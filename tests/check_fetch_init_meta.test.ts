@@ -88,4 +88,26 @@ export async function violateFetchInvariants() {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("a parseArgs `body` option is not a RequestInit body", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "check-fetch-init-"));
+    try {
+      await Bun.write(
+        path.join(root, "scripts/cli.ts"),
+        'parseArgs({ options: {\n    body: { type: "string" },\n    dry: { type: "boolean" },\n} });\n',
+      );
+      const proc = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "../bin/check-fetch-init.ts"),
+          root,
+        ],
+        { env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" } },
+      );
+      expect(proc.stdout.toString()).toContain("Zero RequestInit violations");
+      expect(proc.exitCode).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

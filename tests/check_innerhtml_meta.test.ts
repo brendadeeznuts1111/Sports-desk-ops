@@ -82,4 +82,18 @@ describe("check-innerhtml 5-case meta-test suite", () => {
     expect(res.exitCode).toBe(0);
     expect(res.stdout).toContain("Zero unsafe innerHTML assignments");
   });
+
+  test("Case 6: Double-escaped quotes from a TS template literal pass", async () => {
+    const res = await runLinter(
+      String.raw`container.innerHTML = "<p style=\\"padding:1rem\\">missing</p>";`,
+    );
+    expect(res.exitCode).toBe(0);
+  });
+
+  test("Case 7: An escaped quote does not hide a concatenation", async () => {
+    const res = await runLinter(
+      String.raw`container.innerHTML = "<p>\\" + untrusted + "</p>";`,
+    );
+    expect(res.exitCode).toBe(1);
+  });
 });

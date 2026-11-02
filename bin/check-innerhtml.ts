@@ -16,6 +16,7 @@
 
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { listSourceFiles } from "../lib/source_files.ts";
 
 const { values, positionals } = parseArgs({
   options: { verbose: { type: "boolean", default: false } },
@@ -24,16 +25,10 @@ const { values, positionals } = parseArgs({
 const ROOT = path.resolve(positionals[0] ?? path.join(import.meta.dir, ".."));
 const isVerbose = values.verbose;
 
-const IGNORE_SUBSTRINGS = [
-  "/.git/",
-  "/node_modules/",
-  "/archive/",
-  "/opencode/",
-  "/vscode/",
-];
-
 const INNER_HTML_ASSIGN_RE = /\.innerHTML\s*=\s*(.+?);?$/;
-const SAFE_STATIC_LITERAL_RE = /^['"][^'"]*['"]$/;
+// A backslash run escapes the next character: client JS emitted from a TS template literal
+// carries its quotes double-escaped (`\\"`). Any bare quote in the middle still fails the match.
+const SAFE_STATIC_LITERAL_RE = /^(['"])(?:\\+.|(?!\1)[^\\])*\1$/;
 
 function isTestFile(relPath: string): boolean {
   const norm = relPath.replace(/\\/g, "/");
@@ -84,16 +79,16 @@ function auditFile(content: string, relPath: string): string[] {
 }
 
 async function main(): Promise<void> {
-  const glob = new Bun.Glob("**/*.{ts,tsx,js,mjs,html}");
   let scannedCount = 0;
   let totalViolations = 0;
 
-  for await (const file of glob.scan({ cwd: ROOT, onlyFiles: true })) {
-    const norm = `/${file.replace(/\\/g, "/")}`;
-    if (IGNORE_SUBSTRINGS.some((ig) => norm.includes(ig))) {
-      continue;
-    }
-
+  for (const file of await listSourceFiles(ROOT, [
+    "ts",
+    "tsx",
+    "js",
+    "mjs",
+    "html",
+  ])) {
     scannedCount++;
     const fullPath = path.join(ROOT, file);
     const content = await Bun.file(fullPath).text();
