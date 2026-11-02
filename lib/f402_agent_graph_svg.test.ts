@@ -7,21 +7,24 @@ describe("f402_agent_graph_svg", () => {
   test("renders nodes and edges as SVG", async () => {
     const graph = JSON.parse(
       await Bun.file(
-        join(import.meta.dir, "../tests/fixtures/f402-list-agents-by-agent-snippet.json"),
+        join(
+          import.meta.dir,
+          "../tests/fixtures/f402-list-agents-by-agent-snippet.json",
+        ),
       ).text(),
     );
     const exportGraph = {
-      nodes: (graph.GENERAL as { AgentID: string; Login: string; Level: number }[]).map(
-        (r) => ({
-          data: {
-            id: String(r.AgentID).trim(),
-            label: String(r.Login).trim(),
-            level: r.Level,
-            seqNumber: null,
-            metrics: null,
-          },
-        }),
-      ),
+      nodes: (
+        graph.GENERAL as { AgentID: string; Login: string; Level: number }[]
+      ).map((r) => ({
+        data: {
+          id: String(r.AgentID).trim(),
+          label: String(r.Login).trim(),
+          level: r.Level,
+          seqNumber: null,
+          metrics: null,
+        },
+      })),
       edges: [] as { data: { id: string; source: string; target: string } }[],
     };
     const svg = cytoscapeExportToSvg(exportGraph);

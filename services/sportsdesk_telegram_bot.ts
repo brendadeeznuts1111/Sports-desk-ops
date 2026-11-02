@@ -1118,11 +1118,19 @@ export class SportsDeskTelegramService {
     }
   }
 
-  /** POST a Bot API method; never throws, transport failures come back as `ok: false`. */
+  /**
+   * POST a Bot API method; never throws, transport failures come back as `ok: false`.
+   *
+   * 8s rather than 10s on purpose: a handler that writes nothing is cut at roughly
+   * `max(4s, idleTimeout + 2s)` — 12s with Bun's default idleTimeout of 10 — and the caller sees
+   * ECONNRESET rather than the response. Aborting at 8s leaves room for the handler to return a
+   * clean `ok: false` inside that budget. Measured, not assumed: see
+   * tests/route_guard_boundary.test.ts.
+   */
   private async api<T>(
     method: string,
     params: Record<string, unknown> = {},
-    timeoutMs = 10_000,
+    timeoutMs = 8_000,
     cancel?: AbortSignal,
   ): Promise<TelegramApiResult<T>> {
     if (!this.botToken.trim()) {

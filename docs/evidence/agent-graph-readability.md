@@ -32,6 +32,7 @@ only when the manifest says views match the envelope.
    use the envelope nesting and every `/agent/<id>` page flags the disagreement. Per-root totals are
    unaffected (a recursive CTE over SQLite gives the same root sizes as the envelope tree), which is
    why the existing count checks never caught it.
+
 2. **One root is the whole business.** `L1-A` holds 2,274 of 2,277 agents; `L1-B`,
    `L1-C` and `L1-D` have no descendants. Level-2 `L2-A` alone holds 1,621 (71%),
    `L2-B` 646. "One view per root" and "color by root" carry no information, so color is by
@@ -58,18 +59,18 @@ only when the manifest says views match the envelope.
 Edges scored as straight center-to-center segments so every engine is compared on equal terms.
 `againstFlow` is the share of parent→child edges not pointing in the layout's direction.
 
-| layout | edges | crossings | overlaps | bounds (layout units) | widest row | againstFlow | label px |
-|---|---|---|---|---|---|---|---|
-| **shipped grid WebP** | portal | **166,098** | 0 | 3572×2004 | 64 | 0.067 | 5.91 |
-| **shipped level-row SVG** | portal | **125,938** | 0 | 56712×1048 | 394 | 0.048 | **0.37** |
-| level-rows | structural | 108,034 | 0 | 56712×1048 | 394 | 0 | 0.37 |
-| cytoscape grid | structural | 13,739 | 0 | 3572×2004 | 64 | 0.666 | 5.91 |
-| cytoscape breadthfirst | structural | 0 | 0 | 33860×974 | 394 | 0 | 0.62 |
-| ELK mrtree | structural | 0 | 0 | 98422×460 | 394 | 0 | 0.21 |
-| ELK layered | structural | 0 | 0 | 101701×3574 | 394 | 0 | 0.21 |
-| Graphviz dot (TB) | structural | 0 | 0 | 118103×654 | 394 | 0 | 0.20 |
-| Graphviz dot (LR) | structural | 0 | 0 | 1968×34859 | 6 | 0 | 0.37 |
-| Graphviz twopi | structural | 34,243 | 0 | 7708×4574 | 6 | n/a | 2.83 |
+| layout                    | edges      | crossings   | overlaps | bounds (layout units) | widest row | againstFlow | label px |
+| ------------------------- | ---------- | ----------- | -------- | --------------------- | ---------- | ----------- | -------- |
+| **shipped grid WebP**     | portal     | **166,098** | 0        | 3572×2004             | 64         | 0.067       | 5.91     |
+| **shipped level-row SVG** | portal     | **125,938** | 0        | 56712×1048            | 394        | 0.048       | **0.37** |
+| level-rows                | structural | 108,034     | 0        | 56712×1048            | 394        | 0           | 0.37     |
+| cytoscape grid            | structural | 13,739      | 0        | 3572×2004             | 64         | 0.666       | 5.91     |
+| cytoscape breadthfirst    | structural | 0           | 0        | 33860×974             | 394        | 0           | 0.62     |
+| ELK mrtree                | structural | 0           | 0        | 98422×460             | 394        | 0           | 0.21     |
+| ELK layered               | structural | 0           | 0        | 101701×3574           | 394        | 0           | 0.21     |
+| Graphviz dot (TB)         | structural | 0           | 0        | 118103×654            | 394        | 0           | 0.20     |
+| Graphviz dot (LR)         | structural | 0           | 0        | 1968×34859            | 6          | 0           | 0.37     |
+| Graphviz twopi            | structural | 34,243      | 0        | 7708×4574             | 6          | n/a         | 2.83     |
 
 Hypothesis check (from the plan): "grid crossings in the thousands, min font under 4 px".
 **Crossings were far worse (166k); font was 5.9 px for the grid and 0.37 px for the SVG.** The
@@ -81,16 +82,16 @@ grid's crossing count also depends on element order: with the envelope's pre-ord
 Budget = visual weight per view (agent box 1, leaf table 1 + ⌊n/12⌋). Every row: coverage
 2,277/2,277, every view reconciles, 0 crossings, 0 overlaps.
 
-| budget | dir | views | worst label px | views < 8 px |
-|---|---|---|---|---|
-| 40 | TB | 96 | 3.45 | 2 |
-| 40 | LR | 96 | 14.88 | 0 |
-| 60 | TB | 79 | 3.45 | 2 |
-| 60 | LR | 79 | 12.44 | 0 |
-| 90 | TB | 45 | 4.30 | 3 |
-| 90 | LR | 45 | 11.02 | 0 |
-| 140 | TB | 24 | 3.90 | 4 |
-| 140 | LR | **24** | **11.14** | **0** |
+| budget | dir | views  | worst label px | views < 8 px |
+| ------ | --- | ------ | -------------- | ------------ |
+| 40     | TB  | 96     | 3.45           | 2            |
+| 40     | LR  | 96     | 14.88          | 0            |
+| 60     | TB  | 79     | 3.45           | 2            |
+| 60     | LR  | 79     | 12.44          | 0            |
+| 90     | TB  | 45     | 4.30           | 3            |
+| 90     | LR  | 45     | 11.02          | 0            |
+| 140    | TB  | 24     | 3.90           | 4            |
+| 140    | LR  | **24** | **11.14**      | **0**        |
 
 **Chosen default: budget 140, left-to-right** — fewest views with no view under 8 px. Left-to-right
 wins at every budget because siblings stack vertically, so a 250-child fan-out becomes a tall
@@ -128,24 +129,24 @@ strict verify 15/20 → `graph:agent:views` + `graph:agent:image` → **31/31**.
 Questions and ground truth: `bun run graph:agent:judge -- --questions`; score any answer set with
 `--score answers.json`. Ground truth is computed from the envelope tree, not from the drawings.
 
-| q | question | ground truth |
-|---|---|---|
-| q1 | Level-2 agent with the largest downline | L2-A |
-| q2 | Direct upline of L5-B | L4-B |
-| q3 | Agent owning the most overflow agents | L12-C |
-| q4 | Agents in L8-A's subtree (incl. self) | 225 |
-| q5 | Upline chain of L6-B | L1-A > L2-A > L3-A > L4-B > L5-C |
+| q   | question                                | ground truth                     |
+| --- | --------------------------------------- | -------------------------------- |
+| q1  | Level-2 agent with the largest downline | L2-A                             |
+| q2  | Direct upline of L5-B                   | L4-B                             |
+| q3  | Agent owning the most overflow agents   | L12-C                            |
+| q4  | Agents in L8-A's subtree (incl. self)   | 225                              |
+| q5  | Upline chain of L6-B                    | L1-A > L2-A > L3-A > L4-B > L5-C |
 
 ### Blind vision-model judge
 
 A separate model (GPT-5.6 Sol), allowed to open only the PNGs in one folder — no code, data, or
 shell — answered the five questions and was told to say `UNREADABLE` rather than guess.
 
-| round | images | score | wrong answers |
-|---|---|---|---|
-| before | shipped grid raster (1 image) | **0/5** | all `UNREADABLE`: "labels and relationships were not legible" |
-| after, round 1 | overview + 23 views + capture (25) | **2/5** | q2 the right login with its last character dropped, q4 `228`, q5 a wrong chain through another level-2 branch |
-| after, round 2 | same views after the two fixes below (25) | **5/5** | none |
+| round          | images                                    | score   | wrong answers                                                                                                 |
+| -------------- | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| before         | shipped grid raster (1 image)             | **0/5** | all `UNREADABLE`: "labels and relationships were not legible"                                                 |
+| after, round 1 | overview + 23 views + capture (25)        | **2/5** | q2 the right login with its last character dropped, q4 `228`, q5 a wrong chain through another level-2 branch |
+| after, round 2 | same views after the two fixes below (25) | **5/5** | none                                                                                                          |
 
 The round-1 misses were drawing defects, not judge noise. All three answers existed only in the
 dense overview: a detail view started at its focus agent with no upline, and the `L8 · 225` line
@@ -163,12 +164,12 @@ Compare level and upline in the manager UI with `/agent/<id>`. The two divergent
 decisive cases: the UI settles which parent is right.
 
 | agent | level | envelope upline | portal-parser upline | UI says | match |
-|---|---|---|---|---|---|
-| L6-C | 6 | L5-D (L5) | L4-C (L4) | | |
-| L12-A | 12 | L11-A (L11) | L12-B (L12) | | |
-| L5-B | 5 | L4-B (L4) | L4-B (L4) | | |
-| L6-B | 6 | L5-C (L5) | L4-B (L4) | | |
-| L12-C | 12 | L11-B (L11) | L12-E (L12) | | |
+| ----- | ----- | --------------- | -------------------- | ------- | ----- |
+| L6-C  | 6     | L5-D (L5)       | L4-C (L4)            |         |       |
+| L12-A | 12    | L11-A (L11)     | L12-B (L12)          |         |       |
+| L5-B  | 5     | L4-B (L4)       | L4-B (L4)            |         |       |
+| L6-B  | 6     | L5-C (L5)       | L4-B (L4)            |         |       |
+| L12-C | 12    | L11-B (L11)     | L12-E (L12)          |         |       |
 
 Four of five disagree, so this sample is decisive either way. The earlier spot-check sheet read
 parents from SQLite: its level-6 rows (L6-C → L4-C, and L6-D → a level-4 agent whose ID differs

@@ -41,12 +41,21 @@ describe("f402_weekly_figure_lite", () => {
 
   test("null money fields stay null; Active -1 is withheld; empty ARRAY is empty", () => {
     expect(
-      parseWeeklyFigureLite(response({ ThisWeek: null, Active: 3, Today: null })),
-    ).toEqual({ kind: "figures", activePlayers: 3, thisWeek: null, today: null });
+      parseWeeklyFigureLite(
+        response({ ThisWeek: null, Active: 3, Today: null }),
+      ),
+    ).toEqual({
+      kind: "figures",
+      activePlayers: 3,
+      thisWeek: null,
+      today: null,
+    });
     expect(
       parseWeeklyFigureLite(response({ ThisWeek: 5, Active: -1, Today: 1 })),
     ).toEqual({ kind: "withheld" });
-    expect(parseWeeklyFigureLite(response(undefined))).toEqual({ kind: "empty" });
+    expect(parseWeeklyFigureLite(response(undefined))).toEqual({
+      kind: "empty",
+    });
   });
 
   test("rejects shapes the manager page could not render", () => {
@@ -62,7 +71,9 @@ describe("f402_weekly_figure_lite", () => {
       response({ ThisWeek: "1", Active: 2, Today: 1 }),
       response({ ThisWeek: 1, Active: 2, Today: Number.NaN }),
     ]) {
-      expect(() => parseWeeklyFigureLite(bad)).toThrow(WeeklyFigureLiteShapeError);
+      expect(() => parseWeeklyFigureLite(bad)).toThrow(
+        WeeklyFigureLiteShapeError,
+      );
     }
   });
 
@@ -74,9 +85,9 @@ describe("f402_weekly_figure_lite", () => {
       parseWeeklyFigureLite(response(undefined)),
     ]) {
       const stored = { agentId: "MASTER", figure, fetchedAt };
-      expect(storedWeeklyFigureLite(JSON.parse(JSON.stringify(stored)))).toEqual(
-        stored,
-      );
+      expect(
+        storedWeeklyFigureLite(JSON.parse(JSON.stringify(stored))),
+      ).toEqual(stored);
     }
     const figure = { kind: "figures", activePlayers: 1, thisWeek: 1, today: 1 };
     for (const bad of [
@@ -85,7 +96,11 @@ describe("f402_weekly_figure_lite", () => {
       figure,
       { figure, fetchedAt },
       { agentId: "MASTER", figure },
-      { agentId: "MASTER", figure: { ...figure, activePlayers: -1 }, fetchedAt },
+      {
+        agentId: "MASTER",
+        figure: { ...figure, activePlayers: -1 },
+        fetchedAt,
+      },
       { agentId: "MASTER", figure: { ...figure, thisWeek: "1" }, fetchedAt },
     ]) {
       expect(storedWeeklyFigureLite(bad)).toBeNull();

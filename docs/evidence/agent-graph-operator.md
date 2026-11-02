@@ -18,10 +18,10 @@ Agents: read `F402_AGENT_SECURITY_WARNING_MARKDOWN` in `lib/f402_agent_policy.ts
 
 ### The two halves of the graph
 
-| Half | Wire operation | Role |
-|------|----------------|------|
-| **Nodes + edges** | `getListAgenstByAgent` | `GENERAL` tree → SQLite `agents` (`parent_id`, levels 1–12) |
-| **Root metrics (optional)** | `getWeeklyFigureByAgentLite` | Weekly figure payload for the master/root node |
+| Half                        | Wire operation               | Role                                                        |
+| --------------------------- | ---------------------------- | ----------------------------------------------------------- |
+| **Nodes + edges**           | `getListAgenstByAgent`       | `GENERAL` tree → SQLite `agents` (`parent_id`, levels 1–12) |
+| **Root metrics (optional)** | `getWeeklyFigureByAgentLite` | Weekly figure payload for the master/root node              |
 
 Form body (matches pinned `manager.js` + HAR):
 
@@ -31,15 +31,20 @@ Form body (matches pinned `manager.js` + HAR):
 recorded here). Rendering rules are from pinned `verification/manager-boot-oracle/pinned/manager.js:2276-2318`:
 
 ```json
-{ "LIST": { "ARRAY": [{ "ThisWeek": 0.0, "Active": 0, "Today": 0.0 }], "INFO": "INFO" } }
+{
+  "LIST": {
+    "ARRAY": [{ "ThisWeek": 0.0, "Active": 0, "Today": 0.0 }],
+    "INFO": "INFO"
+  }
+}
 ```
 
-| field | manager UI slot | rule |
-|---|---|---|
-| `Active` | `grand-total-player` (player count) | `-1` withholds all three slots |
-| `ThisWeek` | `grand-total-weekly` | `null` shown as 0; unrounded float sum, shown without cents |
-| `Today` | `grand-total-day` | `null` shown as 0 |
-| `ARRAY` empty | — | nothing rendered |
+| field         | manager UI slot                     | rule                                                        |
+| ------------- | ----------------------------------- | ----------------------------------------------------------- |
+| `Active`      | `grand-total-player` (player count) | `-1` withholds all three slots                              |
+| `ThisWeek`    | `grand-total-weekly`                | `null` shown as 0; unrounded float sum, shown without cents |
+| `Today`       | `grand-total-day`                   | `null` shown as 0                                           |
+| `ARRAY` empty | —                                   | nothing rendered                                            |
 
 `parseWeeklyFigureLite` (`lib/f402_weekly_figure_lite.ts`) turns this into `figures` / `withheld` /
 `empty` and rejects anything else. `bun run graph:agent -- --live --account <fixture> --weekly` requests

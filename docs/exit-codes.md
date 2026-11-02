@@ -318,7 +318,6 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `verify:gen-tokens-gate`: `bun run verification/gen-tokens-zero-drift-gate/run.ts`
 - `verify:docs`: `bun run scripts/verify_docs.ts`
 
-
 ## Long-running / non-exiting (by heuristic)
 
 - `artifacts:cron`
