@@ -252,10 +252,11 @@ server {
         proxy_buffering off;
         proxy_read_timeout 86400s;
 
-        # The daemon trusts this proxy (SPORTSDESK_TRUST_PROXY=1 in the unit), so this is the
-        # only place /api/live-bets, /api/agent-tree, /api/live-wagers and /graph can be
-        # protected. Uncomment both lines after `htpasswd -c /etc/nginx/.htpasswd <user>`, or put
-        # Cloudflare Access in front of the host.
+        # Optional second layer: the daemon already requires SPORTSDESK_ADMIN_TOKEN on every pii
+        # route, so this gates the pages and the operator's own dashboard too. Uncomment both
+        # lines after `htpasswd -c /etc/nginx/.htpasswd <user>`, or put Cloudflare Access in front
+        # of the host. Basic auth cannot be completed by Telegram, so leave /miniapp reachable if
+        # you use the Mini App (it is static and fetches nothing).
         # auth_basic "SportsDesk";
         # auth_basic_user_file /etc/nginx/.htpasswd;
 
