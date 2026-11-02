@@ -92,6 +92,8 @@ describe("parseShortDesc", () => {
       pick: "Los Angeles Rams -140",
       raw: "Football - Los Angeles Rams vs Los Angeles Chargers / Game / Winner (2 way) / Los Angeles Rams -140",
       compact: false,
+      live: false,
+      gameNumber: "319747616",
     });
   });
 
@@ -104,10 +106,14 @@ describe("parseShortDesc", () => {
     // The alert line uses the compact grammar (`Sport #rot Team line - For Game`), not the
     // `/ Period / Market / Pick` one, so only sport and game survive the split.
     expect(legs[0]?.sport).toBe("Basketball");
-    expect(legs[0]?.pick).toBe("#540 Warriors -2 -110 - For Game");
-    expect(legs[0]?.period).toBe("");
+    // The `#540` is a game number and `- For Game` a period tail, so both are now split out
+    // instead of being left inside the pick.
+    expect(legs[0]?.pick).toBe("Warriors -2 -110");
+    expect(legs[0]?.period).toBe("Game");
+    expect(legs[0]?.gameNumber).toBe("540");
     expect(legs[0]?.market).toBe("");
     expect(legs[0]?.compact).toBe(true);
+    expect(legs[0]?.live).toBe(false);
   });
 
   test("handles an escaped newline form and &#x0D artefacts", () => {
@@ -127,8 +133,16 @@ describe("parseShortDesc", () => {
   });
 
   test("empty description yields no legs", () => {
-    expect(parseShortDesc("")).toEqual({ legs: [], descCode: null });
-    expect(parseShortDesc(null)).toEqual({ legs: [], descCode: null });
+    expect(parseShortDesc("")).toEqual({
+      legs: [],
+      descCode: null,
+      isLive: false,
+    });
+    expect(parseShortDesc(null)).toEqual({
+      legs: [],
+      descCode: null,
+      isLive: false,
+    });
   });
 });
 
@@ -217,7 +231,62 @@ describe("summarizeLiveWagers", () => {
       byType: {},
       bySport: {},
       legs: 0,
+      live: 0,
+      pregame: 0,
+      liveRisk: 0,
+      pregameRisk: 0,
     });
+  });
+
+  /**
+   * The live/pregame split is the `LIVE` marker, not `WagerType`: the page carries `M.LIVE`,
+   * `S:LIVE` and `L.LIVE` rows, so `M` and `S` are live too and `L` also labels ordinary soccer
+   * and half markets.
+   */
+  test("counts live rows from the marker, not the type code", () => {
+    const rows = [
+      {
+        WagerNumber: 1,
+        WagerType: "M",
+        AmountWagered: 100,
+        ShortDesc: "M.LIVE #9263 Eagles (Live) -160 - For Game",
+      },
+      {
+        WagerNumber: 2,
+        WagerType: "S",
+        AmountWagered: 200,
+        ShortDesc: "S:LIVE #9540 Warriors (Live) -2½ -115 - For Game",
+      },
+      {
+        WagerNumber: 3,
+        WagerType: "L",
+        AmountWagered: 300,
+        ShortDesc:
+          "L:LIVE #9263 Eagles (Live)/Commanders (Live) O 42½ -110 - For Game",
+      },
+      {
+        WagerNumber: 4,
+        WagerType: "L",
+        AmountWagered: 400,
+        ShortDesc: "L.Soccer #209857 Houston/Portland O 2½,3 -130 - For Game",
+      },
+      {
+        WagerNumber: 5,
+        WagerType: "M",
+        AmountWagered: 500,
+        ShortDesc:
+          "M.G319807248\r\nBasketball - Lakers vs Raptors / Game / Winner / Lakers -246",
+      },
+    ].map((row) => toLiveWager(row));
+
+    const summary = summarizeLiveWagers(rows);
+    expect(summary.live).toBe(3);
+    expect(summary.pregame).toBe(2);
+    expect(summary.liveRisk).toBe(600);
+    expect(summary.pregameRisk).toBe(900);
+    // The `L` row without the marker is pregame, which is why the type cannot stand in for it.
+    expect(rows[3]?.wagerType).toBe("L");
+    expect(rows[3]?.live).toBe(false);
   });
 });
 

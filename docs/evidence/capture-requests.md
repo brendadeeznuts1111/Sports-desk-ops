@@ -456,6 +456,23 @@ Observed 2026-11-02 (operator transcript — one 100-row page, no artifact):
   therefore at least two passes — walk back from the highest known cursor, then forward from the
   last row — not one request per scope. `/api/live-wagers` serves a single saved page, so it
   inherits whatever window was captured.
+- **`L` is not "live", and neither is `M`.** A later page (2026-11-02) carries `M.LIVE #9263
+Eagles (Live) -160 - For Game`, `S:LIVE #9540 Warriors (Live) -2½ -115` and
+  `L:LIVE #9263 … O 42½ -110`, plus `L.Soccer #209857 … - For Game` with no live marker at all. So
+  the type code is a bet shape (`S`/`P`/`M`/`L`) and the live/pregame split lives in the
+  `LIVE`/`(Live)` token of `ShortDesc`. `parseShortDesc` now returns `isLive` per leg and per wager,
+  and `summarizeLiveWagers` reports `live`/`pregame` counts and risk. Before that, the live shorthand
+  did not parse at all — the whole string landed in `sport`.
+- **Alert rows shadow real rows.** Every `TicketWriter: "ALERT"` row observed carries
+  `VolumeAmount: 0`, and each has a near-twin moments later on `Internet`/`GSLIVE` with the same
+  customer and the same selection (`767173499` ALERT `S:LIVE #9264 Commanders -2½ -140` beside
+  `767173506` Internet, same market; likewise `767173587`/`767173589`, `767173632`/`767173635`). They
+  are distinct `WagerNumber`s, so summing both double-counts stake. One pair even changes type
+  (`767173600` is `P`, its Internet twin `767173602` is `M`), so the type is not stable across a
+  pair either.
+- **`ShortDesc` carries the game id.** `G319807248` on the code line, `#9263`/`#209857` inline for
+  live and compact lines; both are now `gameNumber`, which is what a score join would need when the
+  league is absent.
 - **`WagerType` includes `M` and `L`, which the portal's own filter does not offer** (`S`, `P`, `I`,
   `T`, `G`, `A`, `C`, `N`). In the page: `M` ~11, `L` ~7, `S` ~5, `P` ~1 — so the UI's "Straights"
   filter hides roughly 70% of the rows. `M` is carried as a raw code here (`lib/live_wagers.ts:12-14`,

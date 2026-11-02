@@ -37,6 +37,16 @@ export interface LiveWagerLeg {
    * the line lands in `pick` rather than being guessed into fields it does not have.
    */
   readonly compact: boolean;
+  /**
+   * `LIVE #9263 …` / `… (Live)` — the only live marker in the feed.
+   *
+   * `WagerType` is **not** it: the page carries `M.LIVE`, `S:LIVE` and `L.LIVE` rows, so `M` and
+   * `S` are live too, and `L` also appears on ordinary soccer/half markets. The word in
+   * `ShortDesc` is the signal; the type code is not.
+   */
+  readonly live: boolean;
+  /** The portal's `#<id>` game number when the line carries one, else `null`. */
+  readonly gameNumber: string | null;
 }
 
 export interface LiveWager {
@@ -57,6 +67,11 @@ export interface LiveWager {
   readonly writer: "gslive" | "gsbuilder" | "internet" | "alert" | "other";
   readonly insertedAt: string;
   readonly vip: boolean;
+  /**
+   * Any leg carries the `LIVE` marker. This is the live/pregame split — `WagerType` is not
+   * (`M.LIVE`, `S:LIVE` and `L.LIVE` all occur on the same page).
+   */
+  readonly live: boolean;
   readonly legs: readonly LiveWagerLeg[];
   /** Leading code before the first newline (`S`, `M.G319748909`, `P.G14580595`). */
   readonly descCode: string | null;
@@ -137,6 +152,62 @@ export function splitSportPrefix(header: string): {
   return { sport: trimmed, rest: "" };
 }
 
+/** `LIVE #9263 Eagles (Live) -160 - For Game` and `#209857 Houston/Portland O 2½,3 -130`. */
+const LIVE_TOKEN = /^LIVE\s+#(\d+)\s+/i;
+const HASH_TOKEN = /^#(\d+)\s+/;
+
+/**
+ * The compact grammar has no `/` segments: it is `[Sport] [#id] [LIVE #id] <selection> <odds>
+ * - For <period>`. Everything after the odds is the period, the `#id` is the game number, and the
+ * `LIVE` token is the only live marker the feed carries.
+ */
+function parseCompactLeg(header: string): {
+  sport: string;
+  pick: string;
+  period: string;
+  live: boolean;
+  gameNumber: string | null;
+} {
+  // `L.LIVE …` / `L:Soccer …` — the outer loop only strips `S`, `P` and `M`.
+  const coded = /^[A-Z][.:]/.exec(header);
+  const withoutCode = coded === null ? header : header.slice(2).trim();
+  const { sport, rest } = splitSportPrefix(withoutCode);
+  // `splitSportPrefix` returns the whole header as `sport` when nothing matched — that is "no
+  // sport", not a sport called `LIVE #9263 Eagles (Live)`. Hand the text to the token parser.
+  const knownSport = SPORT_PREFIXES.some(
+    (name) => name.toLowerCase() === sport.toLowerCase(),
+  );
+  let body = rest === "" ? (knownSport ? "" : withoutCode) : rest;
+  let resolvedSport = rest === "" && !knownSport ? "" : sport;
+  let live = false;
+  let gameNumber: string | null = null;
+
+  const liveMatch = LIVE_TOKEN.exec(body);
+  if (liveMatch !== null) {
+    live = true;
+    gameNumber = liveMatch[1] ?? null;
+    body = body.slice(liveMatch[0].length);
+  } else {
+    const hashMatch = HASH_TOKEN.exec(body);
+    if (hashMatch !== null) {
+      gameNumber = hashMatch[1] ?? null;
+      body = body.slice(hashMatch[0].length);
+    }
+  }
+
+  if (/\bLIVE\b|\(live\)/i.test(body)) live = true;
+
+  // ` - For Game` / ` - For 1st Half` is the period tail.
+  let period = "";
+  const tail = /\s+-\s+For\s+(.+)$/i.exec(body);
+  if (tail !== null) {
+    period = (tail[1] ?? "").trim();
+    body = body.slice(0, tail.index).trim();
+  }
+
+  return { sport: resolvedSport, pick: body.trim(), period, live, gameNumber };
+}
+
 /**
  * Splits `ShortDesc` into legs and each leg into sport / game / period / market / pick.
  *
@@ -147,6 +218,8 @@ export function splitSportPrefix(header: string): {
 export function parseShortDesc(shortDesc: unknown): {
   legs: LiveWagerLeg[];
   descCode: string | null;
+  /** Any leg carries the live marker. `WagerType` cannot answer this. */
+  isLive: boolean;
 } {
   const raw = String(shortDesc ?? "")
     .replace(/&#x0D;?/gi, "\n")
@@ -157,7 +230,7 @@ export function parseShortDesc(shortDesc: unknown): {
     .map((line) => line.trim())
     .filter((line) => line !== "");
 
-  if (lines.length === 0) return { legs: [], descCode: null };
+  if (lines.length === 0) return { legs: [], descCode: null, isLive: false };
 
   // A code line looks like `M.G319748909` or `S.` and is alone on its first line.
   let descCode: string | null = null;
@@ -170,6 +243,10 @@ export function parseShortDesc(shortDesc: unknown): {
     // `S:Basketball #540 …` — the code is a prefix of the leg itself, not its own line.
     descCode = first.slice(0, 1);
   }
+
+  // `M.G319748909` carries the game id for every leg that has no `#id` of its own.
+  const codeGame =
+    descCode === null ? null : (/G(\d{6,})/.exec(descCode)?.[1] ?? null);
 
   const legs: LiveWagerLeg[] = [];
   for (const line of lines.slice(start)) {
@@ -184,15 +261,17 @@ export function parseShortDesc(shortDesc: unknown): {
 
     if (rest.length === 0) {
       // Compact grammar: no `/ Period / Market / Pick` segments to read.
-      const { sport, rest: remainder } = splitSportPrefix(header);
+      const compactLeg = parseCompactLeg(header);
       legs.push({
-        sport,
+        sport: compactLeg.sport,
         game: "",
-        period: "",
+        period: compactLeg.period,
         market: "",
-        pick: remainder,
+        pick: compactLeg.pick,
         raw: line,
         compact: true,
+        live: compactLeg.live,
+        gameNumber: compactLeg.gameNumber,
       });
       continue;
     }
@@ -216,14 +295,21 @@ export function parseShortDesc(shortDesc: unknown): {
       pick: rest.slice(2).join(" / ").trim(),
       raw: line,
       compact: false,
+      live: /\bLIVE\b|\(live\)/i.test(line),
+      gameNumber:
+        /G(\d{6,})/.exec(line)?.[1] ?? /#(\d+)/.exec(line)?.[1] ?? codeGame,
     });
   }
 
-  return { legs, descCode };
+  return {
+    legs,
+    descCode,
+    isLive: legs.some((leg) => leg.live),
+  };
 }
 
 export function toLiveWager(row: Record<string, unknown>): LiveWager {
-  const { legs, descCode } = parseShortDesc(row.ShortDesc);
+  const { legs, descCode, isLive } = parseShortDesc(row.ShortDesc);
   const amountWagered = number(row.AmountWagered);
   const volumeAmount = number(row.VolumeAmount);
   const ticketWriter = text(row.TicketWriter);
@@ -245,6 +331,7 @@ export function toLiveWager(row: Record<string, unknown>): LiveWager {
     vip: text(row.VIP) !== "" && text(row.VIP) !== "0",
     legs,
     descCode,
+    live: isLive,
   };
 }
 
@@ -300,6 +387,11 @@ export interface LiveWagerSummary {
   readonly byType: Record<string, number>;
   readonly bySport: Record<string, number>;
   readonly legs: number;
+  /** Rows whose description carries the live marker. */
+  readonly live: number;
+  readonly pregame: number;
+  readonly liveRisk: number;
+  readonly pregameRisk: number;
 }
 
 /** Aggregates over the parsed rows; sports come from the legs, so parlays count each leg. */
@@ -315,6 +407,8 @@ export function summarizeLiveWagers(
   let vip = 0;
   let volumeMismatches = 0;
   let legs = 0;
+  let live = 0;
+  let liveRisk = 0;
 
   for (const wager of wagers) {
     risk += wager.amountWagered;
@@ -322,6 +416,11 @@ export function summarizeLiveWagers(
     volume += wager.volumeAmount;
     if (wager.vip) vip += 1;
     if (wager.volumeDiffers) volumeMismatches += 1;
+
+    if (wager.live) {
+      live += 1;
+      liveRisk += wager.amountWagered;
+    }
 
     byWriter[wager.writer] = (byWriter[wager.writer] ?? 0) + 1;
     const type = wager.wagerType === "" ? "unknown" : wager.wagerType;
@@ -345,5 +444,9 @@ export function summarizeLiveWagers(
     byType,
     bySport,
     legs,
+    live,
+    pregame: wagers.length - live,
+    liveRisk,
+    pregameRisk: risk - liveRisk,
   };
 }
