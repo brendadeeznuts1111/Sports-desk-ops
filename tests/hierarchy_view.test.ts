@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildHierarchy,
+  type HierarchyNode,
   type RawHierarchyTree,
 } from "../lib/hierarchy_view.ts";
 
@@ -129,7 +130,7 @@ describe("buildHierarchy", () => {
     ).json()) as RawHierarchyTree;
     const nodes = tree.nodes ?? {};
     const deltas = new Map<string, number>();
-    for (const [id, node] of Object.entries(nodes)) {
+    for (const node of Object.values(nodes)) {
       const parent = node.p;
       if (parent === null || parent === undefined || !(parent in nodes))
         continue;
@@ -148,5 +149,51 @@ describe("buildHierarchy", () => {
     const atCap = Object.entries(nodes).filter(([, node]) => node.l === 12);
     expect(atCap).toHaveLength(176);
     expect(Object.values(nodes).some((node) => (node.l ?? 0) > 12)).toBe(false);
+  });
+
+  /**
+   * The field drifts in two directions, and the arithmetic says which one wins per chain:
+   * `level − (depth + 1) = (#+2 edges) − (#0-at-12 edges)`. A capture skip pushes the level ahead,
+   * saturation pushes the depth ahead — so the 1,753 / 62 / 460 split is one phenomenon, not three.
+   */
+  test("the level-versus-depth identity holds, except under the collision node", async () => {
+    const tree = (await Bun.file(
+      new URL("../data/agent-tree.json", import.meta.url),
+    ).json()) as RawHierarchyTree;
+    const view = buildHierarchy(tree);
+    const nodes = tree.nodes ?? {};
+    const level = new Map<string, number | null>();
+    const depth = new Map<string, number>();
+    const walk = (node: HierarchyNode, d: number) => {
+      level.set(node.id, node.level);
+      depth.set(node.id, d);
+      for (const child of node.children) walk(child, d + 1);
+    };
+    for (const root of view.roots) walk(root, 0);
+
+    const breaks: string[] = [];
+    for (const id of Object.keys(nodes)) {
+      const l = level.get(id) ?? null;
+      if (l === null) continue;
+      let plus2 = 0;
+      let zero = 0;
+      let current = id;
+      const seen = new Set<string>();
+      while (!seen.has(current)) {
+        seen.add(current);
+        const parent = nodes[current]?.p;
+        if (parent === undefined || parent === null || !(parent in nodes))
+          break;
+        const a = nodes[parent]?.l;
+        const b = nodes[current]?.l;
+        if (a != null && b != null) {
+          if (b - a === 2) plus2 += 1;
+          if (b - a === 0) zero += 1;
+        }
+        current = parent;
+      }
+      if (l - ((depth.get(id) ?? 0) + 1) !== plus2 - zero) breaks.push(id);
+    }
+    expect(breaks.sort()).toEqual(["C-BRANDON", "GRISBY"]);
   });
 });

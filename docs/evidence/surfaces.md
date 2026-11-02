@@ -240,6 +240,23 @@ two do not agree. Measured on the committed 2,276-node tree (2026-11-02):
   `level` so the divergence remains visible. Any consumer that indents by `level` renders a flat
   slab wherever the cap bites.
 
+The two mechanisms push in opposite directions, and the composition of a chain decides which wins:
+
+- a **capture skip** (a `+2` edge — an intermediate agent missing from our tree) puts the level
+  ahead: `l > depth + 1`;
+- **saturation** (a `0` edge at the cap) puts the depth ahead: `depth + 1 > l`.
+
+The arithmetic is exact — `l − (depth + 1) = (#+2 edges) − (#0-at-12 edges)` — for **2,274 of
+2,276 nodes**. The two exceptions are `C-BRANDON` and `GRISBY`, whose parent is the collision node
+`BRANDON` with no level, so their chain's delta cannot be counted. That is why the split is 1,753
+above / 62 below / 460 equal: three regimes of one field, not three defects. `YASKYY` is the
+62-regime in the extreme — one skip and fourteen saturations along a 25-node chain, so `l = 12`
+against `depth = 24`.
+
+**Consumer rule:** use `depth` for structural display, `level` for portal-level annotation, show
+both where they diverge, and treat any count derived from the edges as a **lower bound** — a `+2`
+edge means at least one intermediate agent is absent from the capture.
+
 ## D-10. `surface.daemon-scoreboard`
 
 - `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1446-1458`):
