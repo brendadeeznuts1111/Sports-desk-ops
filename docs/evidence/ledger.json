@@ -738,7 +738,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -766,7 +766,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -794,7 +794,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -893,7 +893,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1059,7 +1059,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1087,7 +1087,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1115,7 +1115,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1143,7 +1143,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1171,7 +1171,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1199,7 +1199,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:347-356). No /api/desk/* route exists."
         },
@@ -1977,7 +1977,7 @@
       ],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:96-356",
+          "source": "services/sportsdesk_webview_server.ts:96-1571",
           "kind": "absence",
           "note": "Handler dispatches the known local routes and falls through to 404 (services/sportsdesk_webview_server.ts:347-356); no /api/desk prefix is matched."
         },

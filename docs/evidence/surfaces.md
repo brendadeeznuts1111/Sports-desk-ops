@@ -173,7 +173,7 @@ Why "9 paths / 10 operations": `/api/desk/auth/session` carries both `POST` and 
 
 Evidence of absence:
 
-- `sportsdesk_webview_server.ts:96-356` is the complete daemon router: `/health`, `/`, `/dashboard`,
+- `sportsdesk_webview_server.ts:96-1571` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
   404 JSON fallback at `:299-307`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
