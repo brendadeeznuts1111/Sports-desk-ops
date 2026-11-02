@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sportsdesk-ops",
+      "name": "@tennis-hq/sportsdesk-workspace",
       "dependencies": {
         "cytoscape": "3.30.2",
         "cytoscape-elk": "2.3.0",

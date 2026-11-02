@@ -58,6 +58,31 @@ describe("package manager policy", () => {
     }
   });
 
+  test("the lockfile's workspaces match the package.json files", async () => {
+    // Bun 1.4.4 never rewrites a renamed package in an existing bun.lock, and a frozen install
+    // does not compare names, so drift here survives every install until the lock is regenerated.
+    const lock = Bun.JSONC.parse(await Bun.file("bun.lock").text()) as {
+      workspaces: Record<string, { name?: string }>;
+    };
+    const root = (await Bun.file("package.json").json()) as {
+      name: string;
+      workspaces: string[];
+    };
+    const expected: Record<string, string> = { "": root.name };
+    for (const pattern of root.workspaces) {
+      for await (const manifest of new Bun.Glob(`${pattern}/package.json`).scan(
+        ".",
+      )) {
+        const pkg = (await Bun.file(manifest).json()) as { name: string };
+        expected[manifest.slice(0, -"/package.json".length)] = pkg.name;
+      }
+    }
+    const actual = Object.fromEntries(
+      Object.entries(lock.workspaces).map(([path, ws]) => [path, ws.name]),
+    );
+    expect(actual).toEqual(expected);
+  });
+
   test("the registry scope is declared without a token", async () => {
     const npmrc = await Bun.file(".npmrc").text();
     expect(npmrc).toContain("@tennis-hq:registry=");
