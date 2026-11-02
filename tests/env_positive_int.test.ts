@@ -13,20 +13,36 @@ import { AGENT_GRAPH_READY_EVAL } from "../lib/f402_agent_graph_capture_page.ts"
 
 describe("parsePositiveInt", () => {
   test("absent or blank means the default, and is not a problem", () => {
-    expect(parsePositiveInt(undefined, 30000)).toEqual({ value: 30000, problem: null });
-    expect(parsePositiveInt("", 30000)).toEqual({ value: 30000, problem: null });
-    expect(parsePositiveInt("   ", 30000)).toEqual({ value: 30000, problem: null });
+    expect(parsePositiveInt(undefined, 30000)).toEqual({
+      value: 30000,
+      problem: null,
+    });
+    expect(parsePositiveInt("", 30000)).toEqual({
+      value: 30000,
+      problem: null,
+    });
+    expect(parsePositiveInt("   ", 30000)).toEqual({
+      value: 30000,
+      problem: null,
+    });
   });
 
   test("a usable number is floored and accepted", () => {
-    expect(parsePositiveInt("2500", 30000)).toEqual({ value: 2500, problem: null });
+    expect(parsePositiveInt("2500", 30000)).toEqual({
+      value: 2500,
+      problem: null,
+    });
     expect(parsePositiveInt("1920.9", 1).value).toBe(1920);
     expect(parsePositiveInt(" 42 ", 1).value).toBe(42);
   });
 
   test("a malformed value falls back and says why", () => {
     for (const raw of ["abc", "NaN", "Infinity", "0", "-5"]) {
-      const parsed = parsePositiveInt(raw, 30000, "F402_GRAPH_CAPTURE_TIMEOUT_MS");
+      const parsed = parsePositiveInt(
+        raw,
+        30000,
+        "F402_GRAPH_CAPTURE_TIMEOUT_MS",
+      );
       expect(parsed.value).toBe(30000);
       expect(parsed.problem).toContain("F402_GRAPH_CAPTURE_TIMEOUT_MS");
       expect(parsed.problem).toContain(raw);
@@ -44,8 +60,12 @@ describe("parsePositiveInt", () => {
 describe("envPositiveInt", () => {
   test("reads through the injected reader without touching the real environment", () => {
     const values: Record<string, string> = { F402_GRAPH_VIEWPORT_W: "1280" };
-    expect(envPositiveInt("F402_GRAPH_VIEWPORT_W", 1920, (name) => values[name])).toBe(1280);
-    expect(envPositiveInt("F402_GRAPH_VIEWPORT_H", 1080, (name) => values[name])).toBe(1080);
+    expect(
+      envPositiveInt("F402_GRAPH_VIEWPORT_W", 1920, (name) => values[name]),
+    ).toBe(1280);
+    expect(
+      envPositiveInt("F402_GRAPH_VIEWPORT_H", 1080, (name) => values[name]),
+    ).toBe(1080);
   });
 
   test("a malformed value cannot leak NaN into the caller", () => {
@@ -59,7 +79,9 @@ describe("the capture page deadline", () => {
   test("the evaluated expression carries a number, never a raw env string", () => {
     // The value is interpolated into page-evaluated JS; `Number(Bun.env…)` used to sit inside it.
     expect(AGENT_GRAPH_READY_EVAL).not.toContain("Bun.env");
-    const deadline = /const deadline = Date\.now\(\) \+ (\d+);/.exec(AGENT_GRAPH_READY_EVAL);
+    const deadline = /const deadline = Date\.now\(\) \+ (\d+);/.exec(
+      AGENT_GRAPH_READY_EVAL,
+    );
     expect(deadline).not.toBeNull();
     expect(Number(deadline?.[1])).toBeGreaterThan(0);
   });

@@ -35,7 +35,9 @@ describe("generated schema citations", () => {
 
   test("no generated citation carries a line number", () => {
     const offenders = schemas
-      .filter(([, schema]) => /Parsed from [a-z0-9_]+\.ts:\d/.test(schema.description ?? ""))
+      .filter(([, schema]) =>
+        /Parsed from [a-z0-9_]+\.ts:\d/.test(schema.description ?? ""),
+      )
       .map(([name]) => name);
     expect(offenders).toEqual([]);
   });
@@ -43,7 +45,11 @@ describe("generated schema citations", () => {
   test("the WeblogEntry prose cites its declaration too", () => {
     // This one was already stale: it named :117-123 after the interface had moved to 130.
     const weblog = schemas.find(([name]) => name === "WeblogEntry")?.[1];
-    expect(weblog?.description ?? "").toContain("simulate_bettor_churn_suite.ts#RawWebLogEntry");
-    expect(weblog?.description ?? "").not.toMatch(/simulate_bettor_churn_suite\.ts:\d/);
+    expect(weblog?.description ?? "").toContain(
+      "simulate_bettor_churn_suite.ts#RawWebLogEntry",
+    );
+    expect(weblog?.description ?? "").not.toMatch(
+      /simulate_bettor_churn_suite\.ts:\d/,
+    );
   });
 });

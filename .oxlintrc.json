@@ -3,5 +3,8 @@
   "categories": {
     "correctness": "warn"
   },
-  "ignorePatterns": ["**/node_modules/**"]
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "verification/manager-boot-oracle/pinned/**"
+  ]
 }

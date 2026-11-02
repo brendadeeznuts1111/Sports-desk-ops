@@ -301,7 +301,10 @@ function interactivePage(graphJsonText: string): string {
     ${AGENT_GRAPH_CLIENT_JS}
     (function () {
       if (typeof cytoscape !== "function") {
-        document.body.innerHTML = "<p style=\\"padding:1rem\\">cytoscape missing</p>";
+        var missing = document.createElement("p");
+        missing.style.padding = "1rem";
+        missing.textContent = "cytoscape missing";
+        document.body.replaceChildren(missing);
         return;
       }
       var graph = JSON.parse(document.getElementById("graph-data").textContent);

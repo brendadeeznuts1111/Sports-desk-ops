@@ -6,24 +6,34 @@ portal and the VPS service. 397 TypeScript files, 89 scripts, 139 tests. Bun **1
 ## Entrypoint and the gate chain
 
 `./bin/dx` is the operator entrypoint (`README.md:11-15`); `scripts/deploy/deploy_to_vps.sh` / `./bin/dx deploy`
-ship to the VPS. CI runs an eight-part chain — reproduce it locally in this order before claiming a
-change works:
+ship to the VPS. CI (`.github/workflows/ci.yml`, job `verify`) runs these steps in order and stops
+at the first failure — reproduce them locally before claiming a change works:
 
 ```sh
+bun run verify:manager-oracle-slices
+bash scripts/ci/run-manager-oracle-gates.sh
+bun test lib/f402_har_redaction_proof_verify.test.ts
 bun run format:check
 bun run typecheck
 bun run lint:check
-bun run test:docs && bun run verify:docs        # docs invariants + docs gates
-bun run schema:typecheck && bun run schema:check-fixture-drift
-bun run verify:gen-tokens-gate
-bun run check:fetch-init
-bun run check:innerhtml
-bun run test                                    # discovered tests, not only tests/
+bun run test:docs
+bun run verify:docs
+bun run check:route-surface
+bun run check:secrets
+bun run audit:ops
+bun run artifacts:lock
+bun run tasks:render --no-color --columns 0 >/dev/null && bun run docs:render
+bun run gen:tokens:gate
+bun bin/check-fetch-init.ts --verbose
+bun bin/check-innerhtml.ts --verbose
+CI=true bun run schema:gate
+bun test tests/
+bun test                                        # not in CI: also runs the colocated tests
 ```
 
-There is **no single `check` script** — these fragments exist only as CI steps, so a local run has
-to be assembled. GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a
-green badge does not exist; the local chain _is_ the proof.
+There is **no single `check` script**, so a local run has to be assembled. Actions do run on this
+repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`); because the job stops at
+the first failing step, a red early step hides every later one.
 
 ## Layout
 
@@ -45,9 +55,10 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
   mutate live data to make a number look right.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
-- **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml`
-  currently has an **empty environment id**, so a fresh machine gets no `.env` — fix the wiring, do
-  not hand-write secrets into the repo.
+- **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml` is
+  wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
+  `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
+  repo.
 - `gs-manager-cli.zip` (31 KB) is untracked junk — do not commit it.
 - `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
   it `policy`-based scripts fail. Say so instead of disabling them.
