@@ -553,6 +553,31 @@ sessionStorage.MASTER_ID && agentType ∈ {M, A}`, while `Authorization` is set 
      with storage already empty. The width of the logout window is that `setTimeout` delay; the
      player state has no width.
 
+**The hierarchy drill-down is the window, and it is entered on every selection.** The mechanism,
+from the pinned reads (offsets, since the file is one line):
+
+1. A tree node is clicked: `r.write({customerID: t.ID, description: "Select agent / Hierarchy Tree /
+Account : " + e}), … t.getAccountInfo({ id: e }), t.__proto__.ID = e` (`manager.js @65556`,
+   `@73488`, `@75445`). `ID` becomes the selection immediately, and the audit entry names the
+   **previous** agent as actor with the selection in the description — actor semantics, not a bug.
+2. `getAccountInfo` posts `{agentID: o.id, operation: "getAccountInfoOwner"}` (`@~23600…`), so the
+   prefilter rewrites that request to `agentID = MASTER_ID` (the account), `agentOwner = <selection>`.
+   **The drill-down's own account-info fetch therefore depends on the server honouring
+   `agentOwner`.** If the server keyed on `agentID` alone, selecting a node could never fetch that
+   node's account info, and the tree would not work at all. That is a consistency argument from the
+   client, not an observation of the server — but it narrows the server question to "does it
+   authorise the pair, or just use `agentOwner`".
+3. The response calls `setAccountInfo({info, ID: o.id, …})`, which sets `ID` again and then calls
+   `settings()` (the call site is inside `setAccountInfo`, `@24699`); `settings` writes
+   `MASTER_ID := ID` and mirrors it to sessionStorage (`@28850`).
+
+So `MASTER_ID` lags `ID` for exactly one `getAccountInfoOwner` round-trip after **every** drill-down,
+not only at login. During that round-trip the 30 s poll and any click-driven request are scoped to
+the previous agent. Two things bound the damage and neither is a guarantee: the poll period (up to
+30 s of stale next to a fresh header), and the agent-management icon, which is **hidden while the
+two differ** (`@28200`: differ → `hide()`, equal → `show()`) — visible as a flicker for one
+round-trip, useless as a warning.
+
 Server behaviour for either window is unverified: reject, default-to-the-bearer's-owner, or a
 wildcard are all compatible with the code. One live session, three requests, one diff each:
 
@@ -564,6 +589,14 @@ wildcard are all compatible with the code. One live session, three requests, one
 
 R2 and R3 are independent — a server can bind on `agentID` and still treat `"0"` as a wildcard if it
 only checks for non-null, which is the worst combination: override closed, window open.
+
+**Open: which field each endpoint scopes on.** Nothing above records whether `Report/Pending`,
+`getScoresLiveDynamic` or the drill-down's `getAccountInfoOwner` binds on `customerID`, on the
+prefilter's `agentID`/`agentOwner`, or on both. The drill-down is the constraint: its request is
+rewritten to `agentID = <account>, agentOwner = <selection>`, so any endpoint that must return the
+selection's rows has to honour `agentOwner`. That makes "the tree works" and "the `agentOwner`
+override is honoured" the same observation — one request settles both — and it is the first row of
+the probe below for every endpoint the tree drives.
 
 ---
 
