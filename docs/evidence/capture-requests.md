@@ -476,6 +476,35 @@ Observed 2026-11-02 (operator transcript — one 100-row page, no artifact):
   (`_0` suffix), and one row shows `CustomerID: "GB57 "` with `Login: "GB57 "` (space kept) while
   another strips an `_0`. Treating the two as one key collapses sub-accounts into their parents.
 
+### `getAccountInfoOwner`: the enrichment payload, and what it says about identity
+
+Observed 2026-11-02 for `BILLY666` (operator transcript; no secrets — `Password` is empty):
+
+- **`AgentID` is `null` on a master account.** `AgentType: "M"`, `customerID: "BILLY666"`,
+  `AgentID: null`, `Office: "NOLAROSE"`. So the agent id is not the identity of a top-level account:
+  anything that keys on `AgentID` drops it, and the login is the only join key. This is the same
+  conclusion the ticker reached from the other side (`AgentID` carries trailing periods the login
+  does not).
+- **Padding, again**: `Login: "BILLY666  "` (padded to 10) while `customerID` is not padded;
+  `Store`, `CustProfile`, `ParlayName`, `NameFirst` and `PlayerName` are space-padded too.
+  `Password: ""` and `PasswordFix: "‡"`.
+- **`AgentMenuStyle: "Tile Menu"`** is the value that selects the deferred hierarchy load in
+  `settings()` (`setTimeout(getCompleteHeriarchy, 500)`), so it is the switch that decides when the
+  tree is fetched at all.
+- **The live flags disagree with each other**: `DenyLiveBetting: "Y"`, `AllowNewLiveBetting: "N"`,
+  `AllowUltraLive: "Y"`, `WSBettingType: 1`, `WSBettingTypeMobile: 1`. Whether a ticker row's `L`
+  type is "live" in the sense these flags govern is unresolved — do not read `L` as live betting
+  until one page is checked against this account's flags.
+- `site: []`, `preferenceDate[0].isTickerDisplayAlready: "true"`, `SERVER.date` in the portal's
+  `YYYY-MM-DD HH:mm:ss.SSS` form. The `test` field is an epoch-second counter, not a status field.
+
+**Provenance: this account is not in the tree.** `BILLY666` is absent from `data/agent-tree.json`
+entirely, and so is its office `NOLAROSE`; the tree's roots are `BILLY667`, `NOLAWOLF`, `RTEST5`
+and `SAINTS2009`, and it carries `NOLAROB`/`NOLAROBPPH` but no `NOLAROSE`. The tree was therefore
+built from a different login than the one behind these request captures, and every cross-endpoint
+join done against it describes a different downline. That does not invalidate the tree — it makes
+"which session produced this artifact" a required field on any comparison between the two.
+
 **The ticker is a second witness to who exists, and it disagrees with the tree.** Of 25 distinct
 `AgentLogin` values in the page, 22 are tree keys; `GB3500.` is the trailing-period variant of
 `GB3500`; **`KOBE8` and `CUB22A` are absent** (`CUB22` exists, so `CUB22A` looks like an uncaptured
@@ -551,10 +580,11 @@ login-state gate, and both of its operands have a writer:
   live for master/agent logins, and both of its operands are false for a player login.
 - `e.ID` is not an account field. The module prototype defaults `ID: 0, MASTER_ID: 0`;
   `init` fills `ID` from `sessionStorage.customerID` only when it is still `0`; `setAccountInfo`
-  overwrites it from the account-info response; and selecting an agent in the hierarchy reassigns
-  it (`ID` ≠ `MASTER_ID` is how the UI knows it is viewing a sub-agent). `MASTER_ID` is a
-  **snapshot** of `ID` taken when the menu is built, written to the instance and to sessionStorage
-  in the same statement.
+  writes `ID` from its **caller** (`getAccountInfo` passes `ID: o.id`, the requested id — the
+  response carries `customerID` and `Login` and has no `ID` at all, so the value round-trips rather
+  than being derived); and selecting an agent in the hierarchy reassigns it (`ID` ≠ `MASTER_ID` is
+  how the UI knows it is viewing a sub-agent). `MASTER_ID` is a **snapshot** of `ID` taken when the
+  menu is built, written to the instance and to sessionStorage in the same statement.
 - So `sessionStorage.MASTER_ID === "0"` means "identity not resolved yet", not "account 0", and it
   is reachable only if the snapshot runs before `init`/`setAccountInfo` has filled `ID`. In that
   window the prefilter writes `agentID: "0"` and the dead `0 === r` fallback does not rescue it.

@@ -282,6 +282,14 @@ assumes every root is `level = 1`, which a crawl that re-parents a node could vi
 `skippedOverflow` — so the envelope path _drops_ the nodes the tree file shows at `l = 12`. The two
 stores therefore have different membership, and neither is a superset of the other.
 
+**Provenance is not recorded, and it matters.** The tree's `source` is `Scratch/agent-graph.json` —
+a file path, not a session. Its roots are `BILLY667` / `NOLAWOLF` / `RTEST5` / `SAINTS2009`, while
+the account behind the 2026-11-02 request captures is `BILLY666` (office `NOLAROSE`), which is not
+in the tree at all; `NOLAROSE` is absent too. So the artifact cannot say which login produced it,
+and any join against it describes a different downline than those captures. A future refresh should
+carry the capturing account — the trimmed `customerID`, never the `AgentID`, which is `null` on a
+master account — in `source` or a sibling field.
+
 ## D-10. `surface.daemon-scoreboard`
 
 - `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1446-1458`):
