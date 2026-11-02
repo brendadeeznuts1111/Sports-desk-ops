@@ -3,7 +3,7 @@
  */
 
 import cytoscape from "cytoscape";
-import ELK from "elkjs/lib/elk.bundled.js";
+import ELK from "elkjs/lib/elk-api.js";
 
 import type { CytoscapeGraphExport } from "./f402_agent_graph.ts";
 import {
@@ -40,6 +40,11 @@ const CAPTURE_NODE = 44;
 const CAPTURE_FONT = 11;
 const BOX_H = 28;
 const BOX_FONT = 11;
+
+const ELK_WORKER = Bun.resolveSync(
+  "elkjs/lib/elk-worker.min.js",
+  import.meta.dir,
+);
 
 function boxWidth(label: string): number {
   return Math.max(48, label.length * 7 + 16);
@@ -113,7 +118,10 @@ async function elkLayout(
   graph: CytoscapeGraphExport,
   algorithm: "mrtree" | "layered",
 ): Promise<LaidOutGraph> {
-  const elk = new ELK();
+  // A real Worker, terminated when done: elk.bundled.js runs ELK in-thread, and its scheduler
+  // re-arms a timer that keeps the process alive after the last layout.
+  const elk = new ELK({ workerFactory: () => new Worker(ELK_WORKER) });
+  using _worker = { [Symbol.dispose]: () => elk.terminateWorker() };
   const res = await elk.layout({
     id: "root",
     layoutOptions: {
