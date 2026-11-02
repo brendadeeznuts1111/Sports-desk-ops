@@ -48,7 +48,7 @@ concurrency:
 
 env:
   # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
-  PLATFORM_SHA: 7a1abe84db68cf9f3a6800b42cfeb078c76dfb8f
+  PLATFORM_SHA: bbf9ac6e1daff03bf225cf88a67846d40130d8c8
 
 jobs:
   verify:
@@ -63,7 +63,7 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.4"
+          bun-version-file: .bun-version
       - name: Install dependencies
         timeout-minutes: 5
         run: bun install --frozen-lockfile

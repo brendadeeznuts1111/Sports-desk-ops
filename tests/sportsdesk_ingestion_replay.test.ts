@@ -1,11 +1,14 @@
-import { describe, expect, test } from "bun:test";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const FIXTURE_DOMAIN = join(
-  dirname(fileURLToPath(import.meta.url)),
+  import.meta.dir,
   "fixtures/ingestion-replay-domain.jsonl",
 );
+const TMP = mkdtempSync(join(tmpdir(), "sportsdesk-ingestion-replay-"));
+afterAll(() => rmSync(TMP, { recursive: true, force: true }));
 import { SIGNAL_SLA_MS } from "../design/domain-branded-types.ts";
 import {
   classifySportsdeskPricePattern,
@@ -73,7 +76,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("self-healing replay skips poison line", async () => {
-    const file = join(import.meta.dir, `.tmp-ingest-${Date.now()}.jsonl`);
+    const file = join(TMP, `ingest-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"v_t":100,"v_to":200,"channel_id":"Internet","channel_status":"ACTIVE","xml":"<t><p>100</p></t>"}\n{"id":4,"v_t":250,"xml":"<bad\n{"id":5,"v_t":300,"v_to":400,"channel_id":"Internet","channel_status":"ACTIVE","xml":"<t><p>240</p></t>"}\n`,
@@ -85,7 +88,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("DROPPED bypasses SQLite and XML hot path", async () => {
-    const file = join(import.meta.dir, `.tmp-dropped-${Date.now()}.jsonl`);
+    const file = join(TMP, `dropped-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"v_t":100,"v_to":200,"channel_id":"BLOCKED","channel_status":"DROPPED","xml":"<t><p>0</p></t>"}\n{"id":2,"v_t":100,"v_to":200,"channel_id":"Internet","channel_status":"ACTIVE","xml":"<t><p>100</p></t>"}\n`,
@@ -125,10 +128,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("overlap trigger enforced without --bitemporal flag", async () => {
-    const file = join(
-      import.meta.dir,
-      `.tmp-trigger-always-${Date.now()}.jsonl`,
-    );
+    const file = join(TMP, `trigger-always-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"GSLIVE","channel_status":"CRITICAL","v_t":100,"v_to":200,"xml":"<t><p>100</p></t>"}\n{"id":2,"channel_id":"GSLIVE","channel_status":"CRITICAL","v_t":150,"v_to":250,"xml":"<t><p>105</p></t>"}\n`,
@@ -140,7 +140,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("--bitemporal rejects rows missing v_to", async () => {
-    const file = join(import.meta.dir, `.tmp-no-vto-${Date.now()}.jsonl`);
+    const file = join(TMP, `no-vto-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"Internet","channel_status":"ACTIVE","v_t":100,"xml":"<t><p>100</p></t>"}\n`,
@@ -152,7 +152,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("latency violation counted when lat exceeds SSOT SLA", async () => {
-    const file = join(import.meta.dir, `.tmp-sla-${Date.now()}.jsonl`);
+    const file = join(TMP, `sla-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"GSLIVE","channel_status":"CRITICAL","v_t":100,"v_to":150,"latency_ms":600,"xml":"<t><p>250</p></t>"}\n`,
@@ -165,7 +165,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("inverted valid interval rejected by CHECK (never inserted)", async () => {
-    const file = join(import.meta.dir, `.tmp-inverted-${Date.now()}.jsonl`);
+    const file = join(TMP, `inverted-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"Internet","channel_status":"ACTIVE","v_t":100,"v_to":50,"xml":"<t><p>100</p></t>"}\n`,
@@ -205,7 +205,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("out-of-order tx_from rejected before close", async () => {
-    const file = join(import.meta.dir, `.tmp-tx-order-${Date.now()}.jsonl`);
+    const file = join(TMP, `tx-order-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":10,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":2000,"xml":"<t><p>50</p></t>"}\n{"id":10,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":1500,"xml":"<t><p>55</p></t>"}\n`,
@@ -220,7 +220,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("same-millisecond correction nudges tx_from and both rows as-of", async () => {
-    const file = join(import.meta.dir, `.tmp-tx-samems-${Date.now()}.jsonl`);
+    const file = join(TMP, `tx-samems-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":12,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":1000,"xml":"<t><p>50</p></t>"}\n{"id":12,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":1000,"xml":"<t><p>55</p></t>"}\n`,
@@ -240,7 +240,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("supersede scoped to (channel_id, id) not global id", async () => {
-    const file = join(import.meta.dir, `.tmp-lane-id-${Date.now()}.jsonl`);
+    const file = join(TMP, `lane-id-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":4,"channel_id":"Internet","channel_status":"ACTIVE","v_t":1000,"v_to":1100,"tx_from":100,"xml":"<t><p>1</p></t>"}\n{"id":4,"channel_id":"GSLIVE","channel_status":"CRITICAL","v_t":100,"v_to":150,"tx_from":100,"xml":"<t><p>2</p></t>"}\n{"id":4,"channel_id":"Internet","channel_status":"ACTIVE","v_t":1000,"v_to":1100,"tx_from":200,"xml":"<t><p>3</p></t>"}\n`,
@@ -260,7 +260,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("duplicate id closes tx_to and supports as-of transaction queries", async () => {
-    const file = join(import.meta.dir, `.tmp-tx-supersede-${Date.now()}.jsonl`);
+    const file = join(TMP, `tx-supersede-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":10,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":1000,"xml":"<t><p>50</p></t>"}\n{"id":10,"channel_id":"Internet","channel_status":"ACTIVE","v_t":900,"v_to":950,"tx_from":2000,"xml":"<t><p>55</p></t>"}\n`,
@@ -282,7 +282,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("replay skips insert when open row already exists (UNIQUE)", async () => {
-    const file = join(import.meta.dir, `.tmp-idempotent-${Date.now()}.jsonl`);
+    const file = join(TMP, `idempotent-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":11,"channel_id":"Internet","channel_status":"ACTIVE","v_t":600,"v_to":700,"tx_from":5000,"xml":"<t><p>11</p></t>"}\n`,
@@ -303,7 +303,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("exit code: corruption outranks SLA", async () => {
-    const file = join(import.meta.dir, `.tmp-exit-${Date.now()}.jsonl`);
+    const file = join(TMP, `exit-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"GSLIVE","channel_status":"CRITICAL","v_t":100,"v_to":150,"latency_ms":600,"xml":"<t><p>250</p></t>"}\n{"id":2,"v_t":200,"xml":"<bad\n`,
@@ -316,7 +316,7 @@ describe("sportsdesk_ingestion_replay", () => {
   });
 
   test("exit code: tx-axis without SLA exits 2", async () => {
-    const file = join(import.meta.dir, `.tmp-exit-tx-${Date.now()}.jsonl`);
+    const file = join(TMP, `exit-tx-${Date.now()}.jsonl`);
     await Bun.write(
       file,
       `{"id":1,"channel_id":"Internet","channel_status":"ACTIVE","v_t":100,"v_to":200,"tx_from":5000,"latency_ms":100,"xml":"<t><p>100</p></t>"}\n{"id":1,"channel_id":"Internet","channel_status":"ACTIVE","v_t":100,"v_to":200,"tx_from":4000,"latency_ms":100,"xml":"<t><p>90</p></t>"}\n`,

@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   pullRawIngestionFeed,
@@ -8,6 +10,9 @@ import {
   ingestionFeedPullExitCode,
   pullIngestionFeedWithProvenance,
 } from "../services/sportsdesk_ingestion_feed_provenance.ts";
+
+const TMP = mkdtempSync(join(tmpdir(), "sportsdesk-ingestion-feed-"));
+afterAll(() => rmSync(TMP, { recursive: true, force: true }));
 
 describe("sportsdesk_ingestion_feed", () => {
   test("resolve explicit URL", () => {
@@ -35,7 +40,7 @@ describe("sportsdesk_ingestion_feed", () => {
       "../tests/fixtures/ingestion-replay-domain.jsonl",
       import.meta.url,
     );
-    const out = join(import.meta.dir, `.tmp-prov-${Date.now()}.jsonl`);
+    const out = join(TMP, `prov-${Date.now()}.jsonl`);
     const first = await pullIngestionFeedWithProvenance(out, {
       url: fixture.href,
     });
