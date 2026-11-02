@@ -282,6 +282,17 @@ assumes every root is `level = 1`, which a crawl that re-parents a node could vi
 `skippedOverflow` — so the envelope path _drops_ the nodes the tree file shows at `l = 12`. The two
 stores therefore have different membership, and neither is a superset of the other.
 
+**Enrichment: office and store.** The tree cannot say which office or store a node belongs to; the
+account-info response can (`Office`, `Store`, `AgentType`, `AgentID`, `SKIN`, `AgentMenuStyle`).
+`bun run hierarchy:enrich <dir-or-file>` parses those responses, writes office/store/skin onto the
+matching rows, and groups everything by (Office, Store) — the grouping that would explain the four
+isolated roots: two roots reporting the same office are siblings above the level the tree models.
+It reports unmatched responses instead of inserting them, because a response for an agent the tree
+does not know is evidence of a missing node. The only response observed so far is `BILLY666`
+(`Office: NOLAROSE`, `Store: PPHINSIDER`, `AgentType: M`, `AgentID: null`), and `BILLY666` is not
+in the tree — so the grouping is implemented and **untested against real roots**; four calls, one
+per root, would answer it.
+
 **Provenance is not recorded, and it matters.** The tree's `source` is `Scratch/agent-graph.json` —
 a file path, not a session. Its roots are `BILLY667` / `NOLAWOLF` / `RTEST5` / `SAINTS2009`, while
 the account behind the 2026-11-02 request captures is `BILLY666` (office `NOLAROSE`), which is not

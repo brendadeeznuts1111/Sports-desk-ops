@@ -68,6 +68,7 @@
     "check:rotations": "bun run scripts/check_rotation_stability.ts",
     "hierarchy:load": "bun run scripts/hierarchy_load.ts",
     "ticker:coverage": "bun run scripts/ticker_tree_coverage.ts",
+    "hierarchy:enrich": "bun run scripts/hierarchy_enrich.ts",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",

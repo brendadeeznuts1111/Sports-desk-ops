@@ -26,6 +26,9 @@ export const HIERARCHY_TABLE_DDL = `
     capture_depth INTEGER NOT NULL,
     level_delta INTEGER,
     collision INTEGER NOT NULL DEFAULT 0,
+    office TEXT,
+    store TEXT,
+    skin TEXT,
     loaded_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_hierarchy_parent ON hierarchy_nodes(parent_login);
@@ -171,4 +174,79 @@ export function subtreeCounts(db: Database, login: string): SubtreeCounts {
     total += count;
   }
   return { total, byKind };
+}
+
+/**
+ * Migrate a table created before the enrichment columns existed. Cheap and idempotent, so a
+ * database built by an earlier `hierarchy:load` keeps working.
+ */
+export function ensureEnrichmentColumns(db: Database): void {
+  const columns = new Set(
+    (
+      db.query("PRAGMA table_info(hierarchy_nodes)").all() as { name: string }[]
+    ).map((column) => column.name),
+  );
+  for (const column of ["office", "store", "skin"]) {
+    if (!columns.has(column)) {
+      db.run(`ALTER TABLE hierarchy_nodes ADD COLUMN ${column} TEXT`);
+    }
+  }
+}
+
+export interface EnrichmentResult {
+  readonly matched: number;
+  readonly unmatched: readonly string[];
+}
+
+/** Writes office/store/skin onto rows that exist; responses for unknown logins are reported. */
+export function applyAccountInfo(
+  db: Database,
+  accounts: readonly {
+    readonly key: string;
+    readonly office: string;
+    readonly store: string;
+    readonly skin: string | null;
+  }[],
+): EnrichmentResult {
+  ensureEnrichmentColumns(db);
+  const update = db.prepare(
+    "UPDATE hierarchy_nodes SET office = $office, store = $store, skin = $skin WHERE login = $login",
+  );
+  const unmatched: string[] = [];
+  let matched = 0;
+  db.transaction(() => {
+    for (const account of accounts) {
+      const changed = update.run({
+        $office: account.office,
+        $store: account.store,
+        $skin: account.skin,
+        $login: account.key,
+      });
+      if (Number(changed.changes) > 0) matched += 1;
+      else unmatched.push(account.key);
+    }
+  })();
+  return { matched, unmatched };
+}
+
+/** Every node with its group fields, for the office/store rollup. */
+export function enrichedRows(db: Database): readonly {
+  login: string;
+  office: string | null;
+  store: string | null;
+  isRoot: boolean;
+}[] {
+  ensureEnrichmentColumns(db);
+  return db
+    .query(
+      "SELECT login, office, store, parent_login IS NULL AS is_root FROM hierarchy_nodes",
+    )
+    .all()
+    .map((row) => ({
+      login: String((row as { login: string }).login),
+      office: ((row as { office: string | null }).office ?? null) as
+        string | null,
+      store: ((row as { store: string | null }).store ?? null) as string | null,
+      isRoot: Number((row as { is_root: number | bigint }).is_root) === 1,
+    }));
 }
