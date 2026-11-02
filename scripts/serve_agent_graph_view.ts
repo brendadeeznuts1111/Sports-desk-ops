@@ -23,7 +23,9 @@ const server = Bun.serve({
 
 const url = `http://127.0.0.1:${server.port}/`;
 console.error(`[graph:agent:view] ${url}`);
-console.error(`[graph:agent:view] webp: ${paths.graphWebp} (run graph:agent:image to refresh)`);
+console.error(
+  `[graph:agent:view] webp: ${paths.graphWebp} (run graph:agent:image to refresh)`,
+);
 
 if (Bun.env.GRAPH_VIEW_NO_OPEN !== "1") {
   spawn("open", [url], { stdio: "ignore", detached: true }).unref();

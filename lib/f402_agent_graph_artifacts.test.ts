@@ -1,5 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
 import { utimes } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -12,9 +14,11 @@ import {
 } from "./f402_agent_graph_artifacts.ts";
 import { sha256Hex } from "./f402_hierarchy_hash.ts";
 
-const TMP = join(import.meta.dir, ".tmp-artifacts");
+const TMP = mkdtempSync(join(tmpdir(), "agent-graph-artifacts-"));
 
 describe("f402_agent_graph_artifacts", () => {
+  afterAll(() => rmSync(TMP, { recursive: true, force: true }));
+
   test("isAgentGraphBuildFresh compares envelope sha256 to manifest", async () => {
     const root = join(TMP, "build-fresh");
     const json = join(root, "agent-graph.json");

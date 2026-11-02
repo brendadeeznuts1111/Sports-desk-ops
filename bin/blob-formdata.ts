@@ -21,7 +21,11 @@ const out: Record<string, unknown> = {};
 for (const [k, v] of fd.entries()) {
   const value =
     (v as unknown) instanceof File
-      ? { filename: (v as any).name, size: (v as any).size, type: (v as any).type }
+      ? {
+          filename: (v as any).name,
+          size: (v as any).size,
+          type: (v as any).type,
+        }
       : String(v);
   if (out[k] === undefined) out[k] = value;
   else if (Array.isArray(out[k])) (out[k] as unknown[]).push(value);

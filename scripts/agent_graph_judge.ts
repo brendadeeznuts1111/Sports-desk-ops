@@ -39,7 +39,8 @@ function largest(nodes: Iterable<AgentTreeNode>): AgentTreeNode {
   const sorted = [...nodes].sort(
     (a, b) => b.descendantCount - a.descendantCount || a.id.localeCompare(b.id),
   );
-  if (sorted[0] === undefined) throw new Error("No agent matches the question rule");
+  if (sorted[0] === undefined)
+    throw new Error("No agent matches the question rule");
   return sorted[0];
 }
 
@@ -56,7 +57,8 @@ export function buildQuestions(
   const parentOf = largest(atLevel(5));
   const sized = largest(atLevel(8));
   const chained = largest(atLevel(6).filter((n) => focusIds.has(n.id)));
-  const login = (id: string | null) => (id ? tree.nodes.get(id)?.login : "") ?? "";
+  const login = (id: string | null) =>
+    (id ? tree.nodes.get(id)?.login : "") ?? "";
   return [
     {
       id: "q1",
@@ -73,7 +75,8 @@ export function buildQuestions(
       id: "q3",
       prompt:
         "Which agent owns the most overflow agents (agents deeper than level 12 that are not drawn individually)? Answer with its login.",
-      answer: [...all].sort((a, b) => b.overflowCount - a.overflowCount)[0]!.login,
+      answer: [...all].sort((a, b) => b.overflowCount - a.overflowCount)[0]!
+        .login,
     },
     {
       id: "q4",
@@ -124,7 +127,9 @@ async function main(): Promise<void> {
     await Bun.file(envelopePath).text(),
   );
   const tree = buildAgentTreeFromGeneral(envelope.GENERAL);
-  const indexFile = Bun.file(join(REPO, "scratch", AGENT_GRAPH_VIEWS_DIR, "index.json"));
+  const indexFile = Bun.file(
+    join(REPO, "scratch", AGENT_GRAPH_VIEWS_DIR, "index.json"),
+  );
   if (!(await indexFile.exists())) {
     throw new Error("Missing views index — run: bun run graph:agent:views");
   }

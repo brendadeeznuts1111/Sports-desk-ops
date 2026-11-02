@@ -81,7 +81,9 @@ export function cytoscapeGraphFromAgentsDb(
         target: a.agent_id,
       },
     }));
-  return options?.weekly ? { nodes, edges, weekly: options.weekly } : { nodes, edges };
+  return options?.weekly
+    ? { nodes, edges, weekly: options.weekly }
+    : { nodes, edges };
 }
 
 export async function fetchHierarchyEnvelopeForGraph(
@@ -126,10 +128,7 @@ export async function buildAgentGraph(
   let envelope: Pick<ListAgentsByAgentEnvelope, "GENERAL">;
   if (options.envelope !== undefined) {
     envelope = options.envelope;
-  } else if (
-    options.transport !== undefined &&
-    options.account !== undefined
-  ) {
+  } else if (options.transport !== undefined && options.account !== undefined) {
     const { envelope: full } = await fetchHierarchyEnvelopeForGraph(
       options.transport,
       options.account,

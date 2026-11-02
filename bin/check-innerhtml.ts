@@ -30,6 +30,8 @@ const IGNORE_SUBSTRINGS = [
   "/archive/",
   "/opencode/",
   "/vscode/",
+  // The portal's own bundles, byte-pinned by SHA-256 in pinned/manifest.json: not ours to edit.
+  "/verification/manager-boot-oracle/pinned/",
 ];
 
 const INNER_HTML_ASSIGN_RE = /\.innerHTML\s*=\s*(.+?);?$/;

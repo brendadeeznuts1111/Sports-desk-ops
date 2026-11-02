@@ -176,7 +176,9 @@ async function main(): Promise<void> {
     if (!live) {
       rootAgentId =
         String(
-          envelope.GENERAL[0]?.AgentID ?? Bun.env.F402_GRAPH_ROOT_AGENT_ID ?? "",
+          envelope.GENERAL[0]?.AgentID ??
+            Bun.env.F402_GRAPH_ROOT_AGENT_ID ??
+            "",
         ).trim() || "UNKNOWN_ROOT";
     }
     envelopeGeneral = { GENERAL: envelope.GENERAL };

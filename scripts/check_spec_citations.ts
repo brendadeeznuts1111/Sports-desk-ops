@@ -28,12 +28,14 @@ export type Citation = {
 
 export type CitationProblem = {
   readonly citation: Citation;
-  readonly reason: "file-missing" | "out-of-range" | "blank-anchor" | "punctuation-anchor";
+  readonly reason:
+    "file-missing" | "out-of-range" | "blank-anchor" | "punctuation-anchor";
   readonly detail: string;
 };
 
 /** `path/file.ext:12` or `path/file.ext:12-34`. */
-const CITATION_RE = /([A-Za-z0-9_./-]+\.(?:ts|tsx|md|json|sh|sql)):(\d+)(?:-(\d+))?/g;
+const CITATION_RE =
+  /([A-Za-z0-9_./-]+\.(?:ts|tsx|md|json|sh|sql)):(\d+)(?:-(\d+))?/g;
 
 /** A line that is only closing punctuation cannot be an anchor for a sentence. */
 const PUNCTUATION_ONLY = /^[\s)}\];,]*$/;
@@ -56,7 +58,10 @@ export function extractCitations(text: string, context = "spec"): Citation[] {
  * reader can open, and a fallback would keep accepting the bare `sportsdesk_webview_server.ts`
  * that did not exist after the module moved under `services/`.
  */
-export function resolveCitedFile(file: string, root: string): string | undefined {
+export function resolveCitedFile(
+  file: string,
+  root: string,
+): string | undefined {
   const full = join(root, file);
   return existsSync(full) ? full : undefined;
 }
@@ -93,7 +98,11 @@ export function auditCitations(
     }
     const anchor = (lines[citation.start - 1] ?? "").trim();
     if (anchor === "") {
-      problems.push({ citation, reason: "blank-anchor", detail: "the cited line is blank" });
+      problems.push({
+        citation,
+        reason: "blank-anchor",
+        detail: "the cited line is blank",
+      });
       continue;
     }
     if (PUNCTUATION_ONLY.test(anchor)) {
@@ -113,7 +122,9 @@ if (import.meta.main) {
   const problems = auditCitations(citations, ROOT);
 
   if (problems.length === 0) {
-    console.log(`check:spec-citations: ok — ${citations.length} citation(s) resolve`);
+    console.log(
+      `check:spec-citations: ok — ${citations.length} citation(s) resolve`,
+    );
     process.exit(0);
   }
   console.error(

@@ -587,7 +587,7 @@
     <main>
       <!-- TOP KPI STRIP -->
       <section class="kpi-strip" aria-label="Real-Time Telemetry KPIs">
-        <div class="kpi-card">
+        <div class="kpi-card" data-source="polymarket">
           <div class="label">Tracked Polymarket Wallets</div>
           <div class="value" style="color: var(--accent-cyan)">
             <span id="kpi-active-wallets">22</span> Valid 0x Wallets
@@ -596,26 +596,26 @@
             Direct PM Profile &amp; F402 Customer Links
           </div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card" data-source="gslive">
           <div class="label">Today's Matched Parlay Book</div>
           <div class="value" style="color: var(--accent-emerald)">
             63 Tickets (138 Legs)
           </div>
           <div class="sub">$418,200 Matched Cross-Venue Volume</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card" data-source="polymarket">
           <div class="label">Off-Tracker Shadow Portfolio</div>
           <div class="value" style="color: var(--accent-amber)">
             84 Legs in 7 Clusters
           </div>
           <div class="sub">$284,500 Unseen PM Volume (6 Alpha / 1 Trap)</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card" data-source="f402">
           <div class="label">NBA Period (1Q–4Q) &amp; Alt Book</div>
           <div class="value" style="color: #c084fc">$657,500 Combined</div>
           <div class="sub">$509K 1H/2H/1Q–4Q + $148.5K GameNum+5000</div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card" data-source="f402">
           <div class="label">180s Quarantine Auto-Resolver</div>
           <div class="value" style="color: var(--accent-emerald)">
             7 / 7 Resolved
@@ -6675,7 +6675,7 @@
           style="margin-bottom: 1.1rem"
           aria-label="4-Week Parlay Backtest KPIs"
         >
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">Full Customer Universe Scanned</div>
             <div class="value" style="color: var(--accent-cyan)">
               9,435 Accounts
@@ -6684,21 +6684,21 @@
               2,236 Active Bettors • 220 Enriched • 22 Valid 0x Wallets
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">4-Week CFB Parlays (Wks 6–9)</div>
             <div class="value" style="color: #38bdf8">$2,426,400 Handle</div>
             <div class="sub">
               4,085 Tickets (9,368 Legs) • -$203.4K → +$384.1K
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">4-Week NBA Parlays (Pre + Wk 1–2)</div>
             <div class="value" style="color: #c084fc">$2,289,800 Handle</div>
             <div class="sub">
               3,578 Tickets (8,087 Legs) • -$209.0K → +$378.2K
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="backtest">
             <div class="label">Counterfactual Desk Net (4 Wks)</div>
             <div class="value" style="color: var(--accent-emerald)">
               +$762,280 (+16.16%)
@@ -6707,7 +6707,7 @@
               vs Baseline Unprotected -$412,380 (-8.74% Hold)
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="backtest">
             <div class="label">Total 4-Week Desk Savings</div>
             <div class="value" style="color: var(--accent-amber)">
               +
@@ -6734,7 +6734,7 @@
             >
           </div>
           <div class="kpi-strip" style="margin-bottom: 1rem">
-            <div class="kpi-card">
+            <div class="kpi-card" data-source="bridge">
               <div class="label">Customers Linked to a 0x Wallet</div>
               <div
                 class="value"
@@ -6745,7 +6745,7 @@
               </div>
               <div class="sub" id="bridge-linked-sub">attribution registry</div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" data-source="polymarket">
               <div class="label">Polymarket Gross P/L (linked wallets)</div>
               <div
                 class="value"
@@ -6758,7 +6758,7 @@
                 pre-fee · unique wallets
               </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" data-source="polymarket">
               <div class="label">Poly-Only-Up Leads</div>
               <div
                 class="value"
@@ -6771,14 +6771,14 @@
                 customer wins on Polymarket, loses at the desk
               </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" data-source="backtest">
               <div class="label">CFB Combos (all legs CFB)</div>
               <div class="value" style="color: #38bdf8" id="combo-all-cfb">
                 —
               </div>
               <div class="sub" id="combo-all-cfb-sub">cross-game allowed</div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card" data-source="backtest">
               <div class="label">Single-Game CFB Combos</div>
               <div class="value" style="color: #c084fc" id="combo-full-game">
                 —
@@ -12768,7 +12768,7 @@
           style="margin-bottom: 1.1rem"
           aria-label="Watchlist and Bet-Ticker KPIs"
         >
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">Watchlist Active Customer Logins</div>
             <div class="value" style="color: var(--accent-amber)">
               38 Active F402 Logins
@@ -12777,7 +12777,7 @@
               36 Baseline Watchlist + 3 Caught (6-Gate) • 1 Root
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="polymarket">
             <div class="label">Watchlist Polymarket 0x Wallets</div>
             <div class="value" style="color: var(--accent-cyan)">
               39 Tracked 0x Wallets
@@ -12786,7 +12786,7 @@
               27 Core CTF + 12 Newly Added (Subnet &amp; 6-Gate)
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">Wallets with Pending Wagers</div>
             <div class="value" style="color: var(--accent-emerald)">
               38 / 39 (97.4%) Active
@@ -12795,7 +12795,7 @@
               11 / 11 Added Betting Wallets (Only Root 0x88f1=$0)
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">Pending Wager Alert Coverage</div>
             <div class="value" style="color: var(--accent-rose)">
               100% Dual-Pipeline
@@ -12804,7 +12804,7 @@
               &lt;500ms CLOB WSS + getBetTicker ALERT Twin (250ms)
             </div>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-source="f402">
             <div class="label">Active Board Rotations (ROT)</div>
             <div class="value" style="color: #c084fc">10 Hot ROT Pairs</div>
             <div class="sub">

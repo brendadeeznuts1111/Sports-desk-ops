@@ -212,7 +212,9 @@ async function main(): Promise<void> {
   await verifyReadableViews(manifest);
 
   async function largestStructuralRootId(): Promise<string | null> {
-    const file = Bun.file(join(SCRATCH, AGENT_GRAPH_VIEWS_DIR, "structural.json"));
+    const file = Bun.file(
+      join(SCRATCH, AGENT_GRAPH_VIEWS_DIR, "structural.json"),
+    );
     if (!(await file.exists())) return null;
     const structural = JSON.parse(await file.text()) as StructuralGraphExport;
     const roots = structural.nodes

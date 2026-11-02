@@ -88,7 +88,9 @@ export interface StoredWeeklyFigureLite {
 }
 
 /** Read back from a graph export on disk; null when absent or not that shape. */
-export function storedWeeklyFigureLite(v: unknown): StoredWeeklyFigureLite | null {
+export function storedWeeklyFigureLite(
+  v: unknown,
+): StoredWeeklyFigureLite | null {
   if (!isRecord(v)) return null;
   const { agentId, fetchedAt } = v;
   if (typeof agentId !== "string" || typeof fetchedAt !== "string") return null;
@@ -98,7 +100,8 @@ export function storedWeeklyFigureLite(v: unknown): StoredWeeklyFigureLite | nul
 
 function figureFromJson(v: unknown): WeeklyFigureLite | null {
   if (!isRecord(v)) return null;
-  if (v["kind"] === "withheld" || v["kind"] === "empty") return { kind: v["kind"] };
+  if (v["kind"] === "withheld" || v["kind"] === "empty")
+    return { kind: v["kind"] };
   if (v["kind"] !== "figures") return null;
   const { activePlayers, thisWeek, today } = v;
   if (

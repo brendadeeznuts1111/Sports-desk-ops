@@ -92,7 +92,11 @@ describe("f402_agent_graph_view_http", () => {
     expect(res.headers.get("content-type")).toContain("webp");
   });
 
-  async function viewsFixture(name: string, fresh: boolean, weeklyAgentId = "MASTER") {
+  async function viewsFixture(
+    name: string,
+    fresh: boolean,
+    weeklyAgentId = "MASTER",
+  ) {
     const root = join(TMP, name);
     const scratch = join(root, "scratch");
     const graphJson = join(scratch, "agent-graph.json");
@@ -122,7 +126,12 @@ describe("f402_agent_graph_view_http", () => {
         })),
         weekly: {
           agentId: weeklyAgentId,
-          figure: { kind: "figures", activePlayers: 1234, thisWeek: -5000.4, today: null },
+          figure: {
+            kind: "figures",
+            activePlayers: 1234,
+            thisWeek: -5000.4,
+            today: null,
+          },
           fetchedAt: "2026-11-01T18:00:00.000Z",
         },
         edges: [
@@ -214,11 +223,18 @@ describe("f402_agent_graph_view_http", () => {
     const paths = await viewsFixture("views-weekly", true);
     const get = async (p: string) =>
       (
-        await handleAgentGraphViewRequest(new Request(`http://127.0.0.1${p}`), paths)
+        await handleAgentGraphViewRequest(
+          new Request(`http://127.0.0.1${p}`),
+          paths,
+        )
       ).text();
     const views = await get("/views");
-    expect(views).toContain('<strong>This week:</strong> <span class="neg">-$5,000</span>');
-    expect(views).toContain('<strong>Today:</strong> <span class="pos">$0</span>');
+    expect(views).toContain(
+      '<strong>This week:</strong> <span class="neg">-$5,000</span>',
+    );
+    expect(views).toContain(
+      '<strong>Today:</strong> <span class="pos">$0</span>',
+    );
     expect(views).toContain("<strong>Active players:</strong> 1,234");
     expect(views).toContain("for MASTER, fetched 2026-11-01T18:00:00.000Z");
     expect(await get("/agent/R")).not.toContain("This week");
@@ -228,7 +244,10 @@ describe("f402_agent_graph_view_http", () => {
     const paths = await viewsFixture("views-weekly-r", true, "R");
     const get = async (p: string) =>
       (
-        await handleAgentGraphViewRequest(new Request(`http://127.0.0.1${p}`), paths)
+        await handleAgentGraphViewRequest(
+          new Request(`http://127.0.0.1${p}`),
+          paths,
+        )
       ).text();
     expect(await get("/agent/R")).toContain("for R, fetched");
     expect(await get("/agent/A")).not.toContain("This week");
