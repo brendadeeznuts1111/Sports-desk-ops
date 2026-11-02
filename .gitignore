@@ -17,6 +17,7 @@ verification/gen-tokens-zero-drift-gate/out/
 customers.sqlite
 # Built by `bun run hierarchy:load` from data/agent-tree.json; a query cache, not an input.
 data/hierarchy.sqlite
+data/customer-profiles.json
 data/hierarchy.sqlite-*
 Untitled.txt.rtf
 

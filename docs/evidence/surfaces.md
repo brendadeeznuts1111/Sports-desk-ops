@@ -293,6 +293,14 @@ does not know is evidence of a missing node. The only response observed so far i
 in the tree — so the grouping is implemented and **untested against real roots**; four calls, one
 per root, would answer it.
 
+**Two independent witnesses say the tree is missing agents.** The customer book's 220 profiles name
+29 distinct `agent_id` values; **12 of them are absent from the tree** (`APEX99`, `BIGDAD`,
+`CUB22A`, `DAN318`, `KOBE24`, `LAKERS`, `METRO1`, `SHARP66`, `SOUTHSHORE`, `TITAN`, `VEGAS88`,
+`VIP777`), and `CUB22A` is also absent from the ticker page — the same node, from two unrelated
+sources. That is 41% of the book's agents against the tree's own 9.2% skip rate, so the tree is
+demonstrably partial rather than merely gapped at the edges; `bun run customers:profiles` prints the
+list, and `bun run ticker:coverage <page>` prints the other.
+
 **Provenance is not recorded, and it matters.** The tree's `source` is `Scratch/agent-graph.json` —
 a file path, not a session. Its roots are `BILLY667` / `NOLAWOLF` / `RTEST5` / `SAINTS2009`, while
 the account behind the 2026-11-02 request captures is `BILLY666` (office `NOLAROSE`), which is not
