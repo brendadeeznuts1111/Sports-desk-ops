@@ -37,6 +37,54 @@ export function globalBunfigPath(
 
 export type WorkspaceNames = Record<string, string | undefined>;
 
+type RootManifest = {
+  name?: string;
+  workspaces?: string[] | { packages?: string[] };
+};
+
+/**
+ * The workspaces Bun installs, keyed by directory, plus the matched package.json files it skips
+ * for having no "name". A `!` pattern removes what the globs match wherever it sits in the list,
+ * but not a directory listed by its literal path (bun.com/docs/pm/workspaces).
+ */
+export async function resolveWorkspaces(root: string): Promise<{
+  workspaces: WorkspaceNames;
+  nameless: string[];
+}> {
+  const manifest = (await Bun.file(
+    path.join(root, "package.json"),
+  ).json()) as RootManifest;
+  const patterns = Array.isArray(manifest.workspaces)
+    ? manifest.workspaces
+    : (manifest.workspaces?.packages ?? []);
+  const negated = patterns
+    .filter((p) => p.startsWith("!"))
+    .map((p) => new Bun.Glob(p.slice(1)));
+  const workspaces: WorkspaceNames = { "": manifest.name };
+  const nameless: string[] = [];
+  for (const pattern of patterns.filter((p) => !p.startsWith("!"))) {
+    const literal = !/[*?[\]{}()!]/.test(pattern);
+    for await (const file of new Bun.Glob(`${pattern}/package.json`).scan(
+      root,
+    )) {
+      const dir = path.dirname(file);
+      if (dir.split("/").includes("node_modules")) continue;
+      if (!literal && negated.some((g) => g.match(dir) || g.match(file))) {
+        continue;
+      }
+      const pkg = (await Bun.file(path.join(root, file)).json()) as {
+        name?: unknown;
+      };
+      if (typeof pkg.name === "string" && pkg.name !== "") {
+        workspaces[dir] = pkg.name;
+      } else {
+        nameless.push(dir);
+      }
+    }
+  }
+  return { workspaces, nameless };
+}
+
 /**
  * Workspace path → package name, from the package.json files and from bun.lock. Bun 1.4.4 never
  * rewrites a renamed package in an existing bun.lock and a frozen install does not compare names,
@@ -46,21 +94,7 @@ export async function lockWorkspaceNames(root: string): Promise<{
   expected: WorkspaceNames;
   locked: WorkspaceNames;
 }> {
-  const manifest = (await Bun.file(path.join(root, "package.json")).json()) as {
-    name?: string;
-    workspaces?: string[];
-  };
-  const expected: WorkspaceNames = { "": manifest.name };
-  for (const pattern of manifest.workspaces ?? []) {
-    for await (const file of new Bun.Glob(`${pattern}/package.json`).scan(
-      root,
-    )) {
-      const pkg = (await Bun.file(path.join(root, file)).json()) as {
-        name?: string;
-      };
-      expected[path.dirname(file)] = pkg.name;
-    }
-  }
+  const { workspaces: expected } = await resolveWorkspaces(root);
   const lock = Bun.JSONC.parse(
     await Bun.file(path.join(root, "bun.lock")).text(),
   ) as { workspaces?: Record<string, { name?: string }> };

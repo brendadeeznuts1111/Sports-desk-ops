@@ -15,6 +15,7 @@ import {
   globalBunfigPath,
   lockWorkspaceNames,
   MACHINE_OWNED_INSTALL_KEYS,
+  resolveWorkspaces,
 } from "../lib/pm_policy.ts";
 
 type Status = "ok" | "warn" | "fail";
@@ -160,6 +161,14 @@ async function projectChecks(): Promise<Check[]> {
           : `${drift.join("; ")}; regenerate bun.lock from scratch`,
       ),
     );
+  }
+  const { nameless } = await resolveWorkspaces(ROOT);
+  if (nameless.length > 0) {
+    checks.push({
+      name: "nameless workspace",
+      status: "warn",
+      detail: `${nameless.join(", ")}: no "name", so Bun skips it`,
+    });
   }
   const modules = path.join(ROOT, "node_modules");
   checks.push(
