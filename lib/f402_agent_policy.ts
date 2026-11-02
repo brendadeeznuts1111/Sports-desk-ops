@@ -15,7 +15,8 @@ If a **live Bearer JWT**, session cookie, or portal password appears in chat, lo
 Active JWTs grant **full manager API access**. Treat pasted tokens as a credential incident.` as const;
 
 /** Second block when repeating the notice (e.g. before sharing artifacts). */
-export const F402_AGENT_SECURITY_WARNING_AGAIN_MARKDOWN = `### ⚠️ SECURITY WARNING (AGAIN)
+export const F402_AGENT_SECURITY_WARNING_AGAIN_MARKDOWN =
+  `### ⚠️ SECURITY WARNING (AGAIN)
 
 Before sharing graph JSON, HAR, probe logs, or agent transcripts externally:
 

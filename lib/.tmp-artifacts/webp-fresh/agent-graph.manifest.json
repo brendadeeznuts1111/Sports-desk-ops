@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "envelopePath": "/x",
+  "envelopeSha256": "b77349bf1fa9b26d45d545d7d64dad96737e9cfbb3cbb5f5d10fb77b0fcc44ad",
+  "envelopeGeneralRows": 1,
+  "ingestedRowCount": 1,
+  "skippedOverflowCount": 0,
+  "nodeCount": 1,
+  "edgeCount": 0,
+  "builtAt": "2026-11-02T17:54:54.830Z",
+  "webpEnvelopeSha256": "b77349bf1fa9b26d45d545d7d64dad96737e9cfbb3cbb5f5d10fb77b0fcc44ad",
+  "webpBuiltAt": "2026-11-02T17:54:54.830Z"
+}

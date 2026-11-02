@@ -134,7 +134,10 @@ export async function loadFreshViews(
   return value;
 }
 
-function viewsIndexPage(v: LoadedViews, weekly: StoredWeeklyFigureLite | null): string {
+function viewsIndexPage(
+  v: LoadedViews,
+  weekly: StoredWeeklyFigureLite | null,
+): string {
   const { index } = v;
   const cards = index.views
     .map(
@@ -167,7 +170,11 @@ const WHOLE_DOLLARS = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-function weeklyFigureHtml({ agentId, figure: f, fetchedAt }: StoredWeeklyFigureLite): string {
+function weeklyFigureHtml({
+  agentId,
+  figure: f,
+  fetchedAt,
+}: StoredWeeklyFigureLite): string {
   const asOf = `getWeeklyFigureByAgentLite for ${esc(agentId)}, fetched ${esc(fetchedAt)}`;
   if (f.kind === "empty") return `<p>Weekly figure: no rows (${asOf}).</p>`;
   if (f.kind === "withheld") {

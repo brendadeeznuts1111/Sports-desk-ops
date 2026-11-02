@@ -51,13 +51,20 @@ describe("f402_agent_graph", () => {
       const bare = cytoscapeGraphFromAgentsDb(db);
       const weekly = {
         agentId: "BILLY666",
-        figure: { kind: "figures", activePlayers: 7, thisWeek: 100, today: null },
+        figure: {
+          kind: "figures",
+          activePlayers: 7,
+          thisWeek: 100,
+          today: null,
+        },
         fetchedAt: "2026-11-01T18:00:00.000Z",
       } as const;
       const withWeekly = cytoscapeGraphFromAgentsDb(db, { weekly });
       expect("weekly" in bare).toBe(false);
       expect(withWeekly.weekly).toEqual(weekly);
-      expect(withWeekly.nodes.some((n) => n.data.id === "BILLY666")).toBe(false);
+      expect(withWeekly.nodes.some((n) => n.data.id === "BILLY666")).toBe(
+        false,
+      );
       expect(withWeekly.nodes.every((n) => n.data.metrics === null)).toBe(true);
     } finally {
       db.close();

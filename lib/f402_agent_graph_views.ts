@@ -76,7 +76,13 @@ export const DEFAULT_VIEW_RANKDIR = "LR" as const;
 
 export function treeToCytoscapeExport(tree: AgentTree): CytoscapeGraphExport {
   const nodes = [...tree.nodes.values()].map((n) => ({
-    data: { id: n.id, label: n.login, level: n.level, seqNumber: null, metrics: null },
+    data: {
+      id: n.id,
+      label: n.login,
+      level: n.level,
+      seqNumber: null,
+      metrics: null,
+    },
   }));
   const edges = [...tree.nodes.values()]
     .filter((n) => n.parentId !== null)

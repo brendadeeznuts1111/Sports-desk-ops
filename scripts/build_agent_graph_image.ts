@@ -69,7 +69,9 @@ async function main(): Promise<void> {
     });
     port = server.port!;
     stopServer = () => server.stop();
-    console.error(`[graph:agent:image] ephemeral server http://127.0.0.1:${port}/`);
+    console.error(
+      `[graph:agent:image] ephemeral server http://127.0.0.1:${port}/`,
+    );
   }
 
   const captureUrl = `http://127.0.0.1:${port}/capture.html`;
