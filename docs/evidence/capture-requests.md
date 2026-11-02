@@ -446,6 +446,11 @@ that appears with more than one, and counts rotation rows whose `Team*ID` is mis
 grouping them under `undefined` (which is what the ad-hoc one-liner did, reporting "clean" on a
 payload where the ids were never present).
 
+**Reading the pinned bundles.** `manager.js`, `security.js` and `util.js` are single-line minified
+files (`wc -l` = 1), so there is no line number to cite: every `file:NNNNN` reference to them —
+including the ones in this repository's own ledger — is a **byte offset**, not a line. Cite them as
+`file#symbol @offset`; the symbol is the part that survives a version bump.
+
 **How the panel drives it** (pinned `verification/manager-boot-oracle/pinned/manager.js`, read
 2026-11-02): the first open of the Scores panel calls `getScoresDynamic()` and then
 `$.scoreInterval = setInterval(() => getScoresDynamic(), 30000)`. The four `setTimeout` calls in the
@@ -501,8 +506,11 @@ login-state gate, and both of its operands have a writer:
 - `sessionStorage.agentType` is set in `security.js` at the master/agent branch of
   `authenticate_normal` (`sessionStorage.agentType = e.accountInfo.AgentType`), i.e. to `"M"` or
   `"A"` for exactly those accounts; the `default:` branch sets `customerID`, `playerID`, `token`,
-  `office`, `language` and `skin` but **not** `agentType`, so a player session keeps the `""` the
-  logout path writes. The gate is therefore live for master/agent logins, not dormant.
+  `office`, `language`, `skin` **and** writes `MASTER_ID = ""` / `agentType = ""`. So the `""` pair
+  is the **player-login** state, not a logged-out one: it is written by that branch, not inherited
+  from a logout. Logout is a full `sessionStorage.clear()` (`security.sessionDestroy`, called by
+  `manager.logOut`), which removes every key rather than resetting three. The gate is therefore
+  live for master/agent logins, and both of its operands are false for a player login.
 - `e.ID` is not an account field. The module prototype defaults `ID: 0, MASTER_ID: 0`;
   `init` fills `ID` from `sessionStorage.customerID` only when it is still `0`; `setAccountInfo`
   overwrites it from the account-info response; and selecting an agent in the hierarchy reassigns
@@ -515,26 +523,35 @@ login-state gate, and both of its operands have a writer:
   It is an ordering window, not the steady state.
 - The two copies (`__proto__.MASTER_ID` and `sessionStorage.MASTER_ID`) are written together from
   the same value and no pinned code writes one without the other; the drift that matters is `ID`
-  versus `MASTER_ID`, which is intentional. Logout resets the storage keys (`MASTER_ID`,
-  `agentType`, `skin`) as one statement but cannot reach the module instance, which is discarded
-  with the page.
+  versus `MASTER_ID`, which is intentional. Logout (`sessionStorage.clear()` from `sessionDestroy`)
+  empties storage but cannot reach the module instance, which is discarded with the page.
 - `customerID: "0"` in a Pending body is a separate sentinel: `customerID` is never written by the
   prefilter, and nothing links it to `MASTER_ID`.
 
 **Two windows where identity is present in one form and absent in the other.** Both are reachable
 without a hostile client, and both are unresolved server-side:
 
-1. _Menu built before identity resolves._ `MASTER_ID` is snapshotted from `ID` (`manager.js:28850`),
+1. _Menu built before identity resolves._ `MASTER_ID` is snapshotted from `ID` (`manager.js#settings @28850`),
    and the prototype default is the number `0`; `init` and `setAccountInfo` fill `ID` afterwards.
    If the snapshot wins the race, storage holds `"0"` and the prefilter emits `agentID: "0"` /
    `agentOwner: "0"` for that request. The module knows this state exists — the icon check at
-   `manager.js:28200` compares against the numeric default (`0 !== e.MASTER_ID`) and renders
+   `manager.js#settings @28200` compares against the numeric default (`0 !== e.MASTER_ID`) and renders
    correctly — but the prefilter's `0 === r` compares a number to the string `sessionStorage` hands
    back, so its fallback does not fire. Same scenario, two readers, one correct.
-2. _Request after logout, before the next login._ The body gate is `"" != sessionStorage.MASTER_ID
-&& agentType ∈ {M, A}`, and logout resets both to `""` (`security.js:18164`); the
-   `Authorization` header is set by the `/cloud/api` branch _before_ that gate. A request in the
-   window therefore goes out with the previous session's bearer and no agent scope.
+2. _A session with no master, and the 300 ms after logout._ The body gate is `"" !=
+sessionStorage.MASTER_ID && agentType ∈ {M, A}`, while `Authorization` is set by the
+   `/cloud/api` branch _before_ that gate. Two ways to be in it:
+   - **Player login.** `authenticate_normal`'s `default:` branch writes `MASTER_ID = ""` and
+     `agentType = ""` (`security.js#authenticate_normal @18164`) and still sets a token, so every
+     `/cloud/api` request from that session is authenticated with no agent scope. This is a
+     steady, designed state, not a race — and it means the server must already have a policy for
+     an un-scoped bearer, which is why "defaults to the bearer's owner" is the likely outcome.
+   - **Logout.** `manager.logOut` calls `sessionDestroy()` (`sessionStorage.clear()`) and then
+     redirects after `setTimeout(…, 300)`. `clear()` removes `sessionStorage.token`, but the
+     prefilter closes over the module instance and reads `e.token` from memory, which
+     `sessionDestroy` does not reset — so a request in that 300 ms carries the previous bearer
+     with storage already empty. The width of the logout window is that `setTimeout` delay; the
+     player state has no width.
 
 Server behaviour for either window is unverified: reject, default-to-the-bearer's-owner, or a
 wildcard are all compatible with the code. One live session, three requests, one diff each:
