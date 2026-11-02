@@ -43,8 +43,6 @@ export interface GeneratedReport {
 export class ReportingSchedulerService {
   private readonly telegramService: SportsDeskTelegramService;
   private readonly schedules: Map<string, ScheduleDefinition> = new Map();
-  private timer: any = null;
-
   constructor(telegramService?: SportsDeskTelegramService) {
     this.telegramService = telegramService || new SportsDeskTelegramService();
     this.telegramService.setReportGenerator((type) =>

@@ -24,6 +24,7 @@
  */
 
 import type { Brand, Sha256Hex } from "../design/domain-branded-types.ts";
+import { sha256FromDigest } from "./brand.ts";
 
 // ============================================================================
 // 0. ROSETTA STONE: EXACT `customer/report/report.js` ENDPOINTS & WAGER TYPES
@@ -514,13 +515,7 @@ export function formatPickShapeLegString(leg: CanonicalLeg): string {
 }
 
 function computeSha256(content: string): Sha256Hex {
-  if (typeof Bun !== "undefined" && Bun.CryptoHasher) {
-    const hasher = new Bun.CryptoHasher("sha256");
-    hasher.update(content);
-    return hasher.digest("hex") as Sha256Hex;
-  }
-  const crypto = require("node:crypto");
-  return crypto.createHash("sha256").update(content).digest("hex") as Sha256Hex;
+  return sha256FromDigest(Bun.CryptoHasher.hash("sha256", content, "hex"));
 }
 
 export interface ComboIdentityHashes {

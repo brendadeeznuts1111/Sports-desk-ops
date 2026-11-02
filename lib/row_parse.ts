@@ -59,7 +59,9 @@ export function parseRows<T>(
     try {
       return parse(value);
     } catch (error) {
-      throw new Error(`row ${index}: ${(error as Error).message}`);
+      throw new Error(`row ${index}: ${(error as Error).message}`, {
+        cause: error,
+      });
     }
   });
 }

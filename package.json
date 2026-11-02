@@ -72,6 +72,7 @@
     "pm:doctor": "bun scripts/pm_doctor.ts",
     "deps": "bun-deps",
     "check:secrets": "bun run bin/check-secrets.ts",
+    "policy:check": "R=\"${PLATFORM_DIR:-$HOME/platform}/policy/ratchet.ts\"; test -f \"$R\" || { echo \"policy:check: $R not found; clone brendadeeznuts1111/platform to ~/platform or set PLATFORM_DIR\" >&2; exit 1; }; bun \"$R\" check .",
     "check:rotations": "bun run scripts/check_rotation_stability.ts",
     "hierarchy:load": "bun run scripts/hierarchy_load.ts",
     "ticker:coverage": "bun run scripts/ticker_tree_coverage.ts",
@@ -232,6 +233,7 @@
   "dependencies": {
     "cytoscape": "3.30.2",
     "cytoscape-elk": "2.3.0",
-    "elkjs": "0.12.1"
+    "elkjs": "0.12.1",
+    "zod": "4.6.7"
   }
 }

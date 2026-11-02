@@ -14,6 +14,7 @@
 import { openSportsdeskSqlite } from "../lib/sportsdesk_sqlite.ts";
 import { createComboObservationsLegsStore } from "../lib/combo_observations_legs_store.ts";
 import { LayoffRiskEngine } from "../lib/layoff_risk_engine.ts";
+import { parseLineHundredths } from "../lib/combo_identity.ts";
 import { resolve } from "node:path";
 
 function printHelp(): void {
@@ -395,7 +396,7 @@ function seedDashboardScenario(dbPath: string): void {
       subject: "TROY",
       marketKind: "spread",
       side: "FAVORITE",
-      lineHundredths: -350 as any,
+      lineHundredths: parseLineHundredths(-3.5),
       productClass: "straight",
       stakeCents: 5000,
       oddsAmerican: -110,

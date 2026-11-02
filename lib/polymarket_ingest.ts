@@ -175,9 +175,7 @@ function errorMessage(error: unknown): string {
 }
 
 const sleep = (ms: number): Promise<void> =>
-  ms <= 0
-    ? Promise.resolve()
-    : new Promise((resolve) => setTimeout(resolve, ms));
+  ms <= 0 ? Promise.resolve() : Bun.sleep(ms);
 
 /** Fetches and validates one wallet's positions, following pagination up to `maxPages`. */
 export async function fetchWalletPositions(

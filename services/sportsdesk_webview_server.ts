@@ -703,7 +703,7 @@ export function startServer(options?: ServerOptions) {
     trustProxy: (Bun.env.SPORTSDESK_TRUST_PROXY ?? "") === "1",
   };
 
-  const serveConfig: Parameters<typeof Bun.serve>[0] = {
+  const serveConfig = {
     development: isDevelopment,
     // Bodies here are small JSON documents and one 1 MiB form probe. Without a cap a chunked
     // request is buffered in full by `req.json()` / `arrayBuffer()` (measured: a 6 MiB POST to
@@ -2001,12 +2001,12 @@ export function startServer(options?: ServerOptions) {
             },
             { headers: cors },
           );
-        } catch (err: any) {
+        } catch (err) {
           return Response.json(
             {
               success: false,
               ok: false,
-              error: err?.message || String(err),
+              error: err instanceof Error ? err.message : String(err),
             },
             { status: 500, headers: cors },
           );
@@ -2065,20 +2065,19 @@ export function startServer(options?: ServerOptions) {
         { status: 500, headers: baseHeaders },
       );
     },
-  };
+  } satisfies Parameters<typeof Bun.serve>[0];
 
-  if (unixSocket) {
-    (serveConfig as any).unix = unixSocket;
-  } else {
-    if (options?.port !== undefined) {
-      serveConfig.port = options.port;
-    }
-    if (options?.hostname !== undefined) {
-      serveConfig.hostname = options.hostname;
-    }
-  }
-
-  const server = Bun.serve(serveConfig);
+  const server: Bun.Server<undefined> = Bun.serve(
+    unixSocket
+      ? { ...serveConfig, unix: unixSocket }
+      : {
+          ...serveConfig,
+          ...(options?.port !== undefined && { port: options.port }),
+          ...(options?.hostname !== undefined && {
+            hostname: options.hostname,
+          }),
+        },
+  );
   return server;
 }
 

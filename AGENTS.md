@@ -20,6 +20,8 @@ bun run ci:local --list        # print the steps without running them
 GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a green badge does
 not exist; `ci:local` _is_ the CI run. It checks the working tree, so uncommitted files from other
 work count against it — to judge only your change, run it in a clean `git worktree` at `HEAD`.
+The `policy:check` step runs the Bun-native ratchet from the `~/platform` checkout
+(`~/platform/policy/ratchet.ts`); without that checkout it fails — say so, do not drop the step.
 
 The CI test step is `bun test tests/ --parallel`. Colocated `*.test.ts` under `lib/` and `scripts/`
 run only under `bun run test` (all discovered tests), so run that too before pushing. It runs files
@@ -29,6 +31,22 @@ slowest files start first; `bun run test:serial` is the one-process run, and
 
 After a Bun upgrade, `bun run probe:bun` diffs the runtime against `tests/bun_baseline.json`; the
 one-liner pitfalls it records are explained in `docs/bun-eval-pitfalls.md`.
+
+## Write Bun-native code
+
+Existing code is not precedent. `~/platform/policy/baseline.json` freezes the old Node-style
+sites; a new one fails `bun run policy:check`. The full rule table is the user rule
+`~/.cursor/rules/bun-native-policy.mdc`.
+
+- `Bun.env.NAME`, not `process.env`; declare the name in `types/env.d.ts`.
+- `Bun.file(path).text()` / `.json()` / `.bytes()` and `Bun.write`, not `readFileSync` /
+  `writeFileSync`.
+- `Bun.spawn` / `Bun.spawnSync` / `Bun.$`, not `node:child_process`; `Bun.sleep`, not a
+  hand-rolled `setTimeout` promise.
+- `import.meta.dir` / `import.meta.main`, not `fileURLToPath(import.meta.url)` or argv checks.
+- No `typeof Bun` guards or fallback branches in Bun-only code: call the API.
+- No `as any` and no hand-rolled `isRecord` / `asRecord` guards. Type external data `unknown`
+  and parse it once at the boundary with a `zod` schema.
 
 ## Layout
 

@@ -46,6 +46,10 @@ concurrency:
   group: sportsdesk-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
+  PLATFORM_SHA: 2384fcc052ed758e60b8637af2f05da96227f68f
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -63,6 +67,20 @@ jobs:
       - name: Install dependencies
         timeout-minutes: 5
         run: bun install --frozen-lockfile
+      - name: Check out platform policy at PLATFORM_SHA
+        uses: actions/checkout@v4
+        with:
+          repository: brendadeeznuts1111/platform
+          ref: ${{ env.PLATFORM_SHA }}
+          path: platform
+      - name: Move platform out of the workspace and install it
+        timeout-minutes: 3
+        # ci:local replays every run step, so this no-ops outside Actions and ~/platform is used.
+        run: |
+          [ -n "${GITHUB_ACTIONS:-}" ] || exit 0
+          mv platform "$RUNNER_TEMP/platform"
+          echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
+          bun install --frozen-lockfile --cwd "$RUNNER_TEMP/platform"
       - name: Manager boot oracle runtime + slice guard
         timeout-minutes: 2
         run: bun run verify:manager-oracle-slices
@@ -93,6 +111,9 @@ jobs:
       - name: "No credentials in tracked files"
         timeout-minutes: 2
         run: bun run check:secrets
+      - name: "Bun-native policy ratchet (platform baseline at PLATFORM_SHA)"
+        timeout-minutes: 3
+        run: bun run policy:check
       - name: "Ops audit (release registry, archive provenance)"
         timeout-minutes: 2
         run: bun run audit:ops

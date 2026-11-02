@@ -27,6 +27,7 @@ export function parseListAgentsByAgentWireText(
       truncated
         ? `getListAgenstByAgent body is truncated or incomplete JSON (${msg}) — re-copy full DevTools response`
         : `getListAgenstByAgent body is not JSON: ${msg}`,
+      { cause: e },
     );
   }
   assertListAgentsTopLevelKeys(parsed);

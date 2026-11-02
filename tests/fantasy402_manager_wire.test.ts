@@ -17,7 +17,10 @@ import {
 
 /** Test boundary: Bun's fetch type carries `preconnect`, which a mock must provide. */
 function mockFetch(
-  handler: (url: any, init: any) => Promise<Response>,
+  handler: (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response>,
 ): typeof fetch {
   return Object.assign(handler, {
     preconnect: (_url: string) => {},
@@ -33,10 +36,11 @@ describe("Fantasy402 Manager Wire Mutations (updateByColumn)", () => {
           agentOwnerIdentifier: "CUB22HR",
           column: "confirmationDelaySeconds",
           value: "5",
+          // @ts-expect-error `path` is typed `never`; the runtime guard must reject it too.
           path: "/cloud/api/Manager/updateByColumn",
-        } as any);
+        });
       },
-      (err: any) => {
+      (err: unknown) => {
         assert(err instanceof WirePayloadError);
         assert.equal(
           err.classification,
@@ -58,7 +62,7 @@ describe("Fantasy402 Manager Wire Mutations (updateByColumn)", () => {
           value: "5",
         });
       },
-      (err: any) => {
+      (err: unknown) => {
         assert(err instanceof WirePayloadError);
         assert.equal(
           err.classification,
@@ -90,11 +94,11 @@ describe("Fantasy402 Manager Wire Mutations (updateByColumn)", () => {
     const originalFetch = globalThis.fetch;
     try {
       let capturedBody: string | null = null;
-      let capturedHeaders: Record<string, string> = {};
+      let capturedHeaders = new Headers();
 
-      globalThis.fetch = mockFetch(async (url: any, init: any) => {
-        capturedBody = init.body;
-        capturedHeaders = init.headers;
+      globalThis.fetch = mockFetch(async (_url, init) => {
+        capturedBody = typeof init?.body === "string" ? init.body : null;
+        capturedHeaders = new Headers(init?.headers);
         return new Response(JSON.stringify({ Result: { Result: 1 } }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -124,7 +128,7 @@ describe("Fantasy402 Manager Wire Mutations (updateByColumn)", () => {
       assert.equal(params.get("value"), "5");
       assert.equal(params.get("RRO"), "0");
       assert.equal(
-        capturedHeaders["Content-Type"],
+        capturedHeaders.get("Content-Type"),
         "application/x-www-form-urlencoded; charset=UTF-8",
       );
     } finally {
@@ -163,10 +167,10 @@ describe("Fantasy402 Vig Setup (vigSetupInsert)", () => {
   it("pads sportType to 20 chars and player to 11 chars in JSON body", async () => {
     const originalFetch = globalThis.fetch;
     try {
-      let capturedPayload: any = null;
+      let capturedPayload: Record<string, unknown> = {};
 
-      globalThis.fetch = mockFetch(async (url: any, init: any) => {
-        capturedPayload = JSON.parse(init.body);
+      globalThis.fetch = mockFetch(async (_url, init) => {
+        capturedPayload = JSON.parse(String(init?.body));
         return new Response(JSON.stringify({ Result: { Result: 1 } }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -206,8 +210,8 @@ describe("Fantasy402 IP Tracker (getWebLog)", () => {
     try {
       const captured: { params: URLSearchParams | null } = { params: null };
 
-      globalThis.fetch = mockFetch(async (url: any, init: any) => {
-        captured.params = new URLSearchParams(init.body);
+      globalThis.fetch = mockFetch(async (_url, init) => {
+        captured.params = new URLSearchParams(String(init?.body));
         return new Response(
           JSON.stringify([{ ip: "192.168.1.1", login: "CB112" }]),
           {

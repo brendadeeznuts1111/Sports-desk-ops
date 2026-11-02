@@ -61,6 +61,7 @@ import {
   executeVigSetupInsert,
   queryIpTrackerWebLog,
   fetchPlayerInfo,
+  WirePayloadError,
 } from "../lib/fantasy402_manager_wire.ts";
 import {
   TEN_MODE_CATALOG,
@@ -1345,9 +1346,11 @@ export async function handleWireCommand(args: string[]): Promise<void> {
       console.log(`  Customer (padded) : "${res.customerId}"`);
       console.log(`  Agent Owner       : "${res.agentOwner}"`);
       console.log(`  Column / Value    : ${res.column} = ${res.value}`);
-    } catch (err: any) {
-      console.error(`[Wire Mutation Error] ${err.message}`);
-      process.exitCode = err.exitCode ?? 1;
+    } catch (err) {
+      console.error(
+        `[Wire Mutation Error] ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exitCode = err instanceof WirePayloadError ? err.exitCode : 1;
     }
     return;
   }
@@ -1382,8 +1385,10 @@ export async function handleWireCommand(args: string[]): Promise<void> {
       console.log(
         `  Vig Spread / Deriv: +${res.vigSpread}c / +${res.vigDerivative}c`,
       );
-    } catch (err: any) {
-      console.error(`[Wire Vig Error] ${err.message}`);
+    } catch (err) {
+      console.error(
+        `[Wire Vig Error] ${err instanceof Error ? err.message : String(err)}`,
+      );
       process.exitCode = 1;
     }
     return;
@@ -1406,8 +1411,10 @@ export async function handleWireCommand(args: string[]): Promise<void> {
       console.log(
         `[Wire IP Tracker] Mode ${res.mode} returned ${res.rowCount} row(s) at ${res.queryTimestamp}`,
       );
-    } catch (err: any) {
-      console.error(`[Wire IP Tracker Error] ${err.message}`);
+    } catch (err) {
+      console.error(
+        `[Wire IP Tracker Error] ${err instanceof Error ? err.message : String(err)}`,
+      );
       process.exitCode = 1;
     }
     return;
@@ -1419,8 +1426,10 @@ export async function handleWireCommand(args: string[]): Promise<void> {
     try {
       const res = await fetchPlayerInfo({ customerIdentifier: custId });
       console.log(`[Wire Read-Back] Result:`, res);
-    } catch (err: any) {
-      console.error(`[Wire Read-Back Error] ${err.message}`);
+    } catch (err) {
+      console.error(
+        `[Wire Read-Back Error] ${err instanceof Error ? err.message : String(err)}`,
+      );
       process.exitCode = 1;
     }
     return;

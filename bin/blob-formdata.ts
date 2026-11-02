@@ -18,17 +18,17 @@ if (file === "-") {
 const blob = new Blob([buf], { type: contentType });
 const fd = await blob.formData();
 const out: Record<string, unknown> = {};
-for (const [k, v] of fd.entries()) {
+fd.forEach((v, k) => {
   const value =
-    (v as unknown) instanceof File
-      ? {
-          filename: (v as any).name,
-          size: (v as any).size,
-          type: (v as any).type,
-        }
-      : String(v);
+    typeof v === "string"
+      ? v
+      : {
+          filename: v.name,
+          size: v.size,
+          type: v.type,
+        };
   if (out[k] === undefined) out[k] = value;
   else if (Array.isArray(out[k])) (out[k] as unknown[]).push(value);
   else out[k] = [out[k], value];
-}
+});
 console.log(JSON.stringify(out, null, 2));

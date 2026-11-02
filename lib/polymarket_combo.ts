@@ -158,9 +158,7 @@ async function getJson(
 }
 
 const sleep = (ms: number): Promise<void> =>
-  ms <= 0
-    ? Promise.resolve()
-    : new Promise((resolve) => setTimeout(resolve, ms));
+  ms <= 0 ? Promise.resolve() : Bun.sleep(ms);
 
 const ELIGIBLE_TYPES = new Set(["moneyline", "spreads", "totals"]);
 

@@ -242,6 +242,7 @@ function loadJson(path: string): unknown {
   } catch (error) {
     throw new Error(
       `generate_docs: ${path} is not valid JSON: ${(error as Error).message}`,
+      { cause: error },
     );
   }
 }
