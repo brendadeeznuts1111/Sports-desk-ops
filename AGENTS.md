@@ -21,8 +21,11 @@ GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a
 not exist; `ci:local` _is_ the CI run. It checks the working tree, so uncommitted files from other
 work count against it — to judge only your change, run it in a clean `git worktree` at `HEAD`.
 
-The CI test step is `bun test tests/`. Colocated `*.test.ts` under `lib/` and `scripts/` run only
-under `bun run test` (all discovered tests), so run that too before pushing.
+The CI test step is `bun test tests/ --parallel`. Colocated `*.test.ts` under `lib/` and `scripts/`
+run only under `bun run test` (all discovered tests), so run that too before pushing. It runs files
+across every core, each in a fresh global, and keeps `.bun-test-timings.json` (gitignored) so the
+slowest files start first; `bun run test:serial` is the one-process run, and
+`bun run test:changed` runs only the files git says your changes affect.
 
 After a Bun upgrade, `bun run probe:bun` diffs the runtime against `tests/bun_baseline.json`; the
 one-liner pitfalls it records are explained in `docs/bun-eval-pitfalls.md`.

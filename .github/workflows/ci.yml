@@ -118,7 +118,7 @@ jobs:
         run: bun run schema:gate
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
-        run: bun test tests/ --reporter=junit --reporter-outfile=junit-report.xml
+        run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
       - name: Archive Test Results
         if: always()
         uses: actions/upload-artifact@v4

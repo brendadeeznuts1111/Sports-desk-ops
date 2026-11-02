@@ -39,3 +39,4 @@ sportsdesk_downline_data.json
 lib/.tmp-artifacts/
 # CI test step reporter output (bun run ci:local)
 junit-report.xml
+.bun-test-timings.json

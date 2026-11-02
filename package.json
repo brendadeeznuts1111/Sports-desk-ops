@@ -14,7 +14,9 @@
   "main": "cli/sportsdesk_cli.ts",
   "type": "module",
   "scripts": {
-    "test": "bun test",
+    "test": "bun test --parallel --timings=.bun-test-timings.json --update-timings",
+    "test:serial": "bun test",
+    "test:changed": "bun test --parallel --changed",
     "pretest": "bun run scripts/pretest-oracle-guard.ts",
     "build:live-bets": "bun run scripts/build_live_bets.ts",
     "build:agent-tree": "bun run scripts/build_agent_tree.ts",
