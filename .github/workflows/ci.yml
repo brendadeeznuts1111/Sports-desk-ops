@@ -48,7 +48,7 @@ concurrency:
 
 env:
   # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
-  PLATFORM_SHA: 2384fcc052ed758e60b8637af2f05da96227f68f
+  PLATFORM_SHA: 7a1abe84db68cf9f3a6800b42cfeb078c76dfb8f
 
 jobs:
   verify:
