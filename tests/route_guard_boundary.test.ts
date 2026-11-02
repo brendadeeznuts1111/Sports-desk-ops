@@ -19,6 +19,18 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
  * reporting coverage it does not have.
  */
 
+/**
+ * Why this binds 0.0.0.0 instead of using `server.fetch()` for an in-process call.
+ *
+ * Measured: `server.requestIP(req)` returns `null` for a request passed straight to
+ * `server.fetch()`, and `isLoopbackAddress(null)` is true ("unix socket = local"), so a pii route
+ * answers 200 in-process. An in-process call therefore cannot distinguish a guarded route from an
+ * unguarded one — the guard's whole input is the peer address, and in-process there isn't one.
+ *
+ * In-process dispatch is only ~1.3x faster anyway (70.6 µs vs 93.1 µs, handler work dominating),
+ * so the socket cost is not the reason to reach for it.
+ */
+
 const lan = Object.values(networkInterfaces())
   .flat()
   .find(
