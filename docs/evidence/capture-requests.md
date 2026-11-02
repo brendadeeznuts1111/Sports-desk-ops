@@ -557,6 +557,19 @@ example row is the negative case on purpose: Eagles +3.5 held, market at +5.5, s
 One enrichment call serves every wager from the same agent — 22 distinct agents in the 100-row page,
 not 100 calls.
 
+**A WebView profile is not a session.** This machine has neither, so nothing portal-facing can run —
+but the distinction matters for the next one. `F402_WEBVIEW_PROFILE` names a `Bun.WebView` `dataStore`
+directory, and after a sign-in it does hold the cookies; `createF402ReplayTransport()` never reads it
+(`lib/f402_replay_transport.ts:2-3`), because `Bun.FetchSession` has no dataStore. So a profile alone
+sends a cookie-less request, and `capture_pending_full.ts` used to count it as configured — silencing
+its own "no session" guard and then 401ing upstream. That guard now requires a session file or the
+replay proxy.
+
+`bun run session:login` is the bridge: one WebView login (`F402_LIVE_LOGIN=1`, `F402_AGENT_ID`,
+`F402_PASSWORD`) writes the 0600 session file the transport reads, and `bun run session:status`
+reports what the transport would use without printing a cookie value. That is the step that turns a
+signed-in WebView into the auth every capture and crawl needs.
+
 **Provenance: this account is not in the tree.** `BILLY666` is absent from `data/agent-tree.json`
 entirely, and so is its office `NOLAROSE`; the tree's roots are `BILLY667`, `NOLAWOLF`, `RTEST5`
 and `SAINTS2009`, and it carries `NOLAROB`/`NOLAROBPPH` but no `NOLAROSE`. The tree was therefore

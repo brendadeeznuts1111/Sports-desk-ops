@@ -71,6 +71,8 @@
     "hierarchy:enrich": "bun run scripts/hierarchy_enrich.ts",
     "customers:profiles": "bun run scripts/build_customer_profiles.ts",
     "wagers:score-coverage": "bun run scripts/wager_score_coverage.ts",
+    "session:login": "bun run scripts/session_login.ts",
+    "session:status": "bun run scripts/session_login.ts --status",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",

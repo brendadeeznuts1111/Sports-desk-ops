@@ -132,7 +132,8 @@ function parseArgs(argv: readonly string[]): Options {
             "  --hierarchy <path>  list-agents envelope to attach Level/AgentType",
             "  --dry-run           capture and report, write nothing",
             "",
-            "Auth: F402_WEBVIEW_PROFILE, F402_SESSION_FILE or F402_REPLAY_PROXY_URL.",
+            "Auth: a session file (bun run session:login), F402_SESSION_FILE or F402_REPLAY_PROXY_URL.",
+            "F402_WEBVIEW_PROFILE is a WebView dataStore, not a session — the transport cannot read it.",
             "Never pass a token on the command line.",
           ].join("\n"),
         );
@@ -169,15 +170,18 @@ async function fetchPendingBody(customerID: string): Promise<string> {
   // degrades to a cookie-less fetch when nothing is configured.
   const { readF402Session } = await import("../../lib/f402_session.ts");
   const proxyConfigured = (Bun.env.F402_REPLAY_PROXY_URL ?? "").trim() !== "";
-  const profileConfigured = (Bun.env.F402_WEBVIEW_PROFILE ?? "").trim() !== "";
-  if (!proxyConfigured && !profileConfigured && readF402Session() === null) {
+  // A WebView profile is not a session: `createF402ReplayTransport` never reads one
+  // (lib/f402_replay_transport.ts:2-3), so counting it here silenced this guard and then sent a
+  // cookie-less request into a 401 page.
+  if (!proxyConfigured && readF402Session() === null) {
     throw new Error(
       [
         "no F402 session available for a live capture.",
         "Configure one of:",
-        "  F402_WEBVIEW_PROFILE=<webview profile dir>   (sign in once; cookies persist)",
-        "  F402_SESSION_FILE=<session json>             (see lib/f402_session.ts)",
+        "  bun run session:login                       (one WebView login; writes the 0600 cache)",
+        "  F402_SESSION_FILE=<session json>            (see lib/f402_session.ts)",
         "  F402_REPLAY_PROXY_URL=<localhost proxy>",
+        "F402_WEBVIEW_PROFILE alone is not enough: the transport does not read WebView cookies.",
         "Or rebuild from a body you already saved: --from-body <path>",
       ].join("\n"),
     );
