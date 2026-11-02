@@ -68,48 +68,58 @@ function orient(
   return v > 1e-9 ? 1 : v < -1e-9 ? -1 : 0;
 }
 
+function properCross(
+  sx1: number,
+  sy1: number,
+  sx2: number,
+  sy2: number,
+  tx1: number,
+  ty1: number,
+  tx2: number,
+  ty2: number,
+): boolean {
+  return (
+    orient(sx1, sy1, sx2, sy2, tx1, ty1) *
+      orient(sx1, sy1, sx2, sy2, tx2, ty2) <
+      0 &&
+    orient(tx1, ty1, tx2, ty2, sx1, sy1) *
+      orient(tx1, ty1, tx2, ty2, sx2, sy2) <
+      0
+  );
+}
+
 /** Proper crossing only: shared endpoints and collinear touches do not count. */
 export function segmentsCross(s: Seg, t: Seg): boolean {
   if (s.a === t.a || s.a === t.b || s.b === t.a || s.b === t.b) return false;
-  const o1 = orient(s.x1, s.y1, s.x2, s.y2, t.x1, t.y1);
-  const o2 = orient(s.x1, s.y1, s.x2, s.y2, t.x2, t.y2);
-  const o3 = orient(t.x1, t.y1, t.x2, t.y2, s.x1, s.y1);
-  const o4 = orient(t.x1, t.y1, t.x2, t.y2, s.x2, s.y2);
-  return o1 * o2 < 0 && o3 * o4 < 0;
+  return properCross(s.x1, s.y1, s.x2, s.y2, t.x1, t.y1, t.x2, t.y2);
 }
 
 /**
- * Uniform-grid bucketed pair test for small boxes; exact result. Cell `c` holds
- * `cellItems[cellStart[c] .. cellStart[c + 1])`; the pair bitset costs n(n-1)/2 bits.
+ * Uniform-grid bucketed pair test for small boxes; exact result. `boxes` holds
+ * `minX, minY, maxX, maxY` per item. Cell `c` holds `cellItems[cellStart[c] .. cellStart[c + 1])`;
+ * the pair bitset costs n(n-1)/2 bits.
  */
-export function countPairs<T>(
-  items: readonly T[],
-  box: (t: T) => { minX: number; minY: number; maxX: number; maxY: number },
-  test: (a: T, b: T) => boolean,
+export function countPairs(
+  boxes: Float64Array,
+  test: (i: number, j: number) => boolean,
   cell: number,
 ): number {
-  const n = items.length;
+  const n = boxes.length >> 2;
   if (n < 2) return 0;
-  const boxes = new Float64Array(n * 4);
   const span = new Int32Array(n * 4);
   let gxMin = Infinity;
   let gyMin = Infinity;
   let gxMax = -Infinity;
   let gyMax = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const b = box(items[i]!);
-    const x0 = Math.floor(b.minX / cell);
-    const y0 = Math.floor(b.minY / cell);
-    const x1 = Math.floor(b.maxX / cell);
-    const y1 = Math.floor(b.maxY / cell);
-    boxes[i * 4] = b.minX;
-    boxes[i * 4 + 1] = b.minY;
-    boxes[i * 4 + 2] = b.maxX;
-    boxes[i * 4 + 3] = b.maxY;
-    span[i * 4] = x0;
-    span[i * 4 + 1] = y0;
-    span[i * 4 + 2] = x1;
-    span[i * 4 + 3] = y1;
+  for (let k = 0; k < n * 4; k += 4) {
+    const x0 = Math.floor(boxes[k]! / cell);
+    const y0 = Math.floor(boxes[k + 1]! / cell);
+    const x1 = Math.floor(boxes[k + 2]! / cell);
+    const y1 = Math.floor(boxes[k + 3]! / cell);
+    span[k] = x0;
+    span[k + 1] = y0;
+    span[k + 2] = x1;
+    span[k + 3] = y1;
     gxMin = Math.min(gxMin, x0);
     gyMin = Math.min(gyMin, y0);
     gxMax = Math.max(gxMax, x1);
@@ -152,104 +162,205 @@ export function countPairs<T>(
         )
           continue;
         seen[word]! |= mask;
-        if (test(items[i]!, items[j]!)) count += 1;
+        if (test(i, j)) count += 1;
       }
     }
   }
   return count;
 }
 
+/**
+ * Sweep-and-prune over segments sorted by their low end on one axis: a pair is tested only when
+ * both extents overlap, the same pairs an all-pairs bounding-box reject keeps. The sweep axis is
+ * the one whose extents cover the drawing fewer times over (tree layouts: short hops across wide
+ * rows), which is what bounds the pairs the sweep visits. `seg` holds `x1, y1, x2, y2` per
+ * segment and `ends` the two node indices.
+ */
+function countCrossings(
+  seg: Float64Array,
+  ends: Int32Array,
+  m: number,
+): number {
+  let spanX = 0;
+  let spanY = 0;
+  let loX = Infinity;
+  let hiX = -Infinity;
+  let loY = Infinity;
+  let hiY = -Infinity;
+  for (let k = 0; k < m * 4; k += 4) {
+    spanX += Math.abs(seg[k + 2]! - seg[k]!);
+    spanY += Math.abs(seg[k + 3]! - seg[k + 1]!);
+    loX = Math.min(loX, seg[k]!, seg[k + 2]!);
+    hiX = Math.max(hiX, seg[k]!, seg[k + 2]!);
+    loY = Math.min(loY, seg[k + 1]!, seg[k + 3]!);
+    hiY = Math.max(hiY, seg[k + 1]!, seg[k + 3]!);
+  }
+  const byY =
+    spanY * Math.max(1e-9, hiX - loX) < spanX * Math.max(1e-9, hiY - loY);
+  const u = byY ? 1 : 0;
+  const v = 1 - u;
+
+  const low = new Float64Array(m);
+  for (let s = 0; s < m; s++)
+    low[s] = Math.min(seg[s * 4 + u]!, seg[s * 4 + 2 + u]!);
+  const order = new Int32Array(m);
+  for (let s = 0; s < m; s++) order[s] = s;
+  order.sort((a, b) => low[a]! - low[b]!);
+
+  // Copied into sweep order so the inner loop reads forward through memory. Per segment `ext`
+  // holds sweep-axis low, other-axis low, sweep-axis high, other-axis high.
+  const ext = new Float64Array(m * 4);
+  const pts = new Float64Array(m * 4);
+  const ids = new Int32Array(m * 2);
+  for (let p = 0; p < m; p++) {
+    const k = order[p]! * 4;
+    const o = p * 4;
+    ext[o] = Math.min(seg[k + u]!, seg[k + 2 + u]!);
+    ext[o + 1] = Math.min(seg[k + v]!, seg[k + 2 + v]!);
+    ext[o + 2] = Math.max(seg[k + u]!, seg[k + 2 + u]!);
+    ext[o + 3] = Math.max(seg[k + v]!, seg[k + 2 + v]!);
+    pts[o] = seg[k]!;
+    pts[o + 1] = seg[k + 1]!;
+    pts[o + 2] = seg[k + 2]!;
+    pts[o + 3] = seg[k + 3]!;
+    ids[p * 2] = ends[order[p]! * 2]!;
+    ids[p * 2 + 1] = ends[order[p]! * 2 + 1]!;
+  }
+
+  let crossings = 0;
+  for (let p = 0; p < m; p++) {
+    const ki = p * 4;
+    const sweepHi = ext[ki + 2]!;
+    const otherLo = ext[ki + 1]!;
+    const otherHi = ext[ki + 3]!;
+    const a = ids[p * 2]!;
+    const b = ids[p * 2 + 1]!;
+    for (let q = p + 1; q < m; q++) {
+      const kj = q * 4;
+      if (ext[kj]! > sweepHi) break;
+      if (ext[kj + 3]! < otherLo || ext[kj + 1]! > otherHi) continue;
+      const c = ids[q * 2]!;
+      const d = ids[q * 2 + 1]!;
+      if (a === c || a === d || b === c || b === d) continue;
+      if (
+        properCross(
+          pts[ki]!,
+          pts[ki + 1]!,
+          pts[ki + 2]!,
+          pts[ki + 3]!,
+          pts[kj]!,
+          pts[kj + 1]!,
+          pts[kj + 2]!,
+          pts[kj + 3]!,
+        )
+      )
+        crossings += 1;
+    }
+  }
+  return crossings;
+}
+
+/** Most nodes sharing one rounded y: the longest run in the sorted row keys. */
+function widestRow(ys: Float64Array): number {
+  const keys = ys.map(Math.round).sort();
+  let best = 0;
+  for (let start = 0, k = 1; k <= keys.length; k++) {
+    if (k === keys.length || keys[k] !== keys[start]) {
+      best = Math.max(best, k - start);
+      start = k;
+    }
+  }
+  return best;
+}
+
 export function scoreLayout(
   graph: LaidOutGraph,
   raster: RasterFit,
 ): ReadabilityMetrics {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const n = graph.nodes.length;
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  const ws = new Float64Array(n);
+  const hs = new Float64Array(n);
+  const boxes = new Float64Array(n * 4);
+  // Engines name nodes by string; this is the one lookup from a name to its row.
+  const indexOf = new Map<string, number>();
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const n of graph.nodes) {
-    minX = Math.min(minX, n.x - n.w / 2);
-    maxX = Math.max(maxX, n.x + n.w / 2);
-    minY = Math.min(minY, n.y - n.h / 2);
-    maxY = Math.max(maxY, n.y + n.h / 2);
+  let sizeSum = 0;
+  for (let i = 0; i < n; i++) {
+    const node = graph.nodes[i]!;
+    xs[i] = node.x;
+    ys[i] = node.y;
+    ws[i] = node.w;
+    hs[i] = node.h;
+    boxes[i * 4] = node.x - node.w / 2;
+    boxes[i * 4 + 1] = node.y - node.h / 2;
+    boxes[i * 4 + 2] = node.x + node.w / 2;
+    boxes[i * 4 + 3] = node.y + node.h / 2;
+    minX = Math.min(minX, boxes[i * 4]!);
+    minY = Math.min(minY, boxes[i * 4 + 1]!);
+    maxX = Math.max(maxX, boxes[i * 4 + 2]!);
+    maxY = Math.max(maxY, boxes[i * 4 + 3]!);
+    sizeSum += Math.max(node.w, node.h);
+    indexOf.set(node.id, i);
   }
-  if (graph.nodes.length === 0) minX = minY = maxX = maxY = 0;
+  if (n === 0) minX = minY = maxX = maxY = 0;
   const boundsWidth = Math.max(1, maxX - minX);
   const boundsHeight = Math.max(1, maxY - minY);
 
-  const segs: Seg[] = [];
+  const seg = new Float64Array(graph.edges.length * 4);
+  const ends = new Int32Array(graph.edges.length * 2);
+  let m = 0;
   let lenSum = 0;
   let nonDown = 0;
   for (const e of graph.edges) {
-    const a = byId.get(e.source);
-    const b = byId.get(e.target);
-    if (!a || !b) continue;
-    segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, a: a.id, b: b.id });
-    lenSum += Math.hypot(b.x - a.x, b.y - a.y);
-    const along = graph.flow === "right" ? b.x - a.x : b.y - a.y;
+    const a = indexOf.get(e.source);
+    const b = indexOf.get(e.target);
+    if (a === undefined || b === undefined) continue;
+    seg[m * 4] = xs[a]!;
+    seg[m * 4 + 1] = ys[a]!;
+    seg[m * 4 + 2] = xs[b]!;
+    seg[m * 4 + 3] = ys[b]!;
+    ends[m * 2] = a;
+    ends[m * 2 + 1] = b;
+    m += 1;
+    lenSum += Math.hypot(xs[b]! - xs[a]!, ys[b]! - ys[a]!);
+    const along = graph.flow === "right" ? xs[b]! - xs[a]! : ys[b]! - ys[a]!;
     if (!(along > 1e-6)) nonDown += 1;
   }
 
-  const avgNode =
-    graph.nodes.reduce((s, n) => s + Math.max(n.w, n.h), 0) /
-    Math.max(1, graph.nodes.length);
+  const avgNode = sizeSum / Math.max(1, n);
   const cell = Math.max(avgNode * 4, Math.max(boundsWidth, boundsHeight) / 256);
-
-  let crossings = 0;
-  for (let i = 0; i < segs.length; i++) {
-    const s = segs[i]!;
-    const sMinX = Math.min(s.x1, s.x2);
-    const sMaxX = Math.max(s.x1, s.x2);
-    const sMinY = Math.min(s.y1, s.y2);
-    const sMaxY = Math.max(s.y1, s.y2);
-    for (let j = i + 1; j < segs.length; j++) {
-      const t = segs[j]!;
-      if (Math.max(t.x1, t.x2) < sMinX || Math.min(t.x1, t.x2) > sMaxX)
-        continue;
-      if (Math.max(t.y1, t.y2) < sMinY || Math.min(t.y1, t.y2) > sMaxY)
-        continue;
-      if (segmentsCross(s, t)) crossings += 1;
-    }
-  }
+  const crossings = countCrossings(seg, ends, m);
   const overlaps = countPairs(
-    graph.nodes,
-    (n) => ({
-      minX: n.x - n.w / 2,
-      maxX: n.x + n.w / 2,
-      minY: n.y - n.h / 2,
-      maxY: n.y + n.h / 2,
-    }),
+    boxes,
     (p, q) =>
-      Math.abs(p.x - q.x) * 2 < p.w + q.w - 1e-6 &&
-      Math.abs(p.y - q.y) * 2 < p.h + q.h - 1e-6,
+      Math.abs(xs[p]! - xs[q]!) * 2 < ws[p]! + ws[q]! - 1e-6 &&
+      Math.abs(ys[p]! - ys[q]!) * 2 < hs[p]! + hs[q]! - 1e-6,
     cell,
   );
-
-  const rows = new Map<number, number>();
-  for (const n of graph.nodes) {
-    const key = Math.round(n.y);
-    rows.set(key, (rows.get(key) ?? 0) + 1);
-  }
 
   const fitScale = Math.min(
     raster.width / boundsWidth,
     raster.height / boundsHeight,
   );
   return {
-    nodes: graph.nodes.length,
-    edges: segs.length,
+    nodes: n,
+    edges: m,
     crossings,
     overlaps,
     boundsWidth: Math.round(boundsWidth),
     boundsHeight: Math.round(boundsHeight),
     aspectRatio: Number((boundsWidth / boundsHeight).toFixed(2)),
-    widestRow: Math.max(0, ...rows.values()),
-    meanEdgeLength: Math.round(lenSum / Math.max(1, segs.length)),
+    widestRow: widestRow(ys),
+    meanEdgeLength: Math.round(lenSum / Math.max(1, m)),
     againstFlowEdgeShare:
       graph.flow === "radial"
         ? null
-        : Number((nonDown / Math.max(1, segs.length)).toFixed(3)),
+        : Number((nonDown / Math.max(1, m)).toFixed(3)),
     fitScale: Number(fitScale.toPrecision(3)),
     effectiveFontPx: Number((graph.fontSize * fitScale).toFixed(2)),
   };
