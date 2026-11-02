@@ -37,6 +37,10 @@ describe("screenshot encoding", () => {
     expect(parseRotate("90deg")).toBe(90);
     expect(parseRotate("-180")).toBe(-180);
     expect(() => parseRotate("ninety")).toThrow("degrees");
+    expect(() => parseRotate("deg")).toThrow("degrees");
+    expect(() => parseRotate("45")).toThrow("multiple of 90");
+    // Bun.Image.rotate(90.5) rotates by 90 without throwing.
+    expect(() => parseRotate("90.5")).toThrow("multiple of 90");
   });
 
   test("detects each format by magic bytes (including RIFF..WEBP signature)", () => {
