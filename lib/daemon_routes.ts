@@ -186,7 +186,7 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
   }),
   defineRoute({
     path: "/api/status",
-    method: "ANY",
+    method: "GET",
     guard: "none",
     dataClass: "operational",
     surface: "surface.daemon-dashboard",
@@ -326,7 +326,7 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
   }),
   defineRoute({
     path: "/status.json",
-    method: "ANY",
+    method: "GET",
     guard: "none",
     dataClass: "operational",
     surface: "surface.daemon-dashboard",
