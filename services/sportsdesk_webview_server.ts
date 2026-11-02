@@ -92,6 +92,15 @@ import {
   type TelegramUpdate,
 } from "./sportsdesk_telegram_bot.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
+import { encodedResponse, negotiateEncoding } from "../lib/http_compression.ts";
+import {
+  contentTypeFor,
+  inspectLogo,
+  logoHeaders,
+  resizeLogo,
+  type LogoMetadata,
+} from "../lib/logo_image.ts";
 
 /** `null` when the request comes from the same machine; otherwise the admin gate applies. */
 export function isLoopbackAddress(address: string | null | undefined): boolean {
@@ -181,11 +190,109 @@ const repoRoot = resolve(
   "..",
 );
 
+/**
+ * A file-backed response, compressed when the client asked for it.
+ *
+ * The version is the path plus the file's mtime/size: two files can share a timestamp, and a
+ * rewritten artifact must not reuse the previous body.
+ */
+async function fileResponse(
+  req: Request,
+  path: string,
+  contentType: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  // A client that accepts no encoding gets the file streamed by Bun, which keeps byte ranges and
+  // does no work in this process. Only the compressed path needs the bytes in memory.
+  if (negotiateEncoding(req.headers.get("accept-encoding")) === null) {
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      return Response.json(
+        {
+          success: false,
+          error: "Not Found",
+          pathname: new URL(req.url).pathname,
+        },
+        { status: 404, headers },
+      );
+    }
+    return new Response(file, {
+      headers: { ...headers, "Content-Type": contentType },
+    });
+  }
+
+  const bytes = await readFileBytes(path);
+  if (bytes === null) {
+    return Response.json(
+      {
+        success: false,
+        error: "Not Found",
+        pathname: new URL(req.url).pathname,
+      },
+      { status: 404, headers },
+    );
+  }
+  return encodedResponse(req, {
+    version: `${path}|${bytes.version}`,
+    contentType,
+    produce: () => bytes.value,
+    headers: { ...headers, "Accept-Ranges": "none" },
+  });
+}
+
 export interface ServerOptions {
   readonly port?: number;
   readonly hostname?: string;
   readonly unix?: string;
   readonly development?: boolean;
+}
+
+/**
+ * Artifacts are parsed once per file version, not once per request: six of these routes re-read
+ * and re-parsed 5-110 KB of JSON on every call before the cache existed (measured 0.85 ms for the
+ * 94 KB agent tree). `cachedJsonFile` keys on mtime + size, so a capture that rewrites a file is
+ * picked up on the next request and nothing serves a stale artifact.
+ */
+const ANALYSIS_REPORT_PATH = "data/analysis-cp-baseball-2026-11-01.json";
+const SPORT_CATALOG_PATH =
+  "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json";
+
+const liveBetsArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/live-bets.json"),
+  (raw) => raw as LiveBetsArtifact,
+);
+const liveWagersArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/live-wagers.json"),
+  readWagerListArtifact,
+);
+const analysisReportArtifact = cachedJsonFile(
+  resolve(repoRoot, ANALYSIS_REPORT_PATH),
+  readAnalysisReport,
+);
+const contestsArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/contests.json"),
+  readContestFile,
+);
+const boardArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/game-admin-board.json"),
+  readBoardFile,
+);
+const catalogArtifact = cachedJsonFile(
+  resolve(repoRoot, SPORT_CATALOG_PATH),
+  loadSportCatalog,
+);
+const scoreboardArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/scoreboard.json"),
+  readScoreboardFile,
+);
+const agentTreeArtifact = cachedJsonFile(
+  resolve(repoRoot, "data/agent-tree.json"),
+  (raw) => raw as AgentTree,
+);
+
+interface AgentTree {
+  readonly nodes?: Record<string, { l?: number | null; t?: string | null }>;
+  readonly [key: string]: unknown;
 }
 
 /** Reads the committed artifact first; falls back to the captured sample row. */
@@ -195,29 +302,33 @@ async function loadLiveBets(): Promise<{
   pendingCount: number;
   dataSource: string;
   capturedAt: string | null;
+  /** Which artifact version answered, so a response body can be cached on it. */
+  version: string;
 }> {
-  const artifactFile = Bun.file(resolve(repoRoot, "data/live-bets.json"));
-  if (await artifactFile.exists()) {
-    const artifact = (await artifactFile.json()) as LiveBetsArtifact;
+  const artifact = await liveBetsArtifact.read();
+  if (artifact !== null) {
     return {
-      games: [...artifact.games],
-      agents: artifact.agents,
-      pendingCount: artifact.pendingCount,
-      dataSource: artifact.dataSource,
-      capturedAt: artifact.capturedAt,
+      games: [...artifact.value.games],
+      agents: artifact.value.agents,
+      pendingCount: artifact.value.pendingCount,
+      dataSource: artifact.value.dataSource,
+      capturedAt: artifact.value.capturedAt,
+      version: `live-bets:${artifact.version}`,
     };
   }
 
   const sampleFile = Bun.file(
     resolve(repoRoot, "tests/f402-pending-wager-sample.json"),
   );
-  if (!(await sampleFile.exists())) {
+  const sampleStat = await sampleFile.stat().catch(() => null);
+  if (sampleStat === null) {
     return {
       games: [],
       agents: summarizeAgents([]),
       pendingCount: 0,
       dataSource: "none",
       capturedAt: null,
+      version: "live-bets:none",
     };
   }
   const pending = readPendingRows(await sampleFile.json());
@@ -228,55 +339,23 @@ async function loadLiveBets(): Promise<{
     pendingCount: pending.length,
     dataSource: "sample-fixture:tests/f402-pending-wager-sample.json",
     capturedAt: null,
+    version: `live-bets:sample:${sampleStat.mtimeMs}:${sampleStat.size}`,
   };
-}
-
-/** The live wager list ({LIST: [...]}), when a capture has been saved. */
-/** The live wager list ({LIST: [...]}) plus the file's own account of its completeness. */
-async function loadLiveWagerList() {
-  const file = Bun.file(resolve(repoRoot, "data/live-wagers.json"));
-  if (!(await file.exists())) return null;
-  return readWagerListArtifact(await file.json());
 }
 
 /** A stored Analysis report result, when one has been transcribed. */
 async function loadAnalysisReport() {
-  const file = Bun.file(
-    resolve(repoRoot, "data/analysis-cp-baseball-2026-11-01.json"),
-  );
-  if (!(await file.exists())) return null;
-  return readAnalysisReport(await file.json());
-}
-
-/** Contest (futures) list extracted from the sports nav markup. */
-async function loadContests() {
-  const file = Bun.file(resolve(repoRoot, "data/contests.json"));
-  if (!(await file.exists())) return null;
-  return readContestFile(await file.json());
+  return (await analysisReportArtifact.read())?.value ?? null;
 }
 
 /** Game Admin "Admin" module: per-game lines and the money on each side. */
 async function loadBoard() {
-  const file = Bun.file(resolve(repoRoot, "data/game-admin-board.json"));
-  if (!(await file.exists())) return null;
-  return readBoardFile(await file.json());
-}
-
-/** Portal sport catalog (19 sports / 230 sub-sports / 42 period entries). */
-const SPORT_CATALOG_PATH =
-  "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json";
-
-async function loadCatalog() {
-  const file = Bun.file(resolve(repoRoot, SPORT_CATALOG_PATH));
-  if (!(await file.exists())) return null;
-  return loadSportCatalog(await file.json());
+  return (await boardArtifact.read())?.value ?? null;
 }
 
 /** Portal scoreboard transcribed from the manager page; null when absent. */
 async function loadScoreboard(): Promise<ScoreboardFile | null> {
-  const file = Bun.file(resolve(repoRoot, "data/scoreboard.json"));
-  if (!(await file.exists())) return null;
-  return readScoreboardFile(await file.json());
+  return (await scoreboardArtifact.read())?.value ?? null;
 }
 
 /** Team-logo names come from the feed and may contain spaces (`"Arsenal FC.png"`).
@@ -291,6 +370,92 @@ function isLogoName(name: string): boolean {
     if (code < 0x20 || ch === "/" || ch === "\\") return false;
   }
   return true;
+}
+
+/**
+ * Where team logos come from, and the memo of what came back.
+ *
+ * The scoreboard's `LogoTeam1`/`LogoTeam2` are file names, and the same handful repeat across every
+ * refresh, so the decoded bytes are kept for an hour rather than re-fetched per request. The key
+ * includes the requested width and the base URL: `SPORTSDESK_LOGO_BASE_URL` exists so a test can
+ * point at a fixture instead of the CDN, and pointing it elsewhere must not serve the old bytes.
+ */
+const LOGO_CACHE_TTL_MS = 60 * 60 * 1000;
+const LOGO_CACHE_MAX = 64;
+const MAX_LOGO_BYTES = 4 * 1024 * 1024;
+const DEFAULT_LOGO_BASE_URL = "https://cdn.fastassets.io/images/team-logos/";
+
+interface CachedLogo {
+  readonly at: number;
+  readonly bytes: Uint8Array<ArrayBuffer>;
+  readonly metadata: LogoMetadata;
+  readonly resized: boolean;
+}
+
+const logoCache = new Map<string, CachedLogo>();
+
+type LogoResult =
+  | ({ readonly kind: "ok" } & CachedLogo)
+  | { readonly kind: "upstream"; readonly status: number }
+  | { readonly kind: "undecodable"; readonly code: string }
+  | { readonly kind: "too-large"; readonly bytes: number };
+
+function logoBaseUrl(): string {
+  const configured = Bun.env.SPORTSDESK_LOGO_BASE_URL ?? "";
+  return configured === "" ? DEFAULT_LOGO_BASE_URL : configured;
+}
+
+async function fetchLogo(
+  name: string,
+  width: number | null,
+): Promise<LogoResult> {
+  const base = logoBaseUrl();
+  const key = `${base}|${name}|${width ?? 0}`;
+  const hit = logoCache.get(key);
+  if (hit !== undefined && Date.now() - hit.at < LOGO_CACHE_TTL_MS) {
+    return { kind: "ok", ...hit };
+  }
+
+  const url = base + encodeURIComponent(name);
+  const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  if (!res.ok) return { kind: "upstream", status: res.status };
+
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > MAX_LOGO_BYTES) {
+    return { kind: "too-large", bytes: declared };
+  }
+  const raw = new Uint8Array(await res.arrayBuffer());
+  if (raw.byteLength > MAX_LOGO_BYTES) {
+    return { kind: "too-large", bytes: raw.byteLength };
+  }
+
+  // The upstream content-type is a claim; decoding is the proof, and it is also where the
+  // dimensions come from.
+  let metadata: LogoMetadata;
+  try {
+    metadata = await inspectLogo(raw);
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code: unknown }).code)
+        : "ERR_IMAGE_DECODE_FAILED";
+    return { kind: "undecodable", code };
+  }
+
+  const processed =
+    width === null
+      ? { bytes: raw, metadata, resized: false }
+      : await resizeLogo(raw, metadata, width);
+
+  const entry: CachedLogo = {
+    at: Date.now(),
+    bytes: processed.bytes,
+    metadata: processed.metadata,
+    resized: processed.resized,
+  };
+  if (logoCache.size >= LOGO_CACHE_MAX) logoCache.clear();
+  logoCache.set(key, entry);
+  return { kind: "ok", ...entry };
 }
 
 /** JSON files the generated graph page fetches relative to itself. */
@@ -319,9 +484,6 @@ export function startServer(options?: ServerOptions) {
     repoRoot,
     "static/telegram-miniapp-dashboard.html",
   );
-
-  const customerDashboardFile = Bun.file(customerDashboardPath);
-  const miniappDashboardFile = Bun.file(miniappDashboardPath);
 
   const isDevelopment =
     options?.development ??
@@ -556,27 +718,68 @@ export function startServer(options?: ServerOptions) {
             headers: cors,
           });
         }
+        // `?w=N` asks for a downscale (16..1024); `?meta=1` asks for the measurement instead of
+        // the pixels, which is what a layout needs to reserve the box before the image lands.
+        const requestedWidth = Number(url.searchParams.get("w") ?? "");
+        const width =
+          Number.isFinite(requestedWidth) &&
+          requestedWidth >= 16 &&
+          requestedWidth <= 1024
+            ? Math.trunc(requestedWidth)
+            : null;
+        const wantsMeta = /^(1|true|json)$/i.test(
+          url.searchParams.get("meta") ?? "",
+        );
+
         try {
-          const url = "https://cdn.fastassets.io/images/team-logos/" + name;
-          const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-          if (!res.ok) {
+          const logo = await fetchLogo(name, width);
+          if (logo.kind === "upstream") {
             return new Response("not found", {
-              status: res.status,
+              status: logo.status,
               headers: cors,
             });
           }
-          const type = res.headers.get("content-type") ?? "";
-          if (!type.startsWith("image/")) {
-            return new Response("upstream did not return an image", {
-              status: 502,
-              headers: cors,
-            });
+          if (logo.kind === "too-large") {
+            return Response.json(
+              {
+                error: "upstream image exceeds the size cap",
+                bytes: logo.bytes,
+              },
+              { status: 502, headers: cors },
+            );
           }
-          const blob = await res.blob();
-          return new Response(blob, {
+          if (logo.kind === "undecodable") {
+            return Response.json(
+              {
+                error: "upstream did not return a decodable image",
+                code: logo.code,
+              },
+              { status: 502, headers: cors },
+            );
+          }
+
+          if (wantsMeta) {
+            return Response.json(
+              {
+                name,
+                source: logoBaseUrl() + encodeURIComponent(name),
+                contentType: logo.metadata.contentType,
+                width: logo.metadata.width,
+                height: logo.metadata.height,
+                format: logo.metadata.format,
+                bytes: logo.metadata.bytes,
+                resized: logo.resized,
+                requestedWidth: width,
+              },
+              { headers: { ...cors, "Cache-Control": "no-store" } },
+            );
+          }
+
+          return new Response(logo.bytes, {
             headers: {
               ...cors,
-              "Content-Type": blob.type || "image/png",
+              ...logoHeaders(logo.metadata),
+              "Content-Type": contentTypeFor(logo.metadata.format),
               "Cache-Control": "public, max-age=86400, immutable",
             },
           });
@@ -685,45 +888,42 @@ export function startServer(options?: ServerOptions) {
 
       // 7. Live bets view
       if (pathname === "/live-bets") {
-        return new Response(
-          Bun.file(resolve(repoRoot, "static/live-bets.html")),
-          {
-            headers: {
-              ...cors,
-              "Content-Type": "text/html; charset=utf-8",
-            },
-          },
+        return fileResponse(
+          req,
+          resolve(repoRoot, "static/live-bets.html"),
+          "text/html; charset=utf-8",
+          cors,
         );
       }
 
       // 8. Executive Dashboard (GET / or GET /dashboard)
       if (pathname === "/" || pathname === "/dashboard") {
-        return new Response(customerDashboardFile, {
-          headers: {
-            ...cors,
-            "Content-Type": "text/html; charset=utf-8",
-          },
-        });
+        return fileResponse(
+          req,
+          customerDashboardPath,
+          "text/html; charset=utf-8",
+          cors,
+        );
       }
 
       // 8b. Status page (GET /status)
       if (pathname === "/status" || pathname === "/status/") {
-        return new Response(Bun.file(resolve(repoRoot, "static/status.html")), {
-          headers: {
-            ...cors,
-            "Content-Type": "text/html; charset=utf-8",
-          },
-        });
+        return fileResponse(
+          req,
+          resolve(repoRoot, "static/status.html"),
+          "text/html; charset=utf-8",
+          cors,
+        );
       }
 
       // 9. Telegram Mini App (GET /miniapp)
       if (pathname === "/miniapp" || pathname === "/miniapp/") {
-        return new Response(miniappDashboardFile, {
-          headers: {
-            ...cors,
-            "Content-Type": "text/html; charset=utf-8",
-          },
-        });
+        return fileResponse(
+          req,
+          miniappDashboardPath,
+          "text/html; charset=utf-8",
+          cors,
+        );
       }
 
       // 10. Dedicated Surveillance Graph & Shadow Portfolio Page (GET /graph or /graph.html)
@@ -747,21 +947,21 @@ export function startServer(options?: ServerOptions) {
             { status: rejected.status, headers: cors },
           );
         }
-        return new Response(Bun.file(resolve(repoRoot, "docs/graph.html")), {
-          headers: {
-            ...cors,
-            "Content-Type": "text/html; charset=utf-8",
-          },
-        });
+        return fileResponse(
+          req,
+          resolve(repoRoot, "docs/graph.html"),
+          "text/html; charset=utf-8",
+          cors,
+        );
       }
 
       if (pathname === "/graph.js") {
-        return new Response(Bun.file(resolve(repoRoot, "docs/graph.js")), {
-          headers: {
-            ...cors,
-            "Content-Type": "application/javascript; charset=utf-8",
-          },
-        });
+        return fileResponse(
+          req,
+          resolve(repoRoot, "docs/graph.js"),
+          "application/javascript; charset=utf-8",
+          cors,
+        );
       }
 
       // 11. Graph data plane. `docs/graph.js` fetches these relative to the page, so the
@@ -782,28 +982,20 @@ export function startServer(options?: ServerOptions) {
             { status: rejected.status, headers: cors },
           );
         }
-        return new Response(
-          Bun.file(resolve(repoRoot, "docs/graph-live-feed.json")),
-          {
-            headers: {
-              ...cors,
-              "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": "no-store",
-            },
-          },
+        return fileResponse(
+          req,
+          resolve(repoRoot, "docs/graph-live-feed.json"),
+          "application/json; charset=utf-8",
+          { ...cors, "Cache-Control": "no-store" },
         );
       }
 
       if (GRAPH_DOCS_JSON.has(pathname)) {
-        return new Response(
-          Bun.file(resolve(repoRoot, "docs", pathname.slice(1))),
-          {
-            headers: {
-              ...cors,
-              "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": "no-store",
-            },
-          },
+        return fileResponse(
+          req,
+          resolve(repoRoot, "docs", pathname.slice(1)),
+          "application/json; charset=utf-8",
+          { ...cors, "Cache-Control": "no-store" },
         );
       }
 
@@ -851,8 +1043,8 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const artifact = await loadLiveWagerList();
-        if (artifact === null) {
+        const cachedWagers = await liveWagersArtifact.read();
+        if (cachedWagers === null) {
           return Response.json(
             {
               error: "no live wager list",
@@ -861,6 +1053,7 @@ export function startServer(options?: ServerOptions) {
             { status: 404, headers: cors },
           );
         }
+        const artifact = cachedWagers.value;
         const wagers = artifact.wagers;
 
         const writer = (url.searchParams.get("writer") ?? "")
@@ -873,25 +1066,32 @@ export function startServer(options?: ServerOptions) {
             (type === "" || wager.wagerType === type),
         );
 
-        return Response.json(
-          {
-            success: true,
-            summary: summarizeLiveWagers(filtered),
-            all: summarizeLiveWagers(wagers),
-            writer: writer === "" ? null : writer,
-            type: type === "" ? null : type,
-            // The file's own account of itself: a 17-row subset reads as 17 rows, not as the list.
-            provenance: artifact.provenance,
-            wagers: filtered,
-          },
-          { headers: { ...cors, "Cache-Control": "no-store" } },
-        );
+        return encodedResponse(req, {
+          // The filtered shape depends on the query, so it is part of the version.
+          version: `live-wagers|${cachedWagers.version}|${writer}|${type}`,
+          contentType: "application/json; charset=utf-8",
+          produce: () =>
+            new TextEncoder().encode(
+              JSON.stringify({
+                success: true,
+                summary: summarizeLiveWagers(filtered),
+                all: summarizeLiveWagers(wagers),
+                writer: writer === "" ? null : writer,
+                type: type === "" ? null : type,
+                // The file's own account of itself: a 17-row subset reads as 17 rows, not as the list.
+                provenance: artifact.provenance,
+                wagers: filtered,
+              }),
+            ),
+          headers: { ...cors, "Cache-Control": "no-store" },
+        });
       }
 
       // Contest / futures list: the sports nav's get-games-prop anchors.
       if (pathname === "/api/contests") {
-        const contests = await loadContests();
-        if (contests === null) {
+        const cachedContests = await contestsArtifact.read();
+        // A parse that returns null is "this file is not a contest list", same as absent.
+        if (cachedContests === null || cachedContests.value === null) {
           return Response.json(
             {
               error: "no contest list",
@@ -900,6 +1100,7 @@ export function startServer(options?: ServerOptions) {
             { status: 404, headers: cors },
           );
         }
+        const contests = cachedContests.value;
 
         const group = url.searchParams.get("group") ?? "";
         const query = url.searchParams.get("q") ?? "";
@@ -908,19 +1109,24 @@ export function startServer(options?: ServerOptions) {
           query,
         );
 
-        return Response.json(
-          {
-            success: true,
-            source: contests.source,
-            extractedAt: contests.extractedAt,
-            summary: summarizeContests(contests),
-            group: group === "" ? null : group,
-            query: query === "" ? null : query,
-            count: filtered.length,
-            entries: filtered,
-          },
-          { headers: { ...cors, "Cache-Control": "no-store" } },
-        );
+        return encodedResponse(req, {
+          version: `contests|${cachedContests.version}|${group}|${query}`,
+          contentType: "application/json; charset=utf-8",
+          produce: () =>
+            new TextEncoder().encode(
+              JSON.stringify({
+                success: true,
+                source: contests.source,
+                extractedAt: contests.extractedAt,
+                summary: summarizeContests(contests),
+                group: group === "" ? null : group,
+                query: query === "" ? null : query,
+                count: filtered.length,
+                entries: filtered,
+              }),
+            ),
+          headers: { ...cors, "Cache-Control": "no-store" },
+        });
       }
 
       // Game Admin board: the market with exposure on each side, per game.
@@ -994,13 +1200,14 @@ export function startServer(options?: ServerOptions) {
 
       // Sport catalog: sub-sports and the full period menus, with their types.
       if (pathname === "/api/sports/catalog") {
-        const catalog = await loadCatalog();
-        if (catalog === null) {
+        const cachedCatalog = await catalogArtifact.read();
+        if (cachedCatalog === null || cachedCatalog.value === null) {
           return Response.json(
             { error: "no sport catalog fixture" },
             { status: 404, headers: cors },
           );
         }
+        const catalog = cachedCatalog.value;
 
         const sportFilter = (url.searchParams.get("sport") ?? "").trim();
         const codeFilter = (url.searchParams.get("subSport") ?? "").trim();
@@ -1044,23 +1251,28 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        return Response.json(
-          {
-            success: true,
-            source: SPORT_CATALOG_PATH,
-            provider: catalog.provider,
-            capturedAt: catalog.capturedAt,
-            periodsCapturedAt: catalog.periodsCapturedAt,
-            summary: summarizeCatalog(catalog),
-            periodTypes: periodTypeIndex(catalog),
-            subSports: subSportIndex(catalog),
-            collisions: catalog.collisions,
-            migrationRisks: catalog.migrationRisks,
-            expectedEmptySubSportPaths: catalog.expectedEmptySubSportPaths,
-            sports,
-          },
-          { headers: { ...cors, "Cache-Control": "no-store" } },
-        );
+        return encodedResponse(req, {
+          version: `catalog|${cachedCatalog.version}|${sportFilter}|${codeFilter}`,
+          contentType: "application/json; charset=utf-8",
+          produce: () =>
+            new TextEncoder().encode(
+              JSON.stringify({
+                success: true,
+                source: SPORT_CATALOG_PATH,
+                provider: catalog.provider,
+                capturedAt: catalog.capturedAt,
+                periodsCapturedAt: catalog.periodsCapturedAt,
+                summary: summarizeCatalog(catalog),
+                periodTypes: periodTypeIndex(catalog),
+                subSports: subSportIndex(catalog),
+                collisions: catalog.collisions,
+                migrationRisks: catalog.migrationRisks,
+                expectedEmptySubSportPaths: catalog.expectedEmptySubSportPaths,
+                sports,
+              }),
+            ),
+          headers: { ...cors, "Cache-Control": "no-store" },
+        });
       }
 
       // Analysis report vocabulary: the codes the portal's filter bar sends, transcribed from
@@ -1117,12 +1329,9 @@ export function startServer(options?: ServerOptions) {
         let agentLevel: number | null = null;
         const selection = parsed.selection;
         if (selection.agent !== "") {
-          const treeFile = Bun.file(resolve(repoRoot, "data/agent-tree.json"));
-          if (await treeFile.exists()) {
-            const tree = (await treeFile.json()) as {
-              nodes?: Record<string, { l?: number | null }>;
-            };
-            const node = tree.nodes?.[selection.agent.toUpperCase()];
+          const tree = await agentTreeArtifact.read();
+          if (tree !== null) {
+            const node = tree.value.nodes?.[selection.agent.toUpperCase()];
             agentKnown = node !== undefined;
             agentLevel =
               node !== undefined && typeof node.l === "number" ? node.l : null;
@@ -1257,8 +1466,8 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const treeFile = Bun.file(resolve(repoRoot, "data/agent-tree.json"));
-        if (!(await treeFile.exists())) {
+        const tree = await agentTreeArtifact.read();
+        if (tree === null) {
           return Response.json(
             { error: "no agent tree; run bun run build:agent-tree" },
             { status: 404, headers: cors },
@@ -1282,10 +1491,7 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const tree = (await treeFile.json()) as {
-          nodes?: Record<string, { l?: number | null; t?: string | null }>;
-        };
-        const nodes = tree.nodes ?? {};
+        const nodes = tree.value.nodes ?? {};
         const matches = Object.entries(nodes)
           .filter(([key]) => key.includes(query))
           .sort((a, b) => {
@@ -1322,15 +1528,14 @@ export function startServer(options?: ServerOptions) {
             { status: rejected.status, headers: cors },
           );
         }
-        const treeFile = Bun.file(resolve(repoRoot, "data/agent-tree.json"));
-        if (!(await treeFile.exists())) {
+        const tree = await agentTreeArtifact.read();
+        if (tree === null) {
           return Response.json(
             { error: "no agent tree; run bun run build:agent-tree" },
             { status: 404, headers: cors },
           );
         }
-        const tree = (await treeFile.json()) as Record<string, unknown>;
-        const { agents } = await loadLiveBets();
+        const { agents, version: betsVersion } = await loadLiveBets();
         const counts: Record<
           string,
           { games: number; wagered: number; toWin: number }
@@ -1342,10 +1547,14 @@ export function startServer(options?: ServerOptions) {
             toWin: agent.toWin,
           };
         }
-        return Response.json(
-          { ...tree, counts },
-          { headers: { ...cors, "Cache-Control": "no-store" } },
-        );
+        const body = { ...tree.value, counts };
+        return encodedResponse(req, {
+          // The payload joins two artifacts, so both versions belong in the key.
+          version: `agent-tree|${tree.version}|${betsVersion}`,
+          contentType: "application/json; charset=utf-8",
+          produce: () => new TextEncoder().encode(JSON.stringify(body)),
+          headers: { ...cors, "Cache-Control": "no-store" },
+        });
       }
 
       if (pathname.startsWith("/assets/")) {

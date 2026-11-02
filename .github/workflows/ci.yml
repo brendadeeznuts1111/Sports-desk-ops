@@ -90,6 +90,9 @@ jobs:
       - name: "Route surface (served = ledger = spec)"
         timeout-minutes: 2
         run: bun run check:route-surface
+      - name: "No credentials in tracked files"
+        timeout-minutes: 2
+        run: bun run check:secrets
       - name: "Ops audit (release registry, archive provenance)"
         timeout-minutes: 2
         run: bun run audit:ops

@@ -80,14 +80,17 @@ function fileServingArms(source: string): Map<string, string> {
     }
     const bodyText = body.join("\n");
 
-    // "Serves" means the arm returns the file. An arm that opens an artifact to answer a
-    // question about it — /api/analysis reads data/agent-tree.json to say whether a name is
-    // known — is not serving that artifact, and counting it produced a false positive.
-    if (!/new Response\(/.test(bodyText) || !/Bun\.file\(/.test(bodyText))
-      continue;
-    const file = /Bun\.file\(\s*resolve\(repoRoot,\s*"([^"]+)"\s*\)/.exec(
-      bodyText,
-    )?.[1];
+    // "Serves" means the arm returns the file, either inline (`new Response(Bun.file(…))`) or
+    // through the cached, compressing helper (`fileResponse(req, resolve(repoRoot, …))`). An arm
+    // that opens an artifact to answer a question about it — /api/analysis reads
+    // data/agent-tree.json to say whether a name is known — is not serving it, and counting it
+    // produced a false positive.
+    if (!/new Response\(|fileResponse\(/.test(bodyText)) continue;
+    const file =
+      /Bun\.file\(\s*resolve\(repoRoot,\s*"([^"]+)"\s*\)/.exec(bodyText)?.[1] ??
+      /fileResponse\(\s*req,\s*resolve\(repoRoot,\s*"([^"]+)"\s*\)/s.exec(
+        bodyText,
+      )?.[1];
     if (file === undefined) continue;
     for (const path of paths) map.set(path, file);
   }

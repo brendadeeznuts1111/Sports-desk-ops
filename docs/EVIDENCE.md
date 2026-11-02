@@ -15,13 +15,13 @@ it.** Everything else is labelled as observed, inferred or unimplemented — in 
 | Tier  | Meaning                                                                                                                                                                                                      | Count       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
 | **A** | Captured wire contract: a real request **and** a real response capture exist.                                                                                                                                | 8           |
-| **B** | Observed first-party evidence: a captured or operator-recorded wire request, an observed request payload, or a route this repo serves verified against its handler source. Response may still be uncaptured. | 6           |
-| **C** | Inferred only: authored in the spec/generators, a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response observed.                                       | 31          |
+| **B** | Observed first-party evidence: a captured or operator-recorded wire request, an observed request payload, or a route this repo serves verified against its handler source. Response may still be uncaptured. | 7           |
+| **C** | Inferred only: authored in the spec/generators, a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response observed.                                       | 30          |
 | **D** | A real surface recorded in `surfaces[]`, never in `operations[]`. Most of its routes are now published in the spec.                                                                                          | 20 surfaces |
 | **E** | Documented operation with no implementation in this repository.                                                                                                                                              | 10          |
 
 **Operations:** the ledger has 55 rows = 54 paths (`/api/desk/auth/session` carries both `POST` and
-`DELETE`): A 8 + B 6 + C 31 + D 0 + E 10 = 55. The published spec has **70 paths / 70 operations**
+`DELETE`): A 8 + B 7 + C 30 + D 0 + E 10 = 55. The published spec has **70 paths / 70 operations**
 (`scripts/audit_docs_webview_cron.ts:47`): the 44 ledger rows that are not reserved — 55 minus the 10
 tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 26 routes recorded only as
 `surfaces[]` members (25 daemon routes and `POST /cloud/api/Manager/getHistory`).

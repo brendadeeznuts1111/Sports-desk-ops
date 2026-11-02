@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "spec": "docs/evidence/manager-boot-har-redaction.md",
   "harPath": "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
-  "harSha256": "ce761e4f1a77db53744418a4718bdcdfe49420a65f1bd959e44f65f016501520",
+  "harSha256": "ea597465a77bcd807911edadc679d3ce49307569a730076ed75a3afc37df03ad",
   "capturedAt": "2026-11-01T16:32:20.155Z",
   "entryCount": 18,
   "managerApiEntries": 9,

@@ -380,22 +380,47 @@ response. Then correct the path/method in the spec if they differ. Expected auth
 cookie; the `/cloud/api/<Model>/<method>` shape means the _model prefix_ is the least certain part of each
 candidate and must be read off the wire, not inferred from the tile name.
 
-| Tile                 | Candidate path + method                     | DOM selector (declared)                     | Declared inputs                                          | Upgrade if captured                                    |
-| -------------------- | ------------------------------------------- | ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| Game Admin           | `POST /cloud/api/Manager/gameAdmin`         | `div.tile:has-text('Game Admin')`           | rotationNumber, sportType, circleLimit, isLocked         | C→A                                                    |
-| Messaging            | `POST /cloud/api/System/getMessages`        | `div.tile:has-text('Messaging')`            | recipientScope, subject, messageBody, priority           | C→A                                                    |
-| Cashier              | `POST /cloud/api/Manager/adjustBalance`     | `div.tile:has-text('Cashier')`              | customerID, amountCents, transactionType, notes          | C→A (write: test account only)                         |
-| Add Customer         | `POST /cloud/api/Manager/createPlayer`      | `div.tile:has-text('Add Customer')`         | customerID, agentID, password, creditLimit, delaySeconds | C→A (write: test account only)                         |
-| 3rd Party Limits     | `POST /cloud/api/Manager/get3rdPartyLimits` | `div.tile:has-text('3rd Party Limits')`     | providerID, sportCategory, maxLimitCents                 | C→A                                                    |
-| Analysis             | `POST /cloud/api/Report/getAnalysis`        | `div.tile:has-text('Analysis')`             | period, sport, marketCategory, agentID                   | C→A — also has UI action-name evidence (`runbook:166`) |
-| Scores               | `POST /cloud/api/Manager/getScores`         | `div.tile:has-text('Scores')`               | gameID, periodIndex, homeScore, awayScore, isFinal       | C→A                                                    |
-| Agent Admin          | `POST /cloud/api/Manager/getAgentTree`      | `div.tile:has-text('Agent Admin')`          | masterAgent, commissionSplitPercent, creditCeiling       | C→A                                                    |
-| Billing              | `POST /cloud/api/Manager/getBilling`        | `div.tile:has-text('Billing')`              | billingWeek, ratePerActiveHead, activeAccountCount       | C→A                                                    |
-| Settings & Rules     | `POST /cloud/api/Manager/getRules`          | `div.tile:has-text('Rules')`                | parlayMaxPayout, teaserTieRule, defaultDelaySeconds      | C→A                                                    |
-| Transactions History | `POST /cloud/api/Report/getFinancialReport` | `div.tile:has-text('Transactions History')` | customerID, startDate, endDate, transactionFilter        | C→A — also has UI action-name evidence (`runbook:167`) |
+| Tile                 | Candidate path + method                       | DOM selector (declared)                     | Declared inputs                                          | Upgrade if captured                                    |
+| -------------------- | --------------------------------------------- | ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| Game Admin           | `POST /cloud/api/Manager/gameAdmin`           | `div.tile:has-text('Game Admin')`           | rotationNumber, sportType, circleLimit, isLocked         | C→A                                                    |
+| Messaging            | `POST /cloud/api/System/getMessages`          | `div.tile:has-text('Messaging')`            | recipientScope, subject, messageBody, priority           | C→A                                                    |
+| Cashier              | `POST /cloud/api/Manager/adjustBalance`       | `div.tile:has-text('Cashier')`              | customerID, amountCents, transactionType, notes          | C→A (write: test account only)                         |
+| Add Customer         | `POST /cloud/api/Manager/createPlayer`        | `div.tile:has-text('Add Customer')`         | customerID, agentID, password, creditLimit, delaySeconds | C→A (write: test account only)                         |
+| 3rd Party Limits     | `POST /cloud/api/Manager/get3rdPartyLimits`   | `div.tile:has-text('3rd Party Limits')`     | providerID, sportCategory, maxLimitCents                 | C→A                                                    |
+| Analysis             | `POST /cloud/api/Report/getAnalysis`          | `div.tile:has-text('Analysis')`             | period, sport, marketCategory, agentID                   | C→A — also has UI action-name evidence (`runbook:166`) |
+| Scores               | `POST /cloud/api/Report/getScoresLiveDynamic` | `div.tile:has-text('Scores')`               | gameID, periodIndex, homeScore, awayScore, isFinal       | B→A — request observed 2026-11-02 (see below)          |
+| Agent Admin          | `POST /cloud/api/Manager/getAgentTree`        | `div.tile:has-text('Agent Admin')`          | masterAgent, commissionSplitPercent, creditCeiling       | C→A                                                    |
+| Billing              | `POST /cloud/api/Manager/getBilling`          | `div.tile:has-text('Billing')`              | billingWeek, ratePerActiveHead, activeAccountCount       | C→A                                                    |
+| Settings & Rules     | `POST /cloud/api/Manager/getRules`            | `div.tile:has-text('Rules')`                | parlayMaxPayout, teaserTieRule, defaultDelaySeconds      | C→A                                                    |
+| Transactions History | `POST /cloud/api/Report/getFinancialReport`   | `div.tile:has-text('Transactions History')` | customerID, startDate, endDate, transactionFilter        | C→A — also has UI action-name evidence (`runbook:167`) |
 
 The declared inputs are **form-field names seen in the DOM**, not request-body fields. Capture must
 establish whether they are POSTed under those names, under a wrapper, or not at all.
+
+### Scores: the observed request and response shape (2026-11-02)
+
+The Scores panel does not use the tile's candidate path, and it does not send a form:
+
+```json
+{
+  "customerID": "<logged-in account>",
+  "operation": "getScoresLiveDynamic",
+  "RRO": 1,
+  "agentID": "<logged-in agent>",
+  "agentOwner": "<logged-in agent>"
+}
+```
+
+sent as `content-type: application/json` to `POST /cloud/api/Report/getScoresLiveDynamic`. The
+response was an object with a `Scores` array; three field names were seen — `LogoTeam1`,
+`LogoTeam2` and `BroadcastInfo`. The logo fields are the portal's **image file names**, not team
+names (`Boston-Celtics.png`, `Notre Dame Fighting Irish.png`, `miami_dolphins_logo.png`,
+`toronto.png`, and `NHL.png` in a team slot), which is what `/api/logo/{name}` resolves.
+
+This is an operator transcript, not a capture: no artifact, no body hash, and the remaining response
+fields are unknown. The row moved C→B on the strength of the observed request; **A still needs the
+redacted capture**, and that capture is also what would settle whether the tile-candidate path
+(`Manager/getScores`) is a second endpoint or a stale name.
 
 ---
 
@@ -406,10 +431,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                               | Spec drift to fix                                                         |
 | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `sportsdesk_webview_server.ts:606-626`                | add `url`, `timestamp` to the response                                    |
-| `GET /api/watchlist`        | `sportsdesk_webview_server.ts:1464-1474` + `:156-175` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1477-1502`              | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1505-1525`              | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `GET /health`               | `sportsdesk_webview_server.ts:810-830`                | add `url`, `timestamp` to the response                                    |
+| `GET /api/watchlist`        | `sportsdesk_webview_server.ts:1674-1684` + `:156-175` | add 401/503 responses from `adminRejection`                               |
+| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1687-1712`              | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1715-1735`              | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,

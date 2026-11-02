@@ -870,7 +870,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Daemon health and telemetry probe",
-        "description": "Handler-defined contract: services/sportsdesk_webview_server.ts:606-626 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts:9,1562-1565), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
+        "description": "Handler-defined contract: services/sportsdesk_webview_server.ts:810-830 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts:9,1562-1565), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
         "operationId": "getHealth",
         "responses": {
           "200": {
@@ -960,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:606-626",
+            "services/sportsdesk_webview_server.ts:810-830",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:606-626 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:810-830 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },
@@ -972,7 +972,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Monitored watch-list accounts",
-        "description": "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts:1464-1474). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts:156-175).",
+        "description": "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts:1674-1684). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts:165-184).",
         "operationId": "getApiWatchlist",
         "security": [
           {
@@ -1020,7 +1020,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1085,8 +1085,8 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1464-1474",
-            "services/sportsdesk_webview_server.ts:156-175",
+            "services/sportsdesk_webview_server.ts:1674-1684",
+            "services/sportsdesk_webview_server.ts:165-184",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1098,7 +1098,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Dispatch an instant Telegram alert",
-        "description": "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts:1477-1502). Admin-token gated (services/sportsdesk_webview_server.ts:156-175).",
+        "description": "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts:1687-1712). Admin-token gated (services/sportsdesk_webview_server.ts:165-184).",
         "operationId": "postApiTelegramAlert",
         "security": [
           {
@@ -1158,7 +1158,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1189,7 +1189,7 @@
             }
           },
           "500": {
-            "description": "Dispatch threw (services/sportsdesk_webview_server.ts:1493-1501).",
+            "description": "Dispatch threw (services/sportsdesk_webview_server.ts:1703-1711).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1477-1502",
+            "services/sportsdesk_webview_server.ts:1687-1712",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1270,7 +1270,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Trigger a scheduled Telegram report",
-        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts:1505-1525). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts:156-175).",
+        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts:1715-1735). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts:165-184).",
         "operationId": "postApiTelegramReport",
         "security": [
           {
@@ -1282,7 +1282,7 @@
             "name": "type",
             "in": "query",
             "required": false,
-            "description": "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts:1506).",
+            "description": "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts:1716).",
             "schema": {
               "type": "string",
               "enum": [
@@ -1335,7 +1335,7 @@
             }
           },
           "400": {
-            "description": "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts:1507-1514).",
+            "description": "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts:1717-1724).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1366,7 +1366,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1431,7 +1431,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1505-1525",
+            "services/sportsdesk_webview_server.ts:1715-1735",
             "services/sportsdesk_telegram_bot.ts:77-81",
             "docs/openapi.json"
           ],
@@ -1775,37 +1775,97 @@
     },
     "/cloud/api/Manager/getScores": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "Launcher tile: Scores",
-        "description": "UNVERIFIED — no capture exists. The path and method are candidate values inferred from a UI/DOM observation; they were never observed on the wire. The launcher-tile DOM metadata (x-dom-tile, x-dom-selector, x-extracted-inputs) is UI observation only and must not be read as wire parameters. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "tags": ["Forensic Surveillance"],
+        "summary": "Scores leaderboard (request observed 2026-11-02; response shape partly observed)",
+        "description": "The Scores panel sends JSON, not a form: {customerID, operation: \"getScoresLiveDynamic\", RRO: 1, agentID, agentOwner} (operator transcript, 2026-11-02 — no capture artifact exists, so this is a recorded payload rather than a hashed capture). The response is an object with a Scores array; three field names were observed — LogoTeam1, LogoTeam2 and BroadcastInfo — and the logo fields are the portal's image file names (Boston-Celtics.png, Notre Dame Fighting Irish.png, miami_dolphins_logo.png, NHL.png in a team slot), not team names. Every other field is unknown and is not published. The tile's candidate URL (/cloud/api/Manager/getScores) and the path the page actually calls (/cloud/api/Report/getScoresLiveDynamic) disagree; the observed one is authoritative for the panel and the candidate row is kept only so the disagreement stays visible.",
         "operationId": "postCloudApiManagerGetScores",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["operation"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getScoresLiveDynamic"
+                  },
+                  "customerID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "agentOwner": {
+                    "type": "string"
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "An object with a Scores array. Only LogoTeam1, LogoTeam2 and BroadcastInfo were observed; the remaining fields are unknown, so the item schema is open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["Scores"],
+                  "properties": {
+                    "Scores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "LogoTeam1": {
+                            "type": "string",
+                            "description": "Portal image file name for the home side, e.g. Boston-Celtics.png; resolve through /api/logo/{name}."
+                          },
+                          "LogoTeam2": {
+                            "type": "string",
+                            "description": "Portal image file name for the away side; the same file-naming vocabulary as LogoTeam1, including league logos."
+                          },
+                          "BroadcastInfo": {
+                            "type": "string",
+                            "description": "Free text, sometimes a single space. Not a channel identifier."
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Unknown — no response artifact was captured; status codes other than 200 are not documented."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "B",
           "sources": [
             "main:scripts/portal_tile_crawler.ts:55-108",
             "main:scripts/portal_tile_crawler.ts:164-245",
-            "docs/openapi.json"
+            "docs/openapi.json",
+            "docs/evidence/capture-requests.md"
           ],
           "capturedResponse": false,
-          "requiredCapture": "In app/manager/manager.js:86861 (v1.0.280), the Scores panel calls POST /cloud/api/Report/getScoresLiveDynamic with contentType: \"application/json\" and JSON.stringify({operation: \"getScoresLiveDynamic\"}). Capture getScoresLiveDynamic and reconcile.",
+          "requiredCapture": "A redacted capture of POST /cloud/api/Report/getScoresLiveDynamic (request and response) to replace the 2026-11-02 operator transcript with an artifact. The request body and three response field names are known; the remaining fields and the non-200 statuses are not.",
           "candidateUrl": true
-        },
-        "x-discovery-status": "UNDER_SURVEILLANCE",
-        "x-dom-tile": "Scores",
-        "x-dom-selector": "div.tile:has-text('Scores')",
-        "x-extracted-inputs": [
-          "gameID",
-          "periodIndex",
-          "homeScore",
-          "awayScore",
-          "isFinal"
-        ],
-        "x-data-language-keys": ["L-1034", "L-1068"]
+        }
       }
     },
     "/cloud/api/Manager/getAgentTree": {
@@ -2515,7 +2575,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Telegram Mini App dashboard (GET /miniapp)",
-        "description": "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts:170-177) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts:350-352). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
+        "description": "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts:179-186) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts:512-514). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
         "operationId": "getMiniapp",
         "responses": {
           "200": {
@@ -2544,8 +2604,8 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:170-177",
-            "services/sportsdesk_webview_server.ts:350-352"
+            "services/sportsdesk_webview_server.ts:179-186",
+            "services/sportsdesk_webview_server.ts:512-514"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured)."
@@ -2557,7 +2617,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Operator dashboard (GET /dashboard)",
-        "description": "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts:160-167). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
+        "description": "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts:169-176). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
         "operationId": "getDashboard",
         "responses": {
           "200": {
@@ -2585,7 +2645,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:160-167"],
+          "sources": ["services/sportsdesk_webview_server.ts:169-176"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -2596,7 +2656,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Live bets derived from captured Report/Pending rows",
-        "description": "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts:146-153); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+        "description": "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts:155-162); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
         "operationId": "getApiLiveBets",
         "responses": {
           "200": {
@@ -2651,7 +2711,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:329-414"],
+          "sources": ["services/sportsdesk_webview_server.ts:491-576"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -2701,7 +2761,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:329-414"],
+          "sources": ["services/sportsdesk_webview_server.ts:491-576"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/live-bets/summary (handler-verified only; no HTTP response was captured)."
         },
@@ -2887,7 +2947,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:677-690"],
+          "sources": ["services/sportsdesk_webview_server.ts:1441-1453"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -3187,7 +3247,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Transcribed analysis reports and their recorded context",
-        "description": "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts:711-739). Surface: surface.daemon-analysis (tier D).",
+        "description": "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts:912-940). Surface: surface.daemon-analysis (tier D).",
         "operationId": "getApiAnalysisReports",
         "responses": {
           "200": {
@@ -3407,7 +3467,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Sub-sports and period menus with their types",
-        "description": "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts:265-273). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
+        "description": "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts:353-354). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
         "operationId": "getApiSportsCatalog",
         "responses": {
           "200": {
@@ -3483,7 +3543,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:265-273"],
+          "sources": ["services/sportsdesk_webview_server.ts:353-354"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },
@@ -3574,7 +3634,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Live wager ticker list with parsed legs",
-        "description": "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts:744-798). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
+        "description": "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts:945-995). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
         "operationId": "getApiLiveWagers",
         "responses": {
           "200": {
@@ -3647,7 +3707,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:744-798"],
+          "sources": ["services/sportsdesk_webview_server.ts:945-995"],
           "capturedResponse": false,
           "requiredCapture": "A full ticker capture. data/live-wagers.json currently holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so."
         },
@@ -3658,7 +3718,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Daemon status and process telemetry (GET /api/status, GET /status.json)",
-        "description": "Answers {ok, status, checks, health, telegram, timestamp} from the running process instead of fetching itself over the loopback (services/sportsdesk_webview_server.ts:628-684); a self-fetch had no port at all under a unix socket. `ok` and `status` are derived from `checks`, so the degraded branch is reachable, and `cpuUsageSinceStartMicros` is cumulative CPU time rather than utilisation. HEAD is answered like GET. Public by the table's `operational` classification — it carries uptime, memory, pid and bind address, not customer data. Surface: surface.daemon-dashboard (tier D).",
+        "description": "Answers {ok, status, checks, health, telegram, timestamp} from the running process instead of fetching itself over the loopback (services/sportsdesk_webview_server.ts:832-888); a self-fetch had no port at all under a unix socket. `ok` and `status` are derived from `checks`, so the degraded branch is reachable, and `cpuUsageSinceStartMicros` is cumulative CPU time rather than utilisation. HEAD is answered like GET. Public by the table's `operational` classification — it carries uptime, memory, pid and bind address, not customer data. Surface: surface.daemon-dashboard (tier D).",
         "operationId": "getApiStatus",
         "responses": {
           "200": {
@@ -3712,7 +3772,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:160-167"],
+          "sources": ["services/sportsdesk_webview_server.ts:169-176"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -3723,7 +3783,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Form-data parse probe (POST /api/parse-formdata)",
-        "description": "Echoes the fields of one multipart or urlencoded body as {name: string | string[]} (services/sportsdesk_webview_server.ts:407-430). Reads through `req.formData()`, which on 1.4.4 succeeds where `new Blob([await req.arrayBuffer()]).formData()` rejected Bun's own encoding; the body is bounded by the daemon's 1 MiB maxRequestBodySize. Public, and the reason the cap exists. Surface: surface.daemon-dashboard (tier D).",
+        "description": "Echoes the fields of one multipart or urlencoded body as {name: string | string[]} (services/sportsdesk_webview_server.ts:569-592). Reads through `req.formData()`, which on 1.4.4 succeeds where `new Blob([await req.arrayBuffer()]).formData()` rejected Bun's own encoding; the body is bounded by the daemon's 1 MiB maxRequestBodySize. Public, and the reason the cap exists. Surface: surface.daemon-dashboard (tier D).",
         "operationId": "postApiParseFormdata",
         "responses": {
           "200": {
@@ -3803,7 +3863,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:160-167"],
+          "sources": ["services/sportsdesk_webview_server.ts:169-176"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
         },
@@ -3814,7 +3874,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Team-logo proxy (GET /api/logo/{name})",
-        "description": "Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image bytes with an immutable day-long cache (services/sportsdesk_webview_server.ts:534-590). Names are validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL; a malformed percent-escape is 400, not the 500 it used to be. Public: it returns image bytes for a fixed host and carries no customer data; the response content type mirrors the upstream's (png, jpeg, gif, webp or svg), and the 200 schema below is the common case. Surface: surface.daemon-logo-proxy (tier D).",
+        "description": "Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image bytes with an immutable day-long cache (services/sportsdesk_webview_server.ts:696-794). Names are validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL; a malformed percent-escape is 400, not the 500 it used to be. Public: it returns image bytes for a fixed host and carries no customer data; the response content type mirrors the upstream's (png, jpeg, gif, webp or svg), and the 200 schema below is the common case. Surface: surface.daemon-logo-proxy (tier D).",
         "operationId": "getApiLogoName",
         "responses": {
           "200": {
@@ -3889,7 +3949,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:534-590"],
+          "sources": ["services/sportsdesk_webview_server.ts:696-794"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
         },
@@ -3912,7 +3972,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Retired Pending endpoint (410 tombstone)",
-        "description": "Answers 410 with a pointer to /api/live-bets (services/sportsdesk_webview_server.ts:594-605). It used to return the same dataset in a different shape; the tombstone makes an old client fail loudly instead of silently reading a fixture that looks live. Surface: surface.daemon-live-bets (tier D).",
+        "description": "Answers 410 with a pointer to /api/live-bets (services/sportsdesk_webview_server.ts:798-809). It used to return the same dataset in a different shape; the tombstone makes an old client fail loudly instead of silently reading a fixture that looks live. Surface: surface.daemon-live-bets (tier D).",
         "operationId": "getApiF402GetPending",
         "responses": {
           "410": {
@@ -3948,7 +4008,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:329-414"],
+          "sources": ["services/sportsdesk_webview_server.ts:491-576"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 410 body (handler-verified only)."
         },
@@ -3959,7 +4019,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Graph live feed (GET /api/graph-feed, /graph-live-feed.json)",
-        "description": "Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds — with no-store caching (services/sportsdesk_webview_server.ts:769-797). It carries agent logins, so it uses the same `pii` guard as the page. Surface: surface.daemon-graph-data-plane (tier D).",
+        "description": "Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds — with no-store caching (services/sportsdesk_webview_server.ts:970-994). It carries agent logins, so it uses the same `pii` guard as the page. Surface: surface.daemon-graph-data-plane (tier D).",
         "operationId": "getApiGraphFeed",
         "responses": {
           "200": {
@@ -3985,7 +4045,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -4049,7 +4109,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:483-549"],
+          "sources": ["services/sportsdesk_webview_server.ts:645-711"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/graph-feed (the artifact is committed; no HTTP response was captured)."
         },
@@ -4060,7 +4120,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Telegram configuration and schedules (GET /api/telegram/status)",
-        "description": "Returns {success, status, schedules, reportTypes} from the bot service and the in-process scheduler (services/sportsdesk_webview_server.ts:1411-1423). Admin-token gated regardless of peer address. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "description": "Returns {success, status, schedules, reportTypes} from the bot service and the in-process scheduler (services/sportsdesk_webview_server.ts:1621-1633). Admin-token gated regardless of peer address. Surface: surface.daemon-telegram-admin-routes (tier D).",
         "operationId": "getApiTelegramStatus",
         "responses": {
           "200": {
@@ -4106,7 +4166,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -4171,9 +4231,9 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1376-1407",
-            "services/sportsdesk_webview_server.ts:1411-1523",
-            "services/sportsdesk_webview_server.ts:403-405,390-396"
+            "services/sportsdesk_webview_server.ts:1586-1617",
+            "services/sportsdesk_webview_server.ts:1621-1733",
+            "services/sportsdesk_webview_server.ts:565-567,390-396"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
@@ -4185,7 +4245,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Recent Telegram activity (GET /api/telegram/activity)",
-        "description": "Returns {success, entries} from the activity log; `limit` defaults to 50 and clamps to 1..200 (services/sportsdesk_webview_server.ts:1426-1438). Admin-token gated. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "description": "Returns {success, entries} from the activity log; `limit` defaults to 50 and clamps to 1..200 (services/sportsdesk_webview_server.ts:1636-1648). Admin-token gated. Surface: surface.daemon-telegram-admin-routes (tier D).",
         "operationId": "getApiTelegramActivity",
         "responses": {
           "200": {
@@ -4222,7 +4282,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -4287,9 +4347,9 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1376-1407",
-            "services/sportsdesk_webview_server.ts:1411-1523",
-            "services/sportsdesk_webview_server.ts:403-405,390-396"
+            "services/sportsdesk_webview_server.ts:1586-1617",
+            "services/sportsdesk_webview_server.ts:1621-1733",
+            "services/sportsdesk_webview_server.ts:565-567,390-396"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
@@ -4301,7 +4361,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Register or delete the Telegram webhook (POST /api/telegram/webhook)",
-        "description": "Body {action: \"set\" | \"delete\"} calls telegramService.setWebhook()/deleteWebhook() and mirrors the Bot API result as {success, ok, error?}, 502 when Telegram refuses (services/sportsdesk_webview_server.ts:1439-1463). Admin-token gated; this is the control plane, distinct from the secret-checked /telegram/webhook that receives updates. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "description": "Body {action: \"set\" | \"delete\"} calls telegramService.setWebhook()/deleteWebhook() and mirrors the Bot API result as {success, ok, error?}, 502 when Telegram refuses (services/sportsdesk_webview_server.ts:1649-1673). Admin-token gated; this is the control plane, distinct from the secret-checked /telegram/webhook that receives updates. Surface: surface.daemon-telegram-admin-routes (tier D).",
         "operationId": "postApiTelegramWebhook",
         "responses": {
           "200": {
@@ -4367,7 +4427,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts:165-184).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -4465,9 +4525,9 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1376-1407",
-            "services/sportsdesk_webview_server.ts:1411-1523",
-            "services/sportsdesk_webview_server.ts:403-405,390-396"
+            "services/sportsdesk_webview_server.ts:1586-1617",
+            "services/sportsdesk_webview_server.ts:1621-1733",
+            "services/sportsdesk_webview_server.ts:565-567,390-396"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
@@ -4496,7 +4556,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Error-boundary probe (GET /api/test/error)",
-        "description": "Throws a string so the server's error boundary runs; `?trigger_error=non_error` does the same on any route (services/sportsdesk_webview_server.ts:394-400). Deliberately reachable in production so a deployment can prove the 500 body carries no stack trace. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "description": "Throws a string so the server's error boundary runs; `?trigger_error=non_error` does the same on any route (services/sportsdesk_webview_server.ts:556-562). Deliberately reachable in production so a deployment can prove the 500 body carries no stack trace. Surface: surface.daemon-telegram-admin-routes (tier D).",
         "operationId": "getApiTestError",
         "responses": {
           "500": {
@@ -4537,9 +4597,9 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1376-1407",
-            "services/sportsdesk_webview_server.ts:1411-1523",
-            "services/sportsdesk_webview_server.ts:403-405,390-396"
+            "services/sportsdesk_webview_server.ts:1586-1617",
+            "services/sportsdesk_webview_server.ts:1621-1733",
+            "services/sportsdesk_webview_server.ts:565-567,390-396"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."
@@ -4625,7 +4685,7 @@
       "daemonBearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts:166-173). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise."
+        "description": "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts:175-182). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise."
       }
     },
     "parameters": {
@@ -4642,7 +4702,7 @@
     },
     "headers": {
       "CSPHeader": {
-        "description": "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts:350-352).",
+        "description": "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts:512-514).",
         "schema": {
           "type": "string"
         }
