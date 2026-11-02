@@ -521,6 +521,33 @@ login-state gate, and both of its operands have a writer:
 - `customerID: "0"` in a Pending body is a separate sentinel: `customerID` is never written by the
   prefilter, and nothing links it to `MASTER_ID`.
 
+**Two windows where identity is present in one form and absent in the other.** Both are reachable
+without a hostile client, and both are unresolved server-side:
+
+1. _Menu built before identity resolves._ `MASTER_ID` is snapshotted from `ID` (`manager.js:28850`),
+   and the prototype default is the number `0`; `init` and `setAccountInfo` fill `ID` afterwards.
+   If the snapshot wins the race, storage holds `"0"` and the prefilter emits `agentID: "0"` /
+   `agentOwner: "0"` for that request. The module knows this state exists — the icon check at
+   `manager.js:28200` compares against the numeric default (`0 !== e.MASTER_ID`) and renders
+   correctly — but the prefilter's `0 === r` compares a number to the string `sessionStorage` hands
+   back, so its fallback does not fire. Same scenario, two readers, one correct.
+2. _Request after logout, before the next login._ The body gate is `"" != sessionStorage.MASTER_ID
+&& agentType ∈ {M, A}`, and logout resets both to `""` (`security.js:18164`); the
+   `Authorization` header is set by the `/cloud/api` branch _before_ that gate. A request in the
+   window therefore goes out with the previous session's bearer and no agent scope.
+
+Server behaviour for either window is unverified: reject, default-to-the-bearer's-owner, or a
+wildcard are all compatible with the code. One live session, three requests, one diff each:
+
+|     | request                                                                                                             | distinguishes                                                   |
+| --- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| R1  | `{operation}`                                                                                                       | baseline                                                        |
+| R2  | `{operation}` + `agentID`/`agentOwner` pair (both are required for the override; `agentOwner` alone is overwritten) | whether the server binds on `agentOwner` or on the bearer       |
+| R3  | `{operation}` fired between login and account-info render                                                           | whether `agentID: "0"` is a wildcard, a rejection, or a default |
+
+R2 and R3 are independent — a server can bind on `agentID` and still treat `"0"` as a wildcard if it
+only checks for non-null, which is the worst combination: override closed, window open.
+
 ---
 
 ## P7 — captures that are not needed (reconcile spec to code instead)
