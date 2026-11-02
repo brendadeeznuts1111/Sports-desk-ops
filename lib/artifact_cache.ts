@@ -19,7 +19,8 @@ export interface ArtifactVersion<T> {
 
 const parsed = new Map<string, ArtifactVersion<unknown>>();
 const bytes = new Map<string, ArtifactVersion<Uint8Array<ArrayBuffer>>>();
-const MAX_CACHED_FILES = 8;
+/** Must exceed the daemon's artifact count, or every full-cache insert clears the rest. */
+const MAX_CACHED_FILES = 16;
 
 async function versionOf(path: string): Promise<string | null> {
   const stat = await Bun.file(path)

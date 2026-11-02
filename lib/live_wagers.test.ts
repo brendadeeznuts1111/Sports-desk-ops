@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  betTickerFile,
+  isTickerNoise,
   parseShortDesc,
   readWagerList,
   readWagerListArtifact,
@@ -69,6 +71,14 @@ describe("writerOf", () => {
     expect(writerOf("ALERT                                             ")).toBe(
       "alert",
     );
+  });
+
+  test("BLOCKED sentinels are their own writer, and noise with ALERT", () => {
+    expect(writerOf("BLOCKED   ")).toBe("blocked");
+    expect(isTickerNoise({ writer: "blocked" })).toBe(true);
+    expect(isTickerNoise({ writer: "alert" })).toBe(true);
+    expect(isTickerNoise({ writer: "internet" })).toBe(false);
+    expect(isTickerNoise({ writer: "other" })).toBe(false);
   });
 
   test("anything else is other, not a guess", () => {
@@ -185,13 +195,18 @@ describe("toLiveWager", () => {
 describe("summarizeLiveWagers", () => {
   const summary = summarizeLiveWagers(wagers);
 
-  test("totals the stakes, payouts and volume", () => {
+  // The fixture's one ALERT row is 767126258: 1430 risked, 1300 to win, volume 0, one
+  // Basketball leg. It is a row but not a wager.
+  test("totals the stakes, payouts and volume without the alert mirror", () => {
     expect(summary.count).toBe(7);
-    expect(summary.risk).toBe(1000 + 21600 + 7277 + 3500 + 1430 + 1600 + 3000);
-    expect(summary.toWin).toBe(1395 + 20000 + 20001 + 5878 + 1300 + 678 + 3542);
+    expect(summary.counted).toBe(6);
+    expect(summary.excluded).toEqual({ alert: 1, blocked: 0, risk: 1430 });
+    expect(summary.risk).toBe(1000 + 21600 + 7277 + 3500 + 1600 + 3000);
+    expect(summary.toWin).toBe(1395 + 20000 + 20001 + 5878 + 678 + 3542);
+    expect(summary.volume).toBe(1000 + 21600 + 7277 + 2188 + 1600 + 3000);
   });
 
-  test("counts by writer, type and leg sport", () => {
+  test("counts every row by writer and type, but only wagers by leg sport", () => {
     expect(summary.byWriter).toEqual({
       gslive: 4,
       internet: 1,
@@ -201,27 +216,35 @@ describe("summarizeLiveWagers", () => {
     expect(summary.byType).toEqual({ P: 3, M: 2, S: 2 });
     expect(summary.bySport).toEqual({
       Football: 7,
-      Basketball: 4,
+      Basketball: 3,
       Tennis: 1,
     });
   });
 
   test("counts legs across parlays", () => {
-    // 2 + 1 + 3 + 1 + 1 + 1 + 3
-    expect(summary.legs).toBe(12);
+    // 2 + 1 + 3 + 1 + 1 + 3
+    expect(summary.legs).toBe(11);
   });
 
-  test("counts volume mismatches", () => {
-    expect(summary.volumeMismatches).toBe(2);
+  test("counts volume mismatches among wagers only", () => {
+    expect(summary.volumeMismatches).toBe(1);
   });
 
   test("no VIP rows in this sample", () => {
     expect(summary.vip).toBe(0);
   });
 
+  test("splits counted rows into live and pregame", () => {
+    expect(summary.live).toBe(0);
+    expect(summary.pregame).toBe(6);
+    expect(summary.pregameRisk).toBe(summary.risk);
+  });
+
   test("handles an empty list", () => {
     expect(summarizeLiveWagers([])).toEqual({
       count: 0,
+      counted: 0,
+      excluded: { alert: 0, blocked: 0, risk: 0 },
       risk: 0,
       toWin: 0,
       volume: 0,
@@ -288,6 +311,56 @@ describe("summarizeLiveWagers", () => {
     expect(rows[3]?.wagerType).toBe("L");
     expect(rows[3]?.live).toBe(false);
   });
+
+  test("alert and blocked rows stay in the chips but out of every figure", () => {
+    const rows = [
+      {
+        WagerNumber: 1,
+        WagerType: "S",
+        TicketWriter: "Internet  ",
+        AmountWagered: 500,
+        ToWinAmount: 450,
+        VolumeAmount: 500,
+        ShortDesc: "S:LIVE #9540 Warriors (Live) -2½ -115 - For Game",
+      },
+      {
+        WagerNumber: 2,
+        WagerType: "S",
+        TicketWriter: "ALERT     ",
+        AmountWagered: 500,
+        ToWinAmount: 450,
+        VolumeAmount: 0,
+        ShortDesc: "S:LIVE #9540 Warriors (Live) -2½ -115 - For Game",
+      },
+      {
+        WagerNumber: 3,
+        WagerType: "P",
+        TicketWriter: "BLOCKED   ",
+        AmountWagered: 250,
+        ToWinAmount: 900,
+        VolumeAmount: 0,
+        ShortDesc:
+          "P.G1\r\nFootball - A vs B / Game / Spread / A -3\r\nTennis - C vs D / Match / Winner / C",
+      },
+    ].map((row) => toLiveWager(row));
+
+    const summary = summarizeLiveWagers(rows);
+    expect(summary.count).toBe(3);
+    expect(summary.counted).toBe(1);
+    expect(summary.excluded).toEqual({ alert: 1, blocked: 1, risk: 750 });
+    expect(summary.byWriter).toEqual({ internet: 1, alert: 1, blocked: 1 });
+    expect(summary.byType).toEqual({ S: 2, P: 1 });
+    expect(summary.risk).toBe(500);
+    expect(summary.toWin).toBe(450);
+    expect(summary.volume).toBe(500);
+    expect(summary.volumeMismatches).toBe(0);
+    expect(summary.legs).toBe(1);
+    expect(summary.bySport).toEqual({ unknown: 1 });
+    expect(summary.live).toBe(1);
+    expect(summary.liveRisk).toBe(500);
+    expect(summary.pregame).toBe(0);
+    expect(summary.pregameRisk).toBe(0);
+  });
 });
 
 describe("readWagerListArtifact", () => {
@@ -350,5 +423,26 @@ describe("readWagerListArtifact", () => {
     expect(
       readWagerListArtifact({ LIST: [{ WagerNumber: 7 }] }).wagers,
     ).toHaveLength(1);
+  });
+});
+
+describe("betTickerFile", () => {
+  const at = "2026-11-02T04:10:00.000Z";
+
+  test("a getBetTicker body becomes a complete, labelled capture", () => {
+    const file = betTickerFile(payload, at);
+    const artifact = readWagerListArtifact(file);
+    expect(artifact.wagers.length).toBe(readWagerList(payload).length);
+    expect(artifact.provenance).toEqual({
+      source: `capture:/cloud/api/Manager/getBetTicker@${at}`,
+      observedAt: at,
+      captureNote: null,
+      partial: false,
+    });
+  });
+
+  test("refuses a body with no LIST, so an error page never replaces a capture", () => {
+    expect(() => betTickerFile({ status: "error" }, at)).toThrow("no LIST");
+    expect(() => betTickerFile("<html>login</html>", at)).toThrow("no LIST");
   });
 });

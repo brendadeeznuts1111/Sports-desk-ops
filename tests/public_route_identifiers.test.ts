@@ -200,7 +200,81 @@ describe("a route's declared dataClass matches its response", () => {
       server.stop(true);
     }
   });
+
+  /**
+   * The index the previous test does not cover.
+   *
+   * `/api/analysis/reports` was declared `aggregate` and unguarded while its body carried
+   * `context.agent` — a portal login — so the co-validating check has to look at this arm too,
+   * not just the one whose rows are obviously customer ids. Measured before the fix: a
+   * non-loopback peer without a token got 200 with `BILLY666`.
+   */
+  test("/api/analysis/reports returns the artifact's context login only from a guarded route", async () => {
+    const contextLogin = readAnalysisContextAgent();
+    expect(contextLogin).toBeDefined();
+
+    const server = startServer({ port: 0, hostname: "127.0.0.1" });
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${server.port}/api/analysis/reports`,
+      );
+      const body = await response.text();
+      expect(body.includes(contextLogin as string)).toBe(true);
+
+      const route = DAEMON_ROUTES.find(
+        (r) => r.path === "/api/analysis/reports",
+      );
+      expect(route?.dataClass).toBe("customer-identifying");
+      expect(route?.guard).not.toBe("none");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  /**
+   * `summary.byAgent` is keyed by `agent.key` (`lib/live_bets.ts:752`), so the aggregate bucket map
+   * is a login list with sums attached. The check is structural rather than vocabulary-based:
+   * every key that is not the `unassigned` sentinel must come from a route declared identifying.
+   */
+  test("/api/live-bets/summary's byAgent keys only from an identifying, guarded route", async () => {
+    const server = startServer({ port: 0, hostname: "127.0.0.1" });
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${server.port}/api/live-bets/summary`,
+        { headers: { "cache-control": "no-cache" } },
+      );
+      const body = (await response.json()) as {
+        summary?: { byAgent?: Record<string, unknown> };
+      };
+      const keys = Object.keys(body.summary?.byAgent ?? {}).filter(
+        (key) => key !== "unassigned",
+      );
+      if (keys.length === 0) return; // a capture with no assigned agent proves nothing
+
+      for (const path of ["/api/live-bets/summary", "/live-bets/summary"]) {
+        const route = DAEMON_ROUTES.find((r) => r.path === path);
+        expect(route?.dataClass).toBe("customer-identifying");
+        expect(route?.guard).not.toBe("none");
+      }
+    } finally {
+      server.stop(true);
+    }
+  });
 });
+
+/** The agent login the stored analysis artifact was captured for. */
+function readAnalysisContextAgent(): string | undefined {
+  const dir = resolve(ROOT, "data");
+  const file = readdirSync(dir).find(
+    (name) => name.startsWith("analysis-") && name.endsWith(".json"),
+  );
+  if (file === undefined) return undefined;
+  const artifact = JSON.parse(readFileSync(resolve(dir, file), "utf8")) as {
+    context?: { agent?: string };
+  };
+  const agent = artifact.context?.agent;
+  return typeof agent === "string" && agent !== "" ? agent : undefined;
+}
 
 /** Customer logins from the stored analysis artifact's rows. */
 function readAnalysisRowLogins(): string[] {

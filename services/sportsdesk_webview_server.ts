@@ -54,6 +54,7 @@ import {
 import {
   readWagerListArtifact,
   summarizeLiveWagers,
+  type WagerListArtifact,
 } from "../lib/live_wagers.ts";
 import {
   BOARD_WINDOWS,
@@ -84,6 +85,14 @@ import {
   type LiveBetGame,
   type LiveBetsArtifact,
 } from "../lib/live_bets.ts";
+import {
+  STALE_AFTER_SECONDS,
+  deriveDeskKpis,
+  freshness,
+  readCustomerBookSummary,
+  recordedTime,
+  type KpiInput,
+} from "../lib/desk_kpis.ts";
 import { ReportingSchedulerService } from "./reporting_scheduler_service.ts";
 import {
   REPORT_TYPES,
@@ -93,6 +102,10 @@ import {
 } from "./sportsdesk_telegram_bot.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
+import {
+  defaultAgentGraphViewPaths,
+  isAgentGraphWebpFresh,
+} from "../lib/f402_agent_graph_view_http.ts";
 import {
   buildHierarchy,
   type HierarchyAction,
@@ -250,6 +263,8 @@ export interface ServerOptions {
   readonly hostname?: string;
   readonly unix?: string;
   readonly development?: boolean;
+  /** Where `bet-ticker.json` and `live-wagers.json` live; defaults to the repo's `data/`. */
+  readonly wagerListDir?: string;
 }
 
 /**
@@ -262,13 +277,17 @@ const ANALYSIS_REPORT_PATH = "data/analysis-cp-baseball-2026-11-01.json";
 const SPORT_CATALOG_PATH =
   "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json";
 
+const LIVE_BETS_PATH = resolve(repoRoot, "data/live-bets.json");
+const AGENT_TREE_PATH = resolve(repoRoot, "data/agent-tree.json");
+const CUSTOMER_PROFILES_PATH = resolve(repoRoot, "data/customer-profiles.json");
+
 const liveBetsArtifact = cachedJsonFile(
-  resolve(repoRoot, "data/live-bets.json"),
+  LIVE_BETS_PATH,
   (raw) => raw as LiveBetsArtifact,
 );
-const liveWagersArtifact = cachedJsonFile(
-  resolve(repoRoot, "data/live-wagers.json"),
-  readWagerListArtifact,
+const customerBookArtifact = cachedJsonFile(
+  CUSTOMER_PROFILES_PATH,
+  readCustomerBookSummary,
 );
 const analysisReportArtifact = cachedJsonFile(
   resolve(repoRoot, ANALYSIS_REPORT_PATH),
@@ -291,13 +310,148 @@ const scoreboardArtifact = cachedJsonFile(
   readScoreboardFile,
 );
 const agentTreeArtifact = cachedJsonFile(
-  resolve(repoRoot, "data/agent-tree.json"),
+  AGENT_TREE_PATH,
   (raw) => raw as AgentTree,
 );
 
 interface AgentTree {
   readonly nodes?: Record<string, { l?: number | null; t?: string | null }>;
   readonly [key: string]: unknown;
+}
+
+/** An artifact plus its file mtime, for KPIs whose artifact records no observation time. */
+async function kpiInput<T>(
+  path: string,
+  artifact: { read(): Promise<{ value: T | null } | null> },
+): Promise<KpiInput<T> | null> {
+  const [read, stat] = await Promise.all([
+    artifact.read(),
+    Bun.file(path)
+      .stat()
+      .catch(() => null),
+  ]);
+  if (read === null || read.value === null || stat === null) return null;
+  return { value: read.value, mtime: stat.mtime };
+}
+
+/** `null` unless the payload is a wager list: an object whose `LIST` is an array, or an array. */
+function readStrictWagerList(raw: unknown): WagerListArtifact | null {
+  const listed =
+    Array.isArray(raw) ||
+    (typeof raw === "object" &&
+      raw !== null &&
+      Array.isArray((raw as { LIST?: unknown }).LIST));
+  return listed ? readWagerListArtifact(raw) : null;
+}
+
+interface WagerListSource {
+  /** Repo-relative name, the only path a response carries. */
+  readonly label: string;
+  readonly path: string;
+  readonly artifact: ReturnType<
+    typeof cachedJsonFile<WagerListArtifact | null>
+  >;
+}
+
+export interface WagerListCandidate {
+  readonly path: string;
+  readonly version: string;
+  readonly artifact: WagerListArtifact;
+  readonly mtime: Date;
+}
+
+export interface WagerListSelection {
+  readonly chosen: WagerListCandidate | null;
+  /** Files that exist but were not served, with the reason. */
+  readonly skipped: ReadonlyArray<{ path: string; reason: string }>;
+}
+
+/** In preference order: on equal observation times the first source wins. */
+function wagerListSources(dir: string): readonly WagerListSource[] {
+  return [
+    { label: "data/bet-ticker.json", name: "bet-ticker.json" },
+    { label: "data/live-wagers.json", name: "live-wagers.json" },
+  ].map(({ label, name }) => {
+    const path = resolve(dir, name);
+    return { label, path, artifact: cachedJsonFile(path, readStrictWagerList) };
+  });
+}
+
+/** A recorded observation time outranks any file mtime; mtime only orders undated files. */
+function newerWagerList(
+  a: { recordedMs: number | null; mtimeMs: number },
+  b: { recordedMs: number | null; mtimeMs: number },
+): boolean {
+  if (a.recordedMs !== null && b.recordedMs !== null) {
+    return a.recordedMs > b.recordedMs;
+  }
+  if (a.recordedMs !== null || b.recordedMs !== null) {
+    return a.recordedMs !== null;
+  }
+  return a.mtimeMs > b.mtimeMs;
+}
+
+/**
+ * The newest valid wager list among `sources`.
+ *
+ * Ranking uses the artifact's own `observedAt` (via `recordedTime`), not the file mtime alone: a
+ * checkout rewrites the committed paste's mtime to now, and that must not shadow a real capture.
+ * A file that is not a list (or not JSON) is skipped rather than served as zero wagers or a 500.
+ */
+async function loadWagerList(
+  sources: readonly WagerListSource[],
+): Promise<WagerListSelection> {
+  const now = new Date();
+  const skipped: Array<{ path: string; reason: string }> = [];
+  const valid: Array<
+    WagerListCandidate & { recordedMs: number | null; mtimeMs: number }
+  > = [];
+  for (const source of sources) {
+    let read: Awaited<ReturnType<WagerListSource["artifact"]["read"]>>;
+    try {
+      read = await source.artifact.read();
+    } catch (error) {
+      skipped.push({
+        path: source.label,
+        reason: error instanceof SyntaxError ? "invalid JSON" : "unreadable",
+      });
+      continue;
+    }
+    if (read === null) continue;
+    if (read.value === null) {
+      skipped.push({ path: source.label, reason: "no LIST array" });
+      continue;
+    }
+    const stat = await Bun.file(source.path)
+      .stat()
+      .catch(() => null);
+    if (stat === null) continue;
+    valid.push({
+      path: source.label,
+      version: read.version,
+      artifact: read.value,
+      mtime: stat.mtime,
+      recordedMs: recordedTime(read.value.provenance.observedAt, now),
+      mtimeMs: stat.mtime.getTime(),
+    });
+  }
+
+  const newest = valid.reduce<(typeof valid)[number] | null>(
+    (best, candidate) =>
+      best === null || newerWagerList(candidate, best) ? candidate : best,
+    null,
+  );
+  for (const candidate of valid) {
+    if (candidate !== newest && newest !== null) {
+      skipped.push({
+        path: candidate.path,
+        reason: `older than ${newest.path}`,
+      });
+    }
+  }
+  if (newest === null) return { chosen: null, skipped };
+  const { path, version, artifact, mtime } = newest;
+  return { chosen: { path, version, artifact, mtime }, skipped };
 }
 
 /** Reads the committed artifact first; falls back to the captured sample row. */
@@ -481,6 +635,9 @@ const MAX_REQUEST_BODY_BYTES = 1 << 20;
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(telegramService);
+  const wagerLists = wagerListSources(
+    options?.wagerListDir ?? resolve(repoRoot, "data"),
+  );
   const customerDashboardPath = resolve(
     repoRoot,
     "static/customer-churn-simulation-dashboard.html",
@@ -518,18 +675,20 @@ export function startServer(options?: ServerOptions) {
       "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    // Unconditional, not conditional on an `Origin` header being present. The same URL answers
+    // differently per origin (grant or refusal), and the no-`Origin` variant is the one a cache is
+    // most likely to store first; without `Vary` it would then be replayed — a refusal as often as
+    // a grant — to every origin that asked afterwards. Measured before this: the grant-less
+    // response carried no `Vary` at all.
+    Vary: "Origin",
   };
 
   function corsHeadersFor(req: Request): Record<string, string> {
     const headers: Record<string, string> = { ...baseHeaders };
     const origin = req.headers.get("origin");
-    if (origin !== null) {
-      // `Vary` even for a refused origin: the same URL answers differently per origin, and a
-      // cache that ignored that would hand one origin another origin's grant.
-      headers["Vary"] = "Origin";
-      if (allowedOrigins.includes(origin)) {
-        headers["Access-Control-Allow-Origin"] = origin;
-      }
+    // The refusal is origin-dependent too, so it carries `Vary` via `baseHeaders` above.
+    if (origin !== null && allowedOrigins.includes(origin)) {
+      headers["Access-Control-Allow-Origin"] = origin;
     }
     return headers;
   }
@@ -631,9 +790,16 @@ export function startServer(options?: ServerOptions) {
             `${dataSource}|${capturedAt}|${summary.totalGames}|${summary.totalWagered}|${summary.totalToWin}|${summary.totalPending}`,
           ).toString("base64url")}"`;
           const ifNoneMatch = req.headers.get("if-none-match");
+          // `private`, not `public`: the summary is served only because `piiRejection` allowed
+          // this peer (`byAgent` is keyed by agent login), so a shared cache that stored and
+          // replayed it would answer requests the guard never saw — which is exactly the request
+          // it must not answer. `must-revalidate` replaces `stale-while-revalidate` for the same
+          // reason: a stale copy is still an answer given without asking the guard.
+          // `Vary: Authorization` says the body is a function of the credential, not just the URL.
           const summaryHeaders = {
             ...cors,
-            "Cache-Control": "public, max-age=30, stale-while-revalidate=60",
+            "Cache-Control": "private, max-age=30, must-revalidate",
+            Vary: "Origin, Authorization",
             ETag: etag,
           };
           if (ifNoneMatch === etag) {
@@ -969,6 +1135,58 @@ export function startServer(options?: ServerOptions) {
         );
       }
 
+      // The dashboard's agent-tree raster.
+      //
+      // The markup asks for `agent-graph.webp` relative to `/`, and no arm answered it (measured
+      // 2026-11-01: `GET /agent-graph.webp` → 404 JSON, `GET /assets/agent-graph.webp` → 404 text).
+      // The file is written to `scratch/`, not `docs/assets`, and it is a rendering of the same
+      // graph `/graph` serves — node labels are logins — so it takes the same guard. Freshness is
+      // the viewer's rule, not a guess: a raster older than the graph it depicts is a 503 with the
+      // command that fixes it, because a picture of the previous tree is worse than none.
+      if (pathname === "/agent-graph.webp") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+
+        const paths = defaultAgentGraphViewPaths(repoRoot);
+        const raster = await readFileBytes(paths.graphWebp);
+        if (raster === null) {
+          return Response.json(
+            {
+              success: false,
+              error: "no agent graph raster; run bun run graph:agent:image",
+            },
+            { status: 404, headers: cors },
+          );
+        }
+        if (!(await isAgentGraphWebpFresh(paths))) {
+          return Response.json(
+            {
+              success: false,
+              error: "stale agent graph raster; run bun run graph:agent:image",
+            },
+            { status: 503, headers: cors },
+          );
+        }
+
+        return new Response(raster.value, {
+          headers: {
+            ...cors,
+            "Content-Type": "image/webp",
+            // Guarded per peer; an intermediary must not replay it to another one.
+            "Cache-Control": "no-store",
+          },
+        });
+      }
+
       // 11. Graph data plane. `docs/graph.js` fetches these relative to the page, so the
       // daemon-served graph was dead (404) unless the docs directory was served separately.
       if (
@@ -1007,6 +1225,22 @@ export function startServer(options?: ServerOptions) {
       // Which analysis reports have been transcribed, so a client can select one instead of
       // guessing the selection it was run for.
       if (pathname === "/api/analysis/reports") {
+        // `context` is the selection the report was run for, and its `agent` is a portal login
+        // (`BILLY666` in the stored artifact). That is the same identifier `/api/analysis` guards,
+        // so this index is customer-identifying too: an unguarded read here disclosed the login
+        // that the guarded arm protects. Measured before the fix: a non-loopback peer without a
+        // token got 200 with `BILLY666` while `/api/analysis` answered 503.
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
         const stored = await loadAnalysisReport();
         if (stored === null) {
           return Response.json(
@@ -1048,18 +1282,28 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const cachedWagers = await liveWagersArtifact.read();
-        if (cachedWagers === null) {
+        const { chosen, skipped } = await loadWagerList(wagerLists);
+        if (chosen === null) {
           return Response.json(
             {
               error: "no live wager list",
-              hint: "save the ticker response as data/live-wagers.json and reload",
+              hint: "run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json, and reload",
+              skipped,
             },
             { status: 404, headers: cors },
           );
         }
-        const artifact = cachedWagers.value;
+        const artifact = chosen.artifact;
         const wagers = artifact.wagers;
+        // No `ageSeconds`: it advances every second, and in the version it would turn each poll
+        // into a new entry in the shared 48-body cache, which clears whole when full. The page
+        // computes the age from `asOf`; `stale` flips once, so it can be part of the version.
+        const { ageSeconds: _age, ...fresh } = freshness(
+          artifact.provenance.observedAt,
+          chosen.mtime,
+          STALE_AFTER_SECONDS.liveWagers,
+          new Date(),
+        );
 
         const writer = (url.searchParams.get("writer") ?? "")
           .trim()
@@ -1072,8 +1316,9 @@ export function startServer(options?: ServerOptions) {
         );
 
         return encodedResponse(req, {
-          // The filtered shape depends on the query, so it is part of the version.
-          version: `live-wagers|${cachedWagers.version}|${writer}|${type}`,
+          // Every input to the bytes is in the version: the query, which file won, what was
+          // skipped, and whether it has gone stale.
+          version: `live-wagers|${chosen.path}|${chosen.version}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}`,
           contentType: "application/json; charset=utf-8",
           produce: () =>
             new TextEncoder().encode(
@@ -1085,6 +1330,8 @@ export function startServer(options?: ServerOptions) {
                 type: type === "" ? null : type,
                 // The file's own account of itself: a 17-row subset reads as 17 rows, not as the list.
                 provenance: artifact.provenance,
+                freshness: fresh,
+                skipped,
                 wagers: filtered,
               }),
             ),
@@ -1453,6 +1700,36 @@ export function startServer(options?: ServerOptions) {
         }
         return Response.json(
           { ...scoreboard, summary: summarizeScoreboard(scoreboard) },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
+        );
+      }
+
+      // Headline KPIs: counts and sums only, so public like the dashboard that shows them.
+      if (pathname === "/api/kpis") {
+        const [agentTree, liveBets, wagerList, customerBook] =
+          await Promise.all([
+            kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
+            kpiInput(LIVE_BETS_PATH, liveBetsArtifact),
+            loadWagerList(wagerLists),
+            kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
+          ]);
+        const liveWagers =
+          wagerList.chosen === null
+            ? null
+            : {
+                value: wagerList.chosen.artifact,
+                mtime: wagerList.chosen.mtime,
+              };
+        const now = new Date();
+        return Response.json(
+          {
+            success: true,
+            kpis: deriveDeskKpis(
+              { agentTree, liveBets, liveWagers, customerBook },
+              now,
+            ),
+            generatedAt: now.toISOString(),
+          },
           { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }

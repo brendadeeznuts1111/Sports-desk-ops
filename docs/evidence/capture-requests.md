@@ -230,12 +230,13 @@ Expected auth: the Manager portal session cookie observed in the 2026-10-28 HAR 
 | 11  | `getDeletedWagerReport` | `POST /cloud/api/Report/getDeletedWagerReport`                                                         | one Reporting capture; resolve whether it is distinct from `delete-wager`                                                                                                                                                                                               | C→A                                   |
 | 12  | `getDailyFigure`        | `POST /cloud/api/Report/getDailyFigure`                                                                | one capture; confirm whether it takes a request body at all                                                                                                                                                                                                             | C→A                                   |
 
-**Two more feeds have repo wire types but no capture** — lower priority, still unverified:
+**Two more feeds have repo wire types** — lower priority. `getPending` has no capture; `getBetTicker`
+has a tier-A capture but no artifact of its cursor walk:
 
-| #   | Operation      | Candidate URL / content type                                                                                                                                  | What to capture                                                                                                                                                           | Upgrades                                                   |
-| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 13  | `getBetTicker` | `POST /cloud/api/Manager/getBetTicker`, **JSON** — a 2026-11-02 transcript shows `application/json` with `{agentID, agentOwner, wagerNumber, operation, RRO}` | a hashed capture of two consecutive pages (the cursor walk) and the `wagerNumber=0` initial call; the `INFO` object; whether the server accepts `wagerType=M` as a filter | C→B on the observed page; **B→A needs the hashed capture** |
-| 14  | `getPending`   | `POST /cloud/api/Manager/getPending` — **content type contested**: the spec says `application/json`, every other Manager call is form-urlencoded              | exact content type + one non-empty response; confirm `BLOCKED`/zero-stake sentinel rows actually appear                                                                   | C→A                                                        |
+| #   | Operation      | Candidate URL / content type                                                                                                                                                                                                                                                                                                                      | What to capture                                                                                                                                                                                                                                              | Upgrades                                                         |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| 13  | `getBetTicker` | `POST /cloud/api/Manager/getBetTicker`, form-urlencoded — the tier-A capture `docs/evidence/captures/2026-10-31/getBetTicker.post.json` records `application/x-www-form-urlencoded; charset=UTF-8` with `{agentID, agentOwner, wagerNumber, operation, RRO}`. A 2026-11-02 operator transcript claims `application/json`; unverified, no artifact | two consecutive nonzero-cursor pages (the cursor walk); the `INFO` object; whether the server accepts `wagerType=M` as a filter. The `wagerNumber=0` initial call is already covered: six discover runs (2026-11-01 01:53–04:19 UTC) returned the whole list | A (captured); the cursor walk is still unobserved as an artifact |
+| 14  | `getPending`   | `POST /cloud/api/Manager/getPending` — **content type contested**: the spec says `application/json`, every other Manager call is form-urlencoded                                                                                                                                                                                                  | exact content type + one non-empty response; confirm `BLOCKED`/zero-stake sentinel rows actually appear                                                                                                                                                      | C→A                                                              |
 
 `authenticateCustomer` is deliberately not in this table — the whole auth model needs its own capture and
 is §P3. Rows with partial observation are tracked elsewhere: `updateByColumn` (§P2) and
@@ -454,8 +455,12 @@ Observed 2026-11-02 (operator transcript — one 100-row page, no artifact):
   (`767174209 … 767174452`) while the request carried `wagerNumber=767177348`, a number above every
   row in the response. So the cursor means "the 100 wagers before this one", not "after". Ingest is
   therefore at least two passes — walk back from the highest known cursor, then forward from the
-  last row — not one request per scope. `/api/live-wagers` serves a single saved page, so it
-  inherits whatever window was captured.
+  last row — not one request per scope. The initial `wagerNumber=0` call is not one of those pages:
+  six `scripts/capture/discover_customers.ts` runs (2026-11-01, 01:53–04:19 UTC; gitignored
+  summaries under `Scratch/f402-discover/*/getBetTicker.json`) returned 449–955 rows each, never
+  100, so it answers with the whole current list and only nonzero cursors page. `/api/live-wagers`
+  serves the newest valid saved list (`data/bet-ticker.json` or `data/live-wagers.json`), so it
+  inherits whatever that file captured.
 - **`L` is not "live", and neither is `M`.** A later page (2026-11-02) carries `M.LIVE #9263
 Eagles (Live) -160 - For Game`, `S:LIVE #9540 Warriors (Live) -2½ -115` and
   `L:LIVE #9263 … O 42½ -110`, plus `L.Soccer #209857 … - For Game` with no live marker at all. So
@@ -745,12 +750,12 @@ the probe below for every endpoint the tree drives.
 These local daemon routes are served by `sportsdesk_webview_server.ts`; the handler is the contract. The
 spec is missing parameters/response fields and should be corrected from source:
 
-| Operation                   | Handler                                               | Spec drift to fix                                                         |
-| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `sportsdesk_webview_server.ts:815-835`                | add `url`, `timestamp` to the response                                    |
-| `GET /api/watchlist`        | `sportsdesk_webview_server.ts:1700-1710` + `:156-175` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1713-1738`              | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1741-1761`              | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| Operation                   | Handler                                                              | Spec drift to fix                                                         |
+| --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `GET /health`               | `sportsdesk_webview_server.ts:815-835`                               | add `url`, `timestamp` to the response                                    |
+| `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
+| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1713-1738`                             | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1741-1761`                             | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,

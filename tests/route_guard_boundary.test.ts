@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { networkInterfaces } from "node:os";
 import { DAEMON_ROUTES, type Guard } from "../lib/daemon_routes.ts";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
@@ -29,6 +29,22 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
  *
  * In-process dispatch is only ~1.3x faster anyway (70.6 µs vs 93.1 µs, handler work dominating),
  * so the socket cost is not the reason to reach for it.
+ *
+ * Correction to an earlier claim (commit 8498288 said "Bun does not cut an in-flight handler at the
+ * 10s default"): it does cut, just later than the docs say. A handler that writes nothing until it
+ * returns was measured against explicit idleTimeout values:
+ *
+ *   idle=1  handler 3s   200 at 3.0s        survived
+ *   idle=1  handler 5s   ECONNRESET 4.0s
+ *   idle=2  handler 5s   ECONNRESET 4.0s
+ *   idle=3  handler 10s  ECONNRESET 4.0s
+ *   idle=10 handler 11s  200 at 11.0s       survived by 1s
+ *   idle=10 handler 25s  ECONNRESET 12.0s
+ *
+ * The fit is ~max(4s, idleTimeout + 2s) rather than the documented `idleTimeout`, so the default 10
+ * behaves as ~12s. The original probe finished one second before the cut and was read as "never
+ * cut". Consequence for this repo: an outbound call must abort well inside that budget, which is
+ * why the Telegram client's default dropped from 10s to 8s.
  */
 
 const lan = Object.values(networkInterfaces())
@@ -106,3 +122,39 @@ describe.skipIf(lan === undefined)(
     });
   },
 );
+
+/**
+ * The guard is only worth anything if a cache cannot answer around it.
+ *
+ * `/api/live-bets/summary` was sent as `Cache-Control: public, max-age=30,
+ * stale-while-revalidate=60` with no `Vary: Authorization`. Its body depends on this peer having
+ * passed `piiRejection`, so `public` authorizes an intermediary to store and replay an answer the
+ * guard never produced — and the unix-socket deployment is exactly the shape where such a cache
+ * sits in front of the daemon. Measured on the allowed (loopback) path, because the refused path
+ * carries no cache headers to inspect.
+ */
+describe("a guarded response is not cacheable by a shared cache", () => {
+  const server = startServer({ port: 0, hostname: "127.0.0.1" });
+  const base = `http://127.0.0.1:${server.port}`;
+
+  afterAll(() => {
+    server.stop(true);
+  });
+
+  test("/api/live-bets/summary is private and varies on Authorization", async () => {
+    const response = await fetch(`${base}/api/live-bets/summary`);
+    const cacheControl = response.headers.get("cache-control") ?? "";
+    expect(cacheControl).toContain("private");
+    expect(cacheControl).not.toContain("public");
+    expect(cacheControl).not.toContain("stale-while-revalidate");
+    expect(response.headers.get("vary") ?? "").toContain("Authorization");
+  });
+
+  test("the no-Origin variant still carries Vary, so a cache cannot replay it", async () => {
+    // The grant-less response is the variant a cache stores first; without `Vary` it would be
+    // replayed to a listed origin that should have been granted.
+    const response = await fetch(`${base}/api/live-bets`);
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    expect(response.headers.get("vary") ?? "").toContain("Origin");
+  });
+});

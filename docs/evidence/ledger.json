@@ -659,7 +659,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1700-1710",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/watchlist",
           "kind": "implementation",
           "note": "Returns {success, count, data:[...]} from telegramService.getWatchList()."
         },
@@ -687,7 +687,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1713-1738",
+          "source": "services/sportsdesk_webview_server.ts:1854-1879",
           "kind": "implementation",
           "note": "Body {customerId?}; defaults to RF2003; dispatches via telegramService.dispatchTestAlert and returns {success, ok, customerId}. Admin-token gated (services/sportsdesk_webview_server.ts:170-189)."
         },
@@ -710,7 +710,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1741-1761",
+          "source": "services/sportsdesk_webview_server.ts#POST /api/telegram/report",
           "kind": "implementation",
           "note": "Report type is selected by the '?type=' QUERY PARAMETER (default EVENING_SETTLEMENT, validated by isReportType); returns {success, ok, reportType}. The spec has no parameter for it."
         },
@@ -1842,6 +1842,7 @@
         "GET /status",
         "GET /status.json",
         "GET /api/status",
+        "GET /api/kpis",
         "POST /api/parse-formdata"
       ],
       "evidence": [
@@ -1868,7 +1869,7 @@
           "note": "Returns the miniapp HTML with CSP frame-ancestors for Telegram."
         },
         {
-          "source": "services/sportsdesk_webview_server.ts:517-519",
+          "source": "services/sportsdesk_webview_server.ts:661-663",
           "kind": "implementation",
           "note": "CSP frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:; no X-Frame-Options."
         }
@@ -1895,12 +1896,12 @@
       ],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1612-1643",
+          "source": "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
           "kind": "implementation",
           "note": "POST /telegram/webhook validates x-telegram-bot-api-secret-token, returns 401 otherwise, and reads the update through the service."
         },
         {
-          "source": "services/sportsdesk_webview_server.ts:1647-1759",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
           "kind": "implementation",
           "note": "GET /api/telegram/status and /api/telegram/activity (limit 1..200), POST /api/telegram/webhook set/delete, GET /api/watchlist and the alert/report dispatchers, all behind the admin-token gate."
         },
@@ -2013,7 +2014,7 @@
       ],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:496-581",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/live-bets",
           "kind": "implementation",
           "note": "Both paths read the same rows through loadLiveBets() and call summarizeGames(), so the two responses cannot disagree. /api/f402/get-pending now answers 410 pointing here."
         }
@@ -2047,7 +2048,7 @@
       "members": ["GET /api/scoreboard"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1446-1458",
+          "source": "services/sportsdesk_webview_server.ts:1563-1575",
           "kind": "implementation",
           "note": "Returns the file plus summarizeScoreboard(); source and observedAt travel with the payload so a transcription is never mistaken for a capture."
         }
@@ -2094,19 +2095,25 @@
       "tier": "D",
       "category": "local-route",
       "missingFromSpec": true,
-      "what": "docs/graph.js fetches its data relative to the document, so the generated graph page was dead when served by the daemon. These paths serve it: the live feed at two paths, the two companion JSON files, and docs/assets/*.",
+      "what": "docs/graph.js fetches its data relative to the document, so the generated graph page was dead when served by the daemon. These paths serve it: the live feed at two paths, the two companion JSON files, docs/assets/*, and the dashboard's agent-tree raster.",
       "members": [
         "GET /graph-live-feed.json",
         "GET /api/graph-feed",
         "GET /combo-uniqueness.json",
         "GET /cross-domain-bridge.json",
-        "GET /assets/*"
+        "GET /assets/*",
+        "GET /agent-graph.webp"
       ],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:650-716",
+          "source": "services/sportsdesk_webview_server.ts:1180-1201",
           "kind": "implementation",
           "note": "All five families returned 404 before this route existed. Asset names are validated (separators, control characters, traversal) and traversal is rejected."
+        },
+        {
+          "source": "services/sportsdesk_webview_server.ts#GET /agent-graph.webp",
+          "kind": "implementation",
+          "note": "Measured 2026-11-01: the dashboard's <img src=\"agent-graph.webp\"> resolved to GET /agent-graph.webp → 404 JSON, and the file lives in scratch/ rather than docs/assets, so /assets/agent-graph.webp was a 404 too. It is now served from scratch/agent-graph.webp behind the pii guard /graph uses, with the viewer's freshness rule: missing → 404, older than the graph → 503."
         }
       ],
       "requiredCapture": "Not a capture gap: these are static files the graph page already ships. A capture would only restate their bytes."
@@ -2117,7 +2124,7 @@
       "tier": "D",
       "category": "local-route",
       "missingFromSpec": false,
-      "what": "The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes.",
+      "what": "The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes. The recorded context names the agent the report was run for, so /api/analysis and /api/analysis/reports both carry the PII guard: loopback answers, any other peer must present SPORTSDESK_ADMIN_TOKEN.",
       "members": [
         "GET /api/analysis",
         "GET /api/analysis/filters",
@@ -2142,7 +2149,7 @@
       "members": ["GET /api/agents/search"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts#GET /api/analysis/reports",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/agents/search",
           "kind": "implementation",
           "note": "Requires q of at least two characters, clamps limit to 1..100, reads data/agent-tree.json, and returns key/level/agentType per hit."
         }
@@ -2210,12 +2217,12 @@
       "members": ["GET /api/live-wagers"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:950-1000",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/live-wagers",
           "kind": "implementation",
           "note": "lib/live_wagers.ts parses legs, classifies TicketWriter (GSLIVE/GSBUILDER/Internet/ALERT), flags volume mismatches, reads the file's provenance via readWagerListArtifact, and gates on piiRejection."
         }
       ],
-      "requiredCapture": "A full ticker capture. data/live-wagers.json currently holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so."
+      "requiredCapture": "An HTTP capture of GET /api/live-wagers serving a `capture:bet-ticker` artifact. No such run has been recorded; data/live-wagers.json holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so."
     },
     {
       "id": "surface.daemon-logo-proxy",

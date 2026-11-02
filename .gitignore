@@ -19,6 +19,8 @@ customers.sqlite
 data/hierarchy.sqlite
 data/customer-profiles.json
 data/hierarchy.sqlite-*
+# Full getBetTicker capture (`bun run capture:bet-ticker`): customer ids and logins.
+data/bet-ticker.json
 Untitled.txt.rtf
 
 # Customer and downline datasets stay local (public repo)

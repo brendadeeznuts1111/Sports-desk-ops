@@ -269,10 +269,27 @@ describe("Settings panel", () => {
     expect(
       moduleScript.match(/new Event\("sportsdesk-settings"\)/g)?.length,
     ).toBe(2);
+    // Live Desk, the ticker and the KPI strip.
     expect(
       moduleScript.match(/addEventListener\("sportsdesk-settings", load\)/g)
         ?.length,
-    ).toBe(2);
+    ).toBe(3);
+  });
+
+  test("the KPI strip is derived from /api/kpis, not typed into the markup", () => {
+    expect(moduleScript).toContain('authed("/api/kpis"');
+    for (const name of ["agents", "pending", "ticker", "customerBook"]) {
+      expect(html).toContain(`data-kpi="${name}"`);
+    }
+    const grid = html.slice(
+      html.indexOf('id="kpi-grid"'),
+      html.indexOf('<main id="panels"'),
+    );
+    expect(grid.length).toBeGreaterThan(0);
+    // The retired literals traced to no capture.
+    for (const literal of ["668 Agents", "9,435", "$2.79M", "$10.49M"]) {
+      expect(grid).not.toContain(literal);
+    }
   });
 
   test("says which preferences do not change the UI", () => {
@@ -374,6 +391,14 @@ describe("Live wager ticker panel", () => {
     expect(panel).toContain("/api/live-wagers");
     expect(panel).toContain("NOT CAPTURED");
     expect(panel).toContain("data/live-wagers.json");
+    expect(panel).toContain("bun run capture:bet-ticker");
+  });
+
+  test("says whether the ticker is a capture or a paste, and keeps polling", () => {
+    expect(html).toContain("Live Wagers — Bet Ticker");
+    expect(panel).toContain('"CAPTURE"');
+    expect(panel).toContain('"PASTE"');
+    expect(panel).toMatch(/setInterval\([\s\S]*?loadLiveWagers\(\)/);
   });
 
   test("flags a volume mismatch instead of hiding it", () => {
@@ -403,6 +428,97 @@ describe("Live wager ticker panel", () => {
     expect(panel).toContain("provenance.source");
     // The note comes from the server, not from a sentence invented in the browser.
     expect(panel).not.toContain("subset of the shown list");
+  });
+
+  test("an empty refresh replaces the previous rows", () => {
+    // render() used to return early on an empty list, leaving old rows under stats saying 0.
+    const render = panel.slice(
+      panel.indexOf("const render = () => {"),
+      panel.indexOf("const loadLiveWagers"),
+    );
+    expect(render.length).toBeGreaterThan(0);
+    expect(render).not.toContain("if (all.length === 0) return");
+    expect(render.indexOf("list.replaceChildren()")).toBeLessThan(
+      render.indexOf("for (const wager of rows)"),
+    );
+    expect(render).toContain("No wagers in this list.");
+    expect(render).toContain("No wager matches this filter.");
+  });
+
+  test("marks a stale capture as stale, in the KPI strip's wording", () => {
+    expect(panel).toContain("body.freshness");
+    expect(panel).toContain("freshness?.stale === true");
+    expect(panel).toContain('...(stale ? ["STALE"] : [])');
+    expect(panel).toContain("!provenance.partial && !stale");
+    expect(panel).toContain('"file written"');
+    // The server sends no age (it would defeat the body cache); the page derives it from asOf.
+    expect(panel).toContain("Date.parse(freshness?.asOf");
+    expect(panel).toContain("sdAge(ageSeconds)");
+    expect(panel).toContain('one-off ${captured ? "capture" : "paste"}');
+    // One age formatter shared by the ticker and the KPI strip.
+    expect((moduleScript.match(/function sdAge\(/g) ?? []).length).toBe(1);
+    expect(moduleScript).not.toContain("const age = ");
+  });
+
+  test("a successful load resets the note instead of keeping an old error", () => {
+    expect(panel).toContain("defaultNote");
+    expect(panel).toContain(
+      'parts.length === 0 ? defaultNote : parts.join(" ")',
+    );
+  });
+
+  test("keeps alert and blocked rows visible but de-emphasised and out of totals", () => {
+    expect(html).toMatch(/\.lw-noise td\s*\{[^}]*var\(--sd-text-muted\)/);
+    expect(panel).toContain('tr.className = "lw-noise"');
+    expect(panel).toContain("excluded from the totals");
+    expect(panel).toContain("alert:");
+    expect(panel).toContain("blocked:");
+    expect(html).toContain('id="lw-excluded"');
+    expect(panel).toContain("summaryData.counted");
+    expect(panel).toContain("`${counted} of ${total} rows`");
+    expect(panel).toContain("usd(excluded.risk)");
+  });
+
+  test("names rejected source files in the note, not the normal older one", () => {
+    expect(panel).toContain("body.skipped");
+    expect(panel).toContain("entry.path");
+    expect(panel).toContain("entry.reason");
+    expect(panel).toContain('!entry.reason.startsWith("older than")');
+  });
+
+  test("every failed load clears the previous rows and totals", () => {
+    const load = panel.slice(
+      panel.indexOf("const loadLiveWagers"),
+      panel.indexOf('addEventListener("sportsdesk-settings", loadLiveWagers)'),
+    );
+    const clear = panel.slice(
+      panel.indexOf("const clearPanel"),
+      panel.indexOf("const loadLiveWagers"),
+    );
+    expect(clear).toContain("all = []");
+    expect(clear).toContain("stats.hidden = true");
+    expect(clear).toContain("list.replaceChildren(tr)");
+    // 404, missing token, and a thrown fetch or parse.
+    expect(load.match(/clearPanel\(/g)?.length).toBe(3);
+  });
+});
+
+describe("KPI ticker card", () => {
+  const html = readFileSync(
+    resolve(
+      import.meta.dir,
+      "../static/customer-churn-simulation-dashboard.html",
+    ),
+    "utf8",
+  );
+
+  test("says how many alert/blocked rows the wager count excludes", () => {
+    const strip = html.slice(
+      html.indexOf('authed("/api/kpis"'),
+      html.indexOf("No bet ticker. Run bun run capture:bet-ticker."),
+    );
+    expect(strip).toContain("ticker.excludedRows > 0");
+    expect(strip).toContain("alert/blocked excluded");
   });
 });
 

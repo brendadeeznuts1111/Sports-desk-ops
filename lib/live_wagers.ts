@@ -13,7 +13,9 @@
  *    repository, so it is carried as a raw code rather than guessed into a name.
  *  - `VolumeAmount` is sometimes far below `AmountWagered` (a $3,500 wager with $2,188 volume),
  *    so both are kept and the difference is reported instead of one being treated as a typo.
- *  - `TicketWriter` names the channel: `GSLIVE`, `GSBUILDER`, `Internet`, `ALERT`.
+ *  - `TicketWriter` names the channel: `GSLIVE`, `GSBUILDER`, `Internet`, `ALERT`, `BLOCKED`.
+ *    `ALERT` rows mirror a real ticket within seconds with `VolumeAmount` 0, and `BLOCKED` rows
+ *    are sentinels rather than wagers, so neither may be summed into stake.
  */
 
 import { SPORT_CATEGORIES } from "./sport_taxonomy.ts";
@@ -64,7 +66,8 @@ export interface LiveWager {
   readonly volumeDiffers: boolean;
   readonly ticketWriter: string;
   /** Channel family inferred from `TicketWriter`; `other` for anything unrecognised. */
-  readonly writer: "gslive" | "gsbuilder" | "internet" | "alert" | "other";
+  readonly writer:
+    "gslive" | "gsbuilder" | "internet" | "alert" | "blocked" | "other";
   readonly insertedAt: string;
   readonly vip: boolean;
   /**
@@ -113,6 +116,7 @@ const WRITERS: Readonly<Record<string, LiveWager["writer"]>> = {
   gsbuilder: "gsbuilder",
   internet: "internet",
   alert: "alert",
+  blocked: "blocked",
 };
 
 function text(value: unknown): string {
@@ -127,6 +131,14 @@ function number(value: unknown): number {
 /** `GSLIVE   ` → `gslive`; anything unknown → `other`. */
 export function writerOf(ticketWriter: unknown): LiveWager["writer"] {
   return WRITERS[text(ticketWriter).toLowerCase()] ?? "other";
+}
+
+/**
+ * `ALERT` mirrors another row's stake and `BLOCKED` is not a wager; summing either inflates the
+ * book. Same rule as the forensic pending reader in `forensic_diagnostic_modes.ts`.
+ */
+export function isTickerNoise(wager: Pick<LiveWager, "writer">): boolean {
+  return wager.writer === "alert" || wager.writer === "blocked";
 }
 
 /** Longest-first so multi-word sports ("Auto Racing") win over a shorter prefix. */
@@ -340,6 +352,39 @@ export function readWagerList(payload: unknown): LiveWager[] {
   return [...readWagerListArtifact(payload).wagers];
 }
 
+export const BET_TICKER_OPERATION = "/cloud/api/Manager/getBetTicker";
+
+/**
+ * A raw `getBetTicker` body as the file `/api/live-wagers` serves. `wagerNumber=0` returns the
+ * whole current list, so a capture is complete (`partial: false`), unlike the clipboard paste.
+ * Throws when the body has no `LIST`, so a login page or error envelope never replaces a capture.
+ */
+export function betTickerFile(
+  payload: unknown,
+  observedAt: string,
+): {
+  readonly schemaVersion: 1;
+  readonly source: string;
+  readonly observedAt: string;
+  readonly partial: false;
+  readonly LIST: readonly unknown[];
+} {
+  const list =
+    typeof payload === "object" && payload !== null
+      ? (payload as { LIST?: unknown }).LIST
+      : undefined;
+  if (!Array.isArray(list)) {
+    throw new Error("getBetTicker body has no LIST array");
+  }
+  return {
+    schemaVersion: 1,
+    source: `capture:${BET_TICKER_OPERATION}@${observedAt}`,
+    observedAt,
+    partial: false,
+    LIST: list,
+  };
+}
+
 /** The rows plus whatever the file admits about its own completeness. */
 export function readWagerListArtifact(payload: unknown): WagerListArtifact {
   const rows = Array.isArray(payload)
@@ -376,8 +421,21 @@ export function readWagerListArtifact(payload: unknown): WagerListArtifact {
   };
 }
 
+/**
+ * `count`, `byWriter` and `byType` cover every row, because the filter chips show every row.
+ * Every other figure covers only the `counted` rows — those `isTickerNoise` does not reject.
+ */
 export interface LiveWagerSummary {
+  /** All rows, noise included. */
   readonly count: number;
+  /** Rows that are not `ALERT` mirrors or `BLOCKED` sentinels. */
+  readonly counted: number;
+  /** What was left out of the stake figures; `risk` is the noise rows' `amountWagered`. */
+  readonly excluded: {
+    readonly alert: number;
+    readonly blocked: number;
+    readonly risk: number;
+  };
   readonly risk: number;
   readonly toWin: number;
   readonly volume: number;
@@ -387,8 +445,9 @@ export interface LiveWagerSummary {
   readonly byType: Record<string, number>;
   readonly bySport: Record<string, number>;
   readonly legs: number;
-  /** Rows whose description carries the live marker. */
+  /** Counted rows whose description carries the live marker. */
   readonly live: number;
+  /** `counted - live`. */
   readonly pregame: number;
   readonly liveRisk: number;
   readonly pregameRisk: number;
@@ -401,6 +460,10 @@ export function summarizeLiveWagers(
   const byWriter: Record<string, number> = {};
   const byType: Record<string, number> = {};
   const bySport: Record<string, number> = {};
+  let counted = 0;
+  let excludedAlert = 0;
+  let excludedBlocked = 0;
+  let excludedRisk = 0;
   let risk = 0;
   let toWin = 0;
   let volume = 0;
@@ -411,6 +474,18 @@ export function summarizeLiveWagers(
   let liveRisk = 0;
 
   for (const wager of wagers) {
+    byWriter[wager.writer] = (byWriter[wager.writer] ?? 0) + 1;
+    const type = wager.wagerType === "" ? "unknown" : wager.wagerType;
+    byType[type] = (byType[type] ?? 0) + 1;
+
+    if (isTickerNoise(wager)) {
+      if (wager.writer === "alert") excludedAlert += 1;
+      else excludedBlocked += 1;
+      excludedRisk += wager.amountWagered;
+      continue;
+    }
+
+    counted += 1;
     risk += wager.amountWagered;
     toWin += wager.toWinAmount;
     volume += wager.volumeAmount;
@@ -422,10 +497,6 @@ export function summarizeLiveWagers(
       liveRisk += wager.amountWagered;
     }
 
-    byWriter[wager.writer] = (byWriter[wager.writer] ?? 0) + 1;
-    const type = wager.wagerType === "" ? "unknown" : wager.wagerType;
-    byType[type] = (byType[type] ?? 0) + 1;
-
     for (const leg of wager.legs) {
       legs += 1;
       const sport = leg.sport === "" ? "unknown" : leg.sport;
@@ -435,6 +506,12 @@ export function summarizeLiveWagers(
 
   return {
     count: wagers.length,
+    counted,
+    excluded: {
+      alert: excludedAlert,
+      blocked: excludedBlocked,
+      risk: excludedRisk,
+    },
     risk,
     toWin,
     volume,
@@ -445,7 +522,7 @@ export function summarizeLiveWagers(
     bySport,
     legs,
     live,
-    pregame: wagers.length - live,
+    pregame: counted - live,
     liveRisk,
     pregameRisk: risk - liveRisk,
   };

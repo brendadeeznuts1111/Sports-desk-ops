@@ -19,6 +19,7 @@
     "build:live-bets": "bun run scripts/build_live_bets.ts",
     "build:agent-tree": "bun run scripts/build_agent_tree.ts",
     "capture:pending": "bun run scripts/capture/capture_pending_full.ts",
+    "capture:bet-ticker": "bun run scripts/capture/capture_bet_ticker.ts",
     "manual:fetch": "bun run scripts/fetch_user_manual.ts",
     "contests:extract": "bun run scripts/extract_contests.ts",
     "verify:manager-oracle-slices": "bun run verification/manager-boot-oracle/run-slice-guard.ts",

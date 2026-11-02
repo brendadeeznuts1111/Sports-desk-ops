@@ -184,31 +184,143 @@
       .header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         margin-bottom: 24px;
         border-bottom: 1px solid var(--sd-surface-border);
         padding-bottom: 18px;
         flex-wrap: wrap;
         gap: 16px;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--sd-surface-card) 60%, transparent),
+          transparent
+        );
+      }
+      .header-left {
+        flex: 1 1 320px;
+        min-width: 0;
       }
       .header-left h1 {
-        font-size: 22px;
-        font-weight: 700;
+        font-size: 24px;
+        font-weight: 800;
         color: var(--sd-text-primary);
         display: flex;
         align-items: center;
         gap: 10px;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
+        background: linear-gradient(
+          90deg,
+          var(--sd-text-primary),
+          var(--sd-tier-retail)
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
       .header-left .subtitle {
         color: var(--sd-text-muted);
         font-size: 13px;
-        margin-top: 4px;
+        margin-top: 6px;
+        line-height: 1.5;
+        max-width: 640px;
       }
       .status-badges {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        align-items: center;
+      }
+      .agent-tree-dropdown {
+        margin-bottom: 18px;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 10px;
+        background: var(--sd-surface-card);
+        overflow: hidden;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .agent-tree-dropdown[open] {
+        border-color: var(--sd-tier-retail);
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--sd-tier-retail) 30%, transparent);
+      }
+      .agent-tree-toggle {
+        cursor: pointer;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: var(--sd-text-primary);
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+      }
+      .agent-tree-toggle::-webkit-details-marker {
+        display: none;
+      }
+      .agent-tree-toggle::before {
+        content: "▸";
+        display: inline-block;
+        transition: transform 0.2s ease;
+        color: var(--sd-text-muted);
+      }
+      .agent-tree-dropdown[open] .agent-tree-toggle::before {
+        transform: rotate(90deg);
+        color: var(--sd-tier-retail);
+      }
+      .agent-tree-toggle:focus-visible {
+        outline: 2px solid var(--sd-tier-retail);
+        outline-offset: -2px;
+      }
+      .agent-tree-panel {
+        max-height: 0;
+        overflow: hidden;
+        padding: 0 12px;
+        transition:
+          max-height 0.3s ease,
+          padding 0.3s ease,
+          opacity 0.2s ease;
+        opacity: 0;
+      }
+      .agent-tree-dropdown[open] .agent-tree-panel {
+        max-height: 70vh;
+        padding: 12px;
+        opacity: 1;
+        border-top: 1px solid var(--sd-surface-border);
+      }
+      .agent-tree-img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        border: 1px solid var(--sd-surface-border);
+        transform-origin: top left;
+        transition: transform 0.15s ease;
+      }
+      .agent-tree-toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .agent-tree-btn {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-hover);
+        color: var(--sd-text-primary);
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .agent-tree-viewport {
+        overflow: auto;
+        max-height: 60vh;
+      }
+      .agent-tree-fallback {
+        color: var(--sd-text-muted);
+        font-size: 13px;
+        padding: 8px;
       }
       .badge {
         font-size: 11px;
@@ -316,19 +428,57 @@
       .kpi-card {
         background: var(--sd-surface-card);
         border: 1px solid var(--sd-surface-border);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 16px;
+        position: relative;
+        overflow: hidden;
         transition:
           background 0.2s ease,
-          border-color 0.2s ease;
+          border-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .kpi-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--sd-tier-retail),
+          var(--sd-accent)
+        );
+        opacity: 0.6;
+      }
+      .kpi-card::after {
+        content: attr(data-source);
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        font-size: 9px;
+        font-family: var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 80%,
+          transparent
+        );
+        padding: 2px 6px;
+        border-radius: 4px;
+        opacity: 0.7;
       }
       .kpi-card:hover {
         background: var(--sd-surface-hover);
-        border-color: color-mix(
-          in srgb,
-          var(--sd-primary) 40%,
-          var(--sd-surface-border)
-        );
+        border-color: var(--sd-tier-retail);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px
+          color-mix(in srgb, var(--sd-tier-retail) 15%, transparent);
+      }
+      .kpi-card:hover::after {
+        opacity: 1;
+        color: var(--sd-tier-retail);
       }
       .kpi-label {
         font-size: 11px;
@@ -348,6 +498,21 @@
         color: var(--sd-accent);
         font-weight: 500;
       }
+      .kpi-age {
+        margin-top: 6px;
+        font-size: 11px;
+        font-family: var(--mono);
+        color: var(--sd-text-muted);
+      }
+      .kpi-age[data-tone="stale"] {
+        color: var(--sd-warning);
+        font-weight: 600;
+      }
+      .kpi-card[data-source="stale"]::after,
+      .kpi-card[data-source="fixture"]::after {
+        color: var(--sd-warning);
+        opacity: 1;
+      }
 
       /* Section Cards & Tables */
       .section-card {
@@ -358,13 +523,62 @@
         margin-bottom: 24px;
       }
       .section-title {
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 700;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         color: var(--sd-text-primary);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--sd-surface-border);
+      }
+      .wl-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        align-items: center;
+      }
+      .wl-toolbar input {
+        flex: 1 1 260px;
+        padding: 8px 10px;
+        border-radius: 6px;
+      }
+      .wl-toolbar select {
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--sd-surface-card);
+        z-index: 1;
+      }
+      tbody tr:nth-child(even) {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 40%,
+          transparent
+        );
+      }
+      tbody tr:hover {
+        background: var(--sd-surface-hover);
+      }
+      td,
+      th {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--sd-surface-border);
       }
       table {
         width: 100%;
@@ -448,17 +662,29 @@
         grid-template-columns: max-content 1fr;
         gap: 6px 14px;
         font-size: 12px;
+        padding: 10px 12px;
+        background: color-mix(in srgb, var(--sd-surface-bg) 60%, transparent);
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
       }
       .tg-status dt {
         color: var(--sd-text-muted);
         text-transform: uppercase;
         font-size: 11px;
         font-weight: 600;
+        padding-top: 2px;
       }
       .tg-status dd {
         font-family: var(--mono);
         color: var(--sd-text-primary);
         overflow-wrap: anywhere;
+        margin: 0;
+        padding: 2px 0;
+        border-bottom: 1px dashed
+          color-mix(in srgb, var(--sd-surface-border) 50%, transparent);
+      }
+      .tg-status dd:last-of-type {
+        border-bottom: none;
       }
       .tg-status dd[data-tone="good"] {
         color: var(--sd-accent);
@@ -587,9 +813,12 @@
       /* Bot Activity */
       .act-list {
         list-style: none;
-        max-height: 340px;
+        max-height: 360px;
         overflow-y: auto;
         font-size: 12px;
+        padding: 4px 0;
+        scrollbar-width: thin;
+        scrollbar-color: var(--sd-surface-border) transparent;
       }
       .act-list li {
         display: grid;
@@ -598,12 +827,24 @@
           1fr max-content;
         gap: 10px;
         align-items: baseline;
-        padding: 6px 4px;
+        padding: 8px 6px;
         border-bottom: 1px solid
-          color-mix(in srgb, var(--sd-surface-border) 60%, transparent);
+          color-mix(in srgb, var(--sd-surface-border) 50%, transparent);
+        transition: background 0.15s ease;
+      }
+      .act-list li:hover {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 60%,
+          transparent
+        );
       }
       .act-list li.empty-row {
         display: block;
+        padding: 16px;
+        text-align: center;
+        color: var(--sd-text-muted);
+        font-style: italic;
       }
       td .badge,
       .act-time {
@@ -840,6 +1081,10 @@
       }
       .lw-vol {
         color: var(--sd-warning);
+      }
+      .lw-noise td {
+        color: var(--sd-text-muted);
+        opacity: 0.55;
       }
       .lw-type {
         display: inline-block;
@@ -1095,18 +1340,41 @@
       }
       .sc-sport {
         border: 1px solid var(--sd-surface-border);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--sd-surface-card);
         overflow: hidden;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .sc-sport:hover {
+        border-color: color-mix(
+          in srgb,
+          var(--sd-accent) 40%,
+          var(--sd-surface-border)
+        );
+      }
+      .sc-sport[open] {
+        border-color: var(--sd-accent);
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--sd-accent) 25%, transparent);
       }
       .sc-sport > summary {
         cursor: pointer;
-        padding: 0.5rem 0.7rem;
+        padding: 0.6rem 0.8rem;
         display: flex;
         align-items: center;
         gap: 0.5rem;
         font-size: 0.85rem;
         list-style: none;
+        transition: background 0.15s ease;
+      }
+      .sc-sport > summary:hover {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 60%,
+          transparent
+        );
       }
       .sc-sport > summary::-webkit-details-marker {
         display: none;
@@ -1115,9 +1383,41 @@
         content: "▸";
         font-size: 0.7rem;
         color: var(--sd-text-muted);
+        transition:
+          transform 0.2s ease,
+          color 0.2s ease;
       }
       .sc-sport[open] > summary::before {
         content: "▾";
+        transform: rotate(0deg);
+        color: var(--sd-accent);
+      }
+      .sc-chip {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-bg);
+        white-space: nowrap;
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease;
+      }
+      .sc-chip:hover {
+        border-color: var(--sd-accent);
+        background: color-mix(
+          in srgb,
+          var(--sd-accent) 10%,
+          var(--sd-surface-bg)
+        );
+      }
+      .sc-chip.sc-collide {
+        border-color: var(--sd-warning);
+        background: color-mix(
+          in srgb,
+          var(--sd-warning) 10%,
+          var(--sd-surface-bg)
+        );
       }
       .sc-sport > summary .sc-n {
         margin-left: auto;
@@ -1143,21 +1443,10 @@
         flex-wrap: wrap;
         gap: 0.3rem;
       }
-      .sc-chip {
-        font-size: 0.7rem;
-        padding: 0.12rem 0.45rem;
-        border-radius: 4px;
-        border: 1px solid var(--sd-surface-border);
-        background: var(--sd-surface-bg);
-        white-space: nowrap;
-      }
       .sc-chip code {
         font-family: var(--mono);
         font-size: 0.66rem;
         color: var(--sd-text-muted);
-      }
-      .sc-chip.sc-collide {
-        border-color: var(--sd-warning);
       }
       .sc-periods {
         display: flex;
@@ -1293,9 +1582,19 @@
       }
       .ld-stat {
         border: 1px solid var(--sd-surface-border);
-        border-radius: 8px;
-        padding: 0.6rem 0.75rem;
+        border-radius: 10px;
+        padding: 0.7rem 0.85rem;
         background: var(--sd-surface-card);
+        transition:
+          border-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .ld-stat:hover {
+        border-color: var(--sd-tier-retail);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px
+          color-mix(in srgb, var(--sd-tier-retail) 12%, transparent);
       }
       .ld-stat dt {
         font-size: 0.66rem;
@@ -1303,11 +1602,15 @@
         letter-spacing: 0.06em;
         opacity: 0.66;
         margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
       .ld-stat dd {
-        margin: 0.2rem 0 0;
-        font-size: 1.15rem;
+        margin: 0.25rem 0 0;
+        font-size: 1.25rem;
         font-variant-numeric: tabular-nums;
+        font-weight: 700;
       }
       .ld-stat dd small {
         display: block;
@@ -1400,6 +1703,33 @@
         <span class="badge badge-purple">50% SHARED AGENT</span>
       </div>
     </div>
+
+    <!-- Agent Tree Graph dropdown -->
+    <details class="agent-tree-dropdown">
+      <summary class="agent-tree-toggle" aria-expanded="false">
+        🌳 Agent Tree Graph
+      </summary>
+      <div class="agent-tree-panel">
+        <div class="agent-tree-toolbar">
+          <button type="button" class="agent-tree-btn" data-zoom="in">
+            + Zoom in
+          </button>
+          <button type="button" class="agent-tree-btn" data-zoom="out">
+            - Zoom out
+          </button>
+          <button type="button" class="agent-tree-btn" data-zoom="reset">
+            Reset
+          </button>
+          <a class="agent-tree-btn" href="/graph" target="_blank" rel="noopener"
+            >Open graph page</a
+          >
+        </div>
+        <div class="agent-tree-viewport">
+          <img class="agent-tree-img" alt="Agent downline tree graph" hidden />
+          <div class="agent-tree-fallback" id="agent-graph-note">Loading…</div>
+        </div>
+      </div>
+    </details>
 
     <!-- Qwen3.5-4B (Layers 18-28) Design Token & Neuron Telemetry Strip -->
     <div class="telemetry-strip">
@@ -1581,26 +1911,31 @@
       </span>
     </div>
 
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">Master Downline Scope</div>
-        <div class="kpi-val">668 Agents</div>
-        <div class="kpi-sub">Master downline • 460 Active Sports</div>
+    <!-- Filled from /api/kpis; every figure is derived from a data/ artifact, never typed here. -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card" data-kpi="agents" data-source="loading">
+        <div class="kpi-label">Agent Tree</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Total Provisioned Bettors</div>
-        <div class="kpi-val">9,435 Accts</div>
-        <div class="kpi-sub">2,236 Active • 7,199 Retained</div>
+      <div class="kpi-card" data-kpi="pending" data-source="loading">
+        <div class="kpi-label">Open Wagers (Pending)</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Active Sports Handle</div>
-        <div class="kpi-val">$2.79M</div>
-        <div class="kpi-sub">10,941 Settled Tickets</div>
+      <div class="kpi-card" data-kpi="ticker" data-source="loading">
+        <div class="kpi-label">Bet Ticker Risk</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Lifetime Book Net Hold</div>
-        <div class="kpi-val">$10.49M</div>
-        <div class="kpi-sub">50% Agent Share: $5.24M</div>
+      <div class="kpi-card" data-kpi="customerBook" data-source="loading">
+        <div class="kpi-label">Customer Lifetime Net</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
     </div>
 
@@ -1665,17 +2000,17 @@
         </div>
       </section>
 
-      <!-- Live wager ticker: the {LIST: [...]} feed, a different shape from Pending -->
+      <!-- Bet ticker: Manager/getBetTicker ({LIST: [...]}), a different shape from Pending -->
       <section class="section-card" id="live-wagers" aria-labelledby="lw-title">
         <div class="section-title">
-          <span id="lw-title">Live Wagers — Ticker</span>
+          <span id="lw-title">Live Wagers — Bet Ticker</span>
           <span class="badge badge-primary" id="lw-badge">LOADING</span>
         </div>
 
         <p class="ld-note" style="margin-top: 0" id="lw-note">
-          Each row is one wager from the ticker feed. Sport comes from the
-          parsed leg description; a stake whose volume differs is flagged rather
-          than reconciled.
+          Each row is one wager from the portal's bet ticker
+          (Manager/getBetTicker). Sport comes from the parsed leg description; a
+          stake whose volume differs is flagged rather than reconciled.
         </p>
 
         <dl class="lw-stats" id="lw-stats" hidden>
@@ -1702,6 +2037,10 @@
           <div class="lw-stat">
             <dt>Volume mismatches</dt>
             <dd id="lw-mismatch">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Excluded (alert/blocked)</dt>
+            <dd id="lw-excluded">–</dd>
           </div>
         </dl>
 
@@ -2652,6 +2991,13 @@
         return `${shifted.toISOString().slice(0, 16).replace("T", " ")} ${zone.label}`;
       }
 
+      function sdAge(seconds) {
+        if (seconds < 90) return "just now";
+        if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+        if (seconds < 172_800) return `${Math.round(seconds / 3600)}h ago`;
+        return `${Math.round(seconds / 86_400)}d ago`;
+      }
+
       /* ------------------------------------------------------------------ *
        * Live Desk                                                          *
        *                                                                    *
@@ -2771,11 +3117,7 @@
               setBadge("TOKEN REQUIRED", "warning");
               fixturesEl.replaceChildren();
               const row = make("tr");
-              const cell = make(
-                "td",
-                "empty-row",
-                tokenHint(bets.status),
-              );
+              const cell = make("td", "empty-row", tokenHint(bets.status));
               cell.colSpan = 6;
               row.append(cell);
               fixturesEl.append(row);
@@ -2838,6 +3180,113 @@
         setInterval(() => {
           if (document.visibilityState === "visible") load();
         }, 30_000);
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * KPI strip                                                          *
+       *                                                                    *
+       * /api/kpis derives each figure from a data/ artifact and says where *
+       * it came from and how old it is; a stale capture is shown as stale. *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const grid = document.getElementById("kpi-grid");
+        if (grid === null) return;
+
+        const count = new Intl.NumberFormat("en-US");
+        const card = (name) => grid.querySelector(`[data-kpi="${name}"]`);
+
+        const fill = (name, value, sub, provenance, missing) => {
+          const node = card(name);
+          if (node === null) return;
+          const [valEl, subEl, ageEl] = [
+            ".kpi-val",
+            ".kpi-sub",
+            ".kpi-age",
+          ].map((selector) => node.querySelector(selector));
+          if (provenance === null) {
+            node.dataset.source = "missing";
+            valEl.textContent = "—";
+            subEl.textContent = missing;
+            ageEl.textContent = "";
+            ageEl.dataset.tone = "";
+            return;
+          }
+          node.dataset.source = provenance.stale ? "stale" : provenance.basis;
+          node.title = provenance.source;
+          valEl.textContent = value;
+          subEl.textContent = sub;
+          const verb =
+            provenance.asOfFrom === "file-mtime" ? "file written" : "as of";
+          const parts = [
+            `${verb} ${sdFormatTs(provenance.asOf)} (${sdAge(provenance.ageSeconds)})`,
+          ];
+          if (provenance.partial) parts.push("partial");
+          if (provenance.basis === "fixture") parts.push("demo fixture");
+          ageEl.textContent = parts.join(" · ");
+          ageEl.dataset.tone = provenance.stale ? "stale" : "";
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/api/kpis", { cache: "no-store" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const { kpis } = await res.json();
+            const { agents, pending, ticker, customerBook } = kpis;
+
+            fill(
+              "agents",
+              agents ? `${count.format(agents.total)} Agents` : "",
+              agents
+                ? `${count.format(agents.agents)} agent · ${count.format(agents.masters)} master`
+                : "",
+              agents?.provenance ?? null,
+              "No data/agent-tree.json. Run bun run build:agent-tree.",
+            );
+            fill(
+              "pending",
+              pending ? usd(pending.wageredCents) : "",
+              pending
+                ? `${count.format(pending.wagers)} wagers · to win ${usd(pending.toWinCents)}`
+                : "",
+              pending?.provenance ?? null,
+              "No data/live-bets.json. Run bun run capture:pending.",
+            );
+            fill(
+              "ticker",
+              ticker ? usd(ticker.riskCents) : "",
+              ticker
+                ? `${count.format(ticker.wagers)} wagers · ${count.format(ticker.live)} live · volume ${usd(ticker.volumeCents)}${
+                    ticker.excludedRows > 0
+                      ? ` · ${count.format(ticker.excludedRows)} alert/blocked excluded`
+                      : ""
+                  }`
+                : "",
+              ticker?.provenance ?? null,
+              "No bet ticker. Run bun run capture:bet-ticker.",
+            );
+            fill(
+              "customerBook",
+              customerBook ? usd(customerBook.customerNetCents) : "",
+              customerBook
+                ? `${count.format(customerBook.customers)} customers · ${count.format(customerBook.tickets)} tickets`
+                : "",
+              customerBook?.provenance ?? null,
+              "No data/customer-profiles.json. Run bun run customers:profiles.",
+            );
+          } catch (err) {
+            for (const node of grid.querySelectorAll("[data-kpi]")) {
+              node.dataset.source = "unavailable";
+              node.querySelector(".kpi-age").textContent =
+                `Failed to load /api/kpis: ${String(err)}`;
+            }
+          }
+        };
+
+        globalThis.addEventListener("sportsdesk-settings", load);
+        setInterval(() => {
+          if (document.visibilityState === "visible") load();
+        }, 60_000);
         load();
       })();
 
@@ -3567,7 +4016,9 @@
           const mode = moduleSelect.value;
           try {
             if (mode === "P") {
-              const res = await authed("/api/game-admin", { cache: "no-store" });
+              const res = await authed("/api/game-admin", {
+                cache: "no-store",
+              });
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               renderPositions(await res.json());
               return;
@@ -3889,6 +4340,13 @@
           return node;
         };
 
+        const defaultNote = note.textContent.replace(/\s+/g, " ").trim();
+        const noiseTitle = {
+          alert:
+            "ALERT row: mirrors a real ticket, so its stake is excluded from the totals.",
+          blocked: "BLOCKED sentinel: not a wager, excluded from the totals.",
+        };
+
         let all = [];
         let summaryData = { count: 0, byWriter: {}, byType: {} };
         let provenance = {
@@ -3938,7 +4396,6 @@
         };
 
         const render = () => {
-          if (all.length === 0) return;
           const rows = all.filter(
             (wager) =>
               (writer === "" || wager.writer === writer) &&
@@ -3948,7 +4405,13 @@
           list.replaceChildren();
           if (rows.length === 0) {
             const tr = make("tr");
-            const td = make("td", "empty-row", "No wager matches this filter.");
+            const td = make(
+              "td",
+              "empty-row",
+              all.length === 0
+                ? "No wagers in this list."
+                : "No wager matches this filter.",
+            );
             td.colSpan = 9;
             tr.append(td);
             list.append(tr);
@@ -3956,6 +4419,11 @@
 
           for (const wager of rows) {
             const tr = make("tr");
+            const noise = noiseTitle[wager.writer];
+            if (noise !== undefined) {
+              tr.className = "lw-noise";
+              tr.title = noise;
+            }
             tr.append(make("td", "", `#${wager.wagerNumber}`));
             tr.append(make("td", "", wager.agentLogin || wager.agentId));
             tr.append(make("td", "", wager.login));
@@ -4005,6 +4473,20 @@
           buildBars(summaryData);
         };
 
+        /** A failed load must not leave the last list's rows and totals on screen. */
+        const clearPanel = (message) => {
+          all = [];
+          summaryData = { count: 0, byWriter: {}, byType: {} };
+          stats.hidden = true;
+          writersBar.replaceChildren();
+          typesBar.replaceChildren();
+          const tr = make("tr");
+          const td = make("td", "empty-row", message);
+          td.colSpan = 9;
+          tr.append(td);
+          list.replaceChildren(tr);
+        };
+
         const loadLiveWagers = async () => {
           try {
             const res = await authed("/api/live-wagers", { cache: "no-store" });
@@ -4012,13 +4494,15 @@
               badge.textContent = "NOT CAPTURED";
               badge.className = "badge badge-warning";
               note.textContent =
-                "No ticker capture yet. Save the {LIST: [...]} response as data/live-wagers.json.";
+                "No bet ticker capture yet. Run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json.";
+              clearPanel("No wager list.");
               return;
             }
             if (res.status === 401 || res.status === 503) {
               badge.textContent = "TOKEN REQUIRED";
               badge.className = "badge badge-warning";
               note.textContent = tokenHint(res.status);
+              clearPanel("Wagers hidden until an admin token is set.");
               return;
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -4027,10 +4511,25 @@
             all = body.wagers ?? [];
             summaryData = body.summary ?? summaryData;
             provenance = body.provenance ?? provenance;
+            const freshness = body.freshness ?? null;
+            const skipped = body.skipped ?? [];
+            const total = summaryData.count ?? 0;
+            const counted = summaryData.counted ?? total;
+            const excluded = summaryData.excluded ?? {
+              alert: 0,
+              blocked: 0,
+              risk: 0,
+            };
+            const excludedRows = excluded.alert + excluded.blocked;
 
-            document.getElementById("lw-count").textContent = String(
-              summaryData.count ?? 0,
-            );
+            document.getElementById("lw-count").textContent =
+              counted === total
+                ? String(counted)
+                : `${counted} of ${total} rows`;
+            document.getElementById("lw-excluded").textContent =
+              excludedRows === 0
+                ? "0"
+                : `${excludedRows} · ${usd(excluded.risk)} risk`;
             document.getElementById("lw-risk").textContent = usd(
               summaryData.risk,
             );
@@ -4048,12 +4547,18 @@
             );
             stats.hidden = false;
 
-            badge.textContent = provenance.partial
-              ? `${summaryData.count ?? 0} WAGERS · PARTIAL`
-              : `${summaryData.count ?? 0} WAGERS`;
-            badge.className = provenance.partial
-              ? "badge badge-warning"
-              : "badge badge-accent";
+            const captured = String(provenance.source).startsWith("capture:");
+            const stale = freshness?.stale === true;
+            badge.textContent = [
+              `${counted} WAGERS`,
+              captured ? "CAPTURE" : "PASTE",
+              ...(provenance.partial ? ["PARTIAL"] : []),
+              ...(stale ? ["STALE"] : []),
+            ].join(" · ");
+            badge.className =
+              captured && !provenance.partial && !stale
+                ? "badge badge-accent"
+                : "badge badge-warning";
 
             // The file's own words about its completeness, not a sentence invented here.
             const caveat = provenance.captureNote;
@@ -4065,30 +4570,127 @@
                       ? " (no observation time)"
                       : ` at ${sdFormatTs(provenance.observedAt)}`
                   }.`;
-            if (caveat !== null || origin !== "") {
-              note.textContent = [caveat ?? "", origin]
-                .filter((part) => part !== "")
-                .join(" ");
-            }
+            const verb =
+              freshness?.asOfFrom === "file-mtime" ? "file written" : "as of";
+            const ageSeconds = Math.max(
+              0,
+              Math.floor(
+                (Date.now() - Date.parse(freshness?.asOf ?? "")) / 1000,
+              ),
+            );
+            const staleNote = stale
+              ? `STALE: list ${verb} ${sdFormatTs(freshness.asOf)} (${sdAge(ageSeconds)}). It is a one-off ${captured ? "capture" : "paste"}, not a live feed — rerun bun run capture:bet-ticker.`
+              : "";
+            // An older second file is the normal state once both exist; only rejected files are news.
+            const rejected = skipped.filter(
+              (entry) => !entry.reason.startsWith("older than"),
+            );
+            const skippedNote =
+              rejected.length === 0
+                ? ""
+                : `Skipped: ${rejected.map((entry) => `${entry.path} (${entry.reason})`).join("; ")}.`;
+            const parts = [caveat ?? "", origin, staleNote, skippedNote].filter(
+              (part) => part !== "",
+            );
+            note.textContent =
+              parts.length === 0 ? defaultNote : parts.join(" ");
             render();
           } catch (err) {
             badge.textContent = "UNAVAILABLE";
             badge.className = "badge badge-alert";
-            list.replaceChildren();
-            const tr = make("tr");
-            const td = make(
-              "td",
-              "empty-row",
-              `Could not load wagers: ${String(err)}`,
-            );
-            td.colSpan = 9;
-            tr.append(td);
-            list.append(tr);
+            clearPanel(`Could not load wagers: ${String(err)}`);
           }
         };
 
         globalThis.addEventListener("sportsdesk-settings", loadLiveWagers);
+        setInterval(() => {
+          if (document.visibilityState === "visible") loadLiveWagers();
+        }, 30_000);
         loadLiveWagers();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Agent tree raster                                                  *
+       *                                                                    *
+       * The image is the same graph `/graph` serves, so it is guarded the   *
+       * same way. An <img src> cannot carry the admin token, so the bytes   *
+       * are read through authed() and handed to the image as a blob URL;   *
+       * without that, every non-loopback peer would see a broken image no   *
+       * matter what token it pasted. The fetch happens on first expand, not *
+       * on page load, because the raster is a few hundred kilobytes.        *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const details = document.querySelector(".agent-tree-dropdown");
+        const img = details?.querySelector(".agent-tree-img") ?? null;
+        const note = document.getElementById("agent-graph-note");
+        const toggle = details?.querySelector(".agent-tree-toggle") ?? null;
+        if (details === null || img === null || note === null) return;
+
+        let objectUrl = null;
+        let loaded = false;
+        let scale = 1;
+
+        const showNote = (message) => {
+          img.hidden = true;
+          note.hidden = false;
+          note.textContent = message;
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/agent-graph.webp", {
+              cache: "no-store",
+            });
+            if (res.status === 401 || res.status === 503) {
+              showNote(`TOKEN REQUIRED — ${tokenHint(res.status)}`);
+              return;
+            }
+            if (!res.ok) {
+              // The server's own words: 404 is "not built yet", 503 is "stale".
+              const body = await res.json().catch(() => ({}));
+              showNote(
+                body.error ??
+                  `Agent graph raster unavailable (HTTP ${res.status}).`,
+              );
+              return;
+            }
+            const blob = await res.blob();
+            if (objectUrl !== null) URL.revokeObjectURL(objectUrl);
+            objectUrl = URL.createObjectURL(blob);
+            img.src = objectUrl;
+            img.hidden = false;
+            note.hidden = true;
+            loaded = true;
+          } catch (err) {
+            showNote(`Could not load the agent graph raster: ${String(err)}`);
+          }
+        };
+
+        details.addEventListener("toggle", () => {
+          toggle?.setAttribute(
+            "aria-expanded",
+            details.open ? "true" : "false",
+          );
+          if (details.open && !loaded) load();
+        });
+
+        // A newly pasted token is the case that made the image stay broken.
+        globalThis.addEventListener("sportsdesk-settings", () => {
+          loaded = false;
+          if (details.open) load();
+        });
+
+        for (const button of details.querySelectorAll(
+          ".agent-tree-btn[data-zoom]",
+        )) {
+          button.addEventListener("click", () => {
+            const zoom = button.getAttribute("data-zoom");
+            if (zoom === "in") scale = Math.min(4, scale + 0.25);
+            else if (zoom === "out") scale = Math.max(0.25, scale - 0.25);
+            else scale = 1;
+            img.style.transform = `scale(${scale})`;
+          });
+        }
       })();
     </script>
   </body>

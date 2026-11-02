@@ -9,8 +9,8 @@
  *
  * `dataClass` is what forces the question. It is not cosmetic: `/health` and `/api/status`
  * return uptime, memory, pid, bind address and NODE_ENV, so "public" there is a deliberate
- * operational choice rather than "static"; `/` and `/dashboard` embed book totals in the markup,
- * so they are `aggregate`, not `static`; `/api/live-bets` and `/api/agent-tree` carry logins
+ * operational choice rather than "static"; `/` and `/dashboard` show book totals (from
+ * `/api/kpis`), so they are `aggregate`, not `static`; `/api/live-bets` and `/api/agent-tree` carry logins
  * and are `customer-identifying`, which is why they must be `pii`.
  *
  * tests/daemon_routes.test.ts keeps the table honest in both directions against the handler, and
@@ -66,6 +66,14 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-dashboard",
   }),
   defineRoute({
+    path: "/agent-graph.webp",
+    method: "ANY",
+    // A rendering of the graph `/graph` serves: the node labels are logins.
+    guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
     path: "/api/agent-tree",
     method: "ANY",
     guard: "pii",
@@ -96,8 +104,8 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
   defineRoute({
     path: "/api/analysis/reports",
     method: "ANY",
-    guard: "none",
-    dataClass: "aggregate",
+    guard: "pii",
+    dataClass: "customer-identifying",
     surface: "surface.daemon-analysis",
   }),
   defineRoute({
@@ -150,6 +158,14 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
+    path: "/api/kpis",
+    method: "ANY",
+    guard: "none",
+    // Counts and sums from lib/desk_kpis.ts; no login, customer id or agent key.
+    dataClass: "aggregate",
+    surface: "surface.daemon-dashboard",
+  }),
+  defineRoute({
     path: "/api/live-bets",
     method: "ANY",
     guard: "pii",
@@ -160,7 +176,9 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     path: "/api/live-bets/summary",
     method: "ANY",
     guard: "pii",
-    dataClass: "aggregate",
+    // Not `aggregate`: `summary.byAgent` is keyed by agent login, so the totals carry an
+    // identifier even though the numbers themselves are sums.
+    dataClass: "customer-identifying",
     surface: "surface.daemon-live-bets",
   }),
   defineRoute({
@@ -314,7 +332,8 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     path: "/live-bets/summary",
     method: "ANY",
     guard: "pii",
-    dataClass: "aggregate",
+    // Same body as `/api/live-bets/summary`, reached by the older path.
+    dataClass: "customer-identifying",
     surface: null,
   }),
   defineRoute({
