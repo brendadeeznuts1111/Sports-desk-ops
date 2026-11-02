@@ -114,6 +114,60 @@ describe("findScore", () => {
     expect(nhl?.team2Score).toBe(7);
   });
 
+  test("an empty league joins only when exactly one game matches", () => {
+    // The caller (the bet ticker) cannot say which league; a unique nickname pair is safe.
+    const unique = findScore(file, {
+      team1: "Cardinals",
+      team2: "Cowboys",
+      league: "",
+    });
+    expect(unique?.league).toBe("NFL");
+
+    // Every nickname that repeats on the real board (`Jets` in NFL and NHL) has a different
+    // partner, so a pair still resolves. Duplicated pairs are the case the rule exists for.
+    expect(
+      findScore(file, { team1: "Jets", team2: "Hurricanes", league: "" })
+        ?.league,
+    ).toBe("NHL");
+    expect(
+      findScore(file, { team1: "Raiders", team2: "Jets", league: "" })?.league,
+    ).toBe("NFL");
+  });
+
+  test("refuses a league-less join when two games share the pair", () => {
+    const duplicated: ScoreboardFile = {
+      ...file,
+      games: [
+        ...file.games,
+        {
+          league: "CFB",
+          sport: "Football",
+          status: "scheduled",
+          period: null,
+          broadcast: null,
+          team1: { name: "Cardinals", score: null, logo: null },
+          team2: { name: "Cowboys", score: null, logo: null },
+        },
+      ],
+    };
+    // "Cardinals vs Cowboys" now exists in two leagues: refuse instead of taking the first row.
+    expect(
+      findScore(duplicated, {
+        team1: "Cardinals",
+        team2: "Cowboys",
+        league: "",
+      }),
+    ).toBeNull();
+    // Naming the league still resolves it.
+    expect(
+      findScore(duplicated, {
+        team1: "Cardinals",
+        team2: "Cowboys",
+        league: "CFB",
+      })?.status,
+    ).toBe("scheduled");
+  });
+
   test("leaves a sport the scoreboard does not cover unmatched", () => {
     expect(
       findScore(file, {

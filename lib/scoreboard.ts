@@ -103,6 +103,13 @@ function samePair(
  * Finds the scoreboard row for a wager's two teams. `league` is the wager's `SportSubType`
  * (`"NFL"`, `"ENG PREM"`); when it does not match, the pair is not joined — a same-nickname
  * club in another league must not borrow a score.
+ *
+ * An **empty** league is not a licence to ignore the guard. It means the caller does not know the
+ * competition (the bet ticker carries `sport: "Football"`, which is NFL *and* CFB), so the join
+ * proceeds only when exactly one game matches the nickname pair. Two candidates and the result is
+ * `null` rather than the first row in file order. The board really does repeat a nickname —
+ * `Jets` plays in NFL and in NHL — so a league-less caller is one duplicated pair away from a
+ * wrong score.
  */
 export function findScore(
   file: ScoreboardFile,
@@ -116,23 +123,25 @@ export function findScore(
   const b = teamNickname(wager.team2);
   if (a === "" || b === "") return null;
 
-  for (const game of file.games) {
-    if (!samePair(game, a, b, wager.league)) continue;
+  const league = wager.league.trim();
+  const candidates = file.games.filter((game) => samePair(game, a, b, league));
+  if (candidates.length === 0) return null;
+  // No league means the caller cannot disambiguate; two matches are a refusal, not a coin flip.
+  if (league === "" && candidates.length > 1) return null;
 
-    // Align scores to the wager's team order so the caller never has to re-sort.
-    const wagerTeam1IsGameTeam1 = teamNickname(game.team1.name) === a;
-    return {
-      league: game.league,
-      status: game.status,
-      period: game.period,
-      broadcast: game.broadcast,
-      team1Score: wagerTeam1IsGameTeam1 ? game.team1.score : game.team2.score,
-      team2Score: wagerTeam1IsGameTeam1 ? game.team2.score : game.team1.score,
-      source: file.source,
-      observedAt: file.observedAt,
-    };
-  }
-  return null;
+  const game = candidates[0]!;
+  // Align scores to the wager's team order so the caller never has to re-sort.
+  const wagerTeam1IsGameTeam1 = teamNickname(game.team1.name) === a;
+  return {
+    league: game.league,
+    status: game.status,
+    period: game.period,
+    broadcast: game.broadcast,
+    team1Score: wagerTeam1IsGameTeam1 ? game.team1.score : game.team2.score,
+    team2Score: wagerTeam1IsGameTeam1 ? game.team2.score : game.team1.score,
+    source: file.source,
+    observedAt: file.observedAt,
+  };
 }
 
 /** Counts by status, for the scoreboard header. */
