@@ -19,6 +19,9 @@ const AGENT_GRAPH_CAPTURE_TIMEOUT_MS = envPositiveInt(
 
 export const AGENT_GRAPH_READY_GLOBAL = "__AGENT_GRAPH_READY__" as const;
 
+/** Consecutive animation frames with no Cytoscape `render` before the graph counts as painted. */
+export const AGENT_GRAPH_QUIET_FRAMES = 3;
+
 /** Expression evaluated in-page; resolves when the graph layout finishes. */
 export const AGENT_GRAPH_READY_EVAL = `(new Promise((resolve, reject) => {
   const deadline = Date.now() + ${AGENT_GRAPH_CAPTURE_TIMEOUT_MS};
@@ -122,7 +125,17 @@ export function renderAgentGraphCapturePage(graphJsonText: string): string {
       } else {
         var layout = agentGraphLayout(cy);
         layout.one("layoutstop", function () {
-          window.${AGENT_GRAPH_READY_GLOBAL} = true;
+          // layoutstop means positions are final, not painted: Cytoscape keeps drawing (fit, label
+          // textures) on later frames, and a cold WebView screenshot taken now misses some of it.
+          var quiet = 0;
+          cy.on("render", function () { quiet = 0; });
+          (function settle() {
+            if (++quiet > ${AGENT_GRAPH_QUIET_FRAMES}) {
+              window.${AGENT_GRAPH_READY_GLOBAL} = true;
+              return;
+            }
+            requestAnimationFrame(settle);
+          })();
         });
         layout.run();
       }
