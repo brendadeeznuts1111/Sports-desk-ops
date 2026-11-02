@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  countPairs,
   type LaidOutGraph,
   scoreLayout,
   segmentsCross,
@@ -36,6 +37,52 @@ describe("segmentsCross", () => {
     expect(
       segmentsCross(seg("a", "b", 0, 0, 10, 0), seg("c", "d", 0, 5, 10, 5)),
     ).toBe(false);
+  });
+});
+
+describe("countPairs", () => {
+  type Rect = { x: number; y: number; w: number; h: number };
+  const bounds = (r: Rect) => ({
+    minX: r.x - r.w / 2,
+    maxX: r.x + r.w / 2,
+    minY: r.y - r.h / 2,
+    maxY: r.y + r.h / 2,
+  });
+  const overlap = (p: Rect, q: Rect) =>
+    Math.abs(p.x - q.x) * 2 < p.w + q.w && Math.abs(p.y - q.y) * 2 < p.h + q.h;
+  const bruteForce = (rects: Rect[]) => {
+    let n = 0;
+    for (let i = 0; i < rects.length; i++)
+      for (let j = i + 1; j < rects.length; j++)
+        if (overlap(rects[i]!, rects[j]!)) n += 1;
+    return n;
+  };
+
+  test("empty and single inputs have no pairs", () => {
+    expect(countPairs([], bounds, overlap, 10)).toBe(0);
+    expect(countPairs([{ x: 0, y: 0, w: 5, h: 5 }], bounds, overlap, 10)).toBe(
+      0,
+    );
+  });
+
+  test("a pair sharing many cells counts once", () => {
+    const r = { x: -3, y: -3, w: 40, h: 40 };
+    expect(countPairs([r, { ...r }, { ...r }], bounds, overlap, 1)).toBe(3);
+  });
+
+  test("matches brute force on seeded random layouts with negative coordinates", () => {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    for (let t = 0; t < 50; t++) {
+      const rects = Array.from({ length: 2 + Math.floor(rnd() * 120) }, () => ({
+        x: rnd() * 400 - 200,
+        y: rnd() * 400 - 200,
+        w: 1 + rnd() * 40,
+        h: 1 + rnd() * 40,
+      }));
+      const cell = 1 + rnd() * 30;
+      expect(countPairs(rects, bounds, overlap, cell)).toBe(bruteForce(rects));
+    }
   });
 });
 

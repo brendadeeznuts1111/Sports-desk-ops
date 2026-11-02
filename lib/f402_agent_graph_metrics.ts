@@ -78,53 +78,80 @@ export function segmentsCross(s: Seg, t: Seg): boolean {
   return o1 * o2 < 0 && o3 * o4 < 0;
 }
 
-/** Uniform-grid bucketed pair test for small boxes; exact result. */
-function countPairs<T>(
+/**
+ * Uniform-grid bucketed pair test for small boxes; exact result. Cell `c` holds
+ * `cellItems[cellStart[c] .. cellStart[c + 1])`; the pair bitset costs n(n-1)/2 bits.
+ */
+export function countPairs<T>(
   items: readonly T[],
   box: (t: T) => { minX: number; minY: number; maxX: number; maxY: number },
   test: (a: T, b: T) => boolean,
   cell: number,
 ): number {
-  const buckets = new Map<string, number[]>();
-  const boxes = items.map(box);
-  boxes.forEach((b, i) => {
-    for (
-      let gx = Math.floor(b.minX / cell);
-      gx <= Math.floor(b.maxX / cell);
-      gx++
-    ) {
-      for (
-        let gy = Math.floor(b.minY / cell);
-        gy <= Math.floor(b.maxY / cell);
-        gy++
-      ) {
-        const key = `${gx},${gy}`;
-        const list = buckets.get(key);
-        if (list) list.push(i);
-        else buckets.set(key, [i]);
-      }
-    }
-  });
-  const seen = new Set<number>();
-  let count = 0;
   const n = items.length;
-  for (const list of buckets.values()) {
-    for (let p = 0; p < list.length; p++) {
-      for (let q = p + 1; q < list.length; q++) {
-        const i = list[p]!;
-        const j = list[q]!;
-        const key = i < j ? i * n + j : j * n + i;
-        if (seen.has(key)) continue;
-        const bi = boxes[i]!;
-        const bj = boxes[j]!;
+  if (n < 2) return 0;
+  const boxes = new Float64Array(n * 4);
+  const span = new Int32Array(n * 4);
+  let gxMin = Infinity;
+  let gyMin = Infinity;
+  let gxMax = -Infinity;
+  let gyMax = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const b = box(items[i]!);
+    const x0 = Math.floor(b.minX / cell);
+    const y0 = Math.floor(b.minY / cell);
+    const x1 = Math.floor(b.maxX / cell);
+    const y1 = Math.floor(b.maxY / cell);
+    boxes[i * 4] = b.minX;
+    boxes[i * 4 + 1] = b.minY;
+    boxes[i * 4 + 2] = b.maxX;
+    boxes[i * 4 + 3] = b.maxY;
+    span[i * 4] = x0;
+    span[i * 4 + 1] = y0;
+    span[i * 4 + 2] = x1;
+    span[i * 4 + 3] = y1;
+    gxMin = Math.min(gxMin, x0);
+    gyMin = Math.min(gyMin, y0);
+    gxMax = Math.max(gxMax, x1);
+    gyMax = Math.max(gyMax, y1);
+  }
+  const cols = gxMax - gxMin + 1;
+  const cells = cols * (gyMax - gyMin + 1);
+
+  const cellStart = new Int32Array(cells + 1);
+  for (let i = 0; i < n; i++)
+    for (let gy = span[i * 4 + 1]!; gy <= span[i * 4 + 3]!; gy++)
+      for (let gx = span[i * 4]!; gx <= span[i * 4 + 2]!; gx++)
+        cellStart[(gy - gyMin) * cols + (gx - gxMin) + 1]! += 1;
+  for (let c = 0; c < cells; c++) cellStart[c + 1]! += cellStart[c]!;
+  const cellItems = new Int32Array(cellStart[cells]!);
+  const fill = cellStart.slice(0, cells);
+  for (let i = 0; i < n; i++)
+    for (let gy = span[i * 4 + 1]!; gy <= span[i * 4 + 3]!; gy++)
+      for (let gx = span[i * 4]!; gx <= span[i * 4 + 2]!; gx++)
+        cellItems[fill[(gy - gyMin) * cols + (gx - gxMin)]!++] = i;
+
+  // Pair (i, j), i < j, is bit j(j-1)/2 + i. Items enter cells in index order, so p < q gives i < j.
+  const seen = new Uint32Array(Math.ceil((n * (n - 1)) / 2 / 32));
+  let count = 0;
+  for (let c = 0; c < cells; c++) {
+    const end = cellStart[c + 1]!;
+    for (let p = cellStart[c]!; p < end; p++) {
+      const i = cellItems[p]!;
+      for (let q = p + 1; q < end; q++) {
+        const j = cellItems[q]!;
+        const bit = (j * (j - 1)) / 2 + i;
+        const word = Math.floor(bit / 32);
+        const mask = 1 << (bit & 31);
+        if (seen[word]! & mask) continue;
         if (
-          bi.maxX < bj.minX ||
-          bj.maxX < bi.minX ||
-          bi.maxY < bj.minY ||
-          bj.maxY < bi.minY
+          boxes[i * 4 + 2]! < boxes[j * 4]! ||
+          boxes[j * 4 + 2]! < boxes[i * 4]! ||
+          boxes[i * 4 + 3]! < boxes[j * 4 + 1]! ||
+          boxes[j * 4 + 3]! < boxes[i * 4 + 1]!
         )
           continue;
-        seen.add(key);
+        seen[word]! |= mask;
         if (test(items[i]!, items[j]!)) count += 1;
       }
     }
