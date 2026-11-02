@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import {
+  FOREIGN_LOCKFILES,
+  globalBunfigPath,
+  lockWorkspaceNames,
+  MACHINE_OWNED_INSTALL_KEYS,
+} from "../lib/pm_policy.ts";
 
 /**
  * Package-manager policy, from the machine config and Bun's docs.
@@ -11,13 +17,6 @@ import { readFileSync } from "node:fs";
  * `trustedDependencies` is pinned to an empty list so lifecycle scripts never run on install, rather
  * than inheriting Bun's built-in allow list (docs/pm/lifecycle: omitted = default list).
  */
-const MACHINE_OWNED_INSTALL_KEYS = [
-  "linker",
-  "globalStore",
-  "cache",
-  "frozenLockfile",
-  "minimumReleaseAge",
-] as const;
 
 describe("package manager policy", () => {
   test("the project bunfig does not set machine-owned install keys", () => {
@@ -48,39 +47,24 @@ describe("package manager policy", () => {
 
   test("the lockfile is the text format and is the only one", async () => {
     expect(await Bun.file("bun.lock").exists()).toBe(true);
-    for (const other of [
-      "package-lock.json",
-      "yarn.lock",
-      "pnpm-lock.yaml",
-      "bun.lockb",
-    ]) {
+    for (const other of FOREIGN_LOCKFILES) {
       expect(await Bun.file(other).exists()).toBe(false);
     }
   });
 
   test("the lockfile's workspaces match the package.json files", async () => {
-    // Bun 1.4.4 never rewrites a renamed package in an existing bun.lock, and a frozen install
-    // does not compare names, so drift here survives every install until the lock is regenerated.
-    const lock = Bun.JSONC.parse(await Bun.file("bun.lock").text()) as {
-      workspaces: Record<string, { name?: string }>;
-    };
-    const root = (await Bun.file("package.json").json()) as {
-      name: string;
-      workspaces: string[];
-    };
-    const expected: Record<string, string> = { "": root.name };
-    for (const pattern of root.workspaces) {
-      for await (const manifest of new Bun.Glob(`${pattern}/package.json`).scan(
-        ".",
-      )) {
-        const pkg = (await Bun.file(manifest).json()) as { name: string };
-        expected[manifest.slice(0, -"/package.json".length)] = pkg.name;
-      }
-    }
-    const actual = Object.fromEntries(
-      Object.entries(lock.workspaces).map(([path, ws]) => [path, ws.name]),
+    const { expected, locked } = await lockWorkspaceNames(".");
+    expect(locked).toEqual(expected);
+  });
+
+  test("the global bunfig path follows XDG_CONFIG_HOME only when it is absolute", () => {
+    expect(globalBunfigPath({ HOME: "/h", XDG_CONFIG_HOME: "/x" })).toBe(
+      "/x/.bunfig.toml",
     );
-    expect(actual).toEqual(expected);
+    expect(globalBunfigPath({ HOME: "/h", XDG_CONFIG_HOME: "rel" })).toBe(
+      "/h/.bunfig.toml",
+    );
+    expect(globalBunfigPath({ HOME: "/h" })).toBe("/h/.bunfig.toml");
   });
 
   test("the registry scope is declared without a token", async () => {

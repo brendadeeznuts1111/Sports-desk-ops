@@ -54,7 +54,8 @@ graph CLI: **`bun run graph:agent`** (no `--token` flags).
 - **Install policy is machine-owned** (`~/.bunfig.toml`: isolated linker, frozen lockfile, 3-day
   release age); `tests/bun_config_policy.test.ts` keeps install keys out of the project bunfig.
   The frozen lockfile makes plain `bun add`/`remove`/`update` exit 1, so change dependencies with
-  `bun --config="$HOME/dotfiles/bun/unfrozen.bunfig.toml" add <pkg>`. There is no `catalog`: the
+  `bun run deps add <pkg>` (it passes `--config=~/dotfiles/bun/unfrozen.bunfig.toml`).
+  `bun run pm:doctor` checks the whole setup on this machine. There is no `catalog`: the
   workspace packages in `packages/` have no dependencies of their own.
 - `Scratch/` and `dist/` are gitignored. The source scanners list files from git
   (`lib/source_files.ts`), so an ignored file never fails a gate; do not commit either directory.

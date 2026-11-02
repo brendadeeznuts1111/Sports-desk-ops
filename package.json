@@ -67,6 +67,8 @@
     "check:innerhtml": "bun run bin/check-innerhtml.ts",
     "probe:bun": "bun scripts/probe_bun.ts --check tests/bun_baseline.json",
     "ci:local": "bun scripts/ci_local.ts",
+    "pm:doctor": "bun scripts/pm_doctor.ts",
+    "deps": "bun --config=\"$HOME/dotfiles/bun/unfrozen.bunfig.toml\"",
     "check:secrets": "bun run bin/check-secrets.ts",
     "check:rotations": "bun run scripts/check_rotation_stability.ts",
     "hierarchy:load": "bun run scripts/hierarchy_load.ts",
