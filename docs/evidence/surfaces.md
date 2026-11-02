@@ -82,7 +82,7 @@ spec and should stay out until the transport is real.
 ## D-4. `surface.daemon-dashboard`
 
 - `GET /` and `GET /dashboard` both serve `customer-churn-simulation-dashboard.html` as `text/html`
-  (`sportsdesk_webview_server.ts:169-176`).
+  (`sportsdesk_webview_server.ts:174-181`).
 - No spec row; the spec documents only `/health`, `/api/watchlist` and the Telegram routes for the daemon.
 - These are the operator-facing dashboards; the Scalar docs portal is a separate artifact (`docs/index.html`
   loading `docs/openapi.json`).
@@ -90,9 +90,9 @@ spec and should stay out until the transport is real.
 ## D-5. `surface.daemon-miniapp`
 
 - `GET /miniapp` and `GET /miniapp/` serve `telegram-miniapp-dashboard.html`
-  (`sportsdesk_webview_server.ts:179-186`).
+  (`sportsdesk_webview_server.ts:184-191`).
 - Served with Telegram-specific CSP `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
-  and no `X-Frame-Options` (`sportsdesk_webview_server.ts:512-514`).
+  and no `X-Frame-Options` (`sportsdesk_webview_server.ts:517-519`).
 - Absent from the spec.
 
 ## D-6. `surface.daemon-telegram-admin-routes`
@@ -101,15 +101,15 @@ Real routes, no spec rows:
 
 | Route                               | Behaviour                                             | Source                                 |
 | ----------------------------------- | ----------------------------------------------------- | -------------------------------------- |
-| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `sportsdesk_webview_server.ts:189-308` |
-| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `sportsdesk_webview_server.ts:323-335` |
-| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `sportsdesk_webview_server.ts:337-345` |
-| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `sportsdesk_webview_server.ts:345-352` |
-| `OPTIONS *`                         | 204 preflight with CORS headers                       | `sportsdesk_webview_server.ts:117-121` |
-| `GET /api/test/error`               | Synthetic throw for the error boundary                | `sportsdesk_webview_server.ts:109-115` |
+| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `sportsdesk_webview_server.ts:194-313` |
+| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `sportsdesk_webview_server.ts:328-340` |
+| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `sportsdesk_webview_server.ts:342-350` |
+| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `sportsdesk_webview_server.ts:350-357` |
+| `OPTIONS *`                         | 204 preflight with CORS headers                       | `sportsdesk_webview_server.ts:122-126` |
+| `GET /api/test/error`               | Synthetic throw for the error boundary                | `sportsdesk_webview_server.ts:114-120` |
 
 All `/api/telegram/*` and `/api/watchlist` calls pass through `adminRejection`
-(`sportsdesk_webview_server.ts:165-184,175-186`): constant-time comparison against `SPORTSDESK_ADMIN_TOKEN`,
+(`sportsdesk_webview_server.ts:170-189,175-186`): constant-time comparison against `SPORTSDESK_ADMIN_TOKEN`,
 503 when the token is unset, 401 otherwise.
 
 ---
@@ -173,7 +173,7 @@ Why "9 paths / 10 operations": `/api/desk/auth/session` carries both `POST` and 
 
 Evidence of absence:
 
-- `sportsdesk_webview_server.ts:105-1781` is the complete daemon router: `/health`, `/`, `/dashboard`,
+- `sportsdesk_webview_server.ts:110-1807` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
   404 JSON fallback at `:299-307`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
@@ -188,7 +188,7 @@ present these as callable routes in the docs release.
 ## D-8. `surface.daemon-live-bets`
 
 - `GET /api/live-bets` and `GET /api/live-bets/summary` derive a scoreboard payload from captured
-  `Report/Pending` rows (`sportsdesk_webview_server.ts:491-576`).
+  `Report/Pending` rows (`sportsdesk_webview_server.ts:496-581`).
 - Amounts stay in integer cents; `Password`, `NameFirst` and `Login` are stripped by name, and
   `buildArtifact()` refuses to write when any survive (`lib/live_bets.ts`).
 - Both paths call the same loader and `summarizeGames()` in one request, so the summary cannot
@@ -199,7 +199,7 @@ present these as callable routes in the docs release.
 ## D-9. `surface.daemon-agent-tree`
 
 - `GET /api/agent-tree` serves `data/agent-tree.json` joined with per-agent exposure
-  (`sportsdesk_webview_server.ts:892-912`).
+  (`sportsdesk_webview_server.ts:897-917`).
 - The forest is built from the portal's own `baseHeriarchy` parent pointers
   (`scripts/build_agent_tree.ts`), keyed by canonical `agentLoginKey`.
 - A key owned by more than one `AgentID` keeps its node but is flagged `a: true` and never given a
@@ -218,7 +218,7 @@ present these as callable routes in the docs release.
 
 ## D-10. `surface.daemon-scoreboard`
 
-- `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1441-1453`):
+- `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1446-1458`):
   22 games (NFL 12, NHL 5, NBA 4, NCAA 1) transcribed from the manager page.
 - The payload carries `source` and `observedAt`. These games are **transcribed, not captured**; the
   pasted logo column was offset by one game, so logos are resolved by team name and verified against
@@ -228,21 +228,21 @@ present these as callable routes in the docs release.
 ## D-11. `surface.daemon-sports-taxonomy`
 
 - `GET /api/sports` returns the portal's 18 categories with counts for the loaded wagers and the
-  scoreboard (`sportsdesk_webview_server.ts:854-879`).
+  scoreboard (`sportsdesk_webview_server.ts:859-884`).
 - `All Sports` is the absence of a filter and `LIVE` is a state, so neither is modelled as a category;
   unmapped sports surface as `Other` (`lib/sport_taxonomy.ts`).
 
 ## D-12. `surface.daemon-game-admin`
 
 - `GET /api/game-admin` returns exposure per fixture split by position (`Straight`/`Parlay`/`Teaser`),
-  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`sportsdesk_webview_server.ts:836-852`).
+  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`sportsdesk_webview_server.ts:841-857`).
 - `preGame` is computed from `gameDateTime` against the request clock and is a fact about the fixture,
   **not** a claim about the operator's delete permission (manual F.A.Q. #3).
 
 ## D-13. `surface.daemon-graph-data-plane`
 
 The generated graph page fetches its data relative to the document, so serving only `/graph` and
-`/graph.js` left it dead. These paths now serve it (`sportsdesk_webview_server.ts:645-711`):
+`/graph.js` left it dead. These paths now serve it (`sportsdesk_webview_server.ts:650-716`):
 
 | Route                           | Serves                                         |
 | ------------------------------- | ---------------------------------------------- |
@@ -257,9 +257,9 @@ Asset names are validated (separators, control characters, `..`) and traversal i
 ## D-14. `surface.daemon-analysis`
 
 - `GET /api/analysis/filters` returns the report kinds (CP/CPS/CPV/G), 14 activity codes, 2 group
-  modes and 4 week windows, with provenance (`sportsdesk_webview_server.ts:1179-1195`).
+  modes and 4 week windows, with provenance (`sportsdesk_webview_server.ts:1184-1200`).
 - `GET /api/analysis/reports` lists transcribed results with the selection each was run under
-  (`sportsdesk_webview_server.ts:912-940`).
+  (`sportsdesk_webview_server.ts:917-945`).
 - `GET /api/analysis` answers **200** only when a stored report matches the selection, and **501**
   with the required capture otherwise. A 200 carries the rows, the published totals, a recomputed
   copy and a `discrepancies` array.
@@ -354,14 +354,14 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 ## D-15. `surface.daemon-agent-search`
 
 - `GET /api/agents/search?q=` searches `data/agent-tree.json`, prefix hits first
-  (`sportsdesk_webview_server.ts:1349-1408`).
+  (`sportsdesk_webview_server.ts:1354-1413`).
 - Requires two characters, clamps `limit` to 1–100, and is loopback-gated because agent names are
   identity data.
 
 ## D-16. `surface.daemon-game-admin-board`
 
 - `GET /api/game-admin/board` serves the Admin module — spread, moneyline, total and team totals
-  with the money on each side (`sportsdesk_webview_server.ts:1020-1093`).
+  with the money on each side (`sportsdesk_webview_server.ts:1025-1098`).
 - Window values are the portal's: `48` yesterday, `24` today, `-1` current board. A single-day
   board answers Yesterday with no games rather than repeating today.
 - Abbreviated amounts (`120k`) carry `amountExact: null` and are excluded from every sum.
@@ -370,21 +370,21 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 
 - `GET /api/sports/catalog` exposes 19 sports, 230 sub-sports and 42 period entries from
   `tests/fixtures/fantasy402-sport-catalog-2026-10-21.json`
-  (`sportsdesk_webview_server.ts:1101-1178`).
+  (`sportsdesk_webview_server.ts:1106-1183`).
 - Period numbers are sport-specific; `periodTypes` reports every name a number carries and flags the
   ambiguous ones. Sub-sport codes claimed by two sports are marked.
 
 ## D-18. `surface.daemon-contests`
 
 - `GET /api/contests` serves 227 futures extracted from the sports nav by
-  `scripts/extract_contests.ts` (`sportsdesk_webview_server.ts:986-1019`).
+  `scripts/extract_contests.ts` (`sportsdesk_webview_server.ts:991-1024`).
 - Rows are keyed by the portal's numeric `contestNum`; sport, market and subject are parsed from the
   padded type string. `?group` and `?q` filter server-side.
 
 ## D-19. `surface.daemon-live-wagers`
 
 - `GET /api/live-wagers` serves the `{LIST: [...]}` ticker feed
-  (`services/sportsdesk_webview_server.ts:949-994`), which is **not** the Pending shape:
+  (`services/sportsdesk_webview_server.ts:954-999`), which is **not** the Pending shape:
   `WagerNumber` is the ticket id and `ShortDesc` carries one line per leg.
 - Both `ShortDesc` grammars are parsed; a leg with no `/ Period / Market / Pick` segments is flagged
   `compact` and its sport is matched against the known sport names.
@@ -445,7 +445,7 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 ## D-20. `surface.daemon-logo-proxy`
 
 - `GET /api/logo/{name}` fetches `https://cdn.fastassets.io/images/team-logos/{name}` and returns the
-  bytes with an immutable day-long cache (`services/sportsdesk_webview_server.ts:696-794`).
+  bytes with an immutable day-long cache (`services/sportsdesk_webview_server.ts:701-799`).
 - The name is validated by rejecting separators, control characters and `..` rather than by
   allowlisting the characters the feed happens to use — the feed sends names with spaces
   (`Arsenal FC.png`), so an allowlist would have to grow with the feed.

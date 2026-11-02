@@ -93,6 +93,11 @@ import {
 } from "./sportsdesk_telegram_bot.ts";
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
+import {
+  buildHierarchy,
+  type HierarchyAction,
+  type RawHierarchyTree,
+} from "../lib/hierarchy_view.ts";
 import { encodedResponse, negotiateEncoding } from "../lib/http_compression.ts";
 import {
   contentTypeFor,
@@ -1547,6 +1552,27 @@ export function startServer(options?: ServerOptions) {
             toWin: agent.toWin,
           };
         }
+        if (url.searchParams.get("view") === "hierarchy") {
+          // The flat map answers "does this agent exist"; only the folded view answers "how much
+          // is under it", which is the question a tree UI asks on every render.
+          const view = buildHierarchy(tree.value as RawHierarchyTree, {
+            actionByAgent: counts as Record<string, HierarchyAction>,
+          });
+          return encodedResponse(req, {
+            version: `agent-tree:hierarchy|${tree.version}|${betsVersion}`,
+            contentType: "application/json; charset=utf-8",
+            produce: () =>
+              new TextEncoder().encode(
+                JSON.stringify({
+                  success: true,
+                  source: "agent-tree",
+                  ...view,
+                }),
+              ),
+            headers: { ...cors, "Cache-Control": "no-store" },
+          });
+        }
+
         const body = { ...tree.value, counts };
         return encodedResponse(req, {
           // The payload joins two artifacts, so both versions belong in the key.
