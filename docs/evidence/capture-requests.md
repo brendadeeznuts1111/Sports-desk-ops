@@ -498,6 +498,31 @@ Observed 2026-11-02 for `BILLY666` (operator transcript; no secrets — `Passwor
 - `site: []`, `preferenceDate[0].isTickerDisplayAlready: "true"`, `SERVER.date` in the portal's
   `YYYY-MM-DD HH:mm:ss.SSS` form. The `test` field is an epoch-second counter, not a status field.
 
+**Padding is not consistent per endpoint, so trim both sides.** Measured on the 17-row ticker
+artifact: `CustomerID` is padded in 15 rows and clean in 2; `Login` is padded in 6 and clean in 11;
+`AgentID` is never padded but can carry a trailing period (`GB3500.`); `AgentLogin` is padded in 7.
+In the account-info response it is the other way round — `customerID` is clean and `Login` is padded
+to 10. So "join on Login in the ticker, customerID in accountInfo" is wrong as a rule: the same
+column is padded in some rows and clean in others on _both_ endpoints. `trim()` on both sides, and
+`AgentID` needs period tolerance rather than trimming.
+
+**Scope checks the enrichment pass can run without a probe.** From the anchor account
+(`Office: NOLAROSE`, `Store: PPHINSIDER`, `customerID: BILLY666`, `AgentID: null`):
+
+- _out of scope_ — an agent whose (Office, Store) differs from the anchor's is a cross-office row in
+  the ticker, which is a finding; it is annotated, never filtered.
+- _second root_ — `AgentID: null` on an account that is not the anchor means the session is reading
+  another subtree, not a child record. The three tree roots would look the same if they ever appeared.
+- _root wager_ — a wager filed under the anchor's own login is either mislabelled or placed from a
+  channel an agent account does not have.
+- _live flag_ — `WagerType: L` must be checked against the **customer's** `DenyLiveBetting`, not the
+  agent's: the flag governs the account it is set on, so comparing it to a player's wager is a
+  category error. `lib/scope_checks.ts` takes the customer's account info and returns nothing when
+  only the agent was enriched, rather than inventing a finding.
+
+One enrichment call serves every wager from the same agent — 22 distinct agents in the 100-row page,
+not 100 calls.
+
 **Provenance: this account is not in the tree.** `BILLY666` is absent from `data/agent-tree.json`
 entirely, and so is its office `NOLAROSE`; the tree's roots are `BILLY667`, `NOLAWOLF`, `RTEST5`
 and `SAINTS2009`, and it carries `NOLAROB`/`NOLAROBPPH` but no `NOLAROSE`. The tree was therefore

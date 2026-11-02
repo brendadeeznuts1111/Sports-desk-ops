@@ -28,6 +28,8 @@ export interface AccountInfo {
   readonly defaultSiteSkin: string;
   /** `Tile Menu` is the value that selects the deferred hierarchy load. */
   readonly agentMenuStyle: string;
+  /** `Y`/`N`: whether *this* account may bet live. It governs the account, not its downline. */
+  readonly denyLiveBetting: string;
 }
 
 function text(value: unknown): string {
@@ -76,6 +78,7 @@ export function parseAccountInfo(raw: unknown): AccountInfo {
     skin: optional(envelope["SKIN"] ?? inner["SKIN"]),
     defaultSiteSkin: text(inner["DefaultSiteSkin"]),
     agentMenuStyle: text(inner["AgentMenuStyle"]),
+    denyLiveBetting: text(inner["DenyLiveBetting"]).toUpperCase(),
   };
 }
 
