@@ -454,9 +454,46 @@ interval, not a chained-timeout loop. Two consequences for anyone mirroring the 
 
 - `clearInterval` does not appear anywhere in the pinned bundle, and `$.scoreInterval` is written
   once and never read, so the 30 s poll never stops — it keeps running with the panel closed.
-- `getScoresDynamic()` itself posts only `{operation: "getScoresLiveDynamic"}`; the `customerID`,
-  `agentID`, `agentOwner` and `RRO` seen in the captured body are injected by the `ajaxPrefilter`,
-  not built by the method.
+- `getScoresDynamic()` itself posts only `{operation: "getScoresLiveDynamic"}`.
+
+**The wire body is the caller's body ∪ the prefilter's body.** Do not read a captured body as
+authored by the method, and do not read a difference between two captures as a prefilter override.
+
+`presetParam` (the only `$.ajaxPrefilter` in the pinned set, installed once from `verifySession`)
+writes exactly three things, per request: `Authorization: Bearer <session token>` (only when the
+caller did not set one), `agentID`, and `agentOwner`. It never writes `customerID`, `RRO` or
+`operation` — those are caller-owned on every endpoint, so a `customerID` of `0` in one call and an
+agent login in another is two callers, not two prefilter paths. The prefilter's rule, exactly:
+
+- gate: `t.url.slice(0, 10) === "/cloud/api"`, evaluated **after** `t.url.replace("qubic", "cloud")`
+  (`apiPath` is `/cloud/`, so the rewrite is what makes legacy `/qubic/api/…` URLs pass);
+- body injection needs `sessionStorage.MASTER_ID !== ""` **and** `agentType ∈ {M, A}`; a player
+  session gets the bearer and no body fields;
+- `agentID := MASTER_ID`, always;
+- `agentOwner := MASTER_ID`, replaced by the body's `agentID` when present, and replaced again by
+  the body's `agentOwner` **only when the body also carries an `agentID` that it differs from**. A
+  caller that sends `agentOwner` alone has it overwritten with `MASTER_ID`; to make the wire carry a
+  different `agentOwner` the caller must send both fields, and its `agentID` is then replaced with
+  `MASTER_ID` while `agentOwner` survives.
+- `0 === r` (the "master is 0, adopt the caller's agentID" fallback) never fires: `r` comes from
+  `sessionStorage`, always a string, so `0 === "0"` is false. The intended check is
+  `!r || r === "0"`. `MASTER_ID` is written from the login payload (`sessionStorage.MASTER_ID =
+e.ID`) or set to `""` for a player session, so `"0"` is reachable only if the portal issues `0`
+  as an account id — and then it flows into `agentID` unmodified.
+
+Consequence for a proxy: the gate is a ten-character **prefix**, not a parsed origin or an endpoint
+allowlist, so a request re-pointed at `/api/…` loses the bearer as well as the body fields, and it
+loses them silently. Keep the `/cloud/api` prefix, or compose the headers and body client-side — and
+note that "compose client-side" is a second implementation of security-relevant injection, which is
+the risk to weigh. A prefilter installed after `presetParam` runs after it (both live in jQuery's `*`
+bucket, which is registration-ordered) and can redirect while keeping the injected body; the proxy
+target must stay same-origin for that to be the same request.
+
+What this does not answer, and the pins that would: `app/sports/score/score.js` and
+`app/sports/report/pending.js` are not in the pinned set, so (a) what `score.js` does with the
+`{accountInfo}` argument it is given, and (b) who writes `customerID` in the Pending caller, are
+open. Both are now in `pinned/fetch-pinned-bundles.sh` and `fetch:pinned-portal`; a run prints their
+hashes to pin, and the reads then answer those two questions the same way.
 
 ---
 
