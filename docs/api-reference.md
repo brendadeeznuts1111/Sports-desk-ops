@@ -352,7 +352,7 @@ Every contest the nav links, keyed by contestNum with sport, market and subject 
 
 ### `GET /api/game-admin`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1067-1070` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/game-admin` · response not captured
 
 **Exposure per fixture with a Straight/Parlay/Teaser split**
 
@@ -513,7 +513,7 @@ Serves data/scoreboard.json with a status summary (sportsdesk_webview_server.ts#
 
 ### `GET /api/sports`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:568-593` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/sports` · response not captured
 
 **Portal sport taxonomy with counts per category**
 

@@ -91,6 +91,7 @@ import {
   isReportType,
   type TelegramUpdate,
 } from "./sportsdesk_telegram_bot.ts";
+import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 
 /** `null` when the request comes from the same machine; otherwise the admin gate applies. */
 export function isLoopbackAddress(address: string | null | undefined): boolean {
@@ -271,16 +272,6 @@ const GRAPH_DOCS_JSON = new Set([
   "/combo-uniqueness.json",
   "/cross-domain-bridge.json",
 ]);
-
-function isSafeAssetName(name: string): boolean {
-  if (name === "" || name.includes("..")) return false;
-  for (const ch of name) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || ch === "\\") return false;
-  }
-  // Nested assets are allowed, but never outside docs/assets.
-  return !name.startsWith("/");
-}
 
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
@@ -1253,20 +1244,24 @@ export function startServer(options?: ServerOptions) {
 
       if (pathname.startsWith("/assets/")) {
         const asset = pathname.slice("/assets/".length);
-        if (!isSafeAssetName(asset)) {
-          return new Response("invalid asset", {
-            status: 400,
-            headers: corsHeaders,
-          });
+        // realpath containment, not just a name check: Bun 1.4.4's `routes: { "/*": { dir } }`
+        // serves a symlink's target even when it points outside the directory (measured), and
+        // `Bun.file().exists()` follows links too. docs/assets has no symlinks today; this keeps
+        // it that way instead of trusting the platform.
+        const contained = containedAssetPath(
+          resolve(repoRoot, "docs/assets"),
+          asset,
+        );
+        if (contained === null) {
+          return new Response(
+            isSafeAssetName(asset) ? "not found" : "invalid asset",
+            {
+              status: isSafeAssetName(asset) ? 404 : 400,
+              headers: corsHeaders,
+            },
+          );
         }
-        const file = Bun.file(resolve(repoRoot, "docs/assets", asset));
-        if (!(await file.exists())) {
-          return new Response("not found", {
-            status: 404,
-            headers: corsHeaders,
-          });
-        }
-        return new Response(file, {
+        return new Response(Bun.file(contained), {
           headers: { ...corsHeaders, "Cache-Control": "public, max-age=3600" },
         });
       }

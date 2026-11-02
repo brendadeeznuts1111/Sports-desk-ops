@@ -2059,7 +2059,7 @@
       "members": ["GET /api/sports"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:568-593",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/sports",
           "kind": "implementation",
           "note": "Counts are computed per request from loadLiveBets() and loadScoreboard(); lib/sport_taxonomy.ts holds the category list and the wire mappings."
         }
@@ -2076,7 +2076,7 @@
       "members": ["GET /api/game-admin"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:1067-1070",
+          "source": "services/sportsdesk_webview_server.ts#GET /api/game-admin",
           "kind": "implementation",
           "note": "summarizeByGame() groups the captured wagers and compactPositions() drops empty buckets; position labels come from wagerTypeLabel()."
         }

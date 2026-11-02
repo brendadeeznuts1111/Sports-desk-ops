@@ -31,10 +31,9 @@ const citation = (file: string, start: number, end = start): Citation => ({
 describe("extractCitations", () => {
   test("finds single lines and ranges", () => {
     const text = "see `services/x.ts:12` and `lib/y.md:3-9`";
-    expect(extractCitations(text).map((c) => `${c.file}:${c.start}-${c.end}`)).toEqual([
-      "services/x.ts:12-12",
-      "lib/y.md:3-9",
-    ]);
+    expect(
+      extractCitations(text).map((c) => `${c.file}:${c.start}-${c.end}`),
+    ).toEqual(["services/x.ts:12-12", "lib/y.md:3-9"]);
   });
 
   test("ignores text that is not a file:line citation", () => {
@@ -44,33 +43,51 @@ describe("extractCitations", () => {
 
 describe("auditCitations", () => {
   test("a citation pointing at real code passes", () => {
-    expect(auditCitations([citation("services/sportsdesk_webview_server.ts", 1327)], ROOT)).toEqual(
-      [],
-    );
+    expect(
+      auditCitations(
+        [citation("services/sportsdesk_webview_server.ts", 1327)],
+        ROOT,
+      ),
+    ).toEqual([]);
   });
 
   test("a bare module name that no longer exists is reported", () => {
     // The module moved under services/; the published citation still said otherwise.
-    const problems = auditCitations([citation("sportsdesk_webview_server.ts", 27)], ROOT);
+    const problems = auditCitations(
+      [citation("sportsdesk_webview_server.ts", 27)],
+      ROOT,
+    );
     expect(problems.map((p) => p.reason)).toEqual(["file-missing"]);
   });
 
   test("a moved file is reported, with no search-path rescue", () => {
     // docs/runbooks/operational_guardrails_runbook.md: the old root-level path is gone.
-    const problems = auditCitations([citation("operational_guardrails_runbook.md", 153)], ROOT);
+    const problems = auditCitations(
+      [citation("operational_guardrails_runbook.md", 153)],
+      ROOT,
+    );
     expect(problems.map((p) => p.reason)).toEqual(["file-missing"]);
   });
 
   test("a line past the end of the file is out of range", () => {
-    const problems = auditCitations([citation("docs/EVIDENCE.md", 999999)], ROOT);
+    const problems = auditCitations(
+      [citation("docs/EVIDENCE.md", 999999)],
+      ROOT,
+    );
     expect(problems.map((p) => p.reason)).toEqual(["out-of-range"]);
   });
 
   test("the punctuation anchor is the signal that code moved under the citation", () => {
-    // sportsdesk_webview_server.ts:236-246 used to open `async function loadBoard()`. It now
-    // opens with `}` because the route moved down the file.
+    // Find a punctuation-only line at runtime rather than pinning one: a hardcoded line number in
+    // the test rots exactly like the citations it is testing for.
+    const file = "services/sportsdesk_webview_server.ts";
+    const lines = readFileSync(resolve(ROOT, file), "utf8").split("\n");
+    const punctuationLine = lines.findIndex(
+      (line) => line.trim() !== "" && /^[\s)}\];,]*$/.test(line.trim()),
+    );
+    expect(punctuationLine).toBeGreaterThan(0);
     const problems = auditCitations(
-      [citation("services/sportsdesk_webview_server.ts", 246)],
+      [citation(file, punctuationLine + 1)],
       ROOT,
     );
     expect(problems.map((p) => p.reason)).toEqual(["punctuation-anchor"]);

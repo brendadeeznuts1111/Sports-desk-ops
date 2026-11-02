@@ -2780,7 +2780,9 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1190-1193"],
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/agent-tree"
+          ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/agent-tree (handler-verified only; no HTTP response was captured)."
         },
@@ -2935,7 +2937,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:568-593"],
+          "sources": ["services/sportsdesk_webview_server.ts#GET /api/sports"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/sports (handler-verified only; no HTTP response was captured)."
         },
@@ -2991,7 +2993,9 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1067-1070"],
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/game-admin"
+          ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/game-admin (handler-verified only; no HTTP response was captured)."
         },
