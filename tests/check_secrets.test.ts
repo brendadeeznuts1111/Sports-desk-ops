@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { looksBinary, scanText } from "../lib/secret_scan.ts";
 
 /**
@@ -19,7 +20,9 @@ describe("scanText", () => {
         CLEARANCE,
         BOT_MGMT,
         `Authorization: Bearer ${JWT}`,
-        "-----BEGIN RSA PRIVATE KEY-----",
+        // Built at runtime: the literal would make this file fail its own scan once it is
+        // tracked, which is exactly what happened the first time this test was committed.
+        `-----BEGIN ${"RSA "}PRIVATE KEY-----`,
       ].join("\n"),
     ).map((finding) => finding.kind);
     expect(kinds).toContain("cloudflare-clearance");
@@ -59,6 +62,18 @@ describe("scanText", () => {
     expect(
       scanText("const token = process.env.SPORTSDESK_ADMIN_TOKEN;"),
     ).toEqual([]);
+  });
+});
+
+describe("the scanner's own fixtures", () => {
+  test("no tracked file carries the shapes it looks for", () => {
+    // The pattern is assembled in the private-key case above so this file can be scanned like
+    // any other; this assertion is the regression guard for that.
+    const source = readFileSync(
+      new URL(import.meta.url).pathname.replace(/^\//, "/"),
+      "utf8",
+    );
+    expect(scanText(source)).toEqual([]);
   });
 });
 
