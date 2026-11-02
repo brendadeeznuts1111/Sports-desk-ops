@@ -116,4 +116,37 @@ describe("buildHierarchy", () => {
     // Every node is reachable exactly once.
     expect(view.stats.reachable).toBe(2276);
   });
+
+  /**
+   * `l` is the portal's level field, and this pins the shape of its defect so a data refresh that
+   * changes it fails here rather than silently shifting a UI. Below the cap it tracks the chain
+   * (1,951 edges), skips a level on 208 edges, and saturates at 12 on the remaining 110 — which is
+   * why the mismatch is accumulated (2,255 nodes) rather than wholesale.
+   */
+  test("the committed tree: level saturates and skips, depth does not", async () => {
+    const tree = (await Bun.file(
+      new URL("../data/agent-tree.json", import.meta.url),
+    ).json()) as RawHierarchyTree;
+    const nodes = tree.nodes ?? {};
+    const deltas = new Map<string, number>();
+    for (const [id, node] of Object.entries(nodes)) {
+      const parent = node.p;
+      if (parent === null || parent === undefined || !(parent in nodes))
+        continue;
+      const a = nodes[parent]?.l;
+      const b = node.l;
+      const key = a == null || b == null ? "null" : String(b - a);
+      deltas.set(key, (deltas.get(key) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(deltas)).toEqual({
+      "1": 1951,
+      "2": 208,
+      "0": 110,
+      null: 3,
+    });
+
+    const atCap = Object.entries(nodes).filter(([, node]) => node.l === 12);
+    expect(atCap).toHaveLength(176);
+    expect(Object.values(nodes).some((node) => (node.l ?? 0) > 12)).toBe(false);
+  });
 });

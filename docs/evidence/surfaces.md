@@ -216,6 +216,30 @@ present these as callable routes in the docs release.
 - Collapsed nodes ship an empty `<ul class="master-ul hide">`, so the tree is loaded lazily; the
   sidebar is agents-only (`data-players="false"`).
 
+### `l` is the portal's level, not a depth
+
+`?view=hierarchy` folds the parent edges into depth and keeps `l` verbatim as `level`, because the
+two do not agree. Measured on the committed 2,276-node tree (2026-11-02):
+
+| edges (parent → child)     | count | reading                                                       |
+| -------------------------- | ----- | ------------------------------------------------------------- |
+| `l(child) − l(parent) = 1` | 1,951 | level tracks the chain                                        |
+| `= 2`                      | 208   | the capture is missing the intermediate level for that branch |
+| `= 0`, both at 12          | 110   | the field **saturates** at 12                                 |
+| `l` null on one end        | 3     | `BRANDON`, the collision node (documented above)              |
+
+- No node reports `l > 12`, and the 176 nodes at 12 span chain depths 10 to 24 — so the cap is hard
+  and everything deeper inherits it (the YASKYY chain is 25 long and reports 12 from `BELLO3`
+  onward).
+- The `= 2` edges are not a deleted level: 255 nodes report `l = 5` with an `l = 4` parent. They are
+  branches whose intermediate agent was not captured, so the child was attached higher up.
+- Mismatch is therefore _accumulated_, not wholesale: 14% of edges are anomalous, and error
+  compounds along a chain, which leaves 1,753 nodes above `depth + 1`, 62 below and 460 equal. A
+  count of "99% stale" describes the accumulation, not the field.
+- Depth therefore comes from the edges (`depth`, `rollup.depth`); `l` stays in the payload as
+  `level` so the divergence remains visible. Any consumer that indents by `level` renders a flat
+  slab wherever the cap bites.
+
 ## D-10. `surface.daemon-scoreboard`
 
 - `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1446-1458`):
