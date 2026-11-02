@@ -22,18 +22,14 @@
  */
 
 // ============================================================================
-// 1. BRAND DISCRIMINATOR & UNIVERSAL BRAND ENGINE
+// 1. BRAND DISCRIMINATOR & UNIVERSAL BRAND ENGINE (SSOT: lib/brand.ts)
 // ============================================================================
 
-const __brand = Symbol("brand");
-
-/**
- * Universal nominal branding wrapper attaching compile-time brand discriminator
- * while preserving zero-overhead runtime representation of the base primitive.
- */
-export type Brand<BasePrimitive, BrandToken extends string> = BasePrimitive & {
-  readonly [__brand]: BrandToken;
-};
+// Re-exported, never redeclared. A local `__brand` symbol gives this module its own
+// nominal identity, so a `Cents` branded here is not assignable to a `Cents` branded in
+// lib/… or services/… — same concept, incompatible types. lib/brand.ts owns the engine.
+import type { Brand } from "../lib/brand.ts";
+export type { Brand };
 
 // ============================================================================
 // 1b. DIGEST & UTC INSTANT BRANDS (audit / provenance) — SSOT in lib/brand.ts

@@ -10,7 +10,9 @@ describe("portal version pin manifest", () => {
   test("pinned version.js on disk matches manifest sha256", async () => {
     const manifest = await loadPinnedManifest();
     const pinned = manifest.artifacts["app/setting/version.js"]?.sha256;
-    expect(pinned).toBeDefined();
+    if (pinned === undefined) {
+      throw new Error("manifest missing app/setting/version.js sha256");
+    }
     const path = join(
       import.meta.dir,
       "../verification/manager-boot-oracle/pinned/version.js",

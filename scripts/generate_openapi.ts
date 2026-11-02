@@ -52,6 +52,7 @@ import {
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import { captureRecordDigest } from "./apply_captures.ts";
 import { checkLedger, checkOpenApi } from "./verify_docs.ts";
 import type { CheckOutcome } from "./verify_docs.ts";
 import {
@@ -101,12 +102,14 @@ const TAG_FORENSIC = "Forensic Surveillance";
 const TAG_CUSTOMER = "Customer State Mutations";
 const TAG_DAEMON = "Local Desk & Telegram Gateway";
 const TAG_SETTLEMENT = "Settlement History";
+const TAG_DOWNLINE = "Downline Accounting";
 
 const USED_TAGS = [
   TAG_FORENSIC,
   TAG_CUSTOMER,
   TAG_DAEMON,
   TAG_SETTLEMENT,
+  TAG_DOWNLINE,
   TAG_INFERRED,
   TAG_CAPTURED,
 ] as const;
@@ -232,7 +235,8 @@ const SUMMARIES: Readonly<Record<string, string>> = {
   "/cloud/api/Manager/getSportsVigSetup": "Read sport vig setup",
   "/cloud/api/Manager/getInfoManager": "Manager dashboard header",
   "/cloud/api/Report/getWeeklyFigure": "Weekly figure report",
-  "/cloud/api/Report/getAgentPerformance": "Agent performance report",
+  "/cloud/api/Manager/getAgentPerformance":
+    "Agent performance report (request observed; response not captured)",
   "/cloud/api/Report/getSettledFigure": "Settled figure / collections",
   "/cloud/api/Report/delete-wager": "Deleted wagers report",
   "/health": "Daemon health and telemetry probe",
@@ -869,9 +873,11 @@ function buildSchemaFromType(
     properties[field.name] = schema;
     if (!field.optional) required.push(field.name);
   }
+  // Cite the declaration, not a line range: a line citation is invalidated by any edit above
+  // the type, and this file's own regeneration then churns for no semantic reason.
   const schema: JsonObject = {
     type: "object",
-    description: `${spec.description} Parsed from ${spec.fileName}:${parsed.startLine}-${parsed.endLine}.`,
+    description: `${spec.description} Parsed from ${spec.fileName}#${spec.sourceType}.`,
     properties,
   };
   if (required.length > 0) schema.required = required;
@@ -1121,13 +1127,13 @@ function adminRejectionResponses(): JsonObject {
   return {
     "401": {
       description:
-        "Missing or wrong admin token (sportsdesk_webview_server.ts:38-46).",
+        "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
       headers: daemonHeaders(),
       content: { "application/json": { schema: daemonErrorSchema() } },
     },
     "503": {
       description:
-        "SPORTSDESK_ADMIN_TOKEN is not set on the server (sportsdesk_webview_server.ts:31-37).",
+        "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
       headers: daemonHeaders(),
       content: { "application/json": { schema: daemonErrorSchema() } },
     },
@@ -1198,7 +1204,7 @@ function getWebLogOperation(operation: LedgerOperation): JsonObject {
     summary:
       "Manager getWebLog (mode B request observed; response not captured)",
     description:
-      "The forensic IP-investigation endpoint (operational_guardrails_runbook.md §5.1.1). Request side: a 2026-10-28 Manager HAR (portal v1.0.279) captured one mode-B POST with a form-urlencoded body and no Authorization header, so the 2026-10-28 session was cookie-based. Only mode B was captured; modes A, C and I are inferred from the portal form and still need a capture. Response side: no response body was captured, so the row schema is undocumented and none is published here. The WeblogEntry component (simulate_bettor_churn_suite.ts:117-123) records the four fields the old spec published, but a consumer type is not a capture, so it is not used as a response schema.",
+      "The forensic IP-investigation endpoint (operational_guardrails_runbook.md §5.1.1). Request side: a 2026-10-28 Manager HAR (portal v1.0.279) captured one mode-B POST with a form-urlencoded body and no Authorization header, so the 2026-10-28 session was cookie-based. Only mode B was captured; modes A, C and I are inferred from the portal form and still need a capture. Response side: no response body was captured, so the row schema is undocumented and none is published here. The WeblogEntry component (simulate_bettor_churn_suite.ts#RawWebLogEntry) records the four fields the old spec published, but a consumer type is not a capture, so it is not used as a response schema.",
     operationId: operationIdFor(operation.method, operation.path),
     parameters: [{ $ref: "#/components/parameters/XRequestedWith" }],
     requestBody: {
@@ -1294,12 +1300,108 @@ function getWebLogOperation(operation: LedgerOperation): JsonObject {
   };
 }
 
+function getAgentPerformanceOperation(operation: LedgerOperation): JsonObject {
+  return {
+    tags: [TAG_DOWNLINE],
+    summary:
+      "Agent performance report (request observed; response not captured)",
+    description:
+      "Request observed 2026-11-01 on the agent-performance screen: a form-urlencoded POST whose fields are published below in wire order (tests/fixtures/f402-report-requests-observed-2026-11-01.json). Three calls were seen — CP and CPS report kinds — and two details matter: `sport` is padded to 20 characters, and `tipo` is not a constant (0 for CP, -1 for CPS). No response body was ever observed, so no response schema is published and nothing here describes the report's columns.",
+    operationId: operationIdFor(operation.method, operation.path),
+    requestBody: {
+      required: true,
+      content: {
+        "application/x-www-form-urlencoded": {
+          schema: {
+            type: "object",
+            required: [
+              "start",
+              "end",
+              "agentID",
+              "type",
+              "freePlay",
+              "store",
+              "sport",
+              "subsport",
+              "period",
+              "wagerType",
+              "betType",
+              "tipo",
+              "debug",
+              "operation",
+              "RRO",
+              "agentOwner",
+            ],
+            properties: {
+              start: { type: "string", description: "M/D/YYYY." },
+              end: { type: "string", description: "M/D/YYYY." },
+              agentID: { type: "string" },
+              type: {
+                type: "string",
+                description:
+                  "Report kind: CP (customer performance) or CPS (sport performance) observed.",
+              },
+              freePlay: { type: "string", enum: ["Y", "N"] },
+              store: {
+                type: "string",
+                description: "Equals agentID in every observed call.",
+              },
+              sport: {
+                type: "string",
+                description:
+                  "Sport name padded with spaces to exactly 20 characters (Football, Auto Racing, Tennis, LIVE).",
+                minLength: 20,
+                maxLength: 20,
+              },
+              subsport: {
+                type: "string",
+                description:
+                  "Catalog sub-sport code (NFL, NCAAF Live, …); empty string when unfiltered.",
+              },
+              period: {
+                type: "string",
+                description:
+                  "Portal period number for that sport, or -1 for all periods. LIVE's menu has only 0 (Game).",
+              },
+              wagerType: {
+                type: "string",
+                description: "Raw portal code; empty when unfiltered.",
+              },
+              betType: {
+                type: "string",
+                description: "Raw portal code; empty when unfiltered.",
+              },
+              tipo: {
+                type: "string",
+                description:
+                  "Observed as 0 for CP and -1 for CPS; not a constant.",
+              },
+              debug: { type: "string", enum: ["0"] },
+              operation: { type: "string", enum: ["getAgentPerformance"] },
+              RRO: { type: "string", enum: ["1"] },
+              agentOwner: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    security: [{ fantasy402Cookie: [] }],
+    responses: {
+      default: {
+        description:
+          "Unknown — no response body was observed; no status code or body schema is documented.",
+      },
+    },
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
 function getInfoPlayerOperation(operation: LedgerOperation): JsonObject {
   return {
     tags: [TAG_CUSTOMER],
     summary: "Manager getInfoPlayer (request observed; response not captured)",
     description:
-      "Read observed in the 2026-10-28 Manager HAR: opening a player sent a form POST with a 7-character trimmed customerID (e.g. CB112_1, not the padded 11-character form the old spec showed), and agentID/agentOwner were the logged-in master on all 19 Manager calls (operational_guardrails_runbook.md:213-214). The response was not captured, so no response schema is published. Ledger contradicted: the prior spec's padded example is refuted by the capture.",
+      "Read observed in the 2026-10-28 Manager HAR: opening a player sent a form POST with a 7-character trimmed customerID (e.g. CB112_1, not the padded 11-character form the old spec showed), and agentID/agentOwner were the logged-in master on all 19 Manager calls (docs/runbooks/operational_guardrails_runbook.md:213-214). The response was not captured, so no response schema is published. Ledger contradicted: the prior spec's padded example is refuted by the capture.",
     operationId: operationIdFor(operation.method, operation.path),
     requestBody: {
       required: true,
@@ -1330,7 +1432,7 @@ function healthOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Daemon health and telemetry probe",
     description:
-      "Handler-defined contract: sportsdesk_webview_server.ts:114-131 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (sportsdesk_webview_server.ts:9,345), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
+      "Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
     operationId: operationIdFor(operation.method, operation.path),
     responses: {
       "200": daemonSuccessResponse("Healthy daemon status", {
@@ -1343,6 +1445,7 @@ function healthOperation(operation: LedgerOperation): JsonObject {
           "timestamp",
           "uptimeSeconds",
           "runtime",
+          "ingress",
           "nodeEnv",
         ],
         properties: {
@@ -1371,9 +1474,184 @@ function healthOperation(operation: LedgerOperation): JsonObject {
           },
           uptimeSeconds: { type: "integer", example: 1240 },
           runtime: { type: "string", example: "Bun v1.4.4" },
+          ingress: {
+            type: "object",
+            description:
+              "Peer-trust rule in force, so 'is the PII guard on?' is answerable from the probe. `proxied` is true when the daemon listens on a unix socket and therefore cannot see the client; `trustProxy` is SPORTSDESK_TRUST_PROXY=1.",
+            required: ["proxied", "trustProxy"],
+            properties: {
+              proxied: { type: "boolean" },
+              trustProxy: { type: "boolean" },
+            },
+          },
           nodeEnv: { type: "string", example: "production" },
         },
       }),
+    },
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
+function getScoresOperation(operation: LedgerOperation): JsonObject {
+  return {
+    tags: [TAG_FORENSIC],
+    summary:
+      "Scores leaderboard (request observed 2026-11-02; response shape partly observed)",
+    description:
+      "The Scores panel sends JSON, not a form: {customerID, operation: \"getScoresLiveDynamic\", RRO: 1, agentID, agentOwner} (operator transcript, 2026-11-02 — no capture artifact exists, so this is a recorded payload rather than a hashed capture). The response is an object with a Scores array; three field names were observed — LogoTeam1, LogoTeam2 and BroadcastInfo — and the logo fields are the portal's image file names (Boston-Celtics.png, Notre Dame Fighting Irish.png, miami_dolphins_logo.png, NHL.png in a team slot), not team names. Every other field is unknown and is not published. The tile's candidate URL (/cloud/api/Manager/getScores) and the path the page actually calls (/cloud/api/Report/getScoresLiveDynamic) disagree; the observed one is authoritative for the panel and the candidate row is kept only so the disagreement stays visible.",
+    operationId: operationIdFor(operation.method, operation.path),
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["operation"],
+            properties: {
+              operation: {
+                type: "string",
+                const: "getScoresLiveDynamic",
+              },
+              customerID: {
+                type: "string",
+                description:
+                  "Logged-in account; the observed value was the master agent.",
+              },
+              agentID: { type: "string" },
+              agentOwner: { type: "string" },
+              RRO: { type: "integer", example: 1 },
+            },
+          },
+        },
+      },
+    },
+    security: [{ fantasy402Cookie: [] }],
+    responses: {
+      "200": {
+        description:
+          "An object with a Scores array. Only LogoTeam1, LogoTeam2 and BroadcastInfo were observed; the remaining fields are unknown, so the item schema is open.",
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["Scores"],
+              properties: {
+                Scores: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    description:
+                      "One game. The fields below are the ones present in the entry observed on 2026-11-02; the schema stays open because that was a single entry and the portal pads and re-types values in ways a schema would otherwise misrepresent. Padded strings (SportSubType, SportType, Grouping, CorrelationID) carry trailing spaces; Team1Score/Team2Score/Total are numeric text, not numbers; GameDateTime is `YYYY-MM-DD HH:mm:ss.SSS`, not ISO 8601.",
+                    properties: {
+                      LogoTeam1: {
+                        type: "string",
+                        description:
+                          "Portal image file name for the first side, e.g. Los-Angeles-Clippers.png; resolve through /api/logo/{name}.",
+                      },
+                      LogoTeam2: {
+                        type: "string",
+                        description:
+                          "Portal image file name for the second side; same vocabulary, including league logos such as NHL.png in a team slot.",
+                      },
+                      BroadcastInfo: {
+                        type: "string",
+                        description: "Whitespace-only in the observed entry.",
+                      },
+                      Record: { type: "string" },
+                      Record2: { type: "string" },
+                      Rank: { type: "string" },
+                      Rank2: { type: "string" },
+                      GameNum: { type: "integer", example: 619121357 },
+                      Team1RotNum: {
+                        type: "integer",
+                        description:
+                          "Board rotation for the first side; should be stable per Team1ID, which is what the rotation check enforces.",
+                      },
+                      Team2RotNum: { type: "integer" },
+                      STATUS: {
+                        type: "string",
+                        description:
+                          "Observed value `O`; the full code set is unknown.",
+                      },
+                      GameDateTime: { type: "string" },
+                      SportSubType: {
+                        type: "string",
+                        description:
+                          "Padded with trailing spaces (observed `NBA         `).",
+                      },
+                      SportType: {
+                        type: "string",
+                        description:
+                          "Padded with trailing spaces (observed `Basketball          `).",
+                      },
+                      DisplaySubType: { type: "string", example: "NBA" },
+                      PeriodNumber: { type: "integer" },
+                      PeriodDescription: { type: "string", example: "Game" },
+                      Team1ID: {
+                        type: "string",
+                        description: "Full team name (`Los Angeles Clippers`).",
+                      },
+                      Team2ID: { type: "string" },
+                      STeam1ID: {
+                        type: "string",
+                        description: "Short name (`Clippers`).",
+                      },
+                      STeam2ID: { type: "string" },
+                      Team1Score: {
+                        type: "string",
+                        description:
+                          "Numeric text (observed `57`), not a number.",
+                      },
+                      Team2Score: { type: "string" },
+                      Final: { type: "string", example: "Not Final" },
+                      Spread: {
+                        type: "number",
+                        description: "Number, unlike the score fields.",
+                      },
+                      SpreadAdj1: { type: "number" },
+                      SpreadAdj2: { type: "number" },
+                      MoneyLine1: { type: "number" },
+                      MoneyLine2: { type: "number" },
+                      MoneyLineDraw: { type: ["number", "null"] },
+                      Total: {
+                        type: "string",
+                        description: "Numeric text (observed `220.5`).",
+                      },
+                      Favorito: {
+                        type: "string",
+                        description: "Team name, not an id.",
+                      },
+                      Grouping: {
+                        type: "string",
+                        description:
+                          "Padded league name (observed `NBA         `).",
+                      },
+                      StatusAway: {
+                        type: "string",
+                        description:
+                          "Per-side clock/period state; observed `Time` beside `Half`. Semantics unconfirmed.",
+                      },
+                      StatusHome: { type: "string" },
+                      CorrelationID: {
+                        type: "string",
+                        description:
+                          "`<Team1RotNum>-g` padded to a fixed width (observed `539-g` + trailing spaces); joins to Team1RotNum.",
+                      },
+                      DefaultMainLine: { type: "string", example: "Spread" },
+                      TotalPoints: { type: ["number", "null"] },
+                    },
+                    additionalProperties: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      default: {
+        description:
+          "Unknown — no response artifact was captured; status codes other than 200 are not documented.",
+      },
     },
     "x-evidence": evidenceOf(operation),
   };
@@ -1384,7 +1662,7 @@ function watchlistOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Monitored watch-list accounts",
     description:
-      "Returns {success, count, data} from telegramService.getWatchList() (sportsdesk_webview_server.ts:236-246). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (sportsdesk_webview_server.ts:27-47,175-186).",
+      "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     responses: {
@@ -1416,7 +1694,7 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Dispatch an instant Telegram alert",
     description:
-      "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (sportsdesk_webview_server.ts:249-274). Admin-token gated (sportsdesk_webview_server.ts:175-186).",
+      "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts). Admin-token gated (services/sportsdesk_webview_server.ts).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     requestBody: {
@@ -1450,7 +1728,7 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
         },
       }),
       "500": {
-        description: "Dispatch threw (sportsdesk_webview_server.ts:264-273).",
+        description: "Dispatch threw (services/sportsdesk_webview_server.ts).",
         headers: daemonHeaders(),
         content: {
           "application/json": {
@@ -1477,7 +1755,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Trigger a scheduled Telegram report",
     description:
-      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (sportsdesk_webview_server.ts:277-297). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (sportsdesk_telegram_bot.ts:77-81). Admin-token gated (sportsdesk_webview_server.ts:175-186).",
+      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     parameters: [
@@ -1486,7 +1764,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
         in: "query",
         required: false,
         description:
-          "Report type; defaults to EVENING_SETTLEMENT when absent (sportsdesk_webview_server.ts:278).",
+          "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts).",
         schema: {
           type: "string",
           enum: ["MORNING_BRIEFING", "MIDDAY_STEAM", "EVENING_SETTLEMENT"],
@@ -1512,7 +1790,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
       }),
       "400": {
         description:
-          "type is not one of REPORT_TYPES (sportsdesk_webview_server.ts:279-287).",
+          "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts).",
         headers: daemonHeaders(),
         content: { "application/json": { schema: daemonErrorSchema() } },
       },
@@ -1525,10 +1803,12 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
 const B_OPERATION_BUILDERS: Readonly<
   Record<string, (operation: LedgerOperation) => JsonObject>
 > = {
+  "/cloud/api/Manager/getAgentPerformance": getAgentPerformanceOperation,
   "/cloud/api/Manager/getWebLog": getWebLogOperation,
   "/cloud/api/Manager/getInfoPlayer": getInfoPlayerOperation,
   "/health": healthOperation,
   "/api/watchlist": watchlistOperation,
+  "/cloud/api/Manager/getScores": getScoresOperation,
   "/api/telegram/alert": telegramAlertOperation,
   "/api/telegram/report": telegramReportOperation,
 };
@@ -1562,6 +1842,8 @@ interface SurfaceOperationSpec {
   readonly requiredCapture: string;
   readonly responses: JsonObject;
   readonly requestBody?: JsonObject;
+  /** Path-item parameters (only the wildcard surfaces need them). */
+  readonly parameters?: readonly JsonObject[];
 }
 
 function htmlResponse(description: string, contentType: string): JsonObject {
@@ -1574,6 +1856,22 @@ function htmlResponse(description: string, contentType: string): JsonObject {
           type: "string",
           description: "Static HTML document served from disk by the daemon.",
         },
+      },
+    },
+  };
+}
+
+/** Response object for a handler-verified JSON route: described fields, no captured body. */
+function jsonSurfaceResponse(
+  description: string,
+  properties: JsonObject,
+): JsonObject {
+  return {
+    description,
+    headers: daemonHeaders(),
+    content: {
+      "application/json": {
+        schema: { type: "object", properties },
       },
     },
   };
@@ -1645,7 +1943,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Telegram Mini App dashboard (GET /miniapp)",
       description:
-        "Serves telegram-miniapp-dashboard.html as text/html (sportsdesk_webview_server.ts:144-151) with Telegram frame-ancestors CSP and no X-Frame-Options (sportsdesk_webview_server.ts:87-90). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
+        "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts#/miniapp) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts#/miniapp). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
       requiredCapture:
         "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured).",
       responses: {
@@ -1662,13 +1960,645 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Operator dashboard (GET /dashboard)",
       description:
-        "Serves customer-churn-simulation-dashboard.html as text/html (sportsdesk_webview_server.ts:134-141). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
+        "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts#/dashboard). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
       requiredCapture:
         "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured).",
       responses: {
         "200": htmlResponse(
           "Operator dashboard HTML with the daemon CORS/CSP headers.",
           "text/html",
+        ),
+      },
+    },
+    {
+      path: "/api/live-bets",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      summary: "Live bets derived from captured Report/Pending rows",
+      description:
+        "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts#/api/live-bets); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Games, agent rollup and the aggregates derived from them.",
+          {
+            games: { type: "array", items: { type: "object" } },
+            agents: { type: "object" },
+            pendingCount: { type: "integer" },
+            summary: { type: "object" },
+            scoreboard: { type: "object", nullable: true },
+            sports: { type: "object" },
+            generatedAt: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/live-bets/summary",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      summary: "Aggregates only, without the game list",
+      description:
+        "Same aggregates as GET /api/live-bets, computed from the same rows in the same request (sportsdesk_webview_server.ts#GET /api/live-bets/summary), so the two responses cannot disagree. Totals are derived, never stored. The byAgent buckets are keyed by agent login, so the route carries the same PII guard as GET /api/live-bets and answers Cache-Control: private with Vary: Authorization: a shared cache must not replay a body the guard released to one peer. Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/live-bets/summary (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse("Derived totals with their data source.", {
+          success: { type: "boolean" },
+          summary: { type: "object" },
+          generatedAt: { type: "string", format: "date-time" },
+        }),
+      },
+    },
+    {
+      path: "/api/agent-tree",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-agent-tree",
+      tag: TAG_DAEMON,
+      summary: "Agent hierarchy joined with the wager rollup",
+      description:
+        "Serves data/agent-tree.json plus per-agent exposure (sportsdesk_webview_server.ts#GET /api/agent-tree). The tree is built by scripts/build_agent_tree.ts from the portal's own baseHeriarchy parent pointers; keys are canonical agentLoginKey values, and keys owned by more than one AgentID are flagged rather than levelled. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN; proxied peers need it too unless SPORTSDESK_TRUST_PROXY=1. `?view=hierarchy` returns the same forest folded into children arrays with per-node rollups (`rollup.agents` = transitive agents below, `rollup.depth` = longest chain below, `depth` = chain depth from the root) and the payload's defects (missing parents, cycles, collision keys) — `lib/hierarchy_view.ts`. Depth comes from the parent edges and not from the `l` field: on the committed tree 1,951 of 2,272 edges increment by 1, 208 by 2 and 110 run 12→12 where `l` saturates, so `l` stays in the payload as `level` and disagreement accumulates to 2,255 of 2,276 nodes. Surface: surface.daemon-agent-tree (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/agent-tree, with and without ?view=hierarchy (handler-verified only; no HTTP response was captured).",
+      parameters: [
+        {
+          name: "view",
+          in: "query",
+          required: false,
+          description:
+            "`hierarchy` folds the flat forest into children arrays with rollups and payload defects. Omit for the flat map plus per-agent wager counts.",
+          schema: { type: "string", enum: ["hierarchy"] },
+        },
+      ],
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Parent-keyed agent forest with per-agent wager counts.",
+          {
+            schemaVersion: { type: "integer" },
+            source: { type: "string" },
+            agentCount: { type: "integer" },
+            roots: { type: "array", items: { type: "string" } },
+            collisions: { type: "array", items: { type: "object" } },
+            nodes: { type: "object" },
+            counts: { type: "object" },
+          },
+        ),
+        "404": jsonSurfaceResponse(
+          "No tree built; run bun run build:agent-tree.",
+          { error: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/scoreboard",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-scoreboard",
+      tag: TAG_DAEMON,
+      summary: "Transcribed portal scoreboard (games, scores, status)",
+      description:
+        "Serves data/scoreboard.json with a status summary (sportsdesk_webview_server.ts#GET /api/scoreboard). The games are transcribed from the manager page, not captured from an API, so the payload carries source and observedAt. Surface: surface.daemon-scoreboard (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse("Scoreboard rows with status counts.", {
+          schemaVersion: { type: "integer" },
+          source: { type: "string" },
+          observedAt: { type: "string", nullable: true },
+          notes: { type: "array", items: { type: "string" } },
+          games: { type: "array", items: { type: "object" } },
+          summary: { type: "object" },
+        }),
+        "404": jsonSurfaceResponse("No scoreboard file present.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/sports",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-sports-taxonomy",
+      tag: TAG_DAEMON,
+      summary: "Portal sport taxonomy with counts per category",
+      description:
+        "Returns the 18 portal categories plus counts for the loaded wagers and the scoreboard (sportsdesk_webview_server.ts#GET /api/sports). All Sports is the absence of a filter and LIVE is a state, so neither is a category. Surface: surface.daemon-sports-taxonomy (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/sports (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Taxonomy and the counts observed per category.",
+          {
+            success: { type: "boolean" },
+            liveFilter: { type: "string" },
+            all: { type: "array", items: { type: "string" } },
+            wagers: { type: "array", items: { type: "object" } },
+            scoreboard: { type: "array", items: { type: "object" } },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/game-admin",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-game-admin",
+      tag: TAG_DAEMON,
+      summary: "Exposure per fixture with a Straight/Parlay/Teaser split",
+      description:
+        "The portal manual's Game Admin report (v1.0.280, F.A.Q. #4) reduced to exposure per fixture and position (sportsdesk_webview_server.ts#GET /api/game-admin). preGame is computed from gameDateTime against the request clock and is a fact about the fixture, not a claim about the operator's delete permission. Surface: surface.daemon-game-admin (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/game-admin (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Fixtures ordered by exposure, with positions.",
+          {
+            success: { type: "boolean" },
+            source: { type: "string" },
+            games: { type: "array", items: { type: "object" } },
+            generatedAt: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/analysis",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-analysis",
+      tag: TAG_DAEMON,
+      summary: "Analysis report, or the reason it is not captured",
+      description:
+        "Validates the portal's filter vocabulary (services/sportsdesk_webview_server.ts#GET /api/analysis) and answers 200 only when a transcribed report matches the selection; otherwise 501 with the required capture. A 200 carries the rows, the published totals, a recomputed copy and a discrepancies array, so a transcription slip is visible rather than served as fact. Surface: surface.daemon-analysis (tier D).",
+      requiredCapture:
+        "Only the response of POST /cloud/api/Manager/getAgentPerformance is missing. The request is observed (2026-11-01, type=CP and CPS) and lib/f402_agent_performance_request.ts reproduces it byte for byte; no response body has ever been seen, so no column set is documented. Today a single Customer Performance result (Baseball, agent BILLY666, 2026-11-01) is transcribed from an operator paste.",
+      responses: {
+        "200": jsonSurfaceResponse("A transcribed analysis report.", {
+          success: { type: "boolean" },
+          available: { type: "boolean" },
+          rows: { type: "array", items: { type: "object" } },
+          totals: { type: "object" },
+          recomputed: { type: "object" },
+          discrepancies: { type: "array", items: { type: "object" } },
+        }),
+        "501": jsonSurfaceResponse(
+          "No transcribed report matches this selection.",
+          { success: { type: "boolean" }, requiredCapture: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/analysis/filters",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-analysis",
+      tag: TAG_DAEMON,
+      summary: "Analysis filter vocabulary transcribed from report.js",
+      description:
+        "Returns the report kinds (CP/CPS/CPV/G), the fourteen activity codes, the two group modes and the four week windows, with their provenance and the required capture (services/sportsdesk_webview_server.ts#GET /api/analysis/filters). Surface: surface.daemon-analysis (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/analysis/filters (handler-verified only).",
+      responses: {
+        "200": jsonSurfaceResponse("Filter vocabulary with provenance.", {
+          success: { type: "boolean" },
+          captured: { type: "boolean" },
+          reports: { type: "array", items: { type: "object" } },
+          activities: { type: "array", items: { type: "object" } },
+          groups: { type: "array", items: { type: "object" } },
+          weeks: { type: "array", items: { type: "object" } },
+        }),
+      },
+    },
+    {
+      path: "/api/analysis/reports",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-analysis",
+      tag: TAG_DAEMON,
+      summary: "Transcribed analysis reports and their recorded context",
+      description:
+        "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts#GET /api/analysis/reports). The recorded context contains the agent login the report was run for, so this index is customer-identifying and carries the same guard as GET /api/analysis: a non-loopback peer must present SPORTSDESK_ADMIN_TOKEN (piiRejection), and a unix-socket listener requires it unless SPORTSDESK_TRUST_PROXY=1. Surface: surface.daemon-analysis (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/analysis/reports (handler-verified only).",
+      responses: {
+        "200": jsonSurfaceResponse("Stored reports with context.", {
+          success: { type: "boolean" },
+          count: { type: "integer" },
+          reports: { type: "array", items: { type: "object" } },
+        }),
+        "401": jsonSurfaceResponse("Missing or wrong admin token.", {
+          success: { type: "boolean" },
+          error: { type: "string" },
+        }),
+        "503": jsonSurfaceResponse(
+          "SPORTSDESK_ADMIN_TOKEN is not set on the server.",
+          { success: { type: "boolean" }, error: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/agents/search",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-agent-search",
+      tag: TAG_DAEMON,
+      summary: "Agent lookup over the committed hierarchy",
+      description:
+        "Case-insensitive prefix-first search over data/agent-tree.json (services/sportsdesk_webview_server.ts#GET /api/agents/search). Requires q of at least two characters and clamps limit to 100. Loopback-gated, because agent names are identity data. Surface: surface.daemon-agent-search (tier D).",
+      requiredCapture:
+        "Not a capture gap: the tree is committed and the handler is the contract.",
+      responses: {
+        "200": jsonSurfaceResponse("Matching agents with their level.", {
+          success: { type: "boolean" },
+          query: { type: "string" },
+          count: { type: "integer" },
+          agents: { type: "array", items: { type: "object" } },
+        }),
+        "400": jsonSurfaceResponse("Query shorter than two characters.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/game-admin/board",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-game-admin-board",
+      tag: TAG_DAEMON,
+      summary: "Game Admin board: lines with the money on each side",
+      description:
+        "Serves the transcribed Admin module: spread, moneyline, total and team-total sides with exposure (services/sportsdesk_webview_server.ts#GET /api/game-admin). Supports the portal's window selector (48 yesterday, 24 today, -1 current board). Abbreviated amounts carry amountExact null and are excluded from sums. Surface: surface.daemon-game-admin-board (tier D).",
+      requiredCapture:
+        "A Game Admin API capture would replace the transcription; none exists, so source and observedAt travel with the payload.",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Board games, their sides and the window summary.",
+          {
+            success: { type: "boolean" },
+            window: { type: "string" },
+            games: { type: "array", items: { type: "object" } },
+            summary: { type: "object" },
+          },
+        ),
+        "400": jsonSurfaceResponse("Unknown window code.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/sports/catalog",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-sport-catalog",
+      tag: TAG_DAEMON,
+      summary: "Sub-sports and period menus with their types",
+      description:
+        "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts#/api/sports/catalog). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
+      requiredCapture:
+        "Not a capture gap: the catalog fixture is the captured artifact.",
+      responses: {
+        "200": jsonSurfaceResponse("Catalog with derived indexes.", {
+          summary: { type: "object" },
+          periodTypes: { type: "array", items: { type: "object" } },
+          subSports: { type: "array", items: { type: "object" } },
+          sports: { type: "array", items: { type: "object" } },
+        }),
+        "404": jsonSurfaceResponse("Unknown sport or sub-sport.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/contests",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-contests",
+      tag: TAG_DAEMON,
+      summary: "Contest / futures list from the sports nav",
+      description:
+        "Every contest the nav links, keyed by contestNum with sport, market and subject parsed out of the padded type string (services/sportsdesk_webview_server.ts#GET /api/contests). The list is extracted from saved markup by scripts/extract_contests.ts. Surface: surface.daemon-contests (tier D).",
+      requiredCapture:
+        "A contest API capture would replace the markup extraction; none exists.",
+      responses: {
+        "200": jsonSurfaceResponse("Contests with their group counts.", {
+          success: { type: "boolean" },
+          count: { type: "integer" },
+          entries: { type: "array", items: { type: "object" } },
+        }),
+        "404": jsonSurfaceResponse("No contest list extracted.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/live-wagers",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-wagers",
+      tag: TAG_DAEMON,
+      summary: "Live wager ticker list with parsed legs",
+      description:
+        "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts#/api/live-wagers). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Candidates are data/bet-ticker.json (a full Manager/getBetTicker capture written by `bun run capture:bet-ticker`, gitignored) and the committed data/live-wagers.json paste; a file is valid only if it parses as JSON and is a wager list ({LIST: [...]} or a bare array), and the valid one observed later wins: a provenance.observedAt that parses and is not in the future outranks any file mtime (a checkout rewrites the committed paste's mtime), mtime only orders two undated files, and a tie goes to bet-ticker — services/sportsdesk_webview_server.ts#/api/live-wagers, shared with /api/kpis. `freshness` ({asOf, asOfFrom, stale}, stale after 3600 s) dates the chosen file — no ageSeconds, because the body is cached by version and the page derives the age from asOf, and `skipped` lists each present file that was not served with its reason (invalid JSON, no LIST array, older than the other); the 404 carries `skipped` too, so a malformed capture is reported rather than answered with a 500 or zero wagers. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
+      requiredCapture:
+        "An HTTP capture of GET /api/live-wagers serving a `capture:bet-ticker` artifact. No such run has been recorded; data/live-wagers.json holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so.",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Wagers with aggregates and their provenance.",
+          {
+            success: { type: "boolean" },
+            summary: { type: "object" },
+            all: { type: "object" },
+            provenance: { type: "object" },
+            freshness: { type: "object" },
+            skipped: { type: "array", items: { type: "object" } },
+            wagers: { type: "array", items: { type: "object" } },
+          },
+        ),
+        "404": jsonSurfaceResponse("No valid live wager list.", {
+          error: { type: "string" },
+          hint: { type: "string" },
+          skipped: { type: "array", items: { type: "object" } },
+        }),
+      },
+    },
+    {
+      path: "/api/status",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary:
+        "Daemon status and process telemetry (GET /api/status, GET /status.json)",
+      description:
+        "Answers {ok, status, checks, health, telegram, timestamp} from the running process instead of fetching itself over the loopback (services/sportsdesk_webview_server.ts#/api/status); a self-fetch had no port at all under a unix socket. `ok` and `status` are derived from `checks`, so the degraded branch is reachable, and `cpuUsageSinceStartMicros` is cumulative CPU time rather than utilisation. HEAD is answered like GET. Public by the table's `operational` classification — it carries uptime, memory, pid and bind address, not customer data. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Liveness, per-check results and process telemetry.",
+          {
+            ok: { type: "boolean" },
+            status: { type: "string", enum: ["serving", "degraded"] },
+            checks: {
+              type: "object",
+              additionalProperties: { type: "string", enum: ["ok", "error"] },
+            },
+            health: { type: "object" },
+            telegram: { type: "object", nullable: true },
+            timestamp: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/kpis",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Dashboard headline KPIs (GET /api/kpis)",
+      description:
+        "Derives the dashboard's KPI strip from the artifacts the daemon serves (lib/desk_kpis.ts#deriveDeskKpis): agent counts from data/agent-tree.json, open wagers from data/live-bets.json, the ticker subset from data/live-wagers.json, and the customer book from data/customer-profiles.json. Each block is null when its file is absent and carries {source, basis, asOf, asOfFrom, ageSeconds, stale, partial}; `basis: fixture` marks demo data (the customer book is built from enriched_customers_full.json). Money is integer cents. Public by the table's `aggregate` classification — counts and sums only, no login, customer id or agent key. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Derived KPI blocks with per-block provenance and staleness.",
+          {
+            success: { type: "boolean" },
+            kpis: {
+              type: "object",
+              properties: {
+                agents: { type: "object", nullable: true },
+                pending: { type: "object", nullable: true },
+                ticker: { type: "object", nullable: true },
+                customerBook: { type: "object", nullable: true },
+              },
+            },
+            generatedAt: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/parse-formdata",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Form-data parse probe (POST /api/parse-formdata)",
+      description:
+        "Echoes the fields of one multipart or urlencoded body as {name: string | string[]} (services/sportsdesk_webview_server.ts#/api/parse-formdata). Reads through `req.formData()`, which on 1.4.4 succeeds where `new Blob([await req.arrayBuffer()]).formData()` rejected Bun's own encoding; the body is bounded by the daemon's 1 MiB maxRequestBodySize. Public, and the reason the cap exists. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded).",
+      responses: {
+        "200": {
+          description:
+            "The submitted fields; a repeated name becomes an array of strings.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: {
+                  oneOf: [
+                    { type: "string" },
+                    { type: "array", items: { type: "string" } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as form data.", {
+          error: { type: "string" },
+        }),
+        "413": {
+          description:
+            "The body exceeded the daemon's 1 MiB maxRequestBodySize. Bun refuses it before the handler runs, so the body is empty (measured on 1.4.4: status 413, no content-type) rather than the daemon's JSON error shape.",
+          headers: daemonHeaders(),
+        },
+      },
+    },
+    {
+      path: "/api/logo/{name}",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-logo-proxy",
+      tag: TAG_DAEMON,
+      summary: "Team-logo proxy (GET /api/logo/{name})",
+      description:
+        "Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image bytes with an immutable day-long cache (services/sportsdesk_webview_server.ts#/api/logo/{name}). Names are validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL; a malformed percent-escape is 400, not the 500 it used to be. Public: it returns image bytes for a fixed host and carries no customer data; the response content type mirrors the upstream's (png, jpeg, gif, webp or svg), and the 200 schema below is the common case. Surface: surface.daemon-logo-proxy (tier D).",
+      requiredCapture:
+        "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough.",
+      parameters: [
+        {
+          name: "name",
+          in: "path",
+          required: true,
+          description:
+            "Logo file name from the wager feed, e.g. `Arsenal FC.png`; must end in .png/.jpg/.jpeg/.gif/.webp/.svg and contain no separator, control character or `..`.",
+          schema: { type: "string" },
+          example: "Arsenal FC.png",
+        },
+      ],
+      responses: {
+        "200": {
+          description: "The upstream image bytes, cached for one day.",
+          headers: daemonHeaders(),
+          content: {
+            "image/png": { schema: { type: "string", format: "binary" } },
+          },
+        },
+        "400": {
+          description:
+            "Missing, malformed or disallowed name — including a broken percent-escape.",
+          headers: daemonHeaders(),
+          content: { "text/plain": { schema: { type: "string" } } },
+        },
+        "502": jsonSurfaceResponse(
+          "The upstream answered but not with an image.",
+          { error: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/f402/get-pending",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      summary: "Retired Pending endpoint (410 tombstone)",
+      description:
+        "Answers 410 with a pointer to /api/live-bets (services/sportsdesk_webview_server.ts#/api/f402/get-pending). It used to return the same dataset in a different shape; the tombstone makes an old client fail loudly instead of silently reading a fixture that looks live. Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture: "HTTP capture of the 410 body (handler-verified only).",
+      responses: {
+        "410": jsonSurfaceResponse(
+          "The endpoint is gone; the body names its replacements.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/graph-feed",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Graph live feed (GET /api/graph-feed, /graph-live-feed.json)",
+      description:
+        "Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds — with no-store caching (services/sportsdesk_webview_server.ts#/api/graph-feed). It carries agent logins, so it uses the same `pii` guard as the page. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/graph-feed (the artifact is committed; no HTTP response was captured).",
+      responses: {
+        "200": {
+          description:
+            "The graph feed document as stored in docs/graph-live-feed.json.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/status",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary:
+        "Telegram configuration and schedules (GET /api/telegram/status)",
+      description:
+        "Returns {success, status, schedules, reportTypes} from the bot service and the in-process scheduler (services/sportsdesk_webview_server.ts#/api/telegram/status). Admin-token gated regardless of peer address. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/telegram/status with a valid token.",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Bot mode, schedules and the report vocabulary.",
+          {
+            success: { type: "boolean", const: true },
+            status: { type: "object" },
+            schedules: { type: "array", items: { type: "object" } },
+            reportTypes: { type: "array", items: { type: "string" } },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/activity",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary: "Recent Telegram activity (GET /api/telegram/activity)",
+      description:
+        "Returns {success, entries} from the activity log; `limit` defaults to 50 and clamps to 1..200 (services/sportsdesk_webview_server.ts#/api/telegram/activity). Admin-token gated. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/telegram/activity with a valid token.",
+      responses: {
+        "200": jsonSurfaceResponse("Newest-first activity entries.", {
+          success: { type: "boolean", const: true },
+          entries: { type: "array", items: { type: "object" } },
+        }),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/webhook",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary:
+        "Register or delete the Telegram webhook (POST /api/telegram/webhook)",
+      description:
+        'Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook() and mirrors the Bot API result as {success, ok, error?}, 502 when Telegram refuses (services/sportsdesk_webview_server.ts#/api/telegram/webhook). Admin-token gated; this is the control plane, distinct from the secret-checked /telegram/webhook that receives updates. Surface: surface.daemon-telegram-admin-routes (tier D).',
+      requiredCapture:
+        "HTTP capture of a set and a delete round trip against the Bot API.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["action"],
+              properties: {
+                action: { type: "string", enum: ["set", "delete"] },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse("Telegram accepted the change.", {
+          success: { type: "boolean" },
+          ok: { type: "boolean" },
+          error: { type: "string" },
+        }),
+        "400": jsonSurfaceResponse('action is missing or not "set"/"delete".', {
+          success: { type: "boolean", const: false },
+          error: { type: "string" },
+        }),
+        "502": jsonSurfaceResponse(
+          "Telegram answered ok:false; its description is passed through.",
+          {
+            success: { type: "boolean", const: false },
+            ok: { type: "boolean" },
+            error: { type: "string" },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/test/error",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary: "Error-boundary probe (GET /api/test/error)",
+      description:
+        "Throws a string so the server's error boundary runs; `?trigger_error=non_error` does the same on any route (services/sportsdesk_webview_server.ts, baseHeaders). Deliberately reachable in production so a deployment can prove the 500 body carries no stack trace. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact).",
+      responses: {
+        "500": jsonSurfaceResponse(
+          "The daemon's structured 500: no stack, no source, only the thrown message.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string", const: "Internal Server Error" },
+            message: { type: "string" },
+          },
         ),
       },
     },
@@ -1691,6 +2621,8 @@ function surfaceOperation(
     "x-surface-id": surface.id,
   };
   if (spec.requestBody !== undefined) operation.requestBody = spec.requestBody;
+  if (spec.parameters !== undefined)
+    operation.parameters = [...spec.parameters];
   return operation;
 }
 
@@ -1826,27 +2758,6 @@ function skeletonToSchema(node: SkeletonNode): JsonObject {
   }
   if (node.truncated) schema["x-capture-truncated"] = true;
   return schema;
-}
-
-/** Canonical JSON (recursively sorted keys, compact) matching capture/json.ts. */
-function canonicalizeJsonValue(value: unknown): unknown {
-  if (value === null) return null;
-  if (Array.isArray(value)) return value.map(canonicalizeJsonValue);
-  if (!isRecord(value)) return value;
-  const sorted: Record<string, unknown> = {};
-  for (const key of Object.keys(value).sort()) {
-    const child = value[key];
-    if (child === undefined) continue;
-    sorted[key] = canonicalizeJsonValue(child);
-  }
-  return sorted;
-}
-
-/** sha256 of the canonical capture record; equals manifest captureHash. */
-function captureRecordDigest(record: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalizeJsonValue(record)))
-    .digest("hex");
 }
 
 function mediaTypeOf(contentType: string, fallback: string): string {
@@ -2269,7 +3180,7 @@ function buildSecuritySchemes(): JsonObject {
       type: "http",
       scheme: "bearer",
       description:
-        "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (sportsdesk_webview_server.ts:27-47). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.",
+        "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts, adminRejection). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.",
     },
   };
 }
@@ -2291,17 +3202,17 @@ function buildHeaders(): JsonObject {
   return {
     CSPHeader: {
       description:
-        "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (sportsdesk_webview_server.ts:87-90).",
+        "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders).",
       schema: { type: "string" },
     },
     XContentTypeOptionsHeader: {
       description:
-        "X-Content-Type-Options: nosniff (sportsdesk_webview_server.ts:89).",
+        "X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).",
       schema: { type: "string", enum: ["nosniff"] },
     },
     ReferrerPolicyHeader: {
       description:
-        "Referrer-Policy: strict-origin-when-cross-origin (sportsdesk_webview_server.ts:90).",
+        "Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).",
       schema: { type: "string", enum: ["strict-origin-when-cross-origin"] },
     },
   };
@@ -2430,7 +3341,7 @@ function buildSchemas(ledger: Ledger): JsonObject {
       description:
         ledgerTierOf("/cloud/api/Manager/getWebLog") === "A"
           ? "Consumer type that declares the four fields the old spec published as the getWebLog response row (customerID, ipAddress, timestamp, agentOwner). The getWebLog operation is now tier A and derives its response schema from the live capture skeleton; this component remains a consumer type declaration and is not used for that schema."
-          : "Consumer type that declares the four fields the old spec published as the getWebLog response row (customerID, ipAddress, timestamp, agentOwner). It is NOT used as a response schema here: the getWebLog response body was never captured (operational_guardrails_runbook.md:153), so the row schema remains undocumented.",
+          : "Consumer type that declares the four fields the old spec published as the getWebLog response row (customerID, ipAddress, timestamp, agentOwner). It is NOT used as a response schema here: the getWebLog response body was never captured (docs/runbooks/operational_guardrails_runbook.md:153), so the row schema remains undocumented.",
     },
   ];
 
@@ -2505,6 +3416,11 @@ function buildTags(ledger: Ledger): readonly JsonObject[] {
       name: TAG_DAEMON,
       description:
         "Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.",
+    },
+    {
+      name: TAG_DOWNLINE,
+      description:
+        "Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.",
     },
     {
       name: TAG_SETTLEMENT,

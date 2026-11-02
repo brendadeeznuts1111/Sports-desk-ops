@@ -27,7 +27,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { resolveCitation } from "../lib/ledger_consistency.ts";
+import { loadManifestIndex } from "./apply_captures.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Shared types                                                               */
@@ -1018,13 +1020,13 @@ function headerLine(headers: string, headerName: string): string | undefined {
 }
 
 export function checkHeaders(headers: string): CheckOutcome {
-  const name = "functions/_headers (security headers)";
+  const name = "_headers (security headers)";
   const issues: Issue[] = [];
   if (headers.trim() === "") {
     return failed(name, [
       problem(
         CODES.HEADERS_MISSING,
-        "functions/_headers is empty; declare CSP, HSTS, X-Content-Type-Options and Referrer-Policy",
+        "_headers is empty; declare CSP, HSTS, X-Content-Type-Options and Referrer-Policy",
       ),
     ]);
   }
@@ -1297,17 +1299,92 @@ function readDeclaredCounts(counts: unknown): DeclaredCounts | undefined {
   return undefined;
 }
 
-function evidenceIsConcrete(evidence: readonly unknown[]): boolean {
+/** Whether any entry names a capture that exists in the store. */
+function evidenceCitesResolvedCapture(
+  evidence: readonly unknown[],
+  context: {
+    readonly root: string;
+    readonly captureFiles?: ReadonlySet<string>;
+  },
+): boolean {
+  return evidence.some((entry) => {
+    if (!isRecord(entry) || typeof entry["source"] !== "string") return false;
+    const source = entry["source"].trim();
+    if (!source.startsWith("capture:")) return false;
+    const target = source.slice("capture:".length);
+    if (context.captureFiles !== undefined) {
+      return context.captureFiles.has(target);
+    }
+    // Without the store index, only the shape can be judged — refuse rather than guess.
+    return /^\d{4}-\d{2}-\d{2}\//.test(target);
+  });
+}
+
+/**
+ * Whether any evidence entry names an artifact that actually exists.
+ *
+ * This used to accept any non-empty string, which is why eight tier-A rows citing
+ * `capture:<date>:<sha256>` ids that matched nothing passed the gate: the array was not empty,
+ * so it was "concrete". Emptiness is not evidence — resolution is.
+ */
+function evidenceIsConcrete(
+  evidence: readonly unknown[],
+  context: {
+    readonly root: string;
+    readonly captureFiles?: ReadonlySet<string>;
+  },
+): boolean {
   return evidence.some((entry) => {
     const text =
       typeof entry === "string" ? entry.trim() : JSON.stringify(entry);
     if (text === undefined || text === "") return false;
-    return text.toLowerCase() !== "none" && text.toLowerCase() !== '["none"]';
+    const lowered = text.toLowerCase();
+    if (lowered === "none" || lowered === '["none"]') return false;
+
+    // A structured entry names its artifact in `source`; fall back to the raw text otherwise.
+    const source =
+      isRecord(entry) && typeof entry["source"] === "string"
+        ? entry["source"].trim()
+        : text;
+
+    if (source.startsWith("capture:")) {
+      // Without the store index the shape can still be refused: capture:<date>/<file> is the
+      // form docs/openapi.json uses, and capture:<date>:<hash> names nothing at all.
+      const target = source.slice("capture:".length);
+      if (context.captureFiles === undefined)
+        return /^\d{4}-\d{2}-\d{2}\//.test(target);
+      return context.captureFiles.has(target);
+    }
+
+    const match =
+      /^([\w./-]+\.(?:ts|tsx|js|json|md|yml|yaml|html|sh))(?::\d+(?:-\d+)?)?$/.exec(
+        source,
+      );
+    if (match === null) return false;
+    return resolveCitation(match[1] ?? "", context.root) !== undefined;
   });
 }
 
-export function checkLedger(ledger: unknown, spec: unknown): CheckOutcome {
+export function checkLedger(
+  ledger: unknown,
+  spec: unknown,
+  options: {
+    readonly root?: string;
+    readonly captureFiles?: ReadonlySet<string>;
+  } = {},
+): CheckOutcome {
   const name = "evidence ledger (shape, tier parity, counts)";
+  const root = options.root ?? resolve(import.meta.dir, "..");
+  // exactOptionalPropertyTypes: an explicit `captureFiles: undefined` is not the same as absent,
+  // and the resolvers distinguish "no store loaded" from "store says no".
+  type EvidenceContext = {
+    readonly root: string;
+    readonly captureFiles?: ReadonlySet<string>;
+  };
+  const evidenceContext: EvidenceContext =
+    options.captureFiles === undefined
+      ? { root }
+      : { root, captureFiles: options.captureFiles };
   const issues: Issue[] = [];
   const notes: string[] = [];
   if (!isRecord(ledger)) {
@@ -1359,8 +1436,19 @@ export function checkLedger(ledger: unknown, spec: unknown): CheckOutcome {
       );
     }
     if (
+      operation.tier === "A" &&
+      !evidenceCitesResolvedCapture(operation.evidence, evidenceContext)
+    ) {
+      issues.push(
+        problem(
+          CODES.LEDGER_EVIDENCE_WEAK,
+          `${operation.method.toUpperCase()} ${operation.path}: tier A means a response was captured, so it must cite a capture:<date>/<file> that exists in docs/evidence/captures; a resolvable spec or source file is not a capture`,
+        ),
+      );
+    }
+    if (
       (operation.tier === "A" || operation.tier === "B") &&
-      !evidenceIsConcrete(operation.evidence)
+      !evidenceIsConcrete(operation.evidence, evidenceContext)
     ) {
       issues.push(
         problem(
@@ -1763,9 +1851,14 @@ export function checkDistParity(root: string): CheckOutcome {
   for (const fileName of ["openapi.json", "index.html"]) {
     compareStaged(distDir, docsDir, fileName, issues);
   }
-  const headersSource = join(root, "functions", "_headers");
-  if (existsSync(headersSource)) {
-    compareStaged(distDir, join(root, "functions"), "_headers", issues);
+  // Same layout migration as checkHeaders: the source moved to infra/pages/, and
+  // `docs:stage` copies from there. Accept either so the gate reflects the tree.
+  const headersSource = [
+    join(root, "infra", "pages", "_headers"),
+    join(root, "functions", "_headers"),
+  ].find((p) => existsSync(p));
+  if (headersSource !== undefined) {
+    compareStaged(distDir, dirname(headersSource), "_headers", issues);
   } else {
     issues.push(
       problem(
@@ -1805,8 +1898,10 @@ const SCRIPT_REQUIREMENTS: readonly ScriptRequirement[] = [
   },
   {
     script: "docs:stage",
-    mustInclude: ["functions/_headers", "dist/_headers"],
-    message: "must copy functions/_headers to dist/_headers",
+    // "_headers" rather than a directory: the source moved functions/ -> infra/pages/
+    // in the layout commit and the staging script was updated, this requirement was not.
+    mustInclude: ["_headers", "dist/_headers"],
+    message: "must copy the _headers source into dist/_headers",
   },
   {
     script: "docs:deploy",
@@ -1975,7 +2070,10 @@ function checkSpecFile(root: string): CheckOutcome {
   return checkOpenApi(parsed.value, rawText);
 }
 
-function checkLedgerFile(root: string, spec: unknown): CheckOutcome {
+async function checkLedgerFile(
+  root: string,
+  spec: unknown,
+): Promise<CheckOutcome> {
   const name = "evidence ledger (shape, tier parity, counts)";
   const ledgerPath = join(root, "docs", "evidence", "ledger.json");
   if (!existsSync(ledgerPath)) {
@@ -1998,7 +2096,17 @@ function checkLedgerFile(root: string, spec: unknown): CheckOutcome {
   if (spec === undefined) {
     return skipped(name, ["spec unreadable; ledger↔spec parity cannot run"]);
   }
-  return checkLedger(parsed.value, spec);
+  // The capture store decides whether a tier-A citation resolves; loadManifestIndex recomputes
+  // every captureHash from the record, so a stale manifest cannot vouch for itself.
+  const capturesDir = join(root, "docs", "evidence", "captures");
+  const captureFiles = existsSync(capturesDir)
+    ? new Set((await loadManifestIndex(capturesDir)).hashes.keys())
+    : undefined;
+  return checkLedger(
+    parsed.value,
+    spec,
+    captureFiles === undefined ? { root } : { root, captureFiles },
+  );
 }
 
 function checkMarkdownFile(root: string): CheckOutcome {
@@ -2024,17 +2132,32 @@ function checkIndexFile(root: string): CheckOutcome {
 }
 
 function checkHeadersFile(root: string): CheckOutcome {
-  const name = "functions/_headers (security headers)";
-  const headersPath = join(root, "functions", "_headers");
-  if (!existsSync(headersPath)) {
+  const name = "_headers (security headers)";
+  // The layout commit "group design tokens, schema preload, and infra paths" moved
+  // this file from functions/_headers to infra/pages/_headers, and `docs:stage` copies
+  // from the new path — but this check and docs/README.md still named the old one, so
+  // the gate failed on a tree that was actually correct. Accept either layout and say
+  // which one was found, so the next migration does not need a code change to be legal.
+  const candidates = [
+    join(root, "infra", "pages", "_headers"),
+    join(root, "functions", "_headers"),
+  ];
+  const headersPath = candidates.find((p) => existsSync(p));
+  if (headersPath === undefined) {
     return failed(name, [
       problem(
         CODES.HEADERS_MISSING,
-        `missing functions/_headers; Cloudflare Pages only serves security headers from the deploy root`,
+        `missing _headers; Cloudflare Pages only serves security headers from the deploy root ` +
+          `(looked for infra/pages/_headers and functions/_headers)`,
       ),
     ]);
   }
-  return checkHeaders(readFileSync(headersPath, "utf8"));
+  const outcome = checkHeaders(readFileSync(headersPath, "utf8"));
+  // Report the path that was actually read, so a reader can tell the two layouts apart.
+  return {
+    ...outcome,
+    name: `${relative(root, headersPath)} (security headers)`,
+  };
 }
 
 async function readSpecForLive(root: string): Promise<CheckOutcome> {
@@ -2059,7 +2182,7 @@ export async function runChecks(options: RunOptions): Promise<CheckOutcome[]> {
   const outcomes: CheckOutcome[] = [
     checkSpecFile(options.root),
     checkOpenApiFreshness(options.root, { strict: options.strict }),
-    checkLedgerFile(options.root, spec),
+    await checkLedgerFile(options.root, spec),
     checkMarkdownFile(options.root),
     checkIndexFile(options.root),
     checkHeadersFile(options.root),

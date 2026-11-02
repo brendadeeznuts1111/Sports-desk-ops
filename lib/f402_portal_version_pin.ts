@@ -38,7 +38,9 @@ export async function sha256HexText(text: string): Promise<string> {
   return sha256HexFileBytes(new TextEncoder().encode(text));
 }
 
-async function sha256HexFileBytes(bytes: Uint8Array): Promise<string> {
+async function sha256HexFileBytes(
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Buffer.from(digest).toString("hex");
 }

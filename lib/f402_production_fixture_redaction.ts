@@ -276,7 +276,7 @@ export function buildProductionOracleFixtureDocument(options: {
   readonly envelope: {
     readonly GENERAL: readonly ListAgentsByAgentGeneralWireRow[];
     readonly PLAYERS: readonly ListAgentsByAgentPlayerWireRow[];
-    readonly EXTRA: boolean | undefined;
+    readonly EXTRA?: boolean;
   };
   readonly redactedByRole: string;
   readonly general: readonly ListAgentsByAgentGeneralWireRow[];

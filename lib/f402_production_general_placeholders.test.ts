@@ -37,8 +37,8 @@ describe("applyProductionGeneralPlaceholders", () => {
     ];
     const out = applyProductionGeneralPlaceholders(original);
     const trailing = 2;
-    expect(out[0]?.Login.endsWith(" ".repeat(trailing))).toBe(true);
-    expect(out[0]?.Login.length).toBe("AGENT_L1_N0".length + trailing);
+    expect(out[0]?.Login).toEndWith(" ".repeat(trailing));
+    expect(out[0]?.Login).toHaveLength("AGENT_L1_N0".length + trailing);
     expect(trimPaddedField(out[0]?.Login)).toBe("AGENT_L1_N0");
   });
 

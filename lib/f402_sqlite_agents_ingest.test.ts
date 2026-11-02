@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { normalizeNested } from "./f402_portal_hierarchy_oracle.ts";
+import {
+  normalizeNested,
+  parsePortalGeneralRows,
+} from "./f402_portal_hierarchy_oracle.ts";
 import { parseProductionOracleFixtureText } from "./f402_production_fixture_redaction.ts";
 import {
   countAgentTreeCteRows,
@@ -22,7 +25,7 @@ describe("f402_sqlite_agents_ingest", () => {
     );
     const text = await Bun.file(fixturePath).text();
     const fixture = parseProductionOracleFixtureText(text);
-    const general = fixture.GENERAL;
+    const general = parsePortalGeneralRows(fixture.GENERAL);
     expect(general.length).toBe(2466);
 
     const ctx = { masterId: "MASTER1", masterLogin: "MASTER1" };

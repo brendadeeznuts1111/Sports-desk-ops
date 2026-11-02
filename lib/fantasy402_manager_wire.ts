@@ -19,6 +19,7 @@
  *     - POST /cloud/api/Manager/getWebLog across modes A, B, C, I
  */
 
+import { SPORT_FIELD_WIDTH, padField } from "./f402_field_widths.ts";
 import {
   type PaddedCustomerId,
   type AgentIdentifier,
@@ -465,7 +466,7 @@ export async function executeVigSetupInsert(
   const timeoutMs = options.timeoutMilliseconds ?? 8000;
 
   // Invariants: 20-char padded sportType, 11-char padded player
-  const paddedSport = options.sportType.trim().padEnd(20, " ");
+  const paddedSport = padField(options.sportType, SPORT_FIELD_WIDTH);
   const paddedPlayer = padCustomerIdCanonical(options.customerIdentifier);
 
   const vigSpread = options.vigSpread ?? "15";

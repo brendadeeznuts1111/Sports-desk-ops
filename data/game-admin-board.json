@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "source": "operator paste of fantasy402 Game Admin (module Admin)",
+  "observedAt": "2026-11-01",
+  "notes": [
+    "Amounts are preserved exactly as the portal rendered them: some are exact integers (53,903) and some abbreviated (120k, 163k). amountExact is null whenever only an approximation is proven.",
+    "Team totals carry separate over and under amounts on each side, so they are modelled per team rather than as one line.",
+    "Opener values are the pre-move numbers the report prints next to the live line.",
+    "period=0 (Game) for every row in this paste; the report's Period selector was on Game."
+  ],
+  "games": [
+    {
+      "gameNum": 619115916,
+      "league": "NFL",
+      "status": "live",
+      "clock": "Time Half",
+      "rot": [257, 258],
+      "teams": ["Los Angeles Chargers", "Los Angeles Rams"],
+      "score": [9, 10],
+      "openers": ["43½", "-7"],
+      "spread": [
+        {
+          "side": "Los Angeles Chargers",
+          "line": "+6½",
+          "price": -110,
+          "amount": "53,903",
+          "amountExact": 53903
+        },
+        {
+          "side": "Los Angeles Rams",
+          "line": "-6½",
+          "price": -110,
+          "amount": "120k",
+          "amountExact": null
+        }
+      ],
+      "money": [
+        {
+          "side": "Los Angeles Chargers",
+          "line": "+255",
+          "price": 255,
+          "amount": "6,200",
+          "amountExact": 6200
+        },
+        {
+          "side": "Los Angeles Rams",
+          "line": "-325",
+          "price": -325,
+          "amount": "5,462",
+          "amountExact": 5462
+        }
+      ],
+      "total": [
+        {
+          "side": "OVER",
+          "line": "46",
+          "price": -115,
+          "amount": "50,314",
+          "amountExact": 50314
+        },
+        {
+          "side": "UNDER",
+          "line": "46",
+          "price": -105,
+          "amount": "5,209",
+          "amountExact": 5209
+        }
+      ],
+      "teamTotal": [
+        {
+          "team": "Los Angeles Chargers",
+          "line": "19½",
+          "overPrice": -125,
+          "underPrice": -105,
+          "overAmount": "146",
+          "underAmount": "0",
+          "overAmountExact": 146,
+          "underAmountExact": 0
+        },
+        {
+          "team": "Los Angeles Rams",
+          "line": "26½",
+          "overPrice": -125,
+          "underPrice": -105,
+          "overAmount": "155",
+          "underAmount": "0",
+          "overAmountExact": 155,
+          "underAmountExact": 0
+        }
+      ],
+      "date": "2026-11-01"
+    },
+    {
+      "gameNum": 619115917,
+      "league": "NFL",
+      "status": "live",
+      "clock": "2nd Q 09:02",
+      "rot": [259, 260],
+      "teams": ["Kansas City Chiefs", "Denver Broncos"],
+      "score": [7, 6],
+      "openers": ["-1", "40"],
+      "spread": [
+        {
+          "side": "Kansas City Chiefs",
+          "line": "PK",
+          "price": -110,
+          "amount": "163k",
+          "amountExact": null
+        },
+        {
+          "side": "Denver Broncos",
+          "line": "PK",
+          "price": -110,
+          "amount": "111k",
+          "amountExact": null
+        }
+      ],
+      "money": [
+        {
+          "side": "Kansas City Chiefs",
+          "line": "-110",
+          "price": -110,
+          "amount": "6,857",
+          "amountExact": 6857
+        },
+        {
+          "side": "Denver Broncos",
+          "line": "-110",
+          "price": -110,
+          "amount": "14,286",
+          "amountExact": 14286
+        }
+      ],
+      "total": [
+        {
+          "side": "OVER",
+          "line": "42",
+          "price": -110,
+          "amount": "15,513",
+          "amountExact": 15513
+        },
+        {
+          "side": "UNDER",
+          "line": "42",
+          "price": -110,
+          "amount": "31,964",
+          "amountExact": 31964
+        }
+      ],
+      "teamTotal": [
+        {
+          "team": "Kansas City Chiefs",
+          "line": "20½",
+          "overPrice": -125,
+          "underPrice": -105,
+          "overAmount": "4,547",
+          "underAmount": "20",
+          "overAmountExact": 4547,
+          "underAmountExact": 20
+        },
+        {
+          "team": "Denver Broncos",
+          "line": "20½",
+          "overPrice": -110,
+          "underPrice": -120,
+          "overAmount": "1,200",
+          "underAmount": "0",
+          "overAmountExact": 1200,
+          "underAmountExact": 0
+        }
+      ],
+      "date": "2026-11-01"
+    },
+    {
+      "gameNum": 619115918,
+      "league": "NFL",
+      "status": "live",
+      "clock": "2nd Q 02:00",
+      "rot": [261, 262],
+      "teams": ["New England Patriots", "Miami Dolphins"],
+      "score": [3, 6],
+      "openers": ["-7½", "44½"],
+      "spread": [
+        {
+          "side": "New England Patriots",
+          "line": "-7",
+          "price": 100,
+          "amount": "123k",
+          "amountExact": null
+        },
+        {
+          "side": "Miami Dolphins",
+          "line": "+7",
+          "price": -120,
+          "amount": "71,128",
+          "amountExact": 71128
+        }
+      ],
+      "money": [
+        {
+          "side": "New England Patriots",
+          "line": "-360",
+          "price": -360,
+          "amount": "4,897",
+          "amountExact": 4897
+        },
+        {
+          "side": "Miami Dolphins",
+          "line": "+290",
+          "price": 290,
+          "amount": "1,311",
+          "amountExact": 1311
+        }
+      ],
+      "total": [
+        {
+          "side": "OVER",
+          "line": "41",
+          "price": -115,
+          "amount": "17,726",
+          "amountExact": 17726
+        },
+        {
+          "side": "UNDER",
+          "line": "41",
+          "price": -105,
+          "amount": "24,060",
+          "amountExact": 24060
+        }
+      ],
+      "teamTotal": [
+        {
+          "team": "New England Patriots",
+          "line": "24½",
+          "overPrice": -115,
+          "underPrice": -115,
+          "overAmount": "2,186",
+          "underAmount": "0",
+          "overAmountExact": 2186,
+          "underAmountExact": 0
+        },
+        {
+          "team": "Miami Dolphins",
+          "line": "17½",
+          "overPrice": 115,
+          "underPrice": -145,
+          "overAmount": "100",
+          "underAmount": "150",
+          "overAmountExact": 100,
+          "underAmountExact": 150
+        }
+      ],
+      "date": "2026-11-01"
+    },
+    {
+      "gameNum": 619115919,
+      "league": "NFL",
+      "status": "scheduled",
+      "clock": "08:20 PM",
+      "rot": [263, 264],
+      "teams": ["Philadelphia Eagles", "Washington Commanders"],
+      "score": [0, 0],
+      "openers": ["4½", "-3½"],
+      "spread": [
+        {
+          "side": "Philadelphia Eagles",
+          "line": "+6",
+          "price": -110,
+          "amount": "7,129",
+          "amountExact": 7129
+        },
+        {
+          "side": "Washington Commanders",
+          "line": "-6",
+          "price": -110,
+          "amount": "91,003",
+          "amountExact": 91003
+        }
+      ],
+      "money": [
+        {
+          "side": "Philadelphia Eagles",
+          "line": "+205",
+          "price": 205,
+          "amount": "3,037",
+          "amountExact": 3037
+        },
+        {
+          "side": "Washington Commanders",
+          "line": "-250",
+          "price": -250,
+          "amount": "496",
+          "amountExact": 496
+        }
+      ],
+      "total": [
+        {
+          "side": "OVER",
+          "line": "40½",
+          "price": -110,
+          "amount": "7,917",
+          "amountExact": 7917
+        },
+        {
+          "side": "UNDER",
+          "line": "40½",
+          "price": -110,
+          "amount": "806",
+          "amountExact": 806
+        }
+      ],
+      "teamTotal": [
+        {
+          "team": "Philadelphia Eagles",
+          "line": "16½",
+          "overPrice": -130,
+          "underPrice": 100,
+          "overAmount": "130",
+          "underAmount": "0",
+          "overAmountExact": 130,
+          "underAmountExact": 0
+        },
+        {
+          "team": "Washington Commanders",
+          "line": "23½",
+          "overPrice": -115,
+          "underPrice": -115,
+          "overAmount": "17",
+          "underAmount": "0",
+          "overAmountExact": 17,
+          "underAmountExact": 0
+        }
+      ],
+      "date": "2026-11-01"
+    }
+  ]
+}

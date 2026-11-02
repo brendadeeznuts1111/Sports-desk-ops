@@ -186,7 +186,7 @@ function makeLiveRuntime(
 /* -------------------------------------------------------------------------- */
 
 describe("static openapi validator", () => {
-  test("accepts the committed docs spec (47 paths, every op evidenced)", () => {
+  test("accepts the committed docs spec (71 paths, every op evidenced)", () => {
     const result = validateOpenApiDocumentFile(SPEC_PATH);
     expect(result.issues).toEqual([]);
     const byId = new Map(result.checks.map((check) => [check.id, check]));

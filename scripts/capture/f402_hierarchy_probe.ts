@@ -32,7 +32,6 @@ import {
 } from "../../lib/f402_hierarchy_config.ts";
 import { isDuplicateEnvelope } from "../../lib/f402_hierarchy_dedupe.ts";
 import {
-  applyPlayersModeToJsonText,
   buildHierarchyFormBody,
   filterHierarchyJsonStream,
 } from "../../lib/f402_hierarchy_envelope.ts";
@@ -95,7 +94,7 @@ const mode = values["players-mode"]
   ? readPlayersMode(values["players-mode"])
   : PLAYERS_MODE;
 
-async function readInputBytes(): Promise<Uint8Array> {
+async function readInputBytes(): Promise<Uint8Array<ArrayBuffer>> {
   if (values.stdin) {
     return new Uint8Array(await Bun.stdin.arrayBuffer());
   }

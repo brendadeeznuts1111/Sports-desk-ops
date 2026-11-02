@@ -13,9 +13,11 @@ describe("Fetch Security & URL Credentials Audit", () => {
         entry === "node_modules" ||
         entry === ".DS_Store" ||
         // Local audit artifacts / detached worktrees are gitignored evidence,
-        // not shipped source.
+        // not shipped source. `.gitignore` lists `scratch/`, and the working tree can spell
+        // it `Scratch` (case-insensitive macOS volumes), so compare case-insensitively —
+        // otherwise the walk enters a live WebView profile and follows dangling symlinks.
+        entry.toLowerCase() === "scratch" ||
         entry === "reports" ||
-        entry === "scratch" ||
         entry === "dist" ||
         entry === ".worktrees"
       ) {

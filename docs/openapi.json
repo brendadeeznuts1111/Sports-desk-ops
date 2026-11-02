@@ -29,6 +29,10 @@
       "description": "Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture."
     },
     {
+      "name": "Downline Accounting",
+      "description": "Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them."
+    },
+    {
       "name": "Settlement History",
       "description": "Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured."
     },
@@ -57,7 +61,7 @@
           "tier": "C",
           "sources": [
             "none",
-            "operational_guardrails_runbook.md:153",
+            "docs/runbooks/operational_guardrails_runbook.md:153",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -308,7 +312,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Pending wager legs snapshot",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: simulate_bettor_churn_suite.ts:91-104 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:91-104 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerGetPending",
         "responses": {
           "default": {
@@ -318,7 +322,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "simulate_bettor_churn_suite.ts:91-104",
+            "services/simulate_bettor_churn_suite.ts:91-104",
             "lib/fantasy402_wager_universe_scope.ts:13-21",
             "docs/openapi.json",
             "docs/evidence/captures/pending-500s/diagnostics.json"
@@ -441,8 +445,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "operational_guardrails_runbook.md:205-209",
-            "operational_guardrails_runbook.md:214",
+            "docs/runbooks/operational_guardrails_runbook.md:205-209",
+            "docs/runbooks/operational_guardrails_runbook.md:214",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -455,7 +459,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Padded-field customer mutation",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: domain-branded-types.ts:9,140-158 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,140-158 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerUpdateByColumn",
         "responses": {
           "default": {
@@ -465,8 +469,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "operational_guardrails_runbook.md:215",
-            "domain-branded-types.ts:9,140-158",
+            "docs/runbooks/operational_guardrails_runbook.md:215",
+            "design/domain-branded-types.ts:9,140-158",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -688,33 +692,131 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["none", "docs/openapi.json"],
+          "sources": ["none", "tests/fixtures/portal-left-menu-actions.html"],
           "capturedResponse": false,
           "requiredCapture": "On manager.html (v1.0.280) boot, weekly figures are fetched via POST /cloud/api/Manager/getWeeklyFigureByAgentLite ({agentID, week: 0, type: \"A\", layout: \"byDay\", operation: \"getWeeklyFigureByAgentLite\", RRO: 1} at manager.js:52703) and POST /cloud/api/Manager/getMasterSheet (manager.js:43955). Capture getWeeklyFigureByAgentLite and reconcile."
         }
       }
     },
-    "/cloud/api/Report/getAgentPerformance": {
+    "/cloud/api/Manager/getAgentPerformance": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "Agent performance report",
-        "description": "UNVERIFIED — no capture exists. The path and method are candidate values inferred from a UI/DOM observation; they were never observed on the wire. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
-        "operationId": "postCloudApiReportGetAgentPerformance",
+        "tags": ["Downline Accounting"],
+        "summary": "Agent performance report (request observed; response not captured)",
+        "description": "Request observed 2026-11-01 on the agent-performance screen: a form-urlencoded POST whose fields are published below in wire order (tests/fixtures/f402-report-requests-observed-2026-11-01.json). Three calls were seen — CP and CPS report kinds — and two details matter: `sport` is padded to 20 characters, and `tipo` is not a constant (0 for CP, -1 for CPS). No response body was ever observed, so no response schema is published and nothing here describes the report's columns.",
+        "operationId": "postCloudApiManagerGetAgentPerformance",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "start",
+                  "end",
+                  "agentID",
+                  "type",
+                  "freePlay",
+                  "store",
+                  "sport",
+                  "subsport",
+                  "period",
+                  "wagerType",
+                  "betType",
+                  "tipo",
+                  "debug",
+                  "operation",
+                  "RRO",
+                  "agentOwner"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "M/D/YYYY."
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "M/D/YYYY."
+                  },
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Report kind: CP (customer performance) or CPS (sport performance) observed."
+                  },
+                  "freePlay": {
+                    "type": "string",
+                    "enum": ["Y", "N"]
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "Equals agentID in every observed call."
+                  },
+                  "sport": {
+                    "type": "string",
+                    "description": "Sport name padded with spaces to exactly 20 characters (Football, Auto Racing, Tennis, LIVE).",
+                    "minLength": 20,
+                    "maxLength": 20
+                  },
+                  "subsport": {
+                    "type": "string",
+                    "description": "Catalog sub-sport code (NFL, NCAAF Live, …); empty string when unfiltered."
+                  },
+                  "period": {
+                    "type": "string",
+                    "description": "Portal period number for that sport, or -1 for all periods. LIVE's menu has only 0 (Game)."
+                  },
+                  "wagerType": {
+                    "type": "string",
+                    "description": "Raw portal code; empty when unfiltered."
+                  },
+                  "betType": {
+                    "type": "string",
+                    "description": "Raw portal code; empty when unfiltered."
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "description": "Observed as 0 for CP and -1 for CPS; not a constant."
+                  },
+                  "debug": {
+                    "type": "string",
+                    "enum": ["0"]
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": ["getAgentPerformance"]
+                  },
+                  "RRO": {
+                    "type": "string",
+                    "enum": ["1"]
+                  },
+                  "agentOwner": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
         "responses": {
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Unknown — no response body was observed; no status code or body schema is documented."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "B",
           "sources": [
-            "operational_guardrails_runbook.md:164",
-            "operational_guardrails_runbook.md:214",
-            "docs/openapi.json"
+            "tests/fixtures/f402-report-requests-observed-2026-11-01.json",
+            "app/manager/module/agent-performance.js?bust=1.0.280"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Capture one get-agent-performance call (agentID, data-type C, period) and its rows; confirm whether holdPct is computed server-side and how the BranchGrade is applied. Upgrades C->A.",
-          "candidateUrl": true
+          "requiredCapture": "The request is now observed in full, with its URL; only the response is missing. Capture one call and its rows, then confirm whether holdPct is computed server-side and how BranchGrade is applied. Upgrades B->A.",
+          "contradicted": true
         }
       }
     },
@@ -732,7 +834,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "operational_guardrails_runbook.md:168",
+            "docs/runbooks/operational_guardrails_runbook.md:168",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -755,7 +857,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "operational_guardrails_runbook.md:165",
+            "docs/runbooks/operational_guardrails_runbook.md:165",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -768,7 +870,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Daemon health and telemetry probe",
-        "description": "Handler-defined contract: sportsdesk_webview_server.ts:114-131 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (sportsdesk_webview_server.ts:9,345), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
+        "description": "Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
         "operationId": "getHealth",
         "responses": {
           "200": {
@@ -796,6 +898,7 @@
                     "timestamp",
                     "uptimeSeconds",
                     "runtime",
+                    "ingress",
                     "nodeEnv"
                   ],
                   "properties": {
@@ -831,6 +934,19 @@
                       "type": "string",
                       "example": "Bun v1.4.4"
                     },
+                    "ingress": {
+                      "type": "object",
+                      "description": "Peer-trust rule in force, so 'is the PII guard on?' is answerable from the probe. `proxied` is true when the daemon listens on a unix socket and therefore cannot see the client; `trustProxy` is SPORTSDESK_TRUST_PROXY=1.",
+                      "required": ["proxied", "trustProxy"],
+                      "properties": {
+                        "proxied": {
+                          "type": "boolean"
+                        },
+                        "trustProxy": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
                     "nodeEnv": {
                       "type": "string",
                       "example": "production"
@@ -844,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "sportsdesk_webview_server.ts:114-131",
+            "services/sportsdesk_webview_server.ts:815-835",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to sportsdesk_webview_server.ts:114-131 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:815-835 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },
@@ -856,7 +972,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Monitored watch-list accounts",
-        "description": "Returns {success, count, data} from telegramService.getWatchList() (sportsdesk_webview_server.ts:236-246). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (sportsdesk_webview_server.ts:27-47,175-186).",
+        "description": "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts).",
         "operationId": "getApiWatchlist",
         "security": [
           {
@@ -904,7 +1020,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (sportsdesk_webview_server.ts:38-46).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -935,7 +1051,7 @@
             }
           },
           "503": {
-            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (sportsdesk_webview_server.ts:31-37).",
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -969,12 +1085,12 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "sportsdesk_webview_server.ts:236-246",
-            "sportsdesk_webview_server.ts:27-47",
+            "services/sportsdesk_webview_server.ts#GET /api/watchlist",
+            "services/sportsdesk_webview_server.ts:170-189",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (sportsdesk_webview_server.ts:33-46)."
+          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:33-46)."
         }
       }
     },
@@ -982,7 +1098,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Dispatch an instant Telegram alert",
-        "description": "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (sportsdesk_webview_server.ts:249-274). Admin-token gated (sportsdesk_webview_server.ts:175-186).",
+        "description": "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts). Admin-token gated (services/sportsdesk_webview_server.ts).",
         "operationId": "postApiTelegramAlert",
         "security": [
           {
@@ -1042,7 +1158,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (sportsdesk_webview_server.ts:38-46).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1073,7 +1189,7 @@
             }
           },
           "500": {
-            "description": "Dispatch threw (sportsdesk_webview_server.ts:264-273).",
+            "description": "Dispatch threw (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1108,7 +1224,7 @@
             }
           },
           "503": {
-            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (sportsdesk_webview_server.ts:31-37).",
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1142,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "sportsdesk_webview_server.ts:249-274",
+            "services/sportsdesk_webview_server.ts:1854-1879",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1154,7 +1270,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Trigger a scheduled Telegram report",
-        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (sportsdesk_webview_server.ts:277-297). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (sportsdesk_telegram_bot.ts:77-81). Admin-token gated (sportsdesk_webview_server.ts:175-186).",
+        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).",
         "operationId": "postApiTelegramReport",
         "security": [
           {
@@ -1166,7 +1282,7 @@
             "name": "type",
             "in": "query",
             "required": false,
-            "description": "Report type; defaults to EVENING_SETTLEMENT when absent (sportsdesk_webview_server.ts:278).",
+            "description": "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts).",
             "schema": {
               "type": "string",
               "enum": [
@@ -1219,7 +1335,7 @@
             }
           },
           "400": {
-            "description": "type is not one of REPORT_TYPES (sportsdesk_webview_server.ts:279-287).",
+            "description": "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1250,7 +1366,7 @@
             }
           },
           "401": {
-            "description": "Missing or wrong admin token (sportsdesk_webview_server.ts:38-46).",
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1281,7 +1397,7 @@
             }
           },
           "503": {
-            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (sportsdesk_webview_server.ts:31-37).",
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -1315,8 +1431,8 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "sportsdesk_webview_server.ts:277-297",
-            "sportsdesk_telegram_bot.ts:77-81",
+            "services/sportsdesk_webview_server.ts#POST /api/telegram/report",
+            "services/sportsdesk_telegram_bot.ts:77-81",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1579,7 +1695,7 @@
             "main:scripts/portal_tile_crawler.ts:74",
             "main:scripts/portal_tile_crawler.ts:164-245",
             "docs/openapi.json",
-            "operational_guardrails_runbook.md:213"
+            "docs/runbooks/operational_guardrails_runbook.md:213"
           ],
           "capturedResponse": false,
           "requiredCapture": "Open the 'Add Customer' launcher tile and capture the network request it actually triggers (URL incl. /Manager vs /Report vs another model prefix, method, content type, body, auth) plus a response. Would replace candidate_url with a confirmed URL and upgrade C->A. Do not promote to B on the tile alone.",
@@ -1644,7 +1760,7 @@
             "main:scripts/portal_tile_crawler.ts:96",
             "main:scripts/portal_tile_crawler.ts:164-245",
             "docs/openapi.json",
-            "operational_guardrails_runbook.md:166"
+            "docs/runbooks/operational_guardrails_runbook.md:166"
           ],
           "capturedResponse": false,
           "requiredCapture": "In app/manager/manager.js:93668 (v1.0.280), the Analysis view calls POST /cloud/api/Manager/getReportPlayerAnalysis ({agentID, agentOwner, customerID, reportType, startDate, endDate, lineType, operation: \"getReportPlayerAnalysis\", RRO: 1}). Capture getReportPlayerAnalysis and reconcile.",
@@ -1659,37 +1775,221 @@
     },
     "/cloud/api/Manager/getScores": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "Launcher tile: Scores",
-        "description": "UNVERIFIED — no capture exists. The path and method are candidate values inferred from a UI/DOM observation; they were never observed on the wire. The launcher-tile DOM metadata (x-dom-tile, x-dom-selector, x-extracted-inputs) is UI observation only and must not be read as wire parameters. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "tags": ["Forensic Surveillance"],
+        "summary": "Scores leaderboard (request observed 2026-11-02; response shape partly observed)",
+        "description": "The Scores panel sends JSON, not a form: {customerID, operation: \"getScoresLiveDynamic\", RRO: 1, agentID, agentOwner} (operator transcript, 2026-11-02 — no capture artifact exists, so this is a recorded payload rather than a hashed capture). The response is an object with a Scores array; three field names were observed — LogoTeam1, LogoTeam2 and BroadcastInfo — and the logo fields are the portal's image file names (Boston-Celtics.png, Notre Dame Fighting Irish.png, miami_dolphins_logo.png, NHL.png in a team slot), not team names. Every other field is unknown and is not published. The tile's candidate URL (/cloud/api/Manager/getScores) and the path the page actually calls (/cloud/api/Report/getScoresLiveDynamic) disagree; the observed one is authoritative for the panel and the candidate row is kept only so the disagreement stays visible.",
         "operationId": "postCloudApiManagerGetScores",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["operation"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getScoresLiveDynamic"
+                  },
+                  "customerID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "agentOwner": {
+                    "type": "string"
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "An object with a Scores array. Only LogoTeam1, LogoTeam2 and BroadcastInfo were observed; the remaining fields are unknown, so the item schema is open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["Scores"],
+                  "properties": {
+                    "Scores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "One game. The fields below are the ones present in the entry observed on 2026-11-02; the schema stays open because that was a single entry and the portal pads and re-types values in ways a schema would otherwise misrepresent. Padded strings (SportSubType, SportType, Grouping, CorrelationID) carry trailing spaces; Team1Score/Team2Score/Total are numeric text, not numbers; GameDateTime is `YYYY-MM-DD HH:mm:ss.SSS`, not ISO 8601.",
+                        "properties": {
+                          "LogoTeam1": {
+                            "type": "string",
+                            "description": "Portal image file name for the first side, e.g. Los-Angeles-Clippers.png; resolve through /api/logo/{name}."
+                          },
+                          "LogoTeam2": {
+                            "type": "string",
+                            "description": "Portal image file name for the second side; same vocabulary, including league logos such as NHL.png in a team slot."
+                          },
+                          "BroadcastInfo": {
+                            "type": "string",
+                            "description": "Whitespace-only in the observed entry."
+                          },
+                          "Record": {
+                            "type": "string"
+                          },
+                          "Record2": {
+                            "type": "string"
+                          },
+                          "Rank": {
+                            "type": "string"
+                          },
+                          "Rank2": {
+                            "type": "string"
+                          },
+                          "GameNum": {
+                            "type": "integer",
+                            "example": 619121357
+                          },
+                          "Team1RotNum": {
+                            "type": "integer",
+                            "description": "Board rotation for the first side; should be stable per Team1ID, which is what the rotation check enforces."
+                          },
+                          "Team2RotNum": {
+                            "type": "integer"
+                          },
+                          "STATUS": {
+                            "type": "string",
+                            "description": "Observed value `O`; the full code set is unknown."
+                          },
+                          "GameDateTime": {
+                            "type": "string"
+                          },
+                          "SportSubType": {
+                            "type": "string",
+                            "description": "Padded with trailing spaces (observed `NBA         `)."
+                          },
+                          "SportType": {
+                            "type": "string",
+                            "description": "Padded with trailing spaces (observed `Basketball          `)."
+                          },
+                          "DisplaySubType": {
+                            "type": "string",
+                            "example": "NBA"
+                          },
+                          "PeriodNumber": {
+                            "type": "integer"
+                          },
+                          "PeriodDescription": {
+                            "type": "string",
+                            "example": "Game"
+                          },
+                          "Team1ID": {
+                            "type": "string",
+                            "description": "Full team name (`Los Angeles Clippers`)."
+                          },
+                          "Team2ID": {
+                            "type": "string"
+                          },
+                          "STeam1ID": {
+                            "type": "string",
+                            "description": "Short name (`Clippers`)."
+                          },
+                          "STeam2ID": {
+                            "type": "string"
+                          },
+                          "Team1Score": {
+                            "type": "string",
+                            "description": "Numeric text (observed `57`), not a number."
+                          },
+                          "Team2Score": {
+                            "type": "string"
+                          },
+                          "Final": {
+                            "type": "string",
+                            "example": "Not Final"
+                          },
+                          "Spread": {
+                            "type": "number",
+                            "description": "Number, unlike the score fields."
+                          },
+                          "SpreadAdj1": {
+                            "type": "number"
+                          },
+                          "SpreadAdj2": {
+                            "type": "number"
+                          },
+                          "MoneyLine1": {
+                            "type": "number"
+                          },
+                          "MoneyLine2": {
+                            "type": "number"
+                          },
+                          "MoneyLineDraw": {
+                            "type": ["number", "null"]
+                          },
+                          "Total": {
+                            "type": "string",
+                            "description": "Numeric text (observed `220.5`)."
+                          },
+                          "Favorito": {
+                            "type": "string",
+                            "description": "Team name, not an id."
+                          },
+                          "Grouping": {
+                            "type": "string",
+                            "description": "Padded league name (observed `NBA         `)."
+                          },
+                          "StatusAway": {
+                            "type": "string",
+                            "description": "Per-side clock/period state; observed `Time` beside `Half`. Semantics unconfirmed."
+                          },
+                          "StatusHome": {
+                            "type": "string"
+                          },
+                          "CorrelationID": {
+                            "type": "string",
+                            "description": "`<Team1RotNum>-g` padded to a fixed width (observed `539-g` + trailing spaces); joins to Team1RotNum."
+                          },
+                          "DefaultMainLine": {
+                            "type": "string",
+                            "example": "Spread"
+                          },
+                          "TotalPoints": {
+                            "type": ["number", "null"]
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Unknown — no response artifact was captured; status codes other than 200 are not documented."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "B",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:107",
+            "main:scripts/portal_tile_crawler.ts:55-108",
             "main:scripts/portal_tile_crawler.ts:164-245",
-            "docs/openapi.json"
+            "docs/openapi.json",
+            "docs/evidence/capture-requests.md"
           ],
           "capturedResponse": false,
-          "requiredCapture": "In app/manager/manager.js:86861 (v1.0.280), the Scores panel calls POST /cloud/api/Report/getScoresLiveDynamic with contentType: \"application/json\" and JSON.stringify({operation: \"getScoresLiveDynamic\"}). Capture getScoresLiveDynamic and reconcile.",
+          "requiredCapture": "A redacted capture of POST /cloud/api/Report/getScoresLiveDynamic (request and response) to replace the 2026-11-02 operator transcript with an artifact. The request body and three response field names are known; the remaining fields and the non-200 statuses are not.",
           "candidateUrl": true
-        },
-        "x-discovery-status": "UNDER_SURVEILLANCE",
-        "x-dom-tile": "Scores",
-        "x-dom-selector": "div.tile:has-text('Scores')",
-        "x-extracted-inputs": [
-          "gameID",
-          "periodIndex",
-          "homeScore",
-          "awayScore",
-          "isFinal"
-        ],
-        "x-data-language-keys": ["L-1034", "L-1068"]
+        }
       }
     },
     "/cloud/api/Manager/getAgentTree": {
@@ -1808,7 +2108,7 @@
             "main:scripts/portal_tile_crawler.ts:151",
             "main:scripts/portal_tile_crawler.ts:164-245",
             "docs/openapi.json",
-            "operational_guardrails_runbook.md:167"
+            "docs/runbooks/operational_guardrails_runbook.md:167"
           ],
           "capturedResponse": false,
           "requiredCapture": "Open the 'Transactions History' launcher tile and capture the network request it actually triggers (URL incl. /Manager vs /Report vs another model prefix, method, content type, body, auth) plus a response. Would replace candidate_url with a confirmed URL and upgrade C->A. Do not promote to B on the tile alone.",
@@ -2399,7 +2699,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Telegram Mini App dashboard (GET /miniapp)",
-        "description": "Serves telegram-miniapp-dashboard.html as text/html (sportsdesk_webview_server.ts:144-151) with Telegram frame-ancestors CSP and no X-Frame-Options (sportsdesk_webview_server.ts:87-90). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
+        "description": "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts#/miniapp) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts#/miniapp). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
         "operationId": "getMiniapp",
         "responses": {
           "200": {
@@ -2428,8 +2728,8 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "sportsdesk_webview_server.ts:144-151",
-            "sportsdesk_webview_server.ts:87-90"
+            "services/sportsdesk_webview_server.ts:184-191",
+            "services/sportsdesk_webview_server.ts:661-663"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured)."
@@ -2441,7 +2741,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Operator dashboard (GET /dashboard)",
-        "description": "Serves customer-churn-simulation-dashboard.html as text/html (sportsdesk_webview_server.ts:134-141). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
+        "description": "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts#/dashboard). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
         "operationId": "getDashboard",
         "responses": {
           "200": {
@@ -2469,11 +2769,2133 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["sportsdesk_webview_server.ts:134-141"],
+          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
         "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/live-bets": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Live bets derived from captured Report/Pending rows",
+        "description": "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts#/api/live-bets); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+        "operationId": "getApiLiveBets",
+        "responses": {
+          "200": {
+            "description": "Games, agent rollup and the aggregates derived from them.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "agents": {
+                      "type": "object"
+                    },
+                    "pendingCount": {
+                      "type": "integer"
+                    },
+                    "summary": {
+                      "type": "object"
+                    },
+                    "scoreboard": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "sports": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-live-bets"
+      }
+    },
+    "/api/live-bets/summary": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Aggregates only, without the game list",
+        "description": "Same aggregates as GET /api/live-bets, computed from the same rows in the same request (sportsdesk_webview_server.ts#GET /api/live-bets/summary), so the two responses cannot disagree. Totals are derived, never stored. The byAgent buckets are keyed by agent login, so the route carries the same PII guard as GET /api/live-bets and answers Cache-Control: private with Vary: Authorization: a shared cache must not replay a body the guard released to one peer. Surface: surface.daemon-live-bets (tier D).",
+        "operationId": "getApiLiveBetsSummary",
+        "responses": {
+          "200": {
+            "description": "Derived totals with their data source.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "summary": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/live-bets/summary (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-live-bets"
+      }
+    },
+    "/api/agent-tree": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Agent hierarchy joined with the wager rollup",
+        "description": "Serves data/agent-tree.json plus per-agent exposure (sportsdesk_webview_server.ts#GET /api/agent-tree). The tree is built by scripts/build_agent_tree.ts from the portal's own baseHeriarchy parent pointers; keys are canonical agentLoginKey values, and keys owned by more than one AgentID are flagged rather than levelled. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN; proxied peers need it too unless SPORTSDESK_TRUST_PROXY=1. `?view=hierarchy` returns the same forest folded into children arrays with per-node rollups (`rollup.agents` = transitive agents below, `rollup.depth` = longest chain below, `depth` = chain depth from the root) and the payload's defects (missing parents, cycles, collision keys) — `lib/hierarchy_view.ts`. Depth comes from the parent edges and not from the `l` field: on the committed tree 1,951 of 2,272 edges increment by 1, 208 by 2 and 110 run 12→12 where `l` saturates, so `l` stays in the payload as `level` and disagreement accumulates to 2,255 of 2,276 nodes. Surface: surface.daemon-agent-tree (tier D).",
+        "operationId": "getApiAgentTree",
+        "responses": {
+          "200": {
+            "description": "Parent-keyed agent forest with per-agent wager counts.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "agentCount": {
+                      "type": "integer"
+                    },
+                    "roots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "collisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "nodes": {
+                      "type": "object"
+                    },
+                    "counts": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No tree built; run bun run build:agent-tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/agent-tree"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/agent-tree, with and without ?view=hierarchy (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-agent-tree",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "description": "`hierarchy` folds the flat forest into children arrays with rollups and payload defects. Omit for the flat map plus per-agent wager counts.",
+            "schema": {
+              "type": "string",
+              "enum": ["hierarchy"]
+            }
+          }
+        ]
+      }
+    },
+    "/api/scoreboard": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Transcribed portal scoreboard (games, scores, status)",
+        "description": "Serves data/scoreboard.json with a status summary (sportsdesk_webview_server.ts#GET /api/scoreboard). The games are transcribed from the manager page, not captured from an API, so the payload carries source and observedAt. Surface: surface.daemon-scoreboard (tier D).",
+        "operationId": "getApiScoreboard",
+        "responses": {
+          "200": {
+            "description": "Scoreboard rows with status counts.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "summary": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scoreboard file present.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1563-1575"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-scoreboard"
+      }
+    },
+    "/api/sports": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Portal sport taxonomy with counts per category",
+        "description": "Returns the 18 portal categories plus counts for the loaded wagers and the scoreboard (sportsdesk_webview_server.ts#GET /api/sports). All Sports is the absence of a filter and LIVE is a state, so neither is a category. Surface: surface.daemon-sports-taxonomy (tier D).",
+        "operationId": "getApiSports",
+        "responses": {
+          "200": {
+            "description": "Taxonomy and the counts observed per category.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "liveFilter": {
+                      "type": "string"
+                    },
+                    "all": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "wagers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "scoreboard": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts#GET /api/sports"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/sports (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-sports-taxonomy"
+      }
+    },
+    "/api/game-admin": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Exposure per fixture with a Straight/Parlay/Teaser split",
+        "description": "The portal manual's Game Admin report (v1.0.280, F.A.Q. #4) reduced to exposure per fixture and position (sportsdesk_webview_server.ts#GET /api/game-admin). preGame is computed from gameDateTime against the request clock and is a fact about the fixture, not a claim about the operator's delete permission. Surface: surface.daemon-game-admin (tier D).",
+        "operationId": "getApiGameAdmin",
+        "responses": {
+          "200": {
+            "description": "Fixtures ordered by exposure, with positions.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/game-admin"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/game-admin (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-game-admin"
+      }
+    },
+    "/api/analysis": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Analysis report, or the reason it is not captured",
+        "description": "Validates the portal's filter vocabulary (services/sportsdesk_webview_server.ts#GET /api/analysis) and answers 200 only when a transcribed report matches the selection; otherwise 501 with the required capture. A 200 carries the rows, the published totals, a recomputed copy and a discrepancies array, so a transcription slip is visible rather than served as fact. Surface: surface.daemon-analysis (tier D).",
+        "operationId": "getApiAnalysis",
+        "responses": {
+          "200": {
+            "description": "A transcribed analysis report.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "totals": {
+                      "type": "object"
+                    },
+                    "recomputed": {
+                      "type": "object"
+                    },
+                    "discrepancies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "No transcribed report matches this selection.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "requiredCapture": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/analysis"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "Only the response of POST /cloud/api/Manager/getAgentPerformance is missing. The request is observed (2026-11-01, type=CP and CPS) and lib/f402_agent_performance_request.ts reproduces it byte for byte; no response body has ever been seen, so no column set is documented. Today a single Customer Performance result (Baseball, agent BILLY666, 2026-11-01) is transcribed from an operator paste."
+        },
+        "x-surface-id": "surface.daemon-analysis"
+      }
+    },
+    "/api/analysis/filters": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Analysis filter vocabulary transcribed from report.js",
+        "description": "Returns the report kinds (CP/CPS/CPV/G), the fourteen activity codes, the two group modes and the four week windows, with their provenance and the required capture (services/sportsdesk_webview_server.ts#GET /api/analysis/filters). Surface: surface.daemon-analysis (tier D).",
+        "operationId": "getApiAnalysisFilters",
+        "responses": {
+          "200": {
+            "description": "Filter vocabulary with provenance.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "captured": {
+                      "type": "boolean"
+                    },
+                    "reports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "weeks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/analysis"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/analysis/filters (handler-verified only)."
+        },
+        "x-surface-id": "surface.daemon-analysis"
+      }
+    },
+    "/api/analysis/reports": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Transcribed analysis reports and their recorded context",
+        "description": "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts#GET /api/analysis/reports). The recorded context contains the agent login the report was run for, so this index is customer-identifying and carries the same guard as GET /api/analysis: a non-loopback peer must present SPORTSDESK_ADMIN_TOKEN (piiRejection), and a unix-socket listener requires it unless SPORTSDESK_TRUST_PROXY=1. Surface: surface.daemon-analysis (tier D).",
+        "operationId": "getApiAnalysisReports",
+        "responses": {
+          "200": {
+            "description": "Stored reports with context.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "reports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/analysis"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/analysis/reports (handler-verified only)."
+        },
+        "x-surface-id": "surface.daemon-analysis"
+      }
+    },
+    "/api/agents/search": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Agent lookup over the committed hierarchy",
+        "description": "Case-insensitive prefix-first search over data/agent-tree.json (services/sportsdesk_webview_server.ts#GET /api/agents/search). Requires q of at least two characters and clamps limit to 100. Loopback-gated, because agent names are identity data. Surface: surface.daemon-agent-search (tier D).",
+        "operationId": "getApiAgentsSearch",
+        "responses": {
+          "200": {
+            "description": "Matching agents with their level.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Query shorter than two characters.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/agents/search"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "Not a capture gap: the tree is committed and the handler is the contract."
+        },
+        "x-surface-id": "surface.daemon-agent-search"
+      }
+    },
+    "/api/game-admin/board": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Game Admin board: lines with the money on each side",
+        "description": "Serves the transcribed Admin module: spread, moneyline, total and team-total sides with exposure (services/sportsdesk_webview_server.ts#GET /api/game-admin). Supports the portal's window selector (48 yesterday, 24 today, -1 current board). Abbreviated amounts carry amountExact null and are excluded from sums. Surface: surface.daemon-game-admin-board (tier D).",
+        "operationId": "getApiGameAdminBoard",
+        "responses": {
+          "200": {
+            "description": "Board games, their sides and the window summary.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "window": {
+                      "type": "string"
+                    },
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "summary": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown window code.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/game-admin"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "A Game Admin API capture would replace the transcription; none exists, so source and observedAt travel with the payload."
+        },
+        "x-surface-id": "surface.daemon-game-admin-board"
+      }
+    },
+    "/api/sports/catalog": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Sub-sports and period menus with their types",
+        "description": "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts#/api/sports/catalog). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
+        "operationId": "getApiSportsCatalog",
+        "responses": {
+          "200": {
+            "description": "Catalog with derived indexes.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "object"
+                    },
+                    "periodTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "subSports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "sports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown sport or sub-sport.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:358-359"],
+          "capturedResponse": false,
+          "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
+        },
+        "x-surface-id": "surface.daemon-sport-catalog"
+      }
+    },
+    "/api/contests": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Contest / futures list from the sports nav",
+        "description": "Every contest the nav links, keyed by contestNum with sport, market and subject parsed out of the padded type string (services/sportsdesk_webview_server.ts#GET /api/contests). The list is extracted from saved markup by scripts/extract_contests.ts. Surface: surface.daemon-contests (tier D).",
+        "operationId": "getApiContests",
+        "responses": {
+          "200": {
+            "description": "Contests with their group counts.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No contest list extracted.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/contests"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "A contest API capture would replace the markup extraction; none exists."
+        },
+        "x-surface-id": "surface.daemon-contests"
+      }
+    },
+    "/api/live-wagers": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Live wager ticker list with parsed legs",
+        "description": "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts#/api/live-wagers). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Candidates are data/bet-ticker.json (a full Manager/getBetTicker capture written by `bun run capture:bet-ticker`, gitignored) and the committed data/live-wagers.json paste; a file is valid only if it parses as JSON and is a wager list ({LIST: [...]} or a bare array), and the valid one observed later wins: a provenance.observedAt that parses and is not in the future outranks any file mtime (a checkout rewrites the committed paste's mtime), mtime only orders two undated files, and a tie goes to bet-ticker — services/sportsdesk_webview_server.ts#/api/live-wagers, shared with /api/kpis. `freshness` ({asOf, asOfFrom, stale}, stale after 3600 s) dates the chosen file — no ageSeconds, because the body is cached by version and the page derives the age from asOf, and `skipped` lists each present file that was not served with its reason (invalid JSON, no LIST array, older than the other); the 404 carries `skipped` too, so a malformed capture is reported rather than answered with a 500 or zero wagers. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
+        "operationId": "getApiLiveWagers",
+        "responses": {
+          "200": {
+            "description": "Wagers with aggregates and their provenance.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "summary": {
+                      "type": "object"
+                    },
+                    "all": {
+                      "type": "object"
+                    },
+                    "provenance": {
+                      "type": "object"
+                    },
+                    "freshness": {
+                      "type": "object"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "wagers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No valid live wager list.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/live-wagers"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "An HTTP capture of GET /api/live-wagers serving a `capture:bet-ticker` artifact. No such run has been recorded; data/live-wagers.json holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so."
+        },
+        "x-surface-id": "surface.daemon-live-wagers"
+      }
+    },
+    "/api/status": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Daemon status and process telemetry (GET /api/status, GET /status.json)",
+        "description": "Answers {ok, status, checks, health, telegram, timestamp} from the running process instead of fetching itself over the loopback (services/sportsdesk_webview_server.ts#/api/status); a self-fetch had no port at all under a unix socket. `ok` and `status` are derived from `checks`, so the degraded branch is reachable, and `cpuUsageSinceStartMicros` is cumulative CPU time rather than utilisation. HEAD is answered like GET. Public by the table's `operational` classification — it carries uptime, memory, pid and bind address, not customer data. Surface: surface.daemon-dashboard (tier D).",
+        "operationId": "getApiStatus",
+        "responses": {
+          "200": {
+            "description": "Liveness, per-check results and process telemetry.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["serving", "degraded"]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": ["ok", "error"]
+                      }
+                    },
+                    "health": {
+                      "type": "object"
+                    },
+                    "telegram": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/kpis": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Dashboard headline KPIs (GET /api/kpis)",
+        "description": "Derives the dashboard's KPI strip from the artifacts the daemon serves (lib/desk_kpis.ts#deriveDeskKpis): agent counts from data/agent-tree.json, open wagers from data/live-bets.json, the ticker subset from data/live-wagers.json, and the customer book from data/customer-profiles.json. Each block is null when its file is absent and carries {source, basis, asOf, asOfFrom, ageSeconds, stale, partial}; `basis: fixture` marks demo data (the customer book is built from enriched_customers_full.json). Money is integer cents. Public by the table's `aggregate` classification — counts and sums only, no login, customer id or agent key. Surface: surface.daemon-dashboard (tier D).",
+        "operationId": "getApiKpis",
+        "responses": {
+          "200": {
+            "description": "Derived KPI blocks with per-block provenance and staleness.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "kpis": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "pending": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "ticker": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "customerBook": {
+                          "type": "object",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-formdata": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Form-data parse probe (POST /api/parse-formdata)",
+        "description": "Echoes the fields of one multipart or urlencoded body as {name: string | string[]} (services/sportsdesk_webview_server.ts#/api/parse-formdata). Reads through `req.formData()`, which on 1.4.4 succeeds where `new Blob([await req.arrayBuffer()]).formData()` rejected Bun's own encoding; the body is bounded by the daemon's 1 MiB maxRequestBodySize. Public, and the reason the cap exists. Surface: surface.daemon-dashboard (tier D).",
+        "operationId": "postApiParseFormdata",
+        "responses": {
+          "200": {
+            "description": "The submitted fields; a repeated name becomes an array of strings.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as form data.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body exceeded the daemon's 1 MiB maxRequestBodySize. Bun refuses it before the handler runs, so the body is empty (measured on 1.4.4: status 413, no content-type) rather than the daemon's JSON error shape.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/logo/{name}": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Team-logo proxy (GET /api/logo/{name})",
+        "description": "Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image bytes with an immutable day-long cache (services/sportsdesk_webview_server.ts#/api/logo/{name}). Names are validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL; a malformed percent-escape is 400, not the 500 it used to be. Public: it returns image bytes for a fixed host and carries no customer data; the response content type mirrors the upstream's (png, jpeg, gif, webp or svg), and the 200 schema below is the common case. Surface: surface.daemon-logo-proxy (tier D).",
+        "operationId": "getApiLogoName",
+        "responses": {
+          "200": {
+            "description": "The upstream image bytes, cached for one day.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing, malformed or disallowed name — including a broken percent-escape.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The upstream answered but not with an image.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:701-799"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
+        },
+        "x-surface-id": "surface.daemon-logo-proxy",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Logo file name from the wager feed, e.g. `Arsenal FC.png`; must end in .png/.jpg/.jpeg/.gif/.webp/.svg and contain no separator, control character or `..`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "Arsenal FC.png"
+          }
+        ]
+      }
+    },
+    "/api/f402/get-pending": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Retired Pending endpoint (410 tombstone)",
+        "description": "Answers 410 with a pointer to /api/live-bets (services/sportsdesk_webview_server.ts#/api/f402/get-pending). It used to return the same dataset in a different shape; the tombstone makes an old client fail loudly instead of silently reading a fixture that looks live. Surface: surface.daemon-live-bets (tier D).",
+        "operationId": "getApiF402GetPending",
+        "responses": {
+          "410": {
+            "description": "The endpoint is gone; the body names its replacements.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of the 410 body (handler-verified only)."
+        },
+        "x-surface-id": "surface.daemon-live-bets"
+      }
+    },
+    "/api/graph-feed": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Graph live feed (GET /api/graph-feed, /graph-live-feed.json)",
+        "description": "Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds — with no-store caching (services/sportsdesk_webview_server.ts#/api/graph-feed). It carries agent logins, so it uses the same `pii` guard as the page. Surface: surface.daemon-graph-data-plane (tier D).",
+        "operationId": "getApiGraphFeed",
+        "responses": {
+          "200": {
+            "description": "The graph feed document as stored in docs/graph-live-feed.json.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts:1180-1201",
+            "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/graph-feed (the artifact is committed; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-graph-data-plane"
+      }
+    },
+    "/api/telegram/status": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Telegram configuration and schedules (GET /api/telegram/status)",
+        "description": "Returns {success, status, schedules, reportTypes} from the bot service and the in-process scheduler (services/sportsdesk_webview_server.ts#/api/telegram/status). Admin-token gated regardless of peer address. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "operationId": "getApiTelegramStatus",
+        "responses": {
+          "200": {
+            "description": "Bot mode, schedules and the report vocabulary.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "status": {
+                      "type": "object"
+                    },
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "reportTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
+            "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
+            "services/sportsdesk_webview_server.ts:570-572,390-396"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
+        },
+        "x-surface-id": "surface.daemon-telegram-admin-routes"
+      }
+    },
+    "/api/telegram/activity": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Recent Telegram activity (GET /api/telegram/activity)",
+        "description": "Returns {success, entries} from the activity log; `limit` defaults to 50 and clamps to 1..200 (services/sportsdesk_webview_server.ts#/api/telegram/activity). Admin-token gated. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "operationId": "getApiTelegramActivity",
+        "responses": {
+          "200": {
+            "description": "Newest-first activity entries.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
+            "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
+            "services/sportsdesk_webview_server.ts:570-572,390-396"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
+        },
+        "x-surface-id": "surface.daemon-telegram-admin-routes"
+      }
+    },
+    "/api/telegram/webhook": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Register or delete the Telegram webhook (POST /api/telegram/webhook)",
+        "description": "Body {action: \"set\" | \"delete\"} calls telegramService.setWebhook()/deleteWebhook() and mirrors the Bot API result as {success, ok, error?}, 502 when Telegram refuses (services/sportsdesk_webview_server.ts#/api/telegram/webhook). Admin-token gated; this is the control plane, distinct from the secret-checked /telegram/webhook that receives updates. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "operationId": "postApiTelegramWebhook",
+        "responses": {
+          "200": {
+            "description": "Telegram accepted the change.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "action is missing or not \"set\"/\"delete\".",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Telegram answered ok:false; its description is passed through.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
+            "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
+            "services/sportsdesk_webview_server.ts:570-572,390-396"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
+        },
+        "x-surface-id": "surface.daemon-telegram-admin-routes",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["set", "delete"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/error": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Error-boundary probe (GET /api/test/error)",
+        "description": "Throws a string so the server's error boundary runs; `?trigger_error=non_error` does the same on any route (services/sportsdesk_webview_server.ts, baseHeaders). Deliberately reachable in production so a deployment can prove the 500 body carries no stack trace. Surface: surface.daemon-telegram-admin-routes (tier D).",
+        "operationId": "getApiTestError",
+        "responses": {
+          "500": {
+            "description": "The daemon's structured 500: no stack, no source, only the thrown message.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "const": "Internal Server Error"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
+            "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
+            "services/sportsdesk_webview_server.ts:570-572,390-396"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."
+        },
+        "x-surface-id": "surface.daemon-telegram-admin-routes"
       }
     }
   },
@@ -2554,7 +4976,7 @@
       "daemonBearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (sportsdesk_webview_server.ts:27-47). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise."
+        "description": "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts, adminRejection). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise."
       }
     },
     "parameters": {
@@ -2571,20 +4993,20 @@
     },
     "headers": {
       "CSPHeader": {
-        "description": "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (sportsdesk_webview_server.ts:87-90).",
+        "description": "Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders).",
         "schema": {
           "type": "string"
         }
       },
       "XContentTypeOptionsHeader": {
-        "description": "X-Content-Type-Options: nosniff (sportsdesk_webview_server.ts:89).",
+        "description": "X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).",
         "schema": {
           "type": "string",
           "enum": ["nosniff"]
         }
       },
       "ReferrerPolicyHeader": {
-        "description": "Referrer-Policy: strict-origin-when-cross-origin (sportsdesk_webview_server.ts:90).",
+        "description": "Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).",
         "schema": {
           "type": "string",
           "enum": ["strict-origin-when-cross-origin"]
@@ -2594,7 +5016,7 @@
     "schemas": {
       "Fantasy402SportCatalog": {
         "type": "object",
-        "description": "Fantasy402 desk navigation catalog (sub-sport lanes plus per-sport period menus). Reference metadata only, not an ingestion audit record. Surface: surface.fantasy402-sport-catalog (tier D). Parsed from fantasy402_sport_catalog.ts:41-54.",
+        "description": "Fantasy402 desk navigation catalog (sub-sport lanes plus per-sport period menus). Reference metadata only, not an ingestion audit record. Surface: surface.fantasy402-sport-catalog (tier D). Parsed from fantasy402_sport_catalog.ts#Fantasy402SportCatalog.",
         "properties": {
           "provider": {
             "type": "string"
@@ -2661,7 +5083,7 @@
       },
       "SubSport": {
         "type": "object",
-        "description": "Sub-sport lane inside one sport (code plus display name). Parsed from fantasy402_sport_catalog.ts:8-11.",
+        "description": "Sub-sport lane inside one sport (code plus display name). Parsed from fantasy402_sport_catalog.ts#Fantasy402SubSport.",
         "properties": {
           "code": {
             "type": "string"
@@ -2674,7 +5096,7 @@
       },
       "Period": {
         "type": "object",
-        "description": "Period menu entry for one sport; period 0 is named Game. Parsed from fantasy402_sport_catalog.ts:13-16.",
+        "description": "Period menu entry for one sport; period 0 is named Game. Parsed from fantasy402_sport_catalog.ts#Fantasy402Period.",
         "properties": {
           "name": {
             "type": "string"
@@ -2687,7 +5109,7 @@
       },
       "SportEntry": {
         "type": "object",
-        "description": "Per-sport lane: the sub-sport tree plus the period menu. Parsed from fantasy402_sport_catalog.ts:18-22.",
+        "description": "Per-sport lane: the sub-sport tree plus the period menu. Parsed from fantasy402_sport_catalog.ts#Fantasy402SportEntry.",
         "properties": {
           "sport": {
             "type": "string"
@@ -2709,7 +5131,7 @@
       },
       "CollisionEntry": {
         "type": "object",
-        "description": "Desk-link code shared across sports (Arena, NCAA Extra). makeDeskLinkId rewrites these to <Sport>|<code>; the collision silently breaks scoped ingestion if it is not represented. Parsed from fantasy402_sport_catalog.ts:24-27.",
+        "description": "Desk-link code shared across sports (Arena, NCAA Extra). makeDeskLinkId rewrites these to <Sport>|<code>; the collision silently breaks scoped ingestion if it is not represented. Parsed from fantasy402_sport_catalog.ts#Fantasy402CollisionEntry.",
         "properties": {
           "code": {
             "type": "string"
@@ -2725,7 +5147,7 @@
       },
       "ExpectedEmptySubSportPaths": {
         "type": "object",
-        "description": "Domain-correct structural empties (sport/code paths) split into stable and volatile LIVE surfaces; not quality defects. Parsed from fantasy402_sport_catalog.ts:29-32.",
+        "description": "Domain-correct structural empties (sport/code paths) split into stable and volatile LIVE surfaces; not quality defects. Parsed from fantasy402_sport_catalog.ts#ExpectedEmptySubSportPaths.",
         "properties": {
           "stable": {
             "type": "array",
@@ -2744,7 +5166,7 @@
       },
       "CatalogMigrationRisk": {
         "type": "object",
-        "description": "Migration hazard note attached to catalogue entries that need coordinated link_id migration. Parsed from fantasy402_sport_catalog.ts:34-39.",
+        "description": "Migration hazard note attached to catalogue entries that need coordinated link_id migration. Parsed from fantasy402_sport_catalog.ts#CatalogMigrationRisk.",
         "properties": {
           "kind": {
             "type": "string"
@@ -2766,7 +5188,7 @@
       },
       "RawBetTickerTick": {
         "type": "object",
-        "description": "Consumer wire type for one bet-ticker row. Field names and number types only. The getBetTicker operation is now tier A: its response schema is derived from the live capture skeleton, while this component remains a consumer type declaration. Parsed from simulate_bettor_churn_suite.ts:106-115.",
+        "description": "Consumer wire type for one bet-ticker row. Field names and number types only. The getBetTicker operation is now tier A: its response schema is derived from the live capture skeleton, while this component remains a consumer type declaration. Parsed from simulate_bettor_churn_suite.ts#RawBetTickerTick.",
         "properties": {
           "wagerNumber": {
             "type": "number"
@@ -2810,7 +5232,7 @@
       },
       "RawPendingLeg": {
         "type": "object",
-        "description": "Consumer wire type for one pending wager leg. Risk and ToWin are cents and repeat identically across parlay legs. This is a type declaration, not a captured response; no pending-leg fixture or capture exists, so the getPending operation (tier C) publishes no response schema. Parsed from simulate_bettor_churn_suite.ts:91-104.",
+        "description": "Consumer wire type for one pending wager leg. Risk and ToWin are cents and repeat identically across parlay legs. This is a type declaration, not a captured response; no pending-leg fixture or capture exists, so the getPending operation (tier C) publishes no response schema. Parsed from simulate_bettor_churn_suite.ts#RawPendingLegRow.",
         "properties": {
           "Login": {
             "type": "string"
@@ -2870,7 +5292,7 @@
       },
       "WeblogEntry": {
         "type": "object",
-        "description": "Consumer type that declares the four fields the old spec published as the getWebLog response row (customerID, ipAddress, timestamp, agentOwner). The getWebLog operation is now tier A and derives its response schema from the live capture skeleton; this component remains a consumer type declaration and is not used for that schema. Parsed from simulate_bettor_churn_suite.ts:117-123.",
+        "description": "Consumer type that declares the four fields the old spec published as the getWebLog response row (customerID, ipAddress, timestamp, agentOwner). The getWebLog operation is now tier A and derives its response schema from the live capture skeleton; this component remains a consumer type declaration and is not used for that schema. Parsed from simulate_bettor_churn_suite.ts#RawWebLogEntry.",
         "properties": {
           "customerID": {
             "type": "string"

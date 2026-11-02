@@ -1,0 +1,127 @@
+<!--
+  Excerpt of the portal's Agent Tree sidebar (aside data-panel="hierarchy"), pasted by an operator on
+  2026-11-01 from a session logged in as BILLY666.
+
+  Kept: the tree head and the rendered root/children markup. Dropped: the search component's
+  internals, the picker tables and everything outside the sidebar. Attribute values and visible text
+  are as they were on the page; `bun fmt` normalised whitespace, so line breaks here are not
+  evidence.
+
+  What it settles: the tree the portal renders has ONE visible root — the account you are logged in
+  as — with four children at data-level="1". The listAgenstByAgent response that data/agent-tree.json
+  is built from contains the four children and NOT BILLY666, because that endpoint returns a downline.
+  The master node is injected by the page from the session, not returned by the API.
+-->
+<aside data-panel="hierarchy" id="s-user-alerts" class="sidebar">
+  <div data-panel="quick-search" style="height: 45px">
+    <h4 class="card-title">
+      <a style="float: left; font-size: 15px" href="#" class="close-tree">
+        <span data-language="L-813">Agent Tree</span>
+      </a>
+      <i class="fa fa-times close-panel fl-r close-tree"></i>
+    </h4>
+  </div>
+
+  <div class="tab-content col-sm-12" style="padding-left: 0px">
+    <div class="tab-pane fade active in">
+      <div id="main-heriarchy" style="height: 958px">
+        <ul data-list="base" data-players="false">
+          <li class="expand-l parent-l base-master">
+            <input
+              class=""
+              data-player="true"
+              data-ag="BILLY666"
+              id="BILLY666"
+              type="checkbox"
+              data-action="parent-check"
+            />
+            <label><strong>BILLY666 </strong></label>
+            <button data-action="go-agent" type="button">Go</button>
+            <ul data-master-m="BILLY666" class="master-ul">
+              <li
+                data-master-m="BILLY666"
+                data-header-agent="BILLY667"
+                data-level="1"
+                data-type-a="A"
+                class="collapse-l parent-l"
+              >
+                <input
+                  data-master-m="BILLY666"
+                  data-ag="BILLY667"
+                  data-player="true"
+                  id="BILLY667"
+                  class=""
+                  type="checkbox"
+                  data-action="parent-check"
+                />
+                <label><strong>BILLY667</strong></label>
+                <button data-action="go-agent" type="button">Go</button>
+                <ul class="master-ul hide"></ul>
+              </li>
+              <li
+                data-master-m="BILLY666"
+                data-header-agent="NOLAWOLF"
+                data-level="1"
+                data-type-a="M"
+                class="collapse-l parent-l"
+              >
+                <input
+                  data-master-m="BILLY666"
+                  data-ag="NOLAWOLF"
+                  data-player="true"
+                  id="NOLAWOLF"
+                  class=""
+                  type="checkbox"
+                  data-action="parent-check"
+                />
+                <label><strong>NOLAWOLF</strong></label>
+                <button data-action="go-agent" type="button">Go</button>
+                <ul class="master-ul hide"></ul>
+              </li>
+              <li
+                data-master-m="BILLY666"
+                data-header-agent="RTEST5"
+                data-level="1"
+                data-type-a="A"
+                class="collapse-l parent-l"
+              >
+                <input
+                  data-master-m="BILLY666"
+                  data-ag="RTEST5"
+                  data-player="true"
+                  id="RTEST5"
+                  class=""
+                  type="checkbox"
+                  data-action="parent-check"
+                />
+                <label><strong>RTEST5</strong></label>
+                <button data-action="go-agent" type="button">Go</button>
+                <ul class="master-ul hide"></ul>
+              </li>
+              <li
+                data-master-m="BILLY666"
+                data-header-agent="SAINTS2009"
+                data-level="1"
+                data-type-a="M"
+                class="collapse-l parent-l"
+              >
+                <input
+                  data-master-m="BILLY666"
+                  data-ag="SAINTS2009"
+                  data-player="true"
+                  id="SAINTS2009"
+                  class=""
+                  type="checkbox"
+                  data-action="parent-check"
+                />
+                <label><strong>SAINTS2009</strong></label>
+                <button data-action="go-agent" type="button">Go</button>
+                <ul class="master-ul hide"></ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</aside>

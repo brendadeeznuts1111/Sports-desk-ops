@@ -12,7 +12,10 @@ import {
 } from "./f402_hierarchy_replay.ts";
 import { createF402ReplayTransport } from "./f402_replay_transport.ts";
 import { parseListAgentsByAgentWireText } from "./f402_list_agents_wire_boundary.ts";
-import type { PortalGeneralRow } from "./f402_portal_hierarchy_oracle.ts";
+import {
+  parsePortalGeneralRows,
+  type PortalGeneralRow,
+} from "./f402_portal_hierarchy_oracle.ts";
 
 export interface ListAgentsGeneralProbe {
   readonly general: readonly PortalGeneralRow[];
@@ -24,7 +27,7 @@ export interface ListAgentsGeneralProbe {
 export function generalProbeFromWireText(text: string): ListAgentsGeneralProbe {
   const envelope = parseListAgentsByAgentWireText(text);
   return {
-    general: envelope.GENERAL as PortalGeneralRow[],
+    general: parsePortalGeneralRows(envelope.GENERAL),
     generalRowCount: envelope.GENERAL.length,
     playersRowCount: envelope.PLAYERS.length,
     extra: envelope.EXTRA,
@@ -33,9 +36,9 @@ export function generalProbeFromWireText(text: string): ListAgentsGeneralProbe {
 
 export async function fetchListAgentsGeneralProbe(options: {
   readonly account: AccountInfoOwnerFixture;
-  readonly profileDir?: string;
-  readonly proxyUrl?: string;
-  readonly host?: string;
+  readonly profileDir?: string | undefined;
+  readonly proxyUrl?: string | undefined;
+  readonly host?: string | undefined;
 }): Promise<ListAgentsGeneralProbe> {
   const plan = buildListAgentsReplayPlan(
     options.account,
@@ -49,7 +52,7 @@ export async function fetchListAgentsGeneralProbe(options: {
   try {
     const { envelope } = await fetchListAgentsEnvelope(plan, transport);
     return {
-      general: envelope.GENERAL as PortalGeneralRow[],
+      general: parsePortalGeneralRows(envelope.GENERAL),
       generalRowCount: envelope.GENERAL.length,
       playersRowCount: envelope.PLAYERS.length,
       extra: envelope.EXTRA,

@@ -12,8 +12,9 @@
  *     with immediate dollar exposure calculations and intervention playbooks.
  */
 
-declare const __brand: unique symbol;
-export type Brand<T, B> = T & { readonly [__brand]: B };
+// Brand engine SSOT: lib/brand.ts (a local declaration makes brands module-private).
+import type { Brand } from "../lib/brand.ts";
+export type { Brand };
 
 export type Cents = Brand<number, "Cents">;
 export type CustomerId = Brand<string, "CustomerId">;

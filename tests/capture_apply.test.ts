@@ -18,6 +18,8 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { Glob } from "bun";
+import { resolve } from "node:path";
 import {
   existsSync,
   mkdirSync,
@@ -965,5 +967,36 @@ describe("apply_captures", () => {
     expect(result.ok).toBe(false);
     expect(result.failureKind).toBe("input-error");
     expect(result.errors[0]).toMatch(/capture store not found/i);
+  });
+});
+
+describe("capture digest single implementation", () => {
+  test("captureRecordDigest is defined once, in apply_captures.ts", () => {
+    // generate_openapi.ts carried a second copy of the canonical-JSON + sha256 pair. It agreed
+    // with this one, which is exactly the dangerous state: two implementations that have not
+    // drifted yet, in a repo where three copies of the ledger counts had.
+    const definitions: string[] = [];
+    for (const file of new Glob("scripts/**/*.ts").scanSync({
+      cwd: resolve(import.meta.dir, ".."),
+    })) {
+      const source = readFileSync(
+        resolve(import.meta.dir, "../", file),
+        "utf8",
+      );
+      if (/function\s+captureRecordDigest\s*\(/.test(source))
+        definitions.push(file);
+    }
+    expect(definitions).toEqual(["scripts/apply_captures.ts"]);
+  });
+
+  test("the generator imports the shared digest instead of recomputing it", () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, "../scripts/generate_openapi.ts"),
+      "utf8",
+    );
+    expect(source).toContain(
+      'import { captureRecordDigest } from "./apply_captures.ts"',
+    );
+    expect(source).not.toMatch(/function\s+canonicalizeJsonValue\s*\(/);
   });
 });

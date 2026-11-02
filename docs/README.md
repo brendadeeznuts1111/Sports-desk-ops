@@ -27,6 +27,7 @@ Read the full model in [EVIDENCE.md](./EVIDENCE.md). The machine-readable source
 | [EVIDENCE.md](./EVIDENCE.md)                                                               | Auditors                       | Evidence standard, tier legend, what is verified vs inferred, contradictions, limitations                                                                                                                                     |
 | [gs-manager-contracts.md](./gs-manager-contracts.md)                                       | GS integration                 | Why the GS manager CLI has **no** HTTP contract: 6 report kinds, all `blocked_contract`, the one observed `getBetReport` payload                                                                                              |
 | [report-surfaces.md](./report-surfaces.md)                                                 | Operators                      | Openable GSLive surfaces: 7-parameter `#/reports/users` deep link and `#/events/bet-history` sidecar, with an evidence level per surface                                                                                      |
+| [settings.md](./settings.md)                                                               | Operators & Developers         | The portal `#update-settings` modal: four server-side preferences, the one that never leaves the browser, the exact write call, and what this dashboard does instead                                                          |
 | [REAL_INGESTION.md](./REAL_INGESTION.md)                                                   | Data / Ops                     | Phase 4 live ingestion: Polymarket positions (shipped, `--live`), F402 session plan, provenance, stale cache, failure semantics                                                                                               |
 | [polymarket-combos.md](./polymarket-combos.md)                                             | Quant / Ops                    | CFB combo endpoints, product-of-legs pricing, three gates (permissive/all-legs-cfb/full-game), whole-series active+closed index and a subset verifier                                                                         |
 | [REMAINING_TASKS.md](./REMAINING_TASKS.md)                                                 | Ops / Planning                 | GFM meta task list: trust blockers, coverage gaps, and hygiene items with basis, done-when and blockers                                                                                                                       |
@@ -40,7 +41,7 @@ Read the full model in [EVIDENCE.md](./EVIDENCE.md). The machine-readable source
 
 ```bash
 ./bin/dx status                           # Verify sandbox $HOME, XDG re-anchoring, Git config, Wrangler 4.156.0 & dist/
-./bin/dx stage                            # Stage docs/{index.html,graph.html,graph.js,openapi.json} + functions/_headers -> dist/
+./bin/dx stage                            # Stage docs/{index.html,graph.html,graph.js,openapi.json} + infra/pages/_headers -> dist/
 ./bin/dx deploy                           # Stage + publish dist/ to Cloudflare R2 Edge (pub-d061f943df0e4477ba7ff200721eddb1.r2.dev) & Pages
 ./bin/dx ship                             # Stage + deploy to Cloudflare Edge + push main to origin
 ./bin/dx gslive <LOGIN>                   # Partner 118 links: 7-param #/reports/users + #/events/bet-history sidecar
@@ -61,7 +62,7 @@ bun run verify:docs                       # structural gate + markdown freshness
 or [evidence/ledger.json](./evidence/ledger.json), re-run the generator and commit the result.
 
 **Portal deploy staging:** `bun run docs:stage` (or `./bin/dx stage`) copies `docs/index.html`, `docs/graph.html`, `docs/graph.js`, `docs/openapi.json`, and
-`functions/_headers` into `dist/`. Do not unpin the Scalar version or remove the `integrity`/`crossorigin` attributes.
+`infra/pages/_headers` into `dist/`. Do not unpin the Scalar version or remove the `integrity`/`crossorigin` attributes.
 
 **Live Edge URLs:**
 

@@ -5,6 +5,8 @@
 
 import { join } from "node:path";
 
+import type { ListAgentsByAgentGeneralWireRow } from "./f402_list_agents_by_agent.ts";
+
 export interface PortalGeneralRow {
   AgentID: string;
   Login: string;
@@ -13,6 +15,26 @@ export interface PortalGeneralRow {
   SeqNumber?: number;
   Master?: string;
   [key: string]: unknown;
+}
+
+/** Wire GENERAL rows → rows `baseHeriarchy` can walk (it calls `.toString()` on AgentID/Login). */
+export function parsePortalGeneralRows(
+  rows: readonly ListAgentsByAgentGeneralWireRow[],
+): PortalGeneralRow[] {
+  return rows.map((row, index) => {
+    const { AgentID, Login, Level, AgentType } = row;
+    if (
+      typeof AgentID !== "string" ||
+      typeof Login !== "string" ||
+      typeof Level !== "number" ||
+      typeof AgentType !== "string"
+    ) {
+      throw new Error(
+        `GENERAL[${index}] needs string AgentID, Login, AgentType and numeric Level`,
+      );
+    }
+    return { ...row, AgentID, Login, Level, AgentType };
+  });
 }
 
 export interface PortalUtilStub {
@@ -169,17 +191,9 @@ export async function expectOracleThrows(
 /** Portal returns sparse arrays; copy own keys for stable JSON. */
 export function normalizeNested(raw: unknown): unknown {
   if (raw === null || typeof raw !== "object") return raw;
-  if (Array.isArray(raw)) {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(raw)) {
-      out[key] = normalizeNested((raw as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  const obj = raw as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    out[key] = normalizeNested(obj[key]);
+  for (const [key, value] of Object.entries(raw)) {
+    out[key] = normalizeNested(value);
   }
   return out;
 }

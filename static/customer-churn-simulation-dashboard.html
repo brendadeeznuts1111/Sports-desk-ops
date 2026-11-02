@@ -184,31 +184,143 @@
       .header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         margin-bottom: 24px;
         border-bottom: 1px solid var(--sd-surface-border);
         padding-bottom: 18px;
         flex-wrap: wrap;
         gap: 16px;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--sd-surface-card) 60%, transparent),
+          transparent
+        );
+      }
+      .header-left {
+        flex: 1 1 320px;
+        min-width: 0;
       }
       .header-left h1 {
-        font-size: 22px;
-        font-weight: 700;
+        font-size: 24px;
+        font-weight: 800;
         color: var(--sd-text-primary);
         display: flex;
         align-items: center;
         gap: 10px;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
+        background: linear-gradient(
+          90deg,
+          var(--sd-text-primary),
+          var(--sd-tier-retail)
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
       .header-left .subtitle {
         color: var(--sd-text-muted);
         font-size: 13px;
-        margin-top: 4px;
+        margin-top: 6px;
+        line-height: 1.5;
+        max-width: 640px;
       }
       .status-badges {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        align-items: center;
+      }
+      .agent-tree-dropdown {
+        margin-bottom: 18px;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 10px;
+        background: var(--sd-surface-card);
+        overflow: hidden;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .agent-tree-dropdown[open] {
+        border-color: var(--sd-tier-retail);
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--sd-tier-retail) 30%, transparent);
+      }
+      .agent-tree-toggle {
+        cursor: pointer;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: var(--sd-text-primary);
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+      }
+      .agent-tree-toggle::-webkit-details-marker {
+        display: none;
+      }
+      .agent-tree-toggle::before {
+        content: "▸";
+        display: inline-block;
+        transition: transform 0.2s ease;
+        color: var(--sd-text-muted);
+      }
+      .agent-tree-dropdown[open] .agent-tree-toggle::before {
+        transform: rotate(90deg);
+        color: var(--sd-tier-retail);
+      }
+      .agent-tree-toggle:focus-visible {
+        outline: 2px solid var(--sd-tier-retail);
+        outline-offset: -2px;
+      }
+      .agent-tree-panel {
+        max-height: 0;
+        overflow: hidden;
+        padding: 0 12px;
+        transition:
+          max-height 0.3s ease,
+          padding 0.3s ease,
+          opacity 0.2s ease;
+        opacity: 0;
+      }
+      .agent-tree-dropdown[open] .agent-tree-panel {
+        max-height: 70vh;
+        padding: 12px;
+        opacity: 1;
+        border-top: 1px solid var(--sd-surface-border);
+      }
+      .agent-tree-img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        border: 1px solid var(--sd-surface-border);
+        transform-origin: top left;
+        transition: transform 0.15s ease;
+      }
+      .agent-tree-toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .agent-tree-btn {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-hover);
+        color: var(--sd-text-primary);
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .agent-tree-viewport {
+        overflow: auto;
+        max-height: 60vh;
+      }
+      .agent-tree-fallback {
+        color: var(--sd-text-muted);
+        font-size: 13px;
+        padding: 8px;
       }
       .badge {
         font-size: 11px;
@@ -316,19 +428,57 @@
       .kpi-card {
         background: var(--sd-surface-card);
         border: 1px solid var(--sd-surface-border);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 16px;
+        position: relative;
+        overflow: hidden;
         transition:
           background 0.2s ease,
-          border-color 0.2s ease;
+          border-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .kpi-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          var(--sd-tier-retail),
+          var(--sd-accent)
+        );
+        opacity: 0.6;
+      }
+      .kpi-card::after {
+        content: attr(data-source);
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        font-size: 9px;
+        font-family: var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 80%,
+          transparent
+        );
+        padding: 2px 6px;
+        border-radius: 4px;
+        opacity: 0.7;
       }
       .kpi-card:hover {
         background: var(--sd-surface-hover);
-        border-color: color-mix(
-          in srgb,
-          var(--sd-primary) 40%,
-          var(--sd-surface-border)
-        );
+        border-color: var(--sd-tier-retail);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px
+          color-mix(in srgb, var(--sd-tier-retail) 15%, transparent);
+      }
+      .kpi-card:hover::after {
+        opacity: 1;
+        color: var(--sd-tier-retail);
       }
       .kpi-label {
         font-size: 11px;
@@ -348,6 +498,21 @@
         color: var(--sd-accent);
         font-weight: 500;
       }
+      .kpi-age {
+        margin-top: 6px;
+        font-size: 11px;
+        font-family: var(--mono);
+        color: var(--sd-text-muted);
+      }
+      .kpi-age[data-tone="stale"] {
+        color: var(--sd-warning);
+        font-weight: 600;
+      }
+      .kpi-card[data-source="stale"]::after,
+      .kpi-card[data-source="fixture"]::after {
+        color: var(--sd-warning);
+        opacity: 1;
+      }
 
       /* Section Cards & Tables */
       .section-card {
@@ -358,13 +523,62 @@
         margin-bottom: 24px;
       }
       .section-title {
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 700;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         color: var(--sd-text-primary);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--sd-surface-border);
+      }
+      .wl-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        align-items: center;
+      }
+      .wl-toolbar input {
+        flex: 1 1 260px;
+        padding: 8px 10px;
+        border-radius: 6px;
+      }
+      .wl-toolbar select {
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--sd-surface-card);
+        z-index: 1;
+      }
+      tbody tr:nth-child(even) {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 40%,
+          transparent
+        );
+      }
+      tbody tr:hover {
+        background: var(--sd-surface-hover);
+      }
+      td,
+      th {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--sd-surface-border);
       }
       table {
         width: 100%;
@@ -448,17 +662,29 @@
         grid-template-columns: max-content 1fr;
         gap: 6px 14px;
         font-size: 12px;
+        padding: 10px 12px;
+        background: color-mix(in srgb, var(--sd-surface-bg) 60%, transparent);
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
       }
       .tg-status dt {
         color: var(--sd-text-muted);
         text-transform: uppercase;
         font-size: 11px;
         font-weight: 600;
+        padding-top: 2px;
       }
       .tg-status dd {
         font-family: var(--mono);
         color: var(--sd-text-primary);
         overflow-wrap: anywhere;
+        margin: 0;
+        padding: 2px 0;
+        border-bottom: 1px dashed
+          color-mix(in srgb, var(--sd-surface-border) 50%, transparent);
+      }
+      .tg-status dd:last-of-type {
+        border-bottom: none;
       }
       .tg-status dd[data-tone="good"] {
         color: var(--sd-accent);
@@ -587,9 +813,12 @@
       /* Bot Activity */
       .act-list {
         list-style: none;
-        max-height: 340px;
+        max-height: 360px;
         overflow-y: auto;
         font-size: 12px;
+        padding: 4px 0;
+        scrollbar-width: thin;
+        scrollbar-color: var(--sd-surface-border) transparent;
       }
       .act-list li {
         display: grid;
@@ -598,12 +827,24 @@
           1fr max-content;
         gap: 10px;
         align-items: baseline;
-        padding: 6px 4px;
+        padding: 8px 6px;
         border-bottom: 1px solid
-          color-mix(in srgb, var(--sd-surface-border) 60%, transparent);
+          color-mix(in srgb, var(--sd-surface-border) 50%, transparent);
+        transition: background 0.15s ease;
+      }
+      .act-list li:hover {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 60%,
+          transparent
+        );
       }
       .act-list li.empty-row {
         display: block;
+        padding: 16px;
+        text-align: center;
+        color: var(--sd-text-muted);
+        font-style: italic;
       }
       td .badge,
       .act-time {
@@ -644,6 +885,805 @@
       .act-outcome[data-outcome="unauthorized"] {
         color: var(--sd-danger);
       }
+      /* Settings modal, transcribed as an inline panel. */
+      .st-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+        gap: 0.7rem;
+        margin-bottom: 0.8rem;
+      }
+      .st-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .st-field label {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+      }
+      .st-field select {
+        font: inherit;
+        font-size: 0.8rem;
+        padding: 0.3rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-primary);
+      }
+      .st-field select:focus {
+        outline: 2px solid var(--sd-accent);
+        outline-offset: 1px;
+      }
+      .st-effect {
+        font-size: 0.66rem;
+        color: var(--sd-text-muted);
+        line-height: 1.4;
+      }
+      .st-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .st-status {
+        font-size: 0.72rem;
+        color: var(--sd-text-muted);
+      }
+      /* Panel stack. Left Menu = one column; Tile Menu = the same panels in a grid. */
+      .panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+      }
+      .panels > .section-card {
+        margin-bottom: 0;
+        min-width: 0;
+      }
+      /* Agent Menu = Tile Menu: panels become a two-column tile grid. */
+      main.tiles .section-card {
+        break-inside: avoid;
+      }
+      /* An explicit two-column grid, not auto-fit: `grid-column: 1 / -1` resolves against the
+         explicit lines, so with implicit auto-fit tracks the full-width rule silently spans one
+         column instead of all of them. */
+      main.tiles {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        align-items: start;
+      }
+      @media (max-width: 1100px) {
+        main.tiles {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      main.tiles > * {
+        margin-bottom: 0;
+      }
+      /* Every panel is a tile, tables included: a half-width card scrolls its table rather than
+         leaving the other half of the row empty. Full-width exceptions were tried first and left a
+         gap beside every panel that followed one. */
+      main.tiles > .section-card {
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--sd-surface-border) transparent;
+      }
+      /* A wide monitor should not stretch a table to 3000px. */
+      .header,
+      .kpi-grid,
+      .panels {
+        max-width: 1680px;
+        margin-inline: auto;
+      }
+      /* Keyboard reachability: the panels are mostly tables and chips, and the palette is dark. */
+      :where(a, button, input, select, [tabindex]):focus-visible {
+        outline: 2px solid var(--sd-primary);
+        outline-offset: 2px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      /* Live wager ticker: rows from the {LIST: [...]} feed. */
+      .lw-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+        gap: 0.6rem;
+        margin-bottom: 0.8rem;
+      }
+      .lw-stat {
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
+        padding: 0.5rem 0.7rem;
+        background: var(--sd-surface-card);
+      }
+      .lw-stat dt {
+        margin: 0;
+        font-size: 0.64rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+      }
+      .lw-stat dd {
+        margin: 0.15rem 0 0;
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .lw-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-bottom: 0.7rem;
+      }
+      .lw-bar button {
+        font: inherit;
+        font-size: 0.68rem;
+        padding: 0.12rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-muted);
+        cursor: pointer;
+      }
+      .lw-bar button[aria-pressed="true"] {
+        background: var(--sd-accent);
+        border-color: var(--sd-accent);
+        color: var(--sd-text-on-fill);
+      }
+      .lw-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.74rem;
+      }
+      .lw-table th,
+      .lw-table td {
+        padding: 0.28rem 0.45rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .lw-table th {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--sd-text-muted);
+        font-weight: 600;
+      }
+      .lw-table th:nth-child(2),
+      .lw-table td:nth-child(2),
+      .lw-table th:nth-child(3),
+      .lw-table td:nth-child(3),
+      .lw-table th:nth-child(9),
+      .lw-table td:nth-child(9) {
+        text-align: left;
+      }
+      .lw-table td:nth-child(9) > span:first-child {
+        display: block;
+        font-variant-numeric: tabular-nums;
+      }
+      .lw-leg {
+        display: block;
+        text-align: left;
+        color: var(--sd-text-muted);
+        font-size: 0.66rem;
+        max-width: 26rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .lw-vol {
+        color: var(--sd-warning);
+      }
+      .lw-noise td {
+        color: var(--sd-text-muted);
+        opacity: 0.55;
+      }
+      .lw-type {
+        display: inline-block;
+        font-size: 0.6rem;
+        padding: 0 0.3rem;
+        border-radius: 3px;
+        border: 1px solid var(--sd-surface-border);
+      }
+
+      /* Contest / futures browser. */
+      .ct-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        margin-bottom: 0.7rem;
+      }
+      .ct-toolbar input {
+        flex: 1 1 12rem;
+        font: inherit;
+        font-size: 0.78rem;
+        padding: 0.3rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-primary);
+      }
+      .ct-toolbar input:focus {
+        outline: 2px solid var(--sd-accent);
+        outline-offset: 1px;
+      }
+      .ct-toolbar button {
+        font: inherit;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-muted);
+        cursor: pointer;
+      }
+      .ct-toolbar button[aria-pressed="true"] {
+        background: var(--sd-accent);
+        border-color: var(--sd-accent);
+        color: var(--sd-text-on-fill);
+      }
+      .ct-list {
+        display: grid;
+        gap: 0.3rem;
+        max-height: 22rem;
+        overflow-y: auto;
+      }
+      .ct-row {
+        display: grid;
+        grid-template-columns: 6rem 1fr auto;
+        gap: 0.6rem;
+        align-items: baseline;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 6px;
+        background: var(--sd-surface-card);
+        font-size: 0.78rem;
+      }
+      .ct-num {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        color: var(--sd-text-muted);
+      }
+      .ct-market {
+        display: block;
+        font-size: 0.68rem;
+        color: var(--sd-text-muted);
+      }
+      .ct-group {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.05rem 0.35rem;
+        border-radius: 3px;
+        border: 1px solid var(--sd-surface-border);
+        color: var(--sd-text-muted);
+      }
+
+      /* Admin <-> Position module selector (portal values A / P). */
+      .gb-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.7rem;
+      }
+      .gb-toolbar label {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+      }
+      .gb-toolbar select {
+        font: inherit;
+        font-size: 0.78rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-primary);
+      }
+      .gb-toolbar select:focus {
+        outline: 2px solid var(--sd-accent);
+        outline-offset: 1px;
+      }
+      .gb-mode-note {
+        font-size: 0.7rem;
+        color: var(--sd-text-muted);
+      }
+      .gb-pos {
+        display: inline-block;
+        font-size: 0.64rem;
+        padding: 0 0.35rem;
+        margin-right: 0.25rem;
+        border-radius: 3px;
+        border: 1px solid var(--sd-surface-border);
+      }
+
+      /* Game Admin board: market exposure per game. */
+      .gb-game {
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 8px;
+        background: var(--sd-surface-card);
+        margin-bottom: 0.6rem;
+        overflow: hidden;
+      }
+      .gb-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.45rem 0.7rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+        font-size: 0.82rem;
+      }
+      .gb-head .gb-clock {
+        margin-left: auto;
+        font-size: 0.72rem;
+        color: var(--sd-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .gb-live {
+        color: var(--sd-accent);
+        font-weight: 700;
+      }
+      .gb-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.76rem;
+      }
+      .gb-table th {
+        text-align: left;
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+        font-weight: 600;
+        padding: 0.3rem 0.7rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+      }
+      .gb-table td {
+        padding: 0.25rem 0.7rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+      }
+      .gb-table tr:last-child td {
+        border-bottom: 0;
+      }
+      .gb-market {
+        color: var(--sd-text-muted);
+        font-size: 0.64rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+      }
+      .gb-line {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+      }
+      .gb-amount {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      /* Score cells: green fill, matching the portal's .col-score. */
+      .gb-score {
+        display: inline-block;
+        min-width: 3.2rem;
+        text-align: center;
+        padding: 0.05rem 0.4rem;
+        border-radius: 4px;
+        border: 1px solid var(--sd-theme-emerald);
+        background: var(--sd-theme-emerald);
+        color: var(--sd-text-primary);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      /* Exposure cells: blue fill, matching the portal's .col-amount. */
+      .gb-table td.gb-amount {
+        border-radius: 4px;
+        border: 1px solid var(--sd-tier-retail);
+        background: var(--sd-tier-retail);
+        color: var(--sd-text-primary);
+        font-weight: 600;
+      }
+      /* An approximated figure keeps its warning cue on the blue fill. */
+      .gb-table td.gb-amount.gb-approx {
+        color: var(--sd-text-primary);
+        text-decoration: underline dotted var(--sd-warning);
+        text-underline-offset: 2px;
+      }
+      .gb-approx {
+        color: var(--sd-warning);
+      }
+      .gb-approx::after {
+        content: "≈";
+        margin-left: 0.15rem;
+      }
+
+      /* Sport catalog browser: sub-sports and per-sport period menus. */
+      .sc-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .sc-toolbar input {
+        flex: 1 1 14rem;
+        font: inherit;
+        font-size: 0.8rem;
+        padding: 0.35rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-primary);
+      }
+      .sc-toolbar input:focus {
+        outline: 2px solid var(--sd-accent);
+        outline-offset: 1px;
+      }
+      .sc-count {
+        font-size: 0.7rem;
+        color: var(--sd-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .sc-list {
+        display: grid;
+        gap: 0.5rem;
+      }
+      .sc-sport {
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 10px;
+        background: var(--sd-surface-card);
+        overflow: hidden;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .sc-sport:hover {
+        border-color: color-mix(
+          in srgb,
+          var(--sd-accent) 40%,
+          var(--sd-surface-border)
+        );
+      }
+      .sc-sport[open] {
+        border-color: var(--sd-accent);
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--sd-accent) 25%, transparent);
+      }
+      .sc-sport > summary {
+        cursor: pointer;
+        padding: 0.6rem 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        list-style: none;
+        transition: background 0.15s ease;
+      }
+      .sc-sport > summary:hover {
+        background: color-mix(
+          in srgb,
+          var(--sd-surface-hover) 60%,
+          transparent
+        );
+      }
+      .sc-sport > summary::-webkit-details-marker {
+        display: none;
+      }
+      .sc-sport > summary::before {
+        content: "▸";
+        font-size: 0.7rem;
+        color: var(--sd-text-muted);
+        transition:
+          transform 0.2s ease,
+          color 0.2s ease;
+      }
+      .sc-sport[open] > summary::before {
+        content: "▾";
+        transform: rotate(0deg);
+        color: var(--sd-accent);
+      }
+      .sc-chip {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-bg);
+        white-space: nowrap;
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease;
+      }
+      .sc-chip:hover {
+        border-color: var(--sd-accent);
+        background: color-mix(
+          in srgb,
+          var(--sd-accent) 10%,
+          var(--sd-surface-bg)
+        );
+      }
+      .sc-chip.sc-collide {
+        border-color: var(--sd-warning);
+        background: color-mix(
+          in srgb,
+          var(--sd-warning) 10%,
+          var(--sd-surface-bg)
+        );
+      }
+      .sc-sport > summary .sc-n {
+        margin-left: auto;
+        font-size: 0.7rem;
+        color: var(--sd-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .sc-body {
+        padding: 0 0.7rem 0.7rem;
+        display: grid;
+        gap: 0.6rem;
+      }
+      .sc-group h4 {
+        margin: 0 0 0.3rem;
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+        font-weight: 600;
+      }
+      .sc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      .sc-chip code {
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        color: var(--sd-text-muted);
+      }
+      .sc-periods {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      .sc-period {
+        font-size: 0.7rem;
+        padding: 0.12rem 0.45rem;
+        border-radius: 4px;
+        background: var(--sd-surface-bg);
+        border: 1px solid var(--sd-surface-border);
+        font-variant-numeric: tabular-nums;
+      }
+      .sc-period b {
+        color: var(--sd-accent);
+        margin-right: 0.25rem;
+      }
+
+      /* Analysis report filters, mirroring the portal filter bar. */
+      .an-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        gap: 0.65rem;
+        align-items: end;
+        margin-bottom: 0.85rem;
+      }
+      .an-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .an-field label {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--sd-text-muted);
+      }
+      .an-field select,
+      .an-field input {
+        font: inherit;
+        font-size: 0.8rem;
+        padding: 0.35rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        color: var(--sd-text-primary);
+      }
+      .an-field select:focus,
+      .an-field input:focus {
+        outline: 2px solid var(--sd-accent);
+        outline-offset: 1px;
+      }
+      .an-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.74rem;
+        margin-top: 0.5rem;
+      }
+      .an-table th,
+      .an-table td {
+        padding: 0.3rem 0.45rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .an-table th:first-child,
+      .an-table td:first-child {
+        text-align: left;
+      }
+      .an-table th {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--sd-text-muted);
+        font-weight: 600;
+      }
+      .an-table tr.duplicate td {
+        opacity: 0.55;
+        font-style: italic;
+      }
+      .an-table tfoot td {
+        font-weight: 700;
+        border-top: 2px solid var(--sd-surface-border);
+      }
+      .an-dup {
+        font-size: 0.6rem;
+        color: var(--sd-warning);
+        margin-left: 0.3rem;
+      }
+      .an-warn {
+        color: var(--sd-warning);
+      }
+
+      .an-hint {
+        font-size: 0.66rem;
+        color: var(--sd-text-muted);
+        min-height: 0.9em;
+      }
+      .an-hint.known {
+        color: var(--sd-accent);
+      }
+      .an-hint.unknown {
+        color: var(--sd-warning);
+      }
+
+      .an-result {
+        border: 1px dashed var(--sd-surface-border);
+        border-radius: 8px;
+        padding: 0.75rem 0.9rem;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        background: var(--sd-surface-bg);
+      }
+      .an-result strong {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      .an-result code {
+        font-family: var(--mono);
+        font-size: 0.74rem;
+      }
+      .an-empty {
+        color: var(--sd-text-muted);
+      }
+
+      /* Live Desk: pending exposure, joined from the capture + scoreboard endpoints. */
+      .ld-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+      }
+      .ld-stat {
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 10px;
+        padding: 0.7rem 0.85rem;
+        background: var(--sd-surface-card);
+        transition:
+          border-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .ld-stat:hover {
+        border-color: var(--sd-tier-retail);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px
+          color-mix(in srgb, var(--sd-tier-retail) 12%, transparent);
+      }
+      .ld-stat dt {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.66;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .ld-stat dd {
+        margin: 0.25rem 0 0;
+        font-size: 1.25rem;
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+      }
+      .ld-stat dd small {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 400;
+        opacity: 0.66;
+        margin-top: 0.15rem;
+      }
+      .ld-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-bottom: 1rem;
+      }
+      .ld-chip {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--sd-surface-border);
+        background: var(--sd-surface-card);
+        white-space: nowrap;
+      }
+      .ld-chip b {
+        font-variant-numeric: tabular-nums;
+        margin-left: 0.25rem;
+      }
+      .ld-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+      }
+      .ld-table th,
+      .ld-table td {
+        text-align: left;
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid var(--sd-surface-border);
+        vertical-align: top;
+      }
+      .ld-table th {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.66;
+        font-weight: 600;
+      }
+      .ld-table td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .ld-pos {
+        display: inline-block;
+        font-size: 0.64rem;
+        padding: 0 0.35rem;
+        border-radius: 3px;
+        border: 1px solid var(--sd-surface-border);
+        margin-right: 0.25rem;
+      }
+      .ld-note {
+        font-size: 0.7rem;
+        opacity: 0.7;
+        margin: 0.6rem 0 0;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+      .ld-note code {
+        font-size: 0.68rem;
+      }
+      .ld-src {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.68rem;
+        opacity: 0.7;
+        word-break: break-all;
+      }
     </style>
   </head>
   <body>
@@ -663,6 +1703,33 @@
         <span class="badge badge-purple">50% SHARED AGENT</span>
       </div>
     </div>
+
+    <!-- Agent Tree Graph dropdown -->
+    <details class="agent-tree-dropdown">
+      <summary class="agent-tree-toggle" aria-expanded="false">
+        🌳 Agent Tree Graph
+      </summary>
+      <div class="agent-tree-panel">
+        <div class="agent-tree-toolbar">
+          <button type="button" class="agent-tree-btn" data-zoom="in">
+            + Zoom in
+          </button>
+          <button type="button" class="agent-tree-btn" data-zoom="out">
+            - Zoom out
+          </button>
+          <button type="button" class="agent-tree-btn" data-zoom="reset">
+            Reset
+          </button>
+          <a class="agent-tree-btn" href="/graph" target="_blank" rel="noopener"
+            >Open graph page</a
+          >
+        </div>
+        <div class="agent-tree-viewport">
+          <img class="agent-tree-img" alt="Agent downline tree graph" hidden />
+          <div class="agent-tree-fallback" id="agent-graph-note">Loading…</div>
+        </div>
+      </div>
+    </details>
 
     <!-- Qwen3.5-4B (Layers 18-28) Design Token & Neuron Telemetry Strip -->
     <div class="telemetry-strip">
@@ -844,203 +1911,580 @@
       </span>
     </div>
 
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">Master Downline Scope</div>
-        <div class="kpi-val">668 Agents</div>
-        <div class="kpi-sub">Master: BILLY666 • 460 Active Sports</div>
+    <!-- Filled from /api/kpis; every figure is derived from a data/ artifact, never typed here. -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card" data-kpi="agents" data-source="loading">
+        <div class="kpi-label">Agent Tree</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Total Provisioned Bettors</div>
-        <div class="kpi-val">9,435 Accts</div>
-        <div class="kpi-sub">2,236 Active • 7,199 Retained</div>
+      <div class="kpi-card" data-kpi="pending" data-source="loading">
+        <div class="kpi-label">Open Wagers (Pending)</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Active Sports Handle</div>
-        <div class="kpi-val">$2.79M</div>
-        <div class="kpi-sub">10,941 Settled Tickets</div>
+      <div class="kpi-card" data-kpi="ticker" data-source="loading">
+        <div class="kpi-label">Bet Ticker Risk</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Lifetime Book Net Hold</div>
-        <div class="kpi-val">$10.49M</div>
-        <div class="kpi-sub">50% Agent Share: $5.24M</div>
+      <div class="kpi-card" data-kpi="customerBook" data-source="loading">
+        <div class="kpi-label">Customer Lifetime Net</div>
+        <div class="kpi-val">—</div>
+        <div class="kpi-sub"></div>
+        <div class="kpi-age"></div>
       </div>
     </div>
 
-    <!-- Telegram Bot Control -->
-    <section
-      class="section-card"
-      id="telegram-control"
-      aria-labelledby="tg-title"
-    >
-      <div class="section-title">
-        <span id="tg-title">Telegram Bot Control</span>
-        <span class="badge badge-warning" id="tg-mode-badge"
-          >NOT CONNECTED</span
-        >
-      </div>
-      <div class="tg-grid">
-        <div>
-          <form class="tg-form" id="tg-token-form">
-            <label for="tg-admin-token">Admin token</label>
-            <input
-              type="password"
-              id="tg-admin-token"
-              autocomplete="off"
-              placeholder="SPORTSDESK_ADMIN_TOKEN"
-            />
-            <button class="btn" type="submit">Connect</button>
-          </form>
-          <dl class="tg-status" id="tg-status">
-            <dt>Bot</dt>
-            <dd data-field="bot">-</dd>
-            <dt>Mode</dt>
-            <dd data-field="mode">-</dd>
-            <dt>Default chat</dt>
-            <dd data-field="chat">-</dd>
-            <dt>Inbound</dt>
-            <dd data-field="inbound">-</dd>
-            <dt>Webhook</dt>
-            <dd data-field="webhook">-</dd>
-            <dt>Pending</dt>
-            <dd data-field="pending">-</dd>
-            <dt>Last error</dt>
-            <dd data-field="error">-</dd>
-            <dt>Schedules</dt>
-            <dd data-field="schedules">-</dd>
-          </dl>
+    <!-- Panels. The main element is what the Agent Menu setting toggles: without one
+         the Tile Menu preference had no target and changed nothing. -->
+    <main id="panels" class="panels">
+      <!-- Settings (portal #update-settings modal, applied inline) -->
+      <section class="section-card" id="settings" aria-labelledby="st-title">
+        <div class="section-title">
+          <span id="st-title">Settings</span>
+          <span class="badge badge-primary" id="st-badge">DEFAULTS</span>
         </div>
-        <div>
-          <div class="tg-action">
-            <label for="tg-report">Report</label>
-            <select id="tg-report"></select>
-            <button class="btn" type="button" data-action="report">
-              Send report
-            </button>
+
+        <div class="st-grid">
+          <div class="st-field">
+            <label for="st-notify">Wager Alerts</label>
+            <select id="st-notify" data-setting="notify">
+              <option value="Y">On</option>
+              <option value="N">Off</option>
+            </select>
+            <span class="st-effect" id="st-fx-notify"></span>
           </div>
-          <div class="tg-action">
-            <label>Webhook</label>
-            <button class="btn" type="button" data-action="webhook-set">
-              Register
-            </button>
-            <button
-              class="btn btn-danger"
-              type="button"
-              data-action="webhook-delete"
-            >
-              Remove
-            </button>
-            <button class="btn btn-ghost" type="button" data-action="refresh">
-              Refresh
-            </button>
+
+          <div class="st-field">
+            <label for="st-language">Language</label>
+            <select id="st-language" data-setting="language">
+              <option value="English">English</option>
+              <option value="Spanish">Spanish</option>
+              <option value="Chinese (Simp)">Chinese (Simp)</option>
+              <option value="French">French</option>
+            </select>
+            <span class="st-effect" id="st-fx-language"></span>
           </div>
-          <p class="tg-log" id="tg-log" role="status" aria-live="polite"></p>
+
+          <div class="st-field">
+            <label for="st-timezone">Time Zone</label>
+            <select id="st-timezone" data-setting="timezone">
+              <option value="0">(EST)</option>
+              <option value="1">(CST)</option>
+              <option value="2">(MST)</option>
+              <option value="3">(PST)</option>
+            </select>
+            <span class="st-effect" id="st-fx-timezone"></span>
+          </div>
+
+          <div class="st-field">
+            <label for="st-agent-menu">Agent Menu</label>
+            <select id="st-agent-menu" data-setting="agentMenu">
+              <option value="Left Menu">Left Menu</option>
+              <option value="Tile Menu">Tile Menu</option>
+            </select>
+            <span class="st-effect" id="st-fx-agentMenu"></span>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Telegram Bot Activity (sent and received, across the bot daemon and this server) -->
-    <section class="section-card" id="bot-activity" aria-labelledby="act-title">
-      <div class="section-title">
-        <span id="act-title">Bot Activity</span>
-        <span class="badge badge-primary" id="act-count">LOCKED</span>
-      </div>
-      <ol class="act-list" id="act-list" aria-live="polite">
-        <li class="empty-row">
-          Connect with the admin token to load activity.
-        </li>
-      </ol>
-    </section>
+        <div class="st-actions">
+          <button class="btn" type="button" id="st-save">Confirm</button>
+          <button class="btn btn-ghost" type="button" id="st-reset">
+            Cancel
+          </button>
+          <span class="st-status" id="st-status"></span>
+        </div>
+      </section>
 
-    <!-- Priority Monitored Accounts Surveillance -->
-    <section class="section-card" id="watchlist" aria-labelledby="wl-title">
-      <div class="section-title">
-        <span id="wl-title"
-          >High-Exposure Accounts &amp; Forensic Watch List</span
-        >
-        <span class="badge badge-warning" id="wl-count">LOCKED</span>
-      </div>
-      <div class="wl-toolbar">
-        <input
-          type="search"
-          id="wl-search"
-          placeholder="Search bettor, agent or archetype"
-          aria-label="Search the watch list"
-        />
-        <select id="wl-tier" aria-label="Filter by risk tier">
-          <option value="">All tiers</option>
-        </select>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="wl-head">
+      <!-- Bet ticker: Manager/getBetTicker ({LIST: [...]}), a different shape from Pending -->
+      <section class="section-card" id="live-wagers" aria-labelledby="lw-title">
+        <div class="section-title">
+          <span id="lw-title">Live Wagers — Bet Ticker</span>
+          <span class="badge badge-primary" id="lw-badge">LOADING</span>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0" id="lw-note">
+          Each row is one wager from the portal's bet ticker
+          (Manager/getBetTicker). Sport comes from the parsed leg description; a
+          stake whose volume differs is flagged rather than reconciled.
+        </p>
+
+        <dl class="lw-stats" id="lw-stats" hidden>
+          <div class="lw-stat">
+            <dt>Wagers</dt>
+            <dd id="lw-count">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Risk</dt>
+            <dd id="lw-risk">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>To win</dt>
+            <dd id="lw-towin">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Volume</dt>
+            <dd id="lw-volume">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Legs</dt>
+            <dd id="lw-legs">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Volume mismatches</dt>
+            <dd id="lw-mismatch">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Excluded (alert/blocked)</dt>
+            <dd id="lw-excluded">–</dd>
+          </div>
+        </dl>
+
+        <div class="lw-bar" id="lw-writers"></div>
+        <div class="lw-bar" id="lw-types"></div>
+
+        <table class="lw-table">
+          <thead>
             <tr>
-              <th aria-sort="none">
-                <button type="button" class="th-sort" data-sort="customerId">
-                  Bettor ID
-                </button>
-              </th>
-              <th aria-sort="none">
-                <button type="button" class="th-sort" data-sort="agentId">
-                  Owning Agent
-                </button>
-              </th>
-              <th aria-sort="none">
-                <button type="button" class="th-sort" data-sort="archetype">
-                  Archetype
-                </button>
-              </th>
-              <th aria-sort="none">
-                <button type="button" class="th-sort" data-sort="riskTier">
-                  Neuron Channel
-                </button>
-              </th>
-              <th class="num" aria-sort="none">
-                <button
-                  type="button"
-                  class="th-sort"
-                  data-sort="sportsHandleUSD"
-                >
-                  Handle
-                </button>
-              </th>
-              <th class="num" aria-sort="none">
-                <button type="button" class="th-sort" data-sort="ticketsCount">
-                  Tickets
-                </button>
-              </th>
-              <th class="num" aria-sort="none">
-                <button type="button" class="th-sort" data-sort="recentNetUSD">
-                  Recent P&amp;L
-                </button>
-              </th>
-              <th class="num" aria-sort="none">
-                <button
-                  type="button"
-                  class="th-sort"
-                  data-sort="lifetimeNetUSD"
-                >
-                  Lifetime P&amp;L
-                </button>
-              </th>
-              <th>Action Playbook</th>
+              <th scope="col">Wager</th>
+              <th scope="col">Agent</th>
+              <th scope="col">Customer</th>
+              <th scope="col">Type</th>
+              <th scope="col">Risk</th>
+              <th scope="col">To win</th>
+              <th scope="col">Volume</th>
+              <th scope="col">Writer</th>
+              <th scope="col">Legs</th>
             </tr>
           </thead>
-          <tbody id="wl-body">
+          <tbody id="lw-rows">
             <tr>
-              <td class="empty-row" colspan="9">
-                Connect with the admin token to load the watch list.
-              </td>
+              <td class="empty-row" colspan="9">Loading wagers…</td>
             </tr>
           </tbody>
         </table>
-      </div>
-      <p class="wl-note">
-        P&amp;L is the bettor's net: red means the bettor is up and the book is
-        losing. "Alert to Telegram" sends the account's alert to the default
-        chat; apply limits in Fantasy402.
-      </p>
-    </section>
+      </section>
+
+      <!-- Contest / futures list (sports nav get-games-prop anchors) -->
+      <section class="section-card" id="contests" aria-labelledby="ct-title">
+        <div class="section-title">
+          <span id="ct-title">Contests — Futures &amp; Props</span>
+          <span class="badge badge-primary" id="ct-badge">LOADING</span>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0" id="ct-note">
+          One row per contest number in the portal's sports nav. The list is
+          extracted from saved markup, so a contest that was not in that markup
+          is absent rather than guessed.
+        </p>
+
+        <div class="ct-toolbar">
+          <input
+            id="ct-search"
+            type="search"
+            placeholder="Filter contests, leagues or subjects…"
+            autocomplete="off"
+            aria-label="Filter contests"
+          />
+          <span id="ct-groups"></span>
+        </div>
+
+        <div class="ct-list" id="ct-list">
+          <p class="ld-note">Loading contests…</p>
+        </div>
+      </section>
+
+      <!-- Game Admin board: lines and the money on each side (portal module Admin) -->
+      <section class="section-card" id="game-board" aria-labelledby="gb-title">
+        <div class="section-title">
+          <span id="gb-title">Game Admin — Board &amp; Exposure</span>
+          <span class="badge badge-primary" id="gb-badge">LOADING</span>
+        </div>
+
+        <div class="gb-toolbar">
+          <label for="gb-module">Module</label>
+          <select id="gb-module" name="module">
+            <option value="A">Admin</option>
+            <option value="P">Position</option>
+          </select>
+          <span class="gb-mode-note" id="gb-mode-note">
+            Admin: the market with the money on each side.
+          </span>
+          <label for="gb-window">Show</label>
+          <select id="gb-window" name="window">
+            <option value="48">Yesterday</option>
+            <option value="24" selected>Today</option>
+            <option value="-1">Current Board</option>
+          </select>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0" id="gb-note">
+          Line and per-side exposure transcribed from the Game Admin report.
+          Values the portal abbreviates (for example “120k”) stay approximate
+          and are excluded from sums; exact figures are marked by their absence
+          of “≈”.
+        </p>
+
+        <div class="gb-list" id="gb-list">
+          <p class="ld-note">Loading the board…</p>
+        </div>
+      </section>
+
+      <!-- Sport catalog: every sub-sport code and each sport's own period menu -->
+      <section
+        class="section-card"
+        id="sport-catalog"
+        aria-labelledby="sc-title"
+      >
+        <div class="section-title">
+          <span id="sc-title">Sport Catalog — Sub-Sports &amp; Periods</span>
+          <span class="badge badge-primary" id="sc-badge">LOADING</span>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0">
+          Period numbers are <strong>sport-specific</strong>: <code>1</code> is
+          “1st Half” in Football and Basketball, “1st Period” in Hockey and “1st
+          5 Innings” in Baseball. The list below shows each sport's own menu,
+          and flags sub-sport codes that more than one sport claims.
+        </p>
+
+        <div class="sc-toolbar">
+          <input
+            id="sc-search"
+            type="search"
+            placeholder="Filter sports, sub-sport codes or period names…"
+            autocomplete="off"
+            aria-label="Filter the sport catalog"
+          />
+          <span class="sc-count" id="sc-count"></span>
+          <button class="btn btn-ghost" type="button" id="sc-expand">
+            Expand all
+          </button>
+        </div>
+
+        <div class="sc-list" id="sc-list">
+          <p class="ld-note">Loading the catalog…</p>
+        </div>
+      </section>
+
+      <!-- Analysis report filters (portal report.js vocabulary; no report body captured) -->
+      <section class="section-card" id="analysis" aria-labelledby="an-title">
+        <div class="section-title">
+          <span id="an-title">Analysis — Report Filters</span>
+          <span class="badge badge-warning" id="an-badge">NOT CAPTURED</span>
+        </div>
+        <p class="ld-note" style="margin-top: 0">
+          The portal's filter bar (Customer Performance / Sport Performance /
+          Customer Volume / Graded Wagers, activity, grouping, week). Codes are
+          transcribed from that markup. A transcribed report answers only for
+          the selection it was run for; anything else returns “not captured”
+          rather than zeroes.
+        </p>
+
+        <form class="an-form" id="an-form">
+          <div class="an-field">
+            <label for="an-stored">Stored report</label>
+            <select id="an-stored">
+              <option value="">— none —</option>
+            </select>
+          </div>
+
+          <div class="an-field">
+            <label for="an-sport">Sport</label>
+            <select id="an-sport" name="sport">
+              <option value="all">All</option>
+            </select>
+          </div>
+
+          <div class="an-field">
+            <label for="an-report">Report</label>
+            <select id="an-report" name="report"></select>
+          </div>
+          <div class="an-field">
+            <label for="an-activity">Activity</label>
+            <select id="an-activity" name="activity"></select>
+          </div>
+          <div class="an-field">
+            <label for="an-group">Group</label>
+            <select id="an-group" name="group"></select>
+          </div>
+          <div class="an-field">
+            <label for="an-week">Week</label>
+            <select id="an-week" name="week"></select>
+          </div>
+          <div class="an-field">
+            <label for="an-agent">Agent</label>
+            <input
+              id="an-agent"
+              name="agent"
+              type="search"
+              autocomplete="off"
+              list="an-agents"
+              placeholder="All agents"
+              aria-describedby="an-agent-hint"
+            />
+            <datalist id="an-agents"></datalist>
+            <span class="an-hint" id="an-agent-hint"></span>
+          </div>
+          <div class="an-field">
+            <label>&nbsp;</label>
+            <button class="btn" type="submit">Run analysis</button>
+          </div>
+        </form>
+
+        <div class="an-result" id="an-result" role="status" aria-live="polite">
+          <span class="an-empty">Loading the filter vocabulary…</span>
+        </div>
+      </section>
+
+      <!-- Live Desk: pending exposure joined from the wager capture and the scoreboard -->
+      <section class="section-card" id="live-desk" aria-labelledby="ld-title">
+        <div class="section-title">
+          <span id="ld-title">Live Desk — Pending Exposure</span>
+          <span class="badge badge-primary" id="ld-badge">LOADING</span>
+          <button class="btn btn-ghost" type="button" id="ld-refresh">
+            Refresh
+          </button>
+        </div>
+
+        <dl class="ld-grid" id="ld-stats">
+          <div class="ld-stat">
+            <dt>Pending games</dt>
+            <dd data-ld="games">–</dd>
+          </div>
+          <div class="ld-stat">
+            <dt>Wagered</dt>
+            <dd data-ld="wagered">–</dd>
+          </div>
+          <div class="ld-stat">
+            <dt>To win</dt>
+            <dd data-ld="towin">–</dd>
+          </div>
+          <div class="ld-stat">
+            <dt>Pending rows</dt>
+            <dd data-ld="rows">–</dd>
+          </div>
+        </dl>
+
+        <div class="ld-bar" id="ld-sports"></div>
+
+        <table class="ld-table">
+          <caption class="ld-note" style="text-align: left; caption-side: top">
+            Exposure per fixture, split by position — the Game Admin view the
+            portal manual documents (F.A.Q. #4).
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Fixture</th>
+              <th scope="col">League</th>
+              <th scope="col">Positions</th>
+              <th scope="col" class="num">Wagered</th>
+              <th scope="col" class="num">To win</th>
+              <th scope="col">State</th>
+            </tr>
+          </thead>
+          <tbody id="ld-fixtures">
+            <tr>
+              <td class="empty-row" colspan="6">Loading pending exposure…</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="ld-note" id="ld-scoreboard"></p>
+        <p class="ld-note ld-src" id="ld-source"></p>
+      </section>
+
+      <!-- Telegram Bot Control -->
+      <section
+        class="section-card"
+        id="telegram-control"
+        aria-labelledby="tg-title"
+      >
+        <div class="section-title">
+          <span id="tg-title">Telegram Bot Control</span>
+          <span class="badge badge-warning" id="tg-mode-badge"
+            >NOT CONNECTED</span
+          >
+        </div>
+        <div class="tg-grid">
+          <div>
+            <form class="tg-form" id="tg-token-form">
+              <label for="tg-admin-token">Admin token</label>
+              <input
+                type="password"
+                id="tg-admin-token"
+                autocomplete="off"
+                placeholder="SPORTSDESK_ADMIN_TOKEN"
+              />
+              <button class="btn" type="submit">Connect</button>
+            </form>
+            <dl class="tg-status" id="tg-status">
+              <dt>Bot</dt>
+              <dd data-field="bot">-</dd>
+              <dt>Mode</dt>
+              <dd data-field="mode">-</dd>
+              <dt>Default chat</dt>
+              <dd data-field="chat">-</dd>
+              <dt>Inbound</dt>
+              <dd data-field="inbound">-</dd>
+              <dt>Webhook</dt>
+              <dd data-field="webhook">-</dd>
+              <dt>Pending</dt>
+              <dd data-field="pending">-</dd>
+              <dt>Last error</dt>
+              <dd data-field="error">-</dd>
+              <dt>Schedules</dt>
+              <dd data-field="schedules">-</dd>
+            </dl>
+          </div>
+          <div>
+            <div class="tg-action">
+              <label for="tg-report">Report</label>
+              <select id="tg-report"></select>
+              <button class="btn" type="button" data-action="report">
+                Send report
+              </button>
+            </div>
+            <div class="tg-action">
+              <label>Webhook</label>
+              <button class="btn" type="button" data-action="webhook-set">
+                Register
+              </button>
+              <button
+                class="btn btn-danger"
+                type="button"
+                data-action="webhook-delete"
+              >
+                Remove
+              </button>
+              <button class="btn btn-ghost" type="button" data-action="refresh">
+                Refresh
+              </button>
+            </div>
+            <p class="tg-log" id="tg-log" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Telegram Bot Activity (sent and received, across the bot daemon and this server) -->
+      <section
+        class="section-card"
+        id="bot-activity"
+        aria-labelledby="act-title"
+      >
+        <div class="section-title">
+          <span id="act-title">Bot Activity</span>
+          <span class="badge badge-primary" id="act-count">LOCKED</span>
+        </div>
+        <ol class="act-list" id="act-list" aria-live="polite">
+          <li class="empty-row">
+            Connect with the admin token to load activity.
+          </li>
+        </ol>
+      </section>
+
+      <!-- Priority Monitored Accounts Surveillance -->
+      <section class="section-card" id="watchlist" aria-labelledby="wl-title">
+        <div class="section-title">
+          <span id="wl-title"
+            >High-Exposure Accounts &amp; Forensic Watch List</span
+          >
+          <span class="badge badge-warning" id="wl-count">LOCKED</span>
+        </div>
+        <div class="wl-toolbar">
+          <input
+            type="search"
+            id="wl-search"
+            placeholder="Search bettor, agent or archetype"
+            aria-label="Search the watch list"
+          />
+          <select id="wl-tier" aria-label="Filter by risk tier">
+            <option value="">All tiers</option>
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead id="wl-head">
+              <tr>
+                <th aria-sort="none">
+                  <button type="button" class="th-sort" data-sort="customerId">
+                    Bettor ID
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="th-sort" data-sort="agentId">
+                    Owning Agent
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="th-sort" data-sort="archetype">
+                    Archetype
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="th-sort" data-sort="riskTier">
+                    Neuron Channel
+                  </button>
+                </th>
+                <th class="num" aria-sort="none">
+                  <button
+                    type="button"
+                    class="th-sort"
+                    data-sort="sportsHandleUSD"
+                  >
+                    Handle
+                  </button>
+                </th>
+                <th class="num" aria-sort="none">
+                  <button
+                    type="button"
+                    class="th-sort"
+                    data-sort="ticketsCount"
+                  >
+                    Tickets
+                  </button>
+                </th>
+                <th class="num" aria-sort="none">
+                  <button
+                    type="button"
+                    class="th-sort"
+                    data-sort="recentNetUSD"
+                  >
+                    Recent P&amp;L
+                  </button>
+                </th>
+                <th class="num" aria-sort="none">
+                  <button
+                    type="button"
+                    class="th-sort"
+                    data-sort="lifetimeNetUSD"
+                  >
+                    Lifetime P&amp;L
+                  </button>
+                </th>
+                <th>Action Playbook</th>
+              </tr>
+            </thead>
+            <tbody id="wl-body">
+              <tr>
+                <td class="empty-row" colspan="9">
+                  Connect with the admin token to load the watch list.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="wl-note">
+          P&amp;L is the bettor's net: red means the bettor is up and the book
+          is losing. "Alert to Telegram" sends the account's alert to the
+          default chat; apply limits in Fantasy402.
+        </p>
+      </section>
+    </main>
 
     <script type="module">
       const TOKEN_KEY = "sportsdesk-admin-token";
@@ -1126,6 +2570,29 @@
           throw new Error(body.error ?? `HTTP ${res.status}`);
         }
         return body;
+      }
+
+      /**
+       * The same credential `api()` sends, without the throw: the panels below inspect the status
+       * themselves — 404 means "no artifact captured yet", 401/503 means "the daemon wants the
+       * token". Before this every panel called fetch() bare, so a non-loopback peer always got
+       * TOKEN REQUIRED with no way to supply one.
+       */
+      function authed(path, init = {}) {
+        return fetch(path, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${tokenInput.value}`,
+            ...init.headers,
+          },
+        });
+      }
+
+      /** 503 is the daemon saying "no token configured"; 401 is "you did not send the right one". */
+      function tokenHint(status) {
+        return status === 503
+          ? "The daemon has no SPORTSDESK_ADMIN_TOKEN configured. Set it in .env and restart."
+          : "This peer is not loopback. Paste the daemon's admin token into the Admin token field (Telegram panel) and reload.";
       }
 
       function lockedRow(message) {
@@ -1457,6 +2924,1774 @@
       }, ACTIVITY_POLL_MS);
 
       refresh();
+
+      /* ------------------------------------------------------------------ *
+       * Shared settings helpers                                            *
+       *                                                                    *
+       * Every panel renders timestamps through sdFormatTs so the Settings   *
+       * time zone actually applies, instead of being stored and ignored.    *
+       * ------------------------------------------------------------------ */
+      const SD_SETTINGS_KEY = "sportsdesk-dashboard-settings";
+      const SD_ZONES = {
+        0: { label: "(EST)", offset: -5 },
+        1: { label: "(CST)", offset: -6 },
+        2: { label: "(MST)", offset: -7 },
+        3: { label: "(PST)", offset: -8 },
+      };
+
+      function sdSettings() {
+        try {
+          const raw = localStorage.getItem(SD_SETTINGS_KEY);
+          const parsed = raw === null ? {} : JSON.parse(raw);
+          return {
+            notify: parsed.notify === "N" ? "N" : "Y",
+            language:
+              typeof parsed.language === "string" ? parsed.language : "English",
+            timezone: parsed.timezone in SD_ZONES ? parsed.timezone : "1",
+            agentMenu:
+              parsed.agentMenu === "Tile Menu" ? "Tile Menu" : "Left Menu",
+          };
+        } catch {
+          return {
+            notify: "Y",
+            language: "English",
+            timezone: "1",
+            agentMenu: "Left Menu",
+          };
+        }
+      }
+
+      /** Shifts an instant into the selected portal zone (fixed offsets, no DST). */
+      /**
+       * Money for the panels: cents in, a compact string out.
+       *
+       * Exact below $100,000 — an operational total rounded to one significant digit ("$1K" for
+       * $1,066.55) is the kind of abbreviation this desk exists to avoid. Above that, thousands
+       * keep one decimal ($106.7K) and millions two ($2.79M), so the magnitude stays readable
+       * without pretending to a precision the figure does not deserve.
+       */
+      function usd(cents) {
+        const value = Number(cents || 0) / 100;
+        const sign = value < 0 ? "-" : "";
+        const abs = Math.abs(value);
+        if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+        if (abs >= 100_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
+        return `${sign}$${abs.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
+      }
+
+      function sdFormatTs(iso) {
+        if (!iso) return "";
+        const parsed = new Date(iso);
+        if (Number.isNaN(parsed.getTime())) return "";
+        const zone = SD_ZONES[sdSettings().timezone] ?? SD_ZONES["1"];
+        const shifted = new Date(parsed.getTime() + zone.offset * 3600 * 1000);
+        return `${shifted.toISOString().slice(0, 16).replace("T", " ")} ${zone.label}`;
+      }
+
+      function sdAge(seconds) {
+        if (seconds < 90) return "just now";
+        if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+        if (seconds < 172_800) return `${Math.round(seconds / 3600)}h ago`;
+        return `${Math.round(seconds / 86_400)}d ago`;
+      }
+
+      /* ------------------------------------------------------------------ *
+       * Live Desk                                                          *
+       *                                                                    *
+       * These endpoints are open on loopback and require                   *
+       * SPORTSDESK_ADMIN_TOKEN from any other peer, so this panel does not *
+       * depend on the Telegram token form above.                           *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const deskEl = document.getElementById("live-desk");
+        if (deskEl === null) return;
+
+        const badgeEl = document.getElementById("ld-badge");
+        const statsEl = document.getElementById("ld-stats");
+        const sportsEl = document.getElementById("ld-sports");
+        const fixturesEl = document.getElementById("ld-fixtures");
+        const scoreboardEl = document.getElementById("ld-scoreboard");
+        const sourceEl = document.getElementById("ld-source");
+        const refreshEl = document.getElementById("ld-refresh");
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        const setStat = (name, value, sub) => {
+          const dd = statsEl.querySelector(`[data-ld="${name}"]`);
+          if (dd === null) return;
+          dd.textContent = value;
+          if (sub !== undefined) dd.append(make("small", "", sub));
+        };
+
+        const setBadge = (text, kind) => {
+          badgeEl.textContent = text;
+          badgeEl.className = `badge badge-${kind}`;
+        };
+
+        const renderSports = (wagers) => {
+          sportsEl.replaceChildren();
+          for (const entry of wagers) {
+            const chip = make("span", "ld-chip", entry.category);
+            chip.append(make("b", "", String(entry.games)));
+            if (entry.live > 0) chip.title = `${entry.live} live`;
+            sportsEl.append(chip);
+          }
+        };
+
+        const renderFixtures = (games) => {
+          fixturesEl.replaceChildren();
+          if (games.length === 0) {
+            const row = make("tr");
+            const cell = make(
+              "td",
+              "empty-row",
+              "No pending wagers in the current capture.",
+            );
+            cell.colSpan = 6;
+            row.append(cell);
+            fixturesEl.append(row);
+            return;
+          }
+
+          for (const game of games.slice(0, 12)) {
+            const row = make("tr");
+
+            row.append(make("td", "", game.matchup));
+            row.append(make("td", "", game.league));
+
+            const positions = make("td");
+            const entries = Object.entries(game.positions ?? {});
+            if (entries.length === 0) positions.textContent = "—";
+            for (const [label, bucket] of entries) {
+              const chip = make("span", "ld-pos", `${label} ${bucket.wagers}`);
+              chip.title = `${usd(bucket.wagered)} wagered`;
+              positions.append(chip);
+            }
+            row.append(positions);
+
+            row.append(make("td", "num", usd(game.total.wagered)));
+            row.append(make("td", "num", usd(game.total.toWin)));
+            row.append(make("td", "", game.preGame ? "pre-game" : "started"));
+
+            fixturesEl.append(row);
+          }
+        };
+
+        const renderScoreboard = (scoreboard, summary) => {
+          if (scoreboard === null || scoreboard === undefined) {
+            scoreboardEl.textContent = "Scoreboard: none loaded.";
+            sourceEl.textContent = summary?.dataSource ?? "unknown source";
+            return;
+          }
+          const s = scoreboard.summary;
+          const observed = scoreboard.observedAt
+            ? ` · transcribed ${sdFormatTs(scoreboard.observedAt)}`
+            : "";
+          scoreboardEl.textContent =
+            `Scoreboard: ${s.games} games — ${s.live} live, ${s.final} final, ` +
+            `${s.scheduled} scheduled${observed}. Scores join to a wager only when both ` +
+            `clubs and the league match.`;
+          sourceEl.textContent = summary?.dataSource ?? scoreboard.source;
+        };
+
+        const load = async () => {
+          refreshEl.disabled = true;
+          setBadge("LOADING", "primary");
+          try {
+            const [bets, admin, sports, board] = await Promise.all([
+              authed("/api/live-bets", { cache: "no-store" }),
+              authed("/api/game-admin", { cache: "no-store" }),
+              authed("/api/sports", { cache: "no-store" }),
+              authed("/api/scoreboard", { cache: "no-store" }),
+            ]);
+
+            if (bets.status === 401 || bets.status === 503) {
+              setBadge("TOKEN REQUIRED", "warning");
+              fixturesEl.replaceChildren();
+              const row = make("tr");
+              const cell = make("td", "empty-row", tokenHint(bets.status));
+              cell.colSpan = 6;
+              row.append(cell);
+              fixturesEl.append(row);
+              return;
+            }
+            if (!bets.ok)
+              throw new Error(`/api/live-bets -> HTTP ${bets.status}`);
+
+            const [betsBody, adminBody, sportsBody, boardBody] =
+              await Promise.all([
+                bets.json(),
+                admin.ok ? admin.json() : Promise.resolve({ games: [] }),
+                sports.ok ? sports.json() : Promise.resolve({ wagers: [] }),
+                board.ok ? board.json() : Promise.resolve(null),
+              ]);
+
+            const summary = betsBody.summary ?? {};
+            setStat("games", String(summary.totalGames ?? 0));
+            setStat("wagered", usd(summary.totalWagered), "integer cents");
+            setStat("towin", usd(summary.totalToWin), "integer cents");
+            setStat(
+              "rows",
+              String(summary.totalPending ?? 0),
+              summary.capturedAt
+                ? `captured ${sdFormatTs(summary.capturedAt)}`
+                : "no capture timestamp",
+            );
+
+            renderSports(sportsBody.wagers ?? []);
+            renderFixtures(adminBody.games ?? []);
+            renderScoreboard(boardBody, summary);
+
+            const captured = String(summary.dataSource ?? "").startsWith(
+              "capture:",
+            );
+            setBadge(
+              captured ? "CAPTURE" : "SAMPLE",
+              captured ? "accent" : "warning",
+            );
+            sourceEl.textContent = summary.dataSource ?? "unknown source";
+          } catch (err) {
+            setBadge("UNAVAILABLE", "alert");
+            fixturesEl.replaceChildren();
+            const row = make("tr");
+            const cell = make(
+              "td",
+              "empty-row",
+              `Failed to load: ${String(err)}`,
+            );
+            cell.colSpan = 6;
+            row.append(cell);
+            fixturesEl.append(row);
+          } finally {
+            refreshEl.disabled = false;
+          }
+        };
+
+        refreshEl.addEventListener("click", load);
+        globalThis.addEventListener("sportsdesk-settings", load);
+        setInterval(() => {
+          if (document.visibilityState === "visible") load();
+        }, 30_000);
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * KPI strip                                                          *
+       *                                                                    *
+       * /api/kpis derives each figure from a data/ artifact and says where *
+       * it came from and how old it is; a stale capture is shown as stale. *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const grid = document.getElementById("kpi-grid");
+        if (grid === null) return;
+
+        const count = new Intl.NumberFormat("en-US");
+        const card = (name) => grid.querySelector(`[data-kpi="${name}"]`);
+
+        const fill = (name, value, sub, provenance, missing) => {
+          const node = card(name);
+          if (node === null) return;
+          const [valEl, subEl, ageEl] = [
+            ".kpi-val",
+            ".kpi-sub",
+            ".kpi-age",
+          ].map((selector) => node.querySelector(selector));
+          if (provenance === null) {
+            node.dataset.source = "missing";
+            valEl.textContent = "—";
+            subEl.textContent = missing;
+            ageEl.textContent = "";
+            ageEl.dataset.tone = "";
+            return;
+          }
+          node.dataset.source = provenance.stale ? "stale" : provenance.basis;
+          node.title = provenance.source;
+          valEl.textContent = value;
+          subEl.textContent = sub;
+          const verb =
+            provenance.asOfFrom === "file-mtime" ? "file written" : "as of";
+          const parts = [
+            `${verb} ${sdFormatTs(provenance.asOf)} (${sdAge(provenance.ageSeconds)})`,
+          ];
+          if (provenance.partial) parts.push("partial");
+          if (provenance.basis === "fixture") parts.push("demo fixture");
+          ageEl.textContent = parts.join(" · ");
+          ageEl.dataset.tone = provenance.stale ? "stale" : "";
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/api/kpis", { cache: "no-store" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const { kpis } = await res.json();
+            const { agents, pending, ticker, customerBook } = kpis;
+
+            fill(
+              "agents",
+              agents ? `${count.format(agents.total)} Agents` : "",
+              agents
+                ? `${count.format(agents.agents)} agent · ${count.format(agents.masters)} master`
+                : "",
+              agents?.provenance ?? null,
+              "No data/agent-tree.json. Run bun run build:agent-tree.",
+            );
+            fill(
+              "pending",
+              pending ? usd(pending.wageredCents) : "",
+              pending
+                ? `${count.format(pending.wagers)} wagers · to win ${usd(pending.toWinCents)}`
+                : "",
+              pending?.provenance ?? null,
+              "No data/live-bets.json. Run bun run capture:pending.",
+            );
+            fill(
+              "ticker",
+              ticker ? usd(ticker.riskCents) : "",
+              ticker
+                ? `${count.format(ticker.wagers)} wagers · ${count.format(ticker.live)} live · volume ${usd(ticker.volumeCents)}${
+                    ticker.excludedRows > 0
+                      ? ` · ${count.format(ticker.excludedRows)} alert/blocked excluded`
+                      : ""
+                  }`
+                : "",
+              ticker?.provenance ?? null,
+              "No bet ticker. Run bun run capture:bet-ticker.",
+            );
+            fill(
+              "customerBook",
+              customerBook ? usd(customerBook.customerNetCents) : "",
+              customerBook
+                ? `${count.format(customerBook.customers)} customers · ${count.format(customerBook.tickets)} tickets`
+                : "",
+              customerBook?.provenance ?? null,
+              "No data/customer-profiles.json. Run bun run customers:profiles.",
+            );
+          } catch (err) {
+            for (const node of grid.querySelectorAll("[data-kpi]")) {
+              node.dataset.source = "unavailable";
+              node.querySelector(".kpi-age").textContent =
+                `Failed to load /api/kpis: ${String(err)}`;
+            }
+          }
+        };
+
+        globalThis.addEventListener("sportsdesk-settings", load);
+        setInterval(() => {
+          if (document.visibilityState === "visible") load();
+        }, 60_000);
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Analysis filters                                                   *
+       *                                                                    *
+       * The vocabulary is transcribed from the portal's report.js filter    *
+       * bar. Running the report returns 501 with the reason: getAnalysis    *
+       * has never been captured, so an empty grid would read as "no action".*
+       * ------------------------------------------------------------------ */
+      (() => {
+        const form = document.getElementById("an-form");
+        if (form === null) return;
+
+        const badge = document.getElementById("an-badge");
+        const result = document.getElementById("an-result");
+        const selects = {
+          report: document.getElementById("an-report"),
+          activity: document.getElementById("an-activity"),
+          group: document.getElementById("an-group"),
+          week: document.getElementById("an-week"),
+        };
+        const agentInput = document.getElementById("an-agent");
+        const sportSelect = document.getElementById("an-sport");
+        const storedSelect = document.getElementById("an-stored");
+
+        /**
+         * A transcribed report answers only for the selection it was run for, so the panel
+         * offers the stored ones as a picker and fills the filters from their recorded context.
+         */
+        const loadStoredReports = async () => {
+          try {
+            const [reportsRes, sportsRes] = await Promise.all([
+              authed("/api/analysis/reports", { cache: "no-store" }),
+              authed("/api/sports", { cache: "no-store" }),
+            ]);
+
+            if (sportsRes.ok) {
+              const sports = await sportsRes.json();
+              for (const category of sports.all ?? []) {
+                const option = document.createElement("option");
+                option.value = category;
+                option.textContent = category;
+                sportSelect.append(option);
+              }
+            }
+
+            if (!reportsRes.ok) return;
+            const reports = await reportsRes.json();
+            for (const entry of reports.reports ?? []) {
+              const option = document.createElement("option");
+              option.value = JSON.stringify(entry.context);
+              option.textContent =
+                `${entry.report} · ${entry.context.agent} · ${entry.context.sport}` +
+                ` · ${entry.observedAt} · ${entry.rows} rows`;
+              storedSelect.append(option);
+            }
+            if ((reports.reports ?? []).length === 1) {
+              storedSelect.selectedIndex = 1;
+              storedSelect.dispatchEvent(new Event("change"));
+            }
+          } catch {
+            /* the picker is a convenience; the form still works without it */
+          }
+        };
+
+        const applyStoredContext = () => {
+          const option = storedSelect.selectedOptions[0];
+          if (option === undefined || option.value === "") return;
+          try {
+            const context = JSON.parse(option.value);
+            selects.report.value = context.report ?? "CP";
+            selects.activity.value = context.activity ?? "-1";
+            selects.group.value = context.group ?? "1";
+            selects.week.value = context.week ?? "-1";
+            sportSelect.value =
+              context.sport === "All" ? "all" : (context.sport ?? "all");
+            agentInput.value = context.agent ?? "";
+          } catch {
+            /* ignore a malformed option */
+          }
+        };
+        const agentList = document.getElementById("an-agents");
+        const agentHint = document.getElementById("an-agent-hint");
+
+        let lookupTimer = 0;
+        let lookupSeq = 0;
+
+        /**
+         * Suggestions come from the committed agent tree, so the field offers the 2,276 agents
+         * this repo actually knows instead of silently accepting typos. A name outside the tree
+         * is still allowed — the portal behaves the same — but the hint says so.
+         */
+        const lookupAgents = async () => {
+          const query = agentInput.value.trim();
+          const seq = ++lookupSeq;
+          agentList.replaceChildren();
+          if (query.length < 2) {
+            agentHint.textContent = "";
+            agentHint.className = "an-hint";
+            return;
+          }
+          try {
+            const res = await authed(
+              `/api/agents/search?q=${encodeURIComponent(query)}&limit=20`,
+              { cache: "no-store" },
+            );
+            if (!res.ok || seq !== lookupSeq) return;
+            const body = await res.json();
+            const agents = body.agents ?? [];
+            agentList.replaceChildren(
+              ...agents.map((agent) => {
+                const option = document.createElement("option");
+                option.value = agent.key;
+                option.label =
+                  agent.level === null
+                    ? agent.key
+                    : `${agent.key} · L${agent.level}`;
+                return option;
+              }),
+            );
+            const exact = agents.find(
+              (agent) => agent.key === query.toUpperCase(),
+            );
+            if (exact !== undefined) {
+              agentHint.textContent =
+                exact.level === null
+                  ? "Known agent (no level attributed)."
+                  : `Known agent · level ${exact.level}`;
+              agentHint.className = "an-hint known";
+            } else if (agents.length === 0) {
+              agentHint.textContent = "No agent in the tree matches this name.";
+              agentHint.className = "an-hint unknown";
+            } else {
+              agentHint.textContent = `${agents.length} suggestion(s).`;
+              agentHint.className = "an-hint";
+            }
+          } catch {
+            agentHint.textContent = "";
+            agentHint.className = "an-hint";
+          }
+        };
+
+        agentInput.addEventListener("input", () => {
+          globalThis.clearTimeout(lookupTimer);
+          lookupTimer = globalThis.setTimeout(lookupAgents, 150);
+        });
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        const fill = (select, options) => {
+          select.replaceChildren(
+            ...options.map((option) => {
+              const node = make("option", "", option.label);
+              node.value = String(option.value);
+              return node;
+            }),
+          );
+        };
+
+        const show = (title, detail, code) => {
+          result.replaceChildren();
+          result.append(make("strong", "", title));
+          if (detail) result.append(make("span", "", detail));
+          if (code) {
+            result.append(document.createElement("br"));
+            result.append(make("code", "", code));
+          }
+        };
+
+        const loadFilters = async () => {
+          try {
+            const res = await authed("/api/analysis/filters", {
+              cache: "no-store",
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            fill(selects.report, body.reports ?? []);
+            fill(selects.activity, body.activities ?? []);
+            fill(selects.group, body.groups ?? []);
+            fill(selects.week, body.weeks ?? []);
+            badge.textContent = "VOCABULARY ONLY";
+            badge.className = "badge badge-warning";
+            show(
+              "Filters ready",
+              "Pick a report and run it — the request is validated, the report body is not available.",
+            );
+          } catch (err) {
+            badge.textContent = "UNAVAILABLE";
+            badge.className = "badge badge-alert";
+            show("Could not load the filter vocabulary", String(err));
+          }
+        };
+
+        storedSelect.addEventListener("change", () => {
+          applyStoredContext();
+          form.requestSubmit();
+        });
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const params = new URLSearchParams({
+            report: selects.report.value,
+            activity: selects.activity.value,
+            group: selects.group.value,
+            week: selects.week.value,
+          });
+          const agent = agentInput.value.trim();
+          if (agent !== "") params.set("agent", agent);
+          const sport = sportSelect.value;
+          if (sport !== "" && sport !== "all") params.set("sport", sport);
+
+          badge.textContent = "RUNNING";
+          badge.className = "badge badge-primary";
+          try {
+            const res = await authed(`/api/analysis?${params.toString()}`, {
+              cache: "no-store",
+            });
+            const body = await res.json();
+
+            if (res.status === 501) {
+              badge.textContent = "NOT CAPTURED";
+              badge.className = "badge badge-warning";
+              const agentNote =
+                body.agentKnown === true
+                  ? body.agentLevel === null
+                    ? " Agent is in the tree (no level attributed)."
+                    : ` Agent is in the tree · level ${body.agentLevel}.`
+                  : body.agentKnown === false
+                    ? " Agent is not in the captured hierarchy."
+                    : "";
+              show(
+                (body.description ?? "Selection accepted") + agentNote,
+                body.error ??
+                  "Analysis data is not captured in this repository.",
+                body.requiredCapture ?? "",
+              );
+              return;
+            }
+            if (!res.ok) {
+              badge.textContent = "INVALID";
+              badge.className = "badge badge-alert";
+              show(
+                "Selection rejected",
+                (body.issues ?? [body.error]).filter(Boolean).join("; "),
+              );
+              return;
+            }
+            // A transcribed report: render its rows, its totals and any drift.
+            badge.textContent = `${body.rows.length} ROWS`;
+            badge.className = "badge badge-accent";
+
+            result.replaceChildren();
+            result.append(make("strong", "", body.description ?? "Analysis"));
+
+            const table = make("table", "an-table");
+            const thead = make("thead");
+            const headRow = make("tr");
+            for (const label of [
+              "Customer",
+              "Accts",
+              "Wagers",
+              "Risk",
+              "To win",
+              "Lost",
+              "Won",
+              "Net",
+              "Hold",
+            ]) {
+              headRow.append(make("th", "", label));
+            }
+            thead.append(headRow);
+            table.append(thead);
+
+            const tbody = make("tbody");
+            for (const row of body.rows) {
+              const tr = make(
+                "tr",
+                row.duplicateOf === null ? "" : "duplicate",
+              );
+              const customer = make("td");
+              customer.append(document.createTextNode(row.customer));
+              if (row.duplicateOf !== null) {
+                customer.append(
+                  make("span", "an-dup", `dup of ${row.duplicateOf}`),
+                );
+              }
+              tr.append(
+                customer,
+                make("td", "", String(row.accounts)),
+                make("td", "", String(row.wagers)),
+                make("td", "", usd(row.risk)),
+                make("td", "", usd(row.toWin)),
+                make("td", "", usd(row.amountLost)),
+                make("td", "", usd(row.amountWon)),
+                make("td", "", usd(row.net)),
+                make("td", "", `${row.holdPercent.toFixed(2)}%`),
+              );
+              tbody.append(tr);
+            }
+            table.append(tbody);
+
+            const tfoot = make("tfoot");
+            const footRow = make("tr");
+            footRow.append(
+              make("td", "", "Totals"),
+              make("td", "", String(body.totals.accounts)),
+              make("td", "", String(body.totals.wagers)),
+              make("td", "", usd(body.totals.risk)),
+              make("td", "", usd(body.totals.toWin)),
+              make("td", "", usd(body.totals.amountLost)),
+              make("td", "", usd(body.totals.amountWon)),
+              make("td", "", usd(body.totals.net)),
+              make("td", "", `${body.totals.holdPercent.toFixed(2)}%`),
+            );
+            tfoot.append(footRow);
+            table.append(tfoot);
+            result.append(table);
+
+            result.append(
+              (body.discrepancies ?? []).length > 0
+                ? make(
+                    "p",
+                    "an-warn",
+                    `Totals disagree with the rows in ${body.discrepancies
+                      .map((entry) => entry.field)
+                      .join(", ")}.`,
+                  )
+                : make(
+                    "p",
+                    "ld-note",
+                    "Totals recomputed from the rows match the published figures.",
+                  ),
+            );
+          } catch (err) {
+            badge.textContent = "ERROR";
+            badge.className = "badge badge-alert";
+            show("Request failed", String(err));
+          }
+        });
+
+        loadFilters();
+        loadStoredReports();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Sport catalog browser                                              *
+       *                                                                    *
+       * Sub-sports are keyed by (sport, code) because "Arena" belongs to    *
+       * both Football and Horse Racing. Periods are shown per sport: the    *
+       * same number carries different names in different sports.            *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const list = document.getElementById("sc-list");
+        if (list === null) return;
+
+        const badge = document.getElementById("sc-badge");
+        const count = document.getElementById("sc-count");
+        const search = document.getElementById("sc-search");
+        const expand = document.getElementById("sc-expand");
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        let catalog = null;
+
+        const matches = (sport, needle) => {
+          if (needle === "") return true;
+          const haystack = [
+            sport.sport,
+            ...sport.subSports.map((s) => `${s.code} ${s.name}`),
+            ...sport.periods.map((p) => p.name),
+          ]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(needle);
+        };
+
+        const render = () => {
+          if (catalog === null) return;
+          const needle = search.value.trim().toLowerCase();
+          const sports = catalog.sports.filter((sport) =>
+            matches(sport, needle),
+          );
+
+          list.replaceChildren();
+          if (sports.length === 0) {
+            list.append(
+              make(
+                "p",
+                "ld-note",
+                `No sport matches "${search.value.trim()}".`,
+              ),
+            );
+            count.textContent = `0 of ${catalog.sports.length}`;
+            return;
+          }
+
+          count.textContent =
+            `${sports.length} of ${catalog.sports.length} sports · ` +
+            `${catalog.summary.subSports} sub-sports · ${catalog.summary.periodEntries} period entries`;
+
+          const colliding = new Map(
+            (catalog.subSports ?? [])
+              .filter((entry) => entry.collision)
+              .map((entry) => [entry.code, entry.sports.join(" + ")]),
+          );
+
+          for (const sport of sports) {
+            const details = make("details", "sc-sport");
+            if (needle !== "" || sports.length <= 4) details.open = true;
+
+            const summary = make("summary");
+            summary.append(make("span", "", sport.sport));
+            summary.append(
+              make(
+                "span",
+                "sc-n",
+                `${sport.subSports.length} sub-sports · ${sport.periods.length} periods`,
+              ),
+            );
+            details.append(summary);
+
+            const body = make("div", "sc-body");
+
+            const subGroup = make("div", "sc-group");
+            subGroup.append(make("h4", "", "Sub-sports (code)"));
+            const chips = make("div", "sc-chips");
+            for (const sub of sport.subSports) {
+              const chip = make("span", "sc-chip");
+              const owners = colliding.get(sub.code);
+              if (owners !== undefined) {
+                chip.classList.add("sc-collide");
+                chip.title = `Code shared by ${owners}`;
+              }
+              chip.append(make("span", "", sub.name));
+              chip.append(make("code", "", ` ${sub.code}`));
+              chips.append(chip);
+            }
+            subGroup.append(chips);
+            body.append(subGroup);
+
+            const periodGroup = make("div", "sc-group");
+            periodGroup.append(make("h4", "", "Periods (number → name)"));
+            const periods = make("div", "sc-periods");
+            for (const period of sport.periods) {
+              const chip = make("span", "sc-period");
+              chip.append(make("b", "", String(period.number)));
+              chip.append(make("span", "", period.name));
+              periods.append(chip);
+            }
+            periodGroup.append(periods);
+            body.append(periodGroup);
+
+            details.append(body);
+            list.append(details);
+          }
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/api/sports/catalog", {
+              cache: "no-store",
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            catalog = await res.json();
+            badge.textContent = `${catalog.summary.sports} SPORTS`;
+            badge.className = "badge badge-accent";
+            render();
+          } catch (err) {
+            badge.textContent = "UNAVAILABLE";
+            badge.className = "badge badge-alert";
+            list.replaceChildren(
+              make(
+                "p",
+                "ld-note",
+                `Could not load the catalog: ${String(err)}`,
+              ),
+            );
+          }
+        };
+
+        search.addEventListener("input", render);
+        expand.addEventListener("click", () => {
+          const open = expand.textContent === "Expand all";
+          for (const details of list.querySelectorAll("details")) {
+            details.open = open;
+          }
+          expand.textContent = open ? "Collapse all" : "Expand all";
+        });
+
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Game Admin board                                                   *
+       *                                                                    *
+       * Some amounts are abbreviated by the portal ("120k"); those are      *
+       * rendered with a trailing ≈ and never added into a total.            *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const list = document.getElementById("gb-list");
+        if (list === null) return;
+
+        const badge = document.getElementById("gb-badge");
+        const note = document.getElementById("gb-note");
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        const MARKETS = [
+          ["spread", "Spread"],
+          ["money", "Moneyline"],
+          ["total", "Total"],
+          ["teamTotal", "Team totals"],
+        ];
+
+        /** Team totals carry over/under per team; every other market is one pair. */
+        const sidesOf = (game, market) => {
+          if (market !== "teamTotal") return game[market] ?? [];
+          return (game.teamTotal ?? []).flatMap((entry) => [
+            {
+              side: `${entry.team} OVER`,
+              line: entry.line,
+              price: entry.overPrice,
+              amount: entry.overAmount,
+              amountExact: entry.overAmountExact,
+            },
+            {
+              side: `${entry.team} UNDER`,
+              line: entry.line,
+              price: entry.underPrice,
+              amount: entry.underAmount,
+              amountExact: entry.underAmountExact,
+            },
+          ]);
+        };
+
+        const moduleSelect = document.getElementById("gb-module");
+        const windowSelect = document.getElementById("gb-window");
+        const moduleNote = document.getElementById("gb-mode-note");
+
+        /**
+         * Module switch, mirroring the portal's `data-field="module"`:
+         *   A (Admin)    — the market with the money on each side
+         *   P (Position) — the same action split Straight / Parlay / Teaser
+         */
+        const setMode = (mode) => {
+          moduleNote.textContent =
+            mode === "P"
+              ? "Position: action split by wager shape."
+              : "Admin: the market with the money on each side.";
+          load();
+        };
+
+        const renderPositions = (body) => {
+          list.replaceChildren();
+          const games = body.games ?? [];
+          if (games.length === 0) {
+            list.append(
+              make("p", "ld-note", "No wagers to split by position."),
+            );
+            return;
+          }
+
+          for (const game of games) {
+            const card = make("article", "gb-game");
+            const head = make("div", "gb-head");
+            head.append(make("span", "", game.matchup));
+            head.append(make("span", "gb-market", game.league));
+            const state = make(
+              "span",
+              "gb-clock",
+              game.preGame ? "pre-game" : "started",
+            );
+            head.append(state);
+            head.append(
+              make(
+                "span",
+                "gb-clock",
+                `${game.total.wagers} wager(s) · ${usd(game.total.wagered)} wagered`,
+              ),
+            );
+            card.append(head);
+
+            const table = make("table", "gb-table");
+            const tbody = make("tbody");
+            const entries = Object.entries(game.positions ?? {});
+            if (entries.length === 0) {
+              const row = make("tr");
+              const cell = make("td", "", "No position buckets.");
+              cell.colSpan = 4;
+              row.append(cell);
+              tbody.append(row);
+            }
+            for (const [position, bucket] of entries) {
+              const row = make("tr");
+              const label = make("td");
+              label.append(make("span", "gb-pos", position));
+              row.append(label);
+              row.append(make("td", "gb-line", String(bucket.wagers)));
+              row.append(make("td", "gb-amount", usd(bucket.wagered)));
+              row.append(make("td", "gb-amount", usd(bucket.toWin)));
+              tbody.append(row);
+            }
+            table.append(tbody);
+            card.append(table);
+            list.append(card);
+          }
+
+          badge.textContent = "POSITION";
+          badge.className = "badge badge-primary";
+          moduleNote.textContent =
+            "Position: action split by wager shape. Source: the wager capture, not the board.";
+        };
+
+        const render = (body) => {
+          list.replaceChildren();
+          const games = body.games ?? [];
+          if (games.length === 0) {
+            list.append(make("p", "ld-note", "No games on the board."));
+            return;
+          }
+
+          for (const game of games) {
+            const card = make("article", "gb-game");
+
+            const head = make("div", "gb-head");
+            const rot = make(
+              "span",
+              "gb-line",
+              `${game.rot[0]} / ${game.rot[1]}`,
+            );
+            const teams = make(
+              "span",
+              "",
+              `${game.teams[0]} vs ${game.teams[1]}`,
+            );
+            const score = make(
+              "span",
+              "gb-score",
+              `${game.score[0]} – ${game.score[1]}`,
+            );
+            const clock = make("span", "gb-clock");
+            if (game.status === "live") {
+              const live = make("span", "gb-live", "LIVE ");
+              clock.append(live);
+            }
+            clock.append(document.createTextNode(game.clock || game.status));
+            head.append(rot, teams, score, clock);
+            card.append(head);
+
+            const table = make("table", "gb-table");
+            const thead = make("thead");
+            const headRow = make("tr");
+            for (const label of ["Market", "Side", "Line", "Price", "Amount"]) {
+              headRow.append(make("th", "", label));
+            }
+            thead.append(headRow);
+            table.append(thead);
+
+            const tbody = make("tbody");
+            for (const [market, label] of MARKETS) {
+              for (const side of sidesOf(game, market)) {
+                const row = make("tr");
+                row.append(make("td", "gb-market", label));
+                row.append(make("td", "", side.side));
+
+                const line = make("td", "gb-line", side.line);
+                row.append(line);
+
+                row.append(
+                  make(
+                    "td",
+                    "gb-line",
+                    side.price === null ? "—" : String(side.price),
+                  ),
+                );
+
+                const amount = make("td", "gb-amount", side.amount);
+                if (side.amountExact === null) {
+                  amount.classList.add("gb-approx");
+                  amount.title =
+                    "The portal abbreviated this figure; it is excluded from sums.";
+                }
+                row.append(amount);
+
+                tbody.append(row);
+              }
+            }
+            table.append(tbody);
+            card.append(table);
+            list.append(card);
+          }
+
+          const summary = body.summary;
+          if (summary !== undefined) {
+            const parts = summary.byMarket
+              .map(
+                (m) =>
+                  `${m.market}: ${m.proven} exact, ${m.approximate} approximate`,
+              )
+              .join(" · ");
+            badge.textContent = `${summary.games} GAMES`;
+            badge.className = "badge badge-accent";
+            note.textContent =
+              `${parts}. Proven spread exposure sums to ` +
+              `$${(summary.byMarket.find((m) => m.market === "spread")?.sumExact ?? 0).toLocaleString()}. ` +
+              `Approximate figures are shown with ≈ and never added in.`;
+          }
+        };
+
+        const load = async () => {
+          const mode = moduleSelect.value;
+          try {
+            if (mode === "P") {
+              const res = await authed("/api/game-admin", {
+                cache: "no-store",
+              });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              renderPositions(await res.json());
+              return;
+            }
+            const windowValue = windowSelect.value;
+            const res = await authed(
+              `/api/game-admin/board?window=${encodeURIComponent(windowValue)}`,
+              { cache: "no-store" },
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            if ((body.games ?? []).length === 0) {
+              const label =
+                body.windows?.find((entry) => entry.value === windowValue)
+                  ?.label ?? "this window";
+              list.replaceChildren(
+                make(
+                  "p",
+                  "ld-note",
+                  `No games for ${label}. The board is transcribed from a single report, so other days are empty rather than repeated.`,
+                ),
+              );
+              badge.textContent = "EMPTY";
+              badge.className = "badge badge-warning";
+              return;
+            }
+            render(body);
+          } catch (err) {
+            badge.textContent = "UNAVAILABLE";
+            badge.className = "badge badge-alert";
+            list.replaceChildren(
+              make(
+                "p",
+                "ld-note",
+                `Could not load the ${mode === "P" ? "position" : "board"} view: ${String(err)}`,
+              ),
+            );
+          }
+        };
+
+        moduleSelect.addEventListener("change", () =>
+          setMode(moduleSelect.value),
+        );
+        windowSelect.addEventListener("change", () => load());
+        globalThis.addEventListener("sportsdesk-settings", load);
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Contest / futures browser                                          *
+       *                                                                    *
+       * Rows come from /api/contests, which is built by                    *
+       * `bun run contests:extract` from saved sports-nav markup. The group  *
+       * filter is the portal's own data-group value.                        *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const list = document.getElementById("ct-list");
+        if (list === null) return;
+
+        const badge = document.getElementById("ct-badge");
+        const groupsEl = document.getElementById("ct-groups");
+        const search = document.getElementById("ct-search");
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        let all = [];
+        let activeGroup = "";
+
+        const render = () => {
+          const needle = search.value.trim().toLowerCase();
+          const rows = all.filter((entry) => {
+            const inGroup = activeGroup === "" || entry.group === activeGroup;
+            if (!inGroup) return false;
+            if (needle === "") return true;
+            return [
+              entry.description,
+              entry.group,
+              entry.sport,
+              entry.market,
+              entry.subject,
+              String(entry.contestNum),
+            ]
+              .filter(Boolean)
+              .some((value) => String(value).toLowerCase().includes(needle));
+          });
+
+          list.replaceChildren();
+          if (rows.length === 0) {
+            list.append(
+              make("p", "ld-note", "No contest matches this filter."),
+            );
+            return;
+          }
+
+          for (const entry of rows) {
+            const row = make("div", "ct-row");
+            row.append(make("span", "ct-num", String(entry.contestNum)));
+
+            const main = make("span");
+            main.append(make("span", "", entry.description));
+            if (entry.market)
+              main.append(make("span", "ct-market", entry.market));
+            row.append(main);
+
+            row.append(make("span", "ct-group", entry.group));
+            list.append(row);
+          }
+        };
+
+        const buildGroups = (entries) => {
+          groupsEl.replaceChildren();
+          const groups = [
+            ...new Set(entries.map((entry) => entry.group)),
+          ].sort();
+
+          const mk = (value, label) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.setAttribute(
+              "aria-pressed",
+              activeGroup === value ? "true" : "false",
+            );
+            button.textContent = label;
+            button.addEventListener("click", () => {
+              activeGroup = activeGroup === value ? "" : value;
+              buildGroups(all);
+              render();
+            });
+            return button;
+          };
+
+          groupsEl.append(mk("", `All ${entries.length}`));
+          for (const group of groups) {
+            const count = entries.filter(
+              (entry) => entry.group === group,
+            ).length;
+            groupsEl.append(mk(group, `${group} ${count}`));
+          }
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/api/contests", { cache: "no-store" });
+            if (res.status === 404) {
+              badge.textContent = "NOT EXTRACTED";
+              badge.className = "badge badge-warning";
+              list.replaceChildren(
+                make(
+                  "p",
+                  "ld-note",
+                  "No contest list yet. Save the sports-nav markup and run: bun run contests:extract --html <file>",
+                ),
+              );
+              return;
+            }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            all = body.entries ?? [];
+            badge.textContent = `${all.length} CONTESTS`;
+            badge.className = "badge badge-accent";
+            buildGroups(all);
+            render();
+          } catch (err) {
+            badge.textContent = "UNAVAILABLE";
+            badge.className = "badge badge-alert";
+            list.replaceChildren(
+              make("p", "ld-note", `Could not load contests: ${String(err)}`),
+            );
+          }
+        };
+
+        search.addEventListener("input", render);
+        load();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Settings (portal #update-settings modal)                            *
+       *                                                                    *
+       * Preferences live in localStorage. Only three of the four change     *
+       * anything here; language sets <html lang> and says so.               *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const form = document.getElementById("settings");
+        if (form === null) return;
+
+        const STORAGE_KEY = "sportsdesk-dashboard-settings";
+        const ZONES = {
+          0: { label: "(EST)", offset: -5 },
+          1: { label: "(CST)", offset: -6 },
+          2: { label: "(MST)", offset: -7 },
+          3: { label: "(PST)", offset: -8 },
+        };
+        const LANGS = {
+          English: "en",
+          Spanish: "es",
+          "Chinese (Simp)": "zh-Hans",
+          French: "fr",
+        };
+        const DEFAULTS = {
+          notify: "Y",
+          language: "English",
+          timezone: "1",
+          agentMenu: "Left Menu",
+        };
+
+        const badge = document.getElementById("st-badge");
+        const status = document.getElementById("st-status");
+        const select = (key) =>
+          form.querySelector(`select[data-setting="${key}"]`);
+
+        const readStored = () => {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw === null) return { ...DEFAULTS };
+            const parsed = JSON.parse(raw);
+            return {
+              notify: parsed.notify === "N" ? "N" : "Y",
+              language:
+                parsed.language in LANGS ? parsed.language : DEFAULTS.language,
+              timezone:
+                parsed.timezone in ZONES ? parsed.timezone : DEFAULTS.timezone,
+              agentMenu:
+                parsed.agentMenu === "Tile Menu" ? "Tile Menu" : "Left Menu",
+            };
+          } catch {
+            return { ...DEFAULTS };
+          }
+        };
+
+        const apply = (settings) => {
+          select("notify").value = settings.notify;
+          select("language").value = settings.language;
+          select("timezone").value = settings.timezone;
+          select("agentMenu").value = settings.agentMenu;
+
+          document.documentElement.lang = LANGS[settings.language] ?? "en";
+
+          const main = document.querySelector("main");
+          if (main !== null)
+            main.classList.toggle("tiles", settings.agentMenu === "Tile Menu");
+
+          // Wager Alerts off hides the dispatch buttons; sending still needs a token.
+          for (const button of document.querySelectorAll(
+            'button[data-action="alert"]',
+          )) {
+            button.hidden = settings.notify === "N";
+          }
+
+          const zone = ZONES[settings.timezone];
+          badge.textContent = `${zone.label} · ${settings.agentMenu === "Tile Menu" ? "TILES" : "LIST"}`;
+          badge.className = "badge badge-accent";
+        };
+
+        const fillEffects = () => {
+          document.getElementById("st-fx-notify").textContent =
+            "Shows or hides the Telegram alert buttons; sending still needs the admin token.";
+          document.getElementById("st-fx-language").textContent =
+            "Sets the document language only. No strings are translated yet.";
+          document.getElementById("st-fx-timezone").textContent =
+            "Shifts every timestamp this dashboard renders. Fixed offsets, so it does not follow US daylight saving.";
+          document.getElementById("st-fx-agentMenu").textContent =
+            "Single column, or a two-column tile grid.";
+        };
+
+        const save = () => {
+          const settings = {
+            notify: select("notify").value,
+            language: select("language").value,
+            timezone: select("timezone").value,
+            agentMenu: select("agentMenu").value,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+          apply(settings);
+          status.textContent = `Saved ${new Date().toLocaleTimeString()}`;
+          globalThis.dispatchEvent(new Event("sportsdesk-settings"));
+        };
+
+        const reset = () => {
+          localStorage.removeItem(STORAGE_KEY);
+          apply({ ...DEFAULTS });
+          status.textContent = "Reverted to defaults";
+          globalThis.dispatchEvent(new Event("sportsdesk-settings"));
+        };
+
+        document.getElementById("st-save").addEventListener("click", save);
+        document.getElementById("st-reset").addEventListener("click", reset);
+
+        fillEffects();
+        apply(readStored());
+        status.textContent = "Loaded";
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Live wager ticker panel                                            *
+       *                                                                    *
+       * Reads /api/live-wagers, which parses the {LIST: [...]} feed. A       *
+       * stake whose volume differs is shown in the warning colour with the   *
+       * volume printed, never averaged away.                                *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const list = document.getElementById("lw-rows");
+        if (list === null) return;
+
+        const badge = document.getElementById("lw-badge");
+        const note = document.getElementById("lw-note");
+        const stats = document.getElementById("lw-stats");
+        const writersBar = document.getElementById("lw-writers");
+        const typesBar = document.getElementById("lw-types");
+
+        const make = (tag, className, text) => {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        };
+
+        const defaultNote = note.textContent.replace(/\s+/g, " ").trim();
+        const noiseTitle = {
+          alert:
+            "ALERT row: mirrors a real ticket, so its stake is excluded from the totals.",
+          blocked: "BLOCKED sentinel: not a wager, excluded from the totals.",
+        };
+
+        let all = [];
+        let summaryData = { count: 0, byWriter: {}, byType: {} };
+        let provenance = {
+          source: "unlabelled",
+          observedAt: null,
+          captureNote: null,
+          partial: false,
+        };
+        let writer = "";
+        let type = "";
+
+        const chip = (value, label, current, onPick) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.setAttribute(
+            "aria-pressed",
+            current === value ? "true" : "false",
+          );
+          button.textContent = label;
+          button.addEventListener("click", () =>
+            onPick(current === value ? "" : value),
+          );
+          return button;
+        };
+
+        const buildBars = (summary) => {
+          writersBar.replaceChildren(
+            chip("", `All writers ${summary.count}`, writer, (value) => {
+              writer = value;
+              render();
+            }),
+            ...Object.entries(summary.byWriter).map(([name, count]) =>
+              chip(name, `${name} ${count}`, writer, (value) => {
+                writer = value;
+                render();
+              }),
+            ),
+          );
+          typesBar.replaceChildren(
+            ...Object.entries(summary.byType).map(([code, count]) =>
+              chip(code, `type ${code} ${count}`, type, (value) => {
+                type = value;
+                render();
+              }),
+            ),
+          );
+        };
+
+        const render = () => {
+          const rows = all.filter(
+            (wager) =>
+              (writer === "" || wager.writer === writer) &&
+              (type === "" || wager.wagerType === type),
+          );
+
+          list.replaceChildren();
+          if (rows.length === 0) {
+            const tr = make("tr");
+            const td = make(
+              "td",
+              "empty-row",
+              all.length === 0
+                ? "No wagers in this list."
+                : "No wager matches this filter.",
+            );
+            td.colSpan = 9;
+            tr.append(td);
+            list.append(tr);
+          }
+
+          for (const wager of rows) {
+            const tr = make("tr");
+            const noise = noiseTitle[wager.writer];
+            if (noise !== undefined) {
+              tr.className = "lw-noise";
+              tr.title = noise;
+            }
+            tr.append(make("td", "", `#${wager.wagerNumber}`));
+            tr.append(make("td", "", wager.agentLogin || wager.agentId));
+            tr.append(make("td", "", wager.login));
+
+            const typeCell = make("td");
+            typeCell.append(make("span", "lw-type", wager.wagerType || "—"));
+            tr.append(typeCell);
+
+            tr.append(make("td", "", usd(wager.amountWagered)));
+            tr.append(make("td", "", usd(wager.toWinAmount)));
+
+            const volume = make(
+              "td",
+              wager.volumeDiffers ? "lw-vol" : "",
+              usd(wager.volumeAmount),
+            );
+            if (wager.volumeDiffers) {
+              volume.title = `Volume differs from the ${usd(wager.amountWagered)} stake`;
+            }
+            tr.append(volume);
+
+            tr.append(make("td", "", wager.writer));
+
+            const legCell = make("td");
+            legCell.append(make("span", "", String(wager.legs.length)));
+            const first = wager.legs[0];
+            if (first !== undefined) {
+              const label =
+                first.game === ""
+                  ? `${first.sport} — ${first.pick}`
+                  : `${first.sport} · ${first.game}${first.market === "" ? "" : ` · ${first.market}`}`;
+              legCell.append(
+                make(
+                  "span",
+                  "lw-leg",
+                  wager.legs.length > 1
+                    ? `${label} (+${wager.legs.length - 1} more)`
+                    : label,
+                ),
+              );
+            }
+            tr.append(legCell);
+
+            list.append(tr);
+          }
+
+          buildBars(summaryData);
+        };
+
+        /** A failed load must not leave the last list's rows and totals on screen. */
+        const clearPanel = (message) => {
+          all = [];
+          summaryData = { count: 0, byWriter: {}, byType: {} };
+          stats.hidden = true;
+          writersBar.replaceChildren();
+          typesBar.replaceChildren();
+          const tr = make("tr");
+          const td = make("td", "empty-row", message);
+          td.colSpan = 9;
+          tr.append(td);
+          list.replaceChildren(tr);
+        };
+
+        const loadLiveWagers = async () => {
+          try {
+            const res = await authed("/api/live-wagers", { cache: "no-store" });
+            if (res.status === 404) {
+              badge.textContent = "NOT CAPTURED";
+              badge.className = "badge badge-warning";
+              note.textContent =
+                "No bet ticker capture yet. Run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json.";
+              clearPanel("No wager list.");
+              return;
+            }
+            if (res.status === 401 || res.status === 503) {
+              badge.textContent = "TOKEN REQUIRED";
+              badge.className = "badge badge-warning";
+              note.textContent = tokenHint(res.status);
+              clearPanel("Wagers hidden until an admin token is set.");
+              return;
+            }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const body = await res.json();
+            all = body.wagers ?? [];
+            summaryData = body.summary ?? summaryData;
+            provenance = body.provenance ?? provenance;
+            const freshness = body.freshness ?? null;
+            const skipped = body.skipped ?? [];
+            const total = summaryData.count ?? 0;
+            const counted = summaryData.counted ?? total;
+            const excluded = summaryData.excluded ?? {
+              alert: 0,
+              blocked: 0,
+              risk: 0,
+            };
+            const excludedRows = excluded.alert + excluded.blocked;
+
+            document.getElementById("lw-count").textContent =
+              counted === total
+                ? String(counted)
+                : `${counted} of ${total} rows`;
+            document.getElementById("lw-excluded").textContent =
+              excludedRows === 0
+                ? "0"
+                : `${excludedRows} · ${usd(excluded.risk)} risk`;
+            document.getElementById("lw-risk").textContent = usd(
+              summaryData.risk,
+            );
+            document.getElementById("lw-towin").textContent = usd(
+              summaryData.toWin,
+            );
+            document.getElementById("lw-volume").textContent = usd(
+              summaryData.volume,
+            );
+            document.getElementById("lw-legs").textContent = String(
+              summaryData.legs ?? 0,
+            );
+            document.getElementById("lw-mismatch").textContent = String(
+              summaryData.volumeMismatches ?? 0,
+            );
+            stats.hidden = false;
+
+            const captured = String(provenance.source).startsWith("capture:");
+            const stale = freshness?.stale === true;
+            badge.textContent = [
+              `${counted} WAGERS`,
+              captured ? "CAPTURE" : "PASTE",
+              ...(provenance.partial ? ["PARTIAL"] : []),
+              ...(stale ? ["STALE"] : []),
+            ].join(" · ");
+            badge.className =
+              captured && !provenance.partial && !stale
+                ? "badge badge-accent"
+                : "badge badge-warning";
+
+            // The file's own words about its completeness, not a sentence invented here.
+            const caveat = provenance.captureNote;
+            const origin =
+              provenance.source === "unlabelled"
+                ? ""
+                : ` Source: ${provenance.source}${
+                    provenance.observedAt === null
+                      ? " (no observation time)"
+                      : ` at ${sdFormatTs(provenance.observedAt)}`
+                  }.`;
+            const verb =
+              freshness?.asOfFrom === "file-mtime" ? "file written" : "as of";
+            const ageSeconds = Math.max(
+              0,
+              Math.floor(
+                (Date.now() - Date.parse(freshness?.asOf ?? "")) / 1000,
+              ),
+            );
+            const staleNote = stale
+              ? `STALE: list ${verb} ${sdFormatTs(freshness.asOf)} (${sdAge(ageSeconds)}). It is a one-off ${captured ? "capture" : "paste"}, not a live feed — rerun bun run capture:bet-ticker.`
+              : "";
+            // An older second file is the normal state once both exist; only rejected files are news.
+            const rejected = skipped.filter(
+              (entry) => !entry.reason.startsWith("older than"),
+            );
+            const skippedNote =
+              rejected.length === 0
+                ? ""
+                : `Skipped: ${rejected.map((entry) => `${entry.path} (${entry.reason})`).join("; ")}.`;
+            const parts = [caveat ?? "", origin, staleNote, skippedNote].filter(
+              (part) => part !== "",
+            );
+            note.textContent =
+              parts.length === 0 ? defaultNote : parts.join(" ");
+            render();
+          } catch (err) {
+            badge.textContent = "UNAVAILABLE";
+            badge.className = "badge badge-alert";
+            clearPanel(`Could not load wagers: ${String(err)}`);
+          }
+        };
+
+        globalThis.addEventListener("sportsdesk-settings", loadLiveWagers);
+        setInterval(() => {
+          if (document.visibilityState === "visible") loadLiveWagers();
+        }, 30_000);
+        loadLiveWagers();
+      })();
+
+      /* ------------------------------------------------------------------ *
+       * Agent tree raster                                                  *
+       *                                                                    *
+       * The image is the same graph `/graph` serves, so it is guarded the   *
+       * same way. An <img src> cannot carry the admin token, so the bytes   *
+       * are read through authed() and handed to the image as a blob URL;   *
+       * without that, every non-loopback peer would see a broken image no   *
+       * matter what token it pasted. The fetch happens on first expand, not *
+       * on page load, because the raster is a few hundred kilobytes.        *
+       * ------------------------------------------------------------------ */
+      (() => {
+        const details = document.querySelector(".agent-tree-dropdown");
+        const img = details?.querySelector(".agent-tree-img") ?? null;
+        const note = document.getElementById("agent-graph-note");
+        const toggle = details?.querySelector(".agent-tree-toggle") ?? null;
+        if (details === null || img === null || note === null) return;
+
+        let objectUrl = null;
+        let loaded = false;
+        let scale = 1;
+
+        const showNote = (message) => {
+          img.hidden = true;
+          note.hidden = false;
+          note.textContent = message;
+        };
+
+        const load = async () => {
+          try {
+            const res = await authed("/agent-graph.webp", {
+              cache: "no-store",
+            });
+            if (res.status === 401 || res.status === 503) {
+              showNote(`TOKEN REQUIRED — ${tokenHint(res.status)}`);
+              return;
+            }
+            if (!res.ok) {
+              // The server's own words: 404 is "not built yet", 503 is "stale".
+              const body = await res.json().catch(() => ({}));
+              showNote(
+                body.error ??
+                  `Agent graph raster unavailable (HTTP ${res.status}).`,
+              );
+              return;
+            }
+            const blob = await res.blob();
+            if (objectUrl !== null) URL.revokeObjectURL(objectUrl);
+            objectUrl = URL.createObjectURL(blob);
+            img.src = objectUrl;
+            img.hidden = false;
+            note.hidden = true;
+            loaded = true;
+          } catch (err) {
+            showNote(`Could not load the agent graph raster: ${String(err)}`);
+          }
+        };
+
+        details.addEventListener("toggle", () => {
+          toggle?.setAttribute(
+            "aria-expanded",
+            details.open ? "true" : "false",
+          );
+          if (details.open && !loaded) load();
+        });
+
+        // A newly pasted token is the case that made the image stay broken.
+        globalThis.addEventListener("sportsdesk-settings", () => {
+          loaded = false;
+          if (details.open) load();
+        });
+
+        for (const button of details.querySelectorAll(
+          ".agent-tree-btn[data-zoom]",
+        )) {
+          button.addEventListener("click", () => {
+            const zoom = button.getAttribute("data-zoom");
+            if (zoom === "in") scale = Math.min(4, scale + 0.25);
+            else if (zoom === "out") scale = Math.max(0.25, scale - 0.25);
+            else scale = 1;
+            img.style.transform = `scale(${scale})`;
+          });
+        }
+      })();
     </script>
   </body>
 </html>

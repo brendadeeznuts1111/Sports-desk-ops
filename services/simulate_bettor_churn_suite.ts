@@ -20,8 +20,11 @@
 // 1. BRANDED DOMAIN PRIMITIVES & SPECIFICATION-GRADE TYPES
 // ============================================================================
 
-declare const __brand: unique symbol;
-export type Brand<T, B> = T & { readonly [__brand]: B };
+// The brand engine lives in lib/brand.ts. Declaring `__brand` here gives this module its own
+// nominal symbol, so a `Cents` branded here would not be assignable to a `Cents` branded in
+// design/domain-branded-types.ts — the same concept, two incompatible types.
+import type { Brand } from "../lib/brand.ts";
+export type { Brand };
 
 export type Cents = Brand<number, "Cents">;
 export type Dollars = Brand<number, "Dollars">;
@@ -54,7 +57,17 @@ export function createCanonicalCustomerId(rawIdentifier: string): CustomerId {
 export function createPaddedCustomerId(
   rawIdentifier: string,
 ): PaddedCustomerId {
-  return rawIdentifier.trim().toUpperCase().padEnd(11, " ") as PaddedCustomerId;
+  // Same contract as design/domain-branded-types.ts:padCustomerIdCanonical, because both now
+  // construct the same brand. Without this, `""` became eleven spaces and a 12-character login
+  // became a 12-character "padded" id — both branded PaddedCustomerId, both rejected by the
+  // domain's own isPaddedCustomerId guard.
+  const trimmed = rawIdentifier.trim().toUpperCase();
+  if (trimmed.length === 0 || trimmed.length > 11) {
+    throw new RangeError(
+      `PaddedCustomerId source length must be between 1 and 11 characters (got ${trimmed.length}): '${rawIdentifier}'`,
+    );
+  }
+  return trimmed.padEnd(11, " ") as PaddedCustomerId;
 }
 
 export function createCanonicalAgentId(rawIdentifier: string): AgentId {

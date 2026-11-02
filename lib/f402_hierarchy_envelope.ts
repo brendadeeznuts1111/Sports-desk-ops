@@ -15,15 +15,22 @@ export const JQ_PLAYERS_PROJECTED = `{GENERAL, EXTRA, PLAYERS: [.PLAYERS[] | {cu
 
 export const JQ_PLAYERS_OFF = `{GENERAL, EXTRA, PLAYERS: []}`;
 
+const PROJECTED_PLAYER_KEYS = [
+  "customerID",
+  "Login",
+  "NameFirst",
+  "Agent",
+] as const;
+
 export function projectPlayerRow(
   row: ListAgentsByAgentPlayerWireRow,
 ): ListAgentsByAgentPlayerWireRow {
-  return {
-    customerID: row.customerID,
-    Login: row.Login,
-    NameFirst: row.NameFirst,
-    Agent: row.Agent,
-  };
+  const out: { [K in (typeof PROJECTED_PLAYER_KEYS)[number]]?: string } = {};
+  for (const key of PROJECTED_PLAYER_KEYS) {
+    const value = row[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
 }
 
 export function applyPlayersModeToEnvelope(
@@ -99,7 +106,7 @@ export function countPlayersInJsonText(bodyText: string): number | null {
 export interface HierarchyRequestFields {
   readonly agentID: string;
   readonly agentType: string;
-  readonly agentOwner?: string;
+  readonly agentOwner?: string | undefined;
 }
 
 export function buildHierarchyFormBody(

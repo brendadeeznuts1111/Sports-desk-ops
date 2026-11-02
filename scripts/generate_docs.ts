@@ -1041,13 +1041,13 @@ function renderDomains(context: RenderContext): string[] {
 
 const HEADER_EVIDENCE: Readonly<Record<string, string>> = {
   authorization:
-    "Declared for the local daemon (`daemonBearer`) and implementation-verified there (`sportsdesk_webview_server.ts:27-47`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`operational_guardrails_runbook.md:153`).",
+    "Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:27-47`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`).",
   cookie:
-    "Observed: the 2026-10-28 Manager HAR session is cookie-based (`operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.",
+    "Observed: the 2026-10-28 Manager HAR session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.",
   "content-type":
-    "Observed on the `getWebLog` mode-B request as `application/x-www-form-urlencoded; charset=UTF-8` (`operational_guardrails_runbook.md:129-140`); other content types are spec declarations, not captures.",
+    "Observed on the `getWebLog` mode-B request as `application/x-www-form-urlencoded; charset=UTF-8` (`docs/runbooks/operational_guardrails_runbook.md:129-140`); other content types are spec declarations, not captures.",
   "x-requested-with":
-    "Observed on the `getWebLog` mode-B request (`XMLHttpRequest`, `operational_guardrails_runbook.md:129-140`).",
+    "Observed on the `getWebLog` mode-B request (`XMLHttpRequest`, `docs/runbooks/operational_guardrails_runbook.md:129-140`).",
   accept:
     "Declared in the spec; not present in the captured `getWebLog` request headers.",
   "referrer-policy":
@@ -1056,11 +1056,11 @@ const HEADER_EVIDENCE: Readonly<Record<string, string>> = {
 
 const RESPONSE_HEADER_EVIDENCE: Readonly<Record<string, string>> = {
   "content-security-policy":
-    "Implemented for local daemon responses (`sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
   "x-content-type-options":
-    "Implemented for local daemon responses (`sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
   "referrer-policy":
-    "Implemented for local daemon responses (`sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured.",
 };
 
 function renderHeadersMatrix(context: RenderContext): string[] {
@@ -1169,7 +1169,7 @@ function renderHeadersMatrix(context: RenderContext): string[] {
   if (responseHeaders.size === 0) {
     lines.push("### Inbound response security headers", "");
     lines.push(
-      "No response headers are declared in the spec. The local daemon implements `Content-Security-Policy`, `X-Content-Type-Options` and `Referrer-Policy` (`sportsdesk_webview_server.ts:83-91`); upstream cloud response headers were not captured.",
+      "No response headers are declared in the spec. The local daemon implements `Content-Security-Policy`, `X-Content-Type-Options` and `Referrer-Policy` (`services/sportsdesk_webview_server.ts:83-91`); upstream cloud response headers were not captured.",
     );
     lines.push("");
   } else {
@@ -1201,9 +1201,9 @@ function renderHeadersMatrix(context: RenderContext): string[] {
 
 const SCHEME_NOTES: Readonly<Record<string, string>> = {
   fantasy402cookie:
-    "Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authorization header (`operational_guardrails_runbook.md:153`). The 2026-10-31 captures record an `authorization` key with a **redacted** value, so whether the current session also sends a bearer token is **unverified — check this**. No login/`Set-Cookie` exchange was captured, so the cookie name, lifetime, renewal window and scope are **unverified**. Do not assume a JWT lifetime — the earlier “~20–25 minute” claim had no source and was removed.",
+    "Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authorization header (`docs/runbooks/operational_guardrails_runbook.md:153`). The 2026-10-31 captures record an `authorization` key with a **redacted** value, so whether the current session also sends a bearer token is **unverified — check this**. No login/`Set-Cookie` exchange was captured, so the cookie name, lifetime, renewal window and scope are **unverified**. Do not assume a JWT lifetime — the earlier “~20–25 minute” claim had no source and was removed.",
   daemonbearer:
-    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`sportsdesk_webview_server.ts:27-47`), protects `/api/watchlist` and `/api/telegram/*` (`:176-183`) and returns 503 when the token is not configured.",
+    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:27-47`), protects `/api/watchlist` and `/api/telegram/*` (`:176-183`) and returns 503 when the token is not configured.",
   bearerAuth:
     "Unverified — declared only for tier C operations; no bearer token exchange was ever captured.",
 };
@@ -1218,7 +1218,7 @@ function renderAuth(context: RenderContext): string[] {
     Object.keys(securitySchemes).length === 0
   ) {
     lines.push(
-      "The spec declares no security schemes. The only observed authenticated session is the cookie-based Manager session from the 2026-10-28 HAR (`operational_guardrails_runbook.md:153`); the local daemon's bearer check is implementation-verified (`sportsdesk_webview_server.ts:27-47`). Everything else is unverified.",
+      "The spec declares no security schemes. The only observed authenticated session is the cookie-based Manager session from the 2026-10-28 HAR (`docs/runbooks/operational_guardrails_runbook.md:153`); the local daemon's bearer check is implementation-verified (`services/sportsdesk_webview_server.ts:27-47`). Everything else is unverified.",
     );
     lines.push("");
   } else {
@@ -1335,9 +1335,9 @@ function renderErrorEnvelope(context: RenderContext): string[] {
 
 const CONTRADICTION_NOTES: Readonly<Record<string, string>> = {
   "/cloud/api/Manager/getWebLog":
-    "The earlier spec required an `Authorization: Bearer` header and published a four-field response row schema; the 2026-10-28 HAR shows a cookie-based session with no Authorization header (the 2026-10-31 captures record a redacted `authorization` key, so a bearer token is unverified), and captured no response body (`operational_guardrails_runbook.md:153`). Only the mode-B request side is real.",
+    "The earlier spec required an `Authorization: Bearer` header and published a four-field response row schema; the 2026-10-28 HAR shows a cookie-based session with no Authorization header (the 2026-10-31 captures record a redacted `authorization` key, so a bearer token is unverified), and captured no response body (`docs/runbooks/operational_guardrails_runbook.md:153`). Only the mode-B request side is real.",
   "/cloud/api/Manager/getInfoPlayer":
-    "The earlier spec's request example was an 11-character padded `customerID`; the observed read sent a 7-character trimmed ID (`operational_guardrails_runbook.md:213`) and the response remains uncaptured.",
+    "The earlier spec's request example was an 11-character padded `customerID`; the observed read sent a 7-character trimmed ID (`docs/runbooks/operational_guardrails_runbook.md:213`) and the response remains uncaptured.",
 };
 
 function contradictionNote(path: string): string {

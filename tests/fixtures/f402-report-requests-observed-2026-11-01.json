@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-11-01T23:07:24Z",
+  "source": "operator paste of two live manager requests, 2026-11-01. Credential headers were stripped before this file was written; agent identifiers are placeholders.",
+  "agentPlaceholder": "<agent>",
+  "responsesObserved": false,
+  "requests": [
+    {
+      "operation": "getAgentPerformance",
+      "pathObserved": "/cloud/api/Manager/getAgentPerformance",
+      "pathStatus": "observed 2026-11-01, third call. This contradicts the repo's inferred /cloud/api/Report/getAgentPerformance: the report is served by the Manager prefix, not Report.",
+      "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+      "fields": {
+        "start": "10/21/2026",
+        "end": "11/01/2026",
+        "agentID": "<agent>",
+        "type": "CP",
+        "freePlay": "Y",
+        "store": "<agent>",
+        "sport": "Football            ",
+        "subsport": "",
+        "period": "-1",
+        "wagerType": "",
+        "betType": "",
+        "tipo": "0",
+        "debug": "0",
+        "operation": "getAgentPerformance",
+        "RRO": "1",
+        "agentOwner": "<agent>"
+      },
+      "filteredFields": {
+        "start": "10/21/2026",
+        "end": "11/01/2026",
+        "agentID": "<agent>",
+        "type": "CP",
+        "freePlay": "Y",
+        "store": "<agent>",
+        "sport": "Football            ",
+        "subsport": "NFL",
+        "period": "1",
+        "wagerType": "M",
+        "betType": "S",
+        "tipo": "0",
+        "debug": "0",
+        "operation": "getAgentPerformance",
+        "RRO": "1",
+        "agentOwner": "<agent>"
+      },
+      "filteredFieldsNote": "second observation, same operation, with the sport filter row filled: subsport=NFL, period=1, wagerType=M, betType=S. Only those four fields differ.",
+      "sportPerformanceFields": {
+        "start": "10/27/2026",
+        "end": "11/02/2026",
+        "agentID": "<agent>",
+        "type": "CPS",
+        "freePlay": "Y",
+        "store": "<agent>",
+        "sport": "LIVE                ",
+        "subsport": "NCAAF Live",
+        "period": "-1",
+        "wagerType": "",
+        "betType": "",
+        "tipo": "-1",
+        "debug": "0",
+        "operation": "getAgentPerformance",
+        "RRO": "1",
+        "agentOwner": "<agent>"
+      },
+      "sportPerformanceNote": "third observation: type=CPS, sport=LIVE, subsport=NCAAF Live, and tipo=-1 rather than 0, so tipo is not a constant. wagerType/betType still present and empty; period is -1 with a sport filter.",
+      "sportPerformancePeriodsObserved": {
+        "values": ["-1", "0"],
+        "note": "the same CPS call was observed twice with everything else equal except period: -1 and 0. LIVE's catalog period menu has exactly one entry, number 0, named Game, so both are meaningful: -1 is unfiltered and 0 is the whole game."
+      }
+    },
+    {
+      "operation": "getGrading",
+      "pathObserved": "/cloud/api/Report/getGrading",
+      "pathStatus": "observed 2026-11-01, fourth call. Note the Report prefix: getGrading really is under Report, unlike getAgentPerformance which is under Manager.",
+      "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+      "fields": {
+        "path": "/cloud/api/Report/getGrading",
+        "customerID": "",
+        "agent": "<agent>",
+        "start": "2026-11-01",
+        "end": "2026-11-01",
+        "type": "",
+        "operation": "getGrading",
+        "RRO": "1",
+        "agentID": "<agent>",
+        "agentOwner": "<agent>"
+      },
+      "fieldsNote": "Oddities worth keeping: the body echoes its own URL path in a `path` field; customerID and type are sent empty; there is no `token` field, although the committed capture record for this operation stores a 3-field body {customerID, operation, token}; and start/end are ISO YYYY-MM-DD here, where getAgentPerformance uses M/D/YYYY."
+    },
+    {
+      "operation": "getSubSportByReport",
+      "pathObserved": "/cloud/api/Manager/getSubSportByReport",
+      "pathStatus": "observed",
+      "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+      "requestHeadersObserved": [
+        "x-requested-with: XMLHttpRequest",
+        "origin: https://fantasy402.com"
+      ],
+      "caller": {
+        "module": "app/manager/module/agent-performance.js?bust=1.0.280",
+        "function": "getSubsport",
+        "transport": "jQuery $.ajax",
+        "observedFrom": "browser stack trace, 2026-11-01 \u2014 send -> ajax -> getSubsport -> agent-performance.js"
+      },
+      "fields": {
+        "customerID": "<agent>",
+        "sport": "Football            ",
+        "operation": "getSubSportByReport",
+        "RRO": "1",
+        "agentID": "<agent>",
+        "agentOwner": "<agent>"
+      },
+      "sportVariants": [
+        {
+          "sport": "Football            ",
+          "sportTrimmed": "Football",
+          "paddedLength": 20
+        },
+        {
+          "sport": "Auto Racing         ",
+          "sportTrimmed": "Auto Racing",
+          "paddedLength": 20
+        },
+        {
+          "sport": "Tennis              ",
+          "sportTrimmed": "Tennis",
+          "paddedLength": 20
+        }
+      ],
+      "sportVariantsNote": "three observations of the same call: one single-word sport, one two-word sport and one short name; all pad to 20 characters, so the width is not a property of a particular name"
+    },
+    {
+      "operation": "vipListInsert",
+      "pathObserved": "/cloud/api/Manager/vipListInsert",
+      "pathStatus": "observed 2026-11-01, from the Vip List panel's save. This is a WRITE.",
+      "contentType": "application/json",
+      "mutation": true,
+      "body": {
+        "list": [
+          {
+            "agentID": "<agent>",
+            "player": "<player>"
+          }
+        ],
+        "operation": "vipListInsert",
+        "agentID": "<agent>",
+        "agentOwner": "<agent>"
+      },
+      "fieldsNote": "JSON, unlike every report call observed so far (all form-urlencoded). The body carries a list array even for one player, so a single save is a batch from the API's point of view."
+    },
+    {
+      "operation": "write",
+      "pathObserved": "/cloud/api/Log/write",
+      "pathStatus": "observed 2026-11-01, after the two calls above. Audit log headline.",
+      "contentType": "application/json",
+      "mutation": true,
+      "body": {
+        "customerID": "<agent>",
+        "description": "Save Action / Vip List [ v1.0.280 | fantasy402.com ]",
+        "additional": "",
+        "operation": "write",
+        "agentID": "<agent>",
+        "agentOwner": "<agent>"
+      },
+      "fieldsNote": "The description names the screen and the portal version. A save therefore leaves a human-readable audit row naming what was changed."
+    },
+    {
+      "operation": "writeDetail",
+      "pathObserved": "/cloud/api/Log/writeDetail",
+      "pathStatus": "observed 2026-11-01, immediately after vipListInsert. Audit log detail.",
+      "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+      "mutation": true,
+      "fields": {
+        "customerID": "<agent>",
+        "data": "[{\"agentID\":\"<agent>\",\"player\":\"<player>\"}]",
+        "ticket": "0",
+        "info": " [SITE : fantasy402.com v1.0.280] ",
+        "operation": "writeDetail",
+        "agentID": "<agent>",
+        "agentOwner": "<agent>"
+      },
+      "fieldsNote": "Form-encoded, and `data` is the same JSON array the mutation sent, urlencoded into a form field. customerID/agentID/agentOwner are unpadded here."
+    }
+  ],
+  "writeObservation": "The last three requests are mutations, recorded as behaviour, never as a script. Correction 2026-11-01: 'nothing in this repository calls them' was too strong \u2014 lib/f402_probe.ts registers Log/write with readOnly:false, gated behind --include-unconfirmed plus --i-understand-mutations, and it synthesizes its own body rather than replaying a recorded one. vipListInsert, Log/writeDetail and updateBetTickerConfig have no call site at all.",
+  "writeResponse": {
+    "body": {
+      "INFO": ""
+    },
+    "observedAt": "2026-11-01",
+    "whichCall": "not identified in the paste",
+    "candidates": ["vipListInsert", "writeDetail", "write"],
+    "interpretation": "The portal's write acknowledgements carry INFO as an empty STRING, not true, not {} and not an object. So an INFO envelope in this API is either an object (the ticker config) or an empty string (a write ack), and a parser that assumes the object form will read this as an empty config rather than as 'no payload'.",
+    "notAProof": "No success semantics are established by this shape. An empty INFO is consistent with a saved write, but the portal also acknowledges without inspecting results (updateBasicSettings assigns local state from the values it sent), so 'INFO is empty' is recorded as 'no payload', not as 'the write succeeded'."
+  }
+}

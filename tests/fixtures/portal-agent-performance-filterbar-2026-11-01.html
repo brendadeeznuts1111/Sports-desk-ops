@@ -1,0 +1,310 @@
+<!--
+  Excerpt of the portal's agent-performance screen (module agent-performance.js, v1.0.280),
+  pasted by an operator on 2026-11-01.
+
+  Kept for the filter-bar selects and the results-table header; the date-picker tables, the rest of
+  the grading panel and every other element were dropped so the fixture stays readable. Attribute
+  values and visible text are as they were on the page; `bun fmt` normalised the whitespace and
+  indentation, so line breaks here are not evidence. If a value differs from the live page, this
+  excerpt is wrong and should be replaced, not patched.
+
+  What it is for: the Analysis filter vocabulary in lib/analysis_filters.ts was transcribed from
+  this screen earlier. This excerpt is the artifact those transcriptions can be checked against,
+  and it records details the prose lost (padded option values, a duplicate option value, a
+  comma-separated wager-type value, and the grid's column headers).
+-->
+
+<div data-panel="agent-performance-main">
+  <!-- Report kind: data-action="filter" buttons, mirrored into #btnPerformance's label. -->
+  <div class="btn-group" id="listChked">
+    <button type="button" id="btnPerformance" data-field="display">
+      Sport Performance
+    </button>
+    <div class="dropdown-menu open-left arrow">
+      <button
+        class="dropdown-item"
+        type="button"
+        data-action="filter"
+        data-value="CP"
+        data-language="L-330"
+      >
+        Customer Performance
+      </button>
+      <button
+        class="dropdown-item"
+        type="button"
+        data-action="filter"
+        data-value="CPS"
+        data-language="L-592"
+      >
+        Sport Performance
+      </button>
+      <button
+        class="dropdown-item"
+        type="button"
+        data-action="filter"
+        data-value="CPV"
+        data-language="L-331"
+      >
+        Customer Volume
+      </button>
+      <button
+        class="dropdown-item"
+        type="button"
+        data-action="filter"
+        data-value="G"
+        data-language="L-199"
+      >
+        Graded Wagers
+      </button>
+    </div>
+  </div>
+
+  <!-- Activity. Options 6 (Prop Builder) and 9 (Extended Props) are commented out in the portal. -->
+  <select data-list="activity" class="form-control block">
+    <optgroup>
+      <option value="-1" data-language="L-998">All Action</option>
+      <option value="0" data-language="L-275">Sports</option>
+      <option value="1">LV Digital Casino</option>
+      <option value="5" data-language="L-1214">Poker</option>
+      <option value="2" data-language="L-883">Racebook</option>
+      <option value="3" data-language="L-09">Live Casino</option>
+      <option value="4" data-language="L-08">Live Betting</option>
+      <!--option value="6" data-language="L-1337">Prop Builder</option-->
+      <option value="7" data-language="L-1310">Soccer 365</option>
+      <option value="8" data-language="L-1427">Flash Bet</option>
+      <!--option value="9">Extended Props</option-->
+      <option value="10">Crash</option>
+      <option value="11">Fantasy</option>
+      <option value="12">AC Digital Casino</option>
+
+      <option value="14">Bet Builder</option>
+      <option value="15">Git Casino</option>
+    </optgroup>
+  </select>
+
+  <!-- Grouping. -->
+  <select data-list="group" class="form-control block">
+    <option value="1" data-language="L-1005">Group Agent</option>
+    <option value="2" data-language="L-1006">Sorting Columns</option>
+  </select>
+
+  <!-- Week window. 2/3/4 are commented out; -1 is "Today" here, which is NOT period=-1. -->
+  <select data-list="week" class="form-control block">
+    <option value="-1" selected="" data-language="L-449">Today</option>
+    <option value="0" data-language="L-192">This Week</option>
+    <option value="1" data-language="L-193">Last Week</option>
+    <!--
+    <option value="2" data-language="L-1007">Last 30 Days</option>
+    <option value="3" data-language="L-1008">Last 90 Days</option>
+
+    <option value="4" data-language="L-1009">Entered Dates</option>
+    -->
+    <option value="enter-dates" data-language="L-1009">Entered Dates</option>
+  </select>
+
+  <!-- Sports. The option VALUES are padded to 20 characters, exactly like the wire field. -->
+  <select data-list="sports" class="form-control block" id="responsive_single">
+    <optgroup>
+      <option value="-1" selected="">All Sports</option>
+      <option value="Auto Racing         ">Auto Racing</option>
+      <option value="Baseball            ">Baseball</option>
+      <option value="Basketball          ">Basketball</option>
+      <option value="Boxing              ">Boxing</option>
+      <option value="Cricket             ">Cricket</option>
+      <option value="Entertainment       ">Entertainment</option>
+      <option value="Esports             ">Esports</option>
+      <option value="Football            ">Football</option>
+      <option value="Golf                ">Golf</option>
+      <option value="Hockey              ">Hockey</option>
+      <option value="Horse Racing        ">Horse Racing</option>
+      <option value="LIVE                ">LIVE</option>
+      <option value="Martial Arts        ">Martial Arts</option>
+      <option value="Olympics            ">Olympics</option>
+      <option value="Other               ">Other</option>
+      <option value="Rugby               ">Rugby</option>
+      <option value="Soccer              ">Soccer</option>
+      <option value="Tennis              ">Tennis</option>
+      <option value="Virtual Sports      ">Virtual Sports</option>
+    </optgroup>
+  </select>
+
+  <!-- Wager types. Two options share the value "I". -->
+  <select data-list="wagers" class="form-control block" id="responsive_single">
+    <optgroup>
+      <option value="-1" selected="" data-language="L-1011">
+        All Wager Types
+      </option>
+      <option value="S" data-language="L-604">Straights</option>
+      <option value="P" data-language="L-605">Parlays</option>
+      <option value="T" data-language="L-606">Teasers</option>
+      <option value="I" data-language="L-607">If-Bets</option>
+      <option value="I" data-language="L-1012">Action Reverses</option>
+      <option value="C" data-language="L-1013">Contests</option>
+      <option value="A" data-language="L-202">Manual Plays</option>
+    </optgroup>
+  </select>
+
+  <!-- Sub-sports: populated per selected sport. Horse Racing's own list was on screen. -->
+  <select
+    data-list="Subsports"
+    class="form-control block"
+    id="responsive_single"
+  >
+    <option value="-1">All SubSports</option>
+    <option value="Arena"></option>
+    <option value="Bel St MATCH">Belmont Stakes Matchups / Props</option>
+    <option value="Breder Match">Breeders Cup Matchups</option>
+    <option value="K DER MATCHU">Kentucky Derby Matchups/ Props</option>
+    <option value="Prek MATCHU">Preakness Matchups</option>
+    <option value="Triple Crown">Triple Crown Props</option>
+  </select>
+
+  <!-- Bet type. M is Money Line HERE; the bet ticker's WagerType=M is a different field. -->
+  <select data-list="betType" class="form-control block" id="responsive_single">
+    <optgroup>
+      <option value="-1" selected="">All</option>
+      <option value="S">Spread</option>
+      <option value="M">Money Line</option>
+      <option value="L">Total</option>
+      <option value="E">Team Total</option>
+    </optgroup>
+  </select>
+
+  <!-- Periods. This static menu is Football's: 1st/2nd Half, then four quarters. -->
+  <select data-list="period" class="form-control block">
+    <optgroup>
+      <option value="-1" selected="" data-language="L-1015">All Periods</option>
+      <option value="0">Game</option>
+      <option value="1">1st Half</option>
+      <option value="2">2nd Half</option>
+      <option value="3">1st Qtr</option>
+      <option value="4">2nd Qtr</option>
+      <option value="5">3rd Qtr</option>
+      <option value="6">4th Qtr</option>
+    </optgroup>
+  </select>
+
+  <!-- Grading panel's wager-type select: Straight is a comma-separated list, not one code. -->
+  <select
+    data-list="wager-type"
+    class="select2 form-control block"
+    id="responsive_single"
+  >
+    <optgroup>
+      <option value="" selected="" data-language="L-880">All</option>
+      <option value="S,M,L,E,C" data-language="L-12">Straight</option>
+      <option value="P" data-language="L-15">Parlay</option>
+      <option value="T" data-language="L-85">Teaser</option>
+      <option value="I" data-language="L-86">If Bet</option>
+      <option value="A" data-language="L-202">Manual Plays</option>
+      <option value="G" data-language="L-278">Horses</option>
+      <option value="D" data-language="L-876">Dynamic Live</option>
+      <option value="B" data-language="L-1337">Prop Builder</option>
+    </optgroup>
+  </select>
+
+  <!-- Grading panel (report kind G): its own search action, its own date fields, its own export. -->
+  <div class="card-header header-agent-management" data-panel="grading">
+    <button type="button" id="gradeBtn" data-field="display">
+      Graded Wagers
+    </button>
+    <button
+      data-action="search-grading"
+      class="btn btn-icon btn-warning btn-round mr-1"
+    >
+      <i class="fa fa-search"></i>
+    </button>
+    <i data-export="excel-action" class="fa fa-file-excel-o hidden-xs"></i>
+    <input
+      type="text"
+      data-field="startG"
+      class="form-control pickadate picker__input"
+      readonly=""
+    />
+    <input
+      type="text"
+      data-field="endG"
+      class="form-control pickadate picker__input"
+      readonly=""
+    />
+  </div>
+
+  <!-- The analysis panel's export icon keeps the `hide` class, so it is never shown there. -->
+  <i data-export="excel-action" class="fa fa-file-excel-o hidden-xs hide"></i>
+  <button data-action="search" class="btn btn-icon btn-warning btn-round">
+    <i class="fa fa-search"></i>
+  </button>
+  <input
+    type="text"
+    data-field="start"
+    class="form-control pickadate picker__input"
+    readonly=""
+  />
+  <input
+    type="text"
+    data-field="end"
+    class="form-control pickadate picker__input"
+    readonly=""
+  />
+
+  <!-- Header actions beside the filters. -->
+  <div class="fl-r" style="margin-left: 4px">
+    <button
+      type="button"
+      data-action="show-config"
+      class="btn btn-success square"
+      data-language="L-1027"
+    >
+      Configuration
+    </button>
+    <button
+      type="button"
+      data-action="show-vip"
+      class="btn btn-dark square"
+      data-language="L-1028"
+    >
+      Vip List
+    </button>
+  </div>
+
+  <!-- The table container is stamped with the report kind that is loaded. -->
+  <div
+    data-content="table-agent-performance"
+    class="TYPE-REPORT-Customer-Volume"
+  ></div>
+
+  <!-- Results grid: the columns the screen renders. Headers only — the response keys are unknown. -->
+  <table class="table table-striped base" data-table="dynamic">
+    <thead>
+      <tr>
+        <th data-language="L-485" style="text-align: center; width: 15%">
+          All Players and Agents
+        </th>
+        <th data-language="L-223" style="text-align: center; width: 10%">
+          Won
+        </th>
+        <th data-language="L-222" style="text-align: center; width: 10%">
+          Lost
+        </th>
+        <th data-language="L-657" style="text-align: center; width: 10%">
+          # of Bets
+        </th>
+        <th data-language="L-244" style="text-align: center; width: 10%">
+          Risk
+        </th>
+        <th data-language="L-350" style="text-align: center; width: 10%">
+          Net
+        </th>
+        <th data-language="L-656" style="text-align: center; width: 10%">
+          Hold %age
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="noData" colspan="7">No Information to Display</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

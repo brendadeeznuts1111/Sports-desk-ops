@@ -126,7 +126,10 @@ export function createDocsServer(options: DocsServerOptions): DocsServer {
           return new Response("manifest unavailable", { status: 503 });
         }
         const key = request.params.key;
-        const entry = manifest.entries[key];
+        // `entries[key]` also answers for `__proto__`/`constructor`; only an own key is a page.
+        const entry = Object.hasOwn(manifest.entries, key)
+          ? manifest.entries[key]
+          : undefined;
         if (!entry) return new Response("not found", { status: 404 });
 
         const etag = `"${key}"`;

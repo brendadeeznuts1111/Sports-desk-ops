@@ -1,0 +1,34 @@
+<!--
+  Portal left-menu markup, mobile variant (`ul.l-menu-mobile`).
+  Source: operator paste of the manager page's nav, 2026-11-01. Nav actions and icon classes only —
+  it carries no token, cookie, password or account identity, which is why it can be committed.
+
+  Recorded because docs/evidence/ledger.json claimed `data-action="get-weekly-figure"` appeared in
+  "no capture, test or code artifact in either tree". This markup shows the string is real; what
+  stayed unproven is that it posts to POST /cloud/api/Report/getWeeklyFigure (the boot path uses
+  Manager/getWeeklyFigureByAgentLite instead).
+-->
+<ul class="l-menu-mobile mme" style="float:left">
+                            <li data-action="go-home-menu" class="li-a">
+                                <i class="fa fa-home"></i>
+                            </li>
+                            <li data-action="get-weekly-figure" data-type="heavy" class="li-b">
+                                <i class="glypth-line-chart"></i>
+                            </li>
+                            <li data-action="get-pending" class="li-c">
+                                <i class="glypth-calendar-and-clock"></i>
+                            </li>
+                            <li data-action="get-game-admin" class="li-d">
+                                <i class="glypth-gamese"></i>
+                            </li>
+                            <li data-action="get-messaging" class="li-f">
+                                <i class="glypth-close-envelope"></i>
+                            </li>
+
+                            <li data-action="show-search-mobile-icons" style="display: none;" class="li-g">
+                                <i class="ficon icon-search7"></i>
+                            </li>
+
+
+
+                        </ul>

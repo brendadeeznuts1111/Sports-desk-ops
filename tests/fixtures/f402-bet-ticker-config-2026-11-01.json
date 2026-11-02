@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-11-01T23:45:00",
+  "source": "operator paste: the save request plus the config object the read returned",
+  "agentPlaceholder": "<agent>",
+  "neverReplay": "The write below is a live mutation of the desk's ticker settings. This repository never calls it.",
+  "write": {
+    "operation": "updateBetTickerConfig",
+    "path": "/cloud/api/Manager/updateBetTickerConfig",
+    "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+    "mutation": true,
+    "fields": {
+      "agentID": "<agent>",
+      "play100000": "on",
+      "play9999": "on",
+      "play4999": "off",
+      "play1999": "off",
+      "play999": "on",
+      "play499": "on",
+      "showHorses": "on",
+      "showIfbets": "on",
+      "showTeasers": "on",
+      "showParlays": "on",
+      "showStraights": "on",
+      "color499": "#403ec1",
+      "color999": "#a5d687",
+      "color1999": "#fa4549",
+      "color4999": "#006699",
+      "color9999": "#66ff00",
+      "color100000": "#009966",
+      "operation": "updateBetTickerConfig",
+      "agentOwner": "<agent>"
+    },
+    "fieldsNote": "Play and colour fields are named by the bucket's UPPER bound only (play499, color499). The read side names the same buckets as ranges. Colours arrive urlencoded as %23RRGGBB, which decodes to #RRGGBB."
+  },
+  "read": {
+    "operation": "getBetTickerConfig",
+    "path": "/cloud/api/Manager/getBetTickerConfig",
+    "contentType": "application/x-www-form-urlencoded; charset=UTF-8",
+    "requestFields": {
+      "agentID": "<agent>",
+      "operation": "getBetTickerConfig",
+      "RRO": "1",
+      "agentOwner": "<agent>"
+    },
+    "responseEnvelope": "INFO",
+    "agentIdPaddedLength": 50,
+    "agentIdNote": "The response pads AgentID to 50 characters; the request sends it unpadded. Same field, two widths.",
+    "buckets": [
+      {
+        "requestPlay": "play499",
+        "requestColor": "color499",
+        "responsePlay": "play1-499",
+        "responseColor": "color1-499",
+        "playValue": "on ",
+        "color": "#403ec1"
+      },
+      {
+        "requestPlay": "play999",
+        "requestColor": "color999",
+        "responsePlay": "play500-999",
+        "responseColor": "color500-999",
+        "playValue": "on ",
+        "color": "#a5d687"
+      },
+      {
+        "requestPlay": "play1999",
+        "requestColor": "color1999",
+        "responsePlay": "play1000-1999",
+        "responseColor": "color1000-1999",
+        "playValue": "off",
+        "color": "#fa4549"
+      },
+      {
+        "requestPlay": "play4999",
+        "requestColor": "color4999",
+        "responsePlay": "play2000-4999",
+        "responseColor": "color2000-4999",
+        "playValue": "off",
+        "color": "#006699"
+      },
+      {
+        "requestPlay": "play9999",
+        "requestColor": "color9999",
+        "responsePlay": "play5000-9999",
+        "responseColor": "color5000-9999",
+        "playValue": "on ",
+        "color": "#66ff00"
+      },
+      {
+        "requestPlay": "play100000",
+        "requestColor": "color100000",
+        "responsePlay": "play10000-100000",
+        "responseColor": "color10000-100000",
+        "playValue": "on ",
+        "color": "#009966"
+      }
+    ],
+    "showFlags": {
+      "showHorses": "on ",
+      "showIfbets": "on ",
+      "showParlays": "on ",
+      "showStraights": "on ",
+      "showTeasers": "on "
+    },
+    "valuesNote": "An enabled bucket reads \"on \" — with a trailing space — while a disabled one reads \"off\" with no trailing space. Equality against \"on\" is therefore false for every enabled bucket, and equality against \"off\" is true. Trim before comparing."
+  }
+}

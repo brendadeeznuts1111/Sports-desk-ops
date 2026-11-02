@@ -2,7 +2,7 @@
  * Sentinel sweep on redacted HAR / capture JSON (load-bearing for gate i).
  */
 
-import { PRODUCTION_PASSWORD_SENTINEL } from "./f402_production_fixture_redaction.ts";
+import { scanText } from "./secret_scan.ts";
 
 export const F402_HAR_REDACTION_SWEEP_FAILED =
   "F402_HAR_REDACTION_SWEEP_FAILED";
@@ -49,6 +49,17 @@ export function sweepRedactedCaptureText(
     violations.push({
       code: "empty_password_key",
       detail: "empty Password string — use sentinel or omit",
+    });
+  }
+
+  // The `cookie` rule above matches a raw `Cookie:` header line, but a HAR stores headers as
+  // {"name":"cookie","value":"…"}, so it never fired: a "redacted" HAR shipped with 311-character
+  // cf_clearance and 199-character __cf_bm values and the proof still said violationCount 0.
+  // The credential shapes are the check that actually sees the values.
+  for (const finding of scanText(text)) {
+    violations.push({
+      code: "credential_shape",
+      detail: `${finding.kind} at line ${finding.line} (${finding.masked})`,
     });
   }
 

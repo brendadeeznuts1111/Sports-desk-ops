@@ -38,4 +38,21 @@ describe("f402 hierarchy replay scaffolding", () => {
     const res = new Response("", { status: 401 });
     expect(() => assertHierarchyFetchResponse(res, "")).toThrow(/401/);
   });
+
+  test("assertHierarchyFetchResponse reports 500 as an HTTP error, not a redirect", () => {
+    const res = new Response("internal error", { status: 500 });
+    expect(() => assertHierarchyFetchResponse(res, "internal error")).toThrow(
+      /HTTP error 500 .*: internal error/,
+    );
+  });
+
+  test("assertHierarchyFetchResponse reports 302 as a redirect", () => {
+    const res = new Response("", {
+      status: 302,
+      headers: { location: "https://example.test/login" },
+    });
+    expect(() => assertHierarchyFetchResponse(res, "")).toThrow(
+      /redirected \(HTTP 302\)/,
+    );
+  });
 });

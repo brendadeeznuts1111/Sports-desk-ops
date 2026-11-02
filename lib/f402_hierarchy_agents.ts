@@ -21,7 +21,10 @@ export function detectAgentLoginCollisions(
   general: readonly ListAgentsByAgentGeneralWireRow[],
 ): AgentLoginCollision[] {
   const seen = new Map<string, { agentId: string; seqNumber: number | null }>();
-  const collisions: AgentLoginCollision[] = [];
+  const collisions = new Map<
+    string,
+    { agentIds: string[]; seqNumbers: number[] }
+  >();
 
   for (const row of general) {
     const key = agentLoginKey(row);
@@ -32,17 +35,12 @@ export function detectAgentLoginCollisions(
       typeof seqRaw === "number" && Number.isFinite(seqRaw) ? seqRaw : null;
     const prev = seen.get(key);
     if (prev !== undefined && prev.agentId !== agentId) {
-      const existing = collisions.find((c) => c.key === key);
+      const existing = collisions.get(key);
       if (existing) {
-        (
-          existing as { agentIds: string[]; seqNumbers: number[] }
-        ).agentIds.push(agentId);
-        if (seqNumber !== null) {
-          (existing as { seqNumbers: number[] }).seqNumbers.push(seqNumber);
-        }
+        existing.agentIds.push(agentId);
+        if (seqNumber !== null) existing.seqNumbers.push(seqNumber);
       } else {
-        collisions.push({
-          key,
+        collisions.set(key, {
           agentIds: [prev.agentId, agentId],
           seqNumbers: [
             ...(prev.seqNumber !== null ? [prev.seqNumber] : []),
@@ -54,7 +52,11 @@ export function detectAgentLoginCollisions(
       seen.set(key, { agentId, seqNumber });
     }
   }
-  return collisions;
+  return [...collisions].map(([key, { agentIds, seqNumbers }]) => ({
+    key,
+    agentIds,
+    seqNumbers,
+  }));
 }
 
 export function assertNoAgentLoginCollisions(

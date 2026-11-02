@@ -4,6 +4,11 @@
  * customer-admin web reports grid—not credential fields.
  */
 
+import {
+  normalizeOnOffFlag,
+  trimFlag as trimConfigFlag,
+} from "./f402_flag_values.ts";
+
 export interface ConfigWebReportsCustomerAdminInfo {
   readonly showSportsbookStatus?: string;
   readonly showCasinoStatus?: string;
@@ -39,16 +44,14 @@ export interface ConfigWebReportsCustomerAdminEnvelope {
   readonly INFO: ConfigWebReportsCustomerAdminInfo;
 }
 
-export function trimConfigFlag(raw: string | undefined | null): string {
-  return (raw ?? "").trim();
-}
-
-/** Normalize `"on "` / `"off       "` to `"on"` | `"off"` | trimmed literal. */
-export function normalizeOnOffFlag(raw: string | undefined | null): string {
-  const t = trimConfigFlag(raw).toLowerCase();
-  if (t === "on" || t === "off") return t;
-  return trimConfigFlag(raw);
-}
+/**
+ * The trim rule lives in `f402_flag_values.ts` now — the bet-ticker config needed the same one.
+ * These re-exports keep this module's public surface unchanged.
+ */
+export {
+  normalizeOnOffFlag,
+  trimFlag as trimConfigFlag,
+} from "./f402_flag_values.ts";
 
 export function parseConfigWebReportsCustomerAdminEnvelope(
   raw: unknown,

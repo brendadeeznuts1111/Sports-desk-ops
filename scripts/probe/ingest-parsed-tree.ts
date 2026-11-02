@@ -26,7 +26,7 @@ if (!dbPath.startsWith(`${SCRATCH}/`)) {
   throw new Error("F402_AGENTS_DB must be under scratch/");
 }
 
-const result =
+const generalResult =
   ingestFrom === "general"
     ? await (async () => {
         if (!rawEnvelopePath.startsWith(`${SCRATCH}/`)) {
@@ -45,7 +45,10 @@ const result =
           master,
         );
       })()
-    : ingestNormalizedTreeToSqlite(await Bun.file(treePath).json(), dbPath);
+    : null;
+const result =
+  generalResult ??
+  ingestNormalizedTreeToSqlite(await Bun.file(treePath).json(), dbPath);
 
 const log: Record<string, unknown> = {
   signal: "F402_AGENTS_INGESTED",
@@ -55,12 +58,10 @@ const log: Record<string, unknown> = {
   cteRowCount: result.cteRowCount,
   ingestMs: result.ingestMs,
 };
-if (ingestFrom === "general") {
+if (generalResult !== null) {
   log.envelopePath = rawEnvelopePath.replace(`${REPO}/`, "");
-}
-if ("skippedOverflow" in result) {
-  log.generalRowCount = result.generalRowCount;
-  log.skippedOverflowCount = result.skippedOverflow.length;
+  log.generalRowCount = generalResult.generalRowCount;
+  log.skippedOverflowCount = generalResult.skippedOverflow.length;
 }
 console.error(JSON.stringify(log));
 

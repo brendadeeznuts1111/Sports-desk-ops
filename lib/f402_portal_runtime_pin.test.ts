@@ -9,7 +9,7 @@ describe("portal runtime pin", () => {
   test("readCurrentPortalRuntimePin includes webkit jsc revision", () => {
     const pin = readCurrentPortalRuntimePin();
     expect(pin.bunVersion).toBe(Bun.version);
-    expect(pin.jscRevision).toBe(process.versions.webkit);
+    expect<string | undefined>(pin.jscRevision).toBe(process.versions.webkit);
     expect(pin.bunRevision).toBe(Bun.revision);
   });
 

@@ -9,6 +9,8 @@ singleQuote = false
 ignorePatterns = [
   # Minified portal oracle slices — never `bun fmt` (collides with slicer output).
   "verification/manager-boot-oracle/extracted/**/*.min.js",
+  # Pinned portal bundles: manifest.json pins their exact bytes.
+  "verification/manager-boot-oracle/pinned/*.js",
   "tests/fixtures/**/*.golden.ast.json5",
   "tests/fixtures/**/*.golden.json",
   "tests/fixtures/fantasy402-sport-catalog-*.json",
@@ -20,6 +22,14 @@ ignorePatterns = [
   "docs/assets/pipeline-artifacts-metadata.json",
   "docs/combo-uniqueness.json",
   "docs/cross-domain-bridge.json",
+  # Compact on purpose: 2.2k agents stay ~94 KB instead of ~220 KB pretty-printed.
+  "data/agent-tree.json",
+  # Same reason, same generator: 2,465 agents, 122 KB compact vs 228 KB pretty.
+  "data/agent-index.json",
+  # Tool-owned: `statechart` writes this report verbatim (it puts no blank line under a
+  # heading), so formatting it only makes the next gate run dirty the tree again.
+  "verification/gen-tokens-zero-drift-gate/report.md",
+  "verification/gen-tokens-zero-drift-gate/out/**",
 ]
 
 # Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the

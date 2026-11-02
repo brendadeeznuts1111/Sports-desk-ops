@@ -80,7 +80,7 @@ export function loadListAgentsRequestFixture(
 export function buildListAgentsReplayPlan(
   account: AccountInfoOwnerFixture,
   bodyFixture: ListAgentsRequestFixture = {},
-  options?: { readonly host?: string; readonly rro?: number },
+  options?: { readonly host?: string | undefined; readonly rro?: number },
 ): HierarchyReplayPlan {
   const host = (options?.host ?? PROBE_HOST).replace(/\/$/, "");
   const rro = bodyFixture.RRO ?? options?.rro ?? MANAGER_RRO;
@@ -113,14 +113,14 @@ export function assertHierarchyHttpResponse(
       "getListAgenstByAgent returned 401 — session expired or missing cookie (client would console.log and leave hierarchy empty). Auth: F402_WEBVIEW_PROFILE + WebView login (bun run hierarchy:probe -- --login), F402_SESSION_FILE, or F402_REPLAY_PROXY_URL",
     );
   }
-  if (res.redirected || res.status >= 300) {
+  if (res.redirected || (res.status >= 300 && res.status < 400)) {
     throw new Error(
-      `getListAgenstByAgent redirect or 3xx (${res.status}) url=${res.url} — not a JSON envelope`,
+      `getListAgenstByAgent redirected (HTTP ${res.status}) url=${res.url} — not a JSON envelope`,
     );
   }
   if (!res.ok) {
     throw new Error(
-      `getListAgenstByAgent HTTP ${res.status}: ${bodyText.slice(0, 200)}`,
+      `getListAgenstByAgent HTTP error ${res.status} url=${res.url}: ${bodyText.slice(0, 200)}`,
     );
   }
 }
@@ -209,9 +209,9 @@ export async function runHierarchyReplay(options: {
   readonly mode: HierarchyReplayMode;
   readonly account: AccountInfoOwnerFixture;
   readonly bodyFixture?: ListAgentsRequestFixture;
-  readonly host?: string;
-  readonly profileDir?: string;
-  readonly proxyUrl?: string;
+  readonly host?: string | undefined;
+  readonly profileDir?: string | undefined;
+  readonly proxyUrl?: string | undefined;
 }): Promise<HierarchyReplayOutcome> {
   const plan = buildListAgentsReplayPlan(options.account, options.bodyFixture, {
     host: options.host,

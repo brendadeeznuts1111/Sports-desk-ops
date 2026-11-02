@@ -1,0 +1,1766 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Live Bets</title>
+    <style>
+      :root {
+        --line: #d8d8e0;
+        --line-strong: #b9b9c6;
+        --muted: #66666f;
+        --surface: #fff;
+        --page: #f4f5f7;
+        --accent: #1d6f42;
+        --accent-soft: #e8f3ec;
+        --nav-a: #2b2b33;
+        --nav-b: #17171c;
+        --nav-line: #3d3d47;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --line: #33333c;
+          --line-strong: #4a4a56;
+          --muted: #9a9aa6;
+          --surface: #17171c;
+          --page: #0f0f13;
+          --accent: #63c98d;
+          --accent-soft: #1b2c22;
+          --nav-a: #1c1c22;
+          --nav-b: #101014;
+          --nav-line: #2e2e38;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: inherit;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.4;
+      }
+
+      /* Portal-style semi-dark navbar. */
+      .navbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        height: 54px;
+        padding: 0 1rem 0 0;
+        background: linear-gradient(180deg, var(--nav-a), var(--nav-b));
+        border-bottom: 1px solid var(--nav-line);
+        box-shadow: 0 2px 10px rgb(0 0 0 / 0.24);
+        color: #f3f3f5;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        height: 100%;
+        padding: 0 1rem;
+        background: rgb(0 0 0 / 0.22);
+        border-right: 1px solid var(--nav-line);
+        text-decoration: none;
+        color: inherit;
+        flex: none;
+      }
+      .brand-mark {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #3bafda, #1d6f42);
+        display: grid;
+        place-items: center;
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+      .brand-name {
+        font-size: 0.9rem;
+        font-weight: 650;
+      }
+      .agent {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.78rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.08);
+        color: #d6d6de;
+        white-space: nowrap;
+      }
+      .agent b {
+        color: #fff;
+        font-weight: 650;
+      }
+      .quick {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-left: 0.25rem;
+      }
+      .quick button,
+      .graph-link {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #c9c9d3;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .quick button:hover,
+      .graph-link:hover {
+        background: rgb(255 255 255 / 0.09);
+        color: #fff;
+      }
+      .quick button[aria-pressed="true"] {
+        background: rgb(59 175 218 / 0.2);
+        border-color: rgb(59 175 218 / 0.5);
+        color: #fff;
+      }
+      .quick svg,
+      .graph-link svg {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .search {
+        position: relative;
+        margin-left: auto;
+        flex: 0 1 22rem;
+        min-width: 8rem;
+      }
+      .search input {
+        width: 100%;
+        padding: 0.4rem 0.6rem 0.4rem 1.9rem;
+        font: inherit;
+        font-size: 0.82rem;
+        color: #f2f2f5;
+        background: rgb(255 255 255 / 0.08);
+        border: 1px solid var(--nav-line);
+        border-radius: 6px;
+      }
+      .search input::placeholder {
+        color: #9b9ba7;
+      }
+      .search input:focus {
+        outline: none;
+        border-color: #3bafda;
+      }
+      .search > svg {
+        position: absolute;
+        left: 0.55rem;
+        top: 50%;
+        translate: 0 -50%;
+        width: 14px;
+        height: 14px;
+        fill: none;
+        stroke: #9b9ba7;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .search kbd {
+        position: absolute;
+        right: 0.4rem;
+        top: 50%;
+        translate: 0 -50%;
+        font-size: 0.62rem;
+        color: #9b9ba7;
+        border: 1px solid var(--nav-line);
+        border-radius: 4px;
+        padding: 0 0.25rem;
+      }
+
+      /* Layout: agent tree + scoreboard. */
+      .layout {
+        display: grid;
+        grid-template-columns: 17rem minmax(0, 1fr);
+        align-items: start;
+        max-width: 82rem;
+        margin: 0 auto;
+      }
+      .tree {
+        position: sticky;
+        top: 54px;
+        max-height: calc(100vh - 54px);
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: var(--surface);
+        font-size: 0.82rem;
+      }
+      .tree-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .tree-head h2 {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin: 0;
+      }
+      .tree-head .meta {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .tree-head button {
+        font: inherit;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .tree-head button:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .tree-search {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .tree-search input {
+        width: 100%;
+        font: inherit;
+        font-size: 0.78rem;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        background: var(--page);
+        color: inherit;
+      }
+      .tree-search input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .acct-search {
+        position: relative;
+      }
+      .acct-results {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 2px);
+        z-index: 20;
+        margin: 0;
+        padding: 0.2rem;
+        list-style: none;
+        max-height: 18rem;
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+      }
+      .acct-results[hidden] {
+        display: none;
+      }
+      .acct-results li {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.45rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.78rem;
+      }
+      .acct-results li[aria-selected="true"] {
+        background: var(--accent-soft);
+      }
+      .acct-results li:hover {
+        background: var(--page);
+      }
+      .acct-kind {
+        flex: none;
+        font-size: 0.58rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.05rem 0.3rem;
+        border-radius: 3px;
+        border: 1px solid var(--line-strong);
+        color: var(--muted);
+      }
+      .acct-kind.agent {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .acct-detail {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .acct-none {
+        padding: 0.45rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .tree-body {
+        overflow: auto;
+        padding: 0.4rem 0.35rem 1rem;
+      }
+      .node {
+        --depth: 0;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.15rem 0.25rem 0.15rem calc(0.25rem + var(--depth) * 0.7rem);
+        border-radius: 4px;
+      }
+      .row:hover {
+        background: var(--page);
+      }
+      .row.active {
+        background: var(--accent-soft);
+      }
+      .twist {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        padding: 0;
+      }
+      .twist[hidden] {
+        visibility: hidden;
+      }
+      .twist svg {
+        width: 10px;
+        height: 10px;
+        fill: currentColor;
+        transition: rotate 120ms ease;
+      }
+      .twist[aria-expanded="true"] svg {
+        rotate: 90deg;
+      }
+      .pick {
+        border: 0;
+        background: transparent;
+        font: inherit;
+        font-size: 0.8rem;
+        color: inherit;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pick:hover {
+        color: var(--accent);
+      }
+      .tier {
+        font-size: 0.6rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 0 0.2rem;
+        flex: none;
+      }
+      .chip {
+        margin-left: auto;
+        font-size: 0.64rem;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-radius: 999px;
+        padding: 0.05rem 0.35rem;
+        flex: none;
+      }
+      .children[hidden] {
+        display: none;
+      }
+      .tree-empty {
+        padding: 1rem 0.75rem;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .sports {
+        display: flex;
+        gap: 0.35rem;
+        overflow-x: auto;
+        padding-bottom: 0.6rem;
+        margin-bottom: 0.9rem;
+        border-bottom: 1px solid var(--line);
+        scrollbar-width: thin;
+      }
+      .sports button {
+        flex: none;
+        font: inherit;
+        font-size: 0.74rem;
+        padding: 0.25rem 0.6rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .sports button:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .sports button[aria-pressed="true"] {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .sports button .n {
+        opacity: 0.7;
+        margin-left: 0.25rem;
+        font-variant-numeric: tabular-nums;
+      }
+      body.dark .sports button[aria-pressed="true"] {
+        color: #101014;
+      }
+
+      main {
+        padding: 1.25rem;
+        min-width: 0;
+      }
+      .totals {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+      }
+      .totals div {
+        background: var(--surface);
+        padding: 0.7rem 0.9rem;
+      }
+      .totals dt {
+        color: var(--muted);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .totals dd {
+        margin: 0.15rem 0 0;
+        font-size: 1.15rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .statusline {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.9rem;
+        font-size: 0.72rem;
+        color: var(--muted);
+      }
+      .statusline button {
+        font: inherit;
+        padding: 0.2rem 0.6rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: var(--surface);
+        color: inherit;
+        cursor: pointer;
+      }
+      .statusline button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .scope-bar {
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.9rem;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        background: var(--accent-soft);
+        font-size: 0.78rem;
+      }
+      .scope-bar.on {
+        display: flex;
+      }
+      .scope-bar button {
+        margin-left: auto;
+        font: inherit;
+        font-size: 0.72rem;
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--accent);
+        padding: 0.1rem 0.5rem;
+        cursor: pointer;
+      }
+      section.sport {
+        margin-bottom: 1.75rem;
+      }
+      .sport-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 1rem;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 0.6rem;
+      }
+      .sport-head h2 {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin: 0;
+      }
+      .sport-head span {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .game {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .teams {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        flex: 1 1 20rem;
+        min-width: 0;
+      }
+      .team {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-width: 0;
+      }
+      .team img,
+      .logo-missing {
+        width: 30px;
+        height: 30px;
+        flex: none;
+        object-fit: contain;
+      }
+      .logo-missing {
+        border: 1px dashed var(--line-strong);
+        border-radius: 50%;
+      }
+      .team .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .team.chosen .name {
+        font-weight: 650;
+        color: var(--accent);
+      }
+      .score {
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+      }
+      .vs {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .meta {
+        margin-left: auto;
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        min-width: 9rem;
+      }
+      .amount {
+        font-variant-numeric: tabular-nums;
+        font-size: 0.92rem;
+      }
+      .detail {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 0.62rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 0.1rem 0.4rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .empty {
+        background: var(--surface);
+        border: 1px dashed var(--line-strong);
+        border-radius: 10px;
+        padding: 1.5rem;
+        text-align: center;
+        color: var(--muted);
+      }
+      .error {
+        color: #b3261e;
+      }
+      @media (max-width: 60rem) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .tree {
+          position: static;
+          max-height: 15rem;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .tree.collapsed {
+          display: none;
+        }
+      }
+      @media (max-width: 40rem) {
+        .brand-name,
+        .agent {
+          display: none;
+        }
+        .search {
+          flex: 1 1 auto;
+        }
+        .search kbd {
+          display: none;
+        }
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar" aria-label="Scoreboard">
+      <a class="brand" href="/live-bets" aria-label="Live Bets">
+        <span class="brand-mark" aria-hidden="true">LB</span>
+        <span class="brand-name">Live Bets</span>
+      </a>
+
+      <span
+        class="agent"
+        id="agent-scope"
+        title="Scope of the data being shown"
+      >
+        scope <b>—</b>
+      </span>
+
+      <div class="quick" role="group" aria-label="Filters">
+        <button
+          id="tree-toggle"
+          type="button"
+          aria-pressed="true"
+          title="Toggle agent tree"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 4v16M5 8h6M5 16h6M11 8h4M11 16h4" />
+          </svg>
+          <span class="sr-only">Toggle agent tree</span>
+        </button>
+        <button
+          id="f-all"
+          type="button"
+          aria-pressed="true"
+          title="All pending games"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M3 9h18M8 4v16" />
+          </svg>
+          <span class="sr-only">All</span>
+        </button>
+        <button
+          id="f-league"
+          type="button"
+          aria-pressed="true"
+          title="Group by league"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+          </svg>
+          <span class="sr-only">Group by league</span>
+        </button>
+        <button
+          id="f-money"
+          type="button"
+          aria-pressed="false"
+          title="Sort by stake, largest first"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 19V5M4 19h16M8 15l4-5 3 3 5-7" />
+          </svg>
+          <span class="sr-only">Sort by stake</span>
+        </button>
+        <a class="graph-link" href="/graph" title="Surveillance graph">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="6" cy="6" r="2.5" />
+            <circle cx="18" cy="6" r="2.5" />
+            <circle cx="12" cy="18" r="2.5" />
+            <path d="M8.2 7.2 11 15.6M15.8 7.2 13 15.6M8.5 6h7" />
+          </svg>
+          <span class="sr-only">Surveillance graph</span>
+        </a>
+      </div>
+
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <input
+          id="q"
+          type="search"
+          placeholder="Search team, agent, ticket…"
+          autocomplete="off"
+          aria-label="Filter games"
+        />
+        <kbd>/</kbd>
+      </div>
+    </nav>
+
+    <div class="layout">
+      <aside class="tree" id="tree" aria-label="Agent tree">
+        <div class="tree-head">
+          <h2>Agent Tree</h2>
+          <span class="meta" id="tree-meta">…</span>
+          <button id="tree-collapse" type="button" title="Collapse all">
+            Collapse
+          </button>
+        </div>
+        <div class="tree-search acct-search">
+          <input
+            id="tree-q"
+            type="search"
+            placeholder="Search accounts…"
+            autocomplete="off"
+            spellcheck="false"
+            role="combobox"
+            aria-label="Search agents and customers"
+            aria-expanded="false"
+            aria-controls="acct-results"
+            aria-autocomplete="list"
+          />
+          <ul class="acct-results" id="acct-results" role="listbox" hidden></ul>
+        </div>
+        <div class="tree-body" id="tree-body">
+          <p class="tree-empty">Loading…</p>
+        </div>
+      </aside>
+
+      <main>
+        <div class="sports" id="sports" role="group" aria-label="Sport filter">
+          <button type="button" data-sport="" aria-pressed="true">
+            All Sports
+          </button>
+        </div>
+
+        <dl class="totals" id="totals" hidden>
+          <div>
+            <dt>Games</dt>
+            <dd id="t-games">–</dd>
+          </div>
+          <div>
+            <dt>Wagered</dt>
+            <dd id="t-wagered">–</dd>
+          </div>
+          <div>
+            <dt>To win</dt>
+            <dd id="t-towin">–</dd>
+          </div>
+          <div>
+            <dt>Pending rows</dt>
+            <dd id="t-pending">–</dd>
+          </div>
+        </dl>
+
+        <div class="scope-bar" id="scope-bar">
+          <span id="scope-text"></span>
+          <button id="scope-clear" type="button">Clear</button>
+        </div>
+
+        <div class="statusline">
+          <span id="source">Loading…</span>
+          <span id="count"></span>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+
+        <div id="games" class="empty" aria-live="polite">Loading…</div>
+      </main>
+    </div>
+
+    <script>
+      const REFRESH_MS = 30_000;
+
+      const els = {
+        container: document.getElementById("games"),
+        source: document.getElementById("source"),
+        count: document.getElementById("count"),
+        refresh: document.getElementById("refresh"),
+        totals: document.getElementById("totals"),
+        scopePill: document.getElementById("agent-scope"),
+        scopeBar: document.getElementById("scope-bar"),
+        scopeText: document.getElementById("scope-text"),
+        scopeClear: document.getElementById("scope-clear"),
+        q: document.getElementById("q"),
+        all: document.getElementById("f-all"),
+        league: document.getElementById("f-league"),
+        money: document.getElementById("f-money"),
+        tree: document.getElementById("tree"),
+        treeBody: document.getElementById("tree-body"),
+        treeMeta: document.getElementById("tree-meta"),
+        treeQ: document.getElementById("tree-q"),
+        treeCollapse: document.getElementById("tree-collapse"),
+        treeToggle: document.getElementById("tree-toggle"),
+        sports: document.getElementById("sports"),
+        acctResults: document.getElementById("acct-results"),
+      };
+
+      const state = {
+        games: [],
+        summary: null,
+        agents: null,
+        query: "",
+        group: true,
+        sortByStake: false,
+        /** Agent key selected in the tree; filters games to it and its descendants. */
+        selected: null,
+        /** Sport taxonomy category, or null for "All Sports". */
+        sport: null,
+        /** Mirrors the portal's LIVE tab: state, not a sport. */
+        liveOnly: false,
+        /** Customer selected from account search; filters to that customer. */
+        customer: null,
+        /** Highlighted row in the account-search listbox. */
+        acctIndex: -1,
+        acctItems: [],
+        tree: null,
+        childrenOf: new Map(),
+        subtree: null,
+        treeExpanded: new Set(),
+        treeQuery: "",
+      };
+
+      const money = (cents) =>
+        (Number(cents || 0) / 100).toLocaleString(undefined, {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        });
+
+      const compact = (cents) => {
+        const usd = Number(cents || 0) / 100;
+        if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}M`;
+        if (usd >= 1_000) return `$${Math.round(usd / 1_000)}K`;
+        return `$${Math.round(usd)}`;
+      };
+
+      const STATUS = { P: "Pending", W: "Won", L: "Lost", X: "Push" };
+      const statusLabel = (s) => STATUS[s] ?? (s || "—");
+
+      /* ---------------- agent tree ---------------- */
+
+      const buildChildren = () => {
+        const children = new Map();
+        for (const [key, node] of Object.entries(state.tree.nodes)) {
+          const parent = node.p;
+          if (!parent) continue;
+          if (!children.has(parent)) children.set(parent, []);
+          children.get(parent).push(key);
+        }
+        for (const list of children.values()) list.sort();
+        state.childrenOf = children;
+      };
+
+      const descendants = (key) => {
+        const out = new Set([key]);
+        const stack = [key];
+        while (stack.length > 0) {
+          const current = stack.pop();
+          for (const child of state.childrenOf.get(current) ?? []) {
+            if (!out.has(child)) {
+              out.add(child);
+              stack.push(child);
+            }
+          }
+        }
+        return out;
+      };
+
+      /** Matches plus every ancestor, so a hit stays reachable in a collapsed tree. */
+      const visibleKeys = () => {
+        const needle = state.treeQuery.trim().toUpperCase();
+        if (needle === "") return null;
+        const visible = new Set();
+        for (const key of Object.keys(state.tree.nodes)) {
+          if (!key.includes(needle)) continue;
+          visible.add(key);
+          let node = state.tree.nodes[key];
+          let guard = 0;
+          while (node && node.p && guard++ < 64) {
+            visible.add(node.p);
+            node = state.tree.nodes[node.p];
+          }
+        }
+        return visible;
+      };
+
+      const renderTree = () => {
+        if (!state.tree) return;
+        const filter = visibleKeys();
+        const counts = state.tree.counts ?? {};
+        els.treeBody.textContent = "";
+
+        els.treeMeta.textContent = `${state.tree.agentCount} agents`;
+
+        if (filter !== null && filter.size === 0) {
+          const p = document.createElement("p");
+          p.className = "tree-empty";
+          p.textContent = "No agent matches.";
+          els.treeBody.append(p);
+          return;
+        }
+
+        const expandAll = filter !== null;
+
+        const renderNode = (key, depth) => {
+          const node = state.tree.nodes[key];
+          if (!node) return null;
+          if (filter !== null && !filter.has(key)) return null;
+
+          const children = (state.childrenOf.get(key) ?? []).filter(
+            (child) => filter === null || filter.has(child),
+          );
+
+          const wrap = document.createElement("div");
+          wrap.className = "node";
+          wrap.style.setProperty("--depth", String(depth));
+
+          const row = document.createElement("div");
+          row.className = "row" + (state.selected === key ? " active" : "");
+
+          const twist = document.createElement("button");
+          twist.type = "button";
+          twist.className = "twist";
+          twist.setAttribute(
+            "aria-expanded",
+            String(state.treeExpanded.has(key)),
+          );
+          const caret = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg",
+          );
+          caret.setAttribute("viewBox", "0 0 12 12");
+          const path = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path",
+          );
+          path.setAttribute("d", "M4 2l4 4-4 4z");
+          caret.append(path);
+          twist.append(caret);
+          if (children.length === 0) {
+            twist.hidden = true;
+          } else {
+            twist.addEventListener("click", () => {
+              if (state.treeExpanded.has(key)) state.treeExpanded.delete(key);
+              else state.treeExpanded.add(key);
+              renderTree();
+            });
+          }
+
+          const pick = document.createElement("button");
+          pick.type = "button";
+          pick.className = "pick";
+          pick.textContent = key;
+          pick.title = `${key}${node.l === null ? "" : ` · level ${node.l}`}${node.t ? ` · type ${node.t}` : ""}`;
+          pick.addEventListener("click", () => selectAgent(key));
+
+          const tier = document.createElement("span");
+          tier.className = "tier";
+          tier.textContent = node.l === null ? "—" : `L${node.l}`;
+
+          row.append(twist, pick, tier);
+
+          const exposure = counts[key];
+          if (exposure) {
+            const chip = document.createElement("span");
+            chip.className = "chip";
+            chip.textContent = `${exposure.games} · ${compact(exposure.wagered)}`;
+            chip.title = `${exposure.games} wager(s), ${money(exposure.wagered)} wagered`;
+            row.append(chip);
+          }
+
+          wrap.append(row);
+
+          const show = expandAll || state.treeExpanded.has(key);
+          if (children.length > 0 && show) {
+            const box = document.createElement("div");
+            box.className = "children";
+            for (const child of children) {
+              const childEl = renderNode(child, depth + 1);
+              if (childEl) box.append(childEl);
+            }
+            wrap.append(box);
+          }
+          return wrap;
+        };
+
+        const roots = (state.tree.roots ?? []).filter(
+          (key) => filter === null || filter.has(key),
+        );
+        for (const root of roots) {
+          const el = renderNode(root, 0);
+          if (el) els.treeBody.append(el);
+        }
+
+        if (els.treeBody.childElementCount === 0) {
+          const p = document.createElement("p");
+          p.className = "tree-empty";
+          p.textContent = "No agents in this tree.";
+          els.treeBody.append(p);
+        }
+      };
+
+      const selectAgent = (key) => {
+        if (state.selected === key) {
+          state.selected = null;
+          state.subtree = null;
+        } else {
+          state.selected = key;
+          state.subtree = descendants(key);
+        }
+        renderTree();
+        render();
+      };
+
+      const clearScope = () => {
+        state.selected = null;
+        state.subtree = null;
+        state.customer = null;
+        renderTree();
+        render();
+      };
+
+      /* ---------------- scoreboard ---------------- */
+
+      const teamEl = (team, chosen, scoreOverride) => {
+        const el = document.createElement("div");
+        el.className = "team" + (chosen ? " chosen" : "");
+
+        if (team.logo) {
+          const img = document.createElement("img");
+          img.src = `/api/logo/${encodeURIComponent(team.logo)}`;
+          img.alt = "";
+          img.loading = "lazy";
+          img.decoding = "async";
+          img.addEventListener("error", () => {
+            const ph = document.createElement("span");
+            ph.className = "logo-missing";
+            img.replaceWith(ph);
+          });
+          el.append(img);
+        } else {
+          const ph = document.createElement("span");
+          ph.className = "logo-missing";
+          el.append(ph);
+        }
+
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = team.shortName || team.name || "TBD";
+
+        const score = document.createElement("span");
+        score.className = "score";
+        score.textContent = String(scoreOverride ?? team.score ?? 0);
+
+        el.append(name, score);
+        return el;
+      };
+
+      const renderGame = (game) => {
+        const card = document.createElement("article");
+        card.className = "game";
+
+        const chosen = (game.chosenTeam || "").toLowerCase();
+        const teams = document.createElement("div");
+        teams.className = "teams";
+
+        const vs = document.createElement("span");
+        vs.className = "vs";
+        vs.textContent = "vs";
+
+        // Scores from the transcribed scoreboard beat the wager report's placeholder 0.
+        const scoreboard = game.scoreboard ?? null;
+        teams.append(
+          teamEl(
+            game.team1,
+            chosen !== "" && game.team1.name.toLowerCase() === chosen,
+            scoreboard?.team1Score ?? null,
+          ),
+          vs,
+          teamEl(
+            game.team2,
+            chosen !== "" && game.team2.name.toLowerCase() === chosen,
+            scoreboard?.team2Score ?? null,
+          ),
+        );
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+
+        const amount = document.createElement("span");
+        amount.className = "amount";
+        amount.textContent = `${money(game.wagered)} → ${money(game.toWin)}`;
+
+        const detail = document.createElement("span");
+        detail.className = "detail";
+        detail.append(
+          Object.assign(document.createElement("span"), {
+            className: "badge",
+            textContent: statusLabel(game.status),
+          }),
+        );
+        const facts = [
+          scoreboard?.period ?? game.period,
+          scoreboard?.broadcast ?? null,
+          game.position ?? null,
+          game.picks > 1 ? `${game.picks}-leg` : null,
+          game.agent?.key
+            ? `agent ${game.agent.key}${game.agent.level !== null ? ` · L${game.agent.level}` : ""}`
+            : null,
+          game.customerID ? `cust ${game.customerID}` : null,
+          `#${game.ticketNumber}`,
+        ].filter(Boolean);
+        detail.append(` ${facts.join(" · ")}`);
+
+        meta.append(amount, detail);
+        card.append(teams, meta);
+        return card;
+      };
+
+      const matches = (game, needle) => {
+        if (needle === "") return true;
+        const haystack = [
+          game.team1?.name,
+          game.team1?.shortName,
+          game.team2?.name,
+          game.team2?.shortName,
+          game.agent?.key,
+          game.customerID,
+          game.ticketNumber,
+          game.subSport,
+          game.sport,
+          game.chosenTeam,
+          game.description,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(needle);
+      };
+
+      const isLive = (game) =>
+        game.scoreboard?.status === "live" ||
+        (game.status === "P" && game.scoreboard?.period
+          ? !/final/i.test(game.scoreboard.period)
+          : false);
+
+      /**
+       * Account search across both identity surfaces this page actually holds:
+       * every agent in the committed tree, and every customer named by a captured wager.
+       * The portal's search also covers its 57k player list; this page does not have that
+       * capture, so the suggestion list says where each entry came from instead of implying
+       * a complete directory.
+       */
+      const acctEntries = () => {
+        const agents = state.tree
+          ? Object.keys(state.tree.nodes).map((key) => {
+              const node = state.tree.nodes[key];
+              const exposure = state.tree.counts?.[key];
+              return {
+                kind: "agent",
+                id: key,
+                detail:
+                  node?.l === null || node?.l === undefined
+                    ? ""
+                    : `L${node.l}` +
+                      (exposure ? ` · ${exposure.games} wager(s)` : ""),
+              };
+            })
+          : [];
+
+        const seen = new Map();
+        for (const game of state.games) {
+          const id = game.customerID;
+          if (!id) continue;
+          const entry = seen.get(id) ?? { kind: "customer", id, detail: "" };
+          entry.count = (entry.count ?? 0) + 1;
+          entry.detail = `${entry.count} wager(s) · ${game.agent?.key || "no agent"}`;
+          seen.set(id, entry);
+        }
+
+        return [...agents, ...seen.values()];
+      };
+
+      const closeAcct = () => {
+        els.acctResults.hidden = true;
+        els.acctResults.textContent = "";
+        els.treeQ.setAttribute("aria-expanded", "false");
+        state.acctItems = [];
+        state.acctIndex = -1;
+      };
+
+      const chooseAccount = (item) => {
+        if (!item) return;
+        if (item.kind === "agent") {
+          state.customer = null;
+          state.selected = item.id;
+          state.subtree = descendants(item.id);
+          // Reveal the agent in the tree so the selection is visible, not just applied.
+          let node = state.tree?.nodes?.[item.id];
+          let guard = 0;
+          while (node?.p && guard++ < 64) {
+            state.treeExpanded.add(node.p);
+            node = state.tree.nodes[node.p];
+          }
+          state.treeExpanded.add(item.id);
+          renderTree();
+        } else {
+          state.customer = item.id;
+          state.selected = null;
+          state.subtree = null;
+          renderTree();
+        }
+        els.treeQ.value = "";
+        state.treeQuery = "";
+        closeAcct();
+        render();
+      };
+
+      const highlightAcct = (next) => {
+        const rows = [...els.acctResults.querySelectorAll("li")];
+        if (rows.length === 0) return;
+        state.acctIndex = (next + rows.length) % rows.length;
+        rows.forEach((row, index) =>
+          row.setAttribute(
+            "aria-selected",
+            index === state.acctIndex ? "true" : "false",
+          ),
+        );
+        rows[state.acctIndex]?.scrollIntoView({ block: "nearest" });
+      };
+
+      const renderAcct = () => {
+        const needle = els.treeQ.value.trim().toUpperCase();
+        if (needle === "") {
+          closeAcct();
+          return;
+        }
+
+        const matches = acctEntries()
+          .filter((entry) => entry.id.toUpperCase().includes(needle))
+          .sort((a, b) => {
+            // Prefix hits first, then agents before customers, then shortest id.
+            const aPrefix = a.id.toUpperCase().startsWith(needle) ? 0 : 1;
+            const bPrefix = b.id.toUpperCase().startsWith(needle) ? 0 : 1;
+            if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+            if (a.kind !== b.kind) return a.kind === "agent" ? -1 : 1;
+            return a.id.length - b.id.length || a.id.localeCompare(b.id);
+          })
+          .slice(0, 12);
+
+        els.acctResults.textContent = "";
+        state.acctItems = matches;
+        state.acctIndex = -1;
+
+        if (matches.length === 0) {
+          const row = document.createElement("li");
+          row.className = "acct-none";
+          row.textContent = "No agent or captured customer matches.";
+          els.acctResults.append(row);
+        } else {
+          for (const entry of matches) {
+            const row = document.createElement("li");
+            row.setAttribute("role", "option");
+            row.setAttribute("aria-selected", "false");
+
+            const kind = document.createElement("span");
+            kind.className =
+              "acct-kind" + (entry.kind === "agent" ? " agent" : "");
+            kind.textContent = entry.kind === "agent" ? "agent" : "customer";
+
+            const id = document.createElement("span");
+            id.textContent = entry.id;
+
+            row.append(kind, id);
+
+            if (entry.detail) {
+              const detail = document.createElement("span");
+              detail.className = "acct-detail";
+              detail.textContent = entry.detail;
+              row.append(detail);
+            }
+
+            row.addEventListener("mousedown", (event) => {
+              event.preventDefault();
+              chooseAccount(entry);
+            });
+            els.acctResults.append(row);
+          }
+        }
+
+        els.acctResults.hidden = false;
+        els.treeQ.setAttribute("aria-expanded", "true");
+      };
+
+      /**
+       * Rebuilds the category bar from /api/live-bets. Only categories with data are shown,
+       * plus "All Sports"; the portal's LIVE tab becomes a state toggle, not a category.
+       */
+      const renderSports = (sports) => {
+        if (!sports || !Array.isArray(sports.categories)) return;
+        const previous = state.sport;
+        els.sports.textContent = "";
+
+        const allGames = state.games.length;
+        const allButton = document.createElement("button");
+        allButton.type = "button";
+        allButton.dataset.sport = "";
+        allButton.setAttribute(
+          "aria-pressed",
+          state.sport === null ? "true" : "false",
+        );
+        allButton.textContent = "All Sports";
+        const allCount = document.createElement("span");
+        allCount.className = "n";
+        allCount.textContent = String(allGames);
+        allButton.append(allCount);
+        allButton.addEventListener("click", () => {
+          state.sport = null;
+          renderSports(sports);
+          render();
+        });
+        els.sports.append(allButton);
+
+        for (const entry of sports.categories) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.sport = entry.category;
+          button.setAttribute(
+            "aria-pressed",
+            state.sport === entry.category ? "true" : "false",
+          );
+          button.textContent = entry.category;
+          const count = document.createElement("span");
+          count.className = "n";
+          count.textContent = String(entry.games);
+          count.title = entry.live > 0 ? `${entry.live} live` : "none live";
+          button.append(count);
+          button.addEventListener("click", () => {
+            state.sport =
+              state.sport === entry.category ? null : entry.category;
+            renderSports(sports);
+            render();
+          });
+          els.sports.append(button);
+        }
+
+        // "LIVE" mirrors the portal tab; it filters by state across every sport.
+        const live = document.createElement("button");
+        live.type = "button";
+        live.dataset.sport = sports.liveFilter ?? "LIVE";
+        live.setAttribute("aria-pressed", state.liveOnly ? "true" : "false");
+        live.textContent = "LIVE";
+        const liveCount = document.createElement("span");
+        liveCount.className = "n";
+        liveCount.textContent = String(state.games.filter(isLive).length);
+        live.append(liveCount);
+        live.addEventListener("click", () => {
+          state.liveOnly = !state.liveOnly;
+          renderSports(sports);
+          render();
+        });
+        els.sports.append(live);
+
+        if (
+          previous !== null &&
+          !els.sports.querySelector(`[data-sport="${previous}"]`)
+        ) {
+          state.sport = null;
+        }
+      };
+
+      const render = () => {
+        const needle = state.query.trim().toLowerCase();
+        const inCustomer = (game) =>
+          state.customer === null || game.customerID === state.customer;
+
+        const inSport = (game) =>
+          (state.sport === null || game.category === state.sport) &&
+          (!state.liveOnly || isLive(game));
+
+        const inScope = (game) =>
+          state.subtree === null ||
+          (game.agent?.key !== undefined && state.subtree.has(game.agent.key));
+
+        let games = state.games.filter(
+          (g) =>
+            inScope(g) && inCustomer(g) && inSport(g) && matches(g, needle),
+        );
+
+        els.container.textContent = "";
+        els.container.className = "";
+
+        // Scope banner
+        if (state.customer !== null) {
+          const rows = state.games.filter(
+            (g) => g.customerID === state.customer,
+          );
+          els.scopeBar.classList.add("on");
+          els.scopeText.textContent =
+            `customer ${state.customer}` +
+            ` · ${rows.length} wager(s) · ${money(
+              rows.reduce((n, g) => n + g.wagered, 0),
+            )}`;
+        } else if (state.selected !== null) {
+          const descendantsCount = (state.subtree?.size ?? 1) - 1;
+          const scoped = state.games.filter(inScope);
+          els.scopeBar.classList.add("on");
+          els.scopeText.textContent =
+            `${state.selected}${descendantsCount > 0 ? ` + ${descendantsCount} sub-agent(s)` : ""}` +
+            ` · ${scoped.length} wager(s) · ${money(scoped.reduce((n, g) => n + g.wagered, 0))}`;
+        } else {
+          els.scopeBar.classList.remove("on");
+          els.scopeText.textContent = "";
+        }
+
+        if (state.games.length === 0) {
+          els.container.className = "empty";
+          els.container.textContent =
+            "No pending games in the current capture.";
+          els.count.textContent = "";
+          return;
+        }
+        if (games.length === 0) {
+          els.container.className = "empty";
+          els.container.textContent =
+            state.subtree !== null
+              ? "No wagers for this agent or its sub-agents."
+              : state.sport !== null || state.liveOnly
+                ? "No wagers in this sport filter."
+                : `No games match “${state.query.trim()}”.`;
+          els.count.textContent = `0 of ${state.games.length}`;
+          return;
+        }
+
+        els.count.textContent =
+          games.length === state.games.length
+            ? `${games.length} shown`
+            : `${games.length} of ${state.games.length}`;
+
+        if (!state.group) {
+          const sorted = [...games];
+          if (state.sortByStake) sorted.sort((a, b) => b.wagered - a.wagered);
+          for (const game of sorted) els.container.append(renderGame(game));
+          return;
+        }
+
+        const groups = new Map();
+        for (const game of games) {
+          const key = game.subSport || game.sport || "Other";
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(game);
+        }
+
+        const entries = [...groups.entries()];
+        if (state.sortByStake) {
+          entries.sort(
+            (a, b) =>
+              b[1].reduce((n, g) => n + g.wagered, 0) -
+              a[1].reduce((n, g) => n + g.wagered, 0),
+          );
+        }
+
+        for (const [sport, list] of entries) {
+          const section = document.createElement("section");
+          section.className = "sport";
+
+          const head = document.createElement("div");
+          head.className = "sport-head";
+          const title = document.createElement("h2");
+          title.textContent = sport;
+
+          const ordered = state.sortByStake
+            ? [...list].sort((a, b) => b.wagered - a.wagered)
+            : list;
+          const totals = document.createElement("span");
+          totals.textContent = `${ordered.length} ${ordered.length === 1 ? "game" : "games"} · ${money(
+            ordered.reduce((n, g) => n + g.wagered, 0),
+          )}`;
+
+          head.append(title, totals);
+          section.append(head, ...ordered.map(renderGame));
+          els.container.append(section);
+        }
+      };
+
+      const renderSummary = (summary) => {
+        document.getElementById("t-games").textContent = String(
+          summary.totalGames,
+        );
+        document.getElementById("t-wagered").textContent = money(
+          summary.totalWagered,
+        );
+        document.getElementById("t-towin").textContent = money(
+          summary.totalToWin,
+        );
+        document.getElementById("t-pending").textContent = String(
+          summary.totalPending,
+        );
+        els.totals.hidden = false;
+
+        const agents = state.agents;
+        const resolved = agents?.agents ?? [];
+        els.scopePill.textContent = "";
+        const label = document.createElement("span");
+        label.textContent = "scope ";
+        const value = document.createElement("b");
+
+        if (resolved.length === 0) {
+          value.textContent =
+            (agents?.unassignedGames ?? 0) > 0
+              ? "customer capture"
+              : "no agents";
+        } else if (resolved.length === 1) {
+          const [only] = resolved;
+          value.textContent =
+            only.level === null ? only.key : `${only.key} · L${only.level}`;
+        } else {
+          value.textContent = `${resolved.length} agents`;
+        }
+        value.title = resolved
+          .map((a) => `${a.key}${a.level === null ? "" : ` (L${a.level})`}`)
+          .join(", ");
+        els.scopePill.append(label, value);
+
+        const captured = summary.capturedAt
+          ? `captured ${new Date(summary.capturedAt).toLocaleString()}`
+          : "no capture timestamp";
+        const hierarchy = agents?.hierarchyLoaded
+          ? ` · hierarchy L1–${agents.maxLevel ?? "?"}` +
+            (agents.collisions?.length
+              ? `, ${agents.collisions.length} ambiguous`
+              : "")
+          : "";
+        els.source.textContent = `${summary.dataSource} · ${captured}${hierarchy}`;
+        els.source.title = agents?.collisions?.length
+          ? `ambiguous logins: ${agents.collisions
+              .map((c) => `${c.key} (${c.agentIds.join(" / ")})`)
+              .join("; ")}`
+          : "";
+      };
+
+      /* ---------------- loading ---------------- */
+
+      let inFlight = false;
+
+      const loadTree = async () => {
+        try {
+          const res = await fetch("/api/agent-tree", { cache: "no-store" });
+          if (!res.ok) {
+            els.treeMeta.textContent = "n/a";
+            els.treeBody.textContent = "";
+            const p = document.createElement("p");
+            p.className = "tree-empty";
+            p.textContent =
+              res.status === 404
+                ? "No agent tree built. Run: bun run build:agent-tree"
+                : `Agent tree unavailable (HTTP ${res.status}).`;
+            els.treeBody.append(p);
+            return;
+          }
+          state.tree = await res.json();
+          buildChildren();
+          // Roots start expanded so the first screen shows structure, not one node.
+          for (const root of state.tree.roots ?? []) {
+            if ((state.childrenOf.get(root) ?? []).length > 0) {
+              state.treeExpanded.add(root);
+            }
+          }
+          renderTree();
+        } catch (err) {
+          els.treeMeta.textContent = "n/a";
+          els.treeBody.textContent = `Agent tree failed: ${String(err)}`;
+        }
+      };
+
+      const load = async () => {
+        if (inFlight) return;
+        inFlight = true;
+        els.refresh.disabled = true;
+        try {
+          const res = await fetch("/api/live-bets", { cache: "no-store" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          state.games = data.games;
+          state.agents = data.agents;
+          state.summary = data.summary;
+          renderSummary(data.summary);
+          renderSports(data.sports);
+          render();
+        } catch (err) {
+          els.container.className = "empty error";
+          els.container.textContent = `Failed to load: ${String(err)}`;
+        } finally {
+          inFlight = false;
+          els.refresh.disabled = false;
+        }
+      };
+
+      const setPressed = (button, pressed) =>
+        button.setAttribute("aria-pressed", pressed ? "true" : "false");
+
+      els.refresh.addEventListener("click", load);
+      els.q.addEventListener("input", () => {
+        state.query = els.q.value;
+        render();
+      });
+
+      els.treeQ.addEventListener("input", () => {
+        state.treeQuery = els.treeQ.value;
+        renderAcct();
+        renderTree();
+      });
+
+      els.treeQ.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          highlightAcct(state.acctIndex + 1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          highlightAcct(state.acctIndex - 1);
+        } else if (event.key === "Enter") {
+          const item =
+            state.acctIndex >= 0
+              ? state.acctItems[state.acctIndex]
+              : state.acctItems[0];
+          if (item) {
+            event.preventDefault();
+            chooseAccount(item);
+          }
+        } else if (event.key === "Escape") {
+          els.treeQ.value = "";
+          state.treeQuery = "";
+          closeAcct();
+          renderTree();
+        }
+      });
+
+      els.treeQ.addEventListener("blur", () => {
+        // Let a mousedown selection land before the list disappears.
+        setTimeout(closeAcct, 120);
+      });
+
+      els.treeCollapse.addEventListener("click", () => {
+        state.treeExpanded.clear();
+        renderTree();
+      });
+
+      els.treeToggle.addEventListener("click", () => {
+        const collapsed = els.tree.classList.toggle("collapsed");
+        setPressed(els.treeToggle, !collapsed);
+      });
+
+      els.scopeClear.addEventListener("click", clearScope);
+
+      els.all.addEventListener("click", () => {
+        state.group = true;
+        state.sortByStake = false;
+        setPressed(els.all, true);
+        setPressed(els.league, true);
+        setPressed(els.money, false);
+        render();
+      });
+
+      els.league.addEventListener("click", () => {
+        state.group = !state.group;
+        setPressed(els.league, state.group);
+        render();
+      });
+
+      els.money.addEventListener("click", () => {
+        state.sortByStake = !state.sortByStake;
+        setPressed(els.money, state.sortByStake);
+        setPressed(els.all, !state.sortByStake);
+        render();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "/" && document.activeElement !== els.q) {
+          event.preventDefault();
+          els.q.focus();
+        } else if (event.key === "Escape") {
+          if (document.activeElement === els.q) {
+            els.q.value = "";
+            state.query = "";
+            render();
+            els.q.blur();
+          } else if (state.selected !== null || state.customer !== null) {
+            clearScope();
+          }
+        }
+      });
+
+      setInterval(() => {
+        if (document.visibilityState === "visible") load();
+      }, REFRESH_MS);
+
+      loadTree();
+      load();
+    </script>
+  </body>
+</html>

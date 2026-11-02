@@ -228,15 +228,11 @@ export function parseListAgentsByAgentEnvelope(
   const players = obj.PLAYERS;
   if (!Array.isArray(general)) throw new Error("GENERAL must be an array");
   if (!Array.isArray(players)) throw new Error("PLAYERS must be an array");
+  const extra = obj.EXTRA;
   return {
     GENERAL: general as ListAgentsByAgentGeneralWireRow[],
     PLAYERS: players as ListAgentsByAgentPlayerWireRow[],
-    EXTRA:
-      typeof obj.EXTRA === "boolean"
-        ? obj.EXTRA
-        : obj.EXTRA === undefined
-          ? undefined
-          : Boolean(obj.EXTRA),
+    ...(extra === undefined ? {} : { EXTRA: Boolean(extra) }),
   };
 }
 

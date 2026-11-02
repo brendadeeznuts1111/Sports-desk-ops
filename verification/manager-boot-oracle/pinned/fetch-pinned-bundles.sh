@@ -14,5 +14,9 @@ fetch "app/setting/version.js" "$DIR/version.js"
 fetch "app/manager/manager.js" "$DIR/manager.js"
 fetch "app/util/util.js" "$DIR/util.js"
 fetch "app/system/security.js" "$DIR/security.js"
+# Request-composition modules: score.js builds the Scores call, pending.js the Pending call.
+# Not in manifest.json yet — the printed hashes are what pins them.
+fetch "app/sports/score/score.js" "$DIR/score.js"
+fetch "app/sports/report/pending.js" "$DIR/pending.js"
 echo "Compare hashes to pinned/manifest.json"
 echo "Bun fetch (TLS vs bundle-byte drift): bun run fetch:pinned-portal"

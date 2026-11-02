@@ -39,7 +39,7 @@ describe("placeholder oracle equivalence", () => {
       },
     ];
     const out = applyProductionGeneralPlaceholders(original);
-    expect(out[0]?.AgentID.endsWith("    ")).toBe(true);
-    expect(out[0]?.AgentID.length).toBe("AGENT_L1_N0".length + 4);
+    expect(out[0]?.AgentID).toEndWith("    ");
+    expect(out[0]?.AgentID).toHaveLength("AGENT_L1_N0".length + 4);
   });
 });

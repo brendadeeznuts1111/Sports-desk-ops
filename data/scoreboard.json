@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 1,
+  "source": "operator paste of fantasy402 manager.html scoreboard",
+  "observedAt": "2026-11-01",
+  "notes": [
+    "The pasted logo column is offset against the teams (e.g. Vikings paired with Baltimore-Ravens.png), so logos are resolved by team name and each was verified against cdn.fastassets.io on 2026-11-01.",
+    "The CDN keeps legacy file names for some clubs: Sann-DiegoLA.png (Chargers), St.-Louiss-Rams.png (Rams), washington-commanders.png (lowercase), miami_dolphins_logo.png, toronto.png.",
+    "Utah Mammoth has no team logo on the CDN; NHL.png is used and marked as a placeholder.",
+    "Scores, periods and broadcasts are transcribed from the paste, not captured from the API."
+  ],
+  "games": [
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": {
+        "name": "Vikings",
+        "score": 15,
+        "logo": "Minnesota-Vikings.png"
+      },
+      "team2": { "name": "Lions", "score": 19, "logo": "Detroit-Lions.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": {
+        "name": "Raiders",
+        "score": 38,
+        "logo": "Oakland-Raiders.png"
+      },
+      "team2": { "name": "Jets", "score": 33, "logo": "New-York-Jets.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": "FOX",
+      "team1": {
+        "name": "Cardinals",
+        "score": 33,
+        "logo": "Arizona-Cardinals.png"
+      },
+      "team2": { "name": "Cowboys", "score": 30, "logo": "Dallas-Cowboys.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": { "name": "Falcons", "score": 0, "logo": "Atlanta-Falcons.png" },
+      "team2": {
+        "name": "Buccaneers",
+        "score": 16,
+        "logo": "Tampa-Bay-Buccaneers.png"
+      }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": {
+        "name": "Ravens",
+        "score": 10,
+        "logo": "Baltimore-Ravens.png"
+      },
+      "team2": { "name": "Bills", "score": 36, "logo": "Buffalo-Bills.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": {
+        "name": "Colts",
+        "score": 7,
+        "logo": "Indianapolis-Colts.png"
+      },
+      "team2": {
+        "name": "Jaguars",
+        "score": 42,
+        "logo": "Jacksonville-Jaguars.png"
+      }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": "CBS",
+      "team1": {
+        "name": "Titans",
+        "score": 36,
+        "logo": "Tennessee-Titans.png"
+      },
+      "team2": {
+        "name": "Bengals",
+        "score": 43,
+        "logo": "Cincinnati-Bengals.png"
+      }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": { "name": "Browns", "score": 6, "logo": "Cleveland-Browns.png" },
+      "team2": {
+        "name": "Steelers",
+        "score": 27,
+        "logo": "Pittsburgh-Steelers.png"
+      }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "live",
+      "period": "2nd Q 08:25",
+      "broadcast": "FOX",
+      "team1": { "name": "Chargers", "score": 6, "logo": "Sann-DiegoLA.png" },
+      "team2": { "name": "Rams", "score": 3, "logo": "St.-Louiss-Rams.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "live",
+      "period": "1st Q 01:02",
+      "broadcast": "CBS",
+      "team1": {
+        "name": "Chiefs",
+        "score": 7,
+        "logo": "Kansas-City-Chiefs.png"
+      },
+      "team2": { "name": "Broncos", "score": 3, "logo": "Denver-Broncos.png" }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "live",
+      "period": "1st Q 00:37",
+      "broadcast": "CBS",
+      "team1": {
+        "name": "Patriots",
+        "score": 3,
+        "logo": "New-England-Patriots.png"
+      },
+      "team2": {
+        "name": "Dolphins",
+        "score": 3,
+        "logo": "miami_dolphins_logo.png"
+      }
+    },
+    {
+      "league": "NFL",
+      "sport": "Football",
+      "status": "scheduled",
+      "period": "7:20 pm CST",
+      "broadcast": "NBC",
+      "team1": {
+        "name": "Eagles",
+        "score": null,
+        "logo": "Philadelphia-Eagles.png"
+      },
+      "team2": {
+        "name": "Commanders",
+        "score": null,
+        "logo": "washington-commanders.png"
+      }
+    },
+    {
+      "league": "NBA",
+      "sport": "Basketball",
+      "status": "live",
+      "period": "3rd Q 10:00",
+      "broadcast": null,
+      "team1": { "name": "Celtics", "score": 60, "logo": "Boston-Celtics.png" },
+      "team2": { "name": "Magic", "score": 50, "logo": "Orlando-Magic.png" }
+    },
+    {
+      "league": "NBA",
+      "sport": "Basketball",
+      "status": "scheduled",
+      "period": "4:10 pm CST",
+      "broadcast": null,
+      "team1": { "name": "Nets", "score": null, "logo": "Brooklyn_Nets.png" },
+      "team2": { "name": "Pacers", "score": null, "logo": "Indiana-Pacers.png" }
+    },
+    {
+      "league": "NBA",
+      "sport": "Basketball",
+      "status": "scheduled",
+      "period": "7:40 pm CST",
+      "broadcast": null,
+      "team1": {
+        "name": "Clippers",
+        "score": null,
+        "logo": "Los-Angeles-Clippers.png"
+      },
+      "team2": {
+        "name": "Warriors",
+        "score": null,
+        "logo": "Golden-State-Warriors.png"
+      }
+    },
+    {
+      "league": "NBA",
+      "sport": "Basketball",
+      "status": "scheduled",
+      "period": "8:10 pm CST",
+      "broadcast": null,
+      "team1": { "name": "Raptors", "score": null, "logo": "toronto.png" },
+      "team2": {
+        "name": "Lakers",
+        "score": null,
+        "logo": "Los-Angeles-Lakers.png"
+      }
+    },
+    {
+      "league": "NCAA",
+      "sport": "Basketball",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": {
+        "name": "Villanova",
+        "score": 72,
+        "logo": "Villanova_Wildcats.png"
+      },
+      "team2": {
+        "name": "Notre Dame",
+        "score": 74,
+        "logo": "Notre Dame Fighting Irish.png"
+      }
+    },
+    {
+      "league": "NHL",
+      "sport": "Hockey",
+      "status": "final",
+      "period": "Final",
+      "broadcast": null,
+      "team1": { "name": "Jets", "score": 0, "logo": "Winnipeg-Jets.png" },
+      "team2": {
+        "name": "Hurricanes",
+        "score": 7,
+        "logo": "Carolina-Hurricanes.png"
+      }
+    },
+    {
+      "league": "NHL",
+      "sport": "Hockey",
+      "status": "live",
+      "period": "2nd P 05:07",
+      "broadcast": null,
+      "team1": { "name": "Wild", "score": 2, "logo": "Minnesota-Wild.png" },
+      "team2": {
+        "name": "Capitals",
+        "score": 0,
+        "logo": "Washington-Capitals.png"
+      }
+    },
+    {
+      "league": "NHL",
+      "sport": "Hockey",
+      "status": "live",
+      "period": "1st P End",
+      "broadcast": null,
+      "team1": { "name": "Utah", "score": 1, "logo": "NHL.png" },
+      "team2": { "name": "Mammoth", "score": 1, "logo": "NHL.png" }
+    },
+    {
+      "league": "NHL",
+      "sport": "Hockey",
+      "status": "scheduled",
+      "period": "5:07 pm CST",
+      "broadcast": null,
+      "team1": {
+        "name": "Oilers",
+        "score": null,
+        "logo": "Edmonton-Oilers.png"
+      },
+      "team2": {
+        "name": "Rangers",
+        "score": null,
+        "logo": "New-York-Rangers.png"
+      }
+    },
+    {
+      "league": "NHL",
+      "sport": "Hockey",
+      "status": "scheduled",
+      "period": "7:07 pm CST",
+      "broadcast": null,
+      "team1": {
+        "name": "Senators",
+        "score": null,
+        "logo": "Ottawa-Senators.png"
+      },
+      "team2": { "name": "Ducks", "score": null, "logo": "Anaheim-Ducks.png" }
+    }
+  ]
+}

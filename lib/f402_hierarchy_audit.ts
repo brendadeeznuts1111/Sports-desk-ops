@@ -3,16 +3,17 @@
  * Enable with `F402_AUDIT_DB=/path/to/audit.sqlite`.
  */
 
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 
 import { PROBE_HOST } from "./f402_hierarchy_config.ts";
 import { recordPinnedArtifactDrift } from "./f402_portal_version_pin.ts";
+import { openSportsdeskSqlite } from "./sportsdesk_sqlite.ts";
 
 let db: Database | null = null;
 
 function database(path: string): Database {
   if (db !== null) return db;
-  db = new Database(path, { create: true });
+  db = openSportsdeskSqlite(path);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec(`
     CREATE TABLE IF NOT EXISTS probe_log(

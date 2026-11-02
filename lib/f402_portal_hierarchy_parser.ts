@@ -296,15 +296,17 @@ function fSet(map: SparseNode, key: string, value: unknown): void {
 }
 
 function slot(parent: SparseNode, key: string): SparseNode {
-  const raw = parent[key];
-  if (raw === undefined) {
-    parent[key] = [];
-  }
   const cur = parent[key];
   if (typeof cur === "object" && cur !== null) return cur as SparseNode;
-  const created: SparseNode = [];
+  const created = emptySparseArray();
   parent[key] = created;
-  return created as unknown as SparseNode;
+  return created;
+}
+
+/** Portal nests rows under string-keyed arrays (`p[t] = []`), not plain objects. */
+function emptySparseArray(): SparseNode {
+  const keyed: SparseNode = {};
+  return Object.assign([], keyed);
 }
 
 export function normalizeParserNested(value: unknown): unknown {

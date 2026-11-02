@@ -238,7 +238,7 @@ export function diffManifestGateStatuses(
         gate,
         manifestStatus,
         derivedPhase: phase,
-        detail,
+        ...(detail === undefined ? {} : { detail }),
       });
     }
   };

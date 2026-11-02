@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "source": "export:xlsx",
+  "observedAt": "2026-11-01T17:24:00",
+  "request": "POST /cloud/api/Report/getGrading (type empty, start=end=2026-11-01)",
+  "exportLabel": "Graded Wagers | All Action | This Week | November 1, 2026 5:24 PM",
+  "sheetNameNote": "the workbook's single sheet is named after the agent login; that name is identity data and is not reproduced here",
+  "columns": ["Customer", "Ticket Number", "Accepted", "Description", "Amount"],
+  "rowCount": 9387,
+  "headerRowCount": 1,
+  "cellsPerRow": 5,
+  "amountColumn": "Amount",
+  "fileCommitted": false,
+  "fileNote": "The workbook itself is not committed: every row carries a customer login, a ticket number and a description. Only this shape is stored.",
+  "notes": [
+    "It is a wager-level export, not the Analysis grid: five columns of one row per graded wager, where the Analysis results table renders seven aggregate columns per agent (All Players and Agents, Won, Lost, # of Bets, Risk, Net, Hold %age).",
+    "The 'This Week' label on the export is not a `week` parameter: the request sent a start/end date range and an empty `type`, so the week selector is resolved to dates before the call.",
+    "Every one of the 9,387 data rows has exactly five populated cells and a numeric Amount; there are no spacer or subtotal rows to skip."
+  ]
+}

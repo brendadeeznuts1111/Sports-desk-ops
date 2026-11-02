@@ -1,0 +1,2277 @@
+{
+  "schemaVersion": 1,
+  "source": "markup:stdin",
+  "extractedAt": "2026-11-01T22:45:07.287Z",
+  "entries": [
+    {
+      "contestNum": 235738676,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLS‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Goalscorer",
+      "description": "MLS Top Goal Scorer",
+      "sport": "SOCCER",
+      "market": "MLS Futures",
+      "subject": "Top Goalscorer",
+      "partial": false
+    },
+    {
+      "contestNum": 235753005,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Nascar‡Cup‡Series‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win NASCAR Cup Series 2026",
+      "sport": "AUTO RACING",
+      "market": "Nascar Cup Series Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235753014,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡F1‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡F1‡Drivers‡Championship",
+      "description": "Odds To Win F1 Drivers Championship 2026",
+      "sport": "AUTO RACING",
+      "market": "F1 Futures",
+      "subject": "F1 Drivers Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235753017,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡F1‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Constructors‡Championship",
+      "description": "Odds to win Constructors Championship 2026",
+      "sport": "AUTO RACING",
+      "market": "F1 Futures",
+      "subject": "Constructors Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235753892,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Japan‡NPB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win 2026 Japan NPB",
+      "sport": "BASEBALL",
+      "market": "Japan NPB Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235753893,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡South‡Korea‡KBO‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win 2026 South Korea KBO",
+      "sport": "BASEBALL",
+      "market": "South Korea KBO Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235753925,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡American‡League‡MVP",
+      "description": "Odds to win 2026 AL MVP",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "American League MVP",
+      "partial": false
+    },
+    {
+      "contestNum": 235753926,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡National‡League‡MVP",
+      "description": "Odds to win 2026 NL MVP",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "National League MVP",
+      "partial": false
+    },
+    {
+      "contestNum": 235753931,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡American‡League‡Cy‡Young",
+      "description": "Odds to win 2026 AL Cy Young",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "American League Cy Young",
+      "partial": false
+    },
+    {
+      "contestNum": 235753932,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡National‡League‡Cy‡Young",
+      "description": "Odds to win 2026 NL Cy Young",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "National League Cy Young",
+      "partial": false
+    },
+    {
+      "contestNum": 235753937,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡American‡League‡Manager‡of‡the‡Year",
+      "description": "Odds to win 2026 AL Manager of the Year",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "American League Manager of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235753938,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡National‡League‡Manager‡of‡the‡Year",
+      "description": "Odds to win 2026 NL Manager of the Year",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "National League Manager of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235753983,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡OReilly‡Auto‡Parts‡Series‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win OReilly Auto Parts Series Championship",
+      "sport": "AUTO RACING",
+      "market": "OReilly Auto Parts Series Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235753984,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Nascar‡CraftsmanTruck‡Series‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win Truck Series Championship Futures",
+      "sport": "AUTO RACING",
+      "market": "Nascar CraftsmanTruck Series Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235753987,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLS‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win MLS 2026",
+      "sport": "SOCCER",
+      "market": "MLS Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235754021,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLS‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Goalscorer",
+      "description": "Top Goalscorer MLS 2026",
+      "sport": "SOCCER",
+      "market": "MLS Futures",
+      "subject": "Top Goalscorer",
+      "partial": false
+    },
+    {
+      "contestNum": 235754022,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLS‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Conference‡Winner",
+      "description": "Odds to Win MLS 2026 Eastern Conference",
+      "sport": "SOCCER",
+      "market": "MLS Futures",
+      "subject": "Conference Winner",
+      "partial": false
+    },
+    {
+      "contestNum": 235754023,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLS‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Conference‡Winner",
+      "description": "Odds to Win MLS 2026 Western Conference",
+      "sport": "SOCCER",
+      "market": "MLS Futures",
+      "subject": "Conference Winner",
+      "partial": false
+    },
+    {
+      "contestNum": 235754057,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡American‡League‡Rookie‡of‡the‡Year",
+      "description": "Odds to win 2026 AL Rookie of the Year",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "American League Rookie of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235754058,
+      "group": "BASEBALL",
+      "type": "BASEBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡MLB‡Reg‡Season‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡National‡League‡Rookie‡of‡the‡Year",
+      "description": "Odds to win 2026 NL Rookie of the Year",
+      "sport": "BASEBALL",
+      "market": "MLB Reg Season Awards Futures",
+      "subject": "National League Rookie of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235754063,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Super‡Bowl",
+      "description": "Odds to win 2026-27 Super Bowl",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Super Bowl",
+      "partial": false
+    },
+    {
+      "contestNum": 235754071,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win 2026-27 National Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235754106,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Canadian‡Football‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Grey‡Cup",
+      "description": "Odds to win 2026 Grey Cup",
+      "sport": "FOOTBALL",
+      "market": "Canadian Football Futures",
+      "subject": "To win Grey Cup",
+      "partial": false
+    },
+    {
+      "contestNum": 235754267,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡MVP‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win Reg Season MVP 2026-27",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season MVP",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235754268,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Heisman‡Trophy‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win Heisman Trophy 2026-27",
+      "sport": "FOOTBALL",
+      "market": "Heisman Trophy",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235755303,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡AFC‡Conference",
+      "description": "Odds to win AFC Conference",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win AFC Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755304,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡NFC‡Conference",
+      "description": "Odds to win NFC Conference",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win NFC Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755305,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win AFC East",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755306,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win AFC North",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755307,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win AFC South",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755308,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win AFC West",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755309,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win NFC East",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755310,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win NFC North",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755311,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win NFC South",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755312,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win NFC West",
+      "sport": "FOOTBALL",
+      "market": "NFL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235755513,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Div‡of‡Super‡Bowl‡Winner‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Div‡of‡Super‡Bowl‡Winner",
+      "description": "Odds to win Div of Super Bowl Winner",
+      "sport": "FOOTBALL",
+      "market": "NFL Div of Super Bowl Winner",
+      "subject": "Div of Super Bowl Winner",
+      "partial": false
+    },
+    {
+      "contestNum": 235755541,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Offensive‡Rookie‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Offensive Rookie of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Offensive Rookie of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235755542,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win ACC Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755543,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Big 12 Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755544,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Big Ten Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755545,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win SEC Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235755553,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Coach‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Coach of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Coach of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235755554,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Defensive‡Rookie‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Defensive Rookie of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Defensive Rookie of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235755555,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Offensive‡Player‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Offensive Player of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Offensive Player of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235755556,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Defensive‡Player‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Defensive Player of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Defensive Player of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235755649,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Team‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Best‡Reg‡Season‡Record",
+      "description": "Odds to Win Best Reg Season Record",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Team Futures",
+      "subject": "Best Reg Season Record",
+      "partial": false
+    },
+    {
+      "contestNum": 235755650,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Team‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Worst‡Reg‡Season‡Record",
+      "description": "Odds to Win Worst Reg Season Record",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Team Futures",
+      "subject": "Worst Reg Season Record",
+      "partial": false
+    },
+    {
+      "contestNum": 235756166,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Canadian‡Football‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Outstanding‡Player",
+      "description": "Odds to Win Most Outstanding Player",
+      "sport": "FOOTBALL",
+      "market": "Canadian Football Futures",
+      "subject": "Most Outstanding Player",
+      "partial": false
+    },
+    {
+      "contestNum": 235756291,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡UEFA‡Champions‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win UEFA Champions League 2026/27",
+      "sport": "SOCCER",
+      "market": "UEFA Champions League Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235756358,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡England‡Premier‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win England Premier League",
+      "sport": "SOCCER",
+      "market": "England Premier League Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235756359,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Spain‡La‡Liga‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win Spain La Liga",
+      "sport": "SOCCER",
+      "market": "Spain La Liga Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235756363,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Copa‡Sudamericana‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win Copa Sudamericana 2026",
+      "sport": "SOCCER",
+      "market": "Copa Sudamericana Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235756365,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Copa‡Libertadores‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win Copa Libertadores 2026",
+      "sport": "SOCCER",
+      "market": "Copa Libertadores Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235756455,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win American Conference Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756456,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Conference USA Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756457,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win MAC Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756458,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Mountain West Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756460,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Pac-12 Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756463,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference",
+      "description": "Odds to win Sun Belt Championship Game",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Futures",
+      "subject": "To win Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756717,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win NBA Championship 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235756718,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Eastern‡Conference",
+      "description": "Odds to win NBA Eastern Conference 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Eastern Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756719,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Western‡Conference",
+      "description": "Odds to win NBA Western Conference 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Western Conference",
+      "partial": false
+    },
+    {
+      "contestNum": 235756859,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Stanley‡Cup",
+      "description": "Odds to win Stanley Cup 2026",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "To win Stanley Cup",
+      "partial": false
+    },
+    {
+      "contestNum": 235757006,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Comeback‡Player‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Comeback Player of the Year",
+      "sport": "FOOTBALL",
+      "market": "NFL Awards Futures",
+      "subject": "Comeback Player of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757013,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Passing‡Yards",
+      "description": "Odds to win 2026-27 Most Reg Season Pass Yds",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Passing Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757014,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Passing‡TDs",
+      "description": "Odds to win 2026-27 Most Reg Season Pass TDs",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Passing TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757015,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Rushing‡Yards",
+      "description": "Odds to win 2026-27 Most Reg Season Rush Yds",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Rushing Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757028,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Rushing‡TDs",
+      "description": "Odds to win 2026-27 Most Reg Season Rushing TDs",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Rushing TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757040,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Receiving‡Yards",
+      "description": "Odds to win 2026-27 Most Reg Season Recv Yds",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Receiving Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757052,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Championship",
+      "description": "Odds to win 2026-27 NCAAB Championship",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Championship",
+      "partial": false
+    },
+    {
+      "contestNum": 235757085,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Regular‡Season‡MVP‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win 2026-27 Reg Season MVP",
+      "sport": "BASKETBALL",
+      "market": "NBA Regular Season MVP",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757090,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Euroleague‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win Euroleague 2026/2027",
+      "sport": "BASKETBALL",
+      "market": "Euroleague Futures",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757092,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Receiving‡TDs",
+      "description": "Odds to win 2026-27 Most Reg Season Recv TDs",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Receiving TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757093,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Interceptions‡Thrown",
+      "description": "Odds to win 2026-27 Most Reg Season ITs Thrown",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Interceptions Thrown",
+      "partial": false
+    },
+    {
+      "contestNum": 235757094,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Reg‡Season‡Sacks",
+      "description": "Odds to win 2026-27 Most Reg Season Sacks",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Stat Leaders Futures",
+      "subject": "Most Reg Season Sacks",
+      "partial": false
+    },
+    {
+      "contestNum": 235757096,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Germany‡Bundesliga‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Win‡Outright",
+      "description": "Odds to win Germany Bundesliga",
+      "sport": "SOCCER",
+      "market": "Germany Bundesliga Futures",
+      "subject": "To Win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757097,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡France‡Ligue‡1‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to Win France Ligue 1 26/27",
+      "sport": "SOCCER",
+      "market": "France Ligue 1 Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757098,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Italy‡Serie‡A‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Win‡Outright",
+      "description": "Odds to win Italy Serie A",
+      "sport": "SOCCER",
+      "market": "Italy Serie A Futures",
+      "subject": "To Win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757099,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Liga‡MX‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Win‡Outright",
+      "description": "Odds to win Mexico Liga MX",
+      "sport": "SOCCER",
+      "market": "Mexico Liga MX Futures",
+      "subject": "To Win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757118,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eastern‡Conference‡Futures",
+      "description": "Odds to Win Eastern Conference",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "Eastern Conference Futures",
+      "partial": false
+    },
+    {
+      "contestNum": 235757119,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Western‡Conference‡Futures",
+      "description": "Odds to Win Western Conference",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "Western Conference Futures",
+      "partial": false
+    },
+    {
+      "contestNum": 235757120,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡England‡Premier‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Finish‡Top‡4",
+      "description": "To Finish Top 4 England Premier League 26/27",
+      "sport": "SOCCER",
+      "market": "England Premier League Futures",
+      "subject": "To Finish Top 4",
+      "partial": false
+    },
+    {
+      "contestNum": 235757121,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡England‡Premier‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡be‡Relegated",
+      "description": "To be Relegated England Premier League 26/27",
+      "sport": "SOCCER",
+      "market": "England Premier League Futures",
+      "subject": "To be Relegated",
+      "partial": false
+    },
+    {
+      "contestNum": 235757154,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Improved‡Player‡of‡the‡Year",
+      "description": "Odds to win Most Improved Player of the Year 26-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "Most Improved Player of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757155,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Defensive‡Player‡of‡the‡Year",
+      "description": "Odds to win Defensive Player of the Year 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "Defensive Player of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757156,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡6th‡Man‡of‡the‡Year",
+      "description": "Odds to win 6th Man of the Year 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "6th Man of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757159,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Clutch‡Player",
+      "description": "Odds to win Clutch Player Award 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "Clutch Player",
+      "partial": false
+    },
+    {
+      "contestNum": 235757189,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Rookie‡of‡the‡Year",
+      "description": "Odds to win 2026-27 NBA Rookie of the Year",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "Rookie of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757190,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Atlantic Division",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757191,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Metropolitan Division",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757192,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Central Division",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757193,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Pacific Division",
+      "sport": "HOCKEY",
+      "market": "NHL Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757278,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡4500‡or‡More‡Pass‡Yards",
+      "description": "Odds to win 4500 or More Pass Yards Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "4500 or More Pass Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757280,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡35‡or‡More‡Pass‡TDs",
+      "description": "Odds to win 35 or More Pass TDs Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "35 or More Pass TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757281,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡1500‡or‡More‡Receiving‡Yards",
+      "description": "Odds to win1500 or More Recv Yards Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "1500 or More Receiving Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757282,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡12‡or‡More‡Receiving‡TDs",
+      "description": "Odds to win 12 or More Recv TDs Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "12 or More Receiving TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757283,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡1500‡or‡More‡Rushing‡Yards",
+      "description": "Odds to win 1500 or More Rush Yds Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "1500 or More Rushing Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235757284,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡15‡or‡More‡Rushing‡TDs",
+      "description": "Odds to win 15 or More Rush TDs Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "15 or More Rushing TDs",
+      "partial": false
+    },
+    {
+      "contestNum": 235757285,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Player‡Milestones‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡15‡or‡More‡Sacks",
+      "description": "Odds to win 15 or More Sacks Reg Season",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Player Milestones",
+      "subject": "15 or More Sacks",
+      "partial": false
+    },
+    {
+      "contestNum": 235757333,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Coach‡of‡the‡Year",
+      "description": "Odds to Win 2026-27 Coach of the Year",
+      "sport": "BASKETBALL",
+      "market": "NBA Awards Futures",
+      "subject": "Coach of the Year",
+      "partial": false
+    },
+    {
+      "contestNum": 235757334,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Reg‡Season‡Team‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Last‡Undefeated‡Team",
+      "description": "Odds to Win NFL Last Undefeated Team",
+      "sport": "FOOTBALL",
+      "market": "NFL Reg Season Team Futures",
+      "subject": "Last Undefeated Team",
+      "partial": false
+    },
+    {
+      "contestNum": 235757335,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Hart‡Trophy",
+      "description": "Odds to win 2026-27 Hart Trophy",
+      "sport": "HOCKEY",
+      "market": "NHL Awards Futures",
+      "subject": "To win Hart Trophy",
+      "partial": false
+    },
+    {
+      "contestNum": 235757336,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Calder‡Trophy",
+      "description": "Odds to win 2026-27 Calder Trophy",
+      "sport": "HOCKEY",
+      "market": "NHL Awards Futures",
+      "subject": "To win Calder Trophy",
+      "partial": false
+    },
+    {
+      "contestNum": 235757337,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Vezina‡Trophy",
+      "description": "Odds to win 2026-27 Vezina Trophy",
+      "sport": "HOCKEY",
+      "market": "NHL Awards Futures",
+      "subject": "To win Vezina Trophy",
+      "partial": false
+    },
+    {
+      "contestNum": 235757339,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Cup",
+      "description": "Odds to win NBA Cup 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Cup",
+      "partial": false
+    },
+    {
+      "contestNum": 235757340,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win East Group A",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757341,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win East Group B",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757342,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win East Group C",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757343,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win West Group A",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757344,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win West Group B",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757345,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡2026‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Group",
+      "description": "Odds to win West Group C",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup 2026 Futures",
+      "subject": "To win Group",
+      "partial": false
+    },
+    {
+      "contestNum": 235757365,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡England‡Premier‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Goalscorer",
+      "description": "Odds to win Top Goalscorer EPL 2026/27",
+      "sport": "SOCCER",
+      "market": "England Premier League Futures",
+      "subject": "Top Goalscorer",
+      "partial": false
+    },
+    {
+      "contestNum": 235757449,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Norris‡Trophy",
+      "description": "Odds to win 2026-27 Norris Trophy",
+      "sport": "HOCKEY",
+      "market": "NHL Awards Futures",
+      "subject": "To win Norris Trophy",
+      "partial": false
+    },
+    {
+      "contestNum": 235757450,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Fred‡Biletnikoff‡Award",
+      "description": "Odds to win Fred Biletnikoff Award 2026-27",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Awards Futures",
+      "subject": "Fred Biletnikoff Award",
+      "partial": false
+    },
+    {
+      "contestNum": 235757466,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Davey‡OBrien‡Award",
+      "description": "Odds to win Davey OBrien Award 2026-27",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Awards Futures",
+      "subject": "Davey OBrien Award",
+      "partial": false
+    },
+    {
+      "contestNum": 235757467,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAF‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Doak‡Walker‡Award",
+      "description": "Odds to win Doak Walker Award 2026-27",
+      "sport": "FOOTBALL",
+      "market": "NCAAF Awards Futures",
+      "subject": "Doak Walker Award",
+      "partial": false
+    },
+    {
+      "contestNum": 235757608,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Atlantic Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757609,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Central Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757610,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Southeast Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757611,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Northwest Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757612,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Pacific Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757613,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Division",
+      "description": "Odds to win Southwest Division 2026/27",
+      "sport": "BASKETBALL",
+      "market": "NBA Futures",
+      "subject": "To win Division",
+      "partial": false
+    },
+    {
+      "contestNum": 235757760,
+      "group": "SOCCER",
+      "type": "SOCCER‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡UEFA‡Europa‡League‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win UEFA Europa League 26/27",
+      "sport": "SOCCER",
+      "market": "UEFA Europa League Futures",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235757962,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Points‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season PPG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Points Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757963,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Rebounds‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season RPG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Rebounds Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757964,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Assists‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season APG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Assists Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757965,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Threes‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season TPG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Threes Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757966,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Steals‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season SPG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Steals Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757967,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Reg‡Season‡Stat‡Leaders‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Blocks‡Per‡Game‡Leader",
+      "description": "Odds to win 2026-27 Reg Season BPG",
+      "sport": "BASKETBALL",
+      "market": "NBA Reg Season Stat Leaders Futures",
+      "subject": "Blocks Per Game Leader",
+      "partial": false
+    },
+    {
+      "contestNum": 235757978,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡Presidents‡Trophy‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Trophy",
+      "description": "Odds to win Presidents Trophy",
+      "sport": "HOCKEY",
+      "market": "NHL Presidents Trophy Futures",
+      "subject": "To win Trophy",
+      "partial": false
+    },
+    {
+      "contestNum": 235758371,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Women‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Outright",
+      "description": "Odds to win 2027 NCAAB Women Tournament",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Women Futures",
+      "subject": "To win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235758446,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Play‡In‡Tournament‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Make‡Play‡In",
+      "description": "NBA Eastern Conference To Make Play In Tournament",
+      "sport": "BASKETBALL",
+      "market": "NBA Play In Tournament Futures",
+      "subject": "To Make Play In",
+      "partial": false
+    },
+    {
+      "contestNum": 235758447,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Play‡In‡Tournament‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Make‡Play‡In",
+      "description": "NBA Western Conference To Make Play In Tournament",
+      "sport": "BASKETBALL",
+      "market": "NBA Play In Tournament Futures",
+      "subject": "To Make Play In",
+      "partial": false
+    },
+    {
+      "contestNum": 235758496,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Player‡Awards‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Wooden‡Award",
+      "description": "Odds to win Wooden Award 2026-27",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Player Awards Futures",
+      "subject": "Wooden Award",
+      "partial": false
+    },
+    {
+      "contestNum": 235758497,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Super‡Bowl‡Possible‡Matchup‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Name‡the‡Finalists",
+      "description": "Odds to win 2026-27 Super Bowl Finalists",
+      "sport": "FOOTBALL",
+      "market": "NFL Super Bowl Possible Matchup",
+      "subject": "Name the Finalists",
+      "partial": false
+    },
+    {
+      "contestNum": 235758647,
+      "group": "RUGBY",
+      "type": "RUGBY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Rugby‡League‡World‡Cup‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win Rugby League World Cup 2026",
+      "sport": "RUGBY",
+      "market": "Rugby League World Cup Futures",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235758794,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Cup‡MVP‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win NBA Cup MVP",
+      "sport": "BASKETBALL",
+      "market": "NBA Cup MVP Futures",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235758955,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win ACC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235758956,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Big 12 Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235758957,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to win SEC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235758958,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Big Ten Coference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235758959,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Big East Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759031,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAH‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡outright",
+      "description": "Odds to win 2026-27 NCAA Hockey Championship",
+      "sport": "HOCKEY",
+      "market": "NCAAH Futures",
+      "subject": "To win outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235759190,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Chargers‡vs‡Rams",
+      "description": "Chargers vs Rams - Margin Of Victory",
+      "sport": "FOOTBALL",
+      "market": "NFL Margin Of Victory",
+      "subject": "Chargers vs Rams",
+      "partial": false
+    },
+    {
+      "contestNum": 235759192,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Chiefs‡vs‡Broncos",
+      "description": "Chiefs vs Broncos - Margin Of Victory",
+      "sport": "FOOTBALL",
+      "market": "NFL Margin Of Victory",
+      "subject": "Chiefs vs Broncos",
+      "partial": false
+    },
+    {
+      "contestNum": 235759194,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Patriots‡vs‡Dolphins",
+      "description": "Patriots vs Dolphins - Margin Of Victory",
+      "sport": "FOOTBALL",
+      "market": "NFL Margin Of Victory",
+      "subject": "Patriots vs Dolphins",
+      "partial": false
+    },
+    {
+      "contestNum": 235759195,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡First‡Scoring‡Play‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Eagles vs Commanders - 1st Scoring Play",
+      "sport": "FOOTBALL",
+      "market": "NFL First Scoring Play",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759196,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Eagles vs Commanders - Margin Of Victory",
+      "sport": "FOOTBALL",
+      "market": "NFL Margin Of Victory",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759197,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡First‡Scoring‡Play‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Bears‡vs‡Seahawks",
+      "description": "Bears vs Seahawks - 1st Scoring Play",
+      "sport": "FOOTBALL",
+      "market": "NFL First Scoring Play",
+      "subject": "Bears vs Seahawks",
+      "partial": false
+    },
+    {
+      "contestNum": 235759198,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Bears‡vs‡Seahawks",
+      "description": "Bears vs Seahawks - Margin Of Victory",
+      "sport": "FOOTBALL",
+      "market": "NFL Margin Of Victory",
+      "subject": "Bears vs Seahawks",
+      "partial": false
+    },
+    {
+      "contestNum": 235759238,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Simmons‡Bank‡Championship‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Win‡Outright",
+      "description": "Odds to win Simmons Bank Championship",
+      "sport": "GOLF",
+      "market": "Simmons Bank Championship Futures",
+      "subject": "To Win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235759240,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡Win‡Outright",
+      "description": "Odds to win Mexico Open",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "To Win Outright",
+      "partial": false
+    },
+    {
+      "contestNum": 235759244,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡5",
+      "description": "Mexico Open - Top 5",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top 5",
+      "partial": false
+    },
+    {
+      "contestNum": 235759245,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡10",
+      "description": "Mexico Open - Top 10",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top 10",
+      "partial": false
+    },
+    {
+      "contestNum": 235759246,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡20",
+      "description": "Mexico Open - Top 20",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top 20",
+      "partial": false
+    },
+    {
+      "contestNum": 235759248,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡American",
+      "description": "Mexico Open - Top American",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top American",
+      "partial": false
+    },
+    {
+      "contestNum": 235759250,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡European",
+      "description": "Mexico Open - Top European",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top European",
+      "partial": false
+    },
+    {
+      "contestNum": 235759253,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Asian",
+      "description": "Mexico Open - Top Asian",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top Asian",
+      "partial": false
+    },
+    {
+      "contestNum": 235759254,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Rest‡of‡World",
+      "description": "Mexico Open - Top Rest of World",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "Top Rest of World",
+      "partial": false
+    },
+    {
+      "contestNum": 235759274,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group A",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759275,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group B",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759276,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group C",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759277,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group D",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759278,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group E",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759279,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group F",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759280,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group G",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759281,
+      "group": "GOLF",
+      "type": "GOLF‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡Open‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡72‡Hole‡Group‡Betting",
+      "description": "Mexico Open - Group H",
+      "sport": "GOLF",
+      "market": "Mexico Open Futures",
+      "subject": "72 Hole Group Betting",
+      "partial": false
+    },
+    {
+      "contestNum": 235759292,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡race",
+      "description": "Odds to win Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win race",
+      "partial": false
+    },
+    {
+      "contestNum": 235759329,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡3",
+      "description": "Top 3 - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Top 3",
+      "partial": false
+    },
+    {
+      "contestNum": 235759330,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡10",
+      "description": "Top 10 - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Top 10",
+      "partial": false
+    },
+    {
+      "contestNum": 235759331,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Winning‡Manufacturer",
+      "description": "Winning Manufacturer - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Winning Manufacturer",
+      "partial": false
+    },
+    {
+      "contestNum": 235759332,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Chevrolet‡Driver",
+      "description": "Top Chevrolet Driver - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Top Chevrolet Driver",
+      "partial": false
+    },
+    {
+      "contestNum": 235759333,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Ford‡Driver",
+      "description": "Top Ford Driver - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Top Ford Driver",
+      "partial": false
+    },
+    {
+      "contestNum": 235759334,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Top‡Toyota‡Driver",
+      "description": "Top Toyota Driver - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "Top Toyota Driver",
+      "partial": false
+    },
+    {
+      "contestNum": 235759335,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group A - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759336,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group B - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759337,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group C - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759338,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group D - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759339,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group E - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759340,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Xfinity‡500‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡group",
+      "description": "To Win Group F - Xfinity 500",
+      "sport": "AUTO RACING",
+      "market": "Xfinity 500 Futures",
+      "subject": "To win group",
+      "partial": false
+    },
+    {
+      "contestNum": 235759352,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡3‡Way‡Line‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Wild‡vs‡Capitals",
+      "description": "Wild vs Capitals - 3 Way Line",
+      "sport": "HOCKEY",
+      "market": "NHL 3 Way Line",
+      "subject": "Wild vs Capitals",
+      "partial": false
+    },
+    {
+      "contestNum": 235759353,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡3‡Way‡Line‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mammoth‡vs‡Flyers",
+      "description": "Mammoth vs Flyers - 3 Way Line",
+      "sport": "HOCKEY",
+      "market": "NHL 3 Way Line",
+      "subject": "Mammoth vs Flyers",
+      "partial": false
+    },
+    {
+      "contestNum": 235759354,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡3‡Way‡Line‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Oilers‡vs‡Rangers",
+      "description": "Oilers vs Rangers - 3 Way Line",
+      "sport": "HOCKEY",
+      "market": "NHL 3 Way Line",
+      "subject": "Oilers vs Rangers",
+      "partial": false
+    },
+    {
+      "contestNum": 235759355,
+      "group": "HOCKEY",
+      "type": "HOCKEY‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NHL‡3‡Way‡Line‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Senators‡vs‡Ducks",
+      "description": "Senators vs Ducks - 3 Way Line",
+      "sport": "HOCKEY",
+      "market": "NHL 3 Way Line",
+      "subject": "Senators vs Ducks",
+      "partial": false
+    },
+    {
+      "contestNum": 235759381,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win American Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759382,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win American East Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759383,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Atlantic 10 Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759384,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win MAC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759385,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Missouri Valle Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759386,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Mountain West Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759387,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win PAC 12 Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759388,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win West Coast Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759389,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Atlantic Sun Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759390,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Big Sky Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759391,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Big West Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759392,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win USA Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759393,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win CAA Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759394,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Horizon Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759395,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Ivy League Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759396,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win MAAC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759397,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win MEAC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759398,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Northeast Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759399,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Ohio Valley Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759400,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Patriot League Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759401,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Southern Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759402,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Sun Belt Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759403,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Summit League Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759404,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win SWAC Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759405,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win United Athletic Conferenc - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759406,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NCAAB‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡Conference‡Reg‡Season",
+      "description": "Odds to Win Southland Conference - Reg Season",
+      "sport": "BASKETBALL",
+      "market": "NCAAB Futures",
+      "subject": "To win Conference Reg Season",
+      "partial": false
+    },
+    {
+      "contestNum": 235759409,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡GP‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡To‡win‡race",
+      "description": "Odds to win Mexico GP",
+      "sport": "AUTO RACING",
+      "market": "Mexico GP Futures",
+      "subject": "To win race",
+      "partial": false
+    },
+    {
+      "contestNum": 235759410,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡GP‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Podium‡Finish",
+      "description": "Podium Finish - Mexico GP",
+      "sport": "AUTO RACING",
+      "market": "Mexico GP Futures",
+      "subject": "Podium Finish",
+      "partial": false
+    },
+    {
+      "contestNum": 235759411,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡GP‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Fastest‡Lap",
+      "description": "Fastest Lap - Mexico GP",
+      "sport": "AUTO RACING",
+      "market": "Mexico GP Futures",
+      "subject": "Fastest Lap",
+      "partial": false
+    },
+    {
+      "contestNum": 235759412,
+      "group": "AUTO RACING",
+      "type": "AUTO‡RACING‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Mexico‡GP‡Futures‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Winning‡Car",
+      "description": "Winning Car - Mexico GP",
+      "sport": "AUTO RACING",
+      "market": "Mexico GP Futures",
+      "subject": "Winning Car",
+      "partial": false
+    },
+    {
+      "contestNum": 235759423,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡1st‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Chargers‡vs‡Rams",
+      "description": "Chargers vs Rams 1st TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL 1st TD Scorer",
+      "subject": "Chargers vs Rams",
+      "partial": false
+    },
+    {
+      "contestNum": 235759425,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡1st‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Patriots‡vs‡Dolphins",
+      "description": "Patriots vs Dolphins 1st TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL 1st TD Scorer",
+      "subject": "Patriots vs Dolphins",
+      "partial": false
+    },
+    {
+      "contestNum": 235759426,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡1st‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Eagles vs Commanders 1st TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL 1st TD Scorer",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759427,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡1st‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Eagles 1st TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL 1st TD Scorer",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759428,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡1st‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Commanders 1st TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL 1st TD Scorer",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759429,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Anytime‡TD‡Scorer‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Eagles vs Commanders Anytime TD Scorer",
+      "sport": "FOOTBALL",
+      "market": "NFL Anytime TD Scorer",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759430,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Week‡8‡Player‡Specials‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Passing‡Yards",
+      "description": "Odds to win Most Passing Yards Week 8",
+      "sport": "FOOTBALL",
+      "market": "NFL Week 8 Player Specials",
+      "subject": "Most Passing Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235759431,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Week‡8‡Player‡Specials‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Receiving‡Yards",
+      "description": "Odds to win Most Receiving Yards Week 8",
+      "sport": "FOOTBALL",
+      "market": "NFL Week 8 Player Specials",
+      "subject": "Most Receiving Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235759432,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Week‡8‡Player‡Specials‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Most‡Rushing‡Yards",
+      "description": "Odds to win Most Rushing Yards Week 8",
+      "sport": "FOOTBALL",
+      "market": "NFL Week 8 Player Specials",
+      "subject": "Most Rushing Yards",
+      "partial": false
+    },
+    {
+      "contestNum": 235759460,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Celtics‡vs‡Magic",
+      "description": "Celtics vs Magic - Margin Of Victory",
+      "sport": "BASKETBALL",
+      "market": "NBA Margin Of Victory",
+      "subject": "Celtics vs Magic",
+      "partial": false
+    },
+    {
+      "contestNum": 235759461,
+      "group": "BASKETBALL",
+      "type": "BASKETBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NBA‡Margin‡Of‡Victory‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Clippers‡vs‡Warriors",
+      "description": "Clippers vs Warriors - Margin Of Victory",
+      "sport": "BASKETBALL",
+      "market": "NBA Margin Of Victory",
+      "subject": "Clippers vs Warriors",
+      "partial": false
+    },
+    {
+      "contestNum": 235759462,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Sunday‡Night‡Player‡Specials‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Odds to win Most Receiving Yards",
+      "sport": "FOOTBALL",
+      "market": "NFL Sunday Night Player Specials",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    },
+    {
+      "contestNum": 235759463,
+      "group": "FOOTBALL",
+      "type": "FOOTBALL‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡NFL‡Sunday‡Night‡Player‡Specials‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡‡Eagles‡vs‡Commanders",
+      "description": "Odds to win Most Rushing Yards",
+      "sport": "FOOTBALL",
+      "market": "NFL Sunday Night Player Specials",
+      "subject": "Eagles vs Commanders",
+      "partial": false
+    }
+  ]
+}

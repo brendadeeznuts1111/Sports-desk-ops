@@ -100,6 +100,8 @@ SportsDesk DX — operator commands
   ./bin/dx bridge coverage|value|match
                                   Cross-domain customer book ↔ Polymarket wallet join
   ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login)
+  ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
+  ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
   ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
   ./bin/dx poll [--once] [--live] [--live-f402]
                                   Poll feeds (--live = Polymarket, --live-f402 = F402 probe)
@@ -216,6 +218,14 @@ EOF
   shot|screenshot)
     cd "$REPO_ROOT"
     exec bun run cli/sportsdesk_cli.ts shot "$@"
+    ;;
+  image-meta)
+    cd "$REPO_ROOT"
+    exec bun bin/image-meta.ts "$@"
+    ;;
+  blob-formdata)
+    cd "$REPO_ROOT"
+    exec bun bin/blob-formdata.ts "$@"
     ;;
   backtest)
     cd "$REPO_ROOT"

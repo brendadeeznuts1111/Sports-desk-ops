@@ -24,7 +24,9 @@ function bytesToHex(bytes: ArrayBuffer): string {
   return Buffer.from(bytes).toString("hex");
 }
 
-export async function sha256Hex(data: Uint8Array | string): Promise<string> {
+export async function sha256Hex(
+  data: Uint8Array<ArrayBuffer> | string,
+): Promise<string> {
   const bytes =
     typeof data === "string" ? new TextEncoder().encode(data) : data;
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -32,7 +34,9 @@ export async function sha256Hex(data: Uint8Array | string): Promise<string> {
 }
 
 /** Short fingerprint for pre-dedupe (first 8 bytes of SHA-256). */
-export async function fastBodyFingerprint(body: Uint8Array): Promise<string> {
+export async function fastBodyFingerprint(
+  body: Uint8Array<ArrayBuffer>,
+): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", body);
   return bytesToHex(digest).slice(0, 16);
 }

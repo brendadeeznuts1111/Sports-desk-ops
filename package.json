@@ -16,6 +16,12 @@
   "scripts": {
     "test": "bun test",
     "pretest": "bun run scripts/pretest-oracle-guard.ts",
+    "build:live-bets": "bun run scripts/build_live_bets.ts",
+    "build:agent-tree": "bun run scripts/build_agent_tree.ts",
+    "capture:pending": "bun run scripts/capture/capture_pending_full.ts",
+    "capture:bet-ticker": "bun run scripts/capture/capture_bet_ticker.ts",
+    "manual:fetch": "bun run scripts/fetch_user_manual.ts",
+    "contests:extract": "bun run scripts/extract_contests.ts",
     "verify:manager-oracle-slices": "bun run verification/manager-boot-oracle/run-slice-guard.ts",
     "verify:manager-oracle-runtime": "bun run verification/manager-boot-oracle/run-runtime-pin-guard.ts",
     "fetch:pinned-portal": "bun run scripts/verify/fetch-pinned-portal-bundles.ts",
@@ -27,6 +33,14 @@
     "probe:parse-tree": "bun run scripts/probe/parse-tree-only.ts",
     "probe:ingest-tree": "bun run scripts/probe/ingest-parsed-tree.ts",
     "manager:ingest-hierarchy": "bun run cli/f402_manager_hierarchy_ingest_cli.ts",
+    "graph:agent": "bun run scripts/build_agent_graph.ts",
+    "graph:agent:view": "bun run scripts/serve_agent_graph_view.ts",
+    "graph:agent:image": "bun run scripts/build_agent_graph_image.ts",
+    "graph:agent:views": "bun run scripts/build_agent_graph_views.ts",
+    "graph:agent:readability": "bun run scripts/agent_graph_readability.ts",
+    "graph:agent:judge": "bun run scripts/agent_graph_judge.ts",
+    "verify:agent-graph": "bun run scripts/verify_agent_graph_pipeline.ts",
+    "verify:agent-graph:strict": "bun run scripts/verify_agent_graph_pipeline.ts -- --strict",
     "manager-boot:runbook": "bun run scripts/manager_boot_runbook_cli.ts",
     "portal:drift:cron": "bun run scripts/f402_portal_drift_cron.ts",
     "test:manager-oracle-readonly": "PRETEST_SKIP=1 bun test --parallel lib/f402_portal_oracle_slice.test.ts lib/f402_production_fixture_redaction.test.ts lib/f402_portal_runtime_pin.test.ts",
@@ -51,6 +65,15 @@
     "verify:gen-tokens-gate": "bun run verification/gen-tokens-zero-drift-gate/run.ts",
     "check:fetch-init": "bun run bin/check-fetch-init.ts",
     "check:innerhtml": "bun run bin/check-innerhtml.ts",
+    "check:secrets": "bun run bin/check-secrets.ts",
+    "check:rotations": "bun run scripts/check_rotation_stability.ts",
+    "hierarchy:load": "bun run scripts/hierarchy_load.ts",
+    "ticker:coverage": "bun run scripts/ticker_tree_coverage.ts",
+    "hierarchy:enrich": "bun run scripts/hierarchy_enrich.ts",
+    "customers:profiles": "bun run scripts/build_customer_profiles.ts",
+    "wagers:score-coverage": "bun run scripts/wager_score_coverage.ts",
+    "session:login": "bun run scripts/session_login.ts",
+    "session:status": "bun run scripts/session_login.ts --status",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",
@@ -112,7 +135,10 @@
     "docs:serve": "bun --no-orphans run scripts/serve_docs.ts",
     "docs:deploy": "bun run test:docs && bun run verify:docs && bun run audit:release && bun run docs:stage && ./wrangler pages deploy dist --project-name=fantasy402-docs --branch=main",
     "docs:verify:live": "bun run scripts/verify_docs.ts --live https://fantasy402-docs-4ay.pages.dev",
-    "verify:docs": "bun run scripts/verify_docs.ts",
+    "verify:docs": "bun run check:ledger-consistency && bun run check:spec-citations && bun run scripts/verify_docs.ts",
+    "check:ledger-consistency": "bun run scripts/check_ledger_consistency.ts",
+    "check:spec-citations": "bun run scripts/check_spec_citations.ts",
+    "check:route-surface": "bun run scripts/check_route_surface.ts",
     "audit:release": "bun run scripts/audit_release.ts",
     "audit:archives": "bun run scripts/audit_archives.ts",
     "audit:ops": "bun run scripts/audit_release.ts && bun run scripts/audit_archives.ts",
@@ -164,7 +190,9 @@
     "graph:poll": "./bin/dx poll",
     "graph:watch": "./bin/dx watch",
     "graph:deploy": "./bin/dx deploy",
-    "backtest:4wk": "./bin/dx backtest"
+    "backtest:4wk": "./bin/dx backtest",
+    "image:meta": "bun run bin/image-meta.ts",
+    "blob:formdata": "bun run bin/blob-formdata.ts"
   },
   "keywords": [
     "sportsdesk",
@@ -194,5 +222,10 @@
   "packageManager": "bun@1.4.4",
   "engines": {
     "bun": "1.4.4"
+  },
+  "dependencies": {
+    "cytoscape": "3.30.2",
+    "cytoscape-elk": "2.3.0",
+    "elkjs": "0.12.1"
   }
 }

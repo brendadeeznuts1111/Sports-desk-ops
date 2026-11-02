@@ -20,6 +20,8 @@ import {
   inPageReadSessionAuthJs,
 } from "./f402_in_page_fetch.ts";
 
+import { LOG_WRITE_CUSTOMER_ID_WIDTH } from "./f402_field_widths.ts";
+
 export type ProbeParam =
   | "agentID"
   | "agentOwner"
@@ -485,11 +487,19 @@ export function isProbeReadOnlyConfirmed(op: ProbeOp): boolean {
   return op.readOnly || CLIENT_JS_CONFIRMED_READ_ONLY_OPS.has(op.operation);
 }
 
-/** Log/write pads `customerID` to 10 characters (observed in manager boot waterfall). */
+/**
+ * Log/write pads `customerID` to 10 characters, per the manager boot waterfall.
+ *
+ * Contradicted on 2026-11-01: `Log/write`, `Log/writeDetail` and `vipListInsert` all sent the bare
+ * 7-character login. Behaviour is unchanged because two observations disagree and this is probe
+ * code, not a parser — see `docs/evidence/capture-requests.md` for the conflict.
+ */
 export function padLogWriteCustomerId(customerId: string): string {
   const trimmed = customerId.trim();
-  if (trimmed.length >= 10) return trimmed.slice(0, 10);
-  return trimmed.padEnd(10, " ");
+  if (trimmed.length >= LOG_WRITE_CUSTOMER_ID_WIDTH) {
+    return trimmed.slice(0, LOG_WRITE_CUSTOMER_ID_WIDTH);
+  }
+  return trimmed.padEnd(LOG_WRITE_CUSTOMER_ID_WIDTH, " ");
 }
 
 /**

@@ -5,9 +5,12 @@
 
 import type { Database } from "bun:sqlite";
 
-import type { ListAgentsByAgentEnvelope } from "./f402_list_agents_by_agent.ts";
+import type { ListAgentsByAgentGeneralWireRow } from "./f402_list_agents_by_agent.ts";
 import type { PortalHierarchyParserContext } from "./f402_portal_hierarchy_parser.ts";
-import type { PortalGeneralRow } from "./f402_portal_hierarchy_oracle.ts";
+import {
+  parsePortalGeneralRows,
+  type PortalGeneralRow,
+} from "./f402_portal_hierarchy_oracle.ts";
 import {
   countAgentTreeCteRows,
   flatAgentsFromPortalParse,
@@ -23,6 +26,10 @@ export interface SkippedOverflowAgent {
   readonly agent_id: string;
   readonly level: number;
 }
+
+type GeneralRowsEnvelope = {
+  readonly GENERAL: readonly ListAgentsByAgentGeneralWireRow[];
+};
 
 export interface ManagerHierarchyIngestResult extends IngestAgentsResult {
   readonly generalRowCount: number;
@@ -51,10 +58,10 @@ export function listSkippedOverflowAgents(
  */
 export function ingestManagerHierarchy(
   db: Database,
-  envelope: Pick<ListAgentsByAgentEnvelope, "GENERAL">,
+  envelope: GeneralRowsEnvelope,
   ctx: PortalHierarchyParserContext,
 ): ManagerHierarchyIngestResult {
-  const general = envelope.GENERAL as PortalGeneralRow[];
+  const general = parsePortalGeneralRows(envelope.GENERAL);
   const skippedOverflow = listSkippedOverflowAgents(general);
   const flat = flatAgentsFromPortalParse(general, ctx);
   const { rowCount, ingestMs } = ingestFlatAgentsWithTiming(db, flat);
@@ -70,7 +77,7 @@ export function ingestManagerHierarchy(
 
 export function ingestManagerHierarchyFile(
   dbPath: string,
-  envelope: Pick<ListAgentsByAgentEnvelope, "GENERAL">,
+  envelope: GeneralRowsEnvelope,
   ctx: PortalHierarchyParserContext,
 ): ManagerHierarchyIngestResult {
   const db = openSportsdeskSqlite(dbPath);
