@@ -6,16 +6,19 @@ are. Each heading is the id a test name cites; the test pins the safe pattern, t
 mechanism.
 
 - **Measured:** Bun 1.4.4 (`38afee6c8`), macOS arm64, 2026-11-02, every probe in a child process.
+  The raw observations live in [`tests/bun_baseline.json`](../tests/bun_baseline.json); after a
+  Bun upgrade, `bun run probe:bun` diffs the new runtime against it.
 - **Not verified:** heap snapshots past ~2 GiB returning `""` or throwing `RangeError` (reported
   upstream, not reproduced: a 2 GiB allocation is flaky on any runner); `Bun.secrets` with
   `persist: "local"` (Windows only, never run).
 
 ## eval-module-mode
 
-An eval is classified from its source. Mentioning a CommonJS identifier (`require`, `module`,
-`exports`, `__dirname`) evaluates it as CommonJS, and any `import.meta` in the same snippet is then
-`SyntaxError: import.meta is only valid inside modules`. Keep one module system per eval; inside
-ESM use `import.meta.require`. Static and dynamic `import` both work.
+An eval is classified from its source. Referencing a CommonJS identifier (`require`, `module`,
+`exports`, `__dirname`) as code evaluates it as CommonJS, and any `import.meta` in the same snippet
+is then `SyntaxError: import.meta is only valid inside modules`. The word inside a string or a
+comment does not trigger it. Keep one module system per eval; inside ESM use `import.meta.require`.
+Static and dynamic `import` both work.
 
 ## eval-argv
 
@@ -26,7 +29,9 @@ parses them as its own flags (`error: Invalid Argument '-n'`).
 ## eval-print-json
 
 `bun -p` prints the final value through `Bun.inspect`, so a string prints unquoted. Wrap the
-expression in `JSON.stringify` when the output is parsed.
+expression in `JSON.stringify` when the output is parsed. A leading `{` is a block, not an object:
+`bun -p '{a:1}'` prints `1` (label `a`), while `bun repl -p '{a:1}'` prints the object. Write
+`({a:1})`.
 
 ## main-guard
 
@@ -42,7 +47,8 @@ drop a final empty element; the iterator is for streams that never end.
 
 ## color-env
 
-`Bun.enableANSIColors` is a boolean, `false` when piped. `NO_COLOR=1` disables and `FORCE_COLOR=1`
+`Bun.enableANSIColors` is a writable data property (no getter), `false` when piped; assigning it
+changes the value, so read it once at startup rather than trusting it after other code ran. `NO_COLOR=1` disables and `FORCE_COLOR=1`
 enables; `FORCE_COLOR=0` and `NO_COLOR=0` do **not** disable colour on a TTY, unlike Node and the
 no-color.org convention. Use `NO_COLOR=1`. Agent shells often export both variables already, so
 clear them before measuring.

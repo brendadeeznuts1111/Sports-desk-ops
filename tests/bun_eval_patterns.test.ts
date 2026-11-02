@@ -184,15 +184,12 @@ describe("bun -e / -p patterns (docs/bun-eval-pitfalls.md)", () => {
     expect(r.code).toBe(130);
   });
 
-  test("archive-files: files() lists from bytes without touching disk", () => {
-    const src = join(scratch, "arc");
+  test("archive-files: files() lists from bytes without touching disk", async () => {
     const tgz = join(scratch, "x.tgz");
-    rmSync(src, { recursive: true, force: true });
-    Bun.spawnSync(["mkdir", "-p", src]);
-    writeFileSync(join(src, "f.txt"), "hi\n");
-    expect(
-      Bun.spawnSync(["tar", "czf", tgz, "-C", src, "f.txt"]).exitCode,
-    ).toBe(0);
+    await Bun.write(
+      tgz,
+      new Bun.Archive({ "f.txt": "hi\n" }, { compress: "gzip" }),
+    );
 
     const r = probe(
       "-p",
