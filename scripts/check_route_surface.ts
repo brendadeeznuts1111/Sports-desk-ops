@@ -16,10 +16,10 @@ import {
 } from "../lib/route_surface.ts";
 
 const root = resolve(import.meta.dir, "..");
-// The table is the source; the extractor in readRouteSurfaceInputs is now only a test guard.
-const { declared, spec } = readRouteSurfaceInputs(root, DAEMON_PREFIX_PATHS);
-// Prefix surfaces are served by `startsWith` and cannot appear in the chain scan, so they are
-// taken from the table's own prefix rows.
+// The table is the source. `readRouteSurfaceInputs` still reads the chain, but only so the test
+// can compare it with the table; its `served` set is deliberately not used here, or a prefix arm
+// the extractor cannot see would silently drop out of the comparison again.
+const { declared, spec } = readRouteSurfaceInputs(root);
 const served = new Set([...DAEMON_PATHS, ...DAEMON_PREFIX_PATHS]);
 const findings = compareRouteSurfaces({ served, declared, spec });
 

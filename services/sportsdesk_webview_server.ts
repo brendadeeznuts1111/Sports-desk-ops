@@ -356,9 +356,13 @@ export function startServer(options?: ServerOptions) {
   function corsHeadersFor(req: Request): Record<string, string> {
     const headers: Record<string, string> = { ...baseHeaders };
     const origin = req.headers.get("origin");
-    if (origin !== null && allowedOrigins.includes(origin)) {
-      headers["Access-Control-Allow-Origin"] = origin;
+    if (origin !== null) {
+      // `Vary` even for a refused origin: the same URL answers differently per origin, and a
+      // cache that ignored that would hand one origin another origin's grant.
       headers["Vary"] = "Origin";
+      if (allowedOrigins.includes(origin)) {
+        headers["Access-Control-Allow-Origin"] = origin;
+      }
     }
     return headers;
   }

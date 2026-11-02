@@ -395,7 +395,7 @@ export const DAEMON_PREFIX_ROUTES: readonly DaemonRoute[] = [
     method: "ANY",
     guard: "none",
     dataClass: "static",
-    surface: null,
+    surface: "surface.daemon-logo-proxy",
   }),
 ];
 

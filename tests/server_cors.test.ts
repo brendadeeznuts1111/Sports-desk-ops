@@ -52,6 +52,8 @@ describe("cross-origin reads are opt-in", () => {
     expect(response.status).toBe(200);
     expect((await response.text()).length).toBeGreaterThan(0);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    // The refusal is origin-dependent too, so a cache must not reuse it across origins.
+    expect(response.headers.get("vary")).toBe("Origin");
   });
 
   test("a listed Origin is echoed back with Vary", async () => {
