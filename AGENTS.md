@@ -1,36 +1,36 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. 397 TypeScript files, 89 scripts, 139 tests. Bun **1.4.4**.
+portal and the VPS service. Bun **1.4.4** (`packageManager` and `engines` in `package.json`).
 
 ## Entrypoint and the gate chain
 
-`./bin/dx` is the operator entrypoint (`README.md:11-15`); `scripts/deploy/deploy_to_vps.sh` / `./bin/dx deploy`
-ship to the VPS. CI runs an eight-part chain — reproduce it locally in this order before claiming a
-change works:
+`./bin/dx` is the operator entrypoint (`README.md`, "Always use `./bin/dx`"). `./bin/dx deploy`
+stages and publishes to R2 and Cloudflare Pages; `./bin/dx ship` deploys, then pushes `main`. The
+VPS service ships through `scripts/deploy/deploy_to_vps.sh`.
+
+`.github/workflows/ci.yml` is the gate list. Replay it locally before claiming a change works:
 
 ```sh
-bun run format:check
-bun run typecheck
-bun run lint:check
-bun run test:docs && bun run verify:docs        # docs invariants + docs gates
-bun run schema:typecheck && bun run schema:check-fixture-drift
-bun run verify:gen-tokens-gate
-bun run check:fetch-init
-bun run check:innerhtml
-bun run test                                    # discovered tests, not only tests/
+bun run ci:local               # every `run` step of ci.yml, in order; stops at the first failure
+bun run ci:local --keep-going  # all steps, then the list of failures
+bun run ci:local --list        # print the steps without running them
 ```
 
-There is **no single `check` script** — these fragments exist only as CI steps, so a local run has
-to be assembled. GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a
-green badge does not exist; the local chain _is_ the proof.
+GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a green badge does
+not exist; `ci:local` _is_ the CI run. It checks the working tree, so uncommitted files from other
+work count against it — to judge only your change, run it in a clean `git worktree` at `HEAD`.
+
+The CI test step is `bun test tests/`. Colocated `*.test.ts` under `lib/` and `scripts/` run only
+under `bun run test` (all discovered tests), so run that too before pushing.
+
+After a Bun upgrade, `bun run probe:bun` diffs the runtime against `tests/bun_baseline.json`; the
+one-liner pitfalls it records are explained in `docs/bun-eval-pitfalls.md`.
 
 ## Layout
 
-`lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
-`tests/` (84 files) plus **colocated tests in `lib/` and `scripts/`** (~55 more — CI only runs
-`tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
-`docs/` · root runbooks (runtime shapes, guardrails, token architecture, R2/API, VPS domain).
+`ROOT_LAYOUT.md` owns the directory table. Two things it does not say: tests are colocated in
+`lib/` and `scripts/` as well as `tests/`, and the runbooks live in `docs/runbooks/`.
 
 ## Hard rules
 
@@ -38,21 +38,23 @@ green badge does not exist; the local chain _is_ the proof.
 
 Never paste **Bearer JWTs**, live cookies, or portal passwords into chat, commits, or scripts.
 Revoke any token that was exposed. Live manager API calls must use **`createF402ReplayTransport()`**
-(WebView profile / session file / replay proxy) — see `lib/f402_agent_policy.ts` and
-`docs/evidence/agent-graph-operator.md`. Agent graph CLI: **`bun run graph:agent`** (no `--token` flags).
+(`lib/f402_replay_transport.ts`: WebView profile / session file / replay proxy); the policy text is
+`lib/f402_agent_policy.ts` and the operator guide `docs/evidence/agent-graph-operator.md`. Agent
+graph CLI: **`bun run graph:agent`** (no `--token` flags).
 
 - **Production is read-only unless the task is explicitly a deploy.** Probe with `./bin/dx`, never
   mutate live data to make a number look right.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
-- **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml`
-  currently has an **empty environment id**, so a fresh machine gets no `.env` — fix the wiring, do
-  not hand-write secrets into the repo.
-- `gs-manager-cli.zip` (31 KB) is untracked junk — do not commit it.
-- `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
-  it `policy`-based scripts fail. Say so instead of disabling them.
+- **Token/secret work** goes through the documented SSOT path: `.1password/environments.toml`
+  (written by `code-project sync-environments --apply`) mounts `.env`. Fix the wiring; never
+  hand-write secrets into the repo.
+- **`verification/manager-boot-oracle/pinned/` is byte-pinned vendor code.** The oracle diffs it;
+  never edit or reformat it to satisfy a linter. Exclude it from the tool instead.
+- `Scratch/` and `dist/` are gitignored. The source scanners list files from git
+  (`lib/source_files.ts`), so an ignored file never fails a gate; do not commit either directory.
 
 ## Doc ownership
 
-`README.md` = orientation + the runbook tree · the seven root runbooks = operational procedure ·
-`docs/` = long-form. Move procedure into `docs/` rather than growing the root.
+`README.md` = orientation · `ROOT_LAYOUT.md` = layout · `docs/runbooks/` = operational procedure ·
+`docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.
