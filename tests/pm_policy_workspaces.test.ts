@@ -2,7 +2,11 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { lockWorkspaceNames, resolveWorkspaces } from "../lib/pm_policy.ts";
+import {
+  lockWorkspaceNames,
+  lockWorkspaceVersions,
+  resolveWorkspaces,
+} from "../lib/pm_policy.ts";
 
 /** The oracle is the bun.lock that `bun install` writes for the fixture, not a hand-kept list. */
 const scratch = mkdtempSync(path.join(tmpdir(), "pm-ws-"));
@@ -79,6 +83,22 @@ describe("resolveWorkspaces agrees with the bun.lock Bun writes", () => {
     const { expected, locked } = await lockWorkspaceNames(root);
     expect(locked).toEqual(expected);
     expect(expected["../outside-shared"]).toBe("shared");
+  });
+
+  test("workspace versions, including a workspace without one", async () => {
+    const root = fixture("versions", ["packages/*"], {
+      "package.json": {
+        name: "versions-root",
+        version: "9.9.9",
+        private: true,
+        workspaces: ["packages/*"],
+      },
+      "packages/a/package.json": { name: "a", version: "1.2.3" },
+      "packages/b/package.json": { name: "b" },
+    });
+    const { expected, locked } = await lockWorkspaceVersions(root);
+    expect(locked).toEqual(expected);
+    expect(expected["packages/a"]).toBe("1.2.3");
   });
 
   test("the object form of workspaces", async () => {

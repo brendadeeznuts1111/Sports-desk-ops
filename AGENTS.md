@@ -57,8 +57,12 @@ graph CLI: **`bun run graph:agent`** (no `--token` flags).
   `bun-deps add <pkg>` (machine command; `bun run deps` at the root is the same). Run it in the
   package that should own the dependency: inside a workspace it edits that `package.json`, and
   `--catalog[=<name>]` records the version in the root catalog. After a hand edit to a catalog,
-  `bun-deps install`. `bun run pm:doctor` checks the whole setup on this machine. There is no
-  catalog yet: the workspace packages in `packages/` have no dependencies of their own.
+  `bun-deps install`. A frozen install passes even when `bun.lock` is behind on workspace
+  versions or patches, so after `bun pm version` in a workspace run `bun-deps install`, and commit
+  patches with `bun-deps patch --commit <dir>` (plain `bun patch --commit` skips the lock).
+  `bun run pm:doctor` checks the whole setup on this machine, including lock drift and the
+  `@tennis-hq` registry and token that publishing needs. There is no catalog yet: the workspace
+  packages in `packages/` have no dependencies of their own.
 - `Scratch/` and `dist/` are gitignored. The source scanners list files from git
   (`lib/source_files.ts`), so an ignored file never fails a gate; do not commit either directory.
 

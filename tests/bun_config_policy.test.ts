@@ -4,7 +4,9 @@ import {
   FOREIGN_LOCKFILES,
   globalBunfigPath,
   lockWorkspaceNames,
+  lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
+  patchState,
 } from "../lib/pm_policy.ts";
 
 /**
@@ -55,6 +57,17 @@ describe("package manager policy", () => {
   test("the lockfile's workspaces match the package.json files", async () => {
     const { expected, locked } = await lockWorkspaceNames(".");
     expect(locked).toEqual(expected);
+  });
+
+  test("the lockfile's workspace versions match the package.json files", async () => {
+    const { expected, locked } = await lockWorkspaceVersions(".");
+    expect(locked).toEqual(expected);
+  });
+
+  test("every declared patch is in the lockfile and on disk", async () => {
+    const { declared, locked, missing } = await patchState(".");
+    expect(locked).toEqual(declared);
+    expect(missing).toEqual([]);
   });
 
   test("the global bunfig path follows XDG_CONFIG_HOME only when it is absolute", () => {

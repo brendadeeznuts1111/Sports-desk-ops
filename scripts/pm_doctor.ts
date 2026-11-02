@@ -14,7 +14,9 @@ import {
   FOREIGN_LOCKFILES,
   globalBunfigPath,
   lockWorkspaceNames,
+  lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
+  patchState,
   resolveWorkspaces,
 } from "../lib/pm_policy.ts";
 
@@ -50,6 +52,17 @@ async function readInstall(file: string): Promise<Install | undefined> {
 
 function check(name: string, ok: boolean, detail: string): Check {
   return { name, status: ok ? "ok" : "fail", detail };
+}
+
+function drift(
+  expected: Readonly<Record<string, string | undefined>>,
+  locked: Readonly<Record<string, string | undefined>>,
+): string[] {
+  return [...new Set([...Object.keys(expected), ...Object.keys(locked)])]
+    .filter((key) => expected[key] !== locked[key])
+    .map(
+      (key) => `${key || "<root>"}: lock ${locked[key]} vs ${expected[key]}`,
+    );
 }
 
 async function runtimeChecks(): Promise<Check[]> {
@@ -144,21 +157,42 @@ async function projectChecks(): Promise<Check[]> {
     ),
   ];
   if (existsSync(path.join(ROOT, "bun.lock"))) {
-    const { expected, locked } = await lockWorkspaceNames(ROOT);
-    const drift = [
-      ...new Set([...Object.keys(expected), ...Object.keys(locked)]),
-    ]
-      .filter((dir) => expected[dir] !== locked[dir])
-      .map(
-        (dir) => `${dir || "<root>"}: lock ${locked[dir]} vs ${expected[dir]}`,
-      );
+    const names = await lockWorkspaceNames(ROOT);
+    const nameDrift = drift(names.expected, names.locked);
     checks.push(
       check(
         "lock workspaces",
-        drift.length === 0,
-        drift.length === 0
-          ? `${Object.keys(expected).length} match package.json`
-          : `${drift.join("; ")}; regenerate bun.lock from scratch`,
+        nameDrift.length === 0,
+        nameDrift.length === 0
+          ? `${Object.keys(names.expected).length} match package.json`
+          : `${nameDrift.join("; ")}; regenerate bun.lock from scratch`,
+      ),
+    );
+    const versions = await lockWorkspaceVersions(ROOT);
+    const versionDrift = drift(versions.expected, versions.locked);
+    checks.push(
+      check(
+        "lock versions",
+        versionDrift.length === 0,
+        versionDrift.length === 0
+          ? "workspace versions match package.json"
+          : `${versionDrift.join("; ")}; run bun-deps install`,
+      ),
+    );
+    const patches = await patchState(ROOT);
+    const patchDrift = drift(patches.declared, patches.locked);
+    const count = Object.keys(patches.declared).length;
+    checks.push(
+      check(
+        "patches",
+        patchDrift.length === 0 && patches.missing.length === 0,
+        patches.missing.length > 0
+          ? `missing ${patches.missing.join(", ")}`
+          : patchDrift.length > 0
+            ? `${patchDrift.join("; ")}; run bun-deps install`
+            : count === 0
+              ? "none declared"
+              : `${count} declared, in bun.lock and on disk`,
       ),
     );
   }
@@ -215,12 +249,67 @@ async function overrideChecks(): Promise<Check[]> {
   return checks;
 }
 
+async function npmrcLines(): Promise<string[]> {
+  const lines: string[] = [];
+  for (const file of [
+    path.join(ROOT, ".npmrc"),
+    path.join(Bun.env.HOME ?? "", ".npmrc"),
+  ]) {
+    if (!existsSync(file)) continue;
+    lines.push(...(await Bun.file(file).text()).split("\n"));
+  }
+  return lines.map((line) => line.trim());
+}
+
+/** Warn-level: a scoped registry only matters when installing or publishing that scope. */
+async function registryChecks(): Promise<Check[]> {
+  const lines = await npmrcLines();
+  const checks: Check[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const [, scope, url] = /^(@[\w.-]+):registry\s*=\s*(\S+)$/.exec(line) ?? [];
+    if (scope === undefined || url === undefined || seen.has(scope)) continue;
+    seen.add(scope);
+    const base = url.endsWith("/") ? url : `${url}/`;
+    const host = base.replace(/^https?:/, "");
+    const tokenVar = lines
+      .map((l) => /^(\S+):_authToken\s*=\s*\$\{(\w+)\}$/.exec(l) ?? [])
+      .find(
+        ([, prefix]) => prefix !== undefined && host.startsWith(prefix),
+      )?.[2];
+    if (tokenVar !== undefined && !Bun.env[tokenVar]) {
+      checks.push({
+        name: `${scope} token`,
+        status: "warn",
+        detail: `${tokenVar} is unset: publish and installs from ${scope} fail`,
+      });
+    }
+    const reachable = await fetch(`${base}-/ping`, {
+      signal: AbortSignal.timeout(2000),
+    }).then(
+      (res) => res.ok,
+      () => false,
+    );
+    checks.push(
+      reachable
+        ? { name: `${scope} registry`, status: "ok", detail: base }
+        : {
+            name: `${scope} registry`,
+            status: "warn",
+            detail: `${base} unreachable: publish and installs from ${scope} fail`,
+          },
+    );
+  }
+  return checks;
+}
+
 const values = parseCli();
 const checks = [
   ...(await runtimeChecks()),
   ...(await globalConfigChecks()),
   ...(await projectChecks()),
   ...(await overrideChecks()),
+  ...(await registryChecks()),
 ];
 const failed = checks.filter((c) => c.status === "fail").length;
 
