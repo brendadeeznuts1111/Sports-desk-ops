@@ -47,6 +47,18 @@ sites; a new one fails `bun run policy:check`. The full rule table is the user r
 - No `typeof Bun` guards or fallback branches in Bun-only code: call the API.
 - No `as any` and no hand-rolled `isRecord` / `asRecord` guards. Type external data `unknown`
   and parse it once at the boundary with a `zod` schema.
+- `Bun.Image` ([docs](https://bun.com/docs/runtime/image),
+  [error codes](https://bun.com/reference/globals/bun/Image/ErrorCode)):
+  - `metadata()` reads only the header. To prove untrusted bytes decode, await a terminal
+    (`lib/logo_image.ts` `inspectLogo`).
+  - Untrusted input gets an explicit `maxPixels`; the default allows a 1 GiB decode.
+  - Never pass a request-derived string to `new Bun.Image(path)`: it reads that file.
+  - Branch on `imageErrorCode(err)` from `lib/image_errors.ts` (also reads `err.cause`), and
+    rethrow every code you do not handle. Wrap with `{ cause }` so the code survives.
+  - `rotate()` takes whole multiples of 90; `new Response(img)` encodes synchronously, so
+    await `.blob()` in a handler.
+  - Resized bytes differ between macOS and Linux unless `Bun.Image.backend = "bun"`; set it
+    before hashing or locking a resized image.
 
 ## Layout
 

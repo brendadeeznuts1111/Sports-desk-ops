@@ -7,16 +7,24 @@ describe("Fetch Security & URL Credentials Audit", () => {
 
   // Tracked files only: the untracked `.env` is a 1Password Environments FIFO, so reading it
   // blocks until 1Password answers and then pulls live secrets into the test output.
+  function gitFiles(dir: string, ...flags: string[]): string[] {
+    const { stdout } = Bun.spawnSync(["git", "ls-files", "-z", ...flags], {
+      cwd: dir,
+    });
+    return stdout.toString().split("\0");
+  }
+
+  // A tracked file deleted in the working tree is still in the index; there is nothing to read.
   function getAllSourceFiles(dir: string): string[] {
-    const { stdout } = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: dir });
-    return stdout
-      .toString()
-      .split("\0")
+    const deleted = new Set(gitFiles(dir, "--deleted"));
+    return gitFiles(dir)
       .filter(
         (rel) =>
-          [".ts", ".sh", ".json", ".md", ".html", ".toml"].includes(
+          !deleted.has(rel) &&
+          ([".ts", ".sh", ".json", ".md", ".html", ".toml"].includes(
             extname(rel),
-          ) || basename(rel).startsWith(".env"),
+          ) ||
+            basename(rel).startsWith(".env")),
       )
       .map((rel) => join(dir, rel));
   }

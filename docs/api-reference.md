@@ -473,7 +473,7 @@ Serves the transcribed Admin module: spread, moneyline, total and team-total sid
 
 ### `GET /api/graph-feed`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1180-1201`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1207-1228`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Graph live feed (GET /api/graph-feed, /graph-live-feed.json)**
 
@@ -506,7 +506,7 @@ Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds —
 
 ### `GET /api/kpis`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:174-181` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
 
 **Dashboard headline KPIs (GET /api/kpis)**
 
@@ -610,7 +610,7 @@ The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumbe
 
 ### `GET /api/logo/{name}`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:701-799` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:728-826` · response not captured
 
 **Team-logo proxy (GET /api/logo/{name})**
 
@@ -646,7 +646,7 @@ Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image
 
 ### `POST /api/parse-formdata`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:174-181` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
 
 **Form-data parse probe (POST /api/parse-formdata)**
 
@@ -675,7 +675,7 @@ Echoes the fields of one multipart or urlencoded body as {name: string | string[
 
 ### `GET /api/scoreboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1563-1575` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1590-1602` · response not captured
 
 **Transcribed portal scoreboard (games, scores, status)**
 
@@ -730,7 +730,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/sports/catalog`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:358-359` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:359-360` · response not captured
 
 **Sub-sports and period menus with their types**
 
@@ -759,7 +759,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:174-181` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
 
 **Daemon status and process telemetry (GET /api/status, GET /status.json)**
 
@@ -784,7 +784,7 @@ Answers {ok, status, checks, health, telegram, timestamp} from the running proce
 
 ### `GET /api/telegram/activity`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:570-572,390-396` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
 
 **Recent Telegram activity (GET /api/telegram/activity)**
 
@@ -819,7 +819,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1854-1879` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1881-1906` · response not captured
 
 **Dispatch an instant Telegram alert**
 
@@ -918,7 +918,7 @@ Report type is selected by the ?type= query parameter and defaults to EVENING_SE
 
 ### `GET /api/telegram/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:570-572,390-396` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
 
 **Telegram configuration and schedules (GET /api/telegram/status)**
 
@@ -955,7 +955,7 @@ Returns {success, status, schedules, reportTypes} from the bot service and the i
 
 ### `POST /api/telegram/webhook`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:570-572,390-396` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
 
 **Register or delete the Telegram webhook (POST /api/telegram/webhook)**
 
@@ -1012,7 +1012,7 @@ Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook
 
 ### `GET /api/test/error`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:570-572,390-396` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
 
 **Error-boundary probe (GET /api/test/error)**
 
@@ -1034,7 +1034,7 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/watchlist`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:170-189` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:171-190` · response not captured
 
 **Monitored watch-list accounts**
 
@@ -1070,7 +1070,7 @@ Returns {success, count, data} from telegramService.getWatchList() (services/spo
 
 ### `GET /dashboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:174-181` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
 
 **Operator dashboard (GET /dashboard)**
 
@@ -1089,14 +1089,14 @@ Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdes
 
 ### `GET /health`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1008-1027` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1007-1026` · response not captured
 
 **Daemon health and telemetry probe**
 
 Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getHealth`
-- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1008-1027 (add url + timestamp). A curl capture would only confirm the handler.
+- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1007-1026 (add url + timestamp). A curl capture would only confirm the handler.
 
 **Responses**
 
@@ -1117,7 +1117,7 @@ Handler-defined contract: services/sportsdesk_webview_server.ts returns the daem
 
 ### `GET /miniapp`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:184-191`, `services/sportsdesk_webview_server.ts:661-663` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:185-192`, `services/sportsdesk_webview_server.ts:688-690` · response not captured
 
 **Telegram Mini App dashboard (GET /miniapp)**
 

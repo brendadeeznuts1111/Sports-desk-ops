@@ -112,13 +112,12 @@ import {
   type RawHierarchyTree,
 } from "../lib/hierarchy_view.ts";
 import { encodedResponse, negotiateEncoding } from "../lib/http_compression.ts";
+import { imageErrorCode, type ImageErrorCode } from "../lib/image_errors.ts";
 import {
   contentTypeFor,
-  imageErrorCode,
   inspectLogo,
   logoHeaders,
   resizeLogo,
-  type ImageErrorCode,
   type LogoMetadata,
 } from "../lib/logo_image.ts";
 

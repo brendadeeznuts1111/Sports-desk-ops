@@ -29,6 +29,7 @@ import {
 } from "../../lib/screenshot_encode.ts";
 import { parseCdpCookies, type CdpCookie } from "./cookies.ts";
 import { sha256Hex } from "./json.ts";
+import { imageErrorCode } from "../../lib/image_errors.ts";
 import { redactError, redactString, redactUrlForLog } from "./redact.ts";
 
 export type WebViewErrorCode =
@@ -53,11 +54,21 @@ export type WebViewErrorCode =
 export class WebViewError extends Error {
   readonly code: WebViewErrorCode;
 
-  constructor(code: WebViewErrorCode, message: string) {
-    super(message);
+  constructor(code: WebViewErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "WebViewError";
     this.code = code;
   }
+}
+
+/** Keeps the `Bun.Image` code in the message and the original error as `cause`. */
+function screenshotFailed(what: string, error: unknown): WebViewError {
+  const image = imageErrorCode(error);
+  return new WebViewError(
+    "screenshot-failed",
+    `${what} failed${image === undefined ? "" : ` (${image})`}: ${redactError(error)}`,
+    { cause: error },
+  );
 }
 
 export interface WebViewLaunchOptions {
@@ -866,10 +877,7 @@ export class ManagedWebView {
           : new Uint8Array(raw as ArrayBufferLike);
       return new Blob([bytes], { type: mimeTypeForFormat(format) });
     } catch (error) {
-      throw new WebViewError(
-        "screenshot-failed",
-        `screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("screenshot", error);
     }
   }
 
@@ -960,10 +968,7 @@ export class ManagedWebView {
       return await encodeScreenshotDataUrl(input, dataOptions);
     } catch (error) {
       if (error instanceof WebViewError) throw error;
-      throw new WebViewError(
-        "screenshot-failed",
-        `screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("screenshot", error);
     }
   }
 
@@ -979,10 +984,7 @@ export class ManagedWebView {
       return await computeImagePlaceholder(blob);
     } catch (error) {
       if (error instanceof WebViewError) throw error;
-      throw new WebViewError(
-        "screenshot-failed",
-        `placeholder screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("placeholder screenshot", error);
     }
   }
 

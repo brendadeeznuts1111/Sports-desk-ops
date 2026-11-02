@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { imageErrorCode } from "./logo_image.ts";
+import { imageErrorCode } from "./image_errors.ts";
 
 const rejection = (run: () => Promise<unknown>): Promise<unknown> =>
   run().then(
@@ -29,6 +29,14 @@ describe("imageErrorCode", () => {
       code: "ERR_OUT_OF_MEMORY",
     });
     expect(imageErrorCode(error)).toBe("ERR_OUT_OF_MEMORY");
+  });
+
+  test("finds the code on the cause of a wrapping error", async () => {
+    const inner = await rejection(() =>
+      new Bun.Image(new TextEncoder().encode("<html>")).metadata(),
+    );
+    const outer = new Error("screenshot failed", { cause: inner });
+    expect(imageErrorCode(outer)).toBe("ERR_IMAGE_UNKNOWN_FORMAT");
   });
 
   test("non-errors and unknown codes are not image codes", () => {

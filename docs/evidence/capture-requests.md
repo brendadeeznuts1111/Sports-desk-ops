@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `sportsdesk_webview_server.ts:1008-1027`                             | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `sportsdesk_webview_server.ts:1007-1026`                             | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1713-1738`                             | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1741-1761`                             | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1740-1765`                             | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1768-1788`                             | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,

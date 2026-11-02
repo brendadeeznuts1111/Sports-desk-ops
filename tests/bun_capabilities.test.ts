@@ -61,7 +61,7 @@ describe("Bun capabilities used by the ops tooling", () => {
     // reference page lists it — but bun-types 1.4.4 stops at six codes, so comparing against it
     // is TS2367 ("no overlap") and needs a cast. This switch is the tripwire: the day the
     // installed declarations grow a member, `bun check` fails here and `ImageErrorCode` in
-    // lib/logo_image.ts drops its ERR_OUT_OF_MEMORY addition.
+    // lib/image_errors.ts drops its ERR_OUT_OF_MEMORY addition.
     const codeOf = (code: Bun.Image.ErrorCode): string => {
       switch (code) {
         case "ERR_IMAGE_FORMAT_UNSUPPORTED":
