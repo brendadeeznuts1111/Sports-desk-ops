@@ -2,7 +2,7 @@
 /**
  * Checks that this machine's Bun package-manager setup is the one the repo assumes: the pinned
  * runtime, the live global bunfig and its install policy, the lockfile, the installed tree, and
- * the override file that `bun run deps` uses. Read-only; never installs.
+ * the `bun-deps` command and its override file. Read-only; never installs.
  *
  *   bun run pm:doctor           table, exit 1 on any failure
  *   bun run pm:doctor --json    the same checks as JSON
@@ -186,14 +186,24 @@ async function projectChecks(): Promise<Check[]> {
 }
 
 async function overrideChecks(): Promise<Check[]> {
+  const command = Bun.which("bun-deps");
+  const checks = [
+    check(
+      "bun-deps command",
+      command !== null,
+      command ??
+        "not on PATH: link ~/dotfiles/shell/bin/bun-deps into ~/.local/bin",
+    ),
+  ];
   if (!existsSync(UNFROZEN)) {
-    return [
-      check("deps override", false, `${UNFROZEN} missing: bun run deps fails`),
-    ];
+    checks.push(
+      check("deps override", false, `${UNFROZEN} missing: bun-deps fails`),
+    );
+    return checks;
   }
   const install = (await readInstall(UNFROZEN)) ?? {};
   const extra = Object.keys(install).filter((key) => key !== "frozenLockfile");
-  return [
+  checks.push(
     check(
       "deps override",
       install.frozenLockfile === false && extra.length === 0,
@@ -201,7 +211,8 @@ async function overrideChecks(): Promise<Check[]> {
         ? UNFROZEN
         : `${UNFROZEN} also sets ${extra.join(", ")}`,
     ),
-  ];
+  );
+  return checks;
 }
 
 const values = parseCli();
