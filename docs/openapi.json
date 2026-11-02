@@ -960,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:815-835",
+            "services/sportsdesk_webview_server.ts:1008-1027",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:815-835 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1008-1027 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },

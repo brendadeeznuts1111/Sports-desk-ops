@@ -25,6 +25,10 @@ let upstreamHits = 0;
 const tinyPng = new Uint8Array(
   await new Bun.Image(Bun.file(PNG)).resize(20).png().bytes(),
 );
+/** Past the 4 MP `maxPixels` ceiling in lib/logo_image.ts: 3000×1725. */
+const hugePng = new Uint8Array(
+  await new Bun.Image(Bun.file(PNG)).resize(3000).png().bytes(),
+);
 const upstream = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
@@ -36,6 +40,16 @@ const upstream = Bun.serve({
     if (name === "not-an-image.png") {
       return new Response("<html>portal</html>", {
         headers: { "Content-Type": "text/html" },
+      });
+    }
+    if (name === "truncated.png") {
+      return new Response(tinyPng.subarray(0, 60), {
+        headers: { "Content-Type": "image/png" },
+      });
+    }
+    if (name === "huge.png") {
+      return new Response(hugePng, {
+        headers: { "Content-Type": "image/png" },
       });
     }
     upstreamHits += 1;
@@ -140,6 +154,20 @@ describe("upstream failures are described, not guessed", () => {
     expect(response.status).toBe(502);
     const body = (await response.json()) as { code?: string };
     expect(body.code).toBe("ERR_IMAGE_UNKNOWN_FORMAT");
+  });
+
+  test("a PNG cut off mid-header reports the decoder's code", async () => {
+    const response = await fetch(`${base}/api/logo/truncated.png`);
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("ERR_IMAGE_DECODE_FAILED");
+  });
+
+  test("a logo over the pixel ceiling reports maxPixels, not a decode failure", async () => {
+    const response = await fetch(`${base}/api/logo/huge.png`);
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("ERR_IMAGE_TOO_MANY_PIXELS");
   });
 
   test("a broken percent-escape is a client error", async () => {

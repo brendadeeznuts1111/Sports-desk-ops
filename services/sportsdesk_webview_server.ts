@@ -114,9 +114,11 @@ import {
 import { encodedResponse, negotiateEncoding } from "../lib/http_compression.ts";
 import {
   contentTypeFor,
+  imageErrorCode,
   inspectLogo,
   logoHeaders,
   resizeLogo,
+  type ImageErrorCode,
   type LogoMetadata,
 } from "../lib/logo_image.ts";
 
@@ -553,10 +555,38 @@ interface CachedLogo {
 
 const logoCache = new Map<string, CachedLogo>();
 
+/**
+ * Codes that describe the upstream bytes. `ERR_OUT_OF_MEMORY`, `ERR_IMAGE_ENCODE_FAILED` and
+ * `ERR_INVALID_STATE` are this process's failures and must not be reported as a bad upstream image.
+ */
+type UpstreamImageFault = Extract<
+  ImageErrorCode,
+  | "ERR_IMAGE_FORMAT_UNSUPPORTED"
+  | "ERR_IMAGE_TOO_MANY_PIXELS"
+  | "ERR_IMAGE_DECODE_FAILED"
+  | "ERR_IMAGE_UNKNOWN_FORMAT"
+>;
+
+function isUpstreamImageFault(
+  code: ImageErrorCode,
+): code is UpstreamImageFault {
+  switch (code) {
+    case "ERR_IMAGE_FORMAT_UNSUPPORTED":
+    case "ERR_IMAGE_TOO_MANY_PIXELS":
+    case "ERR_IMAGE_DECODE_FAILED":
+    case "ERR_IMAGE_UNKNOWN_FORMAT":
+      return true;
+    case "ERR_IMAGE_ENCODE_FAILED":
+    case "ERR_OUT_OF_MEMORY":
+    case "ERR_INVALID_STATE":
+      return false;
+  }
+}
+
 type LogoResult =
   | ({ readonly kind: "ok" } & CachedLogo)
   | { readonly kind: "upstream"; readonly status: number }
-  | { readonly kind: "undecodable"; readonly code: string }
+  | { readonly kind: "undecodable"; readonly code: UpstreamImageFault }
   | { readonly kind: "too-large"; readonly bytes: number };
 
 function logoBaseUrl(): string {
@@ -594,10 +624,8 @@ async function fetchLogo(
   try {
     metadata = await inspectLogo(raw);
   } catch (error) {
-    const code =
-      typeof error === "object" && error !== null && "code" in error
-        ? String((error as { code: unknown }).code)
-        : "ERR_IMAGE_DECODE_FAILED";
+    const code = imageErrorCode(error);
+    if (code === undefined || !isUpstreamImageFault(code)) throw error;
     return { kind: "undecodable", code };
   }
 

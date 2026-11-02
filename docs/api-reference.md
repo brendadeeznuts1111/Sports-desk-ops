@@ -1089,14 +1089,14 @@ Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdes
 
 ### `GET /health`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:815-835` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1008-1027` · response not captured
 
 **Daemon health and telemetry probe**
 
 Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getHealth`
-- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:815-835 (add url + timestamp). A curl capture would only confirm the handler.
+- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1008-1027 (add url + timestamp). A curl capture would only confirm the handler.
 
 **Responses**
 

@@ -13,8 +13,33 @@
  * format.
  */
 
-export type LogoFormat =
-  "jpeg" | "png" | "webp" | "heic" | "avif" | "bmp" | "tiff" | "gif";
+export type LogoFormat = Bun.Image.Format;
+
+/**
+ * `Bun.Image.ErrorCode` plus `ERR_OUT_OF_MEMORY`: the reference lists seven codes, the bun-types
+ * 1.4.4 declarations six (tests/bun_capabilities.test.ts trips when they catch up).
+ */
+export type ImageErrorCode = Bun.Image.ErrorCode | "ERR_OUT_OF_MEMORY";
+
+const IMAGE_ERROR_CODES: ReadonlySet<string> = new Set<ImageErrorCode>([
+  "ERR_IMAGE_FORMAT_UNSUPPORTED",
+  "ERR_IMAGE_TOO_MANY_PIXELS",
+  "ERR_IMAGE_DECODE_FAILED",
+  "ERR_IMAGE_ENCODE_FAILED",
+  "ERR_IMAGE_UNKNOWN_FORMAT",
+  "ERR_OUT_OF_MEMORY",
+  "ERR_INVALID_STATE",
+]);
+
+function isImageErrorCode(code: unknown): code is ImageErrorCode {
+  return typeof code === "string" && IMAGE_ERROR_CODES.has(code);
+}
+
+/** The `Bun.Image` code on a terminal's rejection, or `undefined` for anything else (syscall codes included). */
+export function imageErrorCode(error: unknown): ImageErrorCode | undefined {
+  if (!(error instanceof Error) || !("code" in error)) return undefined;
+  return isImageErrorCode(error.code) ? error.code : undefined;
+}
 
 export interface LogoMetadata {
   readonly width: number;
@@ -50,13 +75,14 @@ export async function inspectLogo(
 ): Promise<LogoMetadata> {
   const image = new Bun.Image(bytes, { maxPixels: MAX_PIXELS });
   const metadata = await image.metadata();
-  const format = metadata.format as LogoFormat;
+  // metadata() reads only the header; a terminal decodes every row, so a truncated body rejects.
+  await image.resize(1, 1, { fit: "fill" }).png().bytes();
   return {
     width: metadata.width,
     height: metadata.height,
-    format,
+    format: metadata.format,
     bytes: bytes.byteLength,
-    contentType: contentTypeFor(format),
+    contentType: contentTypeFor(metadata.format),
   };
 }
 
