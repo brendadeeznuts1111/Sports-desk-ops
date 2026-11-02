@@ -257,6 +257,31 @@ against `depth = 24`.
 both where they diverge, and treat any count derived from the edges as a **lower bound** — a `+2`
 edge means at least one intermediate agent is absent from the capture.
 
+### A second store, because `agents` cannot hold this tree
+
+`lib/f402_sqlite_agents_ingest.ts` already stores a hierarchy in SQLite — an `agents` table keyed by
+`agent_id`, fed by the portal envelope, with a recursive depth CTE. `data/agent-tree.json` does not
+fit it, measured 2026-11-02:
+
+- `flattenNormalizedHierarchyTree(tree)` returns **0 rows** for this file: the crawler expects nested
+  `AgentID`/`Level` rows, the tree is `nodes[login] = { p, l, t }`.
+- `agents.level` is `NOT NULL`, and the collision node `BRANDON` deliberately has no level — the
+  insert is rejected (`NOT NULL constraint failed: agents.level`).
+- The keys differ: `agents` is keyed by portal `AgentID`, the tree by canonical login, and the
+  collision is exactly where one login maps to two AgentIDs.
+
+So `lib/hierarchy_store.ts` keeps a parallel `hierarchy_nodes` table keyed by login, with a nullable
+`portal_level` and a `level_delta` column that makes the `+1` / `+2` / `0`-at-cap defect queryable
+rather than recomputed per reader. `bun run hierarchy:load` builds it from the JSON (idempotent:
+2,276 rows, 196 KB) and prints the delta distribution; `subtreeCounts` is the rollup the tree UI
+asks for. The descendants CTE uses `UNION`, not `UNION ALL`: the `agents` CTE has no cycle guard and
+assumes every root is `level = 1`, which a crawl that re-parents a node could violate.
+
+`lib/f402_manager_hierarchy_ingest.ts` also encodes the cap independently —
+`PORTAL_HIERARCHY_PARSER_MAX_LEVEL = 12`, "levels 1–12 only", with level ≥ 13 rows returned in
+`skippedOverflow` — so the envelope path _drops_ the nodes the tree file shows at `l = 12`. The two
+stores therefore have different membership, and neither is a superset of the other.
+
 ## D-10. `surface.daemon-scoreboard`
 
 - `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1446-1458`):

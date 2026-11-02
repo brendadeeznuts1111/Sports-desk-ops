@@ -15,6 +15,9 @@ verification/gen-tokens-zero-drift-gate/out/
 
 # Local SQLite and scratch notes at repo root
 customers.sqlite
+# Built by `bun run hierarchy:load` from data/agent-tree.json; a query cache, not an input.
+data/hierarchy.sqlite
+data/hierarchy.sqlite-*
 Untitled.txt.rtf
 
 # Customer and downline datasets stay local (public repo)
