@@ -71,6 +71,16 @@ describe("resolveWorkspaces agrees with the bun.lock Bun writes", () => {
     expect(expected["packages/a/test/other"]).toBeUndefined();
   });
 
+  test("a workspace outside the root directory", async () => {
+    const root = fixture("outside", ["packages/*", "../outside-shared"], {
+      "packages/a/package.json": { name: "a" },
+      "../outside-shared/package.json": { name: "shared" },
+    });
+    const { expected, locked } = await lockWorkspaceNames(root);
+    expect(locked).toEqual(expected);
+    expect(expected["../outside-shared"]).toBe("shared");
+  });
+
   test("the object form of workspaces", async () => {
     const root = fixture(
       "object",
