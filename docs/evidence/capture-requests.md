@@ -523,6 +523,23 @@ to 10. So "join on Login in the ticker, customerID in accountInfo" is wrong as a
 column is padded in some rows and clean in others on _both_ endpoints. `trim()` on both sides, and
 `AgentID` needs period tolerance rather than trimming.
 
+**The anchor is a fixture now, and its timestamps are Eastern.** `tests/fixtures/f402-account-info-billy666-2026-11-02.json`
+carries the observed fields plus the timestamp trio, so the pipeline can import it instead of
+quoting prose. The trio settles the timezone: `test` is `1793589916` = `2026-11-02T03:25:16Z`, and
+`SERVER.date` is `2026-11-01 22:25:16.233` — exactly five hours earlier, i.e. the same instant at
+UTC−5. So **server timestamps are Eastern and printed without a zone**, and `TimeZone: 1` applies to
+them as well as to `GameDateTime`; reading either as UTC shifts every row by five hours.
+
+**`Spread` belongs to `Team2ID`, and `Favorito` is the cross-check.** Both observed score games fit
+that: Clippers vs Warriors `Spread -2` with `Favorito` the Warriors (Team2), and Eagles vs
+Commanders `Spread -5.5` with `Favorito` the Commanders (Team2). A "Favorito decides the sign" rule
+also fits those two rows, and the two rules agree — but they would diverge if Team2 were the
+underdog, so `lib/game_line.ts` takes the one-field reading and returns `agrees` so a disagreement
+surfaces instead of being resolved by whichever rule ran first.
+
+**`lineValue` is `wagerLine − currentSpread`, positive = the bettor got the better number.** The
+example row is the negative case on purpose: Eagles +3.5 held, market at +5.5, so `lineValue = -2`.
+
 **Scope checks the enrichment pass can run without a probe.** From the anchor account
 (`Office: NOLAROSE`, `Store: PPHINSIDER`, `customerID: BILLY666`, `AgentID: null`):
 

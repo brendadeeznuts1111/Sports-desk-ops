@@ -1,0 +1,40 @@
+{
+  "_note": "Projection of the getAccountInfoOwner response observed 2026-11-02 for BILLY666: the fields the parser reads, the timestamp trio used to place it in a timezone, and the ticker-state pair. Password is empty in the source; no credential is represented here.",
+  "accountInfo": {
+    "customerID": "BILLY666",
+    "AgentID": null,
+    "Login": "BILLY666  ",
+    "Office": "NOLAROSE",
+    "Store": "PPHINSIDER          ",
+    "AgentType": "M",
+    "Active": "Y",
+    "CreditAcctFlag": "Y",
+    "CurrentBalance": 0,
+    "AvailableBalance": 0,
+    "PendingWagerBalance": 0,
+    "CreditLimit": 0,
+    "DenyLiveBetting": "Y",
+    "AllowNewLiveBetting": "N",
+    "AllowUltraLive": "Y",
+    "AgentMenuStyle": "Tile Menu",
+    "DefaultSiteSkin": "RiseOfSnake",
+    "Skin": "skin-e",
+    "TimeZone": 1,
+    "TimeZoneSource": 1,
+    "LocalTimeZone": 0,
+    "OpenDateTime": "2025-04-21 21:26:43.317",
+    "OpenDateTimeUnix": 1745288803317,
+    "Password": "",
+    "PasswordFix": "\u2021"
+  },
+  "SERVER": { "date": "2026-11-01 22:25:16.233" },
+  "preferenceDate": [
+    {
+      "isTickerDisplayAlready": "true",
+      "CMisTickerDisplayAlready": "false",
+      "CMTickerMessage": "uglypopup"
+    }
+  ],
+  "test": 1793589916,
+  "SKIN": "M"
+}
