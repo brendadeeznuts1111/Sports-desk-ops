@@ -446,6 +446,18 @@ that appears with more than one, and counts rotation rows whose `Team*ID` is mis
 grouping them under `undefined` (which is what the ad-hoc one-liner did, reporting "clean" on a
 payload where the ids were never present).
 
+**How the panel drives it** (pinned `verification/manager-boot-oracle/pinned/manager.js`, read
+2026-11-02): the first open of the Scores panel calls `getScoresDynamic()` and then
+`$.scoreInterval = setInterval(() => getScoresDynamic(), 30000)`. The four `setTimeout` calls in the
+same module are one-shot UI delays (50, 300, 500 and 1500 ms) and none re-arms, so this is an
+interval, not a chained-timeout loop. Two consequences for anyone mirroring the cadence:
+
+- `clearInterval` does not appear anywhere in the pinned bundle, and `$.scoreInterval` is written
+  once and never read, so the 30 s poll never stops — it keeps running with the panel closed.
+- `getScoresDynamic()` itself posts only `{operation: "getScoresLiveDynamic"}`; the `customerID`,
+  `agentID`, `agentOwner` and `RRO` seen in the captured body are injected by the `ajaxPrefilter`,
+  not built by the method.
+
 ---
 
 ## P7 — captures that are not needed (reconcile spec to code instead)
