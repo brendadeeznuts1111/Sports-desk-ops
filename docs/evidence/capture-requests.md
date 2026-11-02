@@ -232,10 +232,10 @@ Expected auth: the Manager portal session cookie observed in the 2026-10-28 HAR 
 
 **Two more feeds have repo wire types but no capture** — lower priority, still unverified:
 
-| #   | Operation      | Candidate URL / content type                                                                                                                     | What to capture                                                                                                            | Upgrades                                  |
-| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| 13  | `getBetTicker` | `POST /cloud/api/Manager/getBetTicker`, form-urlencoded                                                                                          | an initial call (`wagerNumber=0`) and a delta call; exact body; `INFO`/`LIST` envelope; row keys/types; watermark behavior | C→A; validates the delta-watermark design |
-| 14  | `getPending`   | `POST /cloud/api/Manager/getPending` — **content type contested**: the spec says `application/json`, every other Manager call is form-urlencoded | exact content type + one non-empty response; confirm `BLOCKED`/zero-stake sentinel rows actually appear                    | C→A                                       |
+| #   | Operation      | Candidate URL / content type                                                                                                                                  | What to capture                                                                                                                                                           | Upgrades                                                   |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 13  | `getBetTicker` | `POST /cloud/api/Manager/getBetTicker`, **JSON** — a 2026-11-02 transcript shows `application/json` with `{agentID, agentOwner, wagerNumber, operation, RRO}` | a hashed capture of two consecutive pages (the cursor walk) and the `wagerNumber=0` initial call; the `INFO` object; whether the server accepts `wagerType=M` as a filter | C→B on the observed page; **B→A needs the hashed capture** |
+| 14  | `getPending`   | `POST /cloud/api/Manager/getPending` — **content type contested**: the spec says `application/json`, every other Manager call is form-urlencoded              | exact content type + one non-empty response; confirm `BLOCKED`/zero-stake sentinel rows actually appear                                                                   | C→A                                                        |
 
 `authenticateCustomer` is deliberately not in this table — the whole auth model needs its own capture and
 is §P3. Rows with partial observation are tracked elsewhere: `updateByColumn` (§P2) and
@@ -445,6 +445,44 @@ Rotation numbers should be stable per team; `bun run check:rotations <scores.jso
 that appears with more than one, and counts rotation rows whose `Team*ID` is missing instead of
 grouping them under `undefined` (which is what the ad-hoc one-liner did, reporting "clean" on a
 payload where the ids were never present).
+
+### `getBetTicker`: paginated by cursor, and the type filter misses most of it
+
+Observed 2026-11-02 (operator transcript — one 100-row page, no artifact):
+
+- **Pagination is backward from a cursor.** `LIST` holds 100 rows in ascending `WagerNumber` order
+  (`767174209 … 767174452`) while the request carried `wagerNumber=767177348`, a number above every
+  row in the response. So the cursor means "the 100 wagers before this one", not "after". Ingest is
+  therefore at least two passes — walk back from the highest known cursor, then forward from the
+  last row — not one request per scope. `/api/live-wagers` serves a single saved page, so it
+  inherits whatever window was captured.
+- **`WagerType` includes `M` and `L`, which the portal's own filter does not offer** (`S`, `P`, `I`,
+  `T`, `G`, `A`, `C`, `N`). In the page: `M` ~11, `L` ~7, `S` ~5, `P` ~1 — so the UI's "Straights"
+  filter hides roughly 70% of the rows. `M` is carried as a raw code here (`lib/live_wagers.ts:12-14`,
+  "no documented meaning… carried as a raw code rather than guessed"); `L` was not in the committed
+  17-row artifact at all. The coverage gap is upstream, not in this repo: `/api/live-wagers?type=M`
+  filters exactly, and the dashboard builds its type chips from `summary.byType`, so `M` appears
+  there without a code change.
+- **One `ShortDesc` carries three line-break encodings**: `\r\n` after the game id, `&#x0D;` after the
+  odds, `\n` at the end. `parseShortDesc` already normalises all three (`.replace(/&#x0D;?/gi, "\n")`)
+  and returns one leg with `descCode: "M.G319813019"`; the committed artifact exercises it —
+  14 of its 17 rows contain `&#x0D;`.
+- **Padding is per field**: `AgentLogin`/`CustomerID`/`VIP`/`TicketWriter` are space-padded,
+  `AgentID` and `Login` are not; `AgentID` also carries trailing periods (`GB3500.`) where the login
+  does not. So the join key is the trimmed **login**, never `AgentID`.
+- **Trailing punctuation is real.** `RM11.` and `CONNOR.HAD` are tree keys; a normaliser that strips
+  trailing dots mangles them. `agentLoginKey` only trims, which is why the tree keeps both.
+- `CustomerID` and `Login` are not interchangeable: `MM1023_0` marks a child account of `MM1023`
+  (`_0` suffix), and one row shows `CustomerID: "GB57 "` with `Login: "GB57 "` (space kept) while
+  another strips an `_0`. Treating the two as one key collapses sub-accounts into their parents.
+
+**The ticker is a second witness to who exists, and it disagrees with the tree.** Of 25 distinct
+`AgentLogin` values in the page, 22 are tree keys; `GB3500.` is the trailing-period variant of
+`GB3500`; **`KOBE8` and `CUB22A` are absent** (`CUB22` exists, so `CUB22A` looks like an uncaptured
+child). Two missing of 25 sampled is 8%, against 9.2% of tree edges skipping a level — the same
+order, from two independent directions, which is why the `+2` edges read as missing nodes rather
+than a stale level field. `bun run ticker:coverage <page.json>` diffs any page against the tree and
+reports nearest keys as hints (never as a join — `CUB22A` is not `CUB22`).
 
 **Reading the pinned bundles.** `manager.js`, `security.js` and `util.js` are single-line minified
 files (`wc -l` = 1), so there is no line number to cite: every `file:NNNNN` reference to them —
