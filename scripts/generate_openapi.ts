@@ -1127,7 +1127,7 @@ function adminRejectionResponses(): JsonObject {
   return {
     "401": {
       description:
-        "Missing or wrong admin token (services/sportsdesk_webview_server.ts:38-46).",
+        "Missing or wrong admin token (services/sportsdesk_webview_server.ts:156-175).",
       headers: daemonHeaders(),
       content: { "application/json": { schema: daemonErrorSchema() } },
     },
@@ -1432,7 +1432,7 @@ function healthOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Daemon health and telemetry probe",
     description:
-      "Handler-defined contract: services/sportsdesk_webview_server.ts:114-131 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts:9,345), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
+      "Handler-defined contract: services/sportsdesk_webview_server.ts:140-157 returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts:9,345), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.",
     operationId: operationIdFor(operation.method, operation.path),
     responses: {
       "200": daemonSuccessResponse("Healthy daemon status", {
@@ -1486,7 +1486,7 @@ function watchlistOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Monitored watch-list accounts",
     description:
-      "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts:1327-1330). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts:27-47,175-186).",
+      "Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts:1435-1438). Requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts:156-175).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     responses: {
@@ -1518,7 +1518,7 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Dispatch an instant Telegram alert",
     description:
-      "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts:249-274). Admin-token gated (services/sportsdesk_webview_server.ts:175-186).",
+      "Request body {customerId?} defaults to RF2003; dispatches through telegramService.dispatchTestAlert and returns {success, ok, customerId} (services/sportsdesk_webview_server.ts:275-300). Admin-token gated (services/sportsdesk_webview_server.ts:201-212).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     requestBody: {
@@ -1552,7 +1552,8 @@ function telegramAlertOperation(operation: LedgerOperation): JsonObject {
         },
       }),
       "500": {
-        description: "Dispatch threw (services/sportsdesk_webview_server.ts:264-273).",
+        description:
+          "Dispatch threw (services/sportsdesk_webview_server.ts:290-299).",
         headers: daemonHeaders(),
         content: {
           "application/json": {
@@ -1579,7 +1580,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Trigger a scheduled Telegram report",
     description:
-      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts:277-297). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts:175-186).",
+      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts:312-332). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts:201-212).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     parameters: [
@@ -1588,7 +1589,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
         in: "query",
         required: false,
         description:
-          "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts:278).",
+          "Report type; defaults to EVENING_SETTLEMENT when absent (services/sportsdesk_webview_server.ts:313).",
         schema: {
           type: "string",
           enum: ["MORNING_BRIEFING", "MIDDAY_STEAM", "EVENING_SETTLEMENT"],
@@ -1614,7 +1615,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
       }),
       "400": {
         description:
-          "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts:279-287).",
+          "type is not one of REPORT_TYPES (services/sportsdesk_webview_server.ts:314-322).",
         headers: daemonHeaders(),
         content: { "application/json": { schema: daemonErrorSchema() } },
       },
@@ -1665,6 +1666,8 @@ interface SurfaceOperationSpec {
   readonly requiredCapture: string;
   readonly responses: JsonObject;
   readonly requestBody?: JsonObject;
+  /** Path-item parameters (only the wildcard surfaces need them). */
+  readonly parameters?: readonly JsonObject[];
 }
 
 function htmlResponse(description: string, contentType: string): JsonObject {
@@ -1764,7 +1767,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Telegram Mini App dashboard (GET /miniapp)",
       description:
-        "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts:144-151) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts:87-90). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
+        "Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview_server.ts:170-177) with Telegram frame-ancestors CSP and no X-Frame-Options (services/sportsdesk_webview_server.ts:87-90). GET /miniapp/ is an alias. Surface: surface.daemon-miniapp (tier D).",
       requiredCapture:
         "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured).",
       responses: {
@@ -1781,7 +1784,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Operator dashboard (GET /dashboard)",
       description:
-        "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts:134-141). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
+        "Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdesk_webview_server.ts:160-167). The same handler also answers GET /; the root path is not modelled as an OpenAPI path because the ledger has no dedicated surface row for it. Surface: surface.daemon-dashboard (tier D).",
       requiredCapture:
         "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured).",
       responses: {
@@ -1798,7 +1801,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Live bets derived from captured Report/Pending rows",
       description:
-        "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts:76-90). Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+        "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts:146-153); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
       requiredCapture:
         "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).",
       responses: {
@@ -1841,7 +1844,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Agent hierarchy joined with the wager rollup",
       description:
-        "Serves data/agent-tree.json plus per-agent exposure (sportsdesk_webview_server.ts#GET /api/agent-tree). The tree is built by scripts/build_agent_tree.ts from the portal's own baseHeriarchy parent pointers; keys are canonical agentLoginKey values, and keys owned by more than one AgentID are flagged rather than levelled. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN. Surface: surface.daemon-agent-tree (tier D).",
+        "Serves data/agent-tree.json plus per-agent exposure (sportsdesk_webview_server.ts#GET /api/agent-tree). The tree is built by scripts/build_agent_tree.ts from the portal's own baseHeriarchy parent pointers; keys are canonical agentLoginKey values, and keys owned by more than one AgentID are flagged rather than levelled. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN; proxied peers need it too unless SPORTSDESK_TRUST_PROXY=1. Surface: surface.daemon-agent-tree (tier D).",
       requiredCapture:
         "HTTP capture of GET /api/agent-tree (handler-verified only; no HTTP response was captured).",
       responses: {
@@ -1985,7 +1988,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Transcribed analysis reports and their recorded context",
       description:
-        "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts:629-657). Surface: surface.daemon-analysis (tier D).",
+        "Lists each stored result with the selection it was run under, so a client can select one instead of reconstructing the filters (services/sportsdesk_webview_server.ts:707-735). Surface: surface.daemon-analysis (tier D).",
       requiredCapture:
         "HTTP capture of GET /api/analysis/reports (handler-verified only).",
       responses: {
@@ -2050,7 +2053,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Sub-sports and period menus with their types",
       description:
-        "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts:239-247). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
+        "19 sports, 230 sub-sports and 42 period entries from the committed catalog fixture (services/sportsdesk_webview_server.ts:265-273). Period numbers are sport-specific, so periodTypes reports every name a number carries and flags the ambiguous ones; sub-sport codes shared by several sports are marked. Surface: surface.daemon-sport-catalog (tier D).",
       requiredCapture:
         "Not a capture gap: the catalog fixture is the captured artifact.",
       responses: {
@@ -2093,7 +2096,7 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Live wager ticker list with parsed legs",
       description:
-        "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts:658-708). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
+        "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts:740-794). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
       requiredCapture:
         "A full ticker capture. data/live-wagers.json currently holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so.",
       responses: {
@@ -2110,6 +2113,265 @@ function surfaceOperationSpecs(
         "404": jsonSurfaceResponse("No live wager capture.", {
           error: { type: "string" },
         }),
+      },
+    },
+    {
+      path: "/api/status",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary:
+        "Daemon status and process telemetry (GET /api/status, GET /status.json)",
+      description:
+        "Answers {ok, status, checks, health, telegram, timestamp} from the running process instead of fetching itself over the loopback (services/sportsdesk_webview_server.ts:624-680); a self-fetch had no port at all under a unix socket. `ok` and `status` are derived from `checks`, so the degraded branch is reachable, and `cpuUsageSinceStartMicros` is cumulative CPU time rather than utilisation. HEAD is answered like GET. Public by the table's `operational` classification — it carries uptime, memory, pid and bind address, not customer data. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Liveness, per-check results and process telemetry.",
+          {
+            ok: { type: "boolean" },
+            status: { type: "string", enum: ["serving", "degraded"] },
+            checks: {
+              type: "object",
+              additionalProperties: { type: "string", enum: ["ok", "error"] },
+            },
+            health: { type: "object" },
+            telegram: { type: "object", nullable: true },
+            timestamp: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/parse-formdata",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Form-data parse probe (POST /api/parse-formdata)",
+      description:
+        "Echoes the fields of one multipart or urlencoded body as {name: string | string[]} (services/sportsdesk_webview_server.ts:403-426). Reads through `req.formData()`, which on 1.4.4 succeeds where `new Blob([await req.arrayBuffer()]).formData()` rejected Bun's own encoding; the body is bounded by the daemon's 1 MiB maxRequestBodySize. Public, and the reason the cap exists. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded).",
+      responses: {
+        "200": {
+          description:
+            "The submitted fields; a repeated name becomes an array of strings.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: {
+                  oneOf: [
+                    { type: "string" },
+                    { type: "array", items: { type: "string" } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as form data.", {
+          error: { type: "string" },
+        }),
+        "413": jsonSurfaceResponse(
+          "The body exceeded maxRequestBodySize and Bun refused it before the handler ran.",
+          { error: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/logo/{name}",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-logo-proxy",
+      tag: TAG_DAEMON,
+      summary: "Team-logo proxy (GET /api/logo/{name})",
+      description:
+        "Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image bytes with an immutable day-long cache (services/sportsdesk_webview_server.ts:530-586). Names are validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL; a malformed percent-escape is 400, not the 500 it used to be. Public: it returns image bytes for a fixed host and carries no customer data. Surface: surface.daemon-logo-proxy (tier D).",
+      requiredCapture:
+        "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough.",
+      parameters: [
+        {
+          name: "name",
+          in: "path",
+          required: true,
+          description:
+            "Logo file name from the wager feed, e.g. `Arsenal FC.png`; must end in .png/.jpg/.jpeg/.gif/.webp/.svg and contain no separator, control character or `..`.",
+          schema: { type: "string" },
+          example: "Arsenal FC.png",
+        },
+      ],
+      responses: {
+        "200": {
+          description: "The upstream image bytes, cached for one day.",
+          headers: daemonHeaders(),
+          content: {
+            "image/png": { schema: { type: "string", format: "binary" } },
+          },
+        },
+        "400": {
+          description:
+            "Missing, malformed or disallowed name — including a broken percent-escape.",
+          headers: daemonHeaders(),
+          content: { "text/plain": { schema: { type: "string" } } },
+        },
+        "502": jsonSurfaceResponse(
+          "The upstream answered but not with an image.",
+          { error: { type: "string" } },
+        ),
+      },
+    },
+    {
+      path: "/api/f402/get-pending",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      summary: "Retired Pending endpoint (410 tombstone)",
+      description:
+        "Answers 410 with a pointer to /api/live-bets (services/sportsdesk_webview_server.ts:590-601). It used to return the same dataset in a different shape; the tombstone makes an old client fail loudly instead of silently reading a fixture that looks live. Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture: "HTTP capture of the 410 body (handler-verified only).",
+      responses: {
+        "410": jsonSurfaceResponse(
+          "The endpoint is gone; the body names its replacements.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/graph-feed",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Graph live feed (GET /api/graph-feed, /graph-live-feed.json)",
+      description:
+        "Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds — with no-store caching (services/sportsdesk_webview_server.ts:765-793). It carries agent logins, so it uses the same `pii` guard as the page. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/graph-feed (the artifact is committed; no HTTP response was captured).",
+      responses: {
+        "200": {
+          description:
+            "The graph feed document as stored in docs/graph-live-feed.json.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/status",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary:
+        "Telegram configuration and schedules (GET /api/telegram/status)",
+      description:
+        "Returns {success, status, schedules, reportTypes} from the bot service and the in-process scheduler (services/sportsdesk_webview_server.ts:1407-1419). Admin-token gated regardless of peer address. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/telegram/status with a valid token.",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Bot mode, schedules and the report vocabulary.",
+          {
+            success: { type: "boolean", const: true },
+            status: { type: "object" },
+            schedules: { type: "array", items: { type: "object" } },
+            reportTypes: { type: "array", items: { type: "string" } },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/activity",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary: "Recent Telegram activity (GET /api/telegram/activity)",
+      description:
+        "Returns {success, entries} from the activity log; `limit` defaults to 50 and clamps to 1..200 (services/sportsdesk_webview_server.ts:1422-1434). Admin-token gated. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/telegram/activity with a valid token.",
+      responses: {
+        "200": jsonSurfaceResponse("Newest-first activity entries.", {
+          success: { type: "boolean", const: true },
+          entries: { type: "array", items: { type: "object" } },
+        }),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/telegram/webhook",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary:
+        "Register or delete the Telegram webhook (POST /api/telegram/webhook)",
+      description:
+        'Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook() and mirrors the Bot API result as {success, ok, error?}, 502 when Telegram refuses (services/sportsdesk_webview_server.ts:1435-1459). Admin-token gated; this is the control plane, distinct from the secret-checked /telegram/webhook that receives updates. Surface: surface.daemon-telegram-admin-routes (tier D).',
+      requiredCapture:
+        "HTTP capture of a set and a delete round trip against the Bot API.",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["action"],
+              properties: {
+                action: { type: "string", enum: ["set", "delete"] },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse("Telegram accepted the change.", {
+          success: { type: "boolean" },
+          ok: { type: "boolean" },
+          error: { type: "string" },
+        }),
+        "400": jsonSurfaceResponse('action is missing or not "set"/"delete".', {
+          success: { type: "boolean", const: false },
+          error: { type: "string" },
+        }),
+        "502": jsonSurfaceResponse(
+          "Telegram answered ok:false; its description is passed through.",
+          {
+            success: { type: "boolean", const: false },
+            ok: { type: "boolean" },
+            error: { type: "string" },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/test/error",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary: "Error-boundary probe (GET /api/test/error)",
+      description:
+        "Throws a string so the server's error boundary runs; `?trigger_error=non_error` does the same on any route (services/sportsdesk_webview_server.ts:390-396). Deliberately reachable in production so a deployment can prove the 500 body carries no stack trace. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact).",
+      responses: {
+        "500": jsonSurfaceResponse(
+          "The daemon's structured 500: no stack, no source, only the thrown message.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string", const: "Internal Server Error" },
+            message: { type: "string" },
+          },
+        ),
       },
     },
   ];
@@ -2131,6 +2393,8 @@ function surfaceOperation(
     "x-surface-id": surface.id,
   };
   if (spec.requestBody !== undefined) operation.requestBody = spec.requestBody;
+  if (spec.parameters !== undefined)
+    operation.parameters = [...spec.parameters];
   return operation;
 }
 
@@ -2688,7 +2952,7 @@ function buildSecuritySchemes(): JsonObject {
       type: "http",
       scheme: "bearer",
       description:
-        "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts:27-47). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.",
+        "Static daemon admin token: Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts:166-173). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.",
     },
   };
 }

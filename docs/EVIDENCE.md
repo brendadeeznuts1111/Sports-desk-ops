@@ -17,15 +17,15 @@ it.** Everything else is labelled as observed, inferred or unimplemented — in 
 | **A** | Captured wire contract: a real request **and** a real response capture exist.                                                                                                                                | 8           |
 | **B** | Observed first-party evidence: a captured or operator-recorded wire request, an observed request payload, or a route this repo serves verified against its handler source. Response may still be uncaptured. | 6           |
 | **C** | Inferred only: authored in the spec/generators, a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response observed.                                       | 31          |
-| **D** | A real surface recorded in `surfaces[]`, never in `operations[]`. Most of its routes are now published in the spec.                                                                                          | 19 surfaces |
+| **D** | A real surface recorded in `surfaces[]`, never in `operations[]`. Most of its routes are now published in the spec.                                                                                          | 20 surfaces |
 | **E** | Documented operation with no implementation in this repository.                                                                                                                                              | 10          |
 
 **Operations:** the ledger has 55 rows = 54 paths (`/api/desk/auth/session` carries both `POST` and
-`DELETE`): A 8 + B 6 + C 31 + D 0 + E 10 = 55. The published spec has **61 paths / 61 operations**
+`DELETE`): A 8 + B 6 + C 31 + D 0 + E 10 = 55. The published spec has **70 paths / 70 operations**
 (`scripts/audit_docs_webview_cron.ts:47`): the 44 ledger rows that are not reserved — 55 minus the 10
-tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 17 routes recorded only as
-`surfaces[]` members (16 daemon routes and `POST /cloud/api/Manager/getHistory`).
-**Surfaces:** 20 rows (D 19, E 1). Surface counts are kept separate from operation counts.
+tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 26 routes recorded only as
+`surfaces[]` members (25 daemon routes and `POST /cloud/api/Manager/getHistory`).
+**Surfaces:** 21 rows (D 20, E 1). Surface counts are kept separate from operation counts.
 
 **Tier A comes from two live sessions.** The 2026-10-31 run (Bun.WebView login → portal JWT handoff →
 Bun.FetchSession replay) captured five Manager responses: `getWebLog`, `getInfoPlayer`, `getBetTicker`,
@@ -297,11 +297,12 @@ or rewritten as "blocked, capture required". See [evidence/capture-requests.md](
 
 ## Surfaces recorded outside `operations[]` (D/E)
 
-Twenty rows: D 19, E 1. Most local daemon routes are now published in `docs/openapi.json`, so this table is
-the inventory of surfaces, not a list of spec omissions; none of them appears in `operations[]`. Rows still
-without a spec path include the sport-catalog data file, `Manager/getGrading` (only the `Report/` path is
-published), the Telegram admin routes, the graph data plane, and the blocked GS CLI. The `/api/desk/*`
-group (E) is documented and unimplemented.
+Twenty-one rows: D 20, E 1. Most local daemon routes are now published in `docs/openapi.json`, so this
+table is the inventory of surfaces, not a list of spec omissions; none of them appears in `operations[]`.
+Rows still without a spec path of their own: the sport-catalog data file, `Manager/getGrading` (only the
+`Report/` path is published), `POST /telegram/webhook` and the `OPTIONS` preflight on the admin surface,
+the graph data plane's companion JSON and `docs/assets/*`, and the blocked GS CLI. The `/api/desk/*` group
+(E) is documented and unimplemented.
 
 | Id                                     | Tier | What it is                                                                                                    |
 | -------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------- |
@@ -322,6 +323,7 @@ group (E) is documented and unimplemented.
 | `surface.daemon-sport-catalog`         | D    | `GET /api/sports/catalog`; 19 sports / 230 sub-sports / 42 period entries with sport-specific types           |
 | `surface.daemon-contests`              | D    | `GET /api/contests`; 227 futures extracted from the sports nav markup                                         |
 | `surface.daemon-live-wagers`           | D    | `GET /api/live-wagers`; `{LIST: [...]}` ticker feed with parsed ShortDesc legs                                |
+| `surface.daemon-logo-proxy`            | D    | `GET /api/logo/{name}`; team-logo proxy to `cdn.fastassets.io`, name-validated, image bytes only              |
 | `surface.daemon-graph-data-plane`      | D    | Graph feed, two companion JSON files and `docs/assets/*` that the generated graph page fetches                |
 | `surface.gs-manager-cli`               | D    | 6 report kinds + 9 `jobs` subcommands + CLI orchestration, all `blocked_contract`                             |
 | `surface.desk-api-unimplemented`       | E    | 9 paths / 10 operations under `/api/desk/*` with no handler anywhere                                          |

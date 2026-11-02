@@ -87,6 +87,9 @@ jobs:
       - name: "Docs gates (verify_docs: fabricated-contract, freshness, headers, dist)"
         timeout-minutes: 5
         run: bun run verify:docs
+      - name: "Route surface (served = ledger = spec)"
+        timeout-minutes: 2
+        run: bun run check:route-surface
       - name: "Ops audit (release registry, archive provenance)"
         timeout-minutes: 2
         run: bun run audit:ops

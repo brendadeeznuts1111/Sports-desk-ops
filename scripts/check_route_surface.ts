@@ -9,7 +9,7 @@
  */
 
 import { resolve } from "node:path";
-import { DAEMON_PATHS } from "../lib/daemon_routes.ts";
+import { DAEMON_PATHS, DAEMON_PREFIX_PATHS } from "../lib/daemon_routes.ts";
 import {
   compareRouteSurfaces,
   readRouteSurfaceInputs,
@@ -17,8 +17,10 @@ import {
 
 const root = resolve(import.meta.dir, "..");
 // The table is the source; the extractor in readRouteSurfaceInputs is now only a test guard.
-const { declared, spec } = readRouteSurfaceInputs(root);
-const served = new Set(DAEMON_PATHS);
+const { declared, spec } = readRouteSurfaceInputs(root, DAEMON_PREFIX_PATHS);
+// Prefix surfaces are served by `startsWith` and cannot appear in the chain scan, so they are
+// taken from the table's own prefix rows.
+const served = new Set([...DAEMON_PATHS, ...DAEMON_PREFIX_PATHS]);
 const findings = compareRouteSurfaces({ served, declared, spec });
 
 if (findings.length === 0) {
@@ -28,9 +30,9 @@ if (findings.length === 0) {
   process.exit(0);
 }
 
-// Deliberately not wired into verify:docs yet: the outstanding findings are eight served routes
-// the spec does not publish, and adding them needs a builder per operation. Wire it in when the
-// count reaches zero, or the gate will be red for a known reason and get ignored.
+// Wired into CI (`ci.yml`, after verify:docs) only once this could be green: the eight routes the
+// spec did not publish now have surface operations in scripts/generate_openapi.ts, so a new finding
+// means real drift rather than a known backlog.
 
 console.error(
   `check:route-surface: ${findings.length} disagreement(s) between served (${served.size}) and declared (${declared.size})`,

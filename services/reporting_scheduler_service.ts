@@ -87,7 +87,7 @@ export class ReportingSchedulerService {
         scheduleTime: "08:00",
         reportType: "MORNING_BRIEFING",
         description:
-          "Overnight open pending exposure, active whale check (RF2003), and sniper watch ahead of afternoon games.",
+          "Overnight open pending exposure, whale concentration check, and sniper watch ahead of afternoon games.",
         enabled: true,
       },
       {

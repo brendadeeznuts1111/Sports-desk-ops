@@ -42,10 +42,23 @@ describe("extractCitations", () => {
 });
 
 describe("auditCitations", () => {
+  /**
+   * A line that is code, found rather than hardcoded: a literal here (1327) rotted the moment the
+   * handler above it grew, and the failure looked like a checker bug rather than a fixture one.
+   */
+  const codeLine =
+    readFileSync(resolve(ROOT, "services/sportsdesk_webview_server.ts"), "utf8")
+      .split("\n")
+      .findIndex((line) => line.includes("export function startServer")) + 1;
+
+  test("the fixture resolved to a real line", () => {
+    expect(codeLine).toBeGreaterThan(1);
+  });
+
   test("a citation pointing at real code passes", () => {
     expect(
       auditCitations(
-        [citation("services/sportsdesk_webview_server.ts", 1327)],
+        [citation("services/sportsdesk_webview_server.ts", codeLine)],
         ROOT,
       ),
     ).toEqual([]);

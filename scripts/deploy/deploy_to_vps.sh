@@ -155,6 +155,12 @@ User=root
 WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 Environment="BUN_SOCKET=/run/sportsdesk/webview.sock"
+# The daemon sees the socket, not the client, so `server.requestIP()` is null for every request
+# and it cannot tell a remote client from a local one. 1 says "Nginx is the trust boundary";
+# unset it and every PII route (/api/live-bets, /api/agent-tree, /graph, ...) requires
+# SPORTSDESK_ADMIN_TOKEN through the proxy as well. Either way, protect the domain at the edge:
+# see the auth_basic block in the Nginx site below.
+Environment="SPORTSDESK_TRUST_PROXY=1"
 RuntimeDirectory=sportsdesk
 RuntimeDirectoryMode=0755
 ExecStart=${BUN_BIN} run services/sportsdesk_webview_server.ts
@@ -230,6 +236,13 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_buffering off;
         proxy_read_timeout 86400s;
+
+        # The daemon trusts this proxy (SPORTSDESK_TRUST_PROXY=1 in the unit), so this is the
+        # only place /api/live-bets, /api/agent-tree, /api/live-wagers and /graph can be
+        # protected. Uncomment both lines after `htpasswd -c /etc/nginx/.htpasswd <user>`, or put
+        # Cloudflare Access in front of the host.
+        # auth_basic "SportsDesk";
+        # auth_basic_user_file /etc/nginx/.htpasswd;
 
         # Content-Security-Policy allowing Telegram Mini App embedding
         add_header Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;" always;

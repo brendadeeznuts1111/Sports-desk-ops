@@ -108,6 +108,20 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-contests",
   }),
   defineRoute({
+    path: "/combo-uniqueness.json",
+    method: "ANY",
+    guard: "none",
+    dataClass: "static",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/cross-domain-bridge.json",
+    method: "ANY",
+    guard: "none",
+    dataClass: "static",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
     path: "/api/f402/get-pending",
     method: "ANY",
     guard: "none",
@@ -356,5 +370,35 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
 
 /** Paths only, for the surface comparison. */
 export const DAEMON_PATHS: readonly string[] = DAEMON_ROUTES.map(
+  (route) => route.path,
+);
+
+/**
+ * Surfaces answered by `pathname.startsWith`, which the literal-chain extractor cannot see.
+ *
+ * They are rows in the same sense — same guard, same data class — but they are kept apart so a
+ * test can compare the exact-path table against the chain without pretending a prefix is a path.
+ * `/assets/` is the graph page's asset directory; `/api/logo/` proxies team logos from the CDN.
+ * Both are static by construction: the asset handler refuses anything outside `docs/assets`, and
+ * the logo handler only ever returns image bytes.
+ */
+export const DAEMON_PREFIX_ROUTES: readonly DaemonRoute[] = [
+  defineRoute({
+    path: "/assets/*",
+    method: "ANY",
+    guard: "none",
+    dataClass: "static",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/logo/*",
+    method: "ANY",
+    guard: "none",
+    dataClass: "static",
+    surface: null,
+  }),
+];
+
+export const DAEMON_PREFIX_PATHS: readonly string[] = DAEMON_PREFIX_ROUTES.map(
   (route) => route.path,
 );

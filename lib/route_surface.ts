@@ -34,6 +34,11 @@ export function memberPath(member: unknown): string | undefined {
  * Both the literal comparison and the two variants in use are covered: `pathname === "…"`,
  * a `||` continuation onto the next line, and `pathname.endsWith(…)` suffix matching. Query
  * strings are not part of a path, so they are dropped.
+ *
+ * A `SomeSet.has(pathname)` arm is read from the set's literal declaration: `/combo-uniqueness.json`
+ * and `/cross-domain-bridge.json` are served that way, and a chain scan that only understood
+ * `===` reported "every served path has a row" while two paths had none. The set is only counted
+ * when this source actually branches on it, so a set used for something else is not a route.
  */
 export function servedPathsFromSource(source: string): Set<string> {
   const paths = new Set<string>();
@@ -41,6 +46,23 @@ export function servedPathsFromSource(source: string): Set<string> {
   for (const match of source.matchAll(literal)) {
     const value = match[1] ?? "";
     if (value.startsWith("/")) paths.add(value.split("?")[0] ?? value);
+  }
+
+  const setLiteral =
+    /const\s+([A-Za-z_$][\w$]*)\s*=\s*new Set\(\s*\[([^\]]*)\]\s*\)/g;
+  for (const match of source.matchAll(setLiteral)) {
+    const name = match[1] ?? "";
+    const members = match[2] ?? "";
+    if (
+      name === "" ||
+      !new RegExp(`\\b${name}\\.has\\(\\s*pathname\\s*\\)`).test(source)
+    ) {
+      continue;
+    }
+    for (const member of members.matchAll(/"([^"]+)"/g)) {
+      const value = member[1] ?? "";
+      if (value.startsWith("/")) paths.add(value.split("?")[0] ?? value);
+    }
   }
   return paths;
 }
@@ -130,6 +152,16 @@ export function specPathsFromDocument(spec: unknown): Set<string> {
 }
 
 /**
+ * `{name}` (the spec's notation) and `*` (the handler's) are the same route.
+ *
+ * `/api/logo/{name}` in the ledger and spec, `/api/logo/*` in `DAEMON_PREFIX_ROUTES`: without a
+ * shared form the comparison reports the route as both undocumented and unpublished.
+ */
+export function canonicalRoutePath(path: string): string {
+  return path.replace(/\{[^}]+\}/g, "*");
+}
+
+/**
  * Compare the three views.
  *
  * `declared-not-served` is only reported for surfaces that are not documented as unimplemented:
@@ -152,10 +184,22 @@ export function compareRouteSurfaces(input: {
   // *declared* page that is no longer served still is.
   const isApi = (path: string): boolean => path.startsWith("/api/");
 
+  const servedByCanonical = new Map<string, string>();
+  for (const path of input.served) {
+    servedByCanonical.set(canonicalRoutePath(path), path);
+  }
+  const specCanonical = new Set([...input.spec].map(canonicalRoutePath));
+  const declaredByCanonical = new Map<string, DeclaredPath>();
+  for (const [path, declared] of input.declared) {
+    // First declaration wins; a second surface listing the same route is not a finding.
+    if (!declaredByCanonical.has(canonicalRoutePath(path))) {
+      declaredByCanonical.set(canonicalRoutePath(path), declared);
+    }
+  }
+
   for (const path of [...input.served].sort()) {
     if (!isApi(path)) continue;
-    const declared = input.declared.get(path);
-    if (declared === undefined) {
+    if (!declaredByCanonical.has(canonicalRoutePath(path))) {
       findings.push({
         kind: "served-undocumented",
         path,
@@ -165,13 +209,12 @@ export function compareRouteSurfaces(input: {
   }
 
   // `declared-not-served` is only asserted where the reading is trustworthy: a local-route
-  // surface's `/api/*` member, which the chain can only serve through a literal comparison.
-  // Upstream routes are proxied elsewhere, and asset/data paths are served by prefix or suffix
-  // matching, which this extractor deliberately does not model.
+  // surface's `/api/*` member. Upstream routes are proxied elsewhere, and asset/data paths are
+  // served by prefix or suffix matching, which this extractor deliberately does not model.
   for (const [path, declared] of [...input.declared.entries()].sort((a, b) =>
     a[0].localeCompare(b[0]),
   )) {
-    if (input.served.has(path)) continue;
+    if (servedByCanonical.has(canonicalRoutePath(path))) continue;
     if (allow.has(declared.surface)) continue;
     if (declared.category !== "local-route" || !path.startsWith("/api/"))
       continue;
@@ -184,7 +227,8 @@ export function compareRouteSurfaces(input: {
 
   for (const path of [...input.declared.keys()].sort()) {
     if (!isApi(path)) continue;
-    if (input.served.has(path) && !input.spec.has(path)) {
+    const served = servedByCanonical.has(canonicalRoutePath(path));
+    if (served && !specCanonical.has(canonicalRoutePath(path))) {
       findings.push({
         kind: "spec-missing",
         path,
@@ -196,7 +240,10 @@ export function compareRouteSurfaces(input: {
   return findings;
 }
 
-export function readRouteSurfaceInputs(root: string): {
+export function readRouteSurfaceInputs(
+  root: string,
+  prefixPaths: readonly string[] = [],
+): {
   readonly served: Set<string>;
   readonly declared: Map<string, DeclaredPath>;
   readonly spec: Set<string>;
@@ -210,7 +257,9 @@ export function readRouteSurfaceInputs(root: string): {
   );
   const spec = JSON.parse(readFileSync(`${root}/docs/openapi.json`, "utf8"));
   return {
-    served: servedPathsFromSource(source),
+    // Prefix arms (`pathname.startsWith`) are invisible to the literal scan, so the caller passes
+    // the table's own prefix rows rather than having this guess at an arm's intent.
+    served: new Set([...servedPathsFromSource(source), ...prefixPaths]),
     declared: declaredPathsFromLedger(ledger),
     spec: specPathsFromDocument(spec),
   };

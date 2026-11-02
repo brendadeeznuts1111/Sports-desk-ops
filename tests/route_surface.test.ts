@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
+import { DAEMON_PREFIX_PATHS } from "../lib/daemon_routes.ts";
 import {
+  canonicalRoutePath,
   compareRouteSurfaces,
   declaredPathsFromLedger,
   type DeclaredPath,
@@ -46,6 +48,28 @@ describe("servedPathsFromSource", () => {
         'pathname === "not-a-path"; pathname === "/x?y=1"',
       ),
     ]).toEqual(["/x"]);
+  });
+
+  test("reads a set the handler branches on, and only then", () => {
+    // Two graph companions were served by `GRAPH_DOCS_JSON.has(pathname)` and had no table row;
+    // the extractor said "every table row is served / every served path has a row" anyway.
+    const branched = `
+      const GRAPH_DOCS_JSON = new Set([
+        "/combo-uniqueness.json",
+        "/cross-domain-bridge.json",
+      ]);
+      if (GRAPH_DOCS_JSON.has(pathname)) {}
+    `;
+    expect([...servedPathsFromSource(branched)].sort()).toEqual([
+      "/combo-uniqueness.json",
+      "/cross-domain-bridge.json",
+    ]);
+
+    // A set that is never matched against the pathname is not a route table.
+    const unused = `
+      const REPORT_TYPES = new Set(["MORNING_BRIEFING", "EVENING_SETTLEMENT"]);
+    `;
+    expect([...servedPathsFromSource(unused)]).toEqual([]);
   });
 });
 
@@ -161,11 +185,32 @@ describe("compareRouteSurfaces", () => {
       "spec-missing /api/known",
     ]);
   });
+
+  test("the handler's * and the spec's {name} are one route", () => {
+    // /api/logo/* is served by `pathname.startsWith`, /api/logo/{name} is what the spec and the
+    // ledger can express. Without a shared form the route read as both undocumented and
+    // unpublished, which is why the check now compares canonical paths.
+    expect(canonicalRoutePath("/api/logo/{name}")).toBe("/api/logo/*");
+    expect(
+      compareRouteSurfaces({
+        served: new Set(["/api/logo/*"]),
+        declared: new Map([
+          [
+            "/api/logo/{name}",
+            { surface: "surface.logo", category: "local-route" },
+          ],
+        ]),
+        spec: new Set(["/api/logo/{name}"]),
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("the committed tree", () => {
+  const inputs = readRouteSurfaceInputs(ROOT, DAEMON_PREFIX_PATHS);
+
   test("every served /api path is declared by a ledger surface", () => {
-    const { served, declared, spec } = readRouteSurfaceInputs(ROOT);
+    const { served, declared, spec } = inputs;
     expect(served.size).toBeGreaterThan(20);
     const findings = compareRouteSurfaces({ served, declared, spec });
     const undocumented = findings.filter(
@@ -174,14 +219,11 @@ describe("the committed tree", () => {
     expect(undocumented).toEqual([]);
   });
 
-  test("the remaining findings are all spec gaps, and they are counted", () => {
-    // Not fixed here: adding eight operations to docs/openapi.json needs a builder per route.
-    // Pinned so the number cannot grow silently while the docs pass is pending.
-    const { served, declared, spec } = readRouteSurfaceInputs(ROOT);
-    const findings = compareRouteSurfaces({ served, declared, spec });
-    expect(new Set(findings.map((f) => f.kind))).toEqual(
-      new Set(["spec-missing"]),
-    );
-    expect(findings.length).toBe(8);
+  test("served, declared and published agree — the check is green, not merely quiet", () => {
+    // This asserted eight outstanding spec gaps until the surface operations were added to
+    // scripts/generate_openapi.ts. A non-zero count here now means a new route landed without a
+    // spec path, which is what the CI step exists to catch.
+    expect(compareRouteSurfaces(inputs)).toEqual([]);
+    expect(inputs.served.size).toBe(46);
   });
 });

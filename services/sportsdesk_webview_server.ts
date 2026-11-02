@@ -95,7 +95,7 @@ import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 
 /** `null` when the request comes from the same machine; otherwise the admin gate applies. */
 export function isLoopbackAddress(address: string | null | undefined): boolean {
-  if (address === null || address === undefined) return true; // unix socket = local
+  if (address === null || address === undefined) return true; // no peer address: see Ingress
   const normalized = address
     .trim()
     .toLowerCase()
@@ -110,20 +110,46 @@ export function isLoopbackAddress(address: string | null | undefined): boolean {
 }
 
 /**
+ * How this process accepts connections, because that decides what a peer address can mean.
+ *
+ * A TCP listener sees the client, so loopback is the operator. A unix-socket listener sees only
+ * the reverse proxy: `server.requestIP()` is `null` for every request, proxied or not, so reading
+ * "no address" as local made every PII route public on the VPS, where Nginx is the socket's only
+ * client (`scripts/deploy/deploy_to_vps.sh`). Proxied ingress therefore trusts nothing by default;
+ * `SPORTSDESK_TRUST_PROXY=1` is the explicit opt-in for a deployment that terminates its own auth
+ * at the edge and accepts that the daemon cannot tell one proxied client from another.
+ */
+export type Ingress = {
+  /** Listening on a unix socket: the peer is the proxy, not the client. */
+  readonly proxied: boolean;
+  /** `SPORTSDESK_TRUST_PROXY=1`: the proxy is declared the trust boundary. */
+  readonly trustProxy: boolean;
+};
+
+/** Whether the peer speaks for the machine itself. Pure so the policy can be tested directly. */
+export function peerIsTrusted(
+  address: string | null | undefined,
+  ingress: Ingress,
+): boolean {
+  if (ingress.proxied) return ingress.trustProxy;
+  return isLoopbackAddress(address);
+}
+
+/**
  * Guards endpoints that carry customer or agent-identifying data.
  *
  * Loopback is allowed so the local scoreboard keeps working without a token. Any other peer
  * must present `SPORTSDESK_ADMIN_TOKEN`: a phone on the same Wi-Fi must not be able to read
- * customer ids from a dev server bound to 0.0.0.0.
+ * customer ids from a dev server bound to 0.0.0.0. Behind a proxy the peer address is the
+ * proxy's, which `peerIsTrusted` refuses unless the deployment said otherwise.
  */
 function piiRejection(
   req: Request,
   address: string | null | undefined,
+  ingress: Ingress,
 ): { status: 401 | 403 | 503; error: string } | null {
-  if (isLoopbackAddress(address)) return null;
-  const gate = adminRejection(req);
-  if (gate !== null) return gate;
-  return null;
+  if (peerIsTrusted(address, ingress)) return null;
+  return adminRejection(req);
 }
 
 /** `null` when the bearer token matches SPORTSDESK_ADMIN_TOKEN; otherwise the rejection status and reason. */
@@ -273,6 +299,15 @@ const GRAPH_DOCS_JSON = new Set([
   "/cross-domain-bridge.json",
 ]);
 
+/**
+ * The largest request body any arm reads.
+ *
+ * `/api/parse-formdata` exists to parse one form, and every other POST body is a small JSON
+ * document. Bun enforces this before the handler runs, so a chunked body cannot be buffered past
+ * it the way an arm-local `content-length` check could be.
+ */
+const MAX_REQUEST_BODY_BYTES = 1 << 20;
+
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(telegramService);
@@ -294,8 +329,21 @@ export function startServer(options?: ServerOptions) {
       ? Bun.env.NODE_ENV !== "production"
       : process.env.NODE_ENV !== "production");
 
-  const corsHeaders: Record<string, string> = {
-    "Access-Control-Allow-Origin": "*",
+  /**
+   * Cross-origin reads are off unless the operator names the origins that may make them.
+   *
+   * The old value was `Access-Control-Allow-Origin: *` on every response, including the PII ones.
+   * Any page on any site could therefore read `/api/live-bets` from the operator's own browser,
+   * where the peer is loopback and the guard deliberately allows it. Same-origin fetches (the
+   * dashboard, the Mini App) need no header at all, so the default is to send none.
+   */
+  const allowedOrigins = (Bun.env.SPORTSDESK_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin !== "");
+
+  /** Headers every response carries; the CORS grant is added per request by {@link corsHeadersFor}. */
+  const baseHeaders: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, Authorization, X-Requested-With, X-Telegram-Bot-Api-Secret-Token",
@@ -305,12 +353,37 @@ export function startServer(options?: ServerOptions) {
     "Referrer-Policy": "strict-origin-when-cross-origin",
   };
 
+  function corsHeadersFor(req: Request): Record<string, string> {
+    const headers: Record<string, string> = { ...baseHeaders };
+    const origin = req.headers.get("origin");
+    if (origin !== null && allowedOrigins.includes(origin)) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers["Vary"] = "Origin";
+    }
+    return headers;
+  }
+
+  const unixSocket =
+    options?.unix ||
+    (typeof Bun !== "undefined" ? Bun.env.BUN_SOCKET : process.env.BUN_SOCKET);
+
+  /** What a peer address means here; read once, so a restart is what changes it. */
+  const ingress: Ingress = {
+    proxied: Boolean(unixSocket),
+    trustProxy: (Bun.env.SPORTSDESK_TRUST_PROXY ?? "") === "1",
+  };
+
   const serveConfig: Parameters<typeof Bun.serve>[0] = {
     development: isDevelopment,
+    // Bodies here are small JSON documents and one 1 MiB form probe. Without a cap a chunked
+    // request is buffered in full by `req.json()` / `arrayBuffer()` (measured: a 6 MiB POST to
+    // /api/telegram/alert was accepted), which is a memory DoS on an unauthenticated port.
+    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
 
     async fetch(req) {
       const url = new URL(req.url);
       const pathname = url.pathname;
+      const cors = corsHeadersFor(req);
 
       // Synthetic error trigger for testing error boundary.
       // Deliberately reachable in production: tests/server_error.test.ts asserts the
@@ -324,30 +397,17 @@ export function startServer(options?: ServerOptions) {
 
       // 1. Fast Preflight OPTIONS Response (HTTP 204 No Content)
       if (req.method === "OPTIONS") {
-        return new Response(null, { status: 204, headers: corsHeaders });
+        return new Response(null, { status: 204, headers: cors });
       }
 
-      // 2. Form-data parse debug (Blob.formData)
+      // 2. Form-data parse debug: echoes the fields of one form.
+      // `req.formData()` rather than `new Blob([await req.arrayBuffer()]).formData()`: the Blob
+      // path rejects Bun's own multipart encoding on 1.4.4 ("Invalid encoding", measured with a
+      // body this server's own client produced), so the arm answered 400 for every real form.
+      // The read is bounded by `maxRequestBodySize` above.
       if (pathname === "/api/parse-formdata" && req.method === "POST") {
         try {
-          const MAX_FORM_BYTES = 1 << 20; // 1 MiB; unbounded arrayBuffer() is a memory DoS.
-          const declared = Number(req.headers.get("content-length") ?? 0);
-          if (declared > MAX_FORM_BYTES) {
-            return Response.json(
-              { error: `body exceeds ${MAX_FORM_BYTES} bytes` },
-              { status: 413, headers: corsHeaders },
-            );
-          }
-          const ct = req.headers.get("content-type") || "";
-          const buf = await req.arrayBuffer();
-          if (buf.byteLength > MAX_FORM_BYTES) {
-            return Response.json(
-              { error: `body exceeds ${MAX_FORM_BYTES} bytes` },
-              { status: 413, headers: corsHeaders },
-            );
-          }
-          const blob = new Blob([buf], { type: ct });
-          const fd = await blob.formData();
+          const fd = await req.formData();
           const out: Record<string, string | string[]> = {};
           for (const [k, v] of fd.entries()) {
             if (out[k] === undefined) out[k] = String(v);
@@ -355,11 +415,11 @@ export function startServer(options?: ServerOptions) {
               (out[k] as string[]).push(String(v));
             else out[k] = [out[k] as string, String(v)];
           }
-          return Response.json(out, { headers: corsHeaders });
+          return Response.json(out, { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
       }
@@ -371,11 +431,15 @@ export function startServer(options?: ServerOptions) {
         pathname === "/live-bets/summary" ||
         pathname === "/api/live-bets/summary"
       ) {
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
 
@@ -389,7 +453,7 @@ export function startServer(options?: ServerOptions) {
         );
         const generatedAt = new Date().toISOString();
         // A scoreboard is a snapshot; let the client decide when to re-ask.
-        const headers = { ...corsHeaders, "Cache-Control": "no-store" };
+        const headers = { ...cors, "Cache-Control": "no-store" };
 
         if (pathname.endsWith("/summary")) {
           const etag = `"${Buffer.from(
@@ -397,7 +461,7 @@ export function startServer(options?: ServerOptions) {
           ).toString("base64url")}"`;
           const ifNoneMatch = req.headers.get("if-none-match");
           const summaryHeaders = {
-            ...corsHeaders,
+            ...cors,
             "Cache-Control": "public, max-age=30, stale-while-revalidate=60",
             ETag: etag,
           };
@@ -464,17 +528,28 @@ export function startServer(options?: ServerOptions) {
 
       // 4. Logo proxy (fetches team logo and returns the image blob)
       if (pathname.startsWith("/api/logo/")) {
-        const name = decodeURIComponent(pathname.slice("/api/logo/".length));
+        // A malformed percent-escape made `decodeURIComponent` throw, which reached the error
+        // boundary as a 500 and logged a stack for what is a client error (measured:
+        // /api/logo/%E0%A4%A).
+        let name: string;
+        try {
+          name = decodeURIComponent(pathname.slice("/api/logo/".length));
+        } catch {
+          return new Response("invalid logo name", {
+            status: 400,
+            headers: cors,
+          });
+        }
         if (!name) {
           return new Response("missing name", {
             status: 400,
-            headers: corsHeaders,
+            headers: cors,
           });
         }
         if (!isLogoName(name)) {
           return new Response("invalid logo name", {
             status: 400,
-            headers: corsHeaders,
+            headers: cors,
           });
         }
         try {
@@ -483,20 +558,20 @@ export function startServer(options?: ServerOptions) {
           if (!res.ok) {
             return new Response("not found", {
               status: res.status,
-              headers: corsHeaders,
+              headers: cors,
             });
           }
           const type = res.headers.get("content-type") ?? "";
           if (!type.startsWith("image/")) {
             return new Response("upstream did not return an image", {
               status: 502,
-              headers: corsHeaders,
+              headers: cors,
             });
           }
           const blob = await res.blob();
           return new Response(blob, {
             headers: {
-              ...corsHeaders,
+              ...cors,
               "Content-Type": blob.type || "image/png",
               "Cache-Control": "public, max-age=86400, immutable",
             },
@@ -504,7 +579,7 @@ export function startServer(options?: ServerOptions) {
         } catch (err) {
           return Response.json(
             { error: String(err) },
-            { status: 502, headers: corsHeaders },
+            { status: 502, headers: cors },
           );
         }
       }
@@ -519,7 +594,7 @@ export function startServer(options?: ServerOptions) {
             error:
               "removed: use /api/live-bets (games + agents) or pass --body to build:live-bets",
           },
-          { status: 410, headers: corsHeaders },
+          { status: 410, headers: cors },
         );
       }
 
@@ -534,18 +609,21 @@ export function startServer(options?: ServerOptions) {
             timestamp: new Date().toISOString(),
             uptimeSeconds: Math.floor(process.uptime()),
             runtime: `Bun v${Bun.version} (${process.arch}-${process.platform})`,
+            // Which peer-trust rule is in force, so "is the guard on?" is answerable from here
+            // instead of from a request that happens to come from the wrong address.
+            ingress,
             nodeEnv:
               (typeof Bun !== "undefined"
                 ? Bun.env.NODE_ENV
                 : process.env.NODE_ENV) || "development",
           },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
       if (
         (pathname === "/api/status" || pathname === "/status.json") &&
-        req.method === "GET"
+        (req.method === "GET" || req.method === "HEAD")
       ) {
         // Ask the service directly. The first version fetched itself over
         // `http://127.0.0.1:${server.port}`: an extra round trip, and no port at all when the
@@ -597,7 +675,7 @@ export function startServer(options?: ServerOptions) {
             telegram,
             timestamp: new Date().toISOString(),
           },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
@@ -607,7 +685,7 @@ export function startServer(options?: ServerOptions) {
           Bun.file(resolve(repoRoot, "static/live-bets.html")),
           {
             headers: {
-              ...corsHeaders,
+              ...cors,
               "Content-Type": "text/html; charset=utf-8",
             },
           },
@@ -618,7 +696,7 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/" || pathname === "/dashboard") {
         return new Response(customerDashboardFile, {
           headers: {
-            ...corsHeaders,
+            ...cors,
             "Content-Type": "text/html; charset=utf-8",
           },
         });
@@ -628,7 +706,7 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/status" || pathname === "/status/") {
         return new Response(Bun.file(resolve(repoRoot, "static/status.html")), {
           headers: {
-            ...corsHeaders,
+            ...cors,
             "Content-Type": "text/html; charset=utf-8",
           },
         });
@@ -638,7 +716,7 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/miniapp" || pathname === "/miniapp/") {
         return new Response(miniappDashboardFile, {
           headers: {
-            ...corsHeaders,
+            ...cors,
             "Content-Type": "text/html; charset=utf-8",
           },
         });
@@ -654,16 +732,20 @@ export function startServer(options?: ServerOptions) {
         // docs/graph.html carries agent logins in its dataset (BILLY666, RF2003, BGD101 in the
         // 640 KB payload), so it is customer-identifying, not a static page. Loopback keeps
         // working; any other peer needs the admin token, as /api/live-bets already does.
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
         return new Response(Bun.file(resolve(repoRoot, "docs/graph.html")), {
           headers: {
-            ...corsHeaders,
+            ...cors,
             "Content-Type": "text/html; charset=utf-8",
           },
         });
@@ -672,7 +754,7 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/graph.js") {
         return new Response(Bun.file(resolve(repoRoot, "docs/graph.js")), {
           headers: {
-            ...corsHeaders,
+            ...cors,
             "Content-Type": "application/javascript; charset=utf-8",
           },
         });
@@ -685,18 +767,22 @@ export function startServer(options?: ServerOptions) {
         pathname === "/api/graph-feed"
       ) {
         // Same identifiers as the page: the feed is the page's dataset, so the same guard.
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
         return new Response(
           Bun.file(resolve(repoRoot, "docs/graph-live-feed.json")),
           {
             headers: {
-              ...corsHeaders,
+              ...cors,
               "Content-Type": "application/json; charset=utf-8",
               "Cache-Control": "no-store",
             },
@@ -709,7 +795,7 @@ export function startServer(options?: ServerOptions) {
           Bun.file(resolve(repoRoot, "docs", pathname.slice(1))),
           {
             headers: {
-              ...corsHeaders,
+              ...cors,
               "Content-Type": "application/json; charset=utf-8",
               "Cache-Control": "no-store",
             },
@@ -724,7 +810,7 @@ export function startServer(options?: ServerOptions) {
         if (stored === null) {
           return Response.json(
             { success: true, count: 0, reports: [] },
-            { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+            { headers: { ...cors, "Cache-Control": "no-store" } },
           );
         }
         return Response.json(
@@ -743,17 +829,21 @@ export function startServer(options?: ServerOptions) {
               },
             ],
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
       // Live wager list: the bet-ticker feed ({LIST: [...]}), a different shape from Pending.
       if (pathname === "/api/live-wagers") {
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
 
@@ -764,7 +854,7 @@ export function startServer(options?: ServerOptions) {
               error: "no live wager list",
               hint: "save the ticker response as data/live-wagers.json and reload",
             },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
         const wagers = artifact.wagers;
@@ -790,7 +880,7 @@ export function startServer(options?: ServerOptions) {
             provenance: artifact.provenance,
             wagers: filtered,
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -803,7 +893,7 @@ export function startServer(options?: ServerOptions) {
               error: "no contest list",
               hint: "bun run contests:extract --html <saved sports nav markup>",
             },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
 
@@ -825,7 +915,7 @@ export function startServer(options?: ServerOptions) {
             count: filtered.length,
             entries: filtered,
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -835,7 +925,7 @@ export function startServer(options?: ServerOptions) {
         if (board === null) {
           return Response.json(
             { error: "no game board; add data/game-admin-board.json" },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
 
@@ -849,7 +939,7 @@ export function startServer(options?: ServerOptions) {
                 error: `no game ${gameNum}`,
                 known: board.games.map((entry) => entry.gameNum),
               },
-              { status: 404, headers: corsHeaders },
+              { status: 404, headers: cors },
             );
           }
           return Response.json(
@@ -863,7 +953,7 @@ export function startServer(options?: ServerOptions) {
                 teamTotal: sidesOf(game, "teamTotal"),
               },
             },
-            { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+            { headers: { ...cors, "Cache-Control": "no-store" } },
           );
         }
 
@@ -876,7 +966,7 @@ export function startServer(options?: ServerOptions) {
               error: "window must be 48, 24 or -1",
               windows: BOARD_WINDOWS,
             },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
         const games = filterByWindow(board, window);
@@ -894,7 +984,7 @@ export function startServer(options?: ServerOptions) {
             biggest: biggestSide({ ...board, games }),
             games,
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -904,7 +994,7 @@ export function startServer(options?: ServerOptions) {
         if (catalog === null) {
           return Response.json(
             { error: "no sport catalog fixture" },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
 
@@ -920,7 +1010,7 @@ export function startServer(options?: ServerOptions) {
                 error: `${sportFilter} has no sub-sport "${codeFilter}"`,
                 periods: periodsFor(catalog, sportFilter),
               },
-              { status: 404, headers: corsHeaders },
+              { status: 404, headers: cors },
             );
           }
           return Response.json(
@@ -931,7 +1021,7 @@ export function startServer(options?: ServerOptions) {
               periods: periodsFor(catalog, sportFilter),
               source: SPORT_CATALOG_PATH,
             },
-            { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+            { headers: { ...cors, "Cache-Control": "no-store" } },
           );
         }
 
@@ -946,7 +1036,7 @@ export function startServer(options?: ServerOptions) {
               error: `unknown sport "${sportFilter}"`,
               known: catalog.sports.map((entry) => entry.sport),
             },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
 
@@ -965,7 +1055,7 @@ export function startServer(options?: ServerOptions) {
             expectedEmptySubSportPaths: catalog.expectedEmptySubSportPaths,
             sports,
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -984,7 +1074,7 @@ export function startServer(options?: ServerOptions) {
             weeks: ANALYSIS_WEEKS,
             requiredCapture: ANALYSIS_REQUIRED_CAPTURE,
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -994,11 +1084,15 @@ export function startServer(options?: ServerOptions) {
         // Measured: GET /api/analysis?report=CP&agent=BILLY666&sport=Baseball&week=-1&activity=0
         // returned 8/8 known logins in 2,899 bytes with no credential. Same policy as /graph:
         // loopback keeps working, any other peer needs SPORTSDESK_ADMIN_TOKEN.
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
         const parsed = parseAnalysisQuery(url.searchParams);
@@ -1009,7 +1103,7 @@ export function startServer(options?: ServerOptions) {
               error: "invalid analysis selection",
               issues: parsed.errors,
             },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
 
@@ -1063,7 +1157,7 @@ export function startServer(options?: ServerOptions) {
               recomputed: recomputeTotals(stored),
               discrepancies,
             },
-            { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+            { headers: { ...cors, "Cache-Control": "no-store" } },
           );
         }
 
@@ -1079,7 +1173,7 @@ export function startServer(options?: ServerOptions) {
             storedReports: stored === null ? [] : [stored.context],
             requiredCapture: ANALYSIS_REQUIRED_CAPTURE,
           },
-          { status: 501, headers: corsHeaders },
+          { status: 501, headers: cors },
         );
       }
 
@@ -1098,7 +1192,7 @@ export function startServer(options?: ServerOptions) {
             })),
             generatedAt: new Date().toISOString(),
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -1126,7 +1220,7 @@ export function startServer(options?: ServerOptions) {
             wagers: summarizeCategories(wagerRows),
             scoreboard: summarizeCategories(boardRows),
           },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -1136,22 +1230,26 @@ export function startServer(options?: ServerOptions) {
         if (scoreboard === null) {
           return Response.json(
             { error: "no scoreboard; add data/scoreboard.json" },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
         return Response.json(
           { ...scoreboard, summary: summarizeScoreboard(scoreboard) },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
       // Agent lookup over the committed tree: the Analysis form needs names, not the forest.
       if (pathname === "/api/agents/search") {
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
 
@@ -1159,7 +1257,7 @@ export function startServer(options?: ServerOptions) {
         if (!(await treeFile.exists())) {
           return Response.json(
             { error: "no agent tree; run bun run build:agent-tree" },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
 
@@ -1176,7 +1274,7 @@ export function startServer(options?: ServerOptions) {
               error: "q must be at least 2 characters",
               minLength: 2,
             },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
 
@@ -1203,24 +1301,28 @@ export function startServer(options?: ServerOptions) {
 
         return Response.json(
           { success: true, query, count: matches.length, agents: matches },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
       // Agent forest, joined with the wager rollup so a tree node can show its own exposure.
       if (pathname === "/api/agent-tree") {
-        const rejected = piiRejection(req, server.requestIP(req)?.address);
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
         const treeFile = Bun.file(resolve(repoRoot, "data/agent-tree.json"));
         if (!(await treeFile.exists())) {
           return Response.json(
             { error: "no agent tree; run bun run build:agent-tree" },
-            { status: 404, headers: corsHeaders },
+            { status: 404, headers: cors },
           );
         }
         const tree = (await treeFile.json()) as Record<string, unknown>;
@@ -1238,7 +1340,7 @@ export function startServer(options?: ServerOptions) {
         }
         return Response.json(
           { ...tree, counts },
-          { headers: { ...corsHeaders, "Cache-Control": "no-store" } },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
 
@@ -1257,12 +1359,12 @@ export function startServer(options?: ServerOptions) {
             isSafeAssetName(asset) ? "not found" : "invalid asset",
             {
               status: isSafeAssetName(asset) ? 404 : 400,
-              headers: corsHeaders,
+              headers: cors,
             },
           );
         }
         return new Response(Bun.file(contained), {
-          headers: { ...corsHeaders, "Cache-Control": "public, max-age=3600" },
+          headers: { ...cors, "Cache-Control": "public, max-age=3600" },
         });
       }
 
@@ -1273,7 +1375,7 @@ export function startServer(options?: ServerOptions) {
             req.headers.get("x-telegram-bot-api-secret-token"),
           )
         ) {
-          return Response.json({ ok: false }, { status: 401 });
+          return Response.json({ ok: false }, { status: 401, headers: cors });
         }
         const update = (await req
           .json()
@@ -1285,7 +1387,7 @@ export function startServer(options?: ServerOptions) {
               console.error("[Telegram webhook] update failed:", err),
             );
         }
-        return Response.json({ ok: true });
+        return Response.json({ ok: true }, { headers: cors });
       }
 
       if (
@@ -1296,12 +1398,15 @@ export function startServer(options?: ServerOptions) {
         if (rejected) {
           return Response.json(
             { success: false, error: rejected.error },
-            { status: rejected.status, headers: corsHeaders },
+            { status: rejected.status, headers: cors },
           );
         }
       }
 
-      if (pathname === "/api/telegram/status" && req.method === "GET") {
+      if (
+        pathname === "/api/telegram/status" &&
+        (req.method === "GET" || req.method === "HEAD")
+      ) {
         return Response.json(
           {
             success: true,
@@ -1309,18 +1414,21 @@ export function startServer(options?: ServerOptions) {
             schedules: scheduler.getSchedules(),
             reportTypes: REPORT_TYPES,
           },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
-      if (pathname === "/api/telegram/activity" && req.method === "GET") {
+      if (
+        pathname === "/api/telegram/activity" &&
+        (req.method === "GET" || req.method === "HEAD")
+      ) {
         const limit = Math.min(
           Math.max(Number(url.searchParams.get("limit")) || 50, 1),
           200,
         );
         return Response.json(
           { success: true, entries: await telegramService.getActivity(limit) },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
@@ -1331,7 +1439,7 @@ export function startServer(options?: ServerOptions) {
         if (body.action !== "set" && body.action !== "delete") {
           return Response.json(
             { success: false, error: 'action must be "set" or "delete"' },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
         const res =
@@ -1344,7 +1452,7 @@ export function startServer(options?: ServerOptions) {
             ok: res.ok,
             error: res.ok ? undefined : res.description,
           },
-          { status: res.ok ? 200 : 502, headers: corsHeaders },
+          { status: res.ok ? 200 : 502, headers: cors },
         );
       }
 
@@ -1357,7 +1465,7 @@ export function startServer(options?: ServerOptions) {
             count: list.length,
             data: list,
           },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
@@ -1375,7 +1483,7 @@ export function startServer(options?: ServerOptions) {
               ok: sent,
               customerId: custId,
             },
-            { headers: corsHeaders },
+            { headers: cors },
           );
         } catch (err: any) {
           return Response.json(
@@ -1384,7 +1492,7 @@ export function startServer(options?: ServerOptions) {
               ok: false,
               error: err?.message || String(err),
             },
-            { status: 500, headers: corsHeaders },
+            { status: 500, headers: cors },
           );
         }
       }
@@ -1398,7 +1506,7 @@ export function startServer(options?: ServerOptions) {
               success: false,
               error: `type must be one of ${REPORT_TYPES.join(", ")}`,
             },
-            { status: 400, headers: corsHeaders },
+            { status: 400, headers: cors },
           );
         }
         const sent = await scheduler.dispatchReportNow(type);
@@ -1408,7 +1516,7 @@ export function startServer(options?: ServerOptions) {
             ok: sent,
             reportType: type,
           },
-          { headers: corsHeaders },
+          { headers: cors },
         );
       }
 
@@ -1419,7 +1527,7 @@ export function startServer(options?: ServerOptions) {
           error: "Not Found",
           pathname,
         },
-        { status: 404, headers: corsHeaders },
+        { status: 404, headers: cors },
       );
     },
 
@@ -1438,14 +1546,10 @@ export function startServer(options?: ServerOptions) {
           error: "Internal Server Error",
           message,
         },
-        { status: 500, headers: corsHeaders },
+        { status: 500, headers: baseHeaders },
       );
     },
   };
-
-  const unixSocket =
-    options?.unix ||
-    (typeof Bun !== "undefined" ? Bun.env.BUN_SOCKET : process.env.BUN_SOCKET);
 
   if (unixSocket) {
     (serveConfig as any).unix = unixSocket;
