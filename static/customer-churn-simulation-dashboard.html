@@ -2233,6 +2233,29 @@
         return body;
       }
 
+      /**
+       * The same credential `api()` sends, without the throw: the panels below inspect the status
+       * themselves — 404 means "no artifact captured yet", 401/503 means "the daemon wants the
+       * token". Before this every panel called fetch() bare, so a non-loopback peer always got
+       * TOKEN REQUIRED with no way to supply one.
+       */
+      function authed(path, init = {}) {
+        return fetch(path, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${tokenInput.value}`,
+            ...init.headers,
+          },
+        });
+      }
+
+      /** 503 is the daemon saying "no token configured"; 401 is "you did not send the right one". */
+      function tokenHint(status) {
+        return status === 503
+          ? "The daemon has no SPORTSDESK_ADMIN_TOKEN configured. Set it in .env and restart."
+          : "This peer is not loopback. Paste the daemon's admin token into the Admin token field (Telegram panel) and reload.";
+      }
+
       function lockedRow(message) {
         const td = el("td", "empty-row", message);
         td.colSpan = 9;
@@ -2738,10 +2761,10 @@
           setBadge("LOADING", "primary");
           try {
             const [bets, admin, sports, board] = await Promise.all([
-              fetch("/api/live-bets", { cache: "no-store" }),
-              fetch("/api/game-admin", { cache: "no-store" }),
-              fetch("/api/sports", { cache: "no-store" }),
-              fetch("/api/scoreboard", { cache: "no-store" }),
+              authed("/api/live-bets", { cache: "no-store" }),
+              authed("/api/game-admin", { cache: "no-store" }),
+              authed("/api/sports", { cache: "no-store" }),
+              authed("/api/scoreboard", { cache: "no-store" }),
             ]);
 
             if (bets.status === 401 || bets.status === 503) {
@@ -2751,7 +2774,7 @@
               const cell = make(
                 "td",
                 "empty-row",
-                "Set SPORTSDESK_ADMIN_TOKEN on the server and reload; this peer is not loopback.",
+                tokenHint(bets.status),
               );
               cell.colSpan = 6;
               row.append(cell);
@@ -2848,8 +2871,8 @@
         const loadStoredReports = async () => {
           try {
             const [reportsRes, sportsRes] = await Promise.all([
-              fetch("/api/analysis/reports", { cache: "no-store" }),
-              fetch("/api/sports", { cache: "no-store" }),
+              authed("/api/analysis/reports", { cache: "no-store" }),
+              authed("/api/sports", { cache: "no-store" }),
             ]);
 
             if (sportsRes.ok) {
@@ -2918,7 +2941,7 @@
             return;
           }
           try {
-            const res = await fetch(
+            const res = await authed(
               `/api/agents/search?q=${encodeURIComponent(query)}&limit=20`,
               { cache: "no-store" },
             );
@@ -2992,7 +3015,7 @@
 
         const loadFilters = async () => {
           try {
-            const res = await fetch("/api/analysis/filters", {
+            const res = await authed("/api/analysis/filters", {
               cache: "no-store",
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3035,7 +3058,7 @@
           badge.textContent = "RUNNING";
           badge.className = "badge badge-primary";
           try {
-            const res = await fetch(`/api/analysis?${params.toString()}`, {
+            const res = await authed(`/api/analysis?${params.toString()}`, {
               cache: "no-store",
             });
             const body = await res.json();
@@ -3285,7 +3308,7 @@
 
         const load = async () => {
           try {
-            const res = await fetch("/api/sports/catalog", {
+            const res = await authed("/api/sports/catalog", {
               cache: "no-store",
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3544,13 +3567,13 @@
           const mode = moduleSelect.value;
           try {
             if (mode === "P") {
-              const res = await fetch("/api/game-admin", { cache: "no-store" });
+              const res = await authed("/api/game-admin", { cache: "no-store" });
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               renderPositions(await res.json());
               return;
             }
             const windowValue = windowSelect.value;
-            const res = await fetch(
+            const res = await authed(
               `/api/game-admin/board?window=${encodeURIComponent(windowValue)}`,
               { cache: "no-store" },
             );
@@ -3692,7 +3715,7 @@
 
         const load = async () => {
           try {
-            const res = await fetch("/api/contests", { cache: "no-store" });
+            const res = await authed("/api/contests", { cache: "no-store" });
             if (res.status === 404) {
               badge.textContent = "NOT EXTRACTED";
               badge.className = "badge badge-warning";
@@ -3984,7 +4007,7 @@
 
         const loadLiveWagers = async () => {
           try {
-            const res = await fetch("/api/live-wagers", { cache: "no-store" });
+            const res = await authed("/api/live-wagers", { cache: "no-store" });
             if (res.status === 404) {
               badge.textContent = "NOT CAPTURED";
               badge.className = "badge badge-warning";
@@ -3995,6 +4018,7 @@
             if (res.status === 401 || res.status === 503) {
               badge.textContent = "TOKEN REQUIRED";
               badge.className = "badge badge-warning";
+              note.textContent = tokenHint(res.status);
               return;
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);

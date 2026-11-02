@@ -114,6 +114,44 @@ describe("proxied ingress requires the token", () => {
       setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
     }
   });
+
+  /**
+   * The dashboard's read set, over the socket, with the token it now sends. This is the deploy
+   * posture: Nginx is the only client of the socket, the daemon cannot see the browser, and the
+   * page carries the credential instead.
+   */
+  test("every route the dashboard reads answers with the token", async () => {
+    setEnv("SPORTSDESK_ADMIN_TOKEN", "dashboard-token");
+    try {
+      const paths = [
+        "/api/live-bets",
+        "/api/game-admin",
+        "/api/sports",
+        "/api/scoreboard",
+        "/api/analysis/reports",
+        "/api/analysis/filters",
+        "/api/sports/catalog",
+        "/api/contests",
+        "/api/live-wagers",
+        "/api/agents/search?q=BI",
+        "/api/game-admin/board",
+      ];
+      const refused: string[] = [];
+      for (const path of paths) {
+        const response = await fetch(`http://localhost${path}`, {
+          unix: socket,
+          headers: { authorization: "Bearer dashboard-token" },
+        } as RequestInit);
+        if ([401, 403, 503].includes(response.status)) {
+          refused.push(`${path} -> ${response.status}`);
+        }
+        await response.body?.cancel();
+      }
+      expect(refused).toEqual([]);
+    } finally {
+      setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
+    }
+  });
 });
 
 describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary", () => {

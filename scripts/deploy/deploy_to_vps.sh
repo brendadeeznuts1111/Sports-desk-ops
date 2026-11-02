@@ -139,6 +139,21 @@ EOF
 fi
 
 chmod 600 "$APP_DIR/.env"
+
+# The dashboard reads /api/* through Nginx, where the daemon cannot see a loopback peer, so it
+# needs the admin token. Generate one when the copied .env does not carry one and print it once.
+if ! grep -qE '^SPORTSDESK_ADMIN_TOKEN=.+' "$APP_DIR/.env"; then
+  ADMIN_TOKEN="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  {
+    echo ""
+    echo "# Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by deploy_to_vps.sh."
+    echo "# Paste into the dashboard's Admin token field (Telegram panel); rotate by editing here."
+    echo "SPORTSDESK_ADMIN_TOKEN=${ADMIN_TOKEN}"
+  } >> "$APP_DIR/.env"
+  chmod 600 "$APP_DIR/.env"
+  echo -e "      Admin token (shown once, stored in ${APP_DIR}/.env): ${BOLD}${ADMIN_TOKEN}${NC}"
+fi
+
 echo -e "      Production configuration saved to ${APP_DIR}/.env"
 
 # Step 4: Configure and Enable Systemd Service
@@ -155,12 +170,12 @@ User=root
 WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 Environment="BUN_SOCKET=/run/sportsdesk/webview.sock"
-# The daemon sees the socket, not the client, so `server.requestIP()` is null for every request
-# and it cannot tell a remote client from a local one. 1 says "Nginx is the trust boundary";
-# unset it and every PII route (/api/live-bets, /api/agent-tree, /graph, ...) requires
-# SPORTSDESK_ADMIN_TOKEN through the proxy as well. Either way, protect the domain at the edge:
-# see the auth_basic block in the Nginx site below.
-Environment="SPORTSDESK_TRUST_PROXY=1"
+# No SPORTSDESK_TRUST_PROXY here on purpose. The daemon sees the socket, not the client, so
+# `requestIP()` is null for every request and it cannot tell a remote client from a local one;
+# without the flag every `pii` route requires SPORTSDESK_ADMIN_TOKEN through the proxy, and the
+# dashboard sends the token the operator pastes into its Admin token field. Set
+# SPORTSDESK_TRUST_PROXY=1 only if you put your own auth in front of the domain (see auth_basic
+# below) and accept that the daemon then trusts anybody the proxy forwards.
 RuntimeDirectory=sportsdesk
 RuntimeDirectoryMode=0755
 ExecStart=${BUN_BIN} run services/sportsdesk_webview_server.ts
