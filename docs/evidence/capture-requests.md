@@ -495,6 +495,32 @@ What this does not answer, and the pins that would: `app/sports/score/score.js` 
 open. Both are now in `pinned/fetch-pinned-bundles.sh` and `fetch:pinned-portal`; a run prints their
 hashes to pin, and the reads then answer those two questions the same way.
 
+**What `MASTER_ID` and `agentType` actually are** (same pinned read, 2026-11-02). The body gate is a
+login-state gate, and both of its operands have a writer:
+
+- `sessionStorage.agentType` is set in `security.js` at the master/agent branch of
+  `authenticate_normal` (`sessionStorage.agentType = e.accountInfo.AgentType`), i.e. to `"M"` or
+  `"A"` for exactly those accounts; the `default:` branch sets `customerID`, `playerID`, `token`,
+  `office`, `language` and `skin` but **not** `agentType`, so a player session keeps the `""` the
+  logout path writes. The gate is therefore live for master/agent logins, not dormant.
+- `e.ID` is not an account field. The module prototype defaults `ID: 0, MASTER_ID: 0`;
+  `init` fills `ID` from `sessionStorage.customerID` only when it is still `0`; `setAccountInfo`
+  overwrites it from the account-info response; and selecting an agent in the hierarchy reassigns
+  it (`ID` ≠ `MASTER_ID` is how the UI knows it is viewing a sub-agent). `MASTER_ID` is a
+  **snapshot** of `ID` taken when the menu is built, written to the instance and to sessionStorage
+  in the same statement.
+- So `sessionStorage.MASTER_ID === "0"` means "identity not resolved yet", not "account 0", and it
+  is reachable only if the snapshot runs before `init`/`setAccountInfo` has filled `ID`. In that
+  window the prefilter writes `agentID: "0"` and the dead `0 === r` fallback does not rescue it.
+  It is an ordering window, not the steady state.
+- The two copies (`__proto__.MASTER_ID` and `sessionStorage.MASTER_ID`) are written together from
+  the same value and no pinned code writes one without the other; the drift that matters is `ID`
+  versus `MASTER_ID`, which is intentional. Logout resets the storage keys (`MASTER_ID`,
+  `agentType`, `skin`) as one statement but cannot reach the module instance, which is discarded
+  with the page.
+- `customerID: "0"` in a Pending body is a separate sentinel: `customerID` is never written by the
+  prefilter, and nothing links it to `MASTER_ID`.
+
 ---
 
 ## P7 — captures that are not needed (reconcile spec to code instead)
