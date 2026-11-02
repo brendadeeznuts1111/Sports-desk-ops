@@ -52,7 +52,7 @@
     "format": "bun fmt",
     "format:check": "bun fmt --check",
     "ensure:deep-tsconfig": "bun run scripts/ensure_deep_tsconfig.ts",
-    "typecheck": "bun run ensure:deep-tsconfig && bunx tsc -p tsconfig.json --noEmit",
+    "typecheck": "bun run ensure:deep-tsconfig && bun check --no-script -p tsconfig.json",
     "lint": "bun --bun run oxlint --fix",
     "lint:check": "bun --bun run oxlint --deny-warnings",
     "gen:tokens": "bun run scripts/generate_tokens.ts",
