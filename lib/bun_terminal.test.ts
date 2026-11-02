@@ -130,7 +130,7 @@ test.skipIf(Bun.which("bash") === null)(
     const colorCode = await colorProc.exited;
     colorProc.terminal?.close();
     expect(colorCode).toBe(0);
-    expect(colorRaw).toMatch(/\x1b\[31m/);
+    expect(colorRaw).toContain("\x1b[31m");
     expect(stripPtyCapture(colorRaw)).toContain("red");
   },
 );
