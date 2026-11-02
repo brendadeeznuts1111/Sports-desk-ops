@@ -24,6 +24,7 @@ import {
   redactPendingDeletePreview,
 } from "../../lib/f402_pending_delete_batch.ts";
 import { probeUrl } from "../../lib/f402_probe.ts";
+import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { preflight, warmCaptureNetwork } from "../../lib/preflight.ts";
 import {
   buildDnsPrefetchExpression,
@@ -119,6 +120,10 @@ export async function runBatchPendingDeleteSession(options?: {
   }
 
   const results: BatchPendingDeleteRowResult[] = [];
+
+  // Fails fast when another capture still holds this Chrome profile.
+  using _lock =
+    profile.trim() === "" ? null : acquireProfileLock(join(root, profile));
 
   await using view = ManagedWebView.launch({
     backend,

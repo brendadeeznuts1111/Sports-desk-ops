@@ -29,6 +29,7 @@ import {
   type ReadOnlyOp,
 } from "./capture/allowlist.ts";
 import { cookieHandoffForHost } from "./capture/cookies.ts";
+import { submitLoginForm } from "./capture/f402_login.ts";
 import { isPlainObject, sha256Hex } from "./capture/json.ts";
 import {
   assertFixtureOperations,
@@ -389,8 +390,10 @@ export async function authenticateWithWebView(
     for (let attempt = 1; attempt <= 3; attempt++) {
       await view.fill(config.login.userSelector, agentID);
       await view.fill(config.login.passSelector, password);
-      if (submitExists === true) await view.click(config.login.submitSelector);
-      else await view.press("Enter");
+      // Submit button when the markup has one; otherwise requestSubmit() before
+      // any key press (Enter cannot implicitly submit a two-field form, and
+      // WebKit delivers no keydown for it when the selector is missing).
+      await submitLoginForm(view, config.login, submitExists === true);
       const attemptEnd = Math.min(Date.now() + 8_000, attemptDeadline);
       for (;;) {
         probe = await view.evaluate(config.login.authenticatedExpression);
@@ -423,7 +426,15 @@ export async function authenticateWithWebView(
       );
     }
     const cookies = await view.getAllCookies();
-    const handoff = cookieHandoffForHost(cookies, hostOf(config.baseUrl));
+    const handoff = cookieHandoffForHost(
+      cookies,
+      hostOf(config.baseUrl),
+      undefined,
+      undefined,
+      {
+        requestSecure: config.baseUrl.startsWith("https:"),
+      },
+    );
     const authorizationHeader = await extractPortalAuthorization(view);
     return {
       cookieHeader: handoff.header,

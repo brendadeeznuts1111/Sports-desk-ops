@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   acquireAuditLock,
+  DOCUMENT_TITLE_EXPRESSION,
   EXPAND_SIDEBAR_EXPRESSION,
   parseAuditCliArgs,
   readAuditLock,
@@ -91,7 +92,10 @@ function makeOfflineRuntime(onCall: CallLog): AuditRuntime {
 }
 
 interface FakeViewState {
+  /** What the `view.title` getter reports (WebKit leaves this empty). */
   title: string;
+  /** What `evaluate("document.title")` reports. */
+  evaluatedTitle: string;
   url: string;
   textLength: number;
   bodyText: string;
@@ -104,8 +108,11 @@ function makeFakeWebView(portalUrl: string): {
   readonly view: WebViewHandle;
   readonly state: FakeViewState;
 } {
+  const portalTitle =
+    "SportsDesk & Fantasy402 Wire API Reference — evidence-labelled";
   const state: FakeViewState = {
-    title: "SportsDesk & Fantasy402 Wire API Reference — evidence-labelled",
+    title: portalTitle,
+    evaluatedTitle: portalTitle,
     url: portalUrl,
     textLength: 6200,
     bodyText:
@@ -132,8 +139,11 @@ function makeFakeWebView(portalUrl: string): {
         state.expanded = true;
         return { clicked: 5 };
       }
+      if (expression === DOCUMENT_TITLE_EXPRESSION) {
+        return state.evaluatedTitle;
+      }
       return {
-        title: state.title,
+        title: state.evaluatedTitle,
         href: state.url,
         textLength: state.textLength,
         hasScalarRoot: state.hasScalarRoot,
@@ -439,6 +449,37 @@ describe("documentation audit orchestration", () => {
       }
       expect(callLog.calls.some((call) => call.includes("/openapi.json"))).toBe(
         true,
+      );
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("readiness gate accepts a title that only evaluate() reports", async () => {
+    const dir = makeTempDir("audit-webkit-title-");
+    try {
+      const callLog: CallLog = { calls: [] };
+      const specBytes = new Uint8Array(readFileSync(SPEC_PATH));
+      const runtime = makeLiveRuntime(callLog, specBytes);
+      // Bun 1.4.4 WebKit: the title getter is always "" on every navigation;
+      // only document.title (via evaluate) holds the real value.
+      runtime.state.title = "";
+      expect(runtime.state.evaluatedTitle).not.toBe("");
+
+      const summary = await runDocumentationAudit({
+        rootDir: ROOT,
+        outDir: dir,
+        portalUrl: PORTAL,
+        runtime,
+      });
+
+      expect(summary.status).toBe("PASS");
+      expect(summary.backend).toBe("chrome");
+      const checks = new Map(summary.checks.map((check) => [check.id, check]));
+      expect(checks.get("webview-launch")?.status).toBe("PASS");
+      expect(checks.get("webview-title")?.status).toBe("PASS");
+      expect(checks.get("webview-title")?.detail).toContain(
+        runtime.state.evaluatedTitle,
       );
     } finally {
       cleanup(dir);

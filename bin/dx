@@ -101,6 +101,9 @@ SportsDesk DX — operator commands
                                   Cross-domain customer book ↔ Polymarket wallet join
   ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login)
   ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
+  ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing (--json/--strict/--types)
+  ./bin/dx deps [add|remove|version|check]
+                                  bun-deps (frozen-safe); version = pm version + lock refresh
   ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
   ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
   ./bin/dx poll [--once] [--live] [--live-f402]
@@ -222,6 +225,50 @@ EOF
   image-meta)
     cd "$REPO_ROOT"
     exec bun bin/image-meta.ts "$@"
+    ;;
+  bun)
+    cd "$REPO_ROOT"
+    exec bun bin/bun_surface.ts "$@"
+    ;;
+  deps)
+    # Deliberately no `cd "$REPO_ROOT"`: bun-deps acts on the directory you are
+    # standing in, so `dx deps add` inside a workspace edits that package's
+    # package.json and the root bun.lock. `check` is the machine policy doctor.
+    case "${1:-}" in
+      check)
+        shift
+        exec bun "$REPO_ROOT/scripts/pm_doctor.ts" "$@"
+        ;;
+      version)
+        # `bun pm version` does not touch bun.lock, and a frozen install still
+        # passes with the lock behind — the documented trap. Bump, refresh the
+        # lock, then verify only the lock-shaped checks.
+        shift
+        case "${1:-}" in
+          --help|-h|"")
+            cat <<'VERSION_HELP'
+dx deps version <newversion> [--no-git-tag-version]
+
+  Runs `bun pm version` in the current package, then `bun-deps install` to
+  bring bun.lock back in step, then `pm:doctor --only lock,patches`.
+
+  A frozen install passes even when the lock is behind, so the refresh is the
+  point of this wrapper. Run it inside the workspace whose version changes.
+VERSION_HELP
+            exit 0
+            ;;
+        esac
+        bun pm version "$@"
+        bun-deps install
+        exec bun "$REPO_ROOT/scripts/pm_doctor.ts" --only "lock workspaces,lock versions,patches"
+        ;;
+      --help|-h|"")
+        exec bun-deps --help
+        ;;
+      *)
+        exec bun-deps "$@"
+        ;;
+    esac
     ;;
   blob-formdata)
     cd "$REPO_ROOT"

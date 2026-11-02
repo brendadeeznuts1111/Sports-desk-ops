@@ -26,13 +26,16 @@ type Check = { name: string; status: Status; detail: string };
 const ROOT = path.join(import.meta.dir, "..");
 const HOME = Bun.env.HOME ?? "";
 const UNFROZEN = path.join(HOME, "dotfiles/bun/unfrozen.bunfig.toml");
-const USAGE = "usage: bun run pm:doctor [--json]";
+const USAGE = "usage: bun run pm:doctor [--json] [--only <name,name>]";
 
 function parseCli() {
   try {
     return parseArgs({
       args: Bun.argv.slice(2),
-      options: { json: { type: "boolean", default: false } },
+      options: {
+        json: { type: "boolean", default: false },
+        only: { type: "string" },
+      },
       strict: true,
     }).values;
   } catch (error) {
@@ -304,27 +307,57 @@ async function registryChecks(): Promise<Check[]> {
 }
 
 const values = parseCli();
+const only = (values.only ?? "")
+  .split(",")
+  .map((entry) => entry.trim().toLowerCase())
+  .filter((entry) => entry.length > 0);
+/**
+ * Registry probes hit the network (2 s each), so a filtered run skips them
+ * unless the filter asks for them. `--only lock` stays offline.
+ */
+const needsRegistry =
+  only.length === 0 ||
+  only.some(
+    (entry) =>
+      entry.includes("registry") ||
+      entry.includes("token") ||
+      entry.startsWith("@"),
+  );
 const checks = [
   ...(await runtimeChecks()),
   ...(await globalConfigChecks()),
   ...(await projectChecks()),
   ...(await overrideChecks()),
-  ...(await registryChecks()),
+  ...(needsRegistry ? await registryChecks() : []),
 ];
-const failed = checks.filter((c) => c.status === "fail").length;
+const selected =
+  only.length === 0
+    ? checks
+    : checks.filter((c) =>
+        only.some((entry) => c.name.toLowerCase().includes(entry)),
+      );
+if (selected.length === 0) {
+  console.error(
+    `no checks match --only ${only.join(",")}; known names: ${checks
+      .map((c) => c.name)
+      .join(", ")}`,
+  );
+  process.exit(2);
+}
+const failed = selected.filter((c) => c.status === "fail").length;
 
 if (values.json) {
-  console.log(JSON.stringify({ ok: failed === 0, checks }, null, 2));
+  console.log(JSON.stringify({ ok: failed === 0, checks: selected }, null, 2));
 } else {
   const mark: Record<Status, string> = { ok: "✓", warn: "!", fail: "✗" };
-  const width = Math.max(...checks.map((c) => c.name.length));
-  for (const c of checks) {
+  const width = Math.max(...selected.map((c) => c.name.length));
+  for (const c of selected) {
     console.log(`${mark[c.status]} ${c.name.padEnd(width)}  ${c.detail}`);
   }
   console.log(
     failed === 0
-      ? `\npm:doctor: ${checks.length} checks, none failed`
-      : `\npm:doctor: ${failed} of ${checks.length} checks failed`,
+      ? `\npm:doctor: ${selected.length} checks, none failed`
+      : `\npm:doctor: ${failed} of ${selected.length} checks failed`,
   );
 }
 process.exit(failed === 0 ? 0 : 1);

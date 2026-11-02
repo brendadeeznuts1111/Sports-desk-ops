@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type LoginView,
   MissingF402CredentialsError,
+  REQUEST_SUBMIT_EXPRESSION,
   SECRET_NAMES,
   SECRETS_SERVICE,
   loadF402Credentials,
@@ -14,11 +15,40 @@ const TEST_CREDS = {
   password: "not-a-real-secret",
 };
 
-function stubView(overrides: Partial<LoginView> = {}): {
+const SUBMIT_SELECTOR = "button.btn.btn-primary";
+const PASS_SELECTOR = 'input[type="password"]';
+
+interface StubOptions {
+  /** Whether the pre-fill probe finds a submit button (default true). */
+  readonly hasSubmit?: boolean;
+  /**
+   * Which form the submit expression resolves: the password field's own `form`
+   * (default `"document"` keeps the old single-form page shape).
+   */
+  readonly formSource?: "password" | "document" | "none";
+  /** Whether the resolved form has `requestSubmit` (default true). */
+  readonly requestSubmit?: boolean;
+  /** What `form.checkValidity()` reports (default true). */
+  readonly valid?: boolean;
+}
+
+/**
+ * Records every view call. `passwordGone` flips only on the actions that would
+ * really submit a hydrated login: clicking the submit button, a successful
+ * `requestSubmit`, or the final Enter key press.
+ */
+function stubView(
+  options: StubOptions = {},
+  overrides: Partial<LoginView> = {},
+): {
   view: LoginView;
   calls: string[];
 } {
   const calls: string[] = [];
+  const hasSubmit = options.hasSubmit ?? true;
+  const formSource = options.formSource ?? "document";
+  const requestSubmit = options.requestSubmit ?? true;
+  const valid = options.valid ?? true;
   let passwordGone = false;
   const view: LoginView = {
     async navigate(url) {
@@ -28,11 +58,23 @@ function stubView(overrides: Partial<LoginView> = {}): {
       calls.push(`waitFor:${selector}`);
     },
     async evaluate(expression) {
-      calls.push(
-        `evaluate:${expression.includes("type=password") ? "password-check" : "probe"}`,
-      );
-      if (expression.includes("!== null")) return true; // submit button present
-      if (expression.includes("=== null")) return passwordGone;
+      if (expression === REQUEST_SUBMIT_EXPRESSION) {
+        calls.push("evaluate:requestSubmit");
+        // Mirrors the page expression: no form / no requestSubmit → false, and a
+        // form that fails constraint validation → false without submitting.
+        const submitted = formSource !== "none" && requestSubmit && valid;
+        if (submitted) passwordGone = true;
+        return submitted;
+      }
+      if (expression.includes("!== null")) {
+        calls.push("evaluate:submit-probe");
+        return hasSubmit;
+      }
+      if (expression.includes("=== null")) {
+        calls.push("evaluate:password-check");
+        return passwordGone;
+      }
+      calls.push("evaluate:other");
       return null;
     },
     async fill(selector, text) {
@@ -42,7 +84,7 @@ function stubView(overrides: Partial<LoginView> = {}): {
     },
     async click(selector) {
       calls.push(`click:${selector}`);
-      passwordGone = true;
+      if (selector === SUBMIT_SELECTOR) passwordGone = true;
     },
     async press(key) {
       calls.push(`press:${key}`);
@@ -77,17 +119,31 @@ describe("F402 login", () => {
     expect(outcome.loginUrl).toBe("https://www.fantasy402.com/");
     expect(outcome.usedSubmitButton).toBe(true);
     expect(calls).toContain('fill:input[name="customerID"]:agent-118');
-    expect(calls).toContain('fill:input[type="password"]:<password>');
-    expect(calls).toContain("click:button.btn.btn-primary");
+    expect(calls).toContain(`fill:${PASS_SELECTOR}:<password>`);
+    expect(calls).toContain(`click:${SUBMIT_SELECTOR}`);
+    expect(calls).not.toContain("evaluate:requestSubmit");
     expect(calls.some((call) => call.startsWith("press:"))).toBe(false);
   });
 
-  test("falls back to Enter when the submit button is absent", async () => {
+  test("without a submit button, uses requestSubmit and never presses Enter", async () => {
+    const { view, calls } = stubView({ hasSubmit: false, requestSubmit: true });
+    const outcome = await loginF402(view, {
+      credentials: resolveF402Credentials(TEST_CREDS),
+      hydrationMs: 0,
+      sleep: noSleep,
+    });
+    expect(outcome.usedSubmitButton).toBe(false);
+    expect(calls).toContain("evaluate:requestSubmit");
+    expect(calls.some((call) => call.startsWith("press:"))).toBe(false);
+    expect(calls.some((call) => call.startsWith("click:"))).toBe(false);
+  });
+
+  test("derives the submit form from the password field, not the first form on the page", async () => {
     const { view, calls } = stubView({
-      async evaluate(expression) {
-        if (expression.includes("!== null")) return false;
-        return true;
-      },
+      hasSubmit: false,
+      formSource: "password",
+      requestSubmit: true,
+      valid: true,
     });
     const outcome = await loginF402(view, {
       credentials: resolveF402Credentials(TEST_CREDS),
@@ -95,15 +151,69 @@ describe("F402 login", () => {
       sleep: noSleep,
     });
     expect(outcome.usedSubmitButton).toBe(false);
-    expect(calls).toContain("press:Enter");
+    expect(calls).toContain("evaluate:requestSubmit");
+    expect(calls.some((call) => call.startsWith("press:"))).toBe(false);
+    expect(calls.some((call) => call.startsWith("click:"))).toBe(false);
+  });
+
+  test("an invalid form returns false and falls through to click + Enter", async () => {
+    const { view, calls } = stubView({
+      hasSubmit: false,
+      formSource: "password",
+      requestSubmit: true,
+      valid: false,
+    });
+    await loginF402(view, {
+      credentials: resolveF402Credentials(TEST_CREDS),
+      hydrationMs: 0,
+      sleep: noSleep,
+    });
+    const requestSubmitAt = calls.indexOf("evaluate:requestSubmit");
+    const clickPass = calls.indexOf(`click:${PASS_SELECTOR}`);
+    const pressEnter = calls.indexOf("press:Enter");
+    expect(requestSubmitAt).toBeGreaterThanOrEqual(0);
+    expect(clickPass).toBeGreaterThan(requestSubmitAt);
+    expect(pressEnter).toBeGreaterThan(clickPass);
+  });
+
+  test("submit expression resolves the form from the password field and checks validity", () => {
+    // Guards the shape: `requestSubmit()` alone reports success even when
+    // constraint validation blocked the submission.
+    expect(REQUEST_SUBMIT_EXPRESSION).toContain("input[type=password]");
+    expect(REQUEST_SUBMIT_EXPRESSION).toContain("p.form");
+    expect(REQUEST_SUBMIT_EXPRESSION).toContain("checkValidity");
+    expect(REQUEST_SUBMIT_EXPRESSION.indexOf("checkValidity")).toBeLessThan(
+      REQUEST_SUBMIT_EXPRESSION.indexOf("f.requestSubmit()"),
+    );
+  });
+
+  test("falls back to focusing the password field then Enter when requestSubmit is unavailable", async () => {
+    const { view, calls } = stubView({
+      hasSubmit: false,
+      requestSubmit: false,
+    });
+    const outcome = await loginF402(view, {
+      credentials: resolveF402Credentials(TEST_CREDS),
+      hydrationMs: 0,
+      sleep: noSleep,
+    });
+    expect(outcome.usedSubmitButton).toBe(false);
+    const clickPass = calls.indexOf(`click:${PASS_SELECTOR}`);
+    const pressEnter = calls.indexOf("press:Enter");
+    expect(clickPass).toBeGreaterThanOrEqual(0);
+    expect(pressEnter).toBeGreaterThan(clickPass);
+    expect(calls.indexOf("evaluate:requestSubmit")).toBeLessThan(clickPass);
   });
 
   test("honours selector overrides and reports a stuck form", async () => {
-    const { view, calls } = stubView({
-      async evaluate() {
-        return false; // form never disappears
+    const { view, calls } = stubView(
+      {},
+      {
+        async evaluate() {
+          return false; // form never disappears
+        },
       },
-    });
+    );
     await expect(
       loginF402(view, {
         credentials: resolveF402Credentials(TEST_CREDS),

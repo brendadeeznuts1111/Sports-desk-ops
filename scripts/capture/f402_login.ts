@@ -11,7 +11,7 @@
  * to the same path and still be showing the form.
  */
 
-import { resolveLoginConfig } from "./ops.ts";
+import { resolveLoginConfig, type LoginConfig } from "./ops.ts";
 
 export interface F402Credentials {
   readonly agentId: string;
@@ -113,8 +113,15 @@ export function resolveF402Credentials(
   throw new MissingF402CredentialsError();
 }
 
+/** The subset of `ManagedWebView` a submit needs; shared with `evidence_capture`. */
+export interface LoginSubmitView {
+  evaluate(expression: string): Promise<unknown>;
+  click(selector: string): Promise<void>;
+  press(key: string): Promise<void>;
+}
+
 /** The subset of `ManagedWebView` the login needs; lets tests inject a stub. */
-export interface LoginView {
+export interface LoginView extends LoginSubmitView {
   navigate(
     url: string,
     options?: { allowOpaqueUrl?: boolean; timeoutMs?: number },
@@ -123,10 +130,7 @@ export interface LoginView {
     selector: string,
     options?: { timeoutMs?: number },
   ): Promise<void>;
-  evaluate(expression: string): Promise<unknown>;
   fill(selector: string, text: string): Promise<void>;
-  click(selector: string): Promise<void>;
-  press(key: string): Promise<void>;
 }
 
 export interface LoginOptions {
@@ -151,6 +155,42 @@ export interface LoginOutcome {
 
 const PASSWORD_GONE =
   '(() => document.querySelector("input[type=password]") === null)()';
+
+/**
+ * Ask the page to submit its own form. `requestSubmit` runs the bound submit
+ * handler, so a hydrated SPA login sees the click path; a bare `press("Enter")`
+ * does not work on a button-less form (implicit submission needs a submitter)
+ * and WebKit dispatches no keydown at all for Enter.
+ *
+ * The form is derived from the password field (a portal page can carry an
+ * unrelated `form`), and `checkValidity()` is consulted because `requestSubmit()`
+ * returns `true` even when constraint validation blocked submission — that would
+ * otherwise skip the click+Enter fallback.
+ */
+export const REQUEST_SUBMIT_EXPRESSION =
+  '(() => { const p = document.querySelector("input[type=password]"); const f = p && p.form ? p.form : document.querySelector("form"); if (!f || typeof f.requestSubmit !== "function") return false; if (typeof f.checkValidity === "function" && !f.checkValidity()) return false; f.requestSubmit(); return true; })()';
+
+/**
+ * Submit the login form once both fields are filled.
+ *
+ * A present submit button is clicked. Without one, `requestSubmit()` is tried
+ * before any key press; only when the page has no usable form do we focus the
+ * password field and press Enter (which leaves the outcome to the page).
+ */
+export async function submitLoginForm(
+  view: LoginSubmitView,
+  login: Pick<LoginConfig, "submitSelector" | "passSelector">,
+  hasSubmit: boolean,
+): Promise<void> {
+  if (hasSubmit) {
+    await view.click(login.submitSelector);
+    return;
+  }
+  const submitted = await view.evaluate(REQUEST_SUBMIT_EXPRESSION);
+  if (submitted === true) return;
+  await view.click(login.passSelector);
+  await view.press("Enter");
+}
 
 export async function loginF402(
   view: LoginView,
@@ -194,8 +234,7 @@ export async function loginF402(
 
   await view.fill(login.userSelector, identity.loginId);
   await view.fill(login.passSelector, identity.password);
-  if (hasSubmit) await view.click(login.submitSelector);
-  else await view.press("Enter");
+  await submitLoginForm(view, login, hasSubmit);
 
   const deadline = Date.now() + timeoutMs;
   for (;;) {

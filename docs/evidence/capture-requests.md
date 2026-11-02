@@ -564,16 +564,20 @@ not 100 calls.
 
 **A WebView profile is not a session.** This machine has neither, so nothing portal-facing can run —
 but the distinction matters for the next one. `F402_WEBVIEW_PROFILE` names a `Bun.WebView` `dataStore`
-directory, and after a sign-in it does hold the cookies; `createF402ReplayTransport()` never reads it
-(`lib/f402_replay_transport.ts:2-3`), because `Bun.FetchSession` has no dataStore. So a profile alone
-sends a cookie-less request, and `capture_pending_full.ts` used to count it as configured — silencing
-its own "no session" guard and then 401ing upstream. That guard now requires a session file or the
-replay proxy.
+directory, and after a sign-in it does hold the cookies; `createF402ReplayTransport()` still never
+reads it (`lib/f402_replay_transport.ts:2-3`), because `Bun.FetchSession` has no dataStore. So a
+profile alone sends a cookie-less request, and `capture_pending_full.ts` used to count it as
+configured — silencing its own "no session" guard and then 401ing upstream. That guard now requires a
+session file or the replay proxy.
 
-`bun run session:login` is the bridge: one WebView login (`F402_LIVE_LOGIN=1`, `F402_AGENT_ID`,
-`F402_PASSWORD`) writes the 0600 session file the transport reads, and `bun run session:status`
-reports what the transport would use without printing a cookie value. That is the step that turns a
-signed-in WebView into the auth every capture and crawl needs.
+The bridge now exists as **`bun run session:login --from-profile <dir>`**: it opens that profile in a
+headless WebView, reads the cookies over CDP (`Network.getAllCookies`), and writes the 0600 session
+file the transport reads (`lib/f402_profile_session.ts`). A credential login (`F402_LIVE_LOGIN=1`,
+`F402_AGENT_ID`, `F402_PASSWORD`) still works for a profile-less machine, and `bun run session:status`
+reports what the transport would use without printing a cookie value. The hierarchy CLIs' `--profile`
+is now deprecated and ignored — they warn and name the bridge instead — and their 401 hint points at
+`session:login --from-profile <dir>` rather than at `F402_WEBVIEW_PROFILE`. That is the step that turns
+a signed-in WebView into the auth every capture and crawl needs.
 
 **Provenance: this account is not in the tree.** `BILLY666` is absent from `data/agent-tree.json`
 entirely, and so is its office `NOLAROSE`; the tree's roots are `BILLY667`, `NOLAWOLF`, `RTEST5`

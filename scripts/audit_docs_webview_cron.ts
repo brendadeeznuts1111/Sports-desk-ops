@@ -7,6 +7,9 @@
  *   - Bun.WebView read-only properties (`view.title`, `view.url`) are values, not
  *     functions; the view is closed with `await view.close()` (never destroy /
  *     asyncDispose); screenshots are Blobs converted to Buffers.
+ *   - Per-view `close()` is the only teardown: `Bun.WebView.closeAll()` is never
+ *     called per run (it SIGKILLs the shared browser and the next launch then
+ *     races the respawn with "Chrome process closed the pipe").
  *   - Bun.cron is an in-process scheduler; the returned job exposes ref()/stop().
  *   - Bun.fetch is used for the live spec hash comparison.
  *
@@ -562,6 +565,8 @@ export interface WebViewHandle {
   readonly url: string;
   readonly loading: boolean;
   navigate(url: string): Promise<void>;
+  /** Chrome sizes the constructor as the outer window; resize after navigation. */
+  resize?(width: number, height: number): Promise<void>;
   evaluate(expression: string): Promise<unknown>;
   screenshot(options?: WebViewScreenshotOptions): Promise<Blob>;
   close(): void | Promise<void>;
@@ -660,6 +665,26 @@ export const EXPAND_SIDEBAR_EXPRESSION = `(() => {
   return { clicked };
 })()`;
 
+/**
+ * Bun 1.4.4's WebKit backend reports `view.title === ""` on every navigation
+ * (reload and dynamic title changes included) while `document.title` is
+ * correct, so readiness gates read the title through evaluate() instead.
+ */
+export const DOCUMENT_TITLE_EXPRESSION = "document.title";
+
+/**
+ * Read `document.title` through evaluate(). Errors and non-string results mean
+ * "not ready yet", never a fatal launch failure.
+ */
+export async function readDocumentTitle(view: WebViewHandle): Promise<string> {
+  try {
+    const value = await view.evaluate(DOCUMENT_TITLE_EXPRESSION);
+    return typeof value === "string" ? value.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 export interface PageSnapshot {
   readonly title: string;
   readonly href: string;
@@ -691,17 +716,23 @@ async function readPageSnapshot(
   return parsePageSnapshot(raw);
 }
 
-/** Poll view.title/view.url until navigation has produced a document title. */
+/**
+ * Poll the evaluated document title until navigation has produced one.
+ * `view.title` is unusable on the WebKit backend (always ""), so only
+ * `evaluate("document.title")` is consulted; evaluate errors are retried.
+ */
 async function waitForTitle(
   view: WebViewHandle,
   timeoutMs = RENDER_TIMEOUT_MS,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (view.title.trim() !== "" && view.url.trim() !== "") return true;
+    if ((await readDocumentTitle(view)) !== "" && view.url.trim() !== "") {
+      return true;
+    }
     await sleep(CONTENT_POLL_INTERVAL_MS);
   }
-  return view.title.trim() !== "";
+  return (await readDocumentTitle(view)) !== "";
 }
 
 /**
@@ -777,6 +808,16 @@ async function launchPortalWebView(
         NAVIGATION_TIMEOUT_MS,
         `${backend} navigate`,
       );
+      // Chrome treats the constructor size as the outer window (inner height
+      // is height-87, width floored at 500); resize after navigation so the
+      // viewport and screenshot are the requested 1440x900.
+      if (typeof view.resize === "function") {
+        try {
+          await view.resize(1440, 900);
+        } catch {
+          // Best-effort: an un-resizable backend still renders.
+        }
+      }
       if (!(await waitForTitle(view))) {
         throw new Error(`page never rendered a document title with ${backend}`);
       }
@@ -802,21 +843,6 @@ async function launchPortalWebView(
   throw new Error(
     `no Bun.WebView backend could render ${portalUrl}: ${failures.join(" | ")}`,
   );
-}
-
-async function closeAllWebViews(): Promise<void> {
-  const webViewClass = (
-    Bun as unknown as {
-      WebView?: { closeAll?: () => void | Promise<void> };
-    }
-  ).WebView;
-  const closeAll = webViewClass?.closeAll;
-  if (typeof closeAll !== "function") return;
-  try {
-    await closeAll();
-  } catch {
-    // Best-effort safety net; the finally-block close() owns the real cleanup.
-  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1200,7 +1226,6 @@ async function auditWebView(
         });
       }
     }
-    await closeAllWebViews();
   }
 
   if (!liveChecksComplete) {
@@ -1451,7 +1476,6 @@ async function runOnceCli(cli: AuditCliOptions): Promise<number> {
     return summary.status === "PASS" ? 0 : 1;
   } finally {
     releaseAuditLock(lockPath, process.pid);
-    await closeAllWebViews();
   }
 }
 
@@ -1486,9 +1510,8 @@ async function runWatchCli(cli: AuditCliOptions): Promise<number> {
     console.log(`[Doc Auditor] ${signal} received; draining watch daemon`);
     job?.stop();
     releaseAuditLock(lockPath, process.pid);
-    void closeAllWebViews().finally(() => {
-      resolveStopped();
-    });
+    // Per-pass close() already tore its view down; nothing is left to drain.
+    resolveStopped();
   };
   process.once("SIGINT", () => {
     shutdown("SIGINT");
@@ -1535,7 +1558,6 @@ async function runWatchCli(cli: AuditCliOptions): Promise<number> {
     if (!stopped) {
       job?.stop();
       releaseAuditLock(lockPath, process.pid);
-      await closeAllWebViews();
     }
   }
 }

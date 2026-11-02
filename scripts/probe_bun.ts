@@ -53,7 +53,7 @@ const probes: Probe[] = [
     note: "typeof and own property names per Bun member",
     argv: [
       "-p",
-      `JSON.stringify(["Image","WebView","inspect","SQL","sql","JSONL","password","Password","Build","Serve","Spawn","Security"].map(k => ({ k, t: typeof Bun[k], own: Bun[k] != null ? Object.getOwnPropertyNames(Bun[k]).sort() : null })))`,
+      `JSON.stringify(["$","Build","CSRF","dns","Image","inspect","JSON5","JSONC","JSONL","markdown","Password","peek","RedisClient","Security","semver","Serve","Spawn","SQL","TOML","udp","unsafe","WebAssembly","WebView","XML","YAML"].map(k => ({ k, t: typeof Bun[k], own: Bun[k] != null ? Object.getOwnPropertyNames(Bun[k]).sort() : null })))`,
     ],
   },
   {

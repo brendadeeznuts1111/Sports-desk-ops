@@ -10,6 +10,14 @@
 6. **Verifier exercised without a session:** `bun test lib/f402_har_redaction_proof_verify.test.ts` (synthetic green → ok, red → failed).
 7. **Gate i′ (real shape):** one live capture proves the redactor on production-sized wire; commit HAR + proof → `harRedactionProofGate.status: ready` → **`verify:manager-har-redaction-proof`** exit **0**. Until then exit **10** BLOCKED.
 
+**Profile lock.** `capture:f402-har -- --profile …` takes the sibling lock
+`<profileDir>.bun-webview.lock` before it launches the view, so a second capture — or a
+`session:login --from-profile` — on the same profile fails fast with `ProfileInUseError` naming the
+holder pid, instead of colliding on Chrome's singleton and dying with "Chrome process closed the pipe".
+The `--login` and profile paths are otherwise unchanged: an already signed-in profile is still the
+preferred input, and `--login` still refreshes via keychain or TTY. An **external** Chrome using that
+same profile holds no lock file, so it is outside this protocol; quit it first.
+
 If sweep fails after capture, exit **1** FAILED — fix the redactor, do not commit.
 
 ## Gate chain

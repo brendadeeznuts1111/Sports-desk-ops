@@ -293,6 +293,223 @@ describe("schema skeletons carry no values", () => {
   });
 });
 
+const JWT_FIXTURE =
+  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+
+describe("credential names with a prefix or suffix", () => {
+  test.each([
+    ["F402_PASSWORD=fixture-pass-value", "F402_PASSWORD=<redacted>"],
+    ["sessionid=fixture-session-value", "sessionid=<redacted>"],
+    ["ASP.NET_SessionId=fixture-session-value", "ASP.NET_SessionId=<redacted>"],
+    ["auth_token=fixture-auth-value", "auth_token=<redacted>"],
+    ["authToken=fixture-auth-value; x=1", "authToken=<redacted>; x=1"],
+    ['{"F402_PASSWORD":"fixture-pass"}', '{"F402_PASSWORD":"<redacted>"}'],
+  ])("%s", (input, expected) => {
+    expect(redactString(input)).toBe(expected);
+  });
+
+  test("a short password or secret has no length floor", () => {
+    expect(redactString("password=abc12")).toBe("password=<redacted>");
+    expect(redactString("client_secret=x")).toBe("client_secret=<redacted>");
+  });
+
+  test("words that merely contain a credential name are left alone", () => {
+    for (const text of [
+      "consider=abcdef123456",
+      "residual=abcdef123456",
+      "assessment=abcdefghij",
+      "passwordless=enabled",
+      "width=1440 timeout=30000",
+    ]) {
+      expect(redactString(text)).toBe(text);
+    }
+  });
+});
+
+describe("bare credential pairs", () => {
+  test("sensitive name=value pairs keep the name and lose the value", () => {
+    expect(redactString("session=fixture-session-value")).toBe(
+      "session=<redacted>",
+    );
+    expect(redactString("csrftoken=fixture-csrf-value")).toBe(
+      "csrftoken=<redacted>",
+    );
+    expect(
+      redactString(
+        "PHPSESSID=fixture-php-value; connect.sid=fixture-sid-value; __cf_bm=fixture-cf-value",
+      ),
+    ).toBe("PHPSESSID=<redacted>; connect.sid=<redacted>; __cf_bm=<redacted>");
+    expect(redactString("session = fixture-session-value")).toBe(
+      "session = <redacted>",
+    );
+  });
+
+  test("benign name=value pairs are untouched", () => {
+    expect(redactString("width=1440 timeout=30000")).toBe(
+      "width=1440 timeout=30000",
+    );
+    expect(redactString("height=1080, retries=3; charset=utf-8")).toBe(
+      "height=1080, retries=3; charset=utf-8",
+    );
+    // A separator-delimited prefix is still a credential (`F402_PASSWORD`), so
+    // `my_session` is redacted; only an unseparated word like `consider` is not.
+    expect(redactString("my_session=fixture-session-value")).toBe(
+      "my_session=<redacted>",
+    );
+  });
+
+  test("an already-redacted value is unchanged and never nests", () => {
+    expect(redactString("session=<redacted>")).toBe("session=<redacted>");
+    const once = redactString("session=fixture-session-value");
+    expect(redactString(once)).toBe(once);
+    expect(redactString("session=<redacted:<redacted>>")).toBe(
+      "session=<redacted>",
+    );
+  });
+
+  test("the pattern passes still fire, including inside a pair", () => {
+    const redacted = redactString(
+      `${JWT_FIXTURE} Bearer abcdefghijkl bettor@example.com 203.0.113.9 token=${JWT_FIXTURE}`,
+    );
+    expect(redacted).toContain("<redacted:jwt>");
+    expect(redacted).toContain("<redacted:bearer>");
+    expect(redacted).toContain("<redacted:email>");
+    expect(redacted).toContain("<redacted:ip>");
+    expect(redacted).toContain("token=<redacted>");
+    expect(redacted).not.toContain(JWT_FIXTURE);
+  });
+
+  test("a sensitive name in a `;`-group redacts every value in the group", () => {
+    expect(redactString("session=SECRET-SESSION; scoped=SECRET-SCOPED")).toBe(
+      "session=<redacted>; scoped=<redacted>",
+    );
+    expect(redactString("foo=123456; session=abcdef")).toBe(
+      "foo=<redacted>; session=<redacted>",
+    );
+    expect(redactString("session=<redacted>; scoped=<redacted>")).toBe(
+      "session=<redacted>; scoped=<redacted>",
+    );
+  });
+
+  test("a group with no sensitive name is untouched", () => {
+    expect(redactString("width=1440; height=1080")).toBe(
+      "width=1440; height=1080",
+    );
+    expect(redactString("foo=123456; bar=abcdef")).toBe(
+      "foo=123456; bar=abcdef",
+    );
+    // Values under the six-character floor survive even in a redacted group.
+    expect(redactString("session=abcdef; x=12")).toBe(
+      "session=<redacted>; x=12",
+    );
+  });
+
+  test("a labeled cookie header still loses the whole value", () => {
+    expect(redactString("cookie: session=fixture-session-value")).toBe(
+      "cookie: session=<redacted>",
+    );
+    expect(redactError("cookie: session=fixture-session-value")).toBe(
+      "cookie: <redacted>",
+    );
+    expect(
+      redactError(
+        "cookie: session=fixture-session-value; foo=fixture-foo-value",
+      ),
+    ).toBe("cookie: <redacted>");
+  });
+
+  test("quoted pair values are redacted and keep their quotes", () => {
+    expect(redactString(`session="abcdefghij"`)).toBe(`session="<redacted>"`);
+    expect(redactString(`session='abcdefghij'`)).toBe(`session='<redacted>'`);
+    expect(redactString(`session = "abcdefghij"`)).toBe(
+      `session = "<redacted>"`,
+    );
+    // Short values are credentials once quotes delimit them.
+    expect(redactString(`cookie="abc"`)).toBe(`cookie="<redacted>"`);
+    // Already-redacted quoted values stay put and never nest.
+    expect(redactString(`session="<redacted>"`)).toBe(`session="<redacted>"`);
+  });
+
+  test("JSON key/value pairs are redacted in place", () => {
+    expect(redactString(`{"session":"abcdef123456"}`)).toBe(
+      `{"session":"<redacted>"}`,
+    );
+    expect(redactString(`{"Session": "abcdef123456", "safe": "NFL"}`)).toBe(
+      `{"Session": "<redacted>", "safe": "NFL"}`,
+    );
+    expect(redactString(`{"csrf-token":"abcdef123456"}`)).toBe(
+      `{"csrf-token":"<redacted>"}`,
+    );
+    // An escaped quote or newline inside the value cannot break out of it.
+    expect(redactString(String.raw`{"session":"abc\"defghij","ok":true}`)).toBe(
+      `{"session":"<redacted>","ok":true}`,
+    );
+    expect(redactString(String.raw`{"session":"abc\ndefghij"}`)).toBe(
+      `{"session":"<redacted>"}`,
+    );
+    // Double application is stable.
+    const once = redactString(`{"session":"abcdef123456"}`);
+    expect(redactString(once)).toBe(once);
+    expect(redactError(`{"session":"abcdef123456"}`)).toBe(
+      `{"session":"<redacted>"}`,
+    );
+  });
+
+  test("labeled headers use the shared name list and consume the line", () => {
+    expect(redactError("x-auth-token: abcdefgh")).toBe(
+      "x-auth-token: <redacted>",
+    );
+    expect(redactError("x-csrf-token: abcdefgh")).toBe(
+      "x-csrf-token: <redacted>",
+    );
+    expect(redactError("token: abcdefgh")).toBe("token: <redacted>");
+    expect(redactError("session: abcdefgh")).toBe("session: <redacted>");
+    expect(redactError("Cookie: a=1; b=2")).toBe("Cookie: <redacted>");
+    expect(redactError("set-cookie: sid=abc; Path=/")).toBe(
+      "set-cookie: <redacted>",
+    );
+  });
+
+  test("double application is stable for every repro shape", () => {
+    const inputs = [
+      `session="abcdefghij"`,
+      `cookie="abc"`,
+      `{"session":"abcdef123456"}`,
+      `x-auth-token: abcdefgh`,
+      `Cookie: a=1; b=2`,
+    ];
+    for (const input of inputs) {
+      const once = redactString(input);
+      expect(redactString(once)).toBe(once);
+      const errorOnce = redactError(input);
+      expect(redactError(errorOnce)).toBe(errorOnce);
+      expect(once).not.toContain("abcdefghij");
+      expect(once).not.toContain("abcdef123456");
+      expect(errorOnce).not.toContain("abcdefgh");
+      expect(errorOnce).not.toContain("abcdef123456");
+    }
+  });
+
+  test("benign quoted settings and groups stay untouched", () => {
+    expect(redactString(`width="1440"`)).toBe(`width="1440"`);
+    expect(redactString(`height=1080, retries=3; charset=utf-8`)).toBe(
+      "height=1080, retries=3; charset=utf-8",
+    );
+    expect(redactError("height=1080, retries=3; charset=utf-8")).toBe(
+      "height=1080, retries=3; charset=utf-8",
+    );
+  });
+
+  test("redactError redacts a bare cookie thrown from page code", () => {
+    const leaked = redactError(
+      new Error("session=SECRET-SESSION; scoped=SECRET-SCOPED"),
+    );
+    expect(leaked).toBe("Error: session=<redacted>; scoped=<redacted>");
+    expect(leaked).not.toContain("SECRET-SESSION");
+    expect(leaked).not.toContain("SECRET-SCOPED");
+  });
+});
+
 describe("hashing + error redaction", () => {
   test("canonical JSON is key-order independent and stable", () => {
     const left = canonicalJson({ b: [3, 2, 1], a: { d: true, c: null } });
@@ -334,6 +551,16 @@ describe("hashing + error redaction", () => {
         ),
       ),
     ).toBe("https://<redacted>@portal.example/customer/:id");
+  });
+
+  test("redactUrlForLog keeps the shape of a URL with no host", () => {
+    expect(redactUrlForLog("about:blank")).toBe("about:blank");
+    expect(redactUrlForLog("data:text/html,<h1>secret</h1>")).toBe(
+      "data:text/html,…",
+    );
+    expect(redactUrlForLog("https://portal.example/a?token=abc")).toBe(
+      "https://portal.example/a",
+    );
   });
 
   test("redactString is idempotent for already-redacted text", () => {

@@ -5,6 +5,8 @@
   },
   "ignorePatterns": [
     "**/node_modules/**",
-    "verification/manager-boot-oracle/pinned/**"
+    "verification/manager-boot-oracle/pinned/**",
+    "Scratch/**",
+    "dist/**"
   ]
 }

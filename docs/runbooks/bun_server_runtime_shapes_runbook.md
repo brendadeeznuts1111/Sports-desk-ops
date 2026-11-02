@@ -602,9 +602,9 @@ Bun matches Node.js / libuv Unix domain socket lifecycle semantics:
 
 ## 9. Native In-Process Web Automation & Viewport Auditing (`Bun.WebView`)
 
-_Official Documentation: [https://bun.com/docs/api/webview](https://bun.com/docs/api/webview)_
+_Official Documentation: [https://bun.com/docs/runtime/webview](https://bun.com/docs/runtime/webview)_
 
-SportsDesk standardizes on native `Bun.WebView` for live Telegram Mini App viewport auditing, Fantasy402 Manager DOM forensic verification, and zero-Chromium accessibility gates. This replaces external Playwright, Puppeteer, and Chromium dependencies with a lightweight in-process webview engine.
+SportsDesk standardizes on native `Bun.WebView` for live Telegram Mini App viewport auditing, Fantasy402 Manager DOM forensic verification, and accessibility gates. This replaces external Playwright and Puppeteer with a lightweight in-process webview engine. "Zero dependencies" holds only on macOS, where the default `webkit` backend uses the system WKWebView; on Linux and Windows the `chrome` backend needs an installed Chrome, Chromium, Edge, or Brave (the preinstalled Edge is enough on Windows).
 
 ### 9.1 Core Architectural Principles
 
@@ -620,7 +620,7 @@ await using view = new Bun.WebView({
   width: 1280,
   height: 800,
   backend: "webkit", // "webkit" | "chrome" | { type: "chrome", path: string, argv: string[] }
-  console: true, // Captures page console logs to terminal
+  console: globalThis.console, // or (type, ...args) => void; `true` throws TypeError (ERR_INVALID_ARG_TYPE)
 });
 
 await view.navigate("https://fantasy402.com/manager");
@@ -631,19 +631,114 @@ const jpeg = await view.screenshot({ format: "jpeg", quality: 90 });
 await Bun.write("reports/audit_viewport.jpg", jpeg);
 ```
 
-| Method / Property                          | Description                                     | SportsDesk Surveillance Application                              |
-| :----------------------------------------- | :---------------------------------------------- | :--------------------------------------------------------------- |
-| `navigate(url)`                            | Navigates to target HTTP/HTTPS URL              | Direct navigation to Fantasy402 Manager / Desk routes            |
-| `evaluate(expr)`                           | Evaluates JavaScript expression in page context | DOM extraction of `data-language="L-1029"` headers and KPI cards |
-| `screenshot({format, quality, encoding})`  | Captures JPEG, PNG, or WebP viewport            | Automated forensic proof capture for whale ticket anomalies      |
-| `click(x, y)` / `click(selector)`          | Native OS mouse click with auto-wait            | Interactive navigation across Manager tab bars                   |
-| `type(text)`                               | Types text into currently focused element       | Automated credentials dispatch in testing environments           |
-| `press(key, {modifiers})`                  | Presses key with optional modifier flags        | Keyboard navigation and shortcut verification                    |
-| `scroll(dx, dy)` / `scrollTo(selector)`    | Native wheel scroll or scroll-to-element        | Infinite scroll pagination of pending ticket tickers             |
-| `goBack()` / `goForward()` / `reload()`    | Viewport navigation controls                    | Session revalidation after token expiration                      |
-| `resize(w, h)`                             | Dynamically resizes viewport dimensions         | Telegram Mini App mobile (390x844) vs desktop testing            |
-| `cdp(method, params)`                      | Dispatches raw Chrome DevTools Protocol calls   | Low-level network interception and cookie extraction             |
-| `view.url` / `view.title` / `view.loading` | Synchronous page state properties               | Polling state assertions during navigation sequences             |
+> **Console capture takes an object or a function, not a boolean.** `console: true` throws
+> `TypeError` with code `ERR_INVALID_ARG_TYPE` (measured on Bun 1.4.4). Pass
+> `globalThis.console` to mirror page output to Bun's console, or a
+> `(type, ...args) => void` callback to receive each call yourself (this is what
+> `scripts/capture/webview.ts` and `scripts/audit_docs_webview_cron.ts` do).
+
+> **WebP.** Raw `view.screenshot({ format: "webp" })` is Chrome-only — the WebKit backend
+> throws. The repo wrapper re-encodes: `scripts/capture/webview.ts`
+> (`needsBunImageTransform`) captures a PNG and converts with `Bun.Image`, so
+> `./bin/dx shot --format webp` works on both backends.
+
+| Method / Property                          | Description                                                                                                | SportsDesk Surveillance Application                              |
+| :----------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------- |
+| `navigate(url)`                            | Navigates to target HTTP/HTTPS URL                                                                         | Direct navigation to Fantasy402 Manager / Desk routes            |
+| `evaluate(expr)`                           | Evaluates JavaScript expression in page context                                                            | DOM extraction of `data-language="L-1029"` headers and KPI cards |
+| `screenshot({format, quality, encoding})`  | Captures JPEG, PNG, or WebP viewport (raw WebP is Chrome-only; the wrapper re-encodes PNG via `Bun.Image`) | Automated forensic proof capture for whale ticket anomalies      |
+| `click(x, y)` / `click(selector)`          | Native OS mouse click with auto-wait                                                                       | Interactive navigation across Manager tab bars                   |
+| `type(text)`                               | Types text into currently focused element                                                                  | Automated credentials dispatch in testing environments           |
+| `press(key, {modifiers})`                  | Presses key with optional modifier flags                                                                   | Keyboard navigation and shortcut verification                    |
+| `scroll(dx, dy)` / `scrollTo(selector)`    | Native wheel scroll or scroll-to-element                                                                   | Infinite scroll pagination of pending ticket tickers             |
+| `goBack()` / `goForward()` / `reload()`    | Viewport navigation controls                                                                               | Session revalidation after token expiration                      |
+| `resize(w, h)`                             | Dynamically resizes viewport dimensions                                                                    | Telegram Mini App mobile (390x844) vs desktop testing            |
+| `cdp(method, params)`                      | Raw Chrome DevTools protocol command (Chrome only; requires a prior `navigate()`)                          | Low-level network interception and cookie extraction             |
+| `view.url` / `view.title` / `view.loading` | Synchronous page state properties                                                                          | Polling state assertions during navigation sequences             |
+
+#### Operation slots: one call per kind, awaited
+
+Each view has independent operation slots, and **one operation of each kind may be in flight at a time**:
+
+- one `navigate()` — shared with `reload()` / `goBack()` / `goForward()` on the Chrome backend
+- one `evaluate()`
+- one `screenshot()`
+- one `cdp()` (Chrome only)
+- one "simple" slot shared by `click()`, `type()`, `press()`, `scroll()`, `scrollTo()` and `resize()` (plus history on WebKit)
+
+Starting a second operation while its slot is occupied throws `ERR_INVALID_STATE` **synchronously** — it does not queue. Two shipped scripts hit exactly these rules: one started a second `cdp()` before the first settled (now queued through a single promise chain in `scripts/capture/f402_manager_boot_har.ts`), the other called `cdp("Network.enable")` before the first `navigate()` (now moved after login in `scripts/capture/f402_probe.ts`). Every call must be awaited, and `cdp()` only works after `await view.navigate(...)`. On WebKit, `cdp()` throws `ERR_METHOD_NOT_IMPLEMENTED`.
+
+#### Viewport geometry differs by backend
+
+Measured on Bun 1.4.4, macOS + Chrome 156: with the Chrome backend the constructor `width`/`height` size the **outer** window, not the viewport — `innerHeight` comes out as `height - 87` and `innerWidth` is floored at 500. Use `await view.resize(w, h)` when you need the documented viewport size. WebKit honors the constructor as a viewport, and its screenshots are device-pixel: a 1440x900 view yields a 2880x1800 PNG on a Retina display.
+
+#### `dataStore` is process-wide on Chrome, per-view on WebKit
+
+`dataStore.directory` is the persistence switch: the default is `"ephemeral"` (cookies, `localStorage`,
+IndexedDB and cache discarded when the view closes), and a directory keeps them across runs. The two
+backends do not mean the same thing by it.
+
+- **Chrome**: `dataStore.directory` maps to `--user-data-dir` and applies to the **entire Chrome
+  process**, not to the view. Bun spawns Chrome once per Bun process, so the **first view's directory
+  wins** and a later view requesting a different directory is ignored. `scripts/capture/webview.ts`
+  records the directory that actually won (`noteChromeDataStoreDir`) and prints one
+  `[webview] chrome dataStore: ignoring … (first view wins)` warning instead of pretending the request
+  applied. For capture work that means one profile per Bun process: two views cannot use two profiles,
+  and isolation needs two processes.
+- **WebKit**: each view has its own data store, so the requested directory is honoured per view.
+  Persistent storage there requires **macOS 15.2+**; on older macOS pass `dataStore: "ephemeral"` (the
+  default). Wrapper behaviour on Bun 1.4.4, matching the published `Bun.WebView` persistent-storage
+  notes.
+
+#### One Chrome profile per process: the sibling lock
+
+Chrome's profile singleton is per directory, so two Bun processes opening the same `dataStore` do not
+isolate: the second collides on the singleton and Chrome reports an opaque `Chrome process closed the
+pipe`, which names neither the conflict nor its owner. The capture scripts
+(`scripts/capture/f402_manager_boot_har.ts`, `f402_probe.ts`, `batch_pending_delete_session.ts`,
+`probe_f402_protocol_matrix.ts`) and the profile session bridge now take a sibling lock at
+`<profileDir>.bun-webview.lock` (`lib/f402_profile_lock.ts`, Bun 1.4.4):
+
+- the file records `{ pid, startedAt }` **beside** the profile, never inside it, so Chrome never sees
+  an unexpected entry;
+- a live pid with a fresh `startedAt` makes the second `acquireProfileLock()` throw
+  `ProfileInUseError`, naming the holder pid and start time — fail fast, before a WebView launches,
+  instead of the pipe error;
+- a lock whose pid is gone (`process.kill(pid, 0)` → `ESRCH`) or older than the 12 h stale window is
+  replaced;
+- the lock is released on scope exit (`using`), on `release()`, and from a `process.once("exit")` hook,
+  because `process.exit()` skips dispose scopes.
+
+What the lock cannot see: an **external** Chrome started on the same `--user-data-dir` — the manual MFA
+bootstrap, or a browser the operator left open. It holds no lock file, so it is outside this protocol
+and still produces the pipe error. Quit it before a capture run.
+
+#### A profile is not a session
+
+`Bun.FetchSession` has no `dataStore`, so `createF402ReplayTransport()` never opens a WebView profile;
+a directory full of signed-in cookies still sends a cookie-less request. The bridge is explicit:
+
+```sh
+bun run session:login --from-profile <dir>
+```
+
+`lib/f402_profile_session.ts` launches that profile in a headless Chrome WebView, navigates to the
+portal origin, reads every cookie over CDP (`Network.getAllCookies`), keeps the ones scoped to the
+portal host, and writes the 0600 session file (`F402_SESSION_FILE`, default
+`~/.cache/sportsdesk/f402-session.json`) that the transport reads. The view is closed in a `finally`,
+and a profile with no scoped cookies throws `ProfileSessionError` rather than minting a session of
+401s. `bun run session:status` reports which of proxy / session-file / anonymous the transport would
+use without printing a cookie value. The bridge takes the same profile lock, so exporting while a
+capture holds that profile fails fast instead of colliding inside Chrome.
+
+#### Teardown: `close()` per view, `closeAll()` only at exit
+
+`ManagedWebView.close()` is the teardown; it calls the synchronous, idempotent `view.close()` and never
+escalates. `Bun.WebView.closeAll()` SIGKILLs the shared browser process, so the wrapper reserves it for
+the `process.once("exit")` net. Launching a new Chrome view immediately after `closeAll()` is racy:
+measured on Bun 1.4.4, the first launch fails with `Chrome process closed the pipe` and the same launch
+succeeds roughly one second later. Do not use `closeAll()` to reset state between views — close each
+view and let the process-exit net handle the rest.
 
 ---
 

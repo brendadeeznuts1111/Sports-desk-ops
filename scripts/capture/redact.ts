@@ -6,8 +6,9 @@
  *      values. So redaction runs before the record is built, and the built
  *      record is scanned again before it can be persisted.
  *   2. Error/log text is data too. `redactError` strips URL userinfo, query
- *      values, bearer/JWT tokens, cookie/authorization headers, emails and
- *      public IPs so a failed live capture cannot leak a credential.
+ *      values, bare `name=value` credential pairs, bearer/JWT tokens,
+ *      cookie/authorization headers, emails and public IPs so a failed live
+ *      capture cannot leak a credential.
  */
 
 import { isPlainObject, sha256Hex } from "./json.ts";
@@ -140,6 +141,93 @@ const JWT_RE =
   /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/g;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 
+/**
+ * Credential-shaped names, shared by the pair rule and the cookie-group rule so
+ * the two lists cannot drift. Matched case-insensitively; `-`/`_` variants of
+ * the multi-word names are covered where they exist.
+ */
+const SENSITIVE_NAME_SOURCE =
+  "session|sess|sid|csrftoken|csrf[_-]?token|csrf|xsrftoken|xsrf[_-]?token|xsrf|access[_-]?token|refresh[_-]?token|id[_-]?token|token|jwt|bearer|authorization|auth|cookie|set-cookie|__cf[\\w-]*|cf[_-]?clearance|phpsessid|jsessionid|connect\\.sid|api[_-]?key|apikey|secret|password";
+
+/**
+ * A credential-shaped `name=value` pair: `session=…`, `csrftoken=…`,
+ * `cf_clearance=…`. A bare cookie string (`session=…; scoped=…`) carries no
+ * `cookie:` label, so the labeled-header pass in `redactError` never sees it;
+ * this pattern matches the pair itself and keeps the name.
+ *
+ * The value may be single- or double-quoted (`session="abcdefghij"`) or bare.
+ * A quoted value is self-delimiting, so it needs no length floor: `cookie="abc"`
+ * is still a credential. A bare value keeps the six-character floor so ordinary
+ * settings such as `width=1440` and `timeout=30000` are left alone. The
+ * replacement is the fixed `REDACTED` literal, so an already-redacted value
+ * (quoted or bare) maps to itself and placeholders never nest.
+ */
+/**
+ * A name may carry a namespace prefix that ends in a separator (`F402_PASSWORD`,
+ * `ASP.NET_SessionId`) and a short credential suffix (`sessionid`, `auth_token`,
+ * `authToken`). Free affixes are not allowed: `consider=` and `residual=`
+ * contain `sid` and are not credentials.
+ */
+const SENSITIVE_NAME_FULL = `(?:[\\w.]*[_.-])?(?:${SENSITIVE_NAME_SOURCE})(?:[_.-]?(?:id|key|token|value))?`;
+
+const SENSITIVE_PAIR_RE = new RegExp(
+  `(?<![\\w.-])(${SENSITIVE_NAME_FULL})(\\s*=\\s*)("[^"\\n]+"|'[^'\\n]+'|[^\\s;&,"']{6,})`,
+  "gi",
+);
+
+/** Passwords and secrets have no safe length floor: `password=abc12` is still one. */
+const SHORT_SECRET_PAIR_RE =
+  /(?<![\w.-])((?:[\w.]*[_.-])?(?:password|passwd|pwd|secret))(\s*=\s*)([^\s;&,"']{1,5})(?![^\s;&,"'])/gi;
+
+/** Replace a pair value with `REDACTED`, keeping any quotes around it. */
+function redactPairValue(name: string, assign: string, value: string): string {
+  const quote = value.startsWith('"') ? '"' : value.startsWith("'") ? "'" : "";
+  return `${name}${assign}${quote}${REDACTED}${quote}`;
+}
+
+/**
+ * The same credential-shaped pair written as JSON: `{"session":"abcdef123456"}`.
+ * The value side allows escaped characters (`\\.`) so a `\"` or `\n` escape is
+ * consumed as part of the value and cannot terminate the match early. Six
+ * characters is the floor, matching the bare pair rule; an already-redacted
+ * value (`"<redacted>"`) re-matches to itself, so the pass is idempotent.
+ */
+const SENSITIVE_JSON_PAIR_RE = new RegExp(
+  `("${SENSITIVE_NAME_FULL}"\\s*:\\s*)"(?:[^"\\\\]|\\\\.){6,}"`,
+  "gi",
+);
+
+/** Name-only test that decides a `;`-separated group is a cookie header. */
+const SENSITIVE_NAME_RE = new RegExp(
+  `(?<![\\w.-])${SENSITIVE_NAME_FULL}\\s*=`,
+  "i",
+);
+
+/**
+ * A labeled credential inside log text: `authorization: …`, `cookie: …`,
+ * `set-cookie: …`, `token: …`, `x-auth-token: …`, `x-csrf-token: …`. The name
+ * list is the shared `SENSITIVE_NAME_SOURCE`, so a custom header is caught by
+ * its trailing `token`/`auth`/`session` segment, and the value is the rest of
+ * the line: a cookie value can itself contain `;`-separated pairs, so stopping
+ * at the first `;` would leak the remainder.
+ *
+ * `=` is deliberately not accepted here. Bare `name=value` text is the pair
+ * rule's job, and consuming to end-of-line on `session=…; scoped=…` would
+ * destroy the group structure that rule preserves; `authorization=Bearer …`
+ * still loses its value through the pair rule.
+ */
+const LABELED_HEADER_RE = new RegExp(
+  `(\\b(?:${SENSITIVE_NAME_SOURCE})\\b)\\s*:\\s*[^\\n]+`,
+  "gi",
+);
+
+/** Any `name=value` pair inside a cookie group; same six-character floor. */
+const ASSIGNMENT_RE =
+  /(?<![\w.-])([A-Za-z_$][\w.$-]*)(\s*=\s*)([^\s;&,"']{6,})/g;
+
+/** A value that is already a placeholder: leave it instead of nesting it. */
+const PLACEHOLDER_VALUE_RE = /^<redacted(?::[a-z-]+)?>$/;
+
 const PRIVATE_IPV4_FIRST_OCTETS = new Set([0, 10, 127, 255]);
 
 function isPublicIpv4(candidate: string): boolean {
@@ -204,7 +292,41 @@ export function scanPii(text: string): PiiFinding[] {
   return findings.sort((left, right) => left.kind.localeCompare(right.kind));
 }
 
-/** Redact detectable PII tokens inside free text. */
+/**
+ * Redact a `;`-separated group once any segment names a credential.
+ *
+ * `document.cookie` lets page code use arbitrary cookie names (`scoped=…`), so
+ * name matching alone cannot cover a bare cookie string. One sensitive name in
+ * the group marks the whole group as a cookie header and every value in it is
+ * replaced. A group with no sensitive name (`width=1440; height=1080`) is
+ * returned untouched, and the six-character floor plus the placeholder check
+ * keep short and already-redacted values alone.
+ */
+function redactCookieGroups(text: string): string {
+  const segments = text.split(";");
+  if (!segments.some((segment) => SENSITIVE_NAME_RE.test(segment))) {
+    return text;
+  }
+  return segments
+    .map((segment) =>
+      segment.replace(
+        ASSIGNMENT_RE,
+        (match, name: string, assign: string, value: string) =>
+          PLACEHOLDER_VALUE_RE.test(value)
+            ? match
+            : `${name}${assign}${REDACTED}`,
+      ),
+    )
+    .join(";");
+}
+
+/**
+ * Redact detectable PII tokens and credential-shaped `name=value` pairs.
+ *
+ * Cookie groups run before the pair rule but after the bearer/JWT/email/IP/phone
+ * passes: `authorization=Bearer abc…` must lose the Bearer token as a token
+ * first, and only then is the leftover value collapsed to one placeholder.
+ */
 export function redactString(text: string): string {
   let out = text;
   out = out.replace(BEARER_RE, placeholderFor("bearer"));
@@ -216,6 +338,23 @@ export function redactString(text: string): string {
       : match,
   );
   out = out.replace(PHONE_RE, placeholderFor("phone"));
+  out = redactCookieGroups(out);
+  // JSON pairs first: `{"session":"…"}` has no `=` for the pair rule to anchor
+  // on, and the earlier cookie-group split cannot see inside a quoted value.
+  out = out.replace(
+    SENSITIVE_JSON_PAIR_RE,
+    (_match, prefix: string) => `${prefix}"${REDACTED}"`,
+  );
+  out = out.replace(
+    SENSITIVE_PAIR_RE,
+    (_match, name: string, assign: string, value: string) =>
+      redactPairValue(name, assign, value),
+  );
+  out = out.replace(
+    SHORT_SECRET_PAIR_RE,
+    (_match, name: string, assign: string, value: string) =>
+      redactPairValue(name, assign, value),
+  );
   return out;
 }
 
@@ -401,10 +540,20 @@ export function redactJson(value: unknown): BodyRedactionResult {
 // Log / error redaction
 // ---------------------------------------------------------------------------
 
-/** Scheme+host+path of a URL, with userinfo and query removed. */
+/**
+ * Scheme+host+path of a URL, with userinfo and query removed. A URL with no host
+ * (`about:blank`, `data:text/html,…`) keeps its own shape; a `data:` payload is
+ * dropped after its media type.
+ */
 export function redactUrlForLog(raw: string): string {
   try {
     const url = new URL(raw);
+    if (url.protocol === "data:") {
+      return `data:${url.pathname.split(/[;,]/, 1)[0] ?? ""},…`;
+    }
+    if (url.host === "" && url.protocol !== "file:") {
+      return `${url.protocol}${url.pathname}`;
+    }
     const userinfo =
       url.username.length > 0 || url.password.length > 0 ? `${REDACTED}@` : "";
     const path = url.pathname.replace(/\d{2,}/g, ":id");
@@ -443,9 +592,8 @@ export function redactError(
   out = out.replace(/([?&][^=&\s#]+)=([^&\s#]*)/g, (_match, key: string) => {
     return `${key}=${REDACTED}`;
   });
-  out = out.replace(
-    /\b(authorization|cookie|set-cookie|x-api-key|proxy-authorization)\b\s*[:=]\s*[^\n;]+/gi,
-    (_match, name: string) => `${name}: ${REDACTED}`,
-  );
+  out = out.replace(LABELED_HEADER_RE, (_match, name: string) => {
+    return `${name}: ${REDACTED}`;
+  });
   return out;
 }

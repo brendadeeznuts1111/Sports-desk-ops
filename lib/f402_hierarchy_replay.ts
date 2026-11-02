@@ -110,7 +110,7 @@ export function assertHierarchyHttpResponse(
 ): void {
   if (res.status === 401) {
     throw new Error(
-      "getListAgenstByAgent returned 401 — session expired or missing cookie (client would console.log and leave hierarchy empty). Auth: F402_WEBVIEW_PROFILE + WebView login (bun run hierarchy:probe -- --login), F402_SESSION_FILE, or F402_REPLAY_PROXY_URL",
+      "getListAgenstByAgent returned 401 — session expired or missing cookie (client would console.log and leave hierarchy empty). Auth: mint a session file with `bun run session:login --from-profile <dir>`, or set F402_SESSION_FILE / F402_REPLAY_PROXY_URL — the transport does not read WebView profiles",
     );
   }
   if (res.redirected || (res.status >= 300 && res.status < 400)) {
@@ -210,7 +210,6 @@ export async function runHierarchyReplay(options: {
   readonly account: AccountInfoOwnerFixture;
   readonly bodyFixture?: ListAgentsRequestFixture;
   readonly host?: string | undefined;
-  readonly profileDir?: string | undefined;
   readonly proxyUrl?: string | undefined;
 }): Promise<HierarchyReplayOutcome> {
   const plan = buildListAgentsReplayPlan(options.account, options.bodyFixture, {
@@ -220,7 +219,6 @@ export async function runHierarchyReplay(options: {
     return { mode: "dry", plan };
   }
   const transport = await createF402ReplayTransport({
-    profileDir: options.profileDir,
     proxyUrl: options.proxyUrl,
   });
   try {

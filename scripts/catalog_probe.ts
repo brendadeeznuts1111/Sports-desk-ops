@@ -28,7 +28,12 @@ import {
   type LiveAuthSession,
 } from "./evidence_capture.ts";
 import { resolveLoginConfig } from "./capture/ops.ts";
-import { describeProxy, readProxyEnv } from "./capture/proxy.ts";
+import {
+  describeProxy,
+  normalizeProxyUrl,
+  readProxyEnv,
+  redactProxyUrl,
+} from "./capture/proxy.ts";
 
 const CLI_NAME = "catalog_probe";
 const SPORTS_ENDPOINT = "/cloud/api/Manager/getSportsType";
@@ -46,6 +51,14 @@ export interface CatalogArgs {
   out: string;
   fixture: string;
   timeoutMs: number;
+  /**
+   * Proxy for the probe's own HTTP request.
+   *
+   * `undefined` leaves the environment in charge; `false` forces a direct
+   * connection even when `HTTP(S)_PROXY` is set; a string is a normalized
+   * `http(s)://host:port`.
+   */
+  proxy?: Bun.FetchProxyOption | undefined;
 }
 
 export interface SportsDiff {
@@ -62,7 +75,10 @@ export interface CatalogProbeDeps {
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   createAuth?: (config: LiveAuthConfig) => Promise<LiveAuthSession>;
-  createTransport?: (options: { timeoutMs: number }) => {
+  createTransport?: (options: {
+    timeoutMs: number;
+    proxy?: Bun.FetchProxyOption | undefined;
+  }) => {
     fetch(request: {
       url: string;
       method: "GET" | "POST";
@@ -101,6 +117,21 @@ export function parseCatalogArgs(argv: readonly string[]): CatalogArgs {
         throw new Error("--timeout-ms requires a positive number");
       }
       args.timeoutMs = parsed;
+    } else if (arg === "--proxy") {
+      if (args.proxy === false) {
+        throw new Error("--proxy and --no-proxy are mutually exclusive");
+      }
+      const raw = argv[++i];
+      if (raw === undefined) throw new Error("--proxy requires a value");
+      // Normalizes and rejects empty values, non-http(s) schemes, paths and
+      // query strings. An empty value would otherwise mean "read the
+      // environment", which is the opposite of what the flag is for.
+      args.proxy = normalizeProxyUrl(raw);
+    } else if (arg === "--no-proxy") {
+      if (args.proxy !== undefined) {
+        throw new Error("--proxy and --no-proxy are mutually exclusive");
+      }
+      args.proxy = false;
     } else if (arg === "--help" || arg === "-h") {
       throw new Error(
         [
@@ -113,6 +144,8 @@ export function parseCatalogArgs(argv: readonly string[]): CatalogArgs {
           "  --out <dir>          Capture output dir (default docs/evidence/captures/catalog)",
           "  --fixture <path>     Catalog fixture to diff against",
           "  --timeout-ms <n>     Per-request/login timeout (default 20000)",
+          "  --proxy <url>        Send the probe request through this http(s) proxy",
+          "  --no-proxy           Connect directly, ignoring HTTP(S)_PROXY for the request",
           "  --help               This help",
           "",
           "Live gate: F402_LIVE_CAPTURE=1 + F402_BASE_URL/F402_AGENT_ID/F402_PASSWORD",
@@ -283,6 +316,12 @@ export async function runCatalogProbe(
       targetHost: baseUrl.length > 0 ? new URL(baseUrl).host : null,
       auth: "Bearer JWT extracted by WebView login (memory only)",
       proxy: proxy.present,
+      proxyOverride:
+        args.proxy === false
+          ? "direct"
+          : typeof args.proxy === "string"
+            ? redactProxyUrl(args.proxy)
+            : null,
       fixture: args.fixture,
       fixtureSports: fixtureSports.length,
       out: args.out,
@@ -305,8 +344,8 @@ export async function runCatalogProbe(
     timeoutMs: args.timeoutMs,
   });
   const transport =
-    deps.createTransport?.({ timeoutMs: args.timeoutMs }) ??
-    new HttpSession({ timeoutMs: args.timeoutMs });
+    deps.createTransport?.({ timeoutMs: args.timeoutMs, proxy: args.proxy }) ??
+    new HttpSession({ timeoutMs: args.timeoutMs, proxy: args.proxy });
   try {
     const requestHeaders: Record<string, string> = {
       "content-type": OBSERVED_CONTENT_TYPE,

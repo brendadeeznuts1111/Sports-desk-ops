@@ -6,7 +6,9 @@
  *   bun run scripts/capture/f402_hierarchy_probe.ts --stdin < raw.json
  *   F402_PLAYERS_MODE=projected bun run scripts/capture/f402_hierarchy_probe.ts --dry-run --fetch
  *
- * Live fetch uses WebView dataStore profile (F402_WEBVIEW_PROFILE) or session file — not F402_COOKIE.
+ * Live fetch uses the session file (mint it from a WebView profile with
+ * `bun run session:login --from-profile <dir>`) or the replay proxy — not F402_COOKIE.
+ * `--profile` is still accepted but ignored: the transport cannot read a WebView profile.
  */
 
 import { parseArgs } from "node:util";
@@ -82,7 +84,8 @@ if (values.help) {
   --out, -o        Write filtered JSON (default stdout)
   --zstd-out       Write Bun.zstdCompress packed envelope
   --dry-run        Print redacted request fields only (with --fetch)
-  --fetch          POST getListAgenstByAgent (needs --agent-id, --agent-type, cookie)
+  --fetch          POST getListAgenstByAgent (needs --agent-id, --agent-type, session file)
+  --profile        Ignored: export it first with \`bun run session:login --from-profile <dir>\`
   --players-mode   Override F402_PLAYERS_MODE for this run
   --bust           Manager bundle version for audit drift
   DEBUG_TRACE=1    Print Bun.inspect.table step timings
@@ -152,9 +155,12 @@ async function runPipeline(): Promise<void> {
         return;
       }
       trace.step("fetch");
-      const transport = await createF402ReplayTransport({
-        profileDir: values.profile ?? Bun.env.F402_WEBVIEW_PROFILE,
-      });
+      if (values.profile !== undefined && values.profile.trim() !== "") {
+        console.error(
+          `--profile is ignored: the replay transport does not read WebView profiles. Mint a session with \`bun run session:login --from-profile ${values.profile.trim()}\`, or set F402_SESSION_FILE / F402_REPLAY_PROXY_URL.`,
+        );
+      }
+      const transport = await createF402ReplayTransport();
       let res: Response;
       try {
         res = await transport.fetch(url, {

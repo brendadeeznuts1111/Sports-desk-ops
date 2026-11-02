@@ -1,7 +1,8 @@
 /**
  * Replay transport: primary = FetchSession + session-file cookie; secondary = localhost proxy.
- * `profileDir` is not read: Bun.FetchSession has no dataStore, so WebView profile cookies never reach it.
- * @deprecated F402_COOKIE — use profile or session file from WebView login.
+ * A WebView profile is never read (Bun.FetchSession has no dataStore): export it once with
+ * `bun run session:login --from-profile <dir>`, then point F402_SESSION_FILE at the result.
+ * @deprecated F402_COOKIE — use the session file from a WebView login.
  */
 
 import { join } from "node:path";
@@ -24,7 +25,7 @@ export function warnIfDeprecatedCookieEnv(
   const raw = env[DEPRECATED_F402_COOKIE_ENV]?.trim();
   if (raw === undefined || raw === "") return;
   console.warn(
-    `[deprecated] ${DEPRECATED_F402_COOKIE_ENV} is deprecated; use F402_WEBVIEW_PROFILE + WebView login, F402_SESSION_FILE, or F402_REPLAY_PROXY_URL`,
+    `[deprecated] ${DEPRECATED_F402_COOKIE_ENV} is deprecated; use F402_SESSION_FILE (bun run session:login) or F402_REPLAY_PROXY_URL`,
   );
 }
 
@@ -36,7 +37,6 @@ export interface F402ReplayTransport {
 }
 
 export async function createF402ReplayTransport(options?: {
-  readonly profileDir?: string | undefined;
   readonly proxyUrl?: string | undefined;
   readonly env?: NodeJS.ProcessEnv;
 }): Promise<F402ReplayTransport> {
