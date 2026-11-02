@@ -422,6 +422,30 @@ fields are unknown. The row moved C→B on the strength of the observed request;
 redacted capture**, and that capture is also what would settle whether the tile-candidate path
 (`Manager/getScores`) is a second endpoint or a stale name.
 
+One entry was read in full on 2026-11-02, which is enough to publish the field list but not the
+contract. The quirks a parser has to survive:
+
+- **Padding.** `SportSubType` (`"NBA         "`), `SportType` (`"Basketball          "`), `Grouping`
+  and `CorrelationID` carry trailing spaces to a fixed width. Trim before comparing or joining.
+- **Numbers as text.** `Team1Score`/`Team2Score` (`"57"`, `"63"`) and `Total` (`"220.5"`) are
+  strings, while `Spread`, `SpreadAdj1/2`, `MoneyLine1/2`, `GameNum` and the rotations are numbers.
+- **Nulls and empties.** `MoneyLineDraw` and `TotalPoints` were `null`; `Record`, `Rank`, `Record2`,
+  `Rank2` were `""`; `BroadcastInfo` was whitespace.
+- **Not ISO time.** `GameDateTime` is `"2026-11-01 20:40:00.000"`.
+- **Two id vocabularies.** `Team1ID` is the full name (`"Los Angeles Clippers"`), `STeam1ID` the
+  short one (`"Clippers"`); `Favorito` is a full team _name_, not an id.
+- **`CorrelationID` is `"<Team1RotNum>-g"` plus padding** (`539-g`), so it joins to the rotation and
+  not to a game id.
+- **Status is three fields.** `STATUS` was `"O"`; `StatusAway`/`StatusHome` were `"Time"`/`"Half"`.
+  Whether "live" is `STATUS`, the per-side strings, or `Final` is unresolved — the operator's
+  working filter is `StatusAway.trim() === "Time" || StatusHome.trim() === "Half"`, recorded here as a
+  hypothesis, not a contract.
+
+Rotation numbers should be stable per team; `bun run check:rotations <scores.json>` reports a team
+that appears with more than one, and counts rotation rows whose `Team*ID` is missing instead of
+grouping them under `undefined` (which is what the ad-hoc one-liner did, reporting "clean" on a
+payload where the ids were never present).
+
 ---
 
 ## P7 — captures that are not needed (reconcile spec to code instead)

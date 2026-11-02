@@ -65,6 +65,7 @@
     "check:fetch-init": "bun run bin/check-fetch-init.ts",
     "check:innerhtml": "bun run bin/check-innerhtml.ts",
     "check:secrets": "bun run bin/check-secrets.ts",
+    "check:rotations": "bun run scripts/check_rotation_stability.ts",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",

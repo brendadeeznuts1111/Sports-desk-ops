@@ -1540,22 +1540,105 @@ function getScoresOperation(operation: LedgerOperation): JsonObject {
                   type: "array",
                   items: {
                     type: "object",
+                    description:
+                      "One game. The fields below are the ones present in the entry observed on 2026-11-02; the schema stays open because that was a single entry and the portal pads and re-types values in ways a schema would otherwise misrepresent. Padded strings (SportSubType, SportType, Grouping, CorrelationID) carry trailing spaces; Team1Score/Team2Score/Total are numeric text, not numbers; GameDateTime is `YYYY-MM-DD HH:mm:ss.SSS`, not ISO 8601.",
                     properties: {
                       LogoTeam1: {
                         type: "string",
                         description:
-                          "Portal image file name for the home side, e.g. Boston-Celtics.png; resolve through /api/logo/{name}.",
+                          "Portal image file name for the first side, e.g. Los-Angeles-Clippers.png; resolve through /api/logo/{name}.",
                       },
                       LogoTeam2: {
                         type: "string",
                         description:
-                          "Portal image file name for the away side; the same file-naming vocabulary as LogoTeam1, including league logos.",
+                          "Portal image file name for the second side; same vocabulary, including league logos such as NHL.png in a team slot.",
                       },
                       BroadcastInfo: {
                         type: "string",
-                        description:
-                          "Free text, sometimes a single space. Not a channel identifier.",
+                        description: "Whitespace-only in the observed entry.",
                       },
+                      Record: { type: "string" },
+                      Record2: { type: "string" },
+                      Rank: { type: "string" },
+                      Rank2: { type: "string" },
+                      GameNum: { type: "integer", example: 619121357 },
+                      Team1RotNum: {
+                        type: "integer",
+                        description:
+                          "Board rotation for the first side; should be stable per Team1ID, which is what the rotation check enforces.",
+                      },
+                      Team2RotNum: { type: "integer" },
+                      STATUS: {
+                        type: "string",
+                        description:
+                          "Observed value `O`; the full code set is unknown.",
+                      },
+                      GameDateTime: { type: "string" },
+                      SportSubType: {
+                        type: "string",
+                        description:
+                          "Padded with trailing spaces (observed `NBA         `).",
+                      },
+                      SportType: {
+                        type: "string",
+                        description:
+                          "Padded with trailing spaces (observed `Basketball          `).",
+                      },
+                      DisplaySubType: { type: "string", example: "NBA" },
+                      PeriodNumber: { type: "integer" },
+                      PeriodDescription: { type: "string", example: "Game" },
+                      Team1ID: {
+                        type: "string",
+                        description: "Full team name (`Los Angeles Clippers`).",
+                      },
+                      Team2ID: { type: "string" },
+                      STeam1ID: {
+                        type: "string",
+                        description: "Short name (`Clippers`).",
+                      },
+                      STeam2ID: { type: "string" },
+                      Team1Score: {
+                        type: "string",
+                        description:
+                          "Numeric text (observed `57`), not a number.",
+                      },
+                      Team2Score: { type: "string" },
+                      Final: { type: "string", example: "Not Final" },
+                      Spread: {
+                        type: "number",
+                        description: "Number, unlike the score fields.",
+                      },
+                      SpreadAdj1: { type: "number" },
+                      SpreadAdj2: { type: "number" },
+                      MoneyLine1: { type: "number" },
+                      MoneyLine2: { type: "number" },
+                      MoneyLineDraw: { type: ["number", "null"] },
+                      Total: {
+                        type: "string",
+                        description: "Numeric text (observed `220.5`).",
+                      },
+                      Favorito: {
+                        type: "string",
+                        description: "Team name, not an id.",
+                      },
+                      Grouping: {
+                        type: "string",
+                        description:
+                          "Padded league name (observed `NBA         `).",
+                      },
+                      StatusAway: {
+                        type: "string",
+                        description:
+                          "Per-side clock/period state; observed `Time` beside `Half`. Semantics unconfirmed.",
+                      },
+                      StatusHome: { type: "string" },
+                      CorrelationID: {
+                        type: "string",
+                        description:
+                          "`<Team1RotNum>-g` padded to a fixed width (observed `539-g` + trailing spaces); joins to Team1RotNum.",
+                      },
+                      DefaultMainLine: { type: "string", example: "Spread" },
+                      TotalPoints: { type: ["number", "null"] },
                     },
                     additionalProperties: true,
                   },
