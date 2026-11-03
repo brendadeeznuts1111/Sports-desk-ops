@@ -230,5 +230,125 @@
     "code": 0,
     "signal": null,
     "timedOut": false
+  },
+  "proc.shell": {
+    "note": "Bun.$, argv, env, main are runtime values",
+    "stdout": "{\"dollar\":\"function\",\"argv\":1,\"env\":\"object\",\"envHasKeys\":true,\"main\":\"string\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.stdio": {
+    "note": "stdin/stdout exist with the Blob text() method",
+    "stdout": "{\"stdin\":\"object\",\"stdout\":\"object\",\"stdinText\":\"function\",\"stdoutText\":\"function\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.timing": {
+    "note": "nanoseconds is monotonic and sleepSync blocks",
+    "stdout": "{\"monotonic\":true,\"sleptAtLeast5ms\":true,\"sleep\":\"function\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.spawn": {
+    "note": "spawnSync returns stdout/exitCode and gc returns undefined",
+    "stdout": "{\"out\":\"ok\",\"code\":0,\"gc\":false}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.paths": {
+    "note": "which/resolveSync/fileURLToPath/openInEditor shapes",
+    "stdout": "",
+    "stderr": "error: Cannot find module './package.json' from '/private<cwd>'\n\nBun v1.4.4 (macOS arm64)",
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.meta": {
+    "note": "version, revision and version_with_sha shapes",
+    "stdout": "{\"version\":\"1.4.4\",\"revisionLen\":40,\"sha\":\"v1.4.4 (38afee6c8)\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.terminal": {
+    "note": "Terminal is a value; FileSink is a type only",
+    "stdout": "{\"terminal\":\"function\",\"terminalArity\":0,\"fileSink\":\"undefined\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.width": {
+    "note": "stringWidth and wrapAnsi agree on wide and ANSI input",
+    "stdout": "[2,2,\"a b\\nc\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.ansi": {
+    "note": "color, enableANSIColors and escapeHTML shapes",
+    "stdout": "[\"#ff0000\",\"\",\"boolean\",\"&lt;b&gt;&amp;\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.json": {
+    "note": "JSONC.parse reads JSON with comments",
+    "stdout": "[[1,2],[1,2],\"function\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.glob": {
+    "note": "Glob.match respects the pattern",
+    "stdout": "[true,false]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.compare": {
+    "note": "deepEquals compares structure, not identity",
+    "stdout": "[true,false]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.cookies": {
+    "note": "Cookie and CookieMap parse the same header pair",
+    "stdout": "[\"a\",\"b\",\"b\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "crypto.hash": {
+    "note": "CryptoHasher digest, Bun.hash and UUID v7 shapes",
+    "stdout": "[64,\"bigint\",36,\"7\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "crypto.compress": {
+    "note": "zstd and gzip round-trip; sink and concat shapes",
+    "stdout": "[\"hello\",\"hello\",\"function\",\"function\",\"object\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
   }
 }

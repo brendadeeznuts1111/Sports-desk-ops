@@ -232,6 +232,128 @@ const probes: Probe[] = [
       'const m = Bun.mmap("mapped.bin"); (await import("node:fs")).truncateSync("mapped.bin", 0); console.log(m[m.length - 1])',
     ],
   },
+
+  // --- bun_shapes coverage: one probe per family of lib/bun_shapes.ts entries ---
+  {
+    id: "proc.shell",
+    note: "Bun.$, argv, env, main are runtime values",
+    argv: [
+      "-p",
+      "JSON.stringify({dollar: typeof Bun.$, argv: Math.min(Bun.argv.length, 9), env: typeof Bun.env, envHasKeys: Object.keys(Bun.env).length > 0, main: typeof Bun.main})",
+    ],
+  },
+  {
+    id: "proc.stdio",
+    note: "stdin/stdout exist with the Blob text() method",
+    argv: [
+      "-p",
+      "JSON.stringify({stdin: typeof Bun.stdin, stdout: typeof Bun.stdout, stdinText: typeof Bun.stdin.text, stdoutText: typeof Bun.stdout.text})",
+    ],
+  },
+  {
+    id: "proc.timing",
+    note: "nanoseconds is monotonic and sleepSync blocks",
+    argv: [
+      "-p",
+      "(function(){const t=Bun.nanoseconds();Bun.sleepSync(5);const d=Bun.nanoseconds()-t;return JSON.stringify({monotonic:d>0, sleptAtLeast5ms:d>=5e6, sleep:typeof Bun.sleep})})()",
+    ],
+  },
+  {
+    id: "proc.spawn",
+    note: "spawnSync returns stdout/exitCode and gc returns undefined",
+    argv: [
+      "-p",
+      '(function(){const r=Bun.spawnSync(["echo","ok"]);const g=Bun.gc(false);return JSON.stringify({out:r.stdout.toString().trim(),code:r.exitCode,gc:g===undefined})})()',
+    ],
+  },
+  {
+    id: "proc.paths",
+    note: "which/resolveSync/fileURLToPath/openInEditor shapes",
+    argv: [
+      "-p",
+      'JSON.stringify({which:Bun.which("bun")!==null,resolve:Bun.resolveSync("./package.json",process.cwd()).endsWith("package.json"),fileURL:Bun.fileURLToPath("file:///tmp/x.ts"),openInEditor:Bun.openInEditor.length})',
+    ],
+  },
+  {
+    id: "proc.meta",
+    note: "version, revision and version_with_sha shapes",
+    argv: [
+      "-p",
+      "JSON.stringify({version:Bun.version,revisionLen:Bun.revision.length,sha:Bun.version_with_sha})",
+    ],
+  },
+  {
+    id: "proc.terminal",
+    note: "Terminal is a value; FileSink is a type only",
+    argv: [
+      "-p",
+      'JSON.stringify({terminal:typeof Bun.Terminal,terminalArity:Bun.Terminal.length,fileSink:String((Bun as unknown as Record<string,unknown>)["FileSink"])})',
+    ],
+  },
+  {
+    id: "text.width",
+    note: "stringWidth and wrapAnsi agree on wide and ANSI input",
+    argv: [
+      "-p",
+      'JSON.stringify([Bun.stringWidth("漢"),Bun.stringWidth(String.fromCharCode(27)+"[31mhi"+String.fromCharCode(27)+"[39m"),Bun.wrapAnsi("a b c",3)])',
+    ],
+  },
+  {
+    id: "text.ansi",
+    note: "color, enableANSIColors and escapeHTML shapes",
+    argv: [
+      "-p",
+      'JSON.stringify([Bun.color("red","hex"),Bun.color("red","ansi"),typeof Bun.enableANSIColors,Bun.escapeHTML("<b>&")])',
+    ],
+  },
+  {
+    id: "data.json",
+    note: "JSONC.parse reads JSON with comments",
+    argv: [
+      "-p",
+      'JSON.stringify([Bun.JSONC.parse("[1,2]"),Bun.JSONC.parse("[1,2] // trailing"),typeof Bun.JSONC.parse])',
+    ],
+  },
+  {
+    id: "data.glob",
+    note: "Glob.match respects the pattern",
+    argv: [
+      "-p",
+      'JSON.stringify([new Bun.Glob("*.ts").match("a.ts"),new Bun.Glob("*.ts").match("a.js")])',
+    ],
+  },
+  {
+    id: "data.compare",
+    note: "deepEquals compares structure, not identity",
+    argv: [
+      "-p",
+      "JSON.stringify([Bun.deepEquals({a:[1]},{a:[1]}),Bun.deepEquals({a:1},{a:2})])",
+    ],
+  },
+  {
+    id: "data.cookies",
+    note: "Cookie and CookieMap parse the same header pair",
+    argv: [
+      "-p",
+      'JSON.stringify([new Bun.Cookie("a","b").name,new Bun.CookieMap("a=b").get("a"),new Bun.Cookie("a","b").value])',
+    ],
+  },
+  {
+    id: "crypto.hash",
+    note: "CryptoHasher digest, Bun.hash and UUID v7 shapes",
+    argv: [
+      "-p",
+      'JSON.stringify([new Bun.CryptoHasher("sha256").update("x").digest("hex").length,typeof Bun.hash("x"),Bun.randomUUIDv7().length,Bun.randomUUIDv7().slice(14,15)])',
+    ],
+  },
+  {
+    id: "crypto.compress",
+    note: "zstd and gzip round-trip; sink and concat shapes",
+    argv: [
+      "-p",
+      '(function(){const e=new TextEncoder(),d=new TextDecoder();const s=e.encode("hello");const z=Bun.zstdCompressSync(s),g=Bun.gzipSync(s);return JSON.stringify([d.decode(Bun.zstdDecompressSync(z)),d.decode(Bun.gunzipSync(g)),typeof Bun.zstdCompress,typeof Bun.concatArrayBuffers,typeof new Bun.ArrayBufferSink()])})()',
+    ],
+  },
 ];
 
 async function prepareScratch(): Promise<string> {

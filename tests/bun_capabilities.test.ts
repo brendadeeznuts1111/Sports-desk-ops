@@ -125,4 +125,29 @@ describe("Bun capabilities used by the ops tooling", () => {
       Bun.which("bun-not-a-real-binary-xyz", { PATH: "/usr/bin:/bin" }),
     ).toBeNull();
   });
+
+  test("type-only Bun members have no runtime value", () => {
+    // lib/bun_shapes.ts records these as kind "type": usable in type positions,
+    // undefined if reached for as values. A release that starts exporting one as a
+    // runtime value is a surface change to review, not a silent win.
+    const bun = Bun as unknown as Record<string, unknown>;
+    for (const name of [
+      "CronController",
+      "Env",
+      "FetchProxyOption",
+      "FileSink",
+      "Server",
+    ]) {
+      expect(bun[name]).toBeUndefined();
+    }
+  });
+
+  test("version_with_sha is the version plus the short commit", () => {
+    // scripts/probe_bun.ts reads this for its drift message; nothing asserted it existed.
+    expect(typeof Bun.version_with_sha).toBe("string");
+    expect(Bun.version_with_sha.startsWith(`v${Bun.version} (`)).toBe(true);
+    const shortSha = /\(([0-9a-f]+)\)$/.exec(Bun.version_with_sha)?.[1];
+    expect(shortSha).toBeDefined();
+    expect(Bun.revision.startsWith(shortSha as string)).toBe(true);
+  });
 });

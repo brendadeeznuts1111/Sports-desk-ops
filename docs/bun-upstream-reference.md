@@ -289,6 +289,7 @@ Commits on `main` **after** 1.4.4. Navigation and voice, not runtime.
 - **Package manager policy (full):** [`runbooks/bun-pm-policy.md`](./runbooks/bun-pm-policy.md)
 - Eval one-liners: [`bun-eval-pitfalls.md`](./bun-eval-pitfalls.md)
 - Server / WebView runtime shapes: [`runbooks/bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)
+- Every `Bun.*` shape the code calls, with its declaration source and local evidence: [`runbooks/bun_shape_contracts_runbook.md`](./runbooks/bun_shape_contracts_runbook.md) (coverage gate: `tests/bun_shapes_coverage.test.ts`)
 - Runtime surface + declaration drift: [`bin/bun_surface.ts`](../bin/bun_surface.ts) (`./bin/dx bun --types`), guarded by [`tests/bun_capabilities.test.ts`](../tests/bun_capabilities.test.ts) and the [`tests/bun_baseline.json`](../tests/bun_baseline.json) probe baseline
 
 ```sh

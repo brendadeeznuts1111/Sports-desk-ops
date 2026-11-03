@@ -1,0 +1,280 @@
+import { describe, expect, test } from "bun:test";
+import {
+  BUN_SHAPES,
+  SHAPE_SUBSYSTEMS,
+  analyzeBunShapes,
+  catalogHeadings,
+  collectBunShapeUsage,
+  type BunShape,
+  type ShapeWorld,
+} from "../lib/bun_shapes.ts";
+
+const shape = (name: string, over: Partial<BunShape> = {}): BunShape => ({
+  name,
+  kind: "value",
+  subsystem: "process",
+  heading: `Bun.${name}`,
+  evidence: ["probe:test.probe"],
+  ...over,
+});
+
+function world(over: Partial<ShapeWorld> = {}): ShapeWorld {
+  const shapes: readonly BunShape[] = over.shapes ?? [shape("file")];
+  return {
+    usage: {
+      used: new Map([["file", new Set(["lib/x.ts"])]]),
+      elementAccess: [],
+    },
+    shapes,
+    headings: shapes.map((s) => s.heading),
+    probes: new Set(["test.probe"]),
+    tests: new Set(["tests/bun_capabilities.test.ts"]),
+    surfaces: new Set(["file"]),
+    runtimeTypeof: new Map(
+      shapes.map((s) => [
+        s.name,
+        s.kind === "value" ? "function" : "undefined",
+      ]),
+    ),
+    declaredValues: new Set(
+      shapes.filter((s) => s.kind === "value").map((s) => s.name),
+    ),
+    typesSource: "interface FileSink {}\n",
+    runtimeOnly: new Map(),
+    ...over,
+  };
+}
+
+const rules = (problems: ReturnType<typeof analyzeBunShapes>) =>
+  problems.map((p) => p.rule);
+
+describe("manifest", () => {
+  test("partition is 70 shapes across the eight subsystems", () => {
+    expect(BUN_SHAPES.length).toBe(69);
+    const counts = Object.fromEntries(SHAPE_SUBSYSTEMS.map((s) => [s, 0]));
+    for (const s of BUN_SHAPES)
+      counts[s.subsystem] = (counts[s.subsystem] ?? 0) + 1;
+    expect(counts).toEqual({
+      process: 18,
+      text: 7,
+      data: 11,
+      storage: 7,
+      crypto: 10,
+      network: 9,
+      image: 2,
+      meta: 5,
+    });
+  });
+
+  test("65 runtime values and 5 type-only declarations", () => {
+    expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(64);
+    expect(
+      BUN_SHAPES.filter((s) => s.kind === "type")
+        .map((s) => s.name)
+        .sort(),
+    ).toEqual([
+      "CronController",
+      "Env",
+      "FetchProxyOption",
+      "FileSink",
+      "Server",
+    ]);
+  });
+
+  test("names and headings are unique", () => {
+    expect(new Set(BUN_SHAPES.map((s) => s.name)).size).toBe(BUN_SHAPES.length);
+    expect(new Set(BUN_SHAPES.map((s) => s.heading)).size).toBe(
+      BUN_SHAPES.length,
+    );
+  });
+
+  test("every entry carries evidence and names its subsystem heading", () => {
+    for (const s of BUN_SHAPES) {
+      expect(s.evidence.length).toBeGreaterThan(0);
+      expect(s.heading).toBe(
+        s.kind === "value" ? `Bun.${s.name}` : `Bun.${s.name} (type)`,
+      );
+    }
+  });
+});
+
+describe("catalogHeadings", () => {
+  test("reads only #### lines, in order", () => {
+    const md =
+      "# Title\n## Section\n#### Bun.file\n#### Bun.FileSink (type)\n### Bun.not\n";
+    expect(catalogHeadings(md)).toEqual(["Bun.file", "Bun.FileSink (type)"]);
+  });
+});
+
+describe("collectBunShapeUsage", () => {
+  test("ignores comments and strings, reads value and type positions", () => {
+    const sources = new Map([
+      [
+        "lib/x.ts",
+        [
+          "// Bun.mmap is prose, not a call",
+          'const note = "Bun.Password is not a runtime alias";',
+          'const a = Bun.file("x");',
+          "const b: Bun.FileSink = null as never;",
+          "type C = typeof Bun.which;",
+        ].join("\n"),
+      ],
+    ]);
+    const usage = collectBunShapeUsage(sources);
+    expect([...usage.used.keys()].sort()).toEqual([
+      "FileSink",
+      "file",
+      "which",
+    ]);
+    expect(usage.used.get("file")).toEqual(new Set(["lib/x.ts"]));
+    expect(usage.elementAccess).toEqual([]);
+  });
+
+  test("reports bracket access instead of silently missing it", () => {
+    const usage = collectBunShapeUsage(
+      new Map([["lib/x.ts", 'const x = Bun["file"];']]),
+    );
+    expect(usage.elementAccess).toHaveLength(1);
+    expect(usage.used.size).toBe(0);
+  });
+});
+
+describe("analyzeBunShapes", () => {
+  test("clean world has no problems", () => {
+    expect(analyzeBunShapes(world())).toEqual([]);
+  });
+
+  test("unknown shape names the files that use it", () => {
+    const problems = analyzeBunShapes(
+      world({
+        usage: {
+          used: new Map([
+            ["file", new Set(["a.ts"])],
+            ["mmap", new Set(["b.ts"])],
+          ]),
+          elementAccess: [],
+        },
+      }),
+    );
+    expect(problems).toEqual([
+      { rule: "unknown-shape", detail: "mmap (b.ts)" },
+    ]);
+  });
+
+  test("an entry nothing uses is stale", () => {
+    const problems = analyzeBunShapes(
+      world({
+        shapes: [shape("file"), shape("mmap")],
+        usage: {
+          used: new Map([["file", new Set(["a.ts"])]]),
+          elementAccess: [],
+        },
+      }),
+    );
+    expect(rules(problems)).toContain("unused-shape");
+  });
+
+  test("missing and duplicated headings are reported", () => {
+    const missing = analyzeBunShapes(world({ headings: [] }));
+    expect(rules(missing)).toContain("heading-missing");
+    const duplicated = analyzeBunShapes(
+      world({ headings: ["Bun.file", "Bun.file"] }),
+    );
+    expect(rules(duplicated)).toContain("heading-duplicate");
+  });
+
+  test("kind must match the binary", () => {
+    const problems = analyzeBunShapes(
+      world({ runtimeTypeof: new Map([["file", "undefined"]]) }),
+    );
+    expect(problems).toEqual([
+      { rule: "kind-mismatch", detail: "file: kind=value typeof=undefined" },
+    ]);
+  });
+
+  test("evidence refs must resolve locally", () => {
+    const problems = analyzeBunShapes(
+      world({ shapes: [shape("file", { evidence: ["probe:nope"] })] }),
+    );
+    expect(problems).toEqual([
+      { rule: "evidence-unresolved", detail: "probe:nope" },
+    ]);
+  });
+
+  test("a type-only shape needs a test reference", () => {
+    const sink = shape("FileSink", {
+      kind: "type",
+      heading: "Bun.FileSink (type)",
+      evidence: ["probe:test.probe"],
+      subsystem: "process",
+    });
+    const problems = analyzeBunShapes(
+      world({
+        shapes: [sink],
+        usage: {
+          used: new Map([["FileSink", new Set(["a.ts"])]]),
+          elementAccess: [],
+        },
+        runtimeTypeof: new Map([["FileSink", "undefined"]]),
+        declaredValues: new Set(),
+      }),
+    );
+    expect(rules(problems)).toContain("no-evidence");
+  });
+
+  test("a value absent from bun-types needs a runtime-only anchor", () => {
+    const problems = analyzeBunShapes(world({ declaredValues: new Set() }));
+    expect(problems).toEqual([{ rule: "undeclared-shape", detail: "file" }]);
+    const anchored = analyzeBunShapes(
+      world({
+        declaredValues: new Set(),
+        runtimeOnly: new Map([["file", "src/x.rs#1"]]),
+      }),
+    );
+    expect(anchored).toEqual([]);
+    const emptyAnchor = analyzeBunShapes(
+      world({
+        declaredValues: new Set(),
+        runtimeOnly: new Map([["file", "  "]]),
+      }),
+    );
+    expect(rules(emptyAnchor)).toContain("runtime-only-without-source");
+  });
+
+  test("type shapes must exist in the declaration source", () => {
+    const sink = shape("FileSink", {
+      kind: "type",
+      heading: "Bun.FileSink (type)",
+      evidence: ["test:tests/bun_capabilities.test.ts"],
+    });
+    const problems = analyzeBunShapes(
+      world({
+        shapes: [sink],
+        usage: {
+          used: new Map([["FileSink", new Set(["a.ts"])]]),
+          elementAccess: [],
+        },
+        runtimeTypeof: new Map([["FileSink", "undefined"]]),
+        declaredValues: new Set(),
+        typesSource: "export const x = 1;\n",
+      }),
+    );
+    expect(problems).toEqual([
+      { rule: "undeclared-shape", detail: "FileSink (type)" },
+    ]);
+  });
+
+  test("bracket access fails rather than disappearing", () => {
+    const problems = analyzeBunShapes(
+      world({
+        usage: {
+          used: new Map([["file", new Set(["a.ts"])]]),
+          elementAccess: ['a.ts: Bun["file"]'],
+        },
+      }),
+    );
+    expect(problems).toEqual([
+      { rule: "element-access", detail: 'a.ts: Bun["file"]' },
+    ]);
+  });
+});
