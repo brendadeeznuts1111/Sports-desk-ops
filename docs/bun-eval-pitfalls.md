@@ -18,6 +18,8 @@ repo, use the voice section in
 (source: `docs/project/contributing.mdx`). That commit is ahead of the **1.4.4** tag (`38afee6c8`);
 do not treat it as a behavior pin. Live site: [contributing#voice](https://bun.com/docs/project/contributing#voice).
 
+**Guides index (not runtime):** [`guides.jsx` @ `6a380492`](https://github.com/oven-sh/bun/blob/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/guides.jsx) lists every `/guides/*` href for the docs site; content lives in MDX elsewhere. Live: [bun.com/guides](https://bun.com/guides).
+
 ## eval-module-mode
 
 An eval is classified from its source. Referencing a CommonJS identifier (`require`, `module`,

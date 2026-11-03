@@ -110,3 +110,9 @@ Prose style for Bun-facing or upstream docs: [oven-sh/bun voice guidelines](http
 That pin is for writing only; runtime behavior stays on the repo’s Bun **1.4.4** pin and
 `docs/bun-eval-pitfalls.md`. Evidence labels and capture-backed claims in this repo still override
 tone when they conflict.
+
+Official Bun **how-to catalog** (site nav data, not guide bodies): [`docs/snippets/guides.jsx` @
+`6a380492`](https://github.com/oven-sh/bun/blob/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/guides.jsx)
+→ live [bun.com/guides](https://bun.com/guides). Prefer `/docs/pm/*` for PM depth; the **install**
+category in that file links workspace, trusted deps, registry scope, and CI install guides relevant
+here.
