@@ -87,32 +87,50 @@ shift || true
 case "$cmd" in
   help|--help|-h)
     cat <<'EOF'
-SportsDesk DX — operator commands
+SportsDesk DX — operator commands (Bun 1.4.4)
 
-  ./bin/dx status                 Environment, git and R2 edge health
-  ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix
-  ./bin/dx iptracker              Per-office and cross-office IP clusters
-  ./bin/dx gslive <LOGIN>         GSLive 7-param report + live bet-history links
-  ./bin/dx docs [gslive|--json]   Deployed API docs (Scalar, R2, local artifacts)
-  ./bin/dx stale -i <export>      Stale-line / post-move bet cohort
-  ./bin/dx profile <0x|user>      Polymarket PnL, win rate, positions, categories
-  ./bin/dx combo legs|price|wallet CFB combo legs and product-of-legs pricing
-  ./bin/dx bridge coverage|value|match
-                                  Cross-domain customer book ↔ Polymarket wallet join
-  ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login)
-  ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
-  ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing (--json/--strict/--types)
-  ./bin/dx deps [add|remove|version|check]
-                                  bun-deps (frozen-safe); version = pm version + lock refresh
-  ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
-  ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
-  ./bin/dx poll [--once] [--live] [--live-f402]
-                                  Poll feeds (--live = Polymarket, --live-f402 = F402 probe)
-  ./bin/dx watch                  In-process Bun.cron daemon (60s) + R2 sync
-  ./bin/dx pipeline               End-to-end verification + docs/tasks render + lock check
-  ./bin/dx stage                  Regenerate + stage dist/ (no upload)
-  ./bin/dx deploy                 Stage, publish to R2 and Cloudflare Pages
-  ./bin/dx ship                   Deploy, then push main
+Usage: ./bin/dx <command> [args...]
+
+  Environment / Diagnostics
+    ./bin/dx status                 Environment, git and R2 edge health
+    ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
+    ./bin/dx deps [add|remove|version|check]
+                                    bun-deps (frozen-safe); version = pm version + lock refresh
+
+  Manager Tools / partner config (GSID cookie auth — set GSID in .env)
+    ./bin/dx fetch-config           Fetch partnerConfig JSON → partnerConfig.json
+    ./bin/dx fetch-i18n             Fetch i18n translation resources → i18n-resources.json
+    ./bin/dx fetch-common           Fetch manager-tools common data → manager-common.json
+    ./bin/dx fetch-live-data        Fetch live sports/reference data → live-data.json
+
+  Wagers by state, day, event, player, agent (columns, groups, layout from config/wagers.json)
+    ./bin/dx wagers-by-state --from=M/D/YYYY --to=M/D/YYYY [--state=X] [--nlegs=N] [--wager-number N] [--format=table|json|csv|summary|inspect|columns|grid] [--out=PATH] [--group-by=state|day|event|player|agent] [--top=N]
+    ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSID; --format/--out/--group-by/--top supported)
+
+  Surveillance / ingestion
+    ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix
+    ./bin/dx iptracker              Per-office and cross-office IP clusters
+    ./bin/dx gslive <LOGIN>         GSLive 7-param report + live bet-history links
+    ./bin/dx poll [--once] [--live] [--live-f402]
+                                    Poll feeds (--live = Polymarket, --live-f402 = F402 probe)
+    ./bin/dx watch                  In-process Bun.cron daemon (60s) + R2 sync
+    ./bin/dx backtest               4-week CFB + NBA parlay/combo backtest
+
+  Utilities
+    ./bin/dx docs [gslive|--json]   Deployed API docs (Scalar, R2, local artifacts)
+    ./bin/dx stale -i <export>      Stale-line / post-move bet cohort
+    ./bin/dx profile <0x|user>      Polymarket PnL, win rate, positions, categories
+    ./bin/dx combo legs|price|wallet CFB combo legs and product-of-legs pricing
+    ./bin/dx bridge coverage|value|match
+                                    Cross-domain customer book ↔ Polymarket wallet join
+    ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login)
+    ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
+    ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
+
+  Deploy
+    ./bin/dx stage                  Regenerate + stage dist/ (no upload)
+    ./bin/dx deploy                 Stage, publish to R2 and Cloudflare Pages
+    ./bin/dx ship                   Deploy, then push main
 
 Docs: README.md · docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md
 EOF
@@ -273,6 +291,30 @@ VERSION_HELP
   blob-formdata)
     cd "$REPO_ROOT"
     exec bun bin/blob-formdata.ts "$@"
+    ;;
+  fetch-config)
+    cd "$REPO_ROOT"
+    exec bun run fetch-config.ts "$@"
+    ;;
+  fetch-i18n)
+    cd "$REPO_ROOT"
+    exec bun run scripts/fetch-i18n.ts "$@"
+    ;;
+  fetch-common)
+    cd "$REPO_ROOT"
+    exec bun run scripts/fetch-common.ts "$@"
+    ;;
+  fetch-live-data)
+    cd "$REPO_ROOT"
+    exec bun run scripts/fetch-live-data.ts "$@"
+    ;;
+  wagers-by-state)
+    cd "$REPO_ROOT"
+    exec bun run scripts/wagers_by_state_last14.ts -- "$@"
+    ;;
+  wagers-by-state-live)
+    cd "$REPO_ROOT"
+    exec bun run scripts/wagers_by_state_live.ts -- "$@"
     ;;
   backtest)
     cd "$REPO_ROOT"

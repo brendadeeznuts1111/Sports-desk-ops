@@ -3,6 +3,10 @@ dist/
 wrangler
 .env
 .env.local
+partnerConfig.json
+i18n-resources.json
+manager-common.json
+live-data.json
 reports/
 tests/.tmp-*
 schema/manifest.bin
@@ -26,6 +30,7 @@ Untitled.txt.rtf
 # Customer and downline datasets stay local (public repo)
 enriched_customers_full.json
 sportsdesk_downline_data.json
+data/*.dodbin
 # The synthetic fixture reuses those names because the engine joins fixed paths; it carries no
 # real customer data and must stay tracked or the CI test silently degrades to the snapshot.
 !tests/fixtures/backtest/enriched_customers_full.json
@@ -40,3 +45,6 @@ lib/.tmp-artifacts/
 # CI test step reporter output (bun run ci:local)
 junit-report.xml
 .bun-test-timings.json
+
+# Large report exports (contain identifiers; never commit)
+betReport*.json

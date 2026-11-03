@@ -1,9 +1,10 @@
 # GS Manager CLI — contract status (blocked, capture required)
 
 > **Status: `blocked_contract`.** There is **no verified GS HTTP contract** in this release — no
-> endpoint URL, method, content type, authentication scheme, pagination rule or response schema for
-> any of the six report kinds. Nothing in this document is an HTTP endpoint. Do not build a live
-> adapter from it; build the capture first.
+> verified endpoint URL, method, content type, authentication scheme, pagination rule or response
+> schema for any of the six report kinds. Candidate URLs have since been observed in a browser
+> network log (§2.2), but a URL is not a contract. Nothing in this document is an HTTP endpoint.
+> Do not build a live adapter from it; build the capture first.
 
 The GS Buckeye 2 / Partner 118 deliverable is a **job-orchestration CLI**, not an API client. Its
 own documentation states the rule plainly:
@@ -44,6 +45,11 @@ kind with an observed `action` (`getBetReport`, `:285`); its `url`, `method`, `c
 > "Only Last Bets has an observed action (`getBetReport`); no transport URL, method, response shape,
 > or auth mechanism has been established for any report."
 > — `zip:templates/contract-verification.md:3`
+
+One qualification, added 2026-11-02: the public client bundle (§2.8) shows the console building a
+`GET /manager-tools/reports/?kind=…` request for every kind, with `kind` set to the report id. That is
+**source observation of the client**, not a captured exchange, so it does not lift any row out of
+`blocked_contract` — but it does name the endpoint a capture should target.
 
 ## 2. The only observed artifact: one `getBetReport` request payload
 
@@ -122,6 +128,293 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 Restating the caveat above: hash URL parameters are **not** the API query encoding
 (`zip:contracts/report-surfaces.md:39`). Nothing in this section establishes an endpoint, a method,
 a content type, an auth scheme or a response shape.
+
+## 2.2 Observed transport surface (browser network log, 2026-11-02)
+
+A second evidence level now exists: an operator's browser network log names the URLs the console
+calls. **URLs only** — no methods, request bodies, headers, cookies or responses were captured, and
+none are reproduced here.
+
+| URL observed                                          | Appears to be                                       | Contract status                                                                                                             |
+| ----------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `/manager-tools/ajax.php` (4 calls)                   | Report/data transport                               | `blocked_contract` — action, method, auth, body, response all unknown                                                       |
+| `/manager-tools/usersList/?t=<ms>`                    | Player/user list (JSON)                             | `blocked_contract`; unauthenticated `GET` → **401** (`text/html`, `no-store`) — see §2.7                                    |
+| `/api/v3/manager-tools/signin/`                       | Session sign-in                                     | `blocked_contract` — auth flow unknown; do not probe                                                                        |
+| `/api/v3/manager-tools/common/`                       | Session bootstrap                                   | **observed**: unauthenticated `GET` → `200` `{"FLAVOR":"live","partner":118}` — see §2.5                                    |
+| `/manager-tools/partnerConfig/`                       | Partner configuration                               | `blocked_contract`; responds **401** to an unauthenticated GET (verified 2026-11-02); one response body observed — see §2.3 |
+| `/manager-tools/groups/`                              | Group/agent hierarchy (the SPA preloads it as JSON) | `blocked_contract`; 401 unauthenticated GET; client builds `GET {group, withSle:true}` — §2.8                               |
+| `/manager-tools/translations/v2/getI18nResources/...` | UI strings                                          | public, no report data                                                                                                      |
+| `/manager-tools/assets/components/*/*.html`           | UI component templates (ag-Grid/React fragments)    | public static assets; no data contract                                                                                      |
+| `/betLobbyV2/logic/`                                  | Bet lobby action dispatcher (`POST` + `{"a": …}`)   | **observed**: unauthenticated `POST {"a":"sportPeriods"}` → `200` JSON catalog — see §2.4                                   |
+| `/live/data?...`                                      | Sports/league/country catalog                       | **observed**: unauthenticated `GET` → `200` JSON, 80/29,938/383 entries — see §2.6; not a manager report surface            |
+
+What this changes: the earlier statement that **no** URL had ever been observed is now too strong,
+so it is corrected at the top of this document. What it does **not** change: `ajax.php` remains
+`blocked_contract`. A URL is not a contract — without a method, a request body, an auth scheme and a
+response schema, an adapter built on this table would be guessing, which is the failure this
+document exists to prevent. Note in particular that the console is **React with ag-Grid**, so the
+`assets/components/*.html` templates are UI markup with control labels only; they carry no column
+keys, response shape or transport detail.
+
+Still required, per §4: one redacted request **and** response per report kind, plus the auth/CSRF
+behaviour described without credential values.
+
+### Operator UI observations (2026-11-03)
+
+A nine-image operator screenshot set adds UI-level observations, not contract evidence: Manage
+Players has `Agent` and `Player` profile grids (190 and 2,964 records at that moment); Last Bets
+exposes `State: All` and a **Grade time / Bet time** date-filter choice, with the grids `Bet Group`,
+`Id`, `Player`, `Player Id`, `Profile`, `Agent`, `Ticket`, `If bet`, `Risk`, `To Win`, `Then bet`,
+`Premium`, `Result`, `Free bet`, `Sport/League`, `Sport (SportId)`, `League (LeagueId)`, `Event Id`,
+`Event Details`; the five Reports pages show `Leg Count`, `Wager Count`, `Avg Odds`, `To Excel` and
+`To CSV`. All Last Bets and report grids returned "No data for current selection" for those
+selections at 12:50–12:52 local, which is zero rows for that selection, not an absence of wagers.
+The set carries no method, request body, header, auth or response, so it does **not** satisfy §4 and
+does not move `ajax.php` off `blocked_contract`. Record and image hashes:
+[evidence/manager-ui-observations-2026-11-03.md](./evidence/manager-ui-observations-2026-11-03.md).
+One open question it raises: the supplied `getBetReport` body uses `dateFilterBy: "logTime"`, which
+is not one of the visible date-filter choices (`Grade time`, `Bet time`).
+
+### What the public i18n bundle shows
+
+The console's public translation bundle
+(`/manager-tools/translations/v2/getI18nResources/index.php?lng=en&ns=translation&appId=2`, fetched
+2026-11-02) is UI text, but it constrains the _shape_ of a future adapter. It contains:
+
+- report controls and columns: `Player`, `Player Name`, `Bet`, `To Win`, `Win`, `Loss`, `Pending`,
+  `Graded total`, `Pending total`, `Wager Count`, `Hold`, `Vigorish`, `Ratio`, `Line`, `Side`,
+  `Price`, `Event`, `League`, `Period`, `Market`, `Sports`, `Legs`, `Parlay`, `Teaser`,
+  `Bet time`, `End time`, `Grade time`;
+- generation states: `Generating report. Please wait...`, `Report has been generated successfully.`,
+  `Report History`, `Error fetching report data.`, `Report generation failed.`;
+- exports: `To CSV`, `To Excel`, `You can select the columns you want to download`;
+- a scoping flag: `Reports Are by Risk` (`reportsAreByRisk`).
+
+That reads as **asynchronous report generation plus a file export**, not a JSON grid endpoint, and it
+suggests `ajax.php` may be the generation/download call rather than a rows API. It is a hypothesis,
+not a contract, and it changes the eventual capture target: a generated CSV/XLS (with its request)
+is more useful than a screenshot of the grid.
+
+The column vocabulary is encoded in `lib/gslive_report_columns.ts` (labels → canonical keys, unknown
+headers surfaced rather than guessed) so a future CSV export can be mapped positionally. The mapper
+is display-label only; it asserts nothing about transport.
+
+### 2.3 Partner-config response (operator-supplied, 2026-11-02)
+
+One response body from an authenticated `GET /manager-tools/partnerConfig/` was supplied by an
+operator on 2026-11-02. The request was **not stored**: no capture file, no cookies, no request
+headers. It is recorded here only because it is small, carries no customer data, and names the
+tenant. Unauthenticated `GET` returns **401**.
+
+```json
+[{ "id": "118", "name": "Buckeye 2", "allow": "1" }]
+```
+
+| Field   | Observed JSON type | Observed value | Notes                                                                     |
+| ------- | ------------------ | -------------- | ------------------------------------------------------------------------- |
+| `id`    | string             | `"118"`        | Same value the hash URLs carry as `partnerId`; string, not a number       |
+| `name`  | string             | `"Buckeye 2"`  | Human label — not a wire identifier for any report call                   |
+| `allow` | string             | `"1"`          | Flag semantics unverified; `"0"`, `false` and absence were never observed |
+
+What this establishes: the path answers with a JSON **array** of partner records and Partner 118's
+label. What it does **not**: the record set for any other session (one row is not "always one row"),
+auth/CSRF behaviour, pagination, or whether `allow` gates the report surfaces in §1. A partner list is
+not a report transport, so §1 stays `blocked_contract` unchanged.
+
+### 2.4 `/betLobbyV2/logic/` — action dispatcher, captured 2026-11-02
+
+The §2.2 row that called this a static asset was wrong: it is a `POST` action dispatcher. Captured
+unauthenticated on 2026-11-02, so the response is reproducible without a session:
+
+```http
+POST https://plive.sportswidgets.pro/betLobbyV2/logic/
+content-type: text/plain;charset=UTF-8
+
+{"a":"sportPeriods"}
+```
+
+`200`, JSON body served as `content-type: text/html; charset=UTF-8` (the header lies — parse the body,
+not the header). Top-level keys: `periods` (102 entries), `abbreviations` (10), `periodNames` (40).
+
+| Object          | Shape                                                                                                                                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `periods[<id>]` | `{ m, h1, h2, ht, s1…s10, L_h<n>?, L_s<n>? }` — `m` is the period class (`Game`, `Match`, `Tournament`, `Race`, `Prop`, …; 12 values observed), `h1`/`h2`/`ht` the half headers, `s*` the segment labels, `L_*` label overrides on either family |
+| `periodNames`   | `<id> → name` (`Inning`, `Quarter`, `Half`, `Round`, `Set`, `Map`, `Period`, …)                                                                                                                                                                  |
+| `abbreviations` | `name → short form` (`Quarter → Qtr`, `Inning → Inn`, `Extra Innings → Extra`)                                                                                                                                                                   |
+
+Gotchas for any consumer:
+
+- ids are **numeric strings, non-contiguous** (`1`–`11`, `13`, `16`, `27`, `33`, …). Never iterate a range.
+- `s1…s10` are not uniform: 17 of 102 periods carry `L_` label overrides, on segments (`L_s5`,
+  `L_s10`, `L_s1`) **and** on a header (`L_h1`) — the override family is not segment-only. Period `2`
+  repeats `"Overtime"` across `s5`–`s10` with `L_s5: "Regulation Time"`, so the last non-empty segment
+  is not reliably the period's terminal state.
+- the console sends an `x-gs-session` header on this call, but it is **not required** for
+  `sportPeriods` — the same body returned `200` with the header removed. Auth posture is per-action;
+  do not assume the other `a` values are also open.
+
+What this changes: the desk's period vocabulary is now captured rather than inferred, which constrains
+any future report filter using period ids. What it does **not** change: this is GS console navigation
+data, distinct from the Fantasy402 catalog (`surface.fantasy402-sport-catalog`), and it carries no
+report rows, no customer data and no manager transport — §1 stays `blocked_contract`.
+
+### 2.5 `/api/v3/manager-tools/common/` — session bootstrap (captured 2026-11-02)
+
+`GET` with no cookies returns `200` and a two-key JSON object. This resolves the previously
+unattributed `{"FLAVOR":"live","partner":118}`: it is this endpoint's **response**, not a request body.
+
+```json
+{ "FLAVOR": "live", "partner": 118 }
+```
+
+| Field     | Observed JSON type | Observed value | Notes                                                                                                          |
+| --------- | ------------------ | -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `FLAVOR`  | string             | `"live"`       | Uppercase config key; only `live` observed — a `mock`/`demo` value is inferred, not verified                   |
+| `partner` | number             | `118`          | **number** here but `partnerConfig.id` is the **string** `"118"` (§2.3) — do not compare them without coercion |
+
+What this establishes: the console's bootstrap config is readable without a session and pins Partner 118. What it does **not**: whether the value is tenant-pinned by host/origin or is simply a public
+default for anonymous callers (both fit the same body), the accepted `FLAVOR` values, or any endpoint
+behind it. The `partner`/`partnerConfig.id` type split is the kind of mismatch that breaks a join if it
+is assumed away.
+
+### 2.6 `/live/data` — sports/league/country catalog (captured 2026-11-02)
+
+`GET` with no cookies or session header returns `200 application/json` (chunked, no `content-length`).
+It is a global reference catalog, not a manager surface and not partner-scoped.
+
+```http
+GET https://plive.sportswidgets.pro/live/data?countries=true&leagues=true&sports=true
+```
+
+Three top-level objects, each keyed by numeric-string id:
+
+| Key         | Entries (snapshot) | Record shape (observed)                                                                                   |
+| ----------- | ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `sports`    | 80                 | `{n, in, o, po, mo, m, pn?, mn?}` — `n` name, `in` opaque, `o` sort/offset, `po`/`mo` ordering, `m` flags |
+| `leagues`   | 29,938             | `{n, o, s, po, mo, m?, mn?, pn?, p?, platformSport?, sn?, si?}` — `s` is the **sport id**                 |
+| `countries` | 383                | `{n, code, o, po, mo}` — `code` plus the same ordering pair                                               |
+
+The counts are a **snapshot of a live feed**, not constants: a re-probe minutes later returned a
+different league total and then the original again. Assert the shape and the join, never equality with
+these numbers.
+
+Gotchas:
+
+- `po` and `mo` are **CSV strings**, not arrays (`po: "m,h1,s12,s11,s2…"`, `mo: "286, 285, 282, 280"`).
+  `po` lists period keys, `mo` lists market ids, and the two do not share spacing conventions.
+- `sports[<id>].m` mixes value types in one object (`{"3":"primary","5":"secondary","6":true}`) —
+  string and boolean. A `Record<string, string>` fails on real data.
+- `pn` (period-name overrides) appears on only **3** of 80 sports and `mn` (market names) on **13**, so
+  absence is normal, not an error.
+- leagues use `s` as a **number**; 53 distinct sport ids appear and all resolve into `sports`
+  (verified, e.g. `NBA Props`→`s:24`→`"Basketball Props"`). The join holds today, but ids are strings
+  on the `sports` side — coerce once at the boundary.
+
+What this establishes: the desk's sport/league/country vocabulary and the sport join, unauthenticated.
+What it does **not**: per-partner league visibility (nothing here is scoped), which sport ids a report
+filter accepts, or any manager transport.
+
+### 2.7 `/manager-tools/usersList/` — candidate `player`-report transport (401 only)
+
+The console calls `GET /manager-tools/usersList/?t=<epoch ms>` and expects JSON. Probed
+unauthenticated on 2026-11-02 with the body deliberately **not read** (a `200` here would be customer
+data):
+
+```text
+401  content-type: text/html; charset=UTF-8  cache-control: no-store, no-cache, must-revalidate
+```
+
+So the path is session-gated and never cached. Replaying a captured `t` (`1793679877750`, i.e.
+2026-11-02 22:24:37 CST) unauthenticated returns the same `401`, so `t` carries no authority — it is a
+cache-buster, not a token. What that does **not** give us: the method it accepts
+(a `401` may precede method validation), the auth scheme, any query encoding, or the response shape.
+It is a **candidate** for the `player` report grid in §1 — the name and the millisecond cache-buster
+both point that way — but a candidate is not a contract, and §1 stays `blocked_contract` until a
+redacted request+response pair exists. Note the path is not a literal in the main bundle (§2.8), so it
+is built in a lazy chunk or by concatenation; the bundle's player template id is `users-list`, and
+report ids are **not** uniformly suffixed (`last-bets-report` has it, `users-list` does not).
+
+### 2.8 The client bundle names the report transport (source-observed, 2026-11-02)
+
+The console is a Vite/React bundle: `GET /manager-tools/assets/index-DB17VVxN.js` → `200`,
+`application/javascript`, 5.29 MB, **no session required** (fetched 2026-11-02). Reading it is **source
+observation**, not a wire capture — it shows what the client sends, never what the server accepts. No
+row in §1 changes tier because of this section.
+
+**Request layer.** One axios instance, `baseURL: ""`, `paramsSerializer` set to a query `stringify`
+helper, plus a request interceptor that sets, on every call:
+
+- `Accept: "application/json, gzip, deflate, br"` — the console sets this itself. The odd mixed
+  media-type/content-coding value that appears in every operator `curl` is the app's header, not a
+  transcription error.
+- `x-gs-session: <ganchrowSessionId>` — read from React context, so the session token is a
+  JS-readable header, not an HttpOnly cookie.
+- `withCredentials` only when the URL is absolute (`startsWith("http")`), which is never true for the
+  `/manager-tools/…` paths.
+
+**Session.** `POST /api/v3/manager-tools/signin/` with `{"checkSession":true}`; the response carries
+`ganchrowSessionId` plus `adminUserName`/`agentName`. Logout is `POST /manager-tools/ajax.php` with
+`{"action":"logout"}` — so `ajax.php` is an action dispatcher keyed on `action`, consistent with the
+earlier hypothesis that it was not a rows API.
+
+**The report request.** `kind` is the report id and everything else is a query string:
+
+```http
+GET /manager-tools/reports/?from=<date>&to=<date>&kind=<id>-report&partnerId=<id>&leaguesOrSports=<names>&wagerTypes=<names>&marketTypeCategories=<csv>&periodTypes=<csv>&eventId=<id>&agent=<login>&player=<csv>
+```
+
+| Param                  | Built from                                                       |
+| ---------------------- | ---------------------------------------------------------------- |
+| `from` / `to`          | report date bounds (`String(...)`)                               |
+| `kind`                 | report id; suffix is **not** uniform — see below                 |
+| `partnerId`            | literal `ALL` becomes the empty string                           |
+| `leaguesOrSports`      | selected ids resolved to **names** via the §2.6 catalogs         |
+| `wagerTypes`           | selected market ids resolved to names                            |
+| `marketTypeCategories` | array `.toString()` (comma-joined)                               |
+| `periodTypes`          | array `.toString()`, `undefined` guarded                         |
+| `agent`                | only when `searchBy === "agent"`                                 |
+| `player`               | `[bot && "*BOTS*", searchBy === "player" && text]`, comma-joined |
+
+Client-side rules that matter for any adapter:
+
+- `kind` suffixes are mixed: `users-list` has none, `last-bets-report` and `vigs-report` do. The SPA
+  applies `.replace("-report","")` only when building the hash route, so a `kind` value must be taken
+  from the template map verbatim, not derived;
+- empty, `"undefined"` and `"null"` params are **dropped** before the request, so their absence is
+  normal and must not be read as "not supported";
+- the bot/syndicate flag is not a `bot=true` param on the wire — it is the literal token `*BOTS*`
+  inside `player`, e.g. `player=*BOTS*,player_AF12`;
+- a non-array response is an error: the code throws `d` from the body (or the body itself, or
+  `"Invalid server response"`), so a report failure can arrive as `200` with a non-array body.
+
+**Other routes read from the same bundle** — uncaptured, listed only to name capture targets:
+`GET /manager-tools/groups/` (`{group, withSle:true}`) · `GET /manager-tools/groups/settings/` ·
+`GET /manager-tools/vigs/` (`{groupId}`) · `GET /manager-tools/reports/periods/index.php` ·
+`POST /manager-tools/partnerPreferences/types` · `POST /manager-tools/ajax.php` (`{action}`).
+
+**Probes (unauthenticated, 2026-11-02).** `GET /manager-tools/reports/?from=…&to=…&kind=users-list&partnerId=118`
+→ **401** (`text/html`, `no-store`); `GET /manager-tools/reports/periods/index.php` → **401**. Both are
+session-gated, so nothing in this section was obtained with a session — and nothing here proves the
+server applies the same encoding the client builds.
+
+### 2.9 How §2.3–§2.8 were verified, and what that does not mean
+
+Every claim above was produced by **one author with one method**: unauthenticated HTTP probes against
+the live console, plus reading one public JS bundle. Re-running the probes by script is
+**corroboration, not independent confirmation** — the doc and the checker were written by the same
+effort, so a shared blind spot survives both. That is not hypothetical: the first pass of this section
+omitted seven real fields (period `L_h1`; sport `in`; league `pn` and `mn`; country `code`, `po` and
+`mo`) and the self-check passed anyway, because it only asserted what the prose already said.
+
+The one control against that failure mode is a **key-enumeration diff**: `Scratch/verify_gs_contracts.ts`
+compares the live key union of each object with the documented shape and fails on a key that appears in
+one and not the other. That catches a dropped field or a server-side addition; it does not make the
+author independent.
+
+What would: a second operator replaying the probe set from this document alone, or a wire capture
+produced by tooling this author did not write. Neither exists. Treat the §2.3/§2.5/§2.6 bodies as
+single-source observations, §2.4 as single-source, twice, §2.7 as a status code and nothing more, and
+§2.8 as static source rather than a captured exchange.
 
 ## 3. CLI interfaces — local orchestration, not HTTP endpoints
 
