@@ -65,6 +65,29 @@ sites; a new one fails `bun run policy:check`. The full rule table is the user r
 `ROOT_LAYOUT.md` owns the directory table. Two things it does not say: tests are colocated in
 `lib/` and `scripts/` as well as `tests/`, and the runbooks live in `docs/runbooks/`.
 
+## Plans
+
+Multi-step plans (refactors, evidence work, pipeline changes) are how higher-level autonomy stays
+safe only when each step is **validatable**. For every step, state:
+
+| Field | Content |
+| ----- | ------- |
+| **Accomplishes** | Observable outcome when the step is done (artifact, behavior, or doc claim). |
+| **Why** | Which risk, ordering constraint, or gap this step closes. |
+| **Depends on** | Prior steps, files, envelope SHA, machine policy, or tools on `PATH`. |
+| **Verify** | Fail-closed check: a gate command, test target, doctor line, or measured diff — not “looks good.” |
+
+Do **not** pre-write implementation in the plan (no code, types, or line-level edit lists). Discovery
+and coding belong in execution, after verify criteria for the step are fixed.
+
+Example (good step): “Normalize layout exports into the scored-graph contract so engine adapters
+share one rubric **→** without that, metrics are not comparable **→** depends on contract doc agreed
+**→** verify: `bun test lib/f402_agent_graph_metrics.test.ts` and fixture JSON unchanged unless
+regenerated with stated envelope.”
+
+Example (bad step): “Add `LaidOutEdge`, change `scoreLayout` loop to use `Uint32Array`, edit
+layouts.ts lines 53–75.”
+
 ## Hard rules
 
 ### ⚠️ SECURITY WARNING (Fantasy402 session)
