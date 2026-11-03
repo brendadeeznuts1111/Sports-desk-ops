@@ -11,6 +11,17 @@ When to trust oven-sh/bun docs vs this repo. Evidence labels here beat upstream 
 | This repo | `package.json` `packageManager` / `engines`, `@types/bun@1.4.4` |
 | After upgrade | `bun run probe:bun` vs `tests/bun_baseline.json` |
 
+## Type declarations
+
+Two different things:
+
+| Layer | What | This repo |
+| ----- | ---- | --------- |
+| Project types | `@types/bun` → `bun-types` on npm | `devDependencies` `@types/bun@1.4.4`; must match `Bun.version` (`bin/bun_surface --strict`) |
+| Embedded in the Bun binary | `@types/node`, `undici-types`, plus types pulled in via `bun-types` (`expect-type`, `jest-mock`) | Used when you `bun build --compile --aot` without installing `@types/bun`; not a substitute for day-to-day `bun check` here |
+
+Legal list and licenses: [project/license → type declarations](https://bun.com/docs/project/license#type-declarations). Prod dependency audit: regenerate root `licenses.json` per `.gitignore` comment (`bun pm licenses --prod --json`).
+
 ## Live docs (check behavior on 1.4.4)
 
 - Reference: [bun.com/docs](https://bun.com/docs)
