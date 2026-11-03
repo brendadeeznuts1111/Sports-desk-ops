@@ -173,7 +173,7 @@ describe("compareRouteSurfaces", () => {
     expect(findings.map((f) => f.path)).not.toContain("/graph");
   });
 
-  test("a served and declared API path missing from the spec is reported", () => {
+  test("a served and declared API path missing from the spec is reported", async () => {
     const findings = compareRouteSurfaces({
       served: new Set(["/api/known"]),
       declared: new Map([
@@ -206,8 +206,11 @@ describe("compareRouteSurfaces", () => {
   });
 });
 
+// Read once at module scope: `describe` bodies are synchronous, and this is a file read either way.
+const committedInputs = await readRouteSurfaceInputs(ROOT, DAEMON_PREFIX_PATHS);
+
 describe("the committed tree", () => {
-  const inputs = readRouteSurfaceInputs(ROOT, DAEMON_PREFIX_PATHS);
+  const inputs = committedInputs;
 
   test("every served /api path is declared by a ledger surface", () => {
     const { served, declared, spec } = inputs;

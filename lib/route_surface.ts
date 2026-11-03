@@ -10,7 +10,7 @@
  * invariant is enforced rather than assumed.
  */
 
-import { readFileSync } from "node:fs";
+import { z } from "zod";
 
 export type SurfaceFinding = {
   readonly kind: "served-undocumented" | "declared-not-served" | "spec-missing";
@@ -111,14 +111,36 @@ export type ParsedSurface = {
   readonly members: readonly unknown[];
 };
 
+/** The three files this module reads, each parsed once here and trusted afterwards. */
+const LedgerSchema = z.object({
+  surfaces: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        category: z.unknown(),
+        members: z.array(z.unknown()).optional(),
+      }),
+    )
+    .optional(),
+});
+
+const SpecSchema = z.object({
+  paths: z.record(z.string(), z.unknown()).optional(),
+});
+
+const SurfaceSchema = z.object({
+  id: z.string().optional(),
+  category: z.unknown(),
+  members: z.array(z.unknown()).optional(),
+});
+
 export function parseLedgerSurface(value: unknown): ParsedSurface | null {
-  if (typeof value !== "object" || value === null) return null;
-  const record = value as Record<string, unknown>;
-  const members = record["members"];
+  const parsed = SurfaceSchema.safeParse(value);
+  if (!parsed.success) return null;
   return {
-    id: typeof record["id"] === "string" ? record["id"] : "surface",
-    category: parseSurfaceCategory(record["category"]),
-    members: Array.isArray(members) ? members : [],
+    id: parsed.data.id ?? "surface",
+    category: parseSurfaceCategory(parsed.data.category),
+    members: parsed.data.members ?? [],
   };
 }
 
@@ -127,10 +149,9 @@ export function declaredPathsFromLedger(
   ledger: unknown,
 ): Map<string, DeclaredPath> {
   const declared = new Map<string, DeclaredPath>();
-  if (typeof ledger !== "object" || ledger === null) return declared;
-  const surfaces = (ledger as { surfaces?: unknown }).surfaces;
-  if (!Array.isArray(surfaces)) return declared;
-  for (const value of surfaces) {
+  const parsed = LedgerSchema.safeParse(ledger);
+  if (!parsed.success) return declared;
+  for (const value of parsed.data.surfaces ?? []) {
     const surface = parseLedgerSurface(value);
     if (surface === null) continue;
     for (const member of surface.members) {
@@ -145,10 +166,9 @@ export function declaredPathsFromLedger(
 
 /** Paths published in the spec. */
 export function specPathsFromDocument(spec: unknown): Set<string> {
-  if (typeof spec !== "object" || spec === null) return new Set();
-  const paths = (spec as { paths?: unknown }).paths;
-  if (typeof paths !== "object" || paths === null) return new Set();
-  return new Set(Object.keys(paths));
+  const parsed = SpecSchema.safeParse(spec);
+  if (!parsed.success) return new Set();
+  return new Set(Object.keys(parsed.data.paths ?? {}));
 }
 
 /**
@@ -240,22 +260,21 @@ export function compareRouteSurfaces(input: {
   return findings;
 }
 
-export function readRouteSurfaceInputs(
+export async function readRouteSurfaceInputs(
   root: string,
   prefixPaths: readonly string[] = [],
-): {
+): Promise<{
   readonly served: Set<string>;
   readonly declared: Map<string, DeclaredPath>;
   readonly spec: Set<string>;
-} {
-  const source = readFileSync(
+}> {
+  const source = await Bun.file(
     `${root}/services/sportsdesk_webview_server.ts`,
-    "utf8",
-  );
-  const ledger = JSON.parse(
-    readFileSync(`${root}/docs/evidence/ledger.json`, "utf8"),
-  );
-  const spec = JSON.parse(readFileSync(`${root}/docs/openapi.json`, "utf8"));
+  ).text();
+  const ledger: unknown = await Bun.file(
+    `${root}/docs/evidence/ledger.json`,
+  ).json();
+  const spec: unknown = await Bun.file(`${root}/docs/openapi.json`).json();
   return {
     // Prefix arms (`pathname.startsWith`) are invisible to the literal scan, so the caller passes
     // the table's own prefix rows rather than having this guess at an arm's intent.
