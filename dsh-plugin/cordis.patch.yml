@@ -1,0 +1,22 @@
+# Bundle layer: insert the read-only SportsDesk ops tools into any DSH profile
+# that installs this package.
+#
+# Read-only by design. It exposes status, dataset freshness, downline questions
+# and the repo's verification gates. Deploying (./bin/dx deploy / ship),
+# capturing feeds, dispatching Telegram reports, syncing R2 and the Fantasy402
+# `wire` mutations all change state and stay shell commands, where a human is in
+# the loop.
+#
+# Every tool shells the existing command (`bun run ...`, `git ...`) rather than
+# reimplementing it, so there is one implementation of each behaviour and no
+# drift between the plugin and the commands.
+- insert:
+    - id: sportsdesk-ops
+      name: dsh-plugin-sportsdesk-ops
+      config:
+        repoPath: /Users/nolarose/code/sportsdesk-ops
+        bunPath: bun
+        serviceUrl: http://127.0.0.1:4020
+        timeoutMs: 60000
+        gateTimeoutMs: 900000
+        staleAfterMinutes: 1440

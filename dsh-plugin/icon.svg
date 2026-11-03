@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SportsDesk ops">
+  <rect width="64" height="64" rx="14" fill="#0b1f33"/>
+  <rect x="10" y="12" width="44" height="40" rx="5" fill="#102b45" stroke="#3ddc97" stroke-width="2"/>
+  <rect x="16" y="35" width="6" height="11" rx="1.5" fill="#3ddc97"/>
+  <rect x="26" y="28" width="6" height="18" rx="1.5" fill="#3ddc97"/>
+  <rect x="36" y="21" width="6" height="25" rx="1.5" fill="#e8b23a"/>
+  <path d="M48 22l4 4 6-8" fill="none" stroke="#e8b23a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="16" cy="18" r="2" fill="#e8503a"/>
+  <rect x="16" y="17" width="20" height="3" rx="1.5" fill="#6d8aa5"/>
+</svg>

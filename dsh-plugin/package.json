@@ -1,0 +1,29 @@
+{
+  "name": "dsh-plugin-sportsdesk-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only DSH tools for the SportsDesk/Fantasy402 desk: ops status, dataset freshness, downline questions and the repo's verification gates.",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

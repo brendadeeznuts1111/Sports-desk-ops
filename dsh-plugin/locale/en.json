@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk ops",
+    "description": "Read-only tools over the SportsDesk/Fantasy402 desk: checkout and service status, dataset freshness and record counts, downline snapshot questions, and the repo's verification gates reported as not_run until executed."
+  }
+}

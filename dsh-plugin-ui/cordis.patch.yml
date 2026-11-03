@@ -1,0 +1,9 @@
+# Bundle layer: inserts the Host row that carries the Client module.
+#
+# The Host half is intentionally empty. The visible row is the Client module
+# declared by `dsh.client` in package.json; this patch only gives the bundle a
+# row to enable, enable/disable, and remove independently of the tools bundle
+# (`dsh-plugin-sportsdesk-ops`), which this directory does not touch.
+- insert:
+    - id: sportsdesk-desk-status
+      name: dsh-plugin-sportsdesk-desk-status

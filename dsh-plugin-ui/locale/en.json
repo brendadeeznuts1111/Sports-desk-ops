@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk desk status",
+    "description": "Compact row under the composer showing whether the local SportsDesk webview service is down, running a stale build, or current — read live from its /health and /api/status routes."
+  }
+}
