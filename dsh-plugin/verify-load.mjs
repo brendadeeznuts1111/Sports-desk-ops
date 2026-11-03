@@ -430,6 +430,144 @@ await checkAsync(
       "an out-of-range minSharp was accepted",
     );
 
+    // "profile" / "signals" / "compare": ranks and cutoffs must be derived from the book.
+    const topVolume = book
+      .slice()
+      .sort(
+        (left, right) =>
+          (right.lifetime_volume_usd ?? 0) - (left.lifetime_volume_usd ?? 0),
+      )[0];
+    const profile = await tool.execute({
+      report: "profile",
+      customerId: topVolume.customer_id,
+    });
+    assert(
+      profile.available === true && profile.found === true,
+      "profile was unavailable",
+    );
+    assert(
+      profile.customer_id === topVolume.customer_id,
+      `profile id ${profile.customer_id} != source ${topVolume.customer_id}`,
+    );
+    assert(
+      profile.sample?.tickets === (topVolume.recent_tickets ?? []).length,
+      `profile tickets ${profile.sample?.tickets} != source ${(topVolume.recent_tickets ?? []).length}`,
+    );
+    assert(
+      profile.cohortRanksPct?.volume >= 90,
+      `top-volume rank ${profile.cohortRanksPct?.volume} is below 90`,
+    );
+    assert(
+      profile.cohortRanksPct?.volume <= 100,
+      "a percentile above 100 was returned",
+    );
+    assert(
+      profile.cutoffs?.volumeP90 !== null,
+      "profile did not return the cohort volume cutoff",
+    );
+    assert(
+      profile.flags?.topDecileVolume ===
+        topVolume.lifetime_volume_usd >= profile.cutoffs.volumeP90,
+      "profile flag disagrees with its own cutoff",
+    );
+    const noProfileId = await tool.execute({ report: "profile" });
+    assert(
+      noProfileId.reason === "invalid_arguments",
+      "profile without customerId was accepted",
+    );
+    const unknownProfile = await tool.execute({
+      report: "profile",
+      customerId: "NOT-A-CUSTOMER",
+    });
+    assert(
+      unknownProfile.found === false,
+      "an unknown profile id was reported as found",
+    );
+
+    const signals = await tool.execute({ report: "signals", limit });
+    assert(signals.available === true, "signals was unavailable");
+    const expectedWhales = book.filter(
+      (row) =>
+        (row.lifetime_volume_usd ?? Number.NEGATIVE_INFINITY) >=
+        signals.cutoffs.volumeP90,
+    ).length;
+    assert(
+      signals.signals?.whales?.matched === expectedWhales,
+      `whales ${signals.signals?.whales?.matched} != source ${expectedWhales}`,
+    );
+    assert(
+      signals.signals?.whales?.returned === Math.min(limit, expectedWhales),
+      "whales returned count does not match the limit",
+    );
+    for (const row of signals.signals.whales.customers) {
+      assert(
+        row.lifetime_volume_usd >= signals.cutoffs.volumeP90,
+        "a whale is below the returned cutoff",
+      );
+    }
+    const subnetCounts = new Map();
+    for (const row of book) {
+      const subnet = String(row.ip_subnet ?? "").trim();
+      if (subnet !== "")
+        subnetCounts.set(subnet, (subnetCounts.get(subnet) ?? 0) + 1);
+    }
+    const expectedNetworks = [...subnetCounts.values()].filter(
+      (count) => count >= 2,
+    ).length;
+    assert(
+      signals.multiAccountNetworks?.matched === expectedNetworks,
+      `networks ${signals.multiAccountNetworks?.matched} != source ${expectedNetworks}`,
+    );
+
+    // Dormant must compare UNROUNDED staleness against the cutoff. Rounding it to one
+    // decimal first made every customer fall below p90 and silently reported 0 matches.
+    const lastByCustomer = new Map();
+    let newestPlaced = "";
+    for (const row of book) {
+      let last = "";
+      for (const ticket of row.recent_tickets ?? []) {
+        const placed = String(ticket.placed_at ?? "");
+        if (placed > last) last = placed;
+        if (placed > newestPlaced) newestPlaced = placed;
+      }
+      if (last !== "") lastByCustomer.set(row.customer_id, last);
+    }
+    const newestMs = Date.parse(newestPlaced);
+    const expectedDormant = book.filter((row) => {
+      const last = lastByCustomer.get(row.customer_id);
+      if (last === undefined) return false;
+      return (
+        (newestMs - Date.parse(last)) / 86_400_000 >=
+        signals.cutoffs.dormantDaysP90
+      );
+    }).length;
+    assert(
+      signals.signals.dormant.matched === expectedDormant,
+      `dormant ${signals.signals.dormant.matched} != source ${expectedDormant}`,
+    );
+    assert(
+      expectedDormant > 0,
+      "a book with a staleness spread derived 0 dormant customers",
+    );
+
+    const compare = await tool.execute({
+      report: "compare",
+      customerIds: [book[0].customer_id, book[1].customer_id],
+    });
+    assert(compare.available === true, "compare was unavailable");
+    assert(
+      compare.customers?.length === compare.compared && compare.compared === 2,
+      `compare returned ${compare.customers?.length} of ${compare.compared}`,
+    );
+    const singleCompare = await tool.execute({
+      report: "compare",
+      customerIds: [book[0].customer_id],
+    });
+    assert(
+      singleCompare.reason === "invalid_arguments",
+      "compare accepted a single customer id",
+    );
+
     const byAgent = new Map();
     for (const row of book) {
       const key = row.agent_id;

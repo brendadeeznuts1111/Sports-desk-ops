@@ -137,6 +137,40 @@ await check("sportsdesk_customer executes (derived book counts)", async () => {
   JSON.stringify(result);
 });
 
+await check(
+  "sportsdesk_customer profile executes (derived ranks)",
+  async () => {
+    const book = JSON.parse(
+      // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
+      readFileSync(`${REPO}/enriched_customers_full.json`, "utf8"),
+    );
+    const top = book
+      .slice()
+      .sort(
+        (left, right) =>
+          (right.lifetime_volume_usd ?? 0) - (left.lifetime_volume_usd ?? 0),
+      )[0];
+    const result = await byName.get("sportsdesk_customer").execute({
+      report: "profile",
+      customerId: top.customer_id,
+    });
+    assert(result.available === true, "profile was unavailable");
+    assert(
+      result.found === true,
+      "profile did not find the top-volume customer",
+    );
+    assert(
+      typeof result.cohortRanksPct?.volume === "number",
+      "profile returned no volume percentile",
+    );
+    assert(
+      typeof result.cutoffs?.volumeP90 === "number",
+      "profile returned no cohort cutoff",
+    );
+    JSON.stringify(result);
+  },
+);
+
 await check("sportsdesk_markets executes (dist artifact parse)", async () => {
   const result = await byName
     .get("sportsdesk_markets")

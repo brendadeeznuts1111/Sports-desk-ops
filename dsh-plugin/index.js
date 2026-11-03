@@ -449,6 +449,297 @@ function slimCustomer(row) {
 }
 
 /**
+ * Customer-intelligence helpers. Every rank, quantile and flag below is derived from the book
+ * rows at call time; no cutoff, tie-break or segment label is checked in. A field with no
+ * finite value in the book yields `null`, never zero, so a missing measurement cannot read as
+ * a measured one.
+ */
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/** Linear-interpolated quantile over an ascending-sorted numeric array. */
+function quantile(sorted, fraction) {
+  if (sorted.length === 0) return null;
+  if (sorted.length === 1) return sorted[0];
+  const position = (sorted.length - 1) * fraction;
+  const low = Math.floor(position);
+  const high = Math.ceil(position);
+  if (low === high) return sorted[low];
+  const below = sorted[low];
+  const above = sorted[high];
+  return below + (above - below) * (position - low);
+}
+
+/**
+ * Midrank percentile (0-100): half credit for exact ties, so a book where every customer has
+ * the same value does not report 100 for the last row it happens to scan.
+ */
+function percentileRank(sorted, value) {
+  if (!Number.isFinite(value) || sorted.length === 0) return null;
+  let below = 0;
+  let equal = 0;
+  for (const candidate of sorted) {
+    if (candidate < value) below += 1;
+    else if (candidate === value) equal += 1;
+    else break;
+  }
+  return ((below + equal * 0.5) / sorted.length) * 100;
+}
+
+function medianOf(values) {
+  const finite = values
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right);
+  if (finite.length === 0) return null;
+  const middle = Math.floor(finite.length / 2);
+  return finite.length % 2 === 1
+    ? finite[middle]
+    : (finite[middle - 1] + finite[middle]) / 2;
+}
+
+/**
+ * One pass over the book that every intelligence report shares: sorted numeric columns for
+ * percentile work, agent and ip_subnet groups, and each customer's last sampled ticket time.
+ */
+function buildCustomerCohort(rows) {
+  const sortedField = (key) =>
+    rows
+      .map((row) => Number(row?.[key]))
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => left - right);
+  const byAgent = new Map();
+  const bySubnet = new Map();
+  const lastPlaced = new Map();
+  let newestPlacedAt = "";
+  for (const row of rows) {
+    const customer = String(row?.customer_id ?? "");
+    const agent = String(row?.agent_id ?? "UNKNOWN");
+    const agentRows = byAgent.get(agent) ?? [];
+    agentRows.push(row);
+    byAgent.set(agent, agentRows);
+    const subnet = String(row?.ip_subnet ?? "").trim();
+    if (subnet !== "") bySubnet.set(subnet, (bySubnet.get(subnet) ?? 0) + 1);
+    const tickets = Array.isArray(row?.recent_tickets)
+      ? row.recent_tickets
+      : [];
+    let last = "";
+    for (const ticket of tickets) {
+      const placed = String(ticket?.placed_at ?? "");
+      if (placed > last) last = placed;
+      if (placed > newestPlacedAt) newestPlacedAt = placed;
+    }
+    if (last !== "") lastPlaced.set(customer, last);
+  }
+  const newestMs = Date.parse(newestPlacedAt) || 0;
+  const staleness = rows
+    .map((row) => {
+      const last = lastPlaced.get(String(row?.customer_id ?? ""));
+      if (last === undefined || newestMs === 0) return null;
+      return (newestMs - Date.parse(last)) / 86_400_000;
+    })
+    .filter((days) => days !== null)
+    .sort((left, right) => left - right);
+  return {
+    volume: sortedField("lifetime_volume_usd"),
+    net: sortedField("lifetime_net_usd"),
+    clv: sortedField("clv_bps"),
+    sharp: sortedField("sharp_score"),
+    churn: sortedField("churn_hazard"),
+    hold: sortedField("hold_pct"),
+    wagerLimit: sortedField("wager_limit_usd"),
+    delay: sortedField("delay_seconds"),
+    staleness,
+    byAgent,
+    bySubnet,
+    newestPlacedAt,
+  };
+}
+
+/** The cohort p90 cutoffs the flags refer to, returned with every answer so none is hidden. */
+function cohortCutoffs(cohort) {
+  return {
+    volumeP90: quantile(cohort.volume, 0.9),
+    netP90: quantile(cohort.net, 0.9),
+    sharpP90: quantile(cohort.sharp, 0.9),
+    churnP90: quantile(cohort.churn, 0.9),
+    holdP90: quantile(cohort.hold, 0.9),
+    dormantDaysP90: quantile(cohort.staleness, 0.9),
+  };
+}
+
+/** The sampled-ticket behavior of one customer. Never mixed with the lifetime rollup. */
+function sampleOf(row, cohort) {
+  const tickets = Array.isArray(row?.recent_tickets) ? row.recent_tickets : [];
+  const risk = tickets
+    .map((ticket) => Number(ticket?.risk_usd))
+    .filter((value) => Number.isFinite(value));
+  const net = tickets
+    .map((ticket) => Number(ticket?.net_usd))
+    .filter((value) => Number.isFinite(value));
+  const wins = tickets.filter((ticket) => ticket?.result === "WIN").length;
+  const decisive = tickets.filter(
+    (ticket) => ticket?.result === "WIN" || ticket?.result === "LOSS",
+  ).length;
+  const hourHistogramUtc = Array.from({ length: 24 }, () => 0);
+  for (const ticket of tickets) {
+    const when = Date.parse(String(ticket?.placed_at ?? ""));
+    if (Number.isFinite(when))
+      hourHistogramUtc[new Date(when).getUTCHours()] += 1;
+  }
+  const placed = tickets
+    .map((ticket) => String(ticket?.placed_at ?? ""))
+    .filter((value) => value !== "")
+    .sort();
+  const firstPlacedAt = placed.length === 0 ? null : placed[0];
+  const lastPlacedAt = placed.length === 0 ? null : placed[placed.length - 1];
+  const newestMs = Date.parse(cohort.newestPlacedAt) || 0;
+  // Deliberately unrounded: this value is compared against the unrounded staleness
+  // cutoff, and rounding it first made every tied customer fall just below p90.
+  const daysSinceLastTicket =
+    lastPlacedAt === null || newestMs === 0
+      ? null
+      : (newestMs - Date.parse(lastPlacedAt)) / 86_400_000;
+  const riskUsd = risk.reduce((total, value) => total + value, 0);
+  const netUsd = net.reduce((total, value) => total + value, 0);
+  return {
+    tickets: tickets.length,
+    riskUsd,
+    netUsd,
+    roiPct: riskUsd === 0 ? null : (netUsd / riskUsd) * 100,
+    winPct: decisive === 0 ? null : (wins / decisive) * 100,
+    wins,
+    decisive,
+    avgRiskUsd: risk.length === 0 ? null : riskUsd / risk.length,
+    medianRiskUsd: medianOf(risk),
+    maxRiskUsd: risk.length === 0 ? null : Math.max(...risk),
+    firstPlacedAt,
+    lastPlacedAt,
+    daysSinceLastTicket,
+    results: countField(tickets, "result"),
+    leagues: countField(tickets, "league"),
+    markets: countField(tickets, "market"),
+    channels: countField(tickets, "channel"),
+    hourHistogramUtc,
+  };
+}
+
+function customerRanks(row, cohort) {
+  return {
+    volume: percentileRank(
+      cohort.volume,
+      finiteNumber(row?.lifetime_volume_usd),
+    ),
+    net: percentileRank(cohort.net, finiteNumber(row?.lifetime_net_usd)),
+    clv: percentileRank(cohort.clv, finiteNumber(row?.clv_bps)),
+    sharp: percentileRank(cohort.sharp, finiteNumber(row?.sharp_score)),
+    churn: percentileRank(cohort.churn, finiteNumber(row?.churn_hazard)),
+    hold: percentileRank(cohort.hold, finiteNumber(row?.hold_pct)),
+    wagerLimit: percentileRank(
+      cohort.wagerLimit,
+      finiteNumber(row?.wager_limit_usd),
+    ),
+    delay: percentileRank(cohort.delay, finiteNumber(row?.delay_seconds)),
+  };
+}
+
+/** Deep profile of one customer. Used by `profile` and `compare`, so both cannot drift. */
+function customerProfile(row, cohort, cutoffs) {
+  const customerId = String(row?.customer_id ?? "");
+  const volume = finiteNumber(row?.lifetime_volume_usd);
+  const net = finiteNumber(row?.lifetime_net_usd);
+  const clv = finiteNumber(row?.clv_bps);
+  const sharp = finiteNumber(row?.sharp_score);
+  const churn = finiteNumber(row?.churn_hazard);
+  const hold = finiteNumber(row?.hold_pct);
+  const sample = sampleOf(row, cohort);
+  const subnet = String(row?.ip_subnet ?? "").trim();
+  const peerCustomers =
+    subnet === "" ? 0 : (cohort.bySubnet.get(subnet) ?? 1) - 1;
+  const agentId = String(row?.agent_id ?? "UNKNOWN");
+  const agentRows = cohort.byAgent.get(agentId) ?? [row];
+  const rankWithin = (key) => {
+    const ordered = agentRows.slice().sort((left, right) => {
+      const leftValue = finiteNumber(left?.[key]) ?? Number.NEGATIVE_INFINITY;
+      const rightValue = finiteNumber(right?.[key]) ?? Number.NEGATIVE_INFINITY;
+      return rightValue - leftValue;
+    });
+    const index = ordered.findIndex(
+      (candidate) => String(candidate?.customer_id ?? "") === customerId,
+    );
+    return index < 0 ? null : index + 1;
+  };
+  const dormant =
+    sample.daysSinceLastTicket !== null &&
+    cutoffs.dormantDaysP90 !== null &&
+    sample.daysSinceLastTicket >= cutoffs.dormantDaysP90;
+  return {
+    customer_id: row?.customer_id ?? null,
+    identity: {
+      agent_id: row?.agent_id ?? null,
+      master_agent: row?.master_agent ?? null,
+      status: row?.status ?? null,
+      context_type: row?.context_type ?? null,
+      churn_mode: row?.churn_mode ?? null,
+      wager_limit_usd: row?.wager_limit_usd ?? null,
+      delay_seconds: row?.delay_seconds ?? null,
+    },
+    lifetime: {
+      volumeUsd: volume,
+      netUsd: net,
+      holdPct: hold,
+      sports7dVolumeUsd: finiteNumber(row?.sports_7d_volume_usd),
+      sports7dNetUsd: finiteNumber(row?.sports_7d_net_usd),
+      clvBps: clv,
+      sharpScore: sharp,
+      churnHazard: churn,
+    },
+    cohortRanksPct: customerRanks(row, cohort),
+    sample,
+    agentPeers: {
+      agent_id: agentId,
+      customers: agentRows.length,
+      rankByNet: rankWithin("lifetime_net_usd"),
+      rankByVolume: rankWithin("lifetime_volume_usd"),
+    },
+    network: {
+      sharedNetworkIdentity: peerCustomers > 0,
+      peerCustomers,
+    },
+    flags: {
+      positiveClv: clv !== null && clv > 0,
+      topDecileVolume:
+        volume !== null &&
+        cutoffs.volumeP90 !== null &&
+        volume >= cutoffs.volumeP90,
+      topDecileSharp:
+        sharp !== null &&
+        cutoffs.sharpP90 !== null &&
+        sharp >= cutoffs.sharpP90,
+      highChurn:
+        churn !== null &&
+        cutoffs.churnP90 !== null &&
+        churn >= cutoffs.churnP90,
+      highHold:
+        hold !== null && cutoffs.holdP90 !== null && hold >= cutoffs.holdP90,
+      dormant,
+      sharedNetworkIdentity: peerCustomers > 0,
+    },
+  };
+}
+
+/**
+ * `label >= cutoff`, or an explicit "no finite values" so a null cutoff is never printed as
+ * a number and never silently becomes `>= null`.
+ */
+function cutoffRule(label, cutoff) {
+  return cutoff === null
+    ? `${label} (no finite values in this book)`
+    : `${label} >= ${cutoff}`;
+}
+
+/**
  * The staged market reports `./bin/dx stage` publishes into `dist/`. These are REPORTS, not
  * inputs: each carries its own `generatedAtIso`, and the tool reports both that and the file's
  * mtime, so a caller can tell a fresh build from a stale one.
@@ -1355,7 +1646,16 @@ export function apply(ctx, config) {
         "clv/sharp/churn exist only in the lifetime rollup. " +
         '"sharp" returns the DERIVED sharp audit: customers at or above minSharp ' +
         '(default 70) or with positive CLV, ranked by sharp score. "agent" rolls the book ' +
-        "up per agent (customers, tickets, volume, net, CLV, sharp, churn), optionally filtered by agentId.",
+        "up per agent (customers, tickets, volume, net, CLV, sharp, churn), optionally " +
+        'filtered by agentId. "profile" returns deep intelligence for one customerId: ' +
+        "cohort percentile ranks (volume, net, CLV, sharp, churn, hold, wager limit, delay), " +
+        "sampled-ticket behavior (risk distribution, ROI, win rate, leagues, markets, " +
+        "channels, UTC hour histogram, days since the last sampled ticket), agent-peer " +
+        "position, shared-ip_subnet peers and derived flags, with the cohort p90 cutoffs and " +
+        'flag definitions returned. "signals" ranks cohort-wide derived signals (sharp money, ' +
+        "high churn, whales, book-profitable, dormant, multi-account networks) and returns " +
+        'the cutoff each rule used. "compare" places 2-5 customerIds side by side using the ' +
+        "same derived profile. All ranks/cutoffs are recomputed from the book at call time.",
       parameters: {
         type: "object",
         properties: {
@@ -1365,7 +1665,13 @@ export function apply(ctx, config) {
           },
           customerId: {
             type: "string",
-            description: 'Customer id for report "lookup".',
+            description: 'Customer id for reports "lookup" and "profile".',
+          },
+          customerIds: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              'Customer ids for report "compare" (2-5 ids; missing ids are reported, not thrown).',
           },
           agentId: {
             type: "string",
@@ -1415,6 +1721,9 @@ export function apply(ctx, config) {
           "sharp",
           "agent",
           "subsport",
+          "profile",
+          "signals",
+          "compare",
         ];
         if (
           typeof request.report !== "string" ||
@@ -1798,6 +2107,230 @@ export function apply(ctx, config) {
             returned: ranked.length,
             source,
             customers: ranked,
+          };
+        }
+        if (request.report === "profile") {
+          const wanted =
+            typeof request.customerId === "string"
+              ? request.customerId.trim()
+              : "";
+          if (wanted === "") {
+            return invalidArguments(
+              'report "profile" requires customerId (a non-empty string).',
+            );
+          }
+          const match = rows.find(
+            (row) =>
+              String(row?.customer_id ?? "").toUpperCase() ===
+              wanted.toUpperCase(),
+          );
+          if (match === undefined) {
+            return {
+              available: true,
+              ok: true,
+              report: request.report,
+              found: false,
+              customerId: wanted,
+              totalCustomers: rows.length,
+              source,
+              message: `No customer ${JSON.stringify(wanted)} in the book (${rows.length} customers).`,
+            };
+          }
+          const cohort = buildCustomerCohort(rows);
+          const cutoffs = cohortCutoffs(cohort);
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            found: true,
+            customerId: match.customer_id,
+            totalCustomers: rows.length,
+            source,
+            ...customerProfile(match, cohort, cutoffs),
+            cutoffs,
+            flagDefinitions: {
+              topDecile: "value >= the cohort p90 for the same field",
+              highChurn: "churn_hazard >= the cohort p90",
+              dormant:
+                "days since the last sampled ticket >= the cohort p90 for staleness",
+              sharedNetworkIdentity:
+                "another customer in the book shares this ip_subnet",
+            },
+            caveats:
+              "recent_tickets is a per-customer sample; lifetime_* fields are the full " +
+              "rollup. The book is a curated cohort, not the platform-wide customer base. " +
+              "Ranks, cutoffs and days-since are computed from this book at call time.",
+          };
+        }
+        if (request.report === "signals") {
+          const cohort = buildCustomerCohort(rows);
+          const cutoffs = cohortCutoffs(cohort);
+          const ticketTotal = rows.reduce(
+            (total, row) =>
+              total +
+              (Array.isArray(row?.recent_tickets)
+                ? row.recent_tickets.length
+                : 0),
+            0,
+          );
+          const ranked = (predicate, key) =>
+            rows
+              .filter(predicate)
+              .sort(
+                (left, right) =>
+                  (finiteNumber(right?.[key]) ?? Number.NEGATIVE_INFINITY) -
+                  (finiteNumber(left?.[key]) ?? Number.NEGATIVE_INFINITY),
+              );
+          const asSignal = (rule, predicate, key) => {
+            const matched = ranked(predicate, key);
+            return {
+              rule,
+              matched: matched.length,
+              returned: Math.min(limit, matched.length),
+              customers: matched.slice(0, limit).map(slimCustomer),
+            };
+          };
+          const clusters = [...cohort.bySubnet.entries()]
+            .filter(([, customers]) => customers >= 2)
+            .sort((left, right) => right[1] - left[1]);
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            cohort: { customers: rows.length, tickets: ticketTotal },
+            cutoffs,
+            signals: {
+              sharpMoney: asSignal(
+                cutoffs.sharpP90 === null
+                  ? "clv_bps > 0"
+                  : `clv_bps > 0 or sharp_score >= ${cutoffs.sharpP90}`,
+                (row) =>
+                  Number(row?.clv_bps ?? 0) > 0 ||
+                  (finiteNumber(row?.sharp_score) ??
+                    Number.NEGATIVE_INFINITY) >=
+                    (cutoffs.sharpP90 ?? Number.POSITIVE_INFINITY),
+                "clv_bps",
+              ),
+              highChurn: asSignal(
+                cutoffRule("churn_hazard", cutoffs.churnP90),
+                (row) => {
+                  const churn = finiteNumber(row?.churn_hazard);
+                  return (
+                    churn !== null &&
+                    cutoffs.churnP90 !== null &&
+                    churn >= cutoffs.churnP90
+                  );
+                },
+                "churn_hazard",
+              ),
+              whales: asSignal(
+                cutoffRule("lifetime_volume_usd", cutoffs.volumeP90),
+                (row) => {
+                  const volume = finiteNumber(row?.lifetime_volume_usd);
+                  return (
+                    volume !== null &&
+                    cutoffs.volumeP90 !== null &&
+                    volume >= cutoffs.volumeP90
+                  );
+                },
+                "lifetime_volume_usd",
+              ),
+              bookProfitable: asSignal(
+                cutoffRule("hold_pct", cutoffs.holdP90),
+                (row) => {
+                  const hold = finiteNumber(row?.hold_pct);
+                  return (
+                    hold !== null &&
+                    cutoffs.holdP90 !== null &&
+                    hold >= cutoffs.holdP90
+                  );
+                },
+                "hold_pct",
+              ),
+              dormant: asSignal(
+                cutoffRule(
+                  "days since the last sampled ticket",
+                  cutoffs.dormantDaysP90,
+                ),
+                (row) => {
+                  const days = sampleOf(row, cohort).daysSinceLastTicket;
+                  return (
+                    days !== null &&
+                    cutoffs.dormantDaysP90 !== null &&
+                    days >= cutoffs.dormantDaysP90
+                  );
+                },
+                "lifetime_volume_usd",
+              ),
+            },
+            multiAccountNetworks: {
+              rule: "two or more customers share an ip_subnet",
+              matched: clusters.length,
+              returned: Math.min(limit, clusters.length),
+              networks: clusters.slice(0, limit).map(([subnet, customers]) => ({
+                customers,
+                customerIds: rows
+                  .filter(
+                    (row) => String(row?.ip_subnet ?? "").trim() === subnet,
+                  )
+                  .map((row) => row?.customer_id ?? null),
+              })),
+            },
+            note:
+              "Every rule is derived from the book at call time and states its cutoff. " +
+              "A null cutoff means the book has no finite value for that field. Signals " +
+              "are descriptive, not a recommendation.",
+          };
+        }
+        if (request.report === "compare") {
+          const ids = Array.isArray(request.customerIds)
+            ? request.customerIds.filter(
+                (id) => typeof id === "string" && id.trim() !== "",
+              )
+            : [];
+          if (ids.length < 2 || ids.length > 5) {
+            return invalidArguments(
+              'report "compare" requires customerIds with 2 to 5 customer ids.',
+            );
+          }
+          const cohort = buildCustomerCohort(rows);
+          const cutoffs = cohortCutoffs(cohort);
+          const found = [];
+          const missing = [];
+          for (const id of ids) {
+            const match = rows.find(
+              (row) =>
+                String(row?.customer_id ?? "").toUpperCase() ===
+                id.trim().toUpperCase(),
+            );
+            if (match === undefined) missing.push(id);
+            else found.push(match);
+          }
+          if (found.length < 2) {
+            return {
+              available: true,
+              ok: true,
+              report: request.report,
+              found: false,
+              missing,
+              totalCustomers: rows.length,
+              source,
+              message: `Only ${found.length} of the requested ids are in the book; compare needs at least 2.`,
+            };
+          }
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            compared: found.length,
+            missing,
+            totalCustomers: rows.length,
+            source,
+            cutoffs,
+            customers: found.map((row) =>
+              customerProfile(row, cohort, cutoffs),
+            ),
+            note: 'Same derived profile as report "profile"; deltas are for the caller to read off the shared cohort ranks.',
           };
         }
         if (request.report === "lookup") {

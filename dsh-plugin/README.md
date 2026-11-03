@@ -27,6 +27,18 @@ counts they assert (so a changed book changes the expectations, not a hand-edite
 number). Rankings take a window: `lifetime` (default) or `7d` for net/volume; clv, sharp
 and churn exist only in the lifetime rollup and are refused on 7d. `sharp` returns the
 DERIVED sharp audit (sharp_score cutoff or positive CLV), never a scripted playbook list.
+
+Customer intelligence is derived, not scripted. `profile` returns one customer's cohort
+percentile ranks (volume, net, CLV, sharp, churn, hold, wager limit, delay), the sampled-
+ticket behavior (risk distribution, ROI, win rate, leagues, markets, channels, UTC hour
+histogram, days since the last sampled ticket), agent-peer position, shared-`ip_subnet`
+peers and the flags that follow from those — with the cohort p90 cutoffs and the flag
+definitions returned in the same answer. `signals` ranks cohort-wide derived signals
+(sharp money, high churn, whales, book-profitable, dormant, multi-account networks), each
+stating the cutoff its rule used. `compare` places 2–5 `customerIds` side by side using
+the same profile. Every cutoff is recomputed from the book at call time; a field with no
+finite value reports `null` rather than `0`, and the book is a curated cohort, not the
+platform-wide customer base.
 `sportsdesk_dev` also offers `ci-all` (`bun run ci:local --keep-going`) for a full failure
 inventory in one call.
 
