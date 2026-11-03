@@ -16,6 +16,7 @@ const book = await loadCustomerBook();
 describe("derived customer profile", () => {
   test("lookup is case-insensitive and derives the sample from the row", async () => {
     const first = book[0];
+    if (first === undefined) throw new Error("customer book is empty");
     const found = await lookupCustomer(first.customer_id.toLowerCase());
     expect(found.found).toBe(true);
     expect(found.customerId).toBe(first.customer_id);
