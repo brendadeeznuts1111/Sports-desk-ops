@@ -1,0 +1,667 @@
+<!--
+  Synthetic DataTables fixture for the Fantasy402 manager Pending panel.
+
+  Modelled on the live panel DOM captured 2026-11-03 (portal build 1.0.280): same
+  container, totals fields, filter selects, row attributes and description blocks.
+  Every account, customer, name, ticket and amount here is INVENTED — the live paste
+  carries real customer names and logins, which is why it is not committed (see
+  Scratch/pending-panel-contract.md).
+
+  The `data-type="X"` row is deliberately not a code the portal emits: it pins that an
+  unknown row type is carried through instead of rejected or silently dropped.
+
+  Rows: S single, M single, L single, P 2-leg, T 4-leg, C single, G 2-line game combo, X unknown.
+-->
+<div data-panel="pending-main">
+  <div class="card-body collapse in">
+    <div class="fl-r totals-panel">
+      <span>Risking :</span>
+      <span class="negative mr-10" data-field="total-risk">$61,737.70</span>
+      <span>To Win :</span>
+      <span class="mr-10" data-field="total-win">$109,724.24</span>
+    </div>
+
+    <div class="col-lg-3">
+      <select data-list="time" class="form-control block">
+        <option value="730">All</option>
+        <option selected value="0">Today</option>
+        <option value="3">3 Days</option>
+        <option value="7">7 days</option>
+        <option value="14">14 days</option>
+      </select>
+    </div>
+    <div class="col-lg-3">
+      <select data-list="type" class="form-control block">
+        <option value="">All Types</option>
+        <option value="S">Straight</option>
+        <option value="P">Parlay</option>
+        <option value="I">If Bets</option>
+        <option value="T">Teaser</option>
+        <option value="G">Racebook</option>
+        <option value="A">Manual Plays</option>
+        <option value="C">Contest</option>
+        <option value="N">Live/Props</option>
+      </select>
+    </div>
+
+    <div id="DataTables_Table_0_wrapper">
+      <table
+        class="table table-striped base-table"
+        data-table="0"
+        id="DataTables_Table_0"
+      >
+        <thead data-content="head">
+          <tr>
+            <th>Agent</th>
+            <th>Customer</th>
+            <th>Name</th>
+            <th>Accepted (CST)</th>
+            <th>Scheduled</th>
+            <th>Description</th>
+            <th>Risk</th>
+            <th>To Win</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-ticket="9000000001" data-type="S" role="row" class="odd">
+            <td class="t-a-l">
+              <span data-account="AGENT01  " class="link-account"
+                >AGENT01
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST001  " class="link-account">CUST001</span>
+            </td>
+            <td class="t-a-l">Player One</td>
+            <td class="t-a-l">Nov 2, 2026 11:48 PM</td>
+            <td class="t-a-l">Dec 31, 2019 11:00 PM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-S ln">
+                <div class="d-l w-auto">
+                  <span class="rot"
+                    ><img
+                      class="team-logo not-after"
+                      src="https://cdn.fastassets.io/images/team-logos/Lions.png"
+                  /></span>
+                </div>
+                <div class="d-l w-auto"><span class="choosen">Lions</span></div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z2"> -2½ -110</span>&nbsp;
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000001-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Pending</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 110.00 / $ 100.00</div>
+                  </div>
+                  <div class="ln single-fie ld-true">
+                    <div class="d-l">Game</div>
+                    <div class="d-r"><div>Lions / Vikings</div></div>
+                  </div>
+                  <div class="ln selection-S single-field-true">
+                    <div class="d-l">Selection</div>
+                    <div class="d-r">NFL - 459 Game Spread</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Scheduled</div>
+                    <div class="d-r">Nov 8, 2026 12:00 PM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 2, 2026 11:48 PM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Placed On</div>
+                    <div class="d-r">Internet</div>
+                  </div>
+                  <div class="ln single-field-true hide">
+                    <div class="d-l">Note</div>
+                    <div class="d-r"></div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$110</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$100</td>
+          </tr>
+
+          <tr data-ticket="9000000002" data-type="M" role="row" class="even">
+            <td class="t-a-l">
+              <span data-account="AGENT02  " class="link-account"
+                >AGENT02
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST002  " class="link-account">CUST002</span>
+            </td>
+            <td class="t-a-l">Player Two</td>
+            <td class="t-a-l">Nov 3, 2026 12:19 AM</td>
+            <td class="t-a-l">Nov 3, 2026 2:00 PM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-M ln">
+                <div class="d-l w-auto">
+                  <span class="rot"
+                    ><img
+                      class="team-logo not-after"
+                      src="https://cdn.fastassets.io/images/team-logos/UEFA.png"
+                  /></span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="choosen">Paris Saint Germain</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z2"
+                    ><label class="moneyLineAbrv">ML</label> -140</span
+                  >&nbsp;
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000002-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Pending</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 2,800.00 / $ 2,000.00</div>
+                  </div>
+                  <div class="ln single-fie ld-true">
+                    <div class="d-l">Game</div>
+                    <div class="d-r">
+                      <div>Paris Saint Germain / Villarreal</div>
+                    </div>
+                  </div>
+                  <div class="ln selection-M single-field-true">
+                    <div class="d-l">Selection</div>
+                    <div class="d-r">UEFA CH LEA - 224369 Game Moneyline</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Scheduled</div>
+                    <div class="d-r">Nov 3, 2026 2:00 PM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 3, 2026 12:19 AM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Placed On</div>
+                    <div class="d-r">Internet</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Note</div>
+                    <div class="d-r">UEFA Champions League</div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$2,800</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$2,000</td>
+          </tr>
+
+          <tr data-ticket="9000000003" data-type="L" role="row" class="odd">
+            <td class="t-a-l">
+              <span data-account="AGENT03  " class="link-account"
+                >AGENT03
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST003  " class="link-account">CUST003</span>
+            </td>
+            <td class="t-a-l">Player Three</td>
+            <td class="t-a-l">Nov 3, 2026 12:02 AM</td>
+            <td class="t-a-l">Nov 2, 2026 11:00 PM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-L ln">
+                <div class="d-l w-auto">
+                  <span class="rot"><i class="font-me font-total-O"></i></span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="choosen">Seattle/Hawaii</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z2">O 76 -110</span> -
+                  <span class="period-description-s">2nd Half </span> &nbsp;
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000003-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Pending</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 1,100.00 / $ 1,000.00</div>
+                  </div>
+                  <div class="ln single-fie ld-true">
+                    <div class="d-l">Game</div>
+                    <div class="d-r"><div>Seattle / Hawaii</div></div>
+                  </div>
+                  <div class="ln selection-L single-field-true">
+                    <div class="d-l">Selection</div>
+                    <div class="d-r">NCAA - 895 / 896 2nd Half Total</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Scheduled</div>
+                    <div class="d-r">Nov 2, 2026 11:00 PM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 3, 2026 12:02 AM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Placed On</div>
+                    <div class="d-r">Internet</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Note</div>
+                    <div class="d-r">
+                      COLLEGE BASKETBALL Monday. November 2nd
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$1,100</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$1,000</td>
+          </tr>
+
+          <tr data-ticket="9000000004" data-type="P" role="row" class="even">
+            <td class="t-a-l">
+              <span data-account="AGENT04  " class="link-account"
+                >AGENT04
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST004  " class="link-account">CUST004</span>
+            </td>
+            <td class="t-a-l">Player Four</td>
+            <td class="t-a-l">Nov 3, 2026 12:05 AM</td>
+            <td class="t-a-l">Nov 2, 2026 11:00 PM</td>
+            <td class="t-a-l descp-td">
+              <label class="type-magic">Parlay - 2 Teams </label><br />
+              <div data-toggle-data="" class="hide header-bet single-false">
+                <div class="ln">
+                  <div class="d-l">Ticket#</div>
+                  <div class="d-r"><strong>9000000004</strong></div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Status</div>
+                  <div class="d-r">Pending</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Risk/Win</div>
+                  <div class="d-r rw-mobile">$ 1,000.00 / $ 2,569.17</div>
+                </div>
+                <div class="ln single-field-true">
+                  <div class="d-l">Scheduled</div>
+                  <div class="d-r">Nov 2, 2026 11:00 PM - (CST)</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Accepted</div>
+                  <div class="d-r">Nov 3, 2026 12:05 AM - (CST)</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Placed On</div>
+                  <div class="d-r">Internet</div>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="rot"
+                    ><img
+                      class="team-logo not-after"
+                      src="https://cdn.fastassets.io/images/team-logos/Seattle-Redhawks.png"
+                  /></span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="choosen">Seattle</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">-2½ -110</span> -
+                  <span class="period-description-s">2nd Half </span>
+                  <span class="status-P">P</span>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="rot"><i class="font-me font-total-O"></i></span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="choosen">Seattle / Hawaii</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">O 76 -115</span> -
+                  <span class="period-description-s">2nd Half </span>
+                  <span class="status-P">P</span>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$1,000</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$2,569</td>
+          </tr>
+
+          <tr data-ticket="9000000005" data-type="T" role="row" class="odd">
+            <td class="t-a-l">
+              <span data-account="AGENT05  " class="link-account"
+                >AGENT05
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST005  " class="link-account">CUST005</span>
+            </td>
+            <td class="t-a-l">Player Five</td>
+            <td class="t-a-l">Nov 3, 2026 12:34 AM</td>
+            <td class="t-a-l">Nov 8, 2026 12:00 PM</td>
+            <td class="t-a-l descp-td">
+              <label class="type-magic">Teaser - 4 Teams 13Pts Football </label
+              ><br />
+              <div data-toggle-data="" class="hide header-bet single-false">
+                <div class="ln">
+                  <div class="d-l">Ticket#</div>
+                  <div class="d-r"><strong>9000000005</strong></div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Status</div>
+                  <div class="d-r">Pending</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Risk/Win</div>
+                  <div class="d-r rw-mobile">$ 140.00 / $ 100.00</div>
+                </div>
+                <div class="ln teaser-type-Special 4 Teams">
+                  <div class="d-l">Teaser</div>
+                  <div class="d-r">Special 4 Teams</div>
+                </div>
+                <div class="ln single-field-true">
+                  <div class="d-l">Scheduled</div>
+                  <div class="d-r">Nov 8, 2026 12:00 PM - (CST)</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Accepted</div>
+                  <div class="d-r">Nov 3, 2026 12:34 AM - (CST)</div>
+                </div>
+                <div class="ln">
+                  <div class="d-l">Placed On</div>
+                  <div class="d-r">Internet</div>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="choosen">Denver Broncos</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">+10</span
+                  ><span class="status-P">P</span>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="choosen">Minnesota</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">+18½</span
+                  ><span class="status-P">P</span>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="choosen">Cincinnati Bengals</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">+10</span
+                  ><span class="status-P">P</span>
+                </div>
+              </div>
+              <div class="wager-simple ln single-false">
+                <div class="d-l w-auto">
+                  <span class="choosen">Green Bay Packers</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z3">+16</span
+                  ><span class="status-P">P</span>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$140</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$100</td>
+          </tr>
+
+          <tr data-ticket="9000000006" data-type="C" role="row" class="even">
+            <td class="t-a-l">
+              <span data-account="AGENT06  " class="link-account"
+                >AGENT06
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST006  " class="link-account">CUST006</span>
+            </td>
+            <td class="t-a-l">Player Six</td>
+            <td class="t-a-l">Nov 3, 2026 12:10 AM</td>
+            <td class="t-a-l">Nov 7, 2026 11:00 AM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-C ln">
+                <div class="d-l w-auto">
+                  <span class="choosen"
+                    ><i class="font-me gly-list v-a-s"></i
+                    ><span class="chosen-prop">Utah </span
+                    ><span class="line-selected z1">+3000</span> <br /><span
+                      class="font-normal"
+                      >Odds to win 2026-27 National Championship Game</span
+                    ></span
+                  >
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000006-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Pending</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 250.00 / $ 7,500.00</div>
+                  </div>
+                  <div class="ln single-fie ld-true">
+                    <div class="d-l">Game</div>
+                    <div class="d-r">
+                      <div>
+                        NCAAF Futures / Odds to win 2026-27 National
+                        Championship Game
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ln selection-C single-field-true">
+                    <div class="d-l">Selection</div>
+                    <div class="d-r">- 0 Not available</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Scheduled</div>
+                    <div class="d-r">Nov 7, 2026 11:00 AM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 3, 2026 12:10 AM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Placed On</div>
+                    <div class="d-r">Internet</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Note</div>
+                    <div class="d-r">All wagers action - Other on Request</div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$250</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$7,500</td>
+          </tr>
+
+          <tr data-ticket="9000000007" data-type="G" role="row" class="odd">
+            <td class="t-a-l">
+              <span data-account="AGENT07  " class="link-account"
+                >AGENT07
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST007  " class="link-account">CUST007</span>
+            </td>
+            <td class="t-a-l">Player Seven</td>
+            <td class="t-a-l">Nov 2, 2026 11:35 PM</td>
+            <td class="t-a-l">Dec 31, 2019 11:00 PM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-G ln">
+                <div class="d-l w-auto hide">
+                  <span class="rot"
+                    ><img class="team-logo not-after" src=""
+                  /></span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="choosen"
+                    ><i class="font-me ico-all"></i>G319983682
+                    <ul style="display: inline-grid; padding-left: 14px">
+                      <li>
+                        Basketball - Hawaii vs Seattle U / Game / Total / Over
+                        156 -139
+                      </li>
+                      <li>
+                        Basketball - Los Angeles Clippers vs Toronto Raptors /
+                        Game / Winner (2 way) / Toronto Raptors -143
+                      </li>
+                    </ul></span
+                  >
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000007-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Pending</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 200.00 / $ 777.51</div>
+                  </div>
+                  <div class="ln single-fie ld-true">
+                    <div class="d-l">Game</div>
+                    <div class="d-r">
+                      <div>
+                        G319983682 Basketball - Hawaii vs Seattle U / Game /
+                        Total / Over 156 -139
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Scheduled</div>
+                    <div class="d-r">--</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 2, 2026 11:35 PM - (CST)</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Placed On</div>
+                    <div class="d-r">Internet</div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$200</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$777</td>
+          </tr>
+
+          <tr data-ticket="9000000008" data-type="X" role="row" class="even">
+            <td class="t-a-l">
+              <span data-account="AGENT08  " class="link-account"
+                >AGENT08
+              </span>
+            </td>
+            <td class="t-a-l pdl-zero">
+              <span data-account="CUST008  " class="link-account">CUST008</span>
+            </td>
+            <td class="t-a-l">Player Eight</td>
+            <td class="t-a-l">Nov 3, 2026 12:40 AM</td>
+            <td class="t-a-l">Nov 3, 2026 12:40 AM</td>
+            <td class="t-a-l descp-td">
+              <div class="wager-simple type-X ln">
+                <div class="d-l w-auto">
+                  <span class="choosen">Unlabelled selection</span>
+                </div>
+                <div class="d-l w-auto">
+                  <span class="line-selected z2"> -1 -110</span>
+                </div>
+              </div>
+              <div data-toggle-data="" class="hide content-descripcion">
+                <div class="hide header-bet single-true">
+                  <div class="ln">
+                    <div class="d-l">Ticket#</div>
+                    <div class="d-r"><strong>9000000008-1</strong></div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Status</div>
+                    <div class="d-r">Open</div>
+                  </div>
+                  <div class="ln">
+                    <div class="d-l">Risk/Win</div>
+                    <div class="d-r rw-mobile">$ 50.00 / $ 45.45</div>
+                  </div>
+                  <div class="ln single-field-true">
+                    <div class="d-l">Accepted</div>
+                    <div class="d-r">Nov 3, 2026 12:40 AM - (CST)</div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="t-a-r pdr-zero bold-text to-risk negative">$50</td>
+            <td class="t-a-r pdr-zero bold-text to-win">$45</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="fg-toolbar">
+        <div class="dataTables_paginate" id="DataTables_Table_0_paginate">
+          <a
+            class="previous ui-state-disabled"
+            aria-controls="DataTables_Table_0"
+            >Previous</a
+          >
+          <span>
+            <a class="ui-state-disabled" aria-controls="DataTables_Table_0"
+              >1</a
+            >
+            <a aria-controls="DataTables_Table_0">2</a>
+            <a aria-controls="DataTables_Table_0">3</a>
+            <a aria-controls="DataTables_Table_0">4</a>
+          </span>
+          <a class="next" aria-controls="DataTables_Table_0">Next</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
