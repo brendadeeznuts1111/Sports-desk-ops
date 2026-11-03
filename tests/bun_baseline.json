@@ -350,5 +350,45 @@
     "code": 0,
     "signal": null,
     "timedOut": false
+  },
+  "data.parse": {
+    "note": "JSONL, JSON5, TOML, YAML and XML parse inline",
+    "stdout": "[[1,2],{\"a\":1},{\"a\":1},{\"a\":1},{\"a\":\"1\"}]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.semver": {
+    "note": "semver.satisfies and semver.order answer version questions",
+    "stdout": "[true,-1]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.inspect": {
+    "note": "inspect renders a stable multi-line form",
+    "stdout": "[\"{\\n  a: [ 1 ],\\n}\",\"\\\"x\\\"\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "storage.archive": {
+    "note": "Archive round-trips through bytes and files()",
+    "stdout": "",
+    "stderr": "1 | (async()=>{const b=await new Bun.Archive({\"a.txt\":\"hi\"}).bytes();const f=await new Bun.Archive(b).files();console.log(JSON.stringify([b.length>0,[...f.keys()],new TextDecoder().decode(f.get(\"a.txt\"))]))})()\n                                                                                                                                                                                     ^\nTypeError: TextDecoder.decode expects an ArrayBuffer or TypedArray\n code: \"ERR_INVALID_ARG_TYPE\"\n\n      at <anonymous> (/private<cwd>/[eval]:1:178)\n\nBun v1.4.4 (macOS arm64)",
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  },
+  "image.metadata": {
+    "note": "Image.metadata reads a 1x1 PNG header",
+    "stdout": "{\"width\":1,\"height\":1,\"format\":\"png\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
   }
 }

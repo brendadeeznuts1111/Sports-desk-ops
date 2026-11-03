@@ -354,6 +354,43 @@ const probes: Probe[] = [
       '(function(){const e=new TextEncoder(),d=new TextDecoder();const s=e.encode("hello");const z=Bun.zstdCompressSync(s),g=Bun.gzipSync(s);return JSON.stringify([d.decode(Bun.zstdDecompressSync(z)),d.decode(Bun.gunzipSync(g)),typeof Bun.zstdCompress,typeof Bun.concatArrayBuffers,typeof new Bun.ArrayBufferSink()])})()',
     ],
   },
+  {
+    id: "data.parse",
+    note: "JSONL, JSON5, TOML, YAML and XML parse inline",
+    argv: [
+      "-p",
+      'JSON.stringify([Bun.JSONL.parse("1\\n2\\n"),Bun.JSON5.parse("{a:1}"),Bun.TOML.parse("a = 1"),Bun.YAML.parse("a: 1"),Bun.XML.parse("<a>1</a>")])',
+    ],
+  },
+  {
+    id: "data.semver",
+    note: "semver.satisfies and semver.order answer version questions",
+    argv: [
+      "-p",
+      'JSON.stringify([Bun.semver.satisfies("1.2.3","^1.0.0"),Bun.semver.order("1.0.0","1.0.1")])',
+    ],
+  },
+  {
+    id: "text.inspect",
+    note: "inspect renders a stable multi-line form",
+    argv: ["-p", 'JSON.stringify([Bun.inspect({a:[1]}),Bun.inspect("x")])'],
+  },
+  {
+    id: "storage.archive",
+    note: "Archive round-trips through bytes and files()",
+    argv: [
+      "-e",
+      '(async()=>{const b=await new Bun.Archive({"a.txt":"hi"}).bytes();const f=await new Bun.Archive(b).files();console.log(JSON.stringify([b.length>0,[...f.keys()],new TextDecoder().decode(f.get("a.txt"))]))})()',
+    ],
+  },
+  {
+    id: "image.metadata",
+    note: "Image.metadata reads a 1x1 PNG header",
+    argv: [
+      "-e",
+      'const png=Uint8Array.fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");(async()=>{console.log(JSON.stringify(await new Bun.Image(png).metadata()))})()',
+    ],
+  },
 ];
 
 async function prepareScratch(): Promise<string> {

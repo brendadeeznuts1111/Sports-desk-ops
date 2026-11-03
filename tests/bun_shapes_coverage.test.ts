@@ -12,6 +12,23 @@ import { listSourceFiles } from "../lib/source_files.ts";
 const root = resolve(import.meta.dir, "..");
 const CATALOG = "docs/runbooks/bun_shape_contracts_runbook.md";
 
+/** `## Section` → `#### Shape` headings listed under it. */
+function catalogSections(markdown: string): Map<string, Set<string>> {
+  const sections = new Map<string, Set<string>>();
+  let current: string | undefined;
+  for (const line of markdown.split("\n")) {
+    const section = /^##\s+(.+?)\s*$/.exec(line);
+    const shape = /^####\s+(.+?)\s*$/.exec(line);
+    if (section) {
+      current = section[1] as string;
+      sections.set(current, new Set());
+    } else if (shape && current !== undefined) {
+      sections.get(current)?.add(shape[1] as string);
+    }
+  }
+  return sections;
+}
+
 /** Same scope the inventory was taken from: source, not tests, not the pinned vendor tree. */
 const isScanned = (file: string): boolean =>
   !file.includes(".test.") &&
@@ -94,6 +111,7 @@ describe("Bun shape coverage", () => {
       usage,
       shapes: BUN_SHAPES,
       headings,
+      sections: catalogSections(catalog),
       probes,
       tests,
       surfaces,

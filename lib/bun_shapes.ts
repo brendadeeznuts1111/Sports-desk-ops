@@ -35,6 +35,18 @@ export const SHAPE_SUBSYSTEMS = [
 
 export type ShapeSubsystem = (typeof SHAPE_SUBSYSTEMS)[number];
 
+/** Catalog `##` section title each subsystem's shapes must appear under. */
+export const SHAPE_SECTIONS: Readonly<Record<ShapeSubsystem, string>> = {
+  process: "Process, filesystem and shell",
+  text: "Text and terminal rendering",
+  data: "Data formats and parsing",
+  storage: "Storage and scheduling",
+  crypto: "Crypto, hashing and compression",
+  network: "Network and serving",
+  image: "Image and WebView",
+  meta: "Runtime metadata and environment",
+};
+
 /**
  * `value` — a runtime property of `Bun`; `type` — declared in bun-types but not a
  * runtime value (`typeof Bun.X === "undefined"`), so it may only be used in type
@@ -215,7 +227,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "text",
     heading: "Bun.inspect",
-    evidence: ["surface:inspect.table"],
+    evidence: ["surface:inspect.table", "probe:text.inspect"],
   },
   {
     name: "markdown",
@@ -265,7 +277,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.JSON5",
-    evidence: ["surface:JSON5"],
+    evidence: ["surface:JSON5", "probe:data.parse"],
   },
   {
     name: "JSONC",
@@ -279,28 +291,32 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.JSONL",
-    evidence: ["surface:JSONL", "test:tests/bun_capabilities.test.ts"],
+    evidence: [
+      "surface:JSONL",
+      "test:tests/bun_capabilities.test.ts",
+      "probe:data.parse",
+    ],
   },
   {
     name: "TOML",
     kind: "value",
     subsystem: "data",
     heading: "Bun.TOML",
-    evidence: ["surface:TOML"],
+    evidence: ["surface:TOML", "probe:data.parse"],
   },
   {
     name: "XML",
     kind: "value",
     subsystem: "data",
     heading: "Bun.XML",
-    evidence: ["surface:XML"],
+    evidence: ["surface:XML", "probe:data.parse"],
   },
   {
     name: "YAML",
     kind: "value",
     subsystem: "data",
     heading: "Bun.YAML",
-    evidence: ["surface:YAML"],
+    evidence: ["surface:YAML", "probe:data.parse"],
   },
   {
     name: "deepEquals",
@@ -314,7 +330,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.semver",
-    evidence: ["surface:semver.satisfies"],
+    evidence: ["surface:semver.satisfies", "probe:data.semver"],
   },
   // storage & scheduling
   {
@@ -322,7 +338,7 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "storage",
     heading: "Bun.Archive",
-    evidence: ["surface:Archive"],
+    evidence: ["surface:Archive", "probe:storage.archive"],
   },
   {
     name: "CronController",
@@ -507,7 +523,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "image",
     heading: "Bun.Image",
-    evidence: ["surface:Image", "test:tests/bun_capabilities.test.ts"],
+    evidence: [
+      "surface:Image",
+      "test:tests/bun_capabilities.test.ts",
+      "probe:image.metadata",
+    ],
   },
   {
     name: "WebView",
@@ -631,6 +651,7 @@ export type ShapeRule =
   | "no-evidence"
   | "undeclared-shape"
   | "runtime-only-without-source"
+  | "section-mismatch"
   | "element-access";
 
 export interface ShapeProblem {
@@ -651,6 +672,8 @@ export interface ShapeWorld {
   readonly surfaces: ReadonlySet<string>;
   /** `typeof Bun.<name>` per manifest entry. */
   readonly runtimeTypeof: ReadonlyMap<string, string>;
+  /** Catalog section title → headings listed under it. */
+  readonly sections: ReadonlyMap<string, ReadonlySet<string>>;
   /** Value members declared by bun-types@1.4.4. */
   readonly declaredValues: ReadonlySet<string>;
   /** Raw bun-types source text, used to confirm type-only declarations. */
@@ -725,6 +748,15 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
       problems.push({
         rule: "kind-mismatch",
         detail: `${shape.name}: kind=type typeof=${actual}`,
+      });
+    }
+
+    const section = SHAPE_SECTIONS[shape.subsystem];
+    const inSection = world.sections.get(section);
+    if (inSection === undefined || !inSection.has(shape.heading)) {
+      problems.push({
+        rule: "section-mismatch",
+        detail: `${shape.heading} is not under "## ${section}"`,
       });
     }
 

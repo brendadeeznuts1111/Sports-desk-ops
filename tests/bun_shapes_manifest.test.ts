@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   BUN_SHAPES,
+  SHAPE_SECTIONS,
   SHAPE_SUBSYSTEMS,
   analyzeBunShapes,
   catalogHeadings,
@@ -18,6 +19,17 @@ const shape = (name: string, over: Partial<BunShape> = {}): BunShape => ({
   ...over,
 });
 
+function sectionMap(shapes: readonly BunShape[]): Map<string, Set<string>> {
+  const sections = new Map<string, Set<string>>();
+  for (const s of shapes) {
+    const title = SHAPE_SECTIONS[s.subsystem];
+    const set = sections.get(title) ?? new Set<string>();
+    set.add(s.heading);
+    sections.set(title, set);
+  }
+  return sections;
+}
+
 function world(over: Partial<ShapeWorld> = {}): ShapeWorld {
   const shapes: readonly BunShape[] = over.shapes ?? [shape("file")];
   return {
@@ -27,6 +39,7 @@ function world(over: Partial<ShapeWorld> = {}): ShapeWorld {
     },
     shapes,
     headings: shapes.map((s) => s.heading),
+    sections: sectionMap(shapes),
     probes: new Set(["test.probe"]),
     tests: new Set(["tests/bun_capabilities.test.ts"]),
     surfaces: new Set(["file"]),
@@ -261,6 +274,19 @@ describe("analyzeBunShapes", () => {
     );
     expect(problems).toEqual([
       { rule: "undeclared-shape", detail: "FileSink (type)" },
+    ]);
+  });
+
+  test("a heading under the wrong section is reported", () => {
+    const sections = new Map([
+      ["Text and terminal rendering", new Set(["Bun.file"])],
+    ]);
+    const problems = analyzeBunShapes(world({ sections }));
+    expect(problems).toEqual([
+      {
+        rule: "section-mismatch",
+        detail: 'Bun.file is not under "## Process, filesystem and shell"',
+      },
     ]);
   });
 

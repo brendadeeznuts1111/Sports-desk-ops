@@ -151,7 +151,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - `Bun.stringWidth("漢")` → 2 and ANSI escape codes are ignored by default; `Bun.wrapAnsi` wraps at the given column width — `text.width`.
 - `Bun.color("red", "hex")` → `#ff0000`; `Bun.enableANSIColors` is a boolean; `Bun.escapeHTML` escapes `&`, `<`, `>` — `text.ansi`.
-- `Bun.inspect` is exercised by the `inspect.table` surface check; `Bun.markdown` by the `markdown` surface check.
+- `Bun.inspect({a:[1]})` renders a stable multi-line form — `text.inspect`; `Bun.markdown` is exercised by the `markdown` surface check.
 
 #### Bun.color
 
@@ -179,7 +179,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/wagers_report.ts`, `lib/f402_hierarchy_envelope_view.ts`
-- **Evidence:** `surface:inspect.table`
+- **Evidence:** `surface:inspect.table`, `probe:text.inspect`
 
 #### Bun.markdown
 
@@ -204,11 +204,11 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 ## Data formats and parsing
 
-- `Bun.JSON5` / `Bun.JSONC` / `Bun.JSONL` / `Bun.TOML` / `Bun.YAML` / `Bun.XML` parse in-process; JSONC accepts comments (`data.json`).
+- `Bun.JSON5` / `Bun.TOML` / `Bun.YAML` / `Bun.XML` / `Bun.JSONL` each parse a tiny document in-process — `data.parse`; `Bun.JSONC` also accepts comments — `data.json`.
 - `new Bun.Glob("*.ts").match("a.ts")` → true, `"a.js"` → false — `data.glob`.
 - `Bun.deepEquals` compares structure, not identity — `data.compare`.
 - `new Bun.Cookie("a","b")` and `new Bun.CookieMap("a=b").get("a")` agree on the pair — `data.cookies`.
-- `Bun.semver` satisfies is covered by the `semver.satisfies` surface check.
+- `Bun.semver.satisfies("1.2.3", "^1.0.0")` → true and `Bun.semver.order("1.0.0", "1.0.1")` → -1 — `data.semver`.
 
 #### Bun.Cookie
 
@@ -236,7 +236,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/JSON5)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/bun_xml_golden_ast.ts`
-- **Evidence:** `surface:JSON5`
+- **Evidence:** `surface:JSON5`, `probe:data.parse`
 
 #### Bun.JSONC
 
@@ -250,28 +250,28 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/JSONL)
 - **Shape:** value: `object` · writable false · enumerable true
 - **Here:** `lib/cron_journal.ts`, `scripts/gslive_all_states_suspect_cron.ts`
-- **Evidence:** `surface:JSONL`, `test:tests/bun_capabilities.test.ts` · deep dive: [§8.4](./bun_server_runtime_shapes_runbook.md)
+- **Evidence:** `surface:JSONL`, `test:tests/bun_capabilities.test.ts`, `probe:data.parse` · deep dive: [§8.4](./bun_server_runtime_shapes_runbook.md)
 
 #### Bun.TOML
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/TOML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/gen_tokens/tokens_ssot.ts`
-- **Evidence:** `surface:TOML`
+- **Evidence:** `surface:TOML`, `probe:data.parse`
 
 #### Bun.XML
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/XML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `lib/bun_xml_golden_ast.ts`, `lib/customer_profile.ts`
-- **Evidence:** `surface:XML`
+- **Evidence:** `surface:XML`, `probe:data.parse`
 
 #### Bun.YAML
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/YAML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `scripts/ci_local.ts`
-- **Evidence:** `surface:YAML`
+- **Evidence:** `surface:YAML`, `probe:data.parse`
 
 #### Bun.deepEquals
 
@@ -285,11 +285,11 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/semver)
 - **Shape:** value: `object` · writable false · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
-- **Evidence:** `surface:semver.satisfies`
+- **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
 
 ## Storage and scheduling
 
-- `Bun.SQL`, `Bun.S3Client`, `Bun.RedisClient` are constructors; `Bun.Archive` a class with `blob()`/`bytes()` — `surface:SQL`, `surface:S3Client`, `surface:RedisClient`, `surface:Archive`.
+- `Bun.SQL`, `Bun.S3Client`, `Bun.RedisClient` are constructors; `Bun.Archive` round-trips in memory — write `{"a.txt":"hi"}`, read `files()` back to the same key — `storage.archive`.
 - `Bun.cron` returns a `CronJob`; `Bun.CronController` is a type (no runtime value).
 - `Bun.secrets.get` is covered by the `secrets.get` surface check.
 
@@ -298,7 +298,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Archive)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/eod_archive.ts`, `bin/bun_surface.ts`
-- **Evidence:** `surface:Archive`
+- **Evidence:** `surface:Archive`, `probe:storage.archive`
 
 #### Bun.CronController (type)
 
@@ -488,14 +488,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 ## Image and WebView
 
-- `Bun.Image` and `Bun.WebView` are constructors; both have deep contracts in the server shapes runbook.
+- `Bun.Image` and `Bun.WebView` are constructors; `metadata()` on a 1×1 PNG reads `{width:1, height:1, format:"png"}` — `image.metadata`. Both have deep contracts in the server shapes runbook.
 
 #### Bun.Image
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Image)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/screenshot_encode.ts`, `lib/logo_image.ts`
-- **Evidence:** `surface:Image`, `test:tests/bun_capabilities.test.ts`
+- **Evidence:** `surface:Image`, `test:tests/bun_capabilities.test.ts`, `probe:image.metadata`
 
 #### Bun.WebView
 
