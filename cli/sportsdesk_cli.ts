@@ -24,7 +24,6 @@ import {
   startBotDaemon,
 } from "../services/reporting_scheduler_service.ts";
 import { runFullBettorSimulationPipeline } from "../services/simulate_bettor_churn_suite.ts";
-import { AgentOnePassPlugin } from "../services/agent_onepass_plugin.ts";
 import {
   syncReportsDirectory,
   verifyR2Connection,
@@ -148,7 +147,7 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 ### 2. CORE FORENSICS & SIMULATION:
 * **-f, --forensics, --sharps, --audit-sharps**: Run the DERIVED sharp audit (sharp_score / positive-CLV candidates)
 * **-S, --simulate, --sim, --run-sim**: Run full 52-week dual-basis bettor churn simulation
-* **-o, --onepass, --liability, --agent-risk**: Run streaming Agent OnePass 50% liability aggregator
+* **-o, --onepass, --liability, --agent-risk**: Run the DERIVED Agent OnePass 50% liability scoreboard (downline snapshot)
 
 ### 3. HIERARCHY & SURVEILLANCE:
 * **-k, --walk-tree, --tree** [AGENT_ID]: Walk the snapshot's master→agent links with derived subtree rollups
@@ -208,7 +207,7 @@ export function printHelpOld(): void {
 2. CORE FORENSICS & SIMULATION:
   -f, --forensics, --sharps, --audit-sharps    Run the DERIVED sharp audit (sharp_score / positive CLV)
   -S, --simulate, --sim, --run-sim            Run full 52-week dual-basis bettor churn simulation
-  -o, --onepass, --liability, --agent-risk     Run streaming Agent OnePass 50% liability aggregator
+  -o, --onepass, --liability, --agent-risk     Run the DERIVED 50% liability scoreboard (snapshot)
 
 3. HIERARCHY & SURVEILLANCE:
   -k, --walk-tree, --tree [AGENT_ID]          Walk master→agent links in the snapshot (flat source)
@@ -1154,6 +1153,98 @@ export async function printSharpAudit(args: string[]): Promise<void> {
   );
 }
 
+export function printOnePass(args: string[]): void {
+  let snapshot: DownlinePayload;
+  try {
+    snapshot = loadDownlineData();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+  const agents = snapshot.agents
+    .slice()
+    .sort(
+      (left, right) => Number(right.lifetime_net) - Number(left.lifetime_net),
+    );
+  const rows = agents.map((agent) => {
+    const netUsd = Number(agent.lifetime_net) || 0;
+    return {
+      agent: agent.agent,
+      master: agent.master,
+      accounts: agent.total_accounts,
+      active: agent.active_sports_accounts,
+      tickets: agent.sports_tickets,
+      volumeUsd: agent.sports_vol,
+      netUsd,
+      liabilityShareUsd: netUsd * 0.5,
+    };
+  });
+  const totals = rows.reduce(
+    (acc, row) => ({
+      accounts: acc.accounts + row.accounts,
+      active: acc.active + row.active,
+      tickets: acc.tickets + row.tickets,
+      volumeUsd: acc.volumeUsd + row.volumeUsd,
+      netUsd: acc.netUsd + row.netUsd,
+      liabilityShareUsd: acc.liabilityShareUsd + row.liabilityShareUsd,
+    }),
+    {
+      accounts: 0,
+      active: 0,
+      tickets: 0,
+      volumeUsd: 0,
+      netUsd: 0,
+      liabilityShareUsd: 0,
+    },
+  );
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          snapshotMeta: snapshot.meta,
+          listedAgents: agents.length,
+          totals,
+          agents: rows,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  const divider = "=".repeat(116);
+  console.log(divider);
+  console.log(
+    `AGENT ONEPASS LIABILITY SCOREBOARD • DERIVED from the downline snapshot • ${agents.length} rows • 50% house/agent split`,
+  );
+  console.log(divider);
+  console.log(
+    " Agent        | Master    | Acct | Active | Tickets | Sports Vol ($) | Net P&L ($)     | 50% Liability ($)",
+  );
+  console.log(
+    "--------------+-----------+------+--------+---------+----------------+-----------------+------------------",
+  );
+  for (const row of rows) {
+    console.log(
+      ` ${row.agent.padEnd(12)} | ${row.master.padEnd(9)} | ` +
+        `${String(row.accounts).padStart(4)} | ` +
+        `${String(row.active).padStart(6)} | ` +
+        `${String(row.tickets).padStart(7)} | ` +
+        `${usd(row.volumeUsd).padStart(14)} | ` +
+        `${signedUsd(row.netUsd).padStart(15)} | ` +
+        `${signedUsd(row.liabilityShareUsd).padStart(16)}`,
+    );
+  }
+  console.log(divider);
+  console.log(
+    `TOTALS: accounts ${totals.accounts} | active ${totals.active} | tickets ${totals.tickets} | volume ${usd(totals.volumeUsd)} | net ${signedUsd(totals.netUsd)} | 50% liability ${signedUsd(totals.liabilityShareUsd)}`,
+  );
+  console.log(
+    `* meta claims ${snapshot.meta.total_sub_agents} sub-agents; the snapshot lists ${agents.length} rows. 50% share = |lifetime net| * 0.5 (the CLI's documented split).\n`,
+  );
+}
+
 function parseLimit(raw: string): number {
   const parsed = Number.parseInt(raw, 10);
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 500) : 10;
@@ -1747,10 +1838,11 @@ export async function main(): Promise<void> {
   if (
     rawArgs.includes("-o") ||
     rawArgs.includes("--onepass") ||
+    rawArgs.includes("--liability") ||
+    rawArgs.includes("--agent-risk") ||
     cmd === "onepass"
   ) {
-    new AgentOnePassPlugin(0.5);
-    console.log("Agent OnePass active with 50% liability model.");
+    printOnePass(rawArgs);
     return;
   }
 
