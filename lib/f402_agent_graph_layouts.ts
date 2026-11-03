@@ -1,5 +1,5 @@
 /**
- * Layout engines → common `LaidOutGraph` coordinates for readability scoring.
+ * Run layout engines and produce coordinates in the shared scoring contract (`LaidOutGraph`).
  */
 
 import cytoscape from "cytoscape";

@@ -1,7 +1,11 @@
 /**
- * Graph-drawing readability metrics on laid-out coordinates (layout space, y grows downward).
- * Edges are scored as straight segments between box centers so every layout engine is
- * compared on identical terms regardless of its spline routing.
+ * Readability scoring for agent-graph layouts (layout space, y downward).
+ *
+ * Purpose: compare layout engines and view budgets on one rubric — crossings, overlaps,
+ * intended flow, fit-to-raster — so evidence in docs/evidence/agent-graph-readability.md
+ * is engine-neutral. Edges are judged as center-to-center segments, not each engine's curves.
+ * Wire exports are normalized into a scored graph at the layout boundary; scoring reads
+ * coordinates and dense edge endpoints only.
  */
 
 export interface LaidOutNode {
@@ -13,13 +17,13 @@ export interface LaidOutNode {
   readonly h: number;
 }
 
-/** String endpoints from Cytoscape / Graphviz exports — resolved once at layout build time. */
+/** Edge endpoints in export form (stable agent ids from Cytoscape / Graphviz). */
 export type LaidOutWireEdge = {
   readonly source: string;
   readonly target: string;
 };
 
-/** Dense node row indices; hot paths in scoreLayout never touch string ids. */
+/** Edge endpoints in scored form (indices into the laid-out node list). */
 export type LaidOutEdge = {
   readonly sourceIndex: number;
   readonly targetIndex: number;
@@ -34,7 +38,7 @@ export interface LaidOutGraph {
   readonly flow?: "down" | "right" | "radial";
 }
 
-/** Map wire edges to indices in `nodes` order; drops edges with missing endpoints. */
+/** Attach wire edges to a laid-out node list for scoring; omit endpoints missing from the layout. */
 export function indexLaidOutEdges(
   nodes: readonly Pick<LaidOutNode, "id">[],
   wire: readonly LaidOutWireEdge[],
@@ -52,6 +56,7 @@ export function indexLaidOutEdges(
   return out;
 }
 
+/** Normalize engine output into the graph shape `scoreLayout` expects. */
 export function laidOutGraph(
   nodes: readonly LaidOutNode[],
   wire: readonly LaidOutWireEdge[],
@@ -64,7 +69,6 @@ export function laidOutGraph(
     : { nodes, edges, fontSize, flow };
 }
 
-/** Pack two node indices (each < 65536) into one word for sweep hot loops. */
 function packEndpoints(a: number, b: number): number {
   return (a << 16) | b;
 }
@@ -217,13 +221,7 @@ export function countPairs(
   return count;
 }
 
-/**
- * Sweep-and-prune over segments sorted by their low end on one axis: a pair is tested only when
- * both extents overlap, the same pairs an all-pairs bounding-box reject keeps. The sweep axis is
- * the one whose extents cover the drawing fewer times over (tree layouts: short hops across wide
- * rows), which is what bounds the pairs the sweep visits. `seg` holds `x1, y1, x2, y2` per
- * segment; `packed[s]` is `(sourceIndex << 16) | targetIndex`.
- */
+/** Proper crossings among straight segments; sub-quadratic via axis-chosen sweep-and-prune. */
 function countCrossings(
   seg: Float64Array,
   packed: Uint32Array,

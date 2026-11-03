@@ -120,7 +120,8 @@ bun run graph:agent:judge -- --questions               # judge sheet; --score an
 Viewer routes: `/views` (index), `/views/<file>`, `/agent/<id>` (upline, children, portal-parent
 disagreement), `/interactive` (ELK). All 503 `no-store` when views do not match the envelope SHA.
 Views use envelope nesting; SQLite `parent_id` keeps the portal parser's parents (319 differ) —
-see [agent-graph-readability.md](agent-graph-readability.md).
+see [agent-graph-readability.md](agent-graph-readability.md). Scoring definitions:
+[agent-graph-scoring-contract.md](agent-graph-scoring-contract.md).
 
 ---
 
