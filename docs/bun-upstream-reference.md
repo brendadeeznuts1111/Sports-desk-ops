@@ -18,6 +18,22 @@ Pins above **main** are not behavior SSOT. Evidence labels and capture-backed cl
 sportsdesk-ops override upstream tone when they conflict. One-liner eval rules:
 [`bun-eval-pitfalls.md`](./bun-eval-pitfalls.md).
 
+## Contributing (three surfaces)
+
+GitHub’s [**Contributing** tab](https://github.com/oven-sh/bun?tab=contributing-ov-file) renders
+root [`CONTRIBUTING.md`](https://github.com/oven-sh/bun/blob/main/CONTRIBUTING.md): **building the
+Bun engine** (Nix/`bun bd`, LLVM 23, WebKit local, ASAN, `bun-pr`, BuildKite `ci:*`). It does **not**
+include docs **voice** rules.
+
+| Surface | Content |
+| ------- | ------- |
+| [GitHub Contributing tab](https://github.com/oven-sh/bun?tab=contributing-ov-file) | `CONTRIBUTING.md` — runtime repo onboarding |
+| [`docs/project/contributing.mdx`](https://bun.com/docs/project/contributing) | Same build material as published docs **plus** [voice](https://bun.com/docs/project/contributing#voice) for MDX authors |
+| [`docs/README.md#contributing`](https://github.com/oven-sh/bun/tree/main/docs#contributing) | Short pointer: open issues/PRs; read voice in `contributing.mdx` |
+
+sportsdesk-ops contributors fixing **this** repo use `AGENTS.md` and `ci:local`; upstream **docs**
+PRs use the voice pin in the table above; upstream **runtime** PRs follow `CONTRIBUTING.md`.
+
 ## `docs/snippets/` @ `6a380492`
 
 Mintlify building blocks; full articles live elsewhere.
