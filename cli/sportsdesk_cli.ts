@@ -66,7 +66,20 @@ import {
   TEN_MODE_CATALOG,
   buildTenModeLiveSnapshot,
 } from "../lib/forensic_diagnostic_modes.ts";
-import { buildGsLiveDualSurfaceDescriptor } from "../lib/gslive_manager_deeplink_sidecar.ts";
+import {
+  GSLIVE_BET_HISTORY_STATES,
+  GSLIVE_GROUP_KINDS,
+  buildGsLiveDualSurfaceDescriptor,
+  type GsLiveBetHistoryState,
+  type GsLiveBetHistoryUrlFilters,
+  type GsLiveGroupKind,
+} from "../lib/gslive_manager_deeplink_sidecar.ts";
+import {
+  listGsLivePeriodOptions,
+  parseGsLiveSportPeriods,
+  resolveGsLivePeriodCode,
+  type GsLiveSportPeriods,
+} from "../lib/gslive_period_logic.ts";
 import {
   PER_OFFICE_IP_TRACKER_CLUSTERS,
   buildPerOfficeIpMatcherPayload,
@@ -184,7 +197,7 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 * **wire info** [\`-c\` CUST_ID]: Execute getInfoPlayer read-back verification
 
 ### 9. OPERATOR SURFACES (GSLive, stale lines, screenshots):
-* **gslive** [LOGIN] [\`--date\` YYYY-MM-DD] [\`--json\`]: GSLive 7-param report + bet-history sidecar links
+* **gslive** [LOGIN] [\`--date\` YYYY-MM-DD] [\`--state\` STATE] [\`--window\` 1-31] [\`--agent\` A] [\`--bet-id\` IDS] [\`--bet-group-id\` IDS] [\`--free-bet-id\` ID] [\`--kind\` KIND] [\`--group-name\` NAME] [\`--period\` P] [\`--sport\` SID] [\`--market\` IDS] [\`--json\`]: GSLive 7-param report + bet-history sidecar links
 * **profile** <0x|username> [\`--json\`]: Polymarket PnL, win rate, positions, categories, strategy
 * **combo** legs|price|wallet: CFB combo legs, product-of-legs pricing, wallet combo positions
 * **bridge** coverage|value|match: cross-domain join between the customer book and Polymarket wallets
@@ -1397,6 +1410,144 @@ function getArgValue(
   return defaultValue;
 }
 
+/**
+ * Validates the observed `--state` SPA filter for `#/events/bet-history`.
+ * Prints the refusal and sets the exit code itself; `undefined` tells the caller to stop.
+ */
+function parseGsLiveState(raw: string): GsLiveBetHistoryState | undefined {
+  const state = GSLIVE_BET_HISTORY_STATES.find((entry) => entry === raw);
+  if (state === undefined) {
+    console.error(
+      `Unknown --state ${JSON.stringify(raw)}. Allowed: ${GSLIVE_BET_HISTORY_STATES.map((entry) => JSON.stringify(entry)).join(", ")}.`,
+    );
+    process.exitCode = 1;
+    return undefined;
+  }
+  return state;
+}
+
+/**
+ * Validates the per-player bet-history window (`--window`, desk days 1-31).
+ * Prints the refusal and sets the exit code itself; `undefined` tells the caller to stop.
+ */
+function parseGsLiveWindow(raw: string): number | undefined {
+  const windowDays = Number(raw);
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 31) {
+    console.error(
+      `--window must be an integer 1-31, got ${JSON.stringify(raw)}.`,
+    );
+    process.exitCode = 1;
+    return undefined;
+  }
+  return windowDays;
+}
+
+/** Captured `sportPeriods` vocabulary; provenance in lib/gslive_period_logic.ts. */
+const GSLIVE_PERIODS_FIXTURE = new URL(
+  "../tests/fixtures/gslive-sport-periods-2026-11-03.json",
+  import.meta.url,
+);
+let gslivePeriodsPromise: Promise<GsLiveSportPeriods | null> | undefined;
+
+function loadGsLivePeriods(): Promise<GsLiveSportPeriods | null> {
+  gslivePeriodsPromise ??= (async () => {
+    try {
+      const payload: unknown = JSON.parse(
+        await Bun.file(GSLIVE_PERIODS_FIXTURE).text(),
+      );
+      return parseGsLiveSportPeriods(payload);
+    } catch {
+      return null;
+    }
+  })();
+  return gslivePeriodsPromise;
+}
+
+/**
+ * Reads the URL-expressible Filters-panel values (`--agent`, `--bet-id`, …) for the
+ * `#/events/bet-history` link. `ok:false` means the refusal was printed and the caller stops;
+ * `filters` is absent when no filter flag was given.
+ *
+ * `--period` accepts a code (`s3`) or a console label (`3rd Quarter`); a label is resolved to its
+ * code against the captured `sportPeriods` vocabulary for `--sport`.
+ */
+async function parseGsLiveFilters(
+  args: string[],
+): Promise<
+  | { readonly ok: true; readonly filters?: GsLiveBetHistoryUrlFilters }
+  | { readonly ok: false }
+> {
+  const agent = getArgValue(args, ["--agent"], "").trim();
+  const betId = getArgValue(args, ["--bet-id"], "").trim();
+  const betGroupId = getArgValue(args, ["--bet-group-id"], "").trim();
+  const freeBetId = getArgValue(args, ["--free-bet-id"], "").trim();
+  const kindRaw = getArgValue(args, ["--kind"], "").trim();
+  const groupName = getArgValue(args, ["--group-name"], "").trim();
+  const periodRaw = getArgValue(args, ["--period"], "").trim();
+  const sportId = getArgValue(args, ["--sport"], "").trim();
+  const market = getArgValue(args, ["--market"], "").trim();
+
+  let kind: GsLiveGroupKind | undefined;
+  if (kindRaw !== "") {
+    kind = GSLIVE_GROUP_KINDS.find((entry) => entry === kindRaw);
+    if (kind === undefined) {
+      console.error(
+        `Unknown --kind ${JSON.stringify(kindRaw)}. Allowed: ${GSLIVE_GROUP_KINDS.join(", ")}.`,
+      );
+      process.exitCode = 1;
+      return { ok: false };
+    }
+  }
+
+  let period = periodRaw;
+  if (periodRaw !== "") {
+    if (sportId === "") {
+      if (!/^(?:h1|h2|ht|s(?:10|[1-9]))$/i.test(periodRaw)) {
+        console.error(
+          `--period ${JSON.stringify(periodRaw)} is not a period code; pass --sport to resolve a label such as "3rd Quarter".`,
+        );
+        process.exitCode = 1;
+        return { ok: false };
+      }
+      period = periodRaw.toLowerCase();
+    } else {
+      const vocabulary = await loadGsLivePeriods();
+      if (vocabulary === null) {
+        console.error(
+          "MISSING sportPeriods vocabulary: tests/fixtures/gslive-sport-periods-2026-11-03.json did not parse, so --period cannot be resolved.",
+        );
+        process.exitCode = 1;
+        return { ok: false };
+      }
+      const option = resolveGsLivePeriodCode(vocabulary, sportId, periodRaw);
+      if (option === undefined) {
+        const options = listGsLivePeriodOptions(vocabulary, sportId);
+        console.error(
+          `Unknown --period ${JSON.stringify(periodRaw)} for sport ${JSON.stringify(sportId)}. Codes: ${options.map((entry) => entry.code).join(", ")}. Labels: ${options.map((entry) => `${entry.code}=${JSON.stringify(entry.label)}`).join(", ")}.`,
+        );
+        process.exitCode = 1;
+        return { ok: false };
+      }
+      period = option.code;
+    }
+  }
+
+  const filters: GsLiveBetHistoryUrlFilters = {
+    ...(agent !== "" ? { agent } : {}),
+    ...(betId !== "" ? { betId } : {}),
+    ...(betGroupId !== "" ? { betGroupId } : {}),
+    ...(freeBetId !== "" ? { freeBetId } : {}),
+    ...(kind !== undefined ? { kind } : {}),
+    ...(groupName !== "" ? { groupName } : {}),
+    ...(period !== "" ? { period } : {}),
+    ...(sportId !== "" ? { sportId } : {}),
+    ...(market !== "" ? { marketIds: market } : {}),
+  };
+  return Object.keys(filters).length === 0
+    ? { ok: true }
+    : { ok: true, filters };
+}
+
 export async function handleWireCommand(args: string[]): Promise<void> {
   const sub = args[0]?.toLowerCase();
   if (sub === "mutate" || sub === "mutation" || sub === "update") {
@@ -1527,8 +1678,17 @@ export async function handleWireCommand(args: string[]): Promise<void> {
   if (sub === "gslive" || sub === "gs-live") {
     const custId = getArgValue(args, ["-c", "--customer"], "CHURN_003");
     const dateYmd = getArgValue(args, ["--date"], "");
+    const state = parseGsLiveState(getArgValue(args, ["--state"], ""));
+    if (state === undefined) return;
+    const windowDays = parseGsLiveWindow(getArgValue(args, ["--window"], "1"));
+    if (windowDays === undefined) return;
+    const parsedFilters = await parseGsLiveFilters(args);
+    if (!parsedFilters.ok) return;
     const desc = buildGsLiveDualSurfaceDescriptor(custId, {
       ...(dateYmd ? { dateYmd } : {}),
+      windowDays,
+      state,
+      ...(parsedFilters.filters ? { filters: parsedFilters.filters } : {}),
       tickEpochMs: Date.now(),
     });
     console.log(JSON.stringify(desc, null, 2));
@@ -1543,7 +1703,7 @@ Subcommands:
   vig      Execute vigSetupInsert (+15c/+20c) (-c <CUST_ID> -s <SPORT> --spread 15 --derivative 20)
   weblog   Query getWebLog IP Tracker (-m A|B|C|I -c <CUST_ID> --ip <IP>)
   info     Fetch getInfoPlayer read-back (-c <CUST_ID>)
-  gslive   Emit GSLive 7-param deep-link & live sidecar JSON (-c <CUST_ID> --date YYYY-MM-DD)
+  gslive   Emit GSLive 7-param deep-link & live sidecar JSON (-c <CUST_ID> --date YYYY-MM-DD [--state canceled] [--window 1-31])
 `);
 }
 
@@ -1630,7 +1790,22 @@ export async function main(): Promise<void> {
     rawArgs.includes("-G")
   ) {
     // Flags that consume the next token; skip both so `--date 2026-11-01 MJ102` resolves MJ102.
-    const gsliveFlagValues = new Set(["-c", "--customer", "--date"]);
+    const gsliveFlagValues = new Set([
+      "-c",
+      "--customer",
+      "--date",
+      "--state",
+      "--window",
+      "--agent",
+      "--bet-id",
+      "--bet-group-id",
+      "--free-bet-id",
+      "--kind",
+      "--group-name",
+      "--period",
+      "--sport",
+      "--market",
+    ]);
     let positionalLogin: string | undefined;
     const gsliveArgs = rawArgs.slice(1);
     for (let index = 0; index < gsliveArgs.length; index += 1) {
@@ -1647,8 +1822,19 @@ export async function main(): Promise<void> {
       positionalLogin ||
       getArgValue(rawArgs, ["-c", "--customer"], "CHURN_003");
     const dateYmd = getArgValue(rawArgs, ["--date"], "");
+    const state = parseGsLiveState(getArgValue(rawArgs, ["--state"], ""));
+    if (state === undefined) return;
+    const windowDays = parseGsLiveWindow(
+      getArgValue(rawArgs, ["--window"], "1"),
+    );
+    if (windowDays === undefined) return;
+    const parsedFilters = await parseGsLiveFilters(rawArgs);
+    if (!parsedFilters.ok) return;
     const desc = buildGsLiveDualSurfaceDescriptor(targetLogin, {
       ...(dateYmd ? { dateYmd } : {}),
+      windowDays,
+      state,
+      ...(parsedFilters.filters ? { filters: parsedFilters.filters } : {}),
       tickEpochMs: Date.now(),
     });
     if (rawArgs.includes("--json")) {
@@ -1682,6 +1868,9 @@ export async function main(): Promise<void> {
       `     • Live betTime  : ${desc.liveBetHistorySidecarBetTimeUrl}`,
     );
     console.log(`     • Player Filter : ${desc.playerBetHistoryDeepLinkUrl}`);
+    console.log(
+      `     • Canceled (${desc.playerBetHistoryWindowDays}d): ${desc.playerCanceledBetHistoryDeepLinkUrl}`,
+    );
     console.log(
       "  3. API DOCS: ./bin/dx docs gslive  ·  Scalar: https://fantasy402-docs-4ay.pages.dev/",
     );
