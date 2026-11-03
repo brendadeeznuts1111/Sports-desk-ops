@@ -12,13 +12,8 @@ mechanism.
   upstream, not reproduced: a 2 GiB allocation is flaky on any runner); `Bun.secrets` with
   `persist: "local"` (Windows only, never run).
 
-**Doc voice SSOT (not runtime):** When editing Bun upstream docs or mirroring their tone in this
-repo, use the voice section in
-[`oven-sh/bun` @ `6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing)
-(source: `docs/project/contributing.mdx`). That commit is ahead of the **1.4.4** tag (`38afee6c8`);
-do not treat it as a behavior pin. Live site: [contributing#voice](https://bun.com/docs/project/contributing#voice).
-
-**Guides index (not runtime):** [`guides.jsx` @ `6a380492`](https://github.com/oven-sh/bun/blob/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/guides.jsx) lists every `/guides/*` href for the docs site; content lives in MDX elsewhere. Live: [bun.com/guides](https://bun.com/guides).
+**Upstream doc pins (not runtime):** Full map (voice @ `6cdb3835`, guides + CLI snippets @
+`6a380492`, PM/runtime pages, repo hooks) — [bun-upstream-reference.md](./bun-upstream-reference.md).
 
 ## eval-module-mode
 
