@@ -1261,7 +1261,9 @@ export function apply(ctx, config) {
         "path, mtime and age; a missing file is MISSING, not an empty book. Note: " +
         "recent_tickets is a per-customer SAMPLE, while lifetime_* fields are the full rollup. " +
         '"top" accepts window="lifetime" (default) or "7d" for net/volume rankings; ' +
-        "clv/sharp/churn exist only in the lifetime rollup.",
+        "clv/sharp/churn exist only in the lifetime rollup. " +
+        '"sharp" returns the DERIVED sharp audit: customers at or above minSharp ' +
+        "(default 70) or with positive CLV, ranked by sharp score.",
       parameters: {
         type: "object",
         properties: {
@@ -1287,6 +1289,11 @@ export function apply(ctx, config) {
             description:
               'For "top": lifetime (default) or 7d. The 7d window ranks net and volume only.',
           },
+          minSharp: {
+            type: "number",
+            description:
+              'For "sharp": sharp_score cutoff, 0-100 (default 70). Positive CLV also qualifies.',
+          },
           limit: {
             type: "number",
             description: "Rows for list reports (1-100, default 10).",
@@ -1299,7 +1306,7 @@ export function apply(ctx, config) {
       isConcurrencySafe: () => true,
       async execute(args) {
         const request = args ?? {};
-        const reports = ["summary", "top", "lookup", "search"];
+        const reports = ["summary", "top", "lookup", "search", "sharp"];
         if (
           typeof request.report !== "string" ||
           !reports.includes(request.report)
@@ -1446,6 +1453,42 @@ export function apply(ctx, config) {
             limit,
             returnable: Math.min(limit, rows.length),
             totalCustomers: rows.length,
+            source,
+            customers: ranked,
+          };
+        }
+        if (request.report === "sharp") {
+          const threshold = request.minSharp ?? 70;
+          if (
+            typeof threshold !== "number" ||
+            !Number.isFinite(threshold) ||
+            threshold < 0 ||
+            threshold > 100
+          ) {
+            return invalidArguments("minSharp must be a number from 0 to 100.");
+          }
+          const candidates = rows.filter(
+            (row) =>
+              Number(row?.sharp_score ?? Number.NEGATIVE_INFINITY) >=
+                threshold || Number(row?.clv_bps ?? 0) > 0,
+          );
+          const ranked = candidates
+            .slice()
+            .sort(
+              (left, right) =>
+                Number(right?.sharp_score ?? 0) -
+                Number(left?.sharp_score ?? 0),
+            )
+            .slice(0, limit)
+            .map(slimCustomer);
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            threshold,
+            bookCustomers: rows.length,
+            candidates: candidates.length,
+            returned: ranked.length,
             source,
             customers: ranked,
           };

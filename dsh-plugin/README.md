@@ -24,9 +24,10 @@ computes the customer count, sample-ticket count, totals and rankings from
 `enriched_customers_full.json`, and the verifiers parse the same files to derive the
 counts they assert (so a changed book changes the expectations, not a hand-edited
 number). Rankings take a window: `lifetime` (default) or `7d` for net/volume; clv, sharp
-and churn exist only in the lifetime rollup and are refused on 7d. `sportsdesk_dev` also
-offers `ci-all` (`bun run ci:local --keep-going`) for a
-full failure inventory in one call.
+and churn exist only in the lifetime rollup and are refused on 7d. `sharp` returns the
+DERIVED sharp audit (sharp_score cutoff or positive CLV), never a scripted playbook list.
+`sportsdesk_dev` also offers `ci-all` (`bun run ci:local --keep-going`) for a full failure
+inventory in one call.
 
 It lives in the repo it operates on (unlike `dsh-plugin-fourc-odds`, its sibling in
 `~/4c-odds-intergration/dsh-plugin`), so the commands it shells and the files it

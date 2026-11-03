@@ -399,6 +399,36 @@ await checkAsync(
       "clv was accepted on the 7d window",
     );
 
+    // "sharp" must derive its candidate set from the book, not from a list.
+    const threshold = 70;
+    const expectedCandidates = book.filter(
+      (row) =>
+        (row.sharp_score ?? Number.NEGATIVE_INFINITY) >= threshold ||
+        (row.clv_bps ?? 0) > 0,
+    );
+    const sharp = await tool.execute({
+      report: "sharp",
+      minSharp: threshold,
+      limit,
+    });
+    assert(sharp.available === true, "sharp report unavailable");
+    assert(
+      sharp.candidates === expectedCandidates.length,
+      `sharp candidates ${sharp.candidates} != source ${expectedCandidates.length}`,
+    );
+    assert(
+      sharp.customers?.length === Math.min(limit, expectedCandidates.length),
+      `sharp returned ${sharp.customers?.length}`,
+    );
+    const badThreshold = await tool.execute({
+      report: "sharp",
+      minSharp: 101,
+    });
+    assert(
+      badThreshold.reason === "invalid_arguments",
+      "an out-of-range minSharp was accepted",
+    );
+
     const firstId = book[0].customer_id;
     const lookup = await tool.execute({
       report: "lookup",
