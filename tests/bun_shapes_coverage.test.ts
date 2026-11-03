@@ -137,7 +137,9 @@ describe("Bun shape coverage", () => {
     });
 
     expect(problems.map((p) => `${p.rule}: ${p.detail}`)).toEqual([]);
-    expect(usage.used.size).toBe(BUN_SHAPES.length);
+    expect(usage.used.size).toBe(
+      BUN_SHAPES.filter((s) => s.status !== "declared-only").length,
+    );
     expect(headings).toHaveLength(BUN_SHAPES.length);
   });
 

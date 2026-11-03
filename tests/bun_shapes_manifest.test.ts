@@ -65,14 +65,14 @@ const rules = (problems: ReturnType<typeof analyzeBunShapes>) =>
 
 describe("manifest", () => {
   test("partition is 70 shapes across the eight subsystems", () => {
-    expect(BUN_SHAPES.length).toBe(69);
+    expect(BUN_SHAPES.length).toBe(70);
     const counts = Object.fromEntries(SHAPE_SUBSYSTEMS.map((s) => [s, 0]));
     for (const s of BUN_SHAPES)
       counts[s.subsystem] = (counts[s.subsystem] ?? 0) + 1;
     expect(counts).toEqual({
       process: 18,
       text: 7,
-      data: 11,
+      data: 12,
       storage: 7,
       crypto: 10,
       network: 9,
@@ -81,7 +81,7 @@ describe("manifest", () => {
     });
   });
 
-  test("65 runtime values and 5 type-only declarations", () => {
+  test("64 runtime values and 6 type-only declarations (one declared-only)", () => {
     expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(64);
     expect(
       BUN_SHAPES.filter((s) => s.kind === "type")
@@ -92,6 +92,7 @@ describe("manifest", () => {
       "Env",
       "FetchProxyOption",
       "FileSink",
+      "ImportKind",
       "Server",
     ]);
   });
@@ -107,7 +108,11 @@ describe("manifest", () => {
     for (const s of BUN_SHAPES) {
       expect(s.evidence.length).toBeGreaterThan(0);
       expect(s.heading).toBe(
-        s.kind === "value" ? `Bun.${s.name}` : `Bun.${s.name} (type)`,
+        s.kind === "value"
+          ? `Bun.${s.name}`
+          : s.status === "declared-only"
+            ? `Bun.${s.name} (type, declared-only)`
+            : `Bun.${s.name} (type)`,
       );
     }
   });
@@ -309,6 +314,51 @@ describe("analyzeBunShapes", () => {
         detail: 'Bun.file is not under "## Process, filesystem and shell"',
       },
     ]);
+  });
+
+  test("a declared-only entry that is called must be promoted", () => {
+    const entry = shape("ImportKind", {
+      kind: "type",
+      heading: "Bun.ImportKind (type, declared-only)",
+      evidence: ["test:tests/bun_capabilities.test.ts"],
+      status: "declared-only",
+      subsystem: "data",
+    });
+    const problems = analyzeBunShapes(
+      world({
+        shapes: [entry],
+        usage: {
+          used: new Map([["ImportKind", new Set(["a.ts"])]]),
+          elementAccess: [],
+        },
+        runtimeTypeof: new Map([["ImportKind", "undefined"]]),
+        declaredValues: new Set(),
+        typesSource: "type ImportKind = string;\n",
+      }),
+    );
+    expect(problems).toEqual([
+      { rule: "declared-only-in-use", detail: "ImportKind" },
+    ]);
+  });
+
+  test("a declared-only entry nothing calls is accepted", () => {
+    const entry = shape("ImportKind", {
+      kind: "type",
+      heading: "Bun.ImportKind (type, declared-only)",
+      evidence: ["test:tests/bun_capabilities.test.ts"],
+      status: "declared-only",
+      subsystem: "data",
+    });
+    const problems = analyzeBunShapes(
+      world({
+        shapes: [entry],
+        usage: { used: new Map(), elementAccess: [] },
+        runtimeTypeof: new Map([["ImportKind", "undefined"]]),
+        declaredValues: new Set(),
+        typesSource: "type ImportKind = string;\n",
+      }),
+    );
+    expect(problems).toEqual([]);
   });
 
   test("bracket access fails rather than disappearing", () => {

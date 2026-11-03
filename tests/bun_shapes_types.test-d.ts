@@ -13,5 +13,7 @@ export type FetchProxyOptionShape = Bun.FetchProxyOption;
 export type CronControllerShape = Bun.CronController;
 export type ServerShape = Bun.Server<undefined>;
 
+export type ImportKindShape = Bun.ImportKind;
+
 /** A runtime shape stays usable in a type position too. */
 export type FileShape = ReturnType<typeof Bun.file>;

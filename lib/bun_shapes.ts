@@ -61,6 +61,12 @@ export interface BunShape {
   readonly subsystem: ShapeSubsystem;
   /** Exact `####` heading text in docs/runbooks/bun_shape_contracts_runbook.md. */
   readonly heading: string;
+  /**
+   * `declared-only`: part of the declared surface we have not called yet, kept in
+   * the catalog on purpose. It must NOT appear in source usage, and the gate flips
+   * the entry to a normal one the moment it does.
+   */
+  readonly status?: "declared-only";
   /** `probe:<id>` | `test:<path>` | `surface:<check-name>`. */
   readonly evidence: readonly string[];
 }
@@ -385,6 +391,15 @@ export const BUN_SHAPES: readonly BunShape[] = [
     heading: "Bun.semver",
     evidence: ["surface:semver.satisfies", "probe:data.semver"],
   },
+  // data formats & parsing
+  {
+    name: "ImportKind",
+    kind: "type",
+    subsystem: "data",
+    heading: "Bun.ImportKind (type, declared-only)",
+    evidence: ["test:tests/bun_shapes_types.test-d.ts"],
+    status: "declared-only",
+  },
   // storage & scheduling
   {
     name: "Archive",
@@ -707,6 +722,7 @@ export type ShapeRule =
   | "section-mismatch"
   | "member-drift"
   | "member-unbaselined"
+  | "declared-only-in-use"
   | "element-access";
 
 export interface ShapeProblem {
@@ -781,8 +797,13 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
   const declaredTypes = typeDeclarations(world.typesSource);
 
   for (const shape of world.shapes) {
-    if (!world.usage.used.has(shape.name)) {
+    const declaredOnly = shape.status === "declared-only";
+    const isUsed = world.usage.used.has(shape.name);
+    if (!isUsed && !declaredOnly) {
       problems.push({ rule: "unused-shape", detail: shape.name });
+    }
+    if (isUsed && declaredOnly) {
+      problems.push({ rule: "declared-only-in-use", detail: shape.name });
     }
 
     const count = headingCount.get(shape.heading) ?? 0;

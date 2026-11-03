@@ -1,4 +1,4 @@
-# Bun shape contracts — the 69 shapes this repository calls
+# Bun shape contracts — the 70 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -296,6 +296,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Members (2):** `order`, `satisfies`
 - **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
 - **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
+
+#### Bun.ImportKind (type, declared-only)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/ImportKind)
+- **Shape:** type-only: declared, no runtime value
+- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
+- **Here:** no call site
+- **Evidence:** `test:tests/bun_shapes_types.test-d.ts`
 
 ## Storage and scheduling
 
