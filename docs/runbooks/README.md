@@ -8,7 +8,7 @@ Evidence ledger and OpenAPI citations use **filename only** (for example `operat
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [operational_guardrails_runbook.md](./operational_guardrails_runbook.md)                           | Fantasy402 Manager wire evidence, capture guardrails, getWebLog modes |
 | [bun_server_runtime_shapes_runbook.md](./bun_server_runtime_shapes_runbook.md)                     | Bun `Server`, WebSocket handlers, TLS, replay shapes                  |
-| [bun-pm-policy.md](./bun-pm-policy.md)                                                           | `bun install`, `bun.lock`, machine bunfig, `bun-deps`, `pm:doctor`    |
+| [bun-pm-policy.md](./bun-pm-policy.md)                                                             | `bun install`, `bun.lock`, machine bunfig, `bun-deps`, `pm:doctor`    |
 | [token_architecture_and_verification_runbook.md](./token_architecture_and_verification_runbook.md) | Design tokens, CIEDE2000, WCAG, `gen:tokens`                          |
 | [cloudflare_r2_and_api_runbook.md](./cloudflare_r2_and_api_runbook.md)                             | R2 sync, API tokens, reporting pipeline archive                       |
 | [os_bun_cron_integration_guide.md](./os_bun_cron_integration_guide.md)                             | Crontab / systemd schedules for `bun run reports`                     |

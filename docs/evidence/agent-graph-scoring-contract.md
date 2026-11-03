@@ -31,14 +31,14 @@ deterministic geometric rubric on layout coordinates.
 
 ## Scope: what scoring includes and excludes
 
-| In scope | Out of scope |
-| -------- | ------------ |
-| Axis-aligned node boxes (center, width, height) in **layout space** (y increases downward) | Curved/spline edge routes from any engine |
-| Straight **center-to-center** segments for hierarchy edges | Text legibility of individual logins (kerning, anti-aliasing) |
-| Pairwise **proper** segment crossings | Whether a human can answer upline questions (see judge workflow in readability doc) |
-| Box **overlap** when both centers are closer than half-widths/heights allow | Legend, title bar, or margin ink outside Graphviz node boxes |
-| **Flow** alignment for declared `down` or `right` layouts | Radial layouts: flow share is intentionally not scored (`null`) |
-| **Uniform scale** fit of the bounding box into a declared raster (`width` × `height`) | Per-view WebP resize policy (see [Shipped views vs raw scoreLayout](#shipped-views-vs-raw-scorelayout)) |
+| In scope                                                                                   | Out of scope                                                                                            |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Axis-aligned node boxes (center, width, height) in **layout space** (y increases downward) | Curved/spline edge routes from any engine                                                               |
+| Straight **center-to-center** segments for hierarchy edges                                 | Text legibility of individual logins (kerning, anti-aliasing)                                           |
+| Pairwise **proper** segment crossings                                                      | Whether a human can answer upline questions (see judge workflow in readability doc)                     |
+| Box **overlap** when both centers are closer than half-widths/heights allow                | Legend, title bar, or margin ink outside Graphviz node boxes                                            |
+| **Flow** alignment for declared `down` or `right` layouts                                  | Radial layouts: flow share is intentionally not scored (`null`)                                         |
+| **Uniform scale** fit of the bounding box into a declared raster (`width` × `height`)      | Per-view WebP resize policy (see [Shipped views vs raw scoreLayout](#shipped-views-vs-raw-scorelayout)) |
 
 Edges come from the **same parent→child relation** as the graph export being laid out:
 
@@ -131,16 +131,16 @@ Implementation module: `lib/f402_agent_graph_metrics.ts`. Layout adapters:
 `runLayoutEngine(name, cytoscapeExport)` returns `LaidOutGraph`. Names in
 `LAYOUT_ENGINES` (`lib/f402_agent_graph_layouts.ts`):
 
-| Engine | Typical flow | Notes |
-| ------ | ------------ | ----- |
-| `level-rows` | `down` | Deterministic row/column from level index |
-| `cytoscape-grid` | `down` | Grid in 1920×1080 bounding box; node order affects crossings |
-| `cytoscape-breadthfirst` | `down` | Directed BFS from roots (nodes with no incoming edge in export) |
-| `elk-mrtree` | `down` | ELK Mr. Tree, down |
-| `elk-layered` | `down` | ELK layered |
-| `graphviz-dot` | `down` | DOT TB via `renderViewDot` + `graphvizLayout` |
-| `graphviz-dot-lr` | `right` | DOT LR |
-| `graphviz-twopi` | `radial` | Twopi; flow share not scored |
+| Engine                   | Typical flow | Notes                                                           |
+| ------------------------ | ------------ | --------------------------------------------------------------- |
+| `level-rows`             | `down`       | Deterministic row/column from level index                       |
+| `cytoscape-grid`         | `down`       | Grid in 1920×1080 bounding box; node order affects crossings    |
+| `cytoscape-breadthfirst` | `down`       | Directed BFS from roots (nodes with no incoming edge in export) |
+| `elk-mrtree`             | `down`       | ELK Mr. Tree, down                                              |
+| `elk-layered`            | `down`       | ELK layered                                                     |
+| `graphviz-dot`           | `down`       | DOT TB via `renderViewDot` + `graphvizLayout`                   |
+| `graphviz-dot-lr`        | `right`      | DOT LR                                                          |
+| `graphviz-twopi`         | `radial`     | Twopi; flow share not scored                                    |
 
 Whole-tree benchmarks in `graph:agent:readability` score each engine on the **structural** export at
 **FULL_RASTER** (below). Baseline rows additionally score **portal** exports for `cytoscape-grid` and
@@ -153,10 +153,10 @@ Whole-tree benchmarks in `graph:agent:readability` score each engine on the **st
 Scoring always takes an explicit `RasterFit` `{ width, height }` — “if this layout’s bounding box were
 scaled uniformly to fit inside this rectangle, how large would labels become?”
 
-| Name | Default size | Used by |
-| ---- | ------------- | ------- |
-| **FULL_RASTER** | 1920 × 1080 | Whole-tree engine benchmark, `bench:score-layout`, shipped capture viewport |
-| **VIEW_RASTER** | 2400 × 4800 | Each small-multiple view in readability sweep and `graph:agent:views` |
+| Name            | Default size | Used by                                                                     |
+| --------------- | ------------ | --------------------------------------------------------------------------- |
+| **FULL_RASTER** | 1920 × 1080  | Whole-tree engine benchmark, `bench:score-layout`, shipped capture viewport |
+| **VIEW_RASTER** | 2400 × 4800  | Each small-multiple view in readability sweep and `graph:agent:views`       |
 
 Override full raster via environment (read by `scripts/agent_graph_readability.ts`):
 
@@ -190,19 +190,19 @@ No engine-specific code runs inside this function.
 
 Every field returned by `scoreLayout`:
 
-| Field | Meaning |
-| ----- | ------- |
-| `nodes` | Count of laid-out nodes |
-| `edges` | Count of scored segments (after dropping wire edges with missing endpoints) |
-| `crossings` | Proper segment crossings among scored edges |
-| `overlaps` | Unordered pairs of nodes whose boxes overlap |
-| `boundsWidth`, `boundsHeight` | Rounded size of the layout bounding box (layout units) |
-| `aspectRatio` | `boundsWidth / boundsHeight`, two decimal places |
-| `widestRow` | Maximum count of nodes sharing the same **rounded** y coordinate (horizontal “row” density) |
-| `meanEdgeLength` | Mean Euclidean center-to-center length over scored edges (rounded) |
-| `againstFlowEdgeShare` | Fraction of edges where the child center is not sufficiently **downstream** in the declared direction; `null` when `flow === "radial"` |
-| `fitScale` | Uniform scale if the bounds box were fit inside the raster (3 significant figures) |
-| `effectiveFontPx` | `fontSize * fitScale` (two decimal places) — primary **label size proxy** for whole-layout fit |
+| Field                         | Meaning                                                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodes`                       | Count of laid-out nodes                                                                                                                |
+| `edges`                       | Count of scored segments (after dropping wire edges with missing endpoints)                                                            |
+| `crossings`                   | Proper segment crossings among scored edges                                                                                            |
+| `overlaps`                    | Unordered pairs of nodes whose boxes overlap                                                                                           |
+| `boundsWidth`, `boundsHeight` | Rounded size of the layout bounding box (layout units)                                                                                 |
+| `aspectRatio`                 | `boundsWidth / boundsHeight`, two decimal places                                                                                       |
+| `widestRow`                   | Maximum count of nodes sharing the same **rounded** y coordinate (horizontal “row” density)                                            |
+| `meanEdgeLength`              | Mean Euclidean center-to-center length over scored edges (rounded)                                                                     |
+| `againstFlowEdgeShare`        | Fraction of edges where the child center is not sufficiently **downstream** in the declared direction; `null` when `flow === "radial"` |
+| `fitScale`                    | Uniform scale if the bounds box were fit inside the raster (3 significant figures)                                                     |
+| `effectiveFontPx`             | `fontSize * fitScale` (two decimal places) — primary **label size proxy** for whole-layout fit                                         |
 
 ### Crossings
 
@@ -287,7 +287,7 @@ Default shipped configuration (from sweep): **budget 140, rankdir LR** — fewes
 **manifest gate** uses a slightly different worst-font figure:
 
 - After Graphviz renders PNG at 96 DPI, WebP may be **downscaled** to fit inside VIEW_RASTER (`fit:
-  inside`).
+inside`).
 - Manifest `worstFontPx` uses `VIEW_FONT_SIZE * pxPerPt` from the **actual WebP** dimensions vs source
   PNG (`build_agent_graph_views.ts`), stored per view in `index.json` entries as `metrics.effectiveFontPx`
   (overriding the pure fit-box estimate when they differ).
@@ -304,11 +304,11 @@ layout coordinates (legend disabled in layout DOT for scoring).
 
 Defined in `AGENT_GRAPH_READABILITY_THRESHOLDS` (`lib/f402_agent_graph_artifacts.ts`):
 
-| Threshold | Default | Manifest field |
-| --------- | ------- | -------------- |
-| Minimum worst view font | **9 px** | `readability.worstFontPx` |
-| Maximum total crossings | **0** | `readability.totalCrossings` |
-| Maximum total overlaps | **0** | `readability.totalOverlaps` |
+| Threshold               | Default  | Manifest field               |
+| ----------------------- | -------- | ---------------------------- |
+| Minimum worst view font | **9 px** | `readability.worstFontPx`    |
+| Maximum total crossings | **0**    | `readability.totalCrossings` |
+| Maximum total overlaps  | **0**    | `readability.totalOverlaps`  |
 
 These defaults are **provisional**, set from the measured baseline documented in
 [agent-graph-readability.md](agent-graph-readability.md). Changing them requires updating the constant
@@ -327,12 +327,12 @@ Readability checks are **skipped** if views are stale — run `graph:agent:views
 
 ## Regression and performance
 
-| Mechanism | Role |
-| --------- | ---- |
-| `lib/f402_agent_graph_metrics.test.ts` | Crossing, overlap grid, flow, fit, randomized crossing parity |
-| `lib/f402_agent_graph_dot.test.ts` | Graphviz tree layout → 0 crossings / overlaps on fixture view |
-| `bench:score-layout --json` | Compare `{ layout: ReadabilityMetrics }` across git revisions |
-| Saved fixtures | `--save-fixtures` / `--fixtures`; **re-save after** `LaidOutGraph` edge shape changes |
+| Mechanism                              | Role                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `lib/f402_agent_graph_metrics.test.ts` | Crossing, overlap grid, flow, fit, randomized crossing parity                         |
+| `lib/f402_agent_graph_dot.test.ts`     | Graphviz tree layout → 0 crossings / overlaps on fixture view                         |
+| `bench:score-layout --json`            | Compare `{ layout: ReadabilityMetrics }` across git revisions                         |
+| Saved fixtures                         | `--save-fixtures` / `--fixtures`; **re-save after** `LaidOutGraph` edge shape changes |
 
 Layout JSON fixtures store indexed edges; older fixtures with string `{ source, target }` edges must be
 regenerated.
@@ -374,17 +374,17 @@ When reading [agent-graph-readability.md](agent-graph-readability.md) tables:
 
 ## Code map (entry points only)
 
-| File | Responsibility |
-| ---- | ---------------- |
-| `lib/f402_agent_graph_metrics.ts` | `scoreLayout`, `ReadabilityMetrics`, graph normalization |
-| `lib/f402_agent_graph_layouts.ts` | Engine adapters → `LaidOutGraph` |
-| `lib/f402_agent_graph_dot.ts` | DOT emission, Graphviz run, `graphvizLayout` |
-| `lib/f402_agent_graph_views.ts` | Budgeted views, reconciliation, coverage |
-| `scripts/agent_graph_readability.ts` | Report JSON + stdout tables |
-| `scripts/build_agent_graph_views.ts` | Ship views + manifest readability |
-| `scripts/bench_score_layout.ts` | Timing and fixture diff |
-| `scripts/verify_agent_graph_pipeline.ts` | Strict readability gate |
-| `lib/f402_agent_graph_artifacts.ts` | Threshold constants, manifest fields |
+| File                                     | Responsibility                                           |
+| ---------------------------------------- | -------------------------------------------------------- |
+| `lib/f402_agent_graph_metrics.ts`        | `scoreLayout`, `ReadabilityMetrics`, graph normalization |
+| `lib/f402_agent_graph_layouts.ts`        | Engine adapters → `LaidOutGraph`                         |
+| `lib/f402_agent_graph_dot.ts`            | DOT emission, Graphviz run, `graphvizLayout`             |
+| `lib/f402_agent_graph_views.ts`          | Budgeted views, reconciliation, coverage                 |
+| `scripts/agent_graph_readability.ts`     | Report JSON + stdout tables                              |
+| `scripts/build_agent_graph_views.ts`     | Ship views + manifest readability                        |
+| `scripts/bench_score_layout.ts`          | Timing and fixture diff                                  |
+| `scripts/verify_agent_graph_pipeline.ts` | Strict readability gate                                  |
+| `lib/f402_agent_graph_artifacts.ts`      | Threshold constants, manifest fields                     |
 
 ---
 

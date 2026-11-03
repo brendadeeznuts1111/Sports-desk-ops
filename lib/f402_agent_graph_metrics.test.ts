@@ -93,12 +93,7 @@ describe("countPairs", () => {
 describe("scoreLayout", () => {
   test("K2,2 drawn crossed has exactly one crossing", () => {
     const g: LaidOutGraph = laidOutGraph(
-      [
-        box("p", 0, 0),
-        box("q", 100, 0),
-        box("r", 0, 100),
-        box("s", 100, 100),
-      ],
+      [box("p", 0, 0), box("q", 100, 0), box("r", 0, 100), box("s", 100, 100)],
       [
         { source: "p", target: "s" },
         { source: "q", target: "r" },
@@ -159,10 +154,10 @@ describe("scoreLayout", () => {
       for (let i = 0; i < segs.length; i++)
         for (let j = i + 1; j < segs.length; j++)
           if (segmentsCross(segs[i]!, segs[j]!)) expected += 1;
-      const m = scoreLayout(
-        laidOutGraph(nodes, edges, 10, "down"),
-        { width: 100, height: 100 },
-      );
+      const m = scoreLayout(laidOutGraph(nodes, edges, 10, "down"), {
+        width: 100,
+        height: 100,
+      });
       expect(m.crossings).toBe(expected);
       expect(m.edges).toBe(segs.length);
     }

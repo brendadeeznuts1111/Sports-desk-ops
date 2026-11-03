@@ -70,12 +70,12 @@ sites; a new one fails `bun run policy:check`. The full rule table is the user r
 Multi-step plans (refactors, evidence work, pipeline changes) are how higher-level autonomy stays
 safe only when each step is **validatable**. For every step, state:
 
-| Field | Content |
-| ----- | ------- |
-| **Accomplishes** | Observable outcome when the step is done (artifact, behavior, or doc claim). |
-| **Why** | Which risk, ordering constraint, or gap this step closes. |
-| **Depends on** | Prior steps, files, envelope SHA, machine policy, or tools on `PATH`. |
-| **Verify** | Fail-closed check: a gate command, test target, doctor line, or measured diff — not “looks good.” |
+| Field            | Content                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| **Accomplishes** | Observable outcome when the step is done (artifact, behavior, or doc claim).                      |
+| **Why**          | Which risk, ordering constraint, or gap this step closes.                                         |
+| **Depends on**   | Prior steps, files, envelope SHA, machine policy, or tools on `PATH`.                             |
+| **Verify**       | Fail-closed check: a gate command, test target, doctor line, or measured diff — not “looks good.” |
 
 Do **not** pre-write implementation in the plan (no code, types, or line-level edit lists). Discovery
 and coding belong in execution, after verify criteria for the step are fixed.
@@ -117,7 +117,7 @@ graph CLI: **`bun run graph:agent`** (no `--token` flags).
   versions or patches, so after `bun pm version` in a workspace run `bun-deps install`, and commit
   patches with `bun-deps patch --commit <dir>` (plain `bun patch --commit` skips the lock).
   `bun run pm:doctor` checks the whole setup on this machine, including lock drift and the
-  `@tennis-hq` registry and token that publishing needs.   Frozen traps and command cheat sheet:
+  `@tennis-hq` registry and token that publishing needs. Frozen traps and command cheat sheet:
   [docs/runbooks/bun-pm-policy.md](docs/runbooks/bun-pm-policy.md). There is no catalog yet: the workspace
   packages in `packages/` have no dependencies of their own.
 - `Scratch/` and `dist/` are gitignored. The source scanners list files from git
