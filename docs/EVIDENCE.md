@@ -324,7 +324,6 @@ the graph data plane's companion JSON and `docs/assets/*`, and the blocked GS CL
 | `surface.manager-getGrading`           | D    | Declared settlement feed; no fetch client exists ("wired" is a type/config claim only)                        |
 | `surface.daemon-dashboard`             | D    | `GET /` and `GET /dashboard` dashboard HTML                                                                   |
 | `surface.daemon-miniapp`               | D    | `GET /miniapp` Telegram Mini App HTML                                                                         |
-| `surface.blob-live-bets`               | D    | Bearer-auth R2 blobs, one-time WS tickets, live-bets WebSocket                                                |
 | `surface.daemon-telegram-admin-routes` | D    | Webhook, telegram status/activity, preflight, error trigger                                                   |
 | `surface.daemon-live-bets`             | D    | `GET /api/live-bets` + `/summary`; derives games and aggregates from captured rows (PII stripped)             |
 | `surface.daemon-agent-tree`            | D    | `GET /api/agent-tree`; canonical agent-keyed forest joined with per-agent exposure                            |

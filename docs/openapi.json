@@ -2945,6 +2945,18 @@
         "summary": "Presigned download URL for one blob",
         "description": "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
         "operationId": "getApiV1BlobsKey",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ],
         "responses": {
           "302": {
             "description": "Redirect to a short-lived presigned URL.",
@@ -3036,15 +3048,17 @@
           }
         },
         "x-evidence": {
-          "tier": "D",
-          "sources": [
-            "services/blob_and_live_bets_server.ts:3-11",
-            "tests/blob_and_live_bets_server.test.ts:9-48"
-          ],
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of a presigned redirect (route is handler-verified only; no response was captured)."
-        },
-        "x-surface-id": "surface.blob-live-bets",
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      },
+      "put": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bounded image upload, transcoded to WebP",
+        "description": "Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = \"bun\"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "putApiV1BlobsKey",
         "parameters": [
           {
             "name": "key",
@@ -3056,13 +3070,18 @@
             },
             "description": "Validated blob key; `..` and leading dots are refused."
           }
-        ]
-      },
-      "put": {
-        "tags": ["Local Desk & Telegram Gateway"],
-        "summary": "Bounded image upload, transcoded to WebP",
-        "description": "Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = \"bun\"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).",
-        "operationId": "putApiV1BlobsKey",
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Stored WebP metadata.",
@@ -3260,38 +3279,11 @@
           }
         },
         "x-evidence": {
-          "tier": "D",
-          "sources": [
-            "services/blob_and_live_bets_server.ts:3-11",
-            "tests/blob_and_live_bets_server.test.ts:9-48"
-          ],
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of a successful upload (route is handler-verified only; no response was captured)."
-        },
-        "x-surface-id": "surface.blob-live-bets",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "image/png": {
-              "schema": {
-                "type": "string",
-                "format": "binary"
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
-            },
-            "description": "Validated blob key; `..` and leading dots are refused."
-          }
-        ]
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
       }
     },
     "/api/v1/ws-tickets": {
@@ -3384,15 +3376,11 @@
           }
         },
         "x-evidence": {
-          "tier": "D",
-          "sources": [
-            "services/blob_and_live_bets_server.ts:3-11",
-            "tests/blob_and_live_bets_server.test.ts:9-48"
-          ],
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:336-360"],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of a ticket response (route is handler-verified only)."
-        },
-        "x-surface-id": "surface.blob-live-bets"
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
       }
     },
     "/api/v1/live-bets": {
@@ -3401,6 +3389,26 @@
         "summary": "Publish a live-bets event to subscribers",
         "description": "Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).",
         "operationId": "postApiV1LiveBets",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["channel", "event"],
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]{1,32}$"
+                  },
+                  "event": {
+                    "description": "JSON-serializable event payload."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Subscriber count.",
@@ -3537,34 +3545,10 @@
           }
         },
         "x-evidence": {
-          "tier": "D",
-          "sources": [
-            "services/blob_and_live_bets_server.ts:3-11",
-            "tests/blob_and_live_bets_server.test.ts:9-48"
-          ],
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:361-407"],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of a publish result (route is handler-verified only)."
-        },
-        "x-surface-id": "surface.blob-live-bets",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["channel", "event"],
-                "properties": {
-                  "channel": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9-]{1,32}$"
-                  },
-                  "event": {
-                    "description": "JSON-serializable event payload."
-                  }
-                }
-              }
-            }
-          }
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
       }
     },
@@ -3574,6 +3558,17 @@
         "summary": "Live-bets WebSocket upgrade",
         "description": "Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.<token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).",
         "operationId": "getWsLiveBets",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "One-time HMAC ticket; the subprotocol form is preferred for browsers."
+          }
+        ],
         "responses": {
           "101": {
             "description": "Switching Protocols."
@@ -3632,26 +3627,11 @@
           }
         },
         "x-evidence": {
-          "tier": "D",
-          "sources": [
-            "services/blob_and_live_bets_server.ts:3-11",
-            "tests/blob_and_live_bets_server.test.ts:9-48"
-          ],
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:485-514"],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of the 101 upgrade and a PING/PONG frame (handler-verified only)."
-        },
-        "x-surface-id": "surface.blob-live-bets",
-        "parameters": [
-          {
-            "name": "ticket",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "One-time HMAC ticket; the subprotocol form is preferred for browsers."
-          }
-        ]
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
       }
     },
     "/cloud/api/Manager/getHistory": {

@@ -1800,6 +1800,40 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
   };
 }
 
+/** Tier B builders for the blob/live-bets gateway: handler-verified, no live capture. */
+function blobGatewayOperation(operation: LedgerOperation): JsonObject {
+  const specs = blobLiveBetsSurfaceSpecs();
+  const method = operation.method.toUpperCase();
+  const spec = specs.find(
+    (candidate) =>
+      candidate.path === operation.path &&
+      candidate.httpMethod.toUpperCase() === method,
+  );
+  if (spec === undefined) {
+    fail(
+      `no blob gateway builder for ${operation.method.toUpperCase()} ${operation.path}`,
+    );
+  }
+  const httpMethod: SurfaceHttpMethod =
+    method === "GET" || method === "POST" || method === "PUT"
+      ? method
+      : fail(`unsupported gateway method "${method}"`);
+  return {
+    tags: [spec.tag],
+    summary: spec.summary,
+    description: spec.description,
+    operationId: operationIdFor(pathItemMethod(httpMethod), spec.path),
+    ...(spec.parameters === undefined
+      ? {}
+      : { parameters: [...spec.parameters] }),
+    ...(spec.requestBody === undefined
+      ? {}
+      : { requestBody: spec.requestBody }),
+    responses: spec.responses,
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
 const B_OPERATION_BUILDERS: Readonly<
   Record<string, (operation: LedgerOperation) => JsonObject>
 > = {
@@ -1813,6 +1847,10 @@ const B_OPERATION_BUILDERS: Readonly<
   "/cloud/api/Manager/getAuthorizations": getAuthorizationsOperation,
   "/api/telegram/alert": telegramAlertOperation,
   "/api/telegram/report": telegramReportOperation,
+  "/api/v1/blobs/{key}": blobGatewayOperation,
+  "/api/v1/ws-tickets": blobGatewayOperation,
+  "/api/v1/live-bets": blobGatewayOperation,
+  "/ws/live-bets": blobGatewayOperation,
 };
 
 /**
@@ -2151,7 +2189,6 @@ function surfaceOperationSpecs(
 ): readonly SurfaceOperationSpec[] {
   const historySurface = findSurface(ledger, "surface.manager-getHistory");
   return [
-    ...blobLiveBetsSurfaceSpecs(),
     {
       path: "/cloud/api/Manager/getHistory",
       httpMethod: "POST",

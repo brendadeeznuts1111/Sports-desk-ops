@@ -23,12 +23,12 @@ function operationFor(
 }
 
 describe("blob/live-bets route surface vs docs/openapi.json", () => {
-  test("every served gateway route is published with its surface id", () => {
+  test("every served gateway route is published as a tier B operation", () => {
     for (const route of BLOB_LIVE_BETS_ROUTES) {
       const operation = operationFor(route.path, route.method);
       expect(operation).toBeDefined();
       if (route.path === "/health") continue; // shared with the daemon
-      expect(operation?.["x-surface-id"]).toBe("surface.blob-live-bets");
+      expect(operation?.["x-evidence"]).toMatchObject({ tier: "B" });
     }
   });
 
@@ -40,8 +40,19 @@ describe("blob/live-bets route surface vs docs/openapi.json", () => {
         if (
           operation !== null &&
           typeof operation === "object" &&
-          (operation as Record<string, unknown>)["x-surface-id"] ===
-            "surface.blob-live-bets"
+          (operation as Record<string, unknown>)["x-evidence"] !== null &&
+          typeof (operation as Record<string, unknown>)["x-evidence"] ===
+            "object" &&
+          (
+            (operation as Record<string, unknown>)["x-evidence"] as Record<
+              string,
+              unknown
+            >
+          ).tier === "B" &&
+          BLOB_LIVE_BETS_ROUTES.some(
+            (route) =>
+              route.path === path && route.method === method.toUpperCase(),
+          )
         ) {
           gatewaySpec.add(`${method.toUpperCase()} ${path}`);
         }

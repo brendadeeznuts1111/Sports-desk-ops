@@ -27,7 +27,7 @@
       "missingFromSpec": "true when docs/openapi.json does not publish every path this surface lists — including a surface whose members are field names or CLI commands rather than routes, which the spec cannot model at all. False therefore means fully published. The boolean was previously read both ways; four rows disagreed until scripts/check_ledger_consistency.ts derived it.",
       "what / members / evidence / note": "Inventory, member routes, citations, caveats."
     },
-    "counts": "Operation counts by tier. A+B+C+D+E = total = 59. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here — counts, surfaceCounts, countsByTag and the total below — from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
+    "counts": "Operation counts by tier. A+B+C+D+E = total = 64. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here — counts, surfaceCounts, countsByTag and the total below — from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
     "surfaceCounts": "Surface inventory counts by tier.",
     "countsByTag": "Operation tier counts per spec tag (convenience for P2/P3).",
     "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) → a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
@@ -48,16 +48,16 @@
   },
   "counts": {
     "A": 11,
-    "B": 9,
+    "B": 14,
     "C": 29,
     "D": 0,
     "E": 10,
-    "total": 59
+    "total": 64
   },
   "surfaceCounts": {
-    "D": 21,
+    "D": 20,
     "E": 1,
-    "total": 22
+    "total": 21
   },
   "countsByTag": {
     "Upstream Authentication": {
@@ -102,11 +102,11 @@
     },
     "Local Desk & Telegram Gateway": {
       "A": 0,
-      "B": 4,
+      "B": 9,
       "C": 0,
       "D": 0,
       "E": 0,
-      "total": 4
+      "total": 9
     },
     "Desk HITL Security": {
       "A": 0,
@@ -1833,36 +1833,94 @@
       "requiredCapture": "No request or response was captured for this operation. Capture one boot call (the parameter set is in MANAGER_BOOT_OPS) and promote it with scripts/apply_captures.ts.",
       "contradicted": false,
       "contradictedReason": null
+    },
+    {
+      "path": "/api/v1/blobs/{key}",
+      "method": "get",
+      "operationId": null,
+      "tag": "Local Desk & Telegram Gateway",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "services/blob_and_live_bets_server.ts:408-484",
+          "kind": "implementation",
+          "note": "Bearer-auth presigned redirect; key validated before presigning; 400/401/502 paths implemented."
+        }
+      ],
+      "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.",
+      "contradicted": false
+    },
+    {
+      "path": "/api/v1/blobs/{key}",
+      "method": "put",
+      "operationId": null,
+      "tag": "Local Desk & Telegram Gateway",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "services/blob_and_live_bets_server.ts:408-484",
+          "kind": "implementation",
+          "note": "Bearer-auth bounded upload: size caps, image allowlist, Bun.Image maxPixels, no upscaling, deterministic WebP, width/height metadata."
+        }
+      ],
+      "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.",
+      "contradicted": false
+    },
+    {
+      "path": "/api/v1/ws-tickets",
+      "method": "post",
+      "operationId": null,
+      "tag": "Local Desk & Telegram Gateway",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "services/blob_and_live_bets_server.ts:336-360",
+          "kind": "implementation",
+          "note": "Bearer-auth ticket issuance: HMAC {exp, nonce}, pending allowlist cap 4096, 429 when full."
+        }
+      ],
+      "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.",
+      "contradicted": false
+    },
+    {
+      "path": "/api/v1/live-bets",
+      "method": "post",
+      "operationId": null,
+      "tag": "Local Desk & Telegram Gateway",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "services/blob_and_live_bets_server.ts:361-407",
+          "kind": "implementation",
+          "note": "Bearer-auth publish: bounded body, channel regex, JSON serialization, Server.publish subscriber count."
+        }
+      ],
+      "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.",
+      "contradicted": false
+    },
+    {
+      "path": "/ws/live-bets",
+      "method": "get",
+      "operationId": null,
+      "tag": "Local Desk & Telegram Gateway",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "services/blob_and_live_bets_server.ts:485-514",
+          "kind": "implementation",
+          "note": "Upgrade requires an issued unused ticket via query or Sec-WebSocket-Protocol, echoes live-bets.v1, bounded JSON messages and channel validation."
+        }
+      ],
+      "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.",
+      "contradicted": false
     }
   ],
   "surfaces": [
-    {
-      "id": "surface.blob-live-bets",
-      "name": "Blob / live-bets gateway routes",
-      "tier": "D",
-      "category": "local-route",
-      "missingFromSpec": false,
-      "what": "services/blob_and_live_bets_server.ts: bearer-auth R2 blob upload/download, short-lived one-time WebSocket tickets, and the ws/live-bets stream. Uploads are bounded and transcoded with Bun.Image under maxPixels; GET redirects to a presigned URL.",
-      "members": [
-        "GET /api/v1/blobs/{key}",
-        "PUT /api/v1/blobs/{key}",
-        "POST /api/v1/ws-tickets",
-        "GET /ws/live-bets"
-      ],
-      "evidence": [
-        {
-          "source": "services/blob_and_live_bets_server.ts:3-11",
-          "kind": "implementation",
-          "note": "File header documents bearer auth, bounded uploads, maxPixels and one-time HMAC tickets."
-        },
-        {
-          "source": "tests/blob_and_live_bets_server.test.ts:9-48",
-          "kind": "test",
-          "note": "Route tests cover auth, key validation, upload caps, image rejection, presigned redirect, one-time tickets and WS message limits."
-        }
-      ],
-      "note": "GET /health is shared with the daemon and already published; these four routes are gateway-specific."
-    },
     {
       "id": "surface.fantasy402-sport-catalog",
       "name": "Fantasy402 sport catalog",
@@ -2383,9 +2441,11 @@
     }
   ],
   "citationAnchors": {
+    "services/blob_and_live_bets_server.ts:336-360": "\"/api/v1/ws-tickets\": {",
+    "services/blob_and_live_bets_server.ts:361-407": "\"/api/v1/live-bets\": {",
+    "services/blob_and_live_bets_server.ts:408-484": "\"/api/v1/blobs/:key\": {",
+    "services/blob_and_live_bets_server.ts:485-514": "\"/ws/live-bets\": (request: Request",
     "services/sportsdesk_webview_server.ts:1938-1947": "if (pathname === \"/api/agents/search\") {",
-    "services/blob_and_live_bets_server.ts:3-11": "Hardened blob + live-bet gateway",
-    "tests/blob_and_live_bets_server.test.ts:9-48": "const API_TOKEN = \"test-api-token\";",
     "services/sportsdesk_telegram_bot.ts:80-84": "export const REPORT_TYPES = [",
     "catalog/fantasy402_sport_catalog.ts:133-140": "export type CatalogDigestSet = {",
     "catalog/fantasy402_sport_catalog.ts:229-245": "export function makeDeskLinkId(",
@@ -2492,6 +2552,6 @@
     "tests/fixtures/f402-report-requests-observed-2026-11-01.json:188": "\"writeObservation\": \"The last three requests are mutations, recorded as behaviour, never as a script.",
     "tests/fixtures/fantasy402-history-poll.json:2-24": "\"feed\": \"getHistory\"",
     "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8": "\"provider\": \"fantasy402\"",
-    "docs/evidence/ledger.json:2280": "no response body has ever been seen, so no column set is documented"
+    "docs/evidence/ledger.json:2338": "no response body has ever been seen, so no column set is documented"
   }
 }

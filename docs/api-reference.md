@@ -4,11 +4,11 @@ Evidence-labelled reference generated from `docs/openapi.json` (version `2026.10
 
 ## What is verified vs inferred
 
-1. **Verified (tier B, 8 of 88 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
+1. **Verified (tier B, 13 of 88 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
 2. **Inferred (tier C, 29 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
-3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 40):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
+3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 35):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
 
-Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 9 · C 29 · E 10 · surfaces D 21 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
+Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 14 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
 
 ## GSLive Manager (Partner 118): operator deep links
 
@@ -65,7 +65,7 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 | ---------------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Forensic Surveillance              | 2          | A 1 · B 1      | Cloud Manager surveillance operations with first-party evidence; tier-A rows carry a live request+response capture.                                                            |
 | Customer State Mutations           | 1          | A 1            | Cloud Manager customer state operations with first-party evidence; tier-A rows carry a live request+response capture.                                                          |
-| Local Desk &amp; Telegram Gateway  | 43         | B 4 · D 39     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
+| Local Desk &amp; Telegram Gateway  | 43         | B 9 · D 34     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
 | Downline Accounting                | 3          | B 3            | Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.  |
 | Settlement History                 | 1          | D 1            | Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured.                                                                         |
 | Inferred (Unverified)              | 29         | C 29           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
@@ -1234,14 +1234,14 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-484` · response not captured
 
 **Presigned download URL for one blob**
 
 Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV1BlobsKey`
-- **Required capture:** HTTP capture of a presigned redirect (route is handler-verified only; no response was captured).
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Parameters**
 
@@ -1274,14 +1274,14 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-484` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
 Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `putApiV1BlobsKey`
-- **Required capture:** HTTP capture of a successful upload (route is handler-verified only; no response was captured).
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Parameters**
 
@@ -1344,14 +1344,14 @@ No declared fields.
 
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:361-407` · response not captured
 
 **Publish a live-bets event to subscribers**
 
 Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiV1LiveBets`
-- **Required capture:** HTTP capture of a publish result (route is handler-verified only).
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Request body — `application/json`**
 
@@ -1396,14 +1396,14 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:336-360` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
 Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over {exp, nonce}; issued nonces are kept in a pending allowlist capped at 4096 (429 when full), deleted on the first successful upgrade, and replayed/unissued tickets are rejected. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiV1WsTickets`
-- **Required capture:** HTTP capture of a ticket response (route is handler-verified only).
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Responses**
 
@@ -1531,14 +1531,14 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:485-514` · response not captured
 
 **Live-bets WebSocket upgrade**
 
 Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.&lt;token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getWsLiveBets`
-- **Required capture:** HTTP capture of the 101 upgrade and a PING/PONG frame (handler-verified only).
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Parameters**
 
@@ -2419,7 +2419,6 @@ Real surfaces recorded by the ledger that the final spec does not (or cannot) pr
 
 | Surface                                | Tier | Category                   | What it is                                                                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | In final spec                                                                   |
 | -------------------------------------- | ---- | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `surface.blob-live-bets`               | D    | local-route                | Blob / live-bets gateway routes                                                        | services/blob_and_live_bets_server.ts: bearer-auth R2 blob upload/download, short-lived one-time WebSocket tickets, and the ws/live-bets stream. Uploads are bounded and transcoded with Bun.Image under maxPixels; GET redirects to a presigned URL.                                                                                                                                                                                                                                                                                                                          | yes (4/4 member path(s))                                                        |
 | `surface.daemon-agent-search`          | D    | local-route                | Agent lookup for the Analysis form (GET /api/agents/search)                            | Case-insensitive prefix-first search over the committed agent tree; used to offer agent suggestions instead of a free-text field that silently accepts typos. Loopback-gated like the tree itself, because agent names are identity data.                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                        |
 | `surface.daemon-agent-tree`            | D    | local-route                | Agent hierarchy with wager rollup (GET /api/agent-tree)                                | Serves data/agent-tree.json (2,276 agents, 4 roots) joined with per-agent exposure. Keys are canonical agentLoginKey values; a key owned by more than one AgentID is flagged and never given a level.                                                                                                                                                                                                                                                                                                                                                                          | yes (1/1 member path(s))                                                        |
 | `surface.daemon-analysis`              | D    | local-route                | Analysis report (GET /api/analysis, /api/analysis/filters, /api/analysis/reports)      | The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes. The recorded context names the agent the report was run for, so /api/analysis and /api/analysis/reports both carry the PII guard: loopback answers, any other peer must present SPORTSDESK_ADMIN_TOKEN. | yes (3/3 member path(s))                                                        |
@@ -2442,7 +2441,7 @@ Real surfaces recorded by the ledger that the final spec does not (or cannot) pr
 | `surface.manager-getHistory`           | D    | upstream-route             | Manager/getHistory (wired settlement-history poll)                                     | POST {SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory - append-only settlement-history poll; response is an array or {data: []}.                                                                                                                                                                                                                                                                                                                                                                                                                                     | yes (1/1 member path(s))                                                        |
 | `surface.desk-api-unimplemented`       | E    | documented-not-implemented | /api/desk/* routes documented with no implementation                                   | 9 spec paths / 10 operations under /api/desk/* (auth session POST+DELETE, auth/me, hitl approve/queue/reject, forensics audit/scores, rfq quote/hedge) have no handler, no HMAC verifier, no CookieMap session code and no queue store anywhere in the repo.                                                                                                                                                                                                                                                                                                                   | no — no implementation exists; removed by design                                |
 
-4 of 22 ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](./gs-manager-contracts.md)).
+4 of 21 ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](./gs-manager-contracts.md)).
 
 ## Evidence & limitations
 
@@ -2453,9 +2452,9 @@ Counts below are ledger totals (all recorded rows, including rows removed from t
 | Tier | Meaning                                                                                                                                                                                                             | Ledger surfaces | Spec operations |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | --------------- |
 | A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 11              |
-| B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 8               |
+| B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 13              |
 | C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 29              |
-| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 21              | 40              |
+| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 35              |
 | E    | Documented operation with no implementation in this repository.                                                                                                                                                     | 1               | 0               |
 
 > The ledger distinguishes captured wire evidence from observation and inference: eight operations have live request+response captures — `getWebLog`, `getInfoPlayer`, `getBetTicker`, `getBetTickerConfig` and `getSportsVigSetup` from 2026-10-31, plus `Report/Pending`, `getTransactions` and `getGrading` from 2026-11-01 — and publish capture-derived response schemas. For four of them the captured body is an empty envelope, so the schema describes the envelope and nothing inside it. The Analysis report, `POST /cloud/api/Manager/getAgentPerformance`, has its request observed in full (three calls, 2026-11-01) but no response, and remains tier B. Every other response schema is authored unless its row says otherwise. Earlier wire artifacts are the 2026-10-28 Manager HAR (mode-B request only) and the 2026-10-31 live run, whose three remaining requests (`getPending`, `getInfoManager`, `getCustomerNotes`) returned HTTP 500 with the current request template. Sub-sport lanes and period menus are desk-navigation catalog data, not yet captured live; live pregame sports parity is verified separately (19/19 sports, `getSportsType`). GS Buckeye 2 Partner 118 live acquisition is blocked by design — no endpoint, method, authentication mechanism or response contract for any GS report has been verified, and the observed `getBetReport` payload does not establish a transport. The 11 "Tracked Operational Domains" entries are UI/DOM declarations with candidate URLs and methods, not wire contracts, and the `/api/desk/*` routes are documented without any implementation. Treat any schema or behaviour not backed by a cited capture as a proposal to be confirmed, not as a contract.
