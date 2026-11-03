@@ -550,6 +550,63 @@ await checkAsync(
       "a book with a staleness spread derived 0 dormant customers",
     );
 
+    // "integrity": the provenance verdict and every feature count must come from the book.
+    const integrity = await tool.execute({ report: "integrity" });
+    assert(integrity.available === true, "integrity was unavailable");
+    const ticketRows = book.flatMap((row) => row.recent_tickets ?? []);
+    const documentationPrefixes = ["192.0.2.", "198.51.100.", "203.0.113."];
+    const expectedDocSubnets = new Set(
+      book
+        .map((row) => String(row.ip_subnet ?? "").trim())
+        .filter((subnet) =>
+          documentationPrefixes.some((prefix) => subnet.startsWith(prefix)),
+        ),
+    ).size;
+    assert(
+      integrity.integrity.subnets.documentationRange === expectedDocSubnets,
+      `documentation subnets ${integrity.integrity.subnets.documentationRange} != source ${expectedDocSubnets}`,
+    );
+    const expectedPlaceholders = ticketRows.filter((ticket) =>
+      /^(Selection #\d+|Game Matchup \d+)$/.test(
+        String(ticket.selection ?? ""),
+      ),
+    ).length;
+    assert(
+      integrity.integrity.selections.placeholderCount === expectedPlaceholders,
+      `placeholder tickets ${integrity.integrity.selections.placeholderCount} != source ${expectedPlaceholders}`,
+    );
+    const expectedStamps = new Set(
+      ticketRows.map((ticket) => String(ticket.placed_at ?? "")),
+    ).size;
+    assert(
+      integrity.integrity.timestamps.distinct === expectedStamps,
+      `timestamps ${integrity.integrity.timestamps.distinct} != source ${expectedStamps}`,
+    );
+    assert(
+      integrity.integrity.ticketCounts.distinct === 1,
+      "the book no longer has a uniform sample size; revisit the feature",
+    );
+    assert(
+      integrity.integrity.character === "generated-fixture",
+      `expected a generated-fixture verdict, got ${integrity.integrity.character}`,
+    );
+    assert(
+      integrity.integrity.features.length >= 3,
+      `expected at least 3 provenance features, got ${integrity.integrity.features.length}`,
+    );
+    assert(
+      profile.bookIntegrity?.character === integrity.integrity.character,
+      "profile does not carry the same book character",
+    );
+    assert(
+      signals.bookIntegrity?.character === integrity.integrity.character,
+      "signals does not carry the same book character",
+    );
+    assert(
+      typeof signals.multiAccountNetworks?.interpretation === "string",
+      "multiAccountNetworks has no provenance interpretation",
+    );
+
     const compare = await tool.execute({
       report: "compare",
       customerIds: [book[0].customer_id, book[1].customer_id],

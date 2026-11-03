@@ -39,6 +39,16 @@ stating the cutoff its rule used. `compare` places 2–5 `customerIds` side by s
 the same profile. Every cutoff is recomputed from the book at call time; a field with no
 finite value reports `null` rather than `0`, and the book is a curated cohort, not the
 platform-wide customer base.
+
+That caveat is also measured, not assumed. `integrity` audits the book's provenance —
+RFC 5737 documentation IP ranges, sequential third-octet subnets, placeholder selections
+(`Selection #N`/`Game Matchup N`), generated id families, coarse `placed_at` grids,
+uniform sample sizes and duplicate rollups — and returns a `character` verdict derived
+from how many features matched. `profile`, `signals` and `compare` carry the same compact
+`bookIntegrity` block, and `signals.multiAccountNetworks` states whether its clusters are
+subnet-fixture construction rather than observed multi-accounting. The point is that a
+whale ranking computed over a synthetic fixture must not read as an observation of real
+customers.
 `sportsdesk_dev` also offers `ci-all` (`bun run ci:local --keep-going`) for a full failure
 inventory in one call.
 

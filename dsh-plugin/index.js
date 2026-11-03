@@ -739,6 +739,260 @@ function cutoffRule(label, cutoff) {
     : `${label} >= ${cutoff}`;
 }
 
+/** RFC 5737 documentation ranges: a subnet that cannot belong to a real customer. */
+const DOCUMENTATION_SUBNET_PREFIXES = ["192.0.2.", "198.51.100.", "203.0.113."];
+
+/** `CHURN_049` -> `A_#`, `RF2003` -> `A#`: the shape, not the value. */
+function idFamily(customerId) {
+  return String(customerId)
+    .replace(/[0-9]+/g, "#")
+    .replace(/[A-Za-z]+/g, "A");
+}
+
+function subnetOctets(subnet) {
+  const match = /^(\d+)\.(\d+)\.(\d+)\./.exec(String(subnet).trim());
+  return match === null
+    ? null
+    : [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Derived provenance audit of the book. Every check below is measured from the rows; none of
+ * the feature names is asserted. The point is to keep a fixture-derived ranking from reading
+ * as an observation of real customers: a book whose ip_subnet values are documentation ranges,
+ * whose ids fall into one generated shape, and whose 1,100 tickets share 19 timestamps is a
+ * generated dataset, and its "whales" and "multi-account clusters" describe how it was built.
+ */
+function bookIntegrity(rows) {
+  const families = new Map();
+  for (const row of rows) {
+    const family = idFamily(row?.customer_id ?? "");
+    families.set(family, (families.get(family) ?? 0) + 1);
+  }
+  const familyEntries = [...families.entries()].sort(
+    (left, right) => right[1] - left[1],
+  );
+  const topFamily = familyEntries[0] ?? ["", 0];
+  const topFamilyShare = rows.length === 0 ? null : topFamily[1] / rows.length;
+
+  const placeholderPattern = /^(Selection #\d+|Game Matchup \d+)$/;
+  let tickets = 0;
+  let placeholderTickets = 0;
+  const selections = new Set();
+  for (const row of rows) {
+    for (const ticket of row?.recent_tickets ?? []) {
+      tickets += 1;
+      const selection = String(ticket?.selection ?? "");
+      selections.add(selection);
+      if (placeholderPattern.test(selection)) placeholderTickets += 1;
+    }
+  }
+
+  const subnetCounts = new Map();
+  for (const row of rows) {
+    const subnet = String(row?.ip_subnet ?? "").trim();
+    if (subnet !== "")
+      subnetCounts.set(subnet, (subnetCounts.get(subnet) ?? 0) + 1);
+  }
+  const documentationRange = [...subnetCounts.keys()].filter((subnet) =>
+    DOCUMENTATION_SUBNET_PREFIXES.some((prefix) => subnet.startsWith(prefix)),
+  ).length;
+  const reusedSubnets = [...subnetCounts.values()].filter(
+    (count) => count > 1,
+  ).length;
+  const octetsByPrefix = new Map();
+  for (const subnet of subnetCounts.keys()) {
+    const octets = subnetOctets(subnet);
+    if (octets === null) continue;
+    const prefix = `${octets[0]}.${octets[1]}`;
+    const list = octetsByPrefix.get(prefix) ?? [];
+    list.push(octets[2]);
+    octetsByPrefix.set(prefix, list);
+  }
+  let sequentialSubnets = 0;
+  for (const octets of octetsByPrefix.values()) {
+    const sorted = [...new Set(octets)].sort((left, right) => left - right);
+    let run = 1;
+    for (let index = 1; index < sorted.length; index += 1) {
+      if (sorted[index] === sorted[index - 1] + 1) {
+        run += 1;
+      } else {
+        if (run >= 8) sequentialSubnets += run;
+        run = 1;
+      }
+    }
+    if (run >= 8) sequentialSubnets += run;
+  }
+  const sequentialShare =
+    subnetCounts.size === 0 ? null : sequentialSubnets / subnetCounts.size;
+
+  const timestamps = new Map();
+  let maxPerTimestamp = 0;
+  for (const row of rows) {
+    for (const ticket of row?.recent_tickets ?? []) {
+      const placed = String(ticket?.placed_at ?? "");
+      if (placed === "") continue;
+      const next = (timestamps.get(placed) ?? 0) + 1;
+      timestamps.set(placed, next);
+      if (next > maxPerTimestamp) maxPerTimestamp = next;
+    }
+  }
+
+  const ticketCounts = new Map();
+  for (const row of rows) {
+    const count = Array.isArray(row?.recent_tickets)
+      ? row.recent_tickets.length
+      : 0;
+    ticketCounts.set(count, (ticketCounts.get(count) ?? 0) + 1);
+  }
+  const modalTicketCount = [...ticketCounts.entries()].sort(
+    (left, right) => right[1] - left[1],
+  )[0] ?? [0, 0];
+
+  let holdPctMaxError = 0;
+  for (const row of rows) {
+    const volume = Number(row?.lifetime_volume_usd);
+    const net = Number(row?.lifetime_net_usd);
+    const hold = Number(row?.hold_pct);
+    if (!Number.isFinite(volume) || volume === 0) continue;
+    if (!Number.isFinite(net) || !Number.isFinite(hold)) continue;
+    holdPctMaxError = Math.max(
+      holdPctMaxError,
+      Math.abs((net / volume) * 100 - hold),
+    );
+  }
+
+  const rollupKeys = new Map();
+  for (const row of rows) {
+    const key = [
+      row?.lifetime_volume_usd,
+      row?.lifetime_net_usd,
+      row?.hold_pct,
+      row?.clv_bps,
+      row?.sharp_score,
+      row?.churn_hazard,
+      row?.sports_7d_volume_usd,
+      row?.sports_7d_net_usd,
+    ].join("|");
+    rollupKeys.set(key, (rollupKeys.get(key) ?? 0) + 1);
+  }
+  const rollupDuplicateGroups = [...rollupKeys.values()].filter(
+    (count) => count > 1,
+  ).length;
+
+  const features = [];
+  const addFeature = (id, observed, detail) =>
+    features.push({ id, observed, detail });
+  if (documentationRange > 0) {
+    addFeature(
+      "documentation-ip-ranges",
+      documentationRange,
+      `${documentationRange} of ${subnetCounts.size} distinct ip_subnet values are RFC 5737 documentation ranges`,
+    );
+  }
+  if (sequentialShare !== null && sequentialShare >= 0.2) {
+    addFeature(
+      "sequential-subnets",
+      Number(sequentialShare.toFixed(3)),
+      `${Math.round(sequentialShare * 100)}% of distinct ip_subnet values sit in consecutive third-octet runs of 8 or more`,
+    );
+  }
+  if (placeholderTickets > 0) {
+    addFeature(
+      "placeholder-selections",
+      placeholderTickets,
+      `${placeholderTickets} of ${tickets} sampled tickets use placeholder selections (Selection #N / Game Matchup N)`,
+    );
+  }
+  if (topFamilyShare !== null && topFamilyShare >= 0.25) {
+    addFeature(
+      "generated-id-family",
+      Number(topFamilyShare.toFixed(3)),
+      `the most common customer-id shape (${topFamily[0]}) covers ${Math.round(topFamilyShare * 100)}% of the book`,
+    );
+  }
+  if (timestamps.size > 0 && timestamps.size <= 20 && tickets >= 100) {
+    addFeature(
+      "coarse-timestamp-grid",
+      timestamps.size,
+      `${tickets} tickets share only ${timestamps.size} distinct placed_at values (max ${maxPerTimestamp} per instant)`,
+    );
+  }
+  if (ticketCounts.size === 1 && rows.length >= 50) {
+    addFeature(
+      "uniform-ticket-count",
+      modalTicketCount[0],
+      `every customer carries exactly ${modalTicketCount[0]} sampled tickets`,
+    );
+  }
+  if (rollupDuplicateGroups > 0) {
+    addFeature(
+      "rollup-duplicates",
+      rollupDuplicateGroups,
+      `${rollupDuplicateGroups} exact duplicate rollup groups`,
+    );
+  }
+
+  const character =
+    features.length >= 3
+      ? "generated-fixture"
+      : features.length >= 1
+        ? "partially-generated"
+        : "unremarkable";
+  return {
+    character,
+    matchedFeatures: features.length,
+    features,
+    identityFamilies: Object.fromEntries(
+      familyEntries.slice(0, 5).map(([family, count]) => [family, count]),
+    ),
+    selections: {
+      tickets,
+      distinct: selections.size,
+      placeholderCount: placeholderTickets,
+      placeholderShare: tickets === 0 ? null : placeholderTickets / tickets,
+    },
+    subnets: {
+      distinct: subnetCounts.size,
+      reused: reusedSubnets,
+      documentationRange,
+      sequentialShare,
+    },
+    timestamps: {
+      distinct: timestamps.size,
+      maxTicketsPerTimestamp: maxPerTimestamp,
+    },
+    ticketCounts: {
+      distinct: ticketCounts.size,
+      modal: modalTicketCount[0],
+      modalShare: rows.length === 0 ? null : modalTicketCount[1] / rows.length,
+    },
+    holdPctMaxError,
+    rollupDuplicateGroups,
+    implication:
+      character === "unremarkable"
+        ? "No provenance anomaly was detected; derived rankings still describe this book only."
+        : `This book reports ${features.length} provenance feature(s) of generated/demo data (${features
+            .map((feature) => feature.id)
+            .join(
+              ", ",
+            )}), so derived rankings and signals describe fixture construction, not observed customer behavior.`,
+  };
+}
+
+/** The compact integrity block every intelligence answer carries. */
+function compactIntegrity(integrity) {
+  return {
+    character: integrity.character,
+    matchedFeatures: integrity.matchedFeatures,
+    features: integrity.features.map((feature) => ({
+      id: feature.id,
+      detail: feature.detail,
+    })),
+    implication: integrity.implication,
+  };
+}
+
 /**
  * The staged market reports `./bin/dx stage` publishes into `dist/`. These are REPORTS, not
  * inputs: each carries its own `generatedAtIso`, and the tool reports both that and the file's
@@ -1655,7 +1909,11 @@ export function apply(ctx, config) {
         'flag definitions returned. "signals" ranks cohort-wide derived signals (sharp money, ' +
         "high churn, whales, book-profitable, dormant, multi-account networks) and returns " +
         'the cutoff each rule used. "compare" places 2-5 customerIds side by side using the ' +
-        "same derived profile. All ranks/cutoffs are recomputed from the book at call time.",
+        "same derived profile. All ranks/cutoffs are recomputed from the book at call time. " +
+        '"integrity" measures provenance features (documentation IP ranges, sequential ' +
+        "subnets, placeholder selections, generated id families, coarse timestamp grids, " +
+        "uniform sample sizes, duplicate rollups) and returns a derived character verdict, " +
+        "so a fixture-derived ranking cannot be read as an observation of real customers.",
       parameters: {
         type: "object",
         properties: {
@@ -1724,6 +1982,7 @@ export function apply(ctx, config) {
           "profile",
           "signals",
           "compare",
+          "integrity",
         ];
         if (
           typeof request.report !== "string" ||
@@ -2138,6 +2397,7 @@ export function apply(ctx, config) {
           }
           const cohort = buildCustomerCohort(rows);
           const cutoffs = cohortCutoffs(cohort);
+          const bookAudit = bookIntegrity(rows);
           return {
             available: true,
             ok: true,
@@ -2146,6 +2406,7 @@ export function apply(ctx, config) {
             customerId: match.customer_id,
             totalCustomers: rows.length,
             source,
+            bookIntegrity: compactIntegrity(bookAudit),
             ...customerProfile(match, cohort, cutoffs),
             cutoffs,
             flagDefinitions: {
@@ -2165,6 +2426,7 @@ export function apply(ctx, config) {
         if (request.report === "signals") {
           const cohort = buildCustomerCohort(rows);
           const cutoffs = cohortCutoffs(cohort);
+          const bookAudit = bookIntegrity(rows);
           const ticketTotal = rows.reduce(
             (total, row) =>
               total +
@@ -2198,6 +2460,7 @@ export function apply(ctx, config) {
             ok: true,
             report: request.report,
             cohort: { customers: rows.length, tickets: ticketTotal },
+            bookIntegrity: compactIntegrity(bookAudit),
             cutoffs,
             signals: {
               sharpMoney: asSignal(
@@ -2265,6 +2528,11 @@ export function apply(ctx, config) {
             },
             multiAccountNetworks: {
               rule: "two or more customers share an ip_subnet",
+              interpretation:
+                bookAudit.subnets.documentationRange > 0 ||
+                (bookAudit.subnets.sequentialShare ?? 0) >= 0.2
+                  ? "ip_subnet values are documentation or sequential test ranges, so these clusters reflect how the fixture was built, not observed multi-accounting."
+                  : "No subnet provenance anomaly was detected; clusters still describe this book only.",
               matched: clusters.length,
               returned: Math.min(limit, clusters.length),
               networks: clusters.slice(0, limit).map(([subnet, customers]) => ({
@@ -2279,7 +2547,10 @@ export function apply(ctx, config) {
             note:
               "Every rule is derived from the book at call time and states its cutoff. " +
               "A null cutoff means the book has no finite value for that field. Signals " +
-              "are descriptive, not a recommendation.",
+              "are descriptive, not a recommendation." +
+              (bookAudit.matchedFeatures > 0
+                ? ` ${bookAudit.implication}`
+                : ""),
           };
         }
         if (request.report === "compare") {
@@ -2295,6 +2566,7 @@ export function apply(ctx, config) {
           }
           const cohort = buildCustomerCohort(rows);
           const cutoffs = cohortCutoffs(cohort);
+          const bookAudit = bookIntegrity(rows);
           const found = [];
           const missing = [];
           for (const id of ids) {
@@ -2326,11 +2598,34 @@ export function apply(ctx, config) {
             missing,
             totalCustomers: rows.length,
             source,
+            bookIntegrity: compactIntegrity(bookAudit),
             cutoffs,
             customers: found.map((row) =>
               customerProfile(row, cohort, cutoffs),
             ),
             note: 'Same derived profile as report "profile"; deltas are for the caller to read off the shared cohort ranks.',
+          };
+        }
+        if (request.report === "integrity") {
+          const audit = bookIntegrity(rows);
+          const ticketTotal = rows.reduce(
+            (total, row) =>
+              total +
+              (Array.isArray(row?.recent_tickets)
+                ? row.recent_tickets.length
+                : 0),
+            0,
+          );
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            book: { customers: rows.length, tickets: ticketTotal },
+            source,
+            integrity: audit,
+            note:
+              "Every feature is measured from the book; no feature is asserted by name. " +
+              "The character verdict is a count of matched features, not a hand-written label.",
           };
         }
         if (request.report === "lookup") {

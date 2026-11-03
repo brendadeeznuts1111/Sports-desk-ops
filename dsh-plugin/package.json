@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-sportsdesk-ops",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Read-only DSH tools for the SportsDesk/Fantasy402 desk: ops status, dataset freshness, downline questions and the repo's verification gates.",

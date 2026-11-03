@@ -171,6 +171,33 @@ await check(
   },
 );
 
+await check(
+  "sportsdesk_customer integrity executes (derived provenance)",
+  async () => {
+    const book = JSON.parse(
+      // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
+      readFileSync(`${REPO}/enriched_customers_full.json`, "utf8"),
+    );
+    const result = await byName
+      .get("sportsdesk_customer")
+      .execute({ report: "integrity" });
+    assert(result.available === true, "integrity was unavailable");
+    assert(
+      typeof result.integrity?.character === "string",
+      "integrity returned no character verdict",
+    );
+    const tickets = book.flatMap((row) => row.recent_tickets ?? []);
+    const stamps = new Set(
+      tickets.map((ticket) => String(ticket.placed_at ?? "")),
+    ).size;
+    assert(
+      result.integrity.timestamps.distinct === stamps,
+      "integrity timestamp count != source",
+    );
+    JSON.stringify(result);
+  },
+);
+
 await check("sportsdesk_markets executes (dist artifact parse)", async () => {
   const result = await byName
     .get("sportsdesk_markets")
