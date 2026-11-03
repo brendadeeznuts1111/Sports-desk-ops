@@ -174,18 +174,18 @@ To ensure seamless embedding inside Telegram Web (`https://web.telegram.org`), T
 
 ## Performance Telemetry & Micro-Benchmarks
 
-Empirical measurements recorded via `tests/bench_server.test.ts` and `tests/sendfile_threshold.test.ts` on Bun v1.4.4 (macOS arm64):
+Empirical measurements on Bun v1.4.4 (macOS arm64). The first two rows are from `bun scripts/bench_server.ts` (2026-11-02, Apple M4; a single run, so treat the ratios as order-of-magnitude); the rest are from `tests/sendfile_threshold.test.ts`:
 
-| Surface / Operation                                | Manual Baseline Path             | Native Bun Path            | Measured Latency    | Throughput / Speedup                |
-| :------------------------------------------------- | :------------------------------- | :------------------------- | :------------------ | :---------------------------------- |
-| **JSON Serialization** (25 accounts)               | `JSON.stringify` + headers       | `Response.json(data)`      | 0.99 µs vs 0.82 µs  | 1.21x faster                        |
-| **Response Handle Construction** (21.5 KB payload) | `readFileSync` buffer allocation | `new Response(Bun.file())` | 45.91 µs vs 0.38 µs | 119.88x faster lazy handle creation |
-| **Handle Construction Latency** (16 KB)            | Buffer allocation                | `new Response(Bun.file())` | 0.49 µs/op          | Sub-microsecond lazy handle         |
-| **Handle Construction Latency** (64 KB)            | Buffer allocation                | `new Response(Bun.file())` | 0.47 µs/op          | Sub-microsecond lazy handle         |
-| **Handle Construction Latency** (1 MB)             | Buffer allocation                | `new Response(Bun.file())` | 0.21 µs/op          | Sub-microsecond lazy handle         |
-| **End-to-End Socket Transfer** (16 KB payload)     | `fetch` socket transfer          | `new Response(Bun.file())` | 0.149 ms/req        | Direct loopback socket transfer     |
-| **End-to-End Socket Transfer** (64 KB payload)     | `fetch` socket transfer          | `new Response(Bun.file())` | 0.191 ms/req        | Direct loopback socket transfer     |
-| **End-to-End Socket Transfer** (1 MB payload)      | `fetch` socket transfer          | `new Response(Bun.file())` | 0.489 ms/req        | Direct loopback socket transfer     |
+| Surface / Operation                                 | Manual Baseline Path                | Native Bun Path            | Measured Latency     | Throughput / Speedup             |
+| :-------------------------------------------------- | :---------------------------------- | :------------------------- | :------------------- | :------------------------------- |
+| **JSON Serialization** (25 accounts)                | `JSON.stringify` + headers          | `Response.json(data)`      | 1.22 µs vs 1.12 µs   | 1.09x faster                     |
+| **Response Handle Construction** (154.1 KB payload) | eager `Bun.file().text()` + headers | `new Response(Bun.file())` | 196.68 µs vs 0.67 µs | 292x faster lazy handle creation |
+| **Handle Construction Latency** (16 KB)             | Buffer allocation                   | `new Response(Bun.file())` | 0.49 µs/op           | Sub-microsecond lazy handle      |
+| **Handle Construction Latency** (64 KB)             | Buffer allocation                   | `new Response(Bun.file())` | 0.47 µs/op           | Sub-microsecond lazy handle      |
+| **Handle Construction Latency** (1 MB)              | Buffer allocation                   | `new Response(Bun.file())` | 0.21 µs/op           | Sub-microsecond lazy handle      |
+| **End-to-End Socket Transfer** (16 KB payload)      | `fetch` socket transfer             | `new Response(Bun.file())` | 0.149 ms/req         | Direct loopback socket transfer  |
+| **End-to-End Socket Transfer** (64 KB payload)      | `fetch` socket transfer             | `new Response(Bun.file())` | 0.191 ms/req         | Direct loopback socket transfer  |
+| **End-to-End Socket Transfer** (1 MB payload)       | `fetch` socket transfer             | `new Response(Bun.file())` | 0.489 ms/req         | Direct loopback socket transfer  |
 
 ## Plane 3 — append-only ingestion JSONL replay
 
@@ -271,7 +271,7 @@ The test suite consists of 10 test suites across 34 tests and 813 total assertio
   - `tests/server_error.test.ts`: 14 assertions verifying non-Error exceptions in production return structured 500 JSON without stack traces.
   - `tests/fetch_proxy_isolation.test.ts`: 12 assertions verifying `NO_PROXY`, `{ proxy: false }` direct bypass, and `respectNoProxy: false` overrides.
   - `tests/fetch_timeout.test.ts`: 7 assertions verifying `AbortSignal.timeout` aborts slow upstreams and validates service bounds.
-  - `tests/bench_server.test.ts`: 6 assertions benchmarking latency numbers for JSON serialization and file handle creation.
+  - `tests/bench_server.test.ts`: load-independent checks that `Response.json` matches `JSON.stringify` + `new Response`, and that `new Response(Bun.file())` reads lazily (timings live in `scripts/bench_server.ts`).
   - `tests/fetch_url_credentials.test.ts`: 3 assertions auditing codebase for 0 embedded URL credentials and 0 `rejectUnauthorized: false` occurrences.
   - `tests/server_port.test.ts`: 2 assertions verifying `BUN_PORT=4100` cascade resolution without code overrides.
   - `tests/env_types.test-d.ts` / `tests/env_types.test.ts`: Type assertion verifying `expectTypeOf<typeof Bun.env.KEY>().toEqualTypeOf<typeof process.env.KEY>()`.

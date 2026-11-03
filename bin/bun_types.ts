@@ -92,21 +92,23 @@ export async function declarationDrift(
   };
 
   const configPath = path.join(cwd, "tsconfig.json");
-  let config: ts.ParsedCommandLine | undefined;
+  let config: ts.ParsedCommandLine;
   try {
-    config = ts.getParsedCommandLineOfConfigFile(
+    const read = ts.readConfigFile(configPath, ts.sys.readFile);
+    if (read.error !== undefined)
+      return { ...empty, error: `no tsconfig at ${configPath}` };
+    // Only the compiler options are used. Emptying files/include skips expanding `**/*.ts`
+    // across the repo (~50-110 ms); the resulting "no inputs" diagnostic is ignored.
+    config = ts.parseJsonConfigFileContent(
+      { ...read.config, files: [], include: [] },
+      ts.sys,
+      cwd,
+      undefined,
       configPath,
-      {},
-      {
-        ...ts.sys,
-        onUnRecoverableConfigFileDiagnostic: () => {},
-      },
     );
   } catch (error) {
     return { ...empty, error: `tsconfig: ${String(error)}` };
   }
-  if (config === undefined)
-    return { ...empty, error: `no tsconfig at ${configPath}` };
 
   const host = ts.createCompilerHost(config.options);
   const baseGetSourceFile = host.getSourceFile.bind(host);

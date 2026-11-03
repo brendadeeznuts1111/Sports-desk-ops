@@ -214,7 +214,10 @@ describe("dx bun", () => {
     expect(shell?.absent).toEqual([]);
     const image = report.types?.namespaces.find((gap) => gap.name === "Image");
     expect(image?.absent).toEqual([]);
-  });
+    // The subprocess builds a TypeScript program over ~237 lib/bun-types/@types/node files:
+    // 0.6-1.4 s alone, 2.9-12.1 s under `bun test tests/ --parallel` (2026-11-02, 10 cores,
+    // 6 runs), which crosses the 5 s default.
+  }, 30_000);
 
   test("the fast path does not load the compiler", async () => {
     const report = JSON.parse((await run(["--json"])).stdout) as Report;

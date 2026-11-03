@@ -370,8 +370,8 @@ A critical design decision in SportsDesk is **where** TLS termination occurs:
   2. Unencrypted plain HTTP transport (no TLS encryption).
   3. Direct TCP connection (no intermediate HTTP/HTTPS proxy).
   4. Uncompressed transmission (no transfer compression).
-- **Server Response Path Distinction**: On the server response path (`new Response(Bun.file(path))`), Bun constructs a lazy file handle pointer in user space without eagerly buffering disk bytes into memory. Handle construction requires ~0.38 µs (compared to 45.91 µs for `readFileSync`). However, whether the subsequent socket write employs `sendfile(2)` or `writev`/`pread` is unproven in Bun's published documentation. SportsDesk avoids conflating outbound upload zero-copy claims with response streaming.
-- **Micro-Benchmark Telemetry** (measured in `tests/bench_server.test.ts` and `tests/sendfile_threshold.test.ts` on Bun v1.4.4):
+- **Server Response Path Distinction**: On the server response path (`new Response(Bun.file(path))`), Bun constructs a lazy file handle pointer in user space without eagerly buffering disk bytes into memory. Handle construction requires ~0.67 µs, against 196.68 µs for an eager `Bun.file().text()` of a 154.1 KB file (`bun scripts/bench_server.ts`, 2026-11-02, Apple M4, single run). However, whether the subsequent socket write employs `sendfile(2)` or `writev`/`pread` is unproven in Bun's published documentation. SportsDesk avoids conflating outbound upload zero-copy claims with response streaming.
+- **Micro-Benchmark Telemetry** (measured in `tests/sendfile_threshold.test.ts` on Bun v1.4.4):
   - **Handle Construction**: 0.49 µs (16 KB), 0.47 µs (64 KB), 0.21 µs (1 MB). Sub-microsecond and independent of payload size.
   - **End-to-End Socket Transfer**: 0.149 ms (16 KB), 0.191 ms (64 KB), 0.489 ms (1 MB).
 
