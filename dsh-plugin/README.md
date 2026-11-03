@@ -59,6 +59,16 @@ a good artifact; the run is reported as failed and the old file is left in place
 `sportsdesk_data` report `"capture"` reads that journal and each artifact's own provenance stamp
 (`capturedAt` / `observedAt` / `extractedAt` / `generatedAt`), compares it against the freshness
 budget, and reports an absent journal as MISSING rather than as zero sources.
+
+The same report says how each artifact can be refreshed, which is the distinction that was
+missing: `capture:all` can only rebuild what an API operation serves (`live-bets`,
+`live-wagers`), while scoreboard, Game Admin, Contests and the stored CP analysis are
+**operator pastes** — the portal renders them and no API contract proves them. Those are
+installed with `bun run capture:dom --input <dir>`, which validates each paste against that
+artifact's own reader, requires it to state `observedAt`, installs the normalized content and
+records the input's SHA-256 and mtime. A paste that does not validate is refused and the
+previous artifact is left alone. The capture report therefore lists `capturePath` and a
+`refresh` command per artifact, plus `stalePasteArtifacts` for the ones only a paste can fix.
 `sportsdesk_dev` also offers `ci-all` (`bun run ci:local --keep-going`) for a full failure
 inventory in one call.
 

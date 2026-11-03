@@ -374,42 +374,56 @@ const LIVE_ARTIFACTS = [
     name: "live-bets",
     path: "data/live-bets.json",
     budgetMinutes: 120,
+    capturePath: "api",
+    pasteFileName: null,
     role: "Pending report -> scoreboard feed (rebuilt by capture:all from Report/Pending).",
   },
   {
     name: "live-wagers",
     path: "data/live-wagers.json",
     budgetMinutes: 120,
+    capturePath: "api",
+    pasteFileName: null,
     role: "getBetTicker list -> bet ticker feed (rebuilt by capture:all from getBetTicker).",
   },
   {
     name: "scoreboard",
     path: "data/scoreboard.json",
     budgetMinutes: 360,
+    capturePath: "paste",
+    pasteFileName: "scoreboard.json",
     role: "Scoreboard snapshot.",
   },
   {
     name: "game-admin-board",
     path: "data/game-admin-board.json",
     budgetMinutes: 720,
+    capturePath: "paste",
+    pasteFileName: "game-admin-board.json",
     role: "Game admin board snapshot.",
   },
   {
     name: "contests",
     path: "data/contests.json",
     budgetMinutes: 1_440,
+    capturePath: "paste",
+    pasteFileName: "contests.html",
     role: "Contest entries.",
   },
   {
     name: "customer-profiles",
     path: "data/customer-profiles.json",
     budgetMinutes: 1_440,
+    capturePath: "derived",
+    pasteFileName: null,
     role: "Derived customer profiles.",
   },
   {
     name: "analysis-cp-baseball",
     path: "data/analysis-cp-baseball-2026-11-01.json",
     budgetMinutes: 1_440,
+    capturePath: "paste",
+    pasteFileName: "analysis-cp-baseball.json",
     role: "Customer-performance analysis snapshot.",
   },
 ];
@@ -418,6 +432,14 @@ const LIVE_ARTIFACTS = [
 const CAPTURE_HEALTH = {
   path: "data/capture-health.json",
   role: "One record per live source: outcome, HTTP status, rows, bytes, artifact written, error.",
+};
+
+/** Stable command labels the capture report hands back, so a stale artifact has a next action. */
+const CAPTURE_REFRESH_COMMANDS = {
+  api: "bun run capture:all --agent <id> --customer <id>",
+  paste: "bun run capture:dom --input <paste dir>",
+  derived:
+    "regenerate the derived artifact from its generator (not a live capture)",
 };
 
 /**
@@ -1733,10 +1755,17 @@ export function apply(ctx, config) {
               ? Math.max(0, Math.round((nowMs - stampMs) / 60_000))
               : null;
             const effectiveAgeMinutes = stampAgeMinutes ?? stats.ageMinutes;
+            const stale =
+              effectiveAgeMinutes === null
+                ? null
+                : effectiveAgeMinutes > artifact.budgetMinutes;
             return {
               name: artifact.name,
               path: artifact.path,
               role: artifact.role,
+              capturePath: artifact.capturePath,
+              pasteFileName: artifact.pasteFileName,
+              refresh: CAPTURE_REFRESH_COMMANDS[artifact.capturePath] ?? null,
               exists: stats.exists,
               bytes: stats.bytes,
               mtime: stats.mtime,
@@ -1745,10 +1774,7 @@ export function apply(ctx, config) {
               stampedAt,
               stampAgeMinutes,
               budgetMinutes: artifact.budgetMinutes,
-              stale:
-                effectiveAgeMinutes === null
-                  ? null
-                  : effectiveAgeMinutes > artifact.budgetMinutes,
+              stale,
             };
           });
 
@@ -1820,9 +1846,22 @@ export function apply(ctx, config) {
                 },
             staleArtifacts,
             failedSources,
+            stalePasteArtifacts: artifacts
+              .filter(
+                (artifact) =>
+                  artifact.stale === true && artifact.capturePath === "paste",
+              )
+              .map((artifact) => ({
+                name: artifact.name,
+                pasteFileName: artifact.pasteFileName,
+                refresh: artifact.refresh,
+              })),
             nextStep:
               staleArtifacts.length > 0 || failedSources.length > 0
-                ? "bun run capture:all --agent <id> --customer <id>"
+                ? [
+                    "bun run capture:all --agent <id> --customer <id>",
+                    "bun run capture:dom --input <paste dir>",
+                  ].join(" then ")
                 : "no stale artifact and no failed source reported by the last run",
           };
         }

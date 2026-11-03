@@ -210,6 +210,30 @@ await checkAsync("sportsdesk_data reports live-capture freshness", async () => {
         artifact.stale === effectiveAge > artifact.budgetMinutes,
       `stale flag disagrees with its own age for ${artifact.name}`,
     );
+    assert(
+      ["api", "paste", "derived"].includes(artifact.capturePath),
+      `unknown capturePath for ${artifact.name}: ${artifact.capturePath}`,
+    );
+    assert(
+      typeof artifact.refresh === "string",
+      `no refresh command for ${artifact.name}`,
+    );
+    if (artifact.capturePath === "paste") {
+      assert(
+        typeof artifact.pasteFileName === "string",
+        `a paste artifact must name its input file: ${artifact.name}`,
+      );
+    }
+  }
+  assert(
+    Array.isArray(capture.stalePasteArtifacts),
+    "stalePasteArtifacts is missing from the capture report",
+  );
+  for (const entry of capture.stalePasteArtifacts) {
+    assert(
+      typeof entry.pasteFileName === "string",
+      `stale paste artifact ${entry.name} has no input file name`,
+    );
   }
   const unknownReport = await tool.execute({ report: "nope" });
   assert(

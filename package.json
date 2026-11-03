@@ -25,6 +25,7 @@
     "capture:pending": "bun run scripts/capture/capture_pending_full.ts",
     "capture:bet-ticker": "bun run scripts/capture/capture_bet_ticker.ts",
     "capture:all": "bun run scripts/capture/capture_all_live.ts",
+    "capture:dom": "bun run scripts/capture/capture_dom_surfaces.ts",
     "manual:fetch": "bun run scripts/fetch_user_manual.ts",
     "contests:extract": "bun run scripts/extract_contests.ts",
     "verify:manager-oracle-slices": "bun run verification/manager-boot-oracle/run-slice-guard.ts",

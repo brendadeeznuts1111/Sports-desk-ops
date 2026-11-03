@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import {
+  artifactSpecFor,
   artifactTextFor,
   buildCaptureRequest,
   isUsableCapture,
@@ -9,9 +10,12 @@ import {
   liveOperationPath,
   measuredRows,
   mergeCaptureHealth,
+  pasteArtifactPlan,
   probeOpFor,
   readCaptureHealth,
+  REPO_LIVE_ARTIFACTS,
   runCapturePlan,
+  validatePaste,
   writeCaptureHealth,
   type CaptureHttpResponse,
   type LiveCaptureHealth,
@@ -332,6 +336,123 @@ describe("capture health", () => {
     );
     expect(wrongVersion).toBeGreaterThan(0);
     expect(await readCaptureHealth(path)).toBeNull();
+  });
+});
+
+describe("artifact provenance", () => {
+  const repoRoot = join(import.meta.dir, "..");
+
+  test("classifies every live artifact as api or paste, and each path exists", async () => {
+    expect(REPO_LIVE_ARTIFACTS).toHaveLength(6);
+    const names = REPO_LIVE_ARTIFACTS.map((spec) => spec.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(
+      REPO_LIVE_ARTIFACTS.filter((spec) => spec.capturePath === "api")
+        .map((spec) => spec.name)
+        .sort(),
+    ).toEqual(["live-bets", "live-wagers"]);
+    expect(
+      REPO_LIVE_ARTIFACTS.filter((spec) => spec.capturePath === "paste"),
+    ).toHaveLength(4);
+    for (const spec of REPO_LIVE_ARTIFACTS) {
+      expect(await Bun.file(join(repoRoot, spec.path)).exists()).toBe(true);
+      if (spec.capturePath === "api") {
+        expect(spec.operation).not.toBeNull();
+        expect(spec.pasteInput).toBeNull();
+      } else {
+        expect(spec.operation).toBeNull();
+        expect(spec.pasteInput).not.toBeNull();
+        expect(spec.pasteFileName).not.toBeNull();
+      }
+    }
+    expect(pasteArtifactPlan().map((spec) => spec.name)).toEqual([
+      "scoreboard",
+      "game-admin-board",
+      "contests",
+      "analysis-cp-baseball",
+    ]);
+    expect(pasteArtifactPlan({ only: ["contests"] })).toHaveLength(1);
+  });
+
+  test("the committed JSON pastes validate against their own readers", async () => {
+    for (const name of [
+      "scoreboard",
+      "game-admin-board",
+      "analysis-cp-baseball",
+    ]) {
+      const spec = artifactSpecFor(name);
+      if (spec === null) throw new Error(`no spec for ${name}`);
+      const text = await Bun.file(join(repoRoot, spec.path)).text();
+      const validation = validatePaste(spec, text, "2026-11-01T22:00:00.000Z");
+      expect(validation.ok).toBe(true);
+      expect(validation.reason).toBeNull();
+      expect(validation.records).toBeGreaterThan(0);
+      expect(validation.observedAt).toBe("2026-11-01");
+      expect(validation.artifactText).not.toBeNull();
+    }
+  });
+
+  test("a paste without observedAt is refused", () => {
+    const spec = artifactSpecFor("scoreboard");
+    if (spec === null) throw new Error("no scoreboard spec");
+    const validation = validatePaste(
+      spec,
+      JSON.stringify({ games: [] }),
+      "2026-11-01T22:00:00.000Z",
+    );
+    expect(validation.ok).toBe(false);
+    expect(String(validation.reason)).toContain("observedAt");
+  });
+
+  test("an empty or wrong-shape paste is refused with a reason", () => {
+    const board = artifactSpecFor("game-admin-board");
+    if (board === null) throw new Error("no board spec");
+    expect(
+      validatePaste(board, "", "2026-11-01T00:00:00.000Z").reason,
+    ).toContain("empty");
+    expect(
+      validatePaste(board, "not json", "2026-11-01T00:00:00.000Z").reason,
+    ).toContain("not valid JSON");
+    const wrong = validatePaste(
+      board,
+      JSON.stringify({ observedAt: "2026-11-01", games: "nope" }),
+      "2026-11-01T00:00:00.000Z",
+    );
+    expect(wrong.ok).toBe(false);
+    expect(String(wrong.reason)).toContain("did not validate");
+  });
+
+  test("contests markup is extracted into a stamped artifact", () => {
+    const spec = artifactSpecFor("contests");
+    if (spec === null) throw new Error("no contests spec");
+    const html =
+      '<div data-group="FOOTBALL"><a data-param="{&quot;contestNum&quot;:5,&quot;type&quot;:&quot;NFL - Super Bowl&quot;}"></a></div>';
+    const validation = validatePaste(spec, html, "2026-11-02T10:00:00.000Z");
+    expect(validation.ok).toBe(true);
+    expect(validation.records).toBe(1);
+    expect(validation.observedAt).toBe("2026-11-02T10:00:00.000Z");
+    const artifact = JSON.parse(validation.artifactText as string) as {
+      schemaVersion: number;
+      source: string;
+      extractedAt: string;
+      entries: unknown[];
+    };
+    expect(artifact.schemaVersion).toBe(1);
+    expect(artifact.source).toBe("markup:contests.html");
+    expect(artifact.extractedAt).toBe("2026-11-02T10:00:00.000Z");
+    expect(artifact.entries).toHaveLength(1);
+  });
+
+  test("empty contests markup is refused", () => {
+    const spec = artifactSpecFor("contests");
+    if (spec === null) throw new Error("no contests spec");
+    const validation = validatePaste(
+      spec,
+      "<div>no contests</div>",
+      "2026-11-02T10:00:00.000Z",
+    );
+    expect(validation.ok).toBe(false);
+    expect(String(validation.reason)).toContain("no contest entries");
   });
 });
 

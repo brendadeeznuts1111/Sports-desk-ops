@@ -29,6 +29,10 @@ import {
 } from "./f402_probe.ts";
 import { buildArtifact, readPendingRows } from "./live_bets.ts";
 import { betTickerFile } from "./live_wagers.ts";
+import { extractContests } from "./contests.ts";
+import { readBoardFile } from "./game_admin_board.ts";
+import { readAnalysisReport } from "./analysis_report.ts";
+import { readScoreboardFile } from "./scoreboard.ts";
 
 export type LiveBuilder = "live-bets" | "live-wagers" | "raw";
 
@@ -248,6 +252,11 @@ export interface LiveCaptureRecord {
   readonly artifactWritten: boolean;
   readonly keptPreviousArtifact: boolean;
   readonly error: string | null;
+  /** How the artifact was refreshed: from the API, or by installing an operator paste. */
+  readonly provenanceClass?: "api" | "paste";
+  /** Paste installs only: SHA-256 and mtime of the input the artifact was installed from. */
+  readonly inputSha256?: string | null;
+  readonly inputMtime?: string | null;
 }
 
 /** The snapshot `data/capture-health.json`; one record per source, latest run wins. */
@@ -259,6 +268,199 @@ export interface LiveCaptureHealth {
 }
 
 export const CAPTURE_HEALTH_PATH = "data/capture-health.json";
+
+export type LiveArtifactCapturePath = "api" | "paste";
+export type PasteInputKind = "json" | "html";
+
+/**
+ * The six live desk artifacts, and how each one can be refreshed. This is the classification the
+ * stale-artifact report was missing: two artifacts have an API builder, the other four are
+ * operator pastes (the portal renders them; no API contract proves them), so no API capture can
+ * ever make them fresh. Their reproducer is a validated paste install, not a request.
+ */
+export interface LiveArtifactSpec {
+  readonly name: string;
+  readonly path: string;
+  readonly freshnessMinutes: number;
+  readonly capturePath: LiveArtifactCapturePath;
+  readonly pasteInput: PasteInputKind | null;
+  /** File name expected in the paste input directory. */
+  readonly pasteFileName: string | null;
+  /** Operation that rebuilds it, for API artifacts. */
+  readonly operation: string | null;
+  readonly role: string;
+}
+
+export const REPO_LIVE_ARTIFACTS: readonly LiveArtifactSpec[] = [
+  {
+    name: "live-bets",
+    path: "data/live-bets.json",
+    freshnessMinutes: 120,
+    capturePath: "api",
+    pasteInput: null,
+    pasteFileName: null,
+    operation: "Pending",
+    role: "Pending report -> scoreboard feed.",
+  },
+  {
+    name: "live-wagers",
+    path: "data/live-wagers.json",
+    freshnessMinutes: 120,
+    capturePath: "api",
+    pasteInput: null,
+    pasteFileName: null,
+    operation: "getBetTicker",
+    role: "getBetTicker list -> bet ticker feed.",
+  },
+  {
+    name: "scoreboard",
+    path: "data/scoreboard.json",
+    freshnessMinutes: 360,
+    capturePath: "paste",
+    pasteInput: "json",
+    pasteFileName: "scoreboard.json",
+    operation: null,
+    role: "Manager-page scoreboard, transcribed by the operator.",
+  },
+  {
+    name: "game-admin-board",
+    path: "data/game-admin-board.json",
+    freshnessMinutes: 720,
+    capturePath: "paste",
+    pasteInput: "json",
+    pasteFileName: "game-admin-board.json",
+    operation: null,
+    role: "Game Admin module (lines and money per side), pasted by the operator.",
+  },
+  {
+    name: "contests",
+    path: "data/contests.json",
+    freshnessMinutes: 1_440,
+    capturePath: "paste",
+    pasteInput: "html",
+    pasteFileName: "contests.html",
+    operation: null,
+    role: "Contest (futures) list extracted from the sports-nav markup.",
+  },
+  {
+    name: "analysis-cp-baseball",
+    path: "data/analysis-cp-baseball-2026-11-01.json",
+    freshnessMinutes: 1_440,
+    capturePath: "paste",
+    pasteInput: "json",
+    pasteFileName: "analysis-cp-baseball.json",
+    operation: null,
+    role: "Stored Customer Performance (CP) result, recomputed before serving.",
+  },
+];
+
+export function artifactSpecFor(name: string): LiveArtifactSpec | null {
+  return REPO_LIVE_ARTIFACTS.find((spec) => spec.name === name) ?? null;
+}
+
+/** Sources a paste can refresh: exactly the artifacts with no API builder. */
+export function pasteArtifactPlan(
+  options: { readonly only?: readonly string[] } = {},
+): readonly LiveArtifactSpec[] {
+  const wanted = options.only === undefined ? null : new Set(options.only);
+  return REPO_LIVE_ARTIFACTS.filter(
+    (spec) => spec.capturePath === "paste",
+  ).filter((spec) => wanted === null || wanted.has(spec.name));
+}
+
+export interface PasteValidation {
+  readonly ok: boolean;
+  readonly reason: string | null;
+  readonly records: number | null;
+  readonly observedAt: string | null;
+  readonly artifactText: string | null;
+  readonly inputKind: PasteInputKind;
+}
+
+/**
+ * Validate one paste against its artifact's reader before it can be installed. A paste must
+ * state when it was observed: the current artifacts carry date-only `observedAt` values, and a
+ * refresh that silently kept that ambiguity would make the freshness report a guess.
+ */
+export function validatePaste(
+  spec: LiveArtifactSpec,
+  inputText: string,
+  inputMtimeIso: string,
+): PasteValidation {
+  const inputKind = spec.pasteInput ?? "json";
+  const invalid = (reason: string): PasteValidation => ({
+    ok: false,
+    reason,
+    records: null,
+    observedAt: null,
+    artifactText: null,
+    inputKind,
+  });
+  if (spec.pasteInput === null)
+    return invalid("this artifact has no paste path");
+  if (inputText.trim() === "") return invalid("the paste input is empty");
+
+  if (spec.pasteInput === "html") {
+    const entries = extractContests(inputText);
+    if (entries.length === 0)
+      return invalid("no contest entries found in the markup");
+    const file = {
+      schemaVersion: 1 as const,
+      source: `markup:${spec.pasteFileName ?? "paste"}`,
+      extractedAt: inputMtimeIso,
+      entries,
+    };
+    return {
+      ok: true,
+      reason: null,
+      records: entries.length,
+      observedAt: inputMtimeIso,
+      artifactText: `${JSON.stringify(file, null, 2)}\n`,
+      inputKind,
+    };
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(inputText);
+  } catch {
+    return invalid("the paste is not valid JSON");
+  }
+  if (typeof payload !== "object" || payload === null) {
+    return invalid("the paste is not a JSON object");
+  }
+  const record = payload as Record<string, unknown>;
+  let records: number | null = null;
+  if (spec.name === "scoreboard") {
+    const file = readScoreboardFile(payload);
+    if (file === null) return invalid("did not validate as a scoreboard file");
+    records = file.games.length;
+  } else if (spec.name === "game-admin-board") {
+    const file = readBoardFile(payload);
+    if (file === null)
+      return invalid("did not validate as a game-admin board file");
+    records = file.games.length;
+  } else if (spec.name === "analysis-cp-baseball") {
+    const report = readAnalysisReport(payload);
+    if (report === null)
+      return invalid("did not validate as an analysis report");
+    records = report.rows.length;
+  } else {
+    return invalid(`no paste reader for artifact ${spec.name}`);
+  }
+  const observedAt = record.observedAt;
+  if (typeof observedAt !== "string" || observedAt.trim() === "") {
+    return invalid("the paste does not state observedAt");
+  }
+  return {
+    ok: true,
+    reason: null,
+    records,
+    observedAt,
+    artifactText: `${JSON.stringify(payload, null, 2)}\n`,
+    inputKind,
+  };
+}
 
 async function writeTextAtomic(path: string, text: string): Promise<void> {
   const temporary = `${path}.tmp`;
@@ -405,6 +607,7 @@ export async function runCapturePlan(
         artifactWritten,
         keptPreviousArtifact: false,
         error: null,
+        provenanceClass: "api",
       };
     } catch (error) {
       const keptPreviousArtifact =
@@ -426,6 +629,7 @@ export async function runCapturePlan(
         artifactWritten: false,
         keptPreviousArtifact,
         error: safeError(error),
+        provenanceClass: "api",
       };
     }
     records.push(record);
