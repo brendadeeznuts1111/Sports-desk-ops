@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   countPairs,
+  laidOutGraph,
   type LaidOutGraph,
   scoreLayout,
   segmentsCross,
@@ -91,20 +92,20 @@ describe("countPairs", () => {
 
 describe("scoreLayout", () => {
   test("K2,2 drawn crossed has exactly one crossing", () => {
-    const g: LaidOutGraph = {
-      nodes: [
+    const g: LaidOutGraph = laidOutGraph(
+      [
         box("p", 0, 0),
         box("q", 100, 0),
         box("r", 0, 100),
         box("s", 100, 100),
       ],
-      edges: [
+      [
         { source: "p", target: "s" },
         { source: "q", target: "r" },
       ],
-      fontSize: 10,
-      flow: "down",
-    };
+      10,
+      "down",
+    );
     const m = scoreLayout(g, { width: 110, height: 110 });
     expect(m.crossings).toBe(1);
     expect(m.overlaps).toBe(0);
@@ -114,15 +115,15 @@ describe("scoreLayout", () => {
   });
 
   test("overlaps, flow direction, and fit scale", () => {
-    const g: LaidOutGraph = {
-      nodes: [box("a", 0, 0), box("b", 5, 0), box("c", 1000, 0)],
-      edges: [
+    const g: LaidOutGraph = laidOutGraph(
+      [box("a", 0, 0), box("b", 5, 0), box("c", 1000, 0)],
+      [
         { source: "a", target: "c" },
         { source: "c", target: "b" },
       ],
-      fontSize: 12,
-      flow: "right",
-    };
+      12,
+      "right",
+    );
     const m = scoreLayout(g, { width: 101, height: 1000 });
     expect(m.overlaps).toBe(1);
     expect(m.againstFlowEdgeShare).toBe(0.5);
@@ -159,7 +160,7 @@ describe("scoreLayout", () => {
         for (let j = i + 1; j < segs.length; j++)
           if (segmentsCross(segs[i]!, segs[j]!)) expected += 1;
       const m = scoreLayout(
-        { nodes, edges, fontSize: 10, flow: "down" },
+        laidOutGraph(nodes, edges, 10, "down"),
         { width: 100, height: 100 },
       );
       expect(m.crossings).toBe(expected);

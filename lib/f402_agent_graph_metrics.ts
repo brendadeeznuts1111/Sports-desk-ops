@@ -13,16 +13,64 @@ export interface LaidOutNode {
   readonly h: number;
 }
 
+/** String endpoints from Cytoscape / Graphviz exports — resolved once at layout build time. */
+export type LaidOutWireEdge = {
+  readonly source: string;
+  readonly target: string;
+};
+
+/** Dense node row indices; hot paths in scoreLayout never touch string ids. */
+export type LaidOutEdge = {
+  readonly sourceIndex: number;
+  readonly targetIndex: number;
+};
+
 export interface LaidOutGraph {
   readonly nodes: readonly LaidOutNode[];
-  readonly edges: readonly {
-    readonly source: string;
-    readonly target: string;
-  }[];
+  readonly edges: readonly LaidOutEdge[];
   /** Label font size in layout units. */
   readonly fontSize: number;
   /** Intended parent→child direction; radial layouts skip the flow check. */
   readonly flow?: "down" | "right" | "radial";
+}
+
+/** Map wire edges to indices in `nodes` order; drops edges with missing endpoints. */
+export function indexLaidOutEdges(
+  nodes: readonly Pick<LaidOutNode, "id">[],
+  wire: readonly LaidOutWireEdge[],
+): LaidOutEdge[] {
+  const indexOf = new Map<string, number>();
+  for (let i = 0; i < nodes.length; i++) indexOf.set(nodes[i]!.id, i);
+  const out: LaidOutEdge[] = [];
+  for (const e of wire) {
+    const sourceIndex = indexOf.get(e.source);
+    const targetIndex = indexOf.get(e.target);
+    if (sourceIndex !== undefined && targetIndex !== undefined) {
+      out.push({ sourceIndex, targetIndex });
+    }
+  }
+  return out;
+}
+
+export function laidOutGraph(
+  nodes: readonly LaidOutNode[],
+  wire: readonly LaidOutWireEdge[],
+  fontSize: number,
+  flow?: LaidOutGraph["flow"],
+): LaidOutGraph {
+  const edges = indexLaidOutEdges(nodes, wire);
+  return flow === undefined
+    ? { nodes, edges, fontSize }
+    : { nodes, edges, fontSize, flow };
+}
+
+/** Pack two node indices (each < 65536) into one word for sweep hot loops. */
+function packEndpoints(a: number, b: number): number {
+  return (a << 16) | b;
+}
+
+function endpointsOf(packed: number): { a: number; b: number } {
+  return { a: packed >>> 16, b: packed & 0xffff };
 }
 
 export interface RasterFit {
@@ -174,11 +222,11 @@ export function countPairs(
  * both extents overlap, the same pairs an all-pairs bounding-box reject keeps. The sweep axis is
  * the one whose extents cover the drawing fewer times over (tree layouts: short hops across wide
  * rows), which is what bounds the pairs the sweep visits. `seg` holds `x1, y1, x2, y2` per
- * segment and `ends` the two node indices.
+ * segment; `packed[s]` is `(sourceIndex << 16) | targetIndex`.
  */
 function countCrossings(
   seg: Float64Array,
-  ends: Int32Array,
+  packed: Uint32Array,
   m: number,
 ): number {
   let spanX = 0;
@@ -211,7 +259,7 @@ function countCrossings(
   // holds sweep-axis low, other-axis low, sweep-axis high, other-axis high.
   const ext = new Float64Array(m * 4);
   const pts = new Float64Array(m * 4);
-  const ids = new Int32Array(m * 2);
+  const sweepPacked = new Uint32Array(m);
   for (let p = 0; p < m; p++) {
     const k = order[p]! * 4;
     const o = p * 4;
@@ -223,8 +271,7 @@ function countCrossings(
     pts[o + 1] = seg[k + 1]!;
     pts[o + 2] = seg[k + 2]!;
     pts[o + 3] = seg[k + 3]!;
-    ids[p * 2] = ends[order[p]! * 2]!;
-    ids[p * 2 + 1] = ends[order[p]! * 2 + 1]!;
+    sweepPacked[p] = packed[order[p]!]!;
   }
 
   let crossings = 0;
@@ -233,14 +280,12 @@ function countCrossings(
     const sweepHi = ext[ki + 2]!;
     const otherLo = ext[ki + 1]!;
     const otherHi = ext[ki + 3]!;
-    const a = ids[p * 2]!;
-    const b = ids[p * 2 + 1]!;
+    const { a, b } = endpointsOf(sweepPacked[p]!);
     for (let q = p + 1; q < m; q++) {
       const kj = q * 4;
       if (ext[kj]! > sweepHi) break;
       if (ext[kj + 3]! < otherLo || ext[kj + 1]! > otherHi) continue;
-      const c = ids[q * 2]!;
-      const d = ids[q * 2 + 1]!;
+      const { a: c, b: d } = endpointsOf(sweepPacked[q]!);
       if (a === c || a === d || b === c || b === d) continue;
       if (
         properCross(
@@ -283,8 +328,6 @@ export function scoreLayout(
   const ws = new Float64Array(n);
   const hs = new Float64Array(n);
   const boxes = new Float64Array(n * 4);
-  // Engines name nodes by string; this is the one lookup from a name to its row.
-  const indexOf = new Map<string, number>();
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -305,27 +348,30 @@ export function scoreLayout(
     maxX = Math.max(maxX, boxes[i * 4 + 2]!);
     maxY = Math.max(maxY, boxes[i * 4 + 3]!);
     sizeSum += Math.max(node.w, node.h);
-    indexOf.set(node.id, i);
   }
   if (n === 0) minX = minY = maxX = maxY = 0;
+  if (n >= 65536) {
+    throw new RangeError(
+      `scoreLayout: ${n} nodes exceeds packed endpoint limit (65535)`,
+    );
+  }
   const boundsWidth = Math.max(1, maxX - minX);
   const boundsHeight = Math.max(1, maxY - minY);
 
-  const seg = new Float64Array(graph.edges.length * 4);
-  const ends = new Int32Array(graph.edges.length * 2);
+  const edgeCount = graph.edges.length;
+  const seg = new Float64Array(edgeCount * 4);
+  const packed = new Uint32Array(edgeCount);
   let m = 0;
   let lenSum = 0;
   let nonDown = 0;
   for (const e of graph.edges) {
-    const a = indexOf.get(e.source);
-    const b = indexOf.get(e.target);
-    if (a === undefined || b === undefined) continue;
+    const a = e.sourceIndex;
+    const b = e.targetIndex;
     seg[m * 4] = xs[a]!;
     seg[m * 4 + 1] = ys[a]!;
     seg[m * 4 + 2] = xs[b]!;
     seg[m * 4 + 3] = ys[b]!;
-    ends[m * 2] = a;
-    ends[m * 2 + 1] = b;
+    packed[m] = packEndpoints(a, b);
     m += 1;
     lenSum += Math.hypot(xs[b]! - xs[a]!, ys[b]! - ys[a]!);
     const along = graph.flow === "right" ? xs[b]! - xs[a]! : ys[b]! - ys[a]!;
@@ -334,7 +380,7 @@ export function scoreLayout(
 
   const avgNode = sizeSum / Math.max(1, n);
   const cell = Math.max(avgNode * 4, Math.max(boundsWidth, boundsHeight) / 256);
-  const crossings = countCrossings(seg, ends, m);
+  const crossings = countCrossings(seg, packed, m);
   const overlaps = countPairs(
     boxes,
     (p, q) =>
