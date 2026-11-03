@@ -3,6 +3,7 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import { openSportsdeskSqlite, sqlInt } from "./sportsdesk_sqlite.ts";
 import {
   auditRunAt,
@@ -16,42 +17,140 @@ export const SETTLEMENT_EXIT_STORE_INVARIANT = 5;
 
 export type SettlementFeed = "getHistory" | "getGrading";
 
-export type WagerStatusWire = "P" | "S" | "C" | string;
+/**
+ * Two independent axes, deliberately not one scalar:
+ *
+ * - outcome:   W win, L loss, P push, V void (no action)
+ * - lifecycle: P pending, S settled, C cancelled
+ *
+ * They are separate because the same ticket is often both (`S` + `L`), and
+ * because `P` means *pending* in one vocabulary and *push* in the other. A
+ * single character cannot carry both, and picking one silently drops a fact.
+ */
+export type WagerOutcome = "W" | "L" | "P" | "V";
+export type WagerLifecycle = "P" | "S" | "C";
+/** Where the row was written: the GSLIVE writer emits a sparse row shape. */
+export type WagerWriterSource = "internet" | "gslive" | "unknown";
 
-export type RawHistoryWagerRow = Record<string, unknown> & {
-  Login?: string;
-  CustomerID?: string;
-  WagerNumber?: number;
-  WagerStatus?: string;
-  AcceptedDateTime?: string;
-  GameDateTime?: string;
-  SettlementDateTime?: string;
-  Amount?: number;
-  Risk?: number;
-  ToWin?: number;
-  PlayNumber?: number;
-  ItemNumber?: number;
+/**
+ * Wire vocabulary, per axis. Bare letters stay in the vocabulary the Manager
+ * feeds use: `W`/`L` are outcomes, `P`/`S`/`C` are lifecycle. A push must
+ * arrive spelled `PUSH`, otherwise bare `P` is read as pending.
+ */
+const OUTCOME_WORDS: Readonly<Record<string, WagerOutcome>> = {
+  W: "W",
+  WIN: "W",
+  WON: "W",
+  WINNER: "W",
+  L: "L",
+  LOSS: "L",
+  LOST: "L",
+  LOSER: "L",
+  PUSH: "P",
+  VOID: "V",
+  V: "V",
+  NOACTION: "V",
 };
 
-export type RawGradingLegWire = Record<string, unknown> & {
-  CustomerID?: string;
-  WagerNumber?: number;
-  LegNumber?: number;
-  Amount?: number;
-  SettlementDateTime?: string;
-  Result?: string;
+const LIFECYCLE_WORDS: Readonly<Record<string, WagerLifecycle>> = {
+  P: "P",
+  PENDING: "P",
+  OPEN: "P",
+  UNRESOLVED: "P",
+  S: "S",
+  SETTLED: "S",
+  GRADED: "S",
+  CLOSED: "S",
+  C: "C",
+  CANCELLED: "C",
+  CANCELED: "C",
+  VOIDED: "C",
 };
+
+/** `null` = the wire said something this axis does not recognise. */
+export function normalizeOutcome(raw: unknown): WagerOutcome | null {
+  if (typeof raw !== "string") return null;
+  return OUTCOME_WORDS[raw.trim().toUpperCase()] ?? null;
+}
+
+export function normalizeLifecycle(raw: unknown): WagerLifecycle | null {
+  if (typeof raw !== "string") return null;
+  return LIFECYCLE_WORDS[raw.trim().toUpperCase()] ?? null;
+}
+
+function writerSource(
+  placedOn: string | null | undefined,
+  ticketWriter: string | null | undefined,
+): WagerWriterSource {
+  const writer = `${placedOn ?? ""} ${ticketWriter ?? ""}`.toUpperCase();
+  if (writer.includes("GSLIVE")) return "gslive";
+  if (writer.includes("INTERNET")) return "internet";
+  return "unknown";
+}
+
+const blankToNull = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? null : value;
+
+/**
+ * Boundary schema for Manager history rows.
+ *
+ * The write side is parsed once here; callers get a typed object or `null`.
+ * Unknown wire keys stay in `raw`, which is what gets hashed and stored, so
+ * nothing is lost by not modelling a field yet.
+ */
+const historyRowSchema = z.object({
+  Login: z.string().nullish(),
+  CustomerID: z.string().nullish(),
+  WagerNumber: z.number(),
+  WagerStatus: z.preprocess(blankToNull, z.string().nullish()),
+  Result: z.preprocess(blankToNull, z.string().nullish()),
+  SettlementDateTime: z.preprocess(blankToNull, z.string().nullish()),
+  GameDateTime: z.preprocess(blankToNull, z.string().nullish()),
+  AcceptedDateTime: z.preprocess(blankToNull, z.string().nullish()),
+  InsertDateTime: z.preprocess(blankToNull, z.string().nullish()),
+  PlacedOn: z.preprocess(blankToNull, z.string().nullish()),
+  TicketWriter: z.preprocess(blankToNull, z.string().nullish()),
+  Amount: z.number().nullish(),
+  Risk: z.number().nullish(),
+  ToWin: z.number().nullish(),
+  /** `null` means the writer omitted it; `0` means the writer asserted zero. */
+  AmountRefunded: z.number().nullish(),
+  ItemNumber: z.number().nullish(),
+  PlayNumber: z.number().nullish(),
+});
+
+const gradingLegSchema = z.object({
+  CustomerID: z.string(),
+  WagerNumber: z.number(),
+  LegNumber: z.number().nullish(),
+  Amount: z.number().nullish(),
+  SettlementDateTime: z.preprocess(blankToNull, z.string().nullish()),
+  Result: z.preprocess(blankToNull, z.string().nullish()),
+});
+
+export type HistoryRowInput = z.input<typeof historyRowSchema>;
+
+/** GSLIVE writes `1900-01-01` where a game date is absent. Not a real date. */
+function isPlaceholderDate(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.trim().startsWith("1900-01-01");
+}
 
 export type NormalizedSettlementObservation = {
   ticketId: string;
   login: string;
   wagerNumber: number;
-  wagerStatus: string;
+  outcome: WagerOutcome | null;
+  lifecycle: WagerLifecycle | null;
+  source: WagerWriterSource;
   validTime: string;
   sourceFeed: SettlementFeed;
   legNumber: number | null;
   result: string | null;
   amountCents: number | null;
+  riskCents: number | null;
+  toWinCents: number | null;
+  /** `null` = omitted by the writer; `0` = explicit zero. Never coerced. */
+  amountRefundedCents: number | null;
   raw: Record<string, unknown>;
   payloadSha256: string;
 };
@@ -71,81 +170,121 @@ function parseIsoTime(label: string, value: unknown): string | null {
   return new Date(ms).toISOString();
 }
 
-export function extractValidTimeFromHistoryRow(
-  row: RawHistoryWagerRow,
-): string {
+/** The subset `extractValidTimeFromHistoryRow` reads; callers may pass a raw row. */
+export type HistoryTimeFields = {
+  SettlementDateTime?: string | null | undefined;
+  GameDateTime?: string | null | undefined;
+  AcceptedDateTime?: string | null | undefined;
+  InsertDateTime?: string | null | undefined;
+  PlacedOn?: string | null | undefined;
+  TicketWriter?: string | null | undefined;
+};
+
+export function extractValidTimeFromHistoryRow(row: HistoryTimeFields): string {
+  const gameDate =
+    row.PlacedOn?.toUpperCase().includes("GSLIVE") === true ||
+    row.TicketWriter?.toUpperCase().includes("GSLIVE") === true
+      ? isPlaceholderDate(row.GameDateTime)
+        ? null
+        : row.GameDateTime
+      : row.GameDateTime;
   return (
     parseIsoTime("SettlementDateTime", row.SettlementDateTime) ??
-    parseIsoTime("GameDateTime", row.GameDateTime) ??
+    parseIsoTime("GameDateTime", gameDate) ??
     parseIsoTime("AcceptedDateTime", row.AcceptedDateTime) ??
-    parseIsoTime("InsertDateTime", row.InsertDateTime as string | undefined) ??
+    parseIsoTime("InsertDateTime", row.InsertDateTime) ??
     new Date(0).toISOString()
   );
 }
 
-export function normalizeWagerStatus(raw: unknown): string {
-  if (typeof raw !== "string") return "unknown";
-  const t = raw.trim().toUpperCase();
-  return t.length > 0 ? t.charAt(0) : "unknown";
-}
-
 export function normalizeHistoryWagerRow(
-  row: RawHistoryWagerRow,
+  input: unknown,
   sourceFeed: SettlementFeed = "getHistory",
 ): NormalizedSettlementObservation | null {
+  const parsed = historyRowSchema.safeParse(input);
+  if (!parsed.success) return null;
+  const row = parsed.data;
+
   const loginRaw = row.Login ?? row.CustomerID;
-  const wagerNumber = row.WagerNumber;
-  if (typeof loginRaw !== "string" || typeof wagerNumber !== "number") {
-    return null;
-  }
+  if (typeof loginRaw !== "string" || loginRaw.trim() === "") return null;
+
   const login = loginRaw.trim();
-  const wagerStatus = normalizeWagerStatus(row.WagerStatus);
+  const source = writerSource(row.PlacedOn, row.TicketWriter);
   const validTime = extractValidTimeFromHistoryRow(row);
-  const raw = { ...row };
+  const raw = input as Record<string, unknown>;
+
   return {
-    ticketId: fantasy402TicketId(login, wagerNumber),
+    ticketId: fantasy402TicketId(login, row.WagerNumber),
     login,
-    wagerNumber,
-    wagerStatus,
+    wagerNumber: row.WagerNumber,
+    outcome: normalizeOutcome(row.WagerStatus),
+    lifecycle: normalizeLifecycle(row.WagerStatus),
+    source,
     validTime,
     sourceFeed,
-    legNumber:
-      typeof row.ItemNumber === "number"
-        ? row.ItemNumber
-        : typeof row.PlayNumber === "number"
-          ? row.PlayNumber
-          : null,
-    result: null,
-    amountCents: typeof row.Amount === "number" ? Math.round(row.Amount) : null,
+    legNumber: row.ItemNumber ?? row.PlayNumber ?? null,
+    result:
+      row.Result === null || row.Result === undefined
+        ? null
+        : row.Result.trim().toUpperCase(),
+    amountCents:
+      row.Amount === null || row.Amount === undefined
+        ? null
+        : Math.round(row.Amount),
+    riskCents:
+      row.Risk === null || row.Risk === undefined ? null : Math.round(row.Risk),
+    toWinCents:
+      row.ToWin === null || row.ToWin === undefined
+        ? null
+        : Math.round(row.ToWin),
+    // Deliberately not coerced: `null` (writer omitted) and `0` (writer asserted
+    // zero) are different facts, and the GSLIVE writer emits both.
+    amountRefundedCents:
+      row.AmountRefunded === null || row.AmountRefunded === undefined
+        ? null
+        : Math.round(row.AmountRefunded),
     raw,
     payloadSha256: hashRawPayload(raw),
   };
 }
 
 export function normalizeGradingLegRow(
-  row: RawGradingLegWire,
+  input: unknown,
 ): NormalizedSettlementObservation | null {
-  const customerId = row.CustomerID;
-  const wagerNumber = row.WagerNumber;
-  if (typeof customerId !== "string" || typeof wagerNumber !== "number") {
-    return null;
-  }
-  const login = customerId.trim();
+  const parsed = gradingLegSchema.safeParse(input);
+  if (!parsed.success) return null;
+  const row = parsed.data;
+
+  const login = row.CustomerID.trim();
+  if (login === "") return null;
   const validTime =
     parseIsoTime("SettlementDateTime", row.SettlementDateTime) ??
     new Date(0).toISOString();
-  const raw = { ...row };
+  const result =
+    row.Result === null || row.Result === undefined
+      ? null
+      : row.Result.trim().toUpperCase();
+  const raw = input as Record<string, unknown>;
+
   return {
-    ticketId: fantasy402TicketId(login, wagerNumber),
+    ticketId: fantasy402TicketId(login, row.WagerNumber),
     login,
-    wagerNumber,
-    wagerStatus: "S",
+    wagerNumber: row.WagerNumber,
+    // The grading feed is settled by definition; the outcome is a separate fact.
+    outcome: normalizeOutcome(result),
+    lifecycle: "S",
+    source: "unknown",
     validTime,
     sourceFeed: "getGrading",
-    legNumber: typeof row.LegNumber === "number" ? row.LegNumber : null,
-    result:
-      typeof row.Result === "string" ? row.Result.trim().toUpperCase() : null,
-    amountCents: typeof row.Amount === "number" ? Math.round(row.Amount) : null,
+    legNumber: row.LegNumber ?? null,
+    result,
+    amountCents:
+      row.Amount === null || row.Amount === undefined
+        ? null
+        : Math.round(row.Amount),
+    riskCents: null,
+    toWinCents: null,
+    amountRefundedCents: null,
     raw,
     payloadSha256: hashRawPayload(raw),
   };
@@ -164,8 +303,8 @@ export function normalizeSettlementBatch(
   for (const row of batch.rows) {
     const obs =
       batch.feed === "getGrading"
-        ? normalizeGradingLegRow(row as RawGradingLegWire)
-        : normalizeHistoryWagerRow(row as RawHistoryWagerRow, batch.feed);
+        ? normalizeGradingLegRow(row)
+        : normalizeHistoryWagerRow(row, batch.feed);
     if (obs) out.push(obs);
   }
   return out;
@@ -191,10 +330,16 @@ export function createWagerSettlementStore(
       valid_time TEXT NOT NULL,
       ticket_id TEXT NOT NULL,
       wager_status TEXT NOT NULL,
+      outcome TEXT,
+      lifecycle TEXT,
+      source TEXT NOT NULL,
       source_feed TEXT NOT NULL,
       leg_number INTEGER,
       result TEXT,
       amount_cents INTEGER,
+      risk_cents INTEGER,
+      to_win_cents INTEGER,
+      amount_refunded_cents INTEGER,
       payload_json TEXT NOT NULL,
       payload_sha256 TEXT NOT NULL
     );
@@ -202,6 +347,25 @@ export function createWagerSettlementStore(
     CREATE INDEX IF NOT EXISTS idx_wso_valid_time ON wager_settlement_observations(valid_time);
     CREATE INDEX IF NOT EXISTS idx_wso_run_at ON wager_settlement_observations(run_at);
   `);
+  // Tables created before the outcome/lifecycle split lack these columns.
+  for (const column of [
+    "outcome TEXT",
+    "lifecycle TEXT",
+    "source TEXT",
+    "risk_cents INTEGER",
+    "to_win_cents INTEGER",
+    "amount_refunded_cents INTEGER",
+  ]) {
+    const name = column.split(" ")[0]!;
+    const exists = db
+      .query(
+        `SELECT COUNT(*) AS n FROM pragma_table_info('wager_settlement_observations') WHERE name = ?1`,
+      )
+      .get(name) as { n: number | bigint };
+    if (sqlInt(exists.n) === 0) {
+      db.exec(`ALTER TABLE wager_settlement_observations ADD COLUMN ${column}`);
+    }
+  }
   return new WagerSettlementStore(db);
 }
 
@@ -211,23 +375,35 @@ export class WagerSettlementStore {
   insertObservation(row: SettlementInsert): void {
     const { observation, runId, runAt } = row;
     const payloadJson = canonicalJsonString(observation.raw);
+    // Legacy composite column kept for older readers/indexes; the two axes are
+    // authoritative. Read `outcome` / `lifecycle` from here on.
+    const legacyStatus =
+      observation.lifecycle ?? observation.outcome ?? "unknown";
     this.db
       .query(
         `INSERT INTO wager_settlement_observations (
-          run_id, run_at, valid_time, ticket_id, wager_status, source_feed,
-          leg_number, result, amount_cents, payload_json, payload_sha256
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+          run_id, run_at, valid_time, ticket_id, wager_status,
+          outcome, lifecycle, source, source_feed,
+          leg_number, result, amount_cents, risk_cents, to_win_cents,
+          amount_refunded_cents, payload_json, payload_sha256
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
       )
       .run(
         runId,
         runAt,
         observation.validTime,
         observation.ticketId,
-        observation.wagerStatus,
+        legacyStatus,
+        observation.outcome,
+        observation.lifecycle,
+        observation.source,
         observation.sourceFeed,
         observation.legNumber,
         observation.result,
         observation.amountCents,
+        observation.riskCents,
+        observation.toWinCents,
+        observation.amountRefundedCents,
         payloadJson,
         observation.payloadSha256,
       );
@@ -259,13 +435,31 @@ export class WagerSettlementStore {
     return sqlInt(row.n);
   }
 
+  countByLifecycle(lifecycle: WagerLifecycle): number {
+    const row = this.db
+      .query(
+        `SELECT COUNT(*) AS n FROM wager_settlement_observations WHERE lifecycle = ?1`,
+      )
+      .get(lifecycle) as { n: number | bigint };
+    return sqlInt(row.n);
+  }
+
+  countByOutcome(outcome: WagerOutcome): number {
+    const row = this.db
+      .query(
+        `SELECT COUNT(*) AS n FROM wager_settlement_observations WHERE outcome = ?1`,
+      )
+      .get(outcome) as { n: number | bigint };
+    return sqlInt(row.n);
+  }
+
   findPayloadDrift(): SettlementPayloadDriftRow[] {
     return this.db
       .query(
-        `SELECT ticket_id, valid_time, wager_status, source_feed,
+        `SELECT ticket_id, valid_time, outcome, lifecycle, source_feed,
                 COUNT(DISTINCT payload_sha256) AS distinct_payloads
          FROM wager_settlement_observations
-         GROUP BY ticket_id, valid_time, wager_status, source_feed
+         GROUP BY ticket_id, valid_time, outcome, lifecycle, source_feed
          HAVING COUNT(DISTINCT payload_sha256) > 1`,
       )
       .all() as SettlementPayloadDriftRow[];
@@ -274,11 +468,11 @@ export class WagerSettlementStore {
   findValidTimeFork(): SettlementValidTimeForkRow[] {
     return this.db
       .query(
-        `SELECT ticket_id, wager_status,
+        `SELECT ticket_id, lifecycle,
                 COUNT(DISTINCT valid_time) AS distinct_valid_times
          FROM wager_settlement_observations
-         WHERE wager_status IN ('S', 'C')
-         GROUP BY ticket_id, wager_status
+         WHERE lifecycle IN ('S', 'C')
+         GROUP BY ticket_id, lifecycle
          HAVING COUNT(DISTINCT valid_time) > 1`,
       )
       .all() as SettlementValidTimeForkRow[];
@@ -294,29 +488,34 @@ export class WagerSettlementStore {
     };
   }
 
-  /** Win/loss denominator: settled legs/tickets with WIN/LOSS result or Amount != 0. */
+  /** Win/loss denominator: settled tickets with a WIN/LOSS outcome. */
   summarizeOutcomeRates(): {
     settled: number;
     canceled: number;
     wins: number;
     losses: number;
   } {
-    const settled = this.countByStatus("S");
-    const canceled = this.countByStatus("C");
+    const settled = this.db
+      .query(
+        `SELECT COUNT(*) AS n FROM wager_settlement_observations
+           WHERE lifecycle = 'S' OR outcome IS NOT NULL`,
+      )
+      .get() as { n: number | bigint };
+    const canceled = this.countByLifecycle("C");
     const wins = this.db
       .query(
         `SELECT COUNT(*) AS n FROM wager_settlement_observations
-           WHERE result = 'WIN' OR (wager_status = 'S' AND amount_cents > 0)`,
+           WHERE outcome = 'W' OR result = 'WIN'`,
       )
       .get() as { n: number | bigint };
     const losses = this.db
       .query(
         `SELECT COUNT(*) AS n FROM wager_settlement_observations
-           WHERE result = 'LOSS' OR (wager_status = 'S' AND amount_cents < 0)`,
+           WHERE outcome = 'L' OR result = 'LOSS'`,
       )
       .get() as { n: number | bigint };
     return {
-      settled,
+      settled: sqlInt(settled.n),
       canceled,
       wins: sqlInt(wins.n),
       losses: sqlInt(losses.n),
@@ -327,14 +526,15 @@ export class WagerSettlementStore {
 export type SettlementPayloadDriftRow = {
   ticket_id: string;
   valid_time: string;
-  wager_status: string;
+  outcome: string | null;
+  lifecycle: string | null;
   source_feed: string;
   distinct_payloads: number;
 };
 
 export type SettlementValidTimeForkRow = {
   ticket_id: string;
-  wager_status: string;
+  lifecycle: string;
   distinct_valid_times: number;
 };
 

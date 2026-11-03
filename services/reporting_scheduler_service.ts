@@ -5,26 +5,37 @@
  *
  * Implements:
  *  1. Automated Cron/Interval Schedules for SportsDesk Master Book (Master: BILLY666):
+ *     - 10-Minute Live Volume & Positions Pulse (every 10m): Syncs live Fantasy402 stream
+ *       (`f402-bets.jsonl` + `f402-open-export.jsonl` + `DOD6` v5.4 spine) into `data/live-wagers.json`
+ *       and `data/live-bets.json` and dispatches a live summary of total volume updates and open positions.
  *     - Morning Risk Briefing (08:00 EDT): Overnight open exposure, whale watch (RF2003), sniper alerts.
  *     - Midday Steam & Volatility Pulse (13:00 EDT): Line moves, active steam originators (GP300, AT10359).
- *     - Evening Settlement Recap (23:00 EDT): Daily settled handle ($2.79M), net hold (-$63.5k), agent 50% shares.
+ *     - Evening Settlement Recap (23:00 EDT): Daily settled handle, net hold, agent 50% shares.
  *  2. Report Generators with Markdown/HTML formatting and Telegram WebApp deep links.
- *  3. Cron Runner with native Bun interval monitoring, trigger history, and on-demand dispatch.
+ *  3. Cron Runner with native Bun.cron monitoring, trigger history, and on-demand dispatch.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { startInProcessCron } from "../lib/bun_cron.ts";
+import {
+  formatTelegramPulseHtml,
+  runLivePositionsPulse,
+  type LivePositionsPulseSummary,
+} from "../scripts/live_positions_cron.ts";
 import { SportsDeskTelegramService } from "./sportsdesk_telegram_bot.ts";
 
 export type ReportType =
   | "MORNING_BRIEFING"
   | "MIDDAY_STEAM"
   | "EVENING_SETTLEMENT"
+  | "TEN_MINUTE_POSITIONS_PULSE"
   | "CUSTOM_HOURLY_PULSE";
 
 export interface ScheduleDefinition {
   readonly id: string;
   readonly name: string;
-  readonly scheduleTime: string; // e.g. "08:00", "13:00", "23:00"
+  readonly scheduleTime: string; // e.g. "08:00", "13:00", "23:00", or cron "*/10 * * * *"
   readonly reportType: ReportType;
   readonly description: string;
   readonly targetChatId?: string;
@@ -40,6 +51,22 @@ export interface GeneratedReport {
   readonly targetMiniappTab: string;
 }
 
+const SUMMARY_JSON_PATH = resolve(
+  import.meta.dir,
+  "../reports/live-positions-summary.json",
+);
+
+function readLatestLiveSummary(): LivePositionsPulseSummary | null {
+  if (!existsSync(SUMMARY_JSON_PATH)) return null;
+  try {
+    return JSON.parse(
+      readFileSync(SUMMARY_JSON_PATH, "utf8"),
+    ) as LivePositionsPulseSummary;
+  } catch {
+    return null;
+  }
+}
+
 export class ReportingSchedulerService {
   private readonly telegramService: SportsDeskTelegramService;
   private readonly schedules: Map<string, ScheduleDefinition> = new Map();
@@ -51,17 +78,29 @@ export class ReportingSchedulerService {
     this.initDefaultSchedules();
   }
 
-  /** Fires each enabled schedule at its `HH:MM` in America/New_York; returns a stop function. */
+  /** Fires each enabled schedule (`HH:MM` or 5-field cron expression) in America/New_York; returns a stop function. */
   public start(): () => void {
     const jobs = this.getSchedules()
       .filter((s) => s.enabled)
       .map((s) => {
-        const [hour, minute] = s.scheduleTime.split(":").map(Number);
+        const cronExpr = s.scheduleTime.includes(" ")
+          ? s.scheduleTime
+          : (() => {
+              const [hour, minute] = s.scheduleTime.split(":").map(Number);
+              return `${minute} ${hour} * * *`;
+            })();
         return startInProcessCron(
-          `${minute} ${hour} * * *`,
+          cronExpr,
           async () => {
             s.lastTriggeredAt = new Date().toISOString();
-            await this.dispatchReportNow(s.reportType, s.targetChatId);
+            if (s.reportType === "TEN_MINUTE_POSITIONS_PULSE") {
+              await runLivePositionsPulse({
+                schedule: cronExpr,
+                ...(s.targetChatId ? { chatIdOverride: s.targetChatId } : {}),
+              });
+            } else {
+              await this.dispatchReportNow(s.reportType, s.targetChatId);
+            }
           },
           { tz: "America/New_York" },
         );
@@ -79,6 +118,15 @@ export class ReportingSchedulerService {
 
   private initDefaultSchedules(): void {
     const defaultList: ScheduleDefinition[] = [
+      {
+        id: "sched_10m_positions_pulse",
+        name: "10-Minute Live Volume & Positions Pulse",
+        scheduleTime: "*/10 * * * *",
+        reportType: "TEN_MINUTE_POSITIONS_PULSE",
+        description:
+          "Syncs live Fantasy402 stream into data/live-wagers.json and data/live-bets.json and sends 10-minute total volume delta & open positions summary.",
+        enabled: true,
+      },
       {
         id: "sched_morning_briefing",
         name: "Morning Risk Briefing",
@@ -103,7 +151,7 @@ export class ReportingSchedulerService {
         scheduleTime: "23:00",
         reportType: "EVENING_SETTLEMENT",
         description:
-          "Settled volume ($2.79M), customer payout/loss, net book hold (-$63.5k), and agent 50% liability shares.",
+          "Settled volume, customer payout/loss, net book hold, and agent 50% liability shares.",
         enabled: true,
       },
     ];
@@ -120,18 +168,32 @@ export class ReportingSchedulerService {
   public generateReport(type: ReportType): GeneratedReport {
     const nowStr =
       new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC-5";
+    const liveSummary = readLatestLiveSummary();
+
+    if (type === "TEN_MINUTE_POSITIONS_PULSE" && liveSummary !== null) {
+      return {
+        reportType: type,
+        title: "10-Minute Live Volume & Positions Pulse",
+        contentHtml: formatTelegramPulseHtml(liveSummary),
+        generatedAt: nowStr,
+        targetMiniappTab: "live",
+      };
+    }
 
     if (type === "MORNING_BRIEFING") {
+      const openInfo = liveSummary
+        ? `\n• Live 24h Open Tix : <b>${liveSummary.window24hOpenPositions.openTicketsCount.toLocaleString()}</b> ($${(liveSummary.window24hOpenPositions.openRiskCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })} Risk)`
+        : "";
       const html = `
 ☀️ <b>SPORTSDESK MORNING RISK BRIEFING</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 
 📊 <b>Current Production Master Scope:</b>
-• Total Accounts    : <b>9,435</b> (Active: 2,236 • Dormant: 7,191)
+• Total Accounts    : <b>14,534</b> Canonical (Active: 2,236 • Sub-Accounts Merged: 40)
 • Sub-Agents in Tree: <b>668</b> (Active Sports: 460)
-• Total Sports Handle: <b>$2,786,199.00</b> (10,941 Settled Tickets)
-• Lifetime Net Hold : <b>+$10,487,926.00</b> (Agent 50%: <b>+$5,243,963.00</b>)
+• Total Sports Handle: <b>$2,786,199.00</b> (10,941 Settled Tickets)${openInfo}
+• Lifetime Net Hold : <b>+$35,697,418.60</b> (DOD6 v5.4 Conserved Spine)
 
 ⚠️ <b>Overnight & Morning Threat Assessment:</b>
 • <b>Whale Surveillance (RF2003):</b> Account represents <b>33.7% of total book handle</b> ($940k). Verify single-wager limit ceiling is active.
@@ -206,6 +268,13 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
     type: ReportType,
     chatId?: string,
   ): Promise<boolean> {
+    if (type === "TEN_MINUTE_POSITIONS_PULSE") {
+      const summary = await runLivePositionsPulse({
+        schedule: "*/10 * * * *",
+        ...(chatId ? { chatIdOverride: chatId } : {}),
+      });
+      return summary.telegramDelivery.ok;
+    }
     const rep = this.generateReport(type);
     console.log(
       `[Reporting Scheduler] Dispatching ${rep.title} to Telegram...`,
