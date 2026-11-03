@@ -104,6 +104,4 @@ graph CLI: **`bun run graph:agent`** (no `--token` flags).
 `README.md` = orientation · `ROOT_LAYOUT.md` = layout · `docs/runbooks/` = operational procedure ·
 `docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.
 
-Bun upstream docs (voice pin, `docs/snippets` nav/CLI partials, PM/runtime page map, sportsdesk
-hooks): **[docs/bun-upstream-reference.md](docs/bun-upstream-reference.md)**. Runtime stays on Bun
-**1.4.4** + `docs/bun-eval-pitfalls.md`; evidence labels override upstream tone when they conflict.
+Upstream Bun docs vs this repo: [docs/bun-upstream-reference.md](docs/bun-upstream-reference.md). Runtime **1.4.4** only.

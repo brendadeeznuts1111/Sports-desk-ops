@@ -12,8 +12,7 @@ mechanism.
   upstream, not reproduced: a 2 GiB allocation is flaky on any runner); `Bun.secrets` with
   `persist: "local"` (Windows only, never run).
 
-**Upstream doc pins (not runtime):** Full map (voice @ `6cdb3835`, guides + CLI snippets @
-`6a380492`, PM/runtime pages, repo hooks) — [bun-upstream-reference.md](./bun-upstream-reference.md).
+Upstream Bun docs (not runtime): [bun-upstream-reference.md](./bun-upstream-reference.md).
 
 ## eval-module-mode
 
