@@ -20,11 +20,11 @@ it.** Everything else is labelled as observed, inferred or unimplemented — in 
 | **D** | A real surface recorded in `surfaces[]`, never in `operations[]`. Most of its routes are now published in the spec.                                                                                          | 20 surfaces |
 | **E** | Documented operation with no implementation in this repository.                                                                                                                                              | 10          |
 
-**Operations:** the ledger has 55 rows = 54 paths (`/api/desk/auth/session` carries both `POST` and
-`DELETE`): A 8 + B 7 + C 30 + D 0 + E 10 = 55. The published spec has **70 paths / 70 operations**
-(`scripts/audit_docs_webview_cron.ts:47`): the 44 ledger rows that are not reserved — 55 minus the 10
-tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 26 routes recorded only as
-`surfaces[]` members (25 daemon routes and `POST /cloud/api/Manager/getHistory`).
+**Operations:** the ledger has 59 rows = 58 paths (`/api/desk/auth/session` carries both `POST` and
+`DELETE`): A 9 + B 9 + C 31 + D 0 + E 10 = 59. The published spec has **75 paths / 75 operations**
+(`scripts/audit_docs_webview_cron.ts`): the 48 ledger rows that are not reserved — 59 minus the 10
+tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 27 routes recorded only as
+`surfaces[]` members (26 daemon routes and `POST /cloud/api/Manager/getHistory`).
 **Surfaces:** 21 rows (D 20, E 1). Surface counts are kept separate from operation counts.
 
 **Tier A comes from two live sessions.** The 2026-10-31 run (Bun.WebView login → portal JWT handoff →
@@ -146,7 +146,7 @@ Live capture is implemented and gated behind `F402_LIVE_CAPTURE=1` plus credenti
 It records an authenticated request and the live response as a value-free capture record — sha256 plus a
 schema skeleton, a redaction report and provenance — under the live-only store
 `docs/evidence/captures/` (mock fixtures stay in `tests/fixtures/captures/`). The 2026-10-31 run captured
-five read-only Manager responses and the 2026-11-01 probes added three, which is why tier A is 8. The store
+five read-only Manager responses and the 2026-11-01 probes added three, which is why tier A is 9. The store
 holds 15 live captures (`docs/evidence/captures/manifest.json`); a 2xx with an empty envelope still counts
 as a captured response, which is why four tier-A rows publish no row schema. `scripts/apply_captures.ts` is the
 only sanctioned upgrade path: dry-run by default, B/C→A, and it refuses mock, redaction-dirty,

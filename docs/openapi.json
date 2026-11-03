@@ -2638,15 +2638,226 @@
         }
       }
     },
+    "/cloud/api/Manager/getSportsType": {
+      "post": {
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Manager/getSportsType (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-10-31/getSportsType.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Manager/getSportsType at 2026-10-31T00:21:29.359Z with a 200 response (response body sha256 105edc9c5766b3d5f0e896d3267286ce404cf2c6ef755a3ed92bcbba3c5f4221). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
+        "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-10-31/getSportsType.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "LIST": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "0": {
+                            "type": "string"
+                          },
+                          "sportType": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Other status codes were not captured by this record."
+          }
+        },
+        "x-evidence": {
+          "tier": "A",
+          "sources": [
+            "capture:2026-10-31/getSportsType.post.json",
+            "sha256:436e1cc17b831c747b322ac900146da22fe229dcaec685f3751ab38b7d92396d"
+          ],
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-10-31/getSportsType.post.json",
+          "sha256": "436e1cc17b831c747b322ac900146da22fe229dcaec685f3751ab38b7d92396d",
+          "capturedAt": "2026-10-31T00:21:29.359Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "RRO": {
+                    "type": "string"
+                  },
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "agentOwner": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cloud/api/Manager/getConfigWebReports": {
+      "post": {
+        "tags": ["Downline Accounting"],
+        "summary": "Boot web-report configuration (request observed 2026-11-01; no response schema)",
+        "description": "manager.js:35023 boot report-configuration read. The form body is the one the 2026-11-01 boot HAR recorded: agentID, operation, RRO and agentOwner (agentID and agentOwner were the same master account). The portal consumes the reply as an INFO envelope; its keys are not published because no capture record holds them.",
+        "operationId": "postCloudApiManagerGetConfigWebReports",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded; charset=UTF-8": {
+              "schema": {
+                "type": "object",
+                "required": ["agentID", "operation", "RRO", "agentOwner"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getConfigWebReports"
+                  },
+                  "agentID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1,
+                    "description": "Observed in the 2026-11-01 boot HAR. Always 1 in the observed calls."
+                  },
+                  "agentOwner": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published."
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": [
+            "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+            "lib/f402_probe.ts"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the response envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A."
+        }
+      }
+    },
+    "/cloud/api/Manager/getAuthorizations": {
+      "post": {
+        "tags": ["Downline Accounting"],
+        "summary": "Boot agent permissions (request observed 2026-11-01; no response schema)",
+        "description": "manager.js:37628 boot permissions and distribution read. The recorded form body is agentID, agentOwner, operation and RRO; the portal assigns the reply to a.INFO and a.DISTRIBUTION. Neither INFO nor DISTRIBUTION fields are published because no capture record holds the response.",
+        "operationId": "postCloudApiManagerGetAuthorizations",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded; charset=UTF-8": {
+              "schema": {
+                "type": "object",
+                "required": ["agentID", "agentOwner", "operation", "RRO"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getAuthorizations"
+                  },
+                  "agentID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "agentOwner": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1,
+                    "description": "Observed in the 2026-11-01 boot HAR. Always 1 in the observed calls."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published."
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": [
+            "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+            "lib/f402_probe.ts"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the INFO/DISTRIBUTION envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A."
+        }
+      }
+    },
+    "/cloud/api/Manager/getConfigWebReportsPending": {
+      "post": {
+        "tags": ["Inferred (Unverified)"],
+        "summary": "POST /cloud/api/Manager/getConfigWebReportsPending",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "operationId": "postCloudApiManagerGetConfigWebReportsPending",
+        "responses": {
+          "default": {
+            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+          }
+        },
+        "x-evidence": {
+          "tier": "C",
+          "sources": ["lib/f402_probe.ts"],
+          "capturedResponse": false,
+          "requiredCapture": "No request or response was captured for this operation. Capture one boot call (the parameter set is in MANAGER_BOOT_OPS) and promote it with scripts/apply_captures.ts."
+        }
+      }
+    },
     "/cloud/api/Manager/getHistory": {
       "post": {
         "tags": ["Settlement History"],
         "summary": "Manager getHistory (wired settlement-history poll; no response capture)",
-        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:347-368). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:369-387). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
         "operationId": "postCloudApiManagerGetHistory",
         "responses": {
           "200": {
-            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:374-387). Row fields are not captured, so only raw/unknown objects are described.",
+            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2679,13 +2890,13 @@
             }
           },
           "default": {
-            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:369-371)."
+            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571)."
           }
         },
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "lib/fantasy402_settlement_ingest.ts:347-357",
+            "lib/fantasy402_settlement_ingest.ts:547-557",
             "lib/fantasy402_wager_universe_scope.ts:22-31",
             "fixture:tests/fixtures/fantasy402-history-poll.json:2-24"
           ],

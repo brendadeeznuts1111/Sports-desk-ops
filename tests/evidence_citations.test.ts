@@ -42,10 +42,12 @@ describe("evidence ledger citations", () => {
 
   test("tier-A prose agrees with the tier-A rows", () => {
     const tierA = ledger.operations.filter((op) => op.tier === "A").length;
-    expect(tierA).toBe(8);
+    // Release pin: the 2026-10-31/2026-11-01 capture store holds nine tier-A rows
+    // (getSportsType joined when its live 200 capture was published).
+    expect(tierA).toBe(9);
     expect(ledger.tierRules.A).not.toContain(
       "Nothing in this release qualifies",
     );
-    expect(ledger.tierRules.A).toContain("Eight operations qualify");
+    expect(ledger.tierRules.A).toContain("Nine operations qualify");
   });
 });

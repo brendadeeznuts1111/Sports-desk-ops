@@ -1809,9 +1809,95 @@ const B_OPERATION_BUILDERS: Readonly<
   "/health": healthOperation,
   "/api/watchlist": watchlistOperation,
   "/cloud/api/Manager/getScores": getScoresOperation,
+  "/cloud/api/Manager/getConfigWebReports": getConfigWebReportsOperation,
+  "/cloud/api/Manager/getAuthorizations": getAuthorizationsOperation,
   "/api/telegram/alert": telegramAlertOperation,
   "/api/telegram/report": telegramReportOperation,
 };
+
+/**
+ * Manager boot operations whose wire body was observed in the redacted boot HAR
+ * (2026-11-01, portal 1.0.280) and whose client-JS call site is recorded in
+ * `lib/f402_probe.ts` (MANAGER_BOOT_OPS). The request is observed; the response envelope was
+ * not promoted to a hashed capture, so no response schema is published.
+ */
+function bootFormOperation(
+  operation: LedgerOperation,
+  spec: {
+    readonly summary: string;
+    readonly description: string;
+    readonly note: string;
+    readonly fields: readonly string[];
+  },
+): JsonObject {
+  const properties: JsonObject = {
+    operation: {
+      type: "string",
+      const: operation.path.split("/").at(-1) ?? "",
+    },
+  };
+  for (const field of spec.fields) {
+    if (field === "operation") continue;
+    properties[field] = {
+      type: field === "RRO" ? "integer" : "string",
+      example: field === "RRO" ? 1 : undefined,
+      description:
+        field === "agentID" || field === "agentOwner"
+          ? "Logged-in account; the observed value was the master agent."
+          : "Observed in the 2026-11-01 boot HAR." +
+            (field === "RRO" ? " Always 1 in the observed calls." : ""),
+    };
+  }
+  const required = [...spec.fields];
+  return {
+    tags: [TAG_DOWNLINE],
+    summary: spec.summary,
+    description: `${spec.description} ${spec.note}`,
+    operationId: operationIdFor(operation.method, operation.path),
+    requestBody: {
+      required: true,
+      content: {
+        "application/x-www-form-urlencoded; charset=UTF-8": {
+          schema: {
+            type: "object",
+            required,
+            properties,
+          },
+        },
+      },
+    },
+    security: [{ fantasy402Cookie: [] }],
+    responses: {
+      "200": {
+        description:
+          "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published.",
+      },
+    },
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
+function getConfigWebReportsOperation(operation: LedgerOperation): JsonObject {
+  return bootFormOperation(operation, {
+    summary:
+      "Boot web-report configuration (request observed 2026-11-01; no response schema)",
+    description:
+      "manager.js:35023 boot report-configuration read. The form body is the one the 2026-11-01 boot HAR recorded: agentID, operation, RRO and agentOwner (agentID and agentOwner were the same master account).",
+    note: "The portal consumes the reply as an INFO envelope; its keys are not published because no capture record holds them.",
+    fields: ["agentID", "operation", "RRO", "agentOwner"],
+  });
+}
+
+function getAuthorizationsOperation(operation: LedgerOperation): JsonObject {
+  return bootFormOperation(operation, {
+    summary:
+      "Boot agent permissions (request observed 2026-11-01; no response schema)",
+    description:
+      "manager.js:37628 boot permissions and distribution read. The recorded form body is agentID, agentOwner, operation and RRO; the portal assigns the reply to a.INFO and a.DISTRIBUTION.",
+    note: "Neither INFO nor DISTRIBUTION fields are published because no capture record holds the response.",
+    fields: ["agentID", "agentOwner", "operation", "RRO"],
+  });
+}
 
 /* -------------------------------------------------------------------------- */
 /* Tier D surface operations                                                  */
@@ -1890,13 +1976,13 @@ function surfaceOperationSpecs(
       summary:
         "Manager getHistory (wired settlement-history poll; no response capture)",
       description:
-        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:347-368). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:369-387). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
       requiredCapture:
         "Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance.",
       responses: {
         "200": {
           description:
-            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:374-387). Row fields are not captured, so only raw/unknown objects are described.",
+            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
           content: {
             "application/json": {
               schema: {
@@ -1932,7 +2018,7 @@ function surfaceOperationSpecs(
         },
         default: {
           description:
-            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:369-371).",
+            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571).",
         },
       },
     },

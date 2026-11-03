@@ -24,13 +24,13 @@
       "name": "Human label.",
       "tier": "D = real surface recorded in surfaces[]; its routes may be published as operations or not, and missingFromSpec says which. E = documented operation with no implementation.",
       "category": "catalog | upstream-route | local-route | blocked-contract | documented-not-implemented.",
-      "missingFromSpec": "true when docs/openapi.json does not publish every path this surface lists — including a surface whose members are field names or CLI commands rather than routes, which the spec cannot model at all. False therefore means fully published. The boolean was previously read both ways; four rows disagreed until scripts/check_ledger_consistency.ts derived it.",
+      "missingFromSpec": "true when docs/openapi.json does not publish every path this surface lists \u2014 including a surface whose members are field names or CLI commands rather than routes, which the spec cannot model at all. False therefore means fully published. The boolean was previously read both ways; four rows disagreed until scripts/check_ledger_consistency.ts derived it.",
       "what / members / evidence / note": "Inventory, member routes, citations, caveats."
     },
-    "counts": "Operation counts by tier. A+B+C+D+E = total = 55. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here — counts, surfaceCounts, countsByTag and the total below — from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
+    "counts": "Operation counts by tier. A+B+C+D+E = total = 59. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here \u2014 counts, surfaceCounts, countsByTag and the total below \u2014 from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
     "surfaceCounts": "Surface inventory counts by tier.",
     "countsByTag": "Operation tier counts per spec tag (convenience for P2/P3).",
-    "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) → a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
+    "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) \u2192 a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
   },
   "sourcePrefixes": {
     "(no prefix)": "Path relative to the worktree root /Users/nolarose/code/sportsdesk-ops/.worktrees/docs.",
@@ -39,7 +39,7 @@
     "fixture:": "Committed fixture under the worktree; a shape sample, not a wire capture."
   },
   "tierRules": {
-    "A": "Captured wire contract: a real request AND a real response capture exist. Eight operations qualify from the 2026-10-31/2026-11-01 live sessions (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup, Pending, getTransactions, getGrading); see docs/evidence/captures/manifest.json. Earlier releases had none because the 2026-10-28 HAR captured only requests.",
+    "A": "Captured wire contract: a real request AND a real response capture exist. Nine operations qualify from the 2026-10-31/2026-11-01 live sessions (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup, Pending, getTransactions, getGrading, getSportsType); see docs/evidence/captures/manifest.json. Earlier releases had none because the 2026-10-28 HAR captured only requests.",
     "B": "Observed first-party evidence. (i) captured wire request: getWebLog mode B and getInfoPlayer (2026-10-28 Manager HAR); (ii) observed request payload: GS getBetReport; or (iii) a route this repository serves, verified against its handler source (GET /health, GET /api/watchlist, POST /api/telegram/alert, POST /api/telegram/report). Response bodies may still be uncaptured.",
     "C": "Inferred only. Authored in docs/openapi.json or its generator scripts, or a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response was observed.",
     "D": "A real surface missing from the spec. Recorded in surfaces[], never in operations[].",
@@ -47,12 +47,12 @@
     "crawlerCandidatesRule": "B-vs-C rule for the 11 'Tracked Operational Domains' candidates (gameAdmin, getMessages, adjustBalance, createPlayer, get3rdPartyLimits, getAnalysis, getScores, getAgentTree, getBilling, getRules, getFinancialReport): a launcher tile alone is not enough for B. B requires a URL+method observed on the wire (or a handler that serves it). Those 11 rows take their path+method from hand-authored candidateEndpoint/candidateMethod constants in main:scripts/portal_tile_crawler.ts:55-206. The crawler CLI entry runs the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and its live branch only replaces extracted inputs/L-keys, never the URL/method; no audit JSON or screenshot proof exists in the main tree. They are therefore tier C with candidate_url=true and ui_observed=true, never B. getAnalysis and getFinancialReport also have independent UI action-name evidence (runbook:166-167), which improves the tile evidence but does not observe the URL."
   },
   "counts": {
-    "A": 8,
-    "B": 7,
-    "C": 30,
+    "A": 9,
+    "B": 9,
+    "C": 31,
     "D": 0,
     "E": 10,
-    "total": 55
+    "total": 59
   },
   "surfaceCounts": {
     "D": 20,
@@ -133,12 +133,12 @@
       "total": 2
     },
     "Manager & Player Admin": {
-      "A": 0,
-      "B": 0,
-      "C": 2,
+      "A": 1,
+      "B": 2,
+      "C": 3,
       "D": 0,
       "E": 0,
-      "total": 2
+      "total": 6
     },
     "Vig & Juice Setup": {
       "A": 0,
@@ -546,7 +546,7 @@
         {
           "source": "tests/fixtures/portal-left-menu-actions.html",
           "kind": "ui-observation",
-          "note": "Corrected 2026-11-01: data-action=\"get-weekly-figure\" IS real — an operator paste of the manager page's mobile left menu contains it (with data-type=\"heavy\"), beside go-home-menu, get-pending, get-game-admin and get-messaging. The earlier note that the string appeared in no artifact was wrong. What remains unproven is that this action posts to Report/getWeeklyFigure; the boot path calls Manager/getWeeklyFigureByAgentLite instead."
+          "note": "Corrected 2026-11-01: data-action=\"get-weekly-figure\" IS real \u2014 an operator paste of the manager page's mobile left menu contains it (with data-type=\"heavy\"), beside go-home-menu, get-pending, get-game-admin and get-messaging. The earlier note that the string appeared in no artifact was wrong. What remains unproven is that this action posts to Report/getWeeklyFigure; the boot path calls Manager/getWeeklyFigureByAgentLite instead."
         }
       ],
       "requiredCapture": "On manager.html (v1.0.280) boot, weekly figures are fetched via POST /cloud/api/Manager/getWeeklyFigureByAgentLite ({agentID, week: 0, type: \"A\", layout: \"byDay\", operation: \"getWeeklyFigureByAgentLite\", RRO: 1} at manager.js:52703) and POST /cloud/api/Manager/getMasterSheet (manager.js:43955). Capture getWeeklyFigureByAgentLite and reconcile.",
@@ -1729,6 +1729,98 @@
       "requiredCapture": "Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when ticketNumber/wagerNumber were omitted. 1. Retrieve upstream server error log; 2. Re-probe identical payload, then probe with the 5-key customer/report/report.js:108955 envelope {token, ticketNumber, wagerNumber, flag, operation}.",
       "contradicted": false,
       "contradictedReason": null
+    },
+    {
+      "path": "/cloud/api/Manager/getSportsType",
+      "method": "post",
+      "operationId": null,
+      "tag": "Manager & Player Admin",
+      "tier": "A",
+      "capturedResponse": true,
+      "evidence": [
+        {
+          "source": "capture:2026-10-31/getSportsType.post.json",
+          "kind": "capture",
+          "note": "Live capture 2026-10-31T00:21:29.359Z from a 200 response (response bodySha256 105edc9c5766b3d5f0e896d3267286ce404cf2c6ef755a3ed92bcbba3c5f4221); request agentID/agentOwner/operation/RRO, response record carries a type/nullable/fields skeleton."
+        },
+        {
+          "source": "lib/f402_probe.ts (MANAGER_BOOT_OPS.getSportsType)",
+          "kind": "wire-observation",
+          "note": "manager.js:33998 boot sports catalog list -> n.LIST; observed form fields agentID, agentOwner, operation, RRO."
+        },
+        {
+          "source": "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+          "kind": "wire-observation",
+          "note": "2026-11-01 boot waterfall: POST form agentID=<master>&agentOwner=<master>&operation=getSportsType&RRO=1, HTTP 200. The portal consumes the reply as a LIST envelope."
+        }
+      ],
+      "requiredCapture": null,
+      "contradicted": false,
+      "contradictedReason": null
+    },
+    {
+      "path": "/cloud/api/Manager/getConfigWebReports",
+      "method": "post",
+      "operationId": null,
+      "tag": "Manager & Player Admin",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+          "kind": "wire-observation",
+          "note": "2026-11-01 boot waterfall: POST form agentID=<master>&operation=getConfigWebReports&RRO=1&agentOwner=<master>, HTTP 200. The response body is in the redacted HAR but was not promoted to a hashed capture record."
+        },
+        {
+          "source": "lib/f402_probe.ts",
+          "kind": "wire-observation",
+          "note": "manager.js:35023 boot report-configuration read -> s.INFO; MANAGER_BOOT_OPS lists the same parameter set."
+        }
+      ],
+      "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the response envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A.",
+      "contradicted": false,
+      "contradictedReason": null
+    },
+    {
+      "path": "/cloud/api/Manager/getAuthorizations",
+      "method": "post",
+      "operationId": null,
+      "tag": "Manager & Player Admin",
+      "tier": "B",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+          "kind": "wire-observation",
+          "note": "2026-11-01 boot waterfall: POST form agentID=<master>&agentOwner=<master>&operation=getAuthorizations&RRO=1, HTTP 200. The response body is in the redacted HAR but was not promoted to a hashed capture record."
+        },
+        {
+          "source": "lib/f402_probe.ts",
+          "kind": "wire-observation",
+          "note": "manager.js:37628 boot permissions/distribution read -> a.INFO, a.DISTRIBUTION; MANAGER_BOOT_OPS lists the same parameter set."
+        }
+      ],
+      "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the INFO/DISTRIBUTION envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A.",
+      "contradicted": false,
+      "contradictedReason": null
+    },
+    {
+      "path": "/cloud/api/Manager/getConfigWebReportsPending",
+      "method": "post",
+      "operationId": null,
+      "tag": "Manager & Player Admin",
+      "tier": "C",
+      "capturedResponse": false,
+      "evidence": [
+        {
+          "source": "lib/f402_probe.ts",
+          "kind": "wire-observation",
+          "note": "manager.js:35534 boot pending report-configuration read -> n.INFO; MANAGER_BOOT_OPS lists agentID, operation, RRO. No wire capture or boot-HAR entry records the body, so the field set is the client-JS one."
+        }
+      ],
+      "requiredCapture": "No request or response was captured for this operation. Capture one boot call (the parameter set is in MANAGER_BOOT_OPS) and promote it with scripts/apply_captures.ts.",
+      "contradicted": false,
+      "contradictedReason": null
     }
   ],
   "surfaces": [
@@ -1786,7 +1878,7 @@
       "members": ["POST /cloud/api/Manager/getHistory"],
       "evidence": [
         {
-          "source": "lib/fantasy402_settlement_ingest.ts:347-357",
+          "source": "lib/fantasy402_settlement_ingest.ts:547-557",
           "kind": "implementation",
           "note": "resolveHistoryPollUrl builds `${base}/cloud/api/Manager/getHistory` from SPORTSDESK_PORTAL_HTTP_BASE; pollManagerGetHistory POSTs with no body, 60s timeout, accepts array or {data:[]}."
         },
@@ -1823,7 +1915,7 @@
           "note": "RawGradingLegRow declares CustomerID, WagerNumber, LegNumber, Amount (cents, customer perspective), SettlementDateTime, Result WIN|LOSS|VOID|PUSH, Description."
         },
         {
-          "source": "lib/fantasy402_settlement_ingest.ts:17",
+          "source": "lib/fantasy402_settlement_ingest.ts:18",
           "kind": "implementation",
           "note": "SettlementFeed = 'getHistory' | 'getGrading'; grading rows are ingested into the same append-only path."
         }
@@ -1912,7 +2004,7 @@
           "note": "OPTIONS returns 204 with CORS headers (the grant is origin-checked); /api/test/error throws a synthetic error so the error boundary can be exercised in production."
         }
       ],
-      "note": "Only POST /telegram/webhook and OPTIONS * remain outside the spec; both are deliberate — one is Telegram's callback surface, the other is transport-level."
+      "note": "Only POST /telegram/webhook and OPTIONS * remain outside the spec; both are deliberate \u2014 one is Telegram's callback surface, the other is transport-level."
     },
     {
       "id": "surface.gs-manager-cli",
@@ -2114,7 +2206,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts#GET /agent-graph.webp",
           "kind": "implementation",
-          "note": "Measured 2026-11-01: the dashboard's <img src=\"agent-graph.webp\"> resolved to GET /agent-graph.webp → 404 JSON, and the file lives in scratch/ rather than docs/assets, so /assets/agent-graph.webp was a 404 too. It is now served from scratch/agent-graph.webp behind the pii guard /graph uses, with the viewer's freshness rule: missing → 404, older than the graph → 503."
+          "note": "Measured 2026-11-01: the dashboard's <img src=\"agent-graph.webp\"> resolved to GET /agent-graph.webp \u2192 404 JSON, and the file lives in scratch/ rather than docs/assets, so /assets/agent-graph.webp was a 404 too. It is now served from scratch/agent-graph.webp behind the pii guard /graph uses, with the viewer's freshness rule: missing \u2192 404, older than the graph \u2192 503."
         }
       ],
       "requiredCapture": "Not a capture gap: these are static files the graph page already ships. A capture would only restate their bytes."
@@ -2251,7 +2343,6 @@
     "catalog/fantasy402_sport_catalog.ts:627-676": "export function computeCatalogProvenance(",
     "design/domain-branded-types.ts:136-154": "export type PaddedCustomerId = Brand<",
     "design/domain-branded-types.ts:9": "PaddedCustomerId     - 11-char space-padded",
-    "docs/evidence/ledger.json:2141": "no response body has ever been seen, so no column set is documented",
     "docs/evidence/ledger.json:557-580": "\"path\": \"/cloud/api/Manager/getAgentPerformance\"",
     "docs/evidence/ledger.json:575": "\"requiredCapture\": \"The request is now observed in full, with its URL; only the response is missing.",
     "docs/evidence/ledger.json:9-21": "\"operationFields\": {",
@@ -2276,13 +2367,13 @@
     "lib/f402_bet_ticker_config.ts:2-20": "@file f402_bet_ticker_config.ts",
     "lib/f402_probe.ts:372-386": "operation: \"write\",",
     "lib/f402_replay_transport.ts:2-3": "Replay transport: primary = FetchSession",
-    "lib/fantasy402_settlement_ingest.ts:17": "export type SettlementFeed = \"getHistory\" | \"getGrading\";",
-    "lib/fantasy402_settlement_ingest.ts:347-357": "export function resolveHistoryPollUrl(",
-    "lib/fantasy402_settlement_ingest.ts:347-368": "export function resolveHistoryPollUrl(",
-    "lib/fantasy402_settlement_ingest.ts:359-387": "export async function pollManagerGetHistory(",
-    "lib/fantasy402_settlement_ingest.ts:369-371": "if (!res.ok) {",
-    "lib/fantasy402_settlement_ingest.ts:369-387": "if (!res.ok) {",
-    "lib/fantasy402_settlement_ingest.ts:374-387": "if (Array.isArray(body)) {",
+    "lib/fantasy402_settlement_ingest.ts:18": "export type SettlementFeed = \"getHistory\" | \"getGrading\";",
+    "lib/fantasy402_settlement_ingest.ts:547-557": "export function resolveHistoryPollUrl(",
+    "lib/fantasy402_settlement_ingest.ts:547-568": "export function resolveHistoryPollUrl(",
+    "lib/fantasy402_settlement_ingest.ts:559-587": "export async function pollManagerGetHistory(",
+    "lib/fantasy402_settlement_ingest.ts:569-571": "if (!res.ok) {",
+    "lib/fantasy402_settlement_ingest.ts:569-587": "if (!res.ok) {",
+    "lib/fantasy402_settlement_ingest.ts:574-587": "if (Array.isArray(body)) {",
     "lib/fantasy402_wager_universe_scope.ts:13-21": "getPending: {",
     "lib/fantasy402_wager_universe_scope.ts:22-31": "getHistory: {",
     "lib/fantasy402_wager_universe_scope.ts:32-38": "getGrading: {",
@@ -2349,6 +2440,7 @@
     "tests/f402_observed_requests.test.ts:402-408": "test(\"a save is three requests, and all three are mutations\"",
     "tests/fixtures/f402-report-requests-observed-2026-11-01.json:188": "\"writeObservation\": \"The last three requests are mutations, recorded as behaviour, never as a script.",
     "tests/fixtures/fantasy402-history-poll.json:2-24": "\"feed\": \"getHistory\"",
-    "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8": "\"provider\": \"fantasy402\""
+    "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8": "\"provider\": \"fantasy402\"",
+    "docs/evidence/ledger.json:2233": "no response body has ever been seen, so no column set is documented"
   }
 }
