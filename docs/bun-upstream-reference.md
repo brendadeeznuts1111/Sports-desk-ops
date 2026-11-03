@@ -22,6 +22,18 @@ Two different things:
 
 Legal list and licenses: [project/license → type declarations](https://bun.com/docs/project/license#type-declarations). Prod dependency audit: regenerate root `licenses.json` per `.gitignore` comment (`bun pm licenses --prod --json`).
 
+## JavaScriptCore (Bun engine builds only)
+
+Bun is MIT. The runtime **statically links** JavaScriptCore/WebKit (LGPL-2), so distributors who modify that stack must offer a relink path. Fork: [github.com/oven-sh/WebKit](https://github.com/oven-sh/WebKit) (docs also spell the URL `oven-sh/webkit`; GitHub treats it as the same repo).
+
+| Step | Command |
+| ---- | ------- |
+| Clone fork | `git clone https://github.com/oven-sh/WebKit vendor/WebKit` |
+| Match Bun’s pin | `bun sync-webkit-source` (`WEBKIT_VERSION` in `scripts/build/deps/webkit.ts`) |
+| Relink binary | `bun run build:local` |
+
+Full context: [project/license → JavaScriptCore](https://bun.com/docs/project/license#javascriptcore). **sportsdesk-ops** consumes the official [bun-v1.4.4](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) binary; this section applies only if you patch Bun/JSC upstream.
+
 ## Live docs (check behavior on 1.4.4)
 
 - Reference: [bun.com/docs](https://bun.com/docs)
