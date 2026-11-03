@@ -40,6 +40,8 @@ function world(over: Partial<ShapeWorld> = {}): ShapeWorld {
     shapes,
     headings: shapes.map((s) => s.heading),
     sections: sectionMap(shapes),
+    members: new Map(),
+    memberBaseline: new Map(),
     probes: new Set(["test.probe"]),
     tests: new Set(["tests/bun_capabilities.test.ts"]),
     surfaces: new Set(["file"]),
@@ -275,6 +277,25 @@ describe("analyzeBunShapes", () => {
     expect(problems).toEqual([
       { rule: "undeclared-shape", detail: "FileSink (type)" },
     ]);
+  });
+
+  test("a changed member surface is reported with the delta", () => {
+    const problems = analyzeBunShapes(
+      world({
+        members: new Map([["file", ["a", "b"]]]),
+        memberBaseline: new Map([["file", ["a"]]]),
+      }),
+    );
+    expect(problems).toEqual([
+      { rule: "member-drift", detail: "file: added [b] removed []" },
+    ]);
+  });
+
+  test("a member surface with no baseline entry is reported", () => {
+    const problems = analyzeBunShapes(
+      world({ members: new Map([["file", ["a"]]]) }),
+    );
+    expect(problems).toEqual([{ rule: "member-unbaselined", detail: "file" }]);
   });
 
   test("a heading under the wrong section is reported", () => {

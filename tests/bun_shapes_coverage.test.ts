@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { dirname, join, resolve } from "node:path";
 import {
   BUN_SHAPES,
+  VOLATILE_SHAPES,
   analyzeBunShapes,
   catalogHeadings,
   collectBunShapeUsage,
+  surfaceMembers,
 } from "../lib/bun_shapes.ts";
 import { declarationDrift } from "../bin/bun_types.ts";
 import { listSourceFiles } from "../lib/source_files.ts";
@@ -107,9 +109,23 @@ describe("Bun shape coverage", () => {
       ).map((shape) => shape.name),
     );
 
+    const members = new Map<string, readonly string[]>();
+    for (const shape of BUN_SHAPES) {
+      if (shape.kind !== "value" || VOLATILE_SHAPES.has(shape.name)) continue;
+      const value = (Bun as unknown as Record<string, unknown>)[shape.name];
+      if (typeof value !== "object" && typeof value !== "function") continue;
+      members.set(shape.name, surfaceMembers(value));
+    }
+    const memberFile = (await Bun.file(
+      join(root, "tests/bun_shape_members.json"),
+    ).json()) as { shapes: Record<string, string[]> };
+    const memberBaseline = new Map(Object.entries(memberFile.shapes));
+
     const problems = analyzeBunShapes({
       usage,
       shapes: BUN_SHAPES,
+      members,
+      memberBaseline,
       headings,
       sections: catalogSections(catalog),
       probes,

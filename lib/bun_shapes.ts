@@ -72,6 +72,59 @@ export interface BunShape {
  */
 export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map();
 
+/**
+ * Shapes whose members depend on the caller, so they are not snapshotted: the
+ * environment, the argv vector and the stdio streams.
+ */
+export const VOLATILE_SHAPES: ReadonlySet<string> = new Set([
+  "env",
+  "argv",
+  "stdin",
+  "stdout",
+]);
+
+/** Properties every function inherits that say nothing about the API surface. */
+const FUNCTION_INTERNALS = new Set([
+  "length",
+  "name",
+  "prototype",
+  "arguments",
+  "caller",
+  "constructor",
+  "apply",
+  "bind",
+  "call",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "__proto__",
+]);
+
+/**
+ * Own names plus the prototype chain, minus function internals. The same walk
+ * `bin/bun_types.ts` uses for declaration drift, so a member list means the same
+ * thing in both places.
+ */
+export function surfaceMembers(value: unknown): string[] {
+  const names = new Set<string>();
+  let current: unknown = value;
+  while (
+    current !== null &&
+    current !== Object.prototype &&
+    current !== Function.prototype &&
+    current !== Array.prototype
+  ) {
+    for (const name of Object.getOwnPropertyNames(current)) {
+      if (!FUNCTION_INTERNALS.has(name)) names.add(name);
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return [...names].sort();
+}
+
 export const BUN_SHAPES: readonly BunShape[] = [
   // process & filesystem
   {
@@ -652,6 +705,8 @@ export type ShapeRule =
   | "undeclared-shape"
   | "runtime-only-without-source"
   | "section-mismatch"
+  | "member-drift"
+  | "member-unbaselined"
   | "element-access";
 
 export interface ShapeProblem {
@@ -672,6 +727,10 @@ export interface ShapeWorld {
   readonly surfaces: ReadonlySet<string>;
   /** `typeof Bun.<name>` per manifest entry. */
   readonly runtimeTypeof: ReadonlyMap<string, string>;
+  /** Member surface per shape, measured now. */
+  readonly members: ReadonlyMap<string, readonly string[]>;
+  /** Member surface per shape, from tests/bun_shape_members.json. */
+  readonly memberBaseline: ReadonlyMap<string, readonly string[]>;
   /** Catalog section title → headings listed under it. */
   readonly sections: ReadonlyMap<string, ReadonlySet<string>>;
   /** Value members declared by bun-types@1.4.4. */
@@ -748,6 +807,31 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
       problems.push({
         rule: "kind-mismatch",
         detail: `${shape.name}: kind=type typeof=${actual}`,
+      });
+    }
+
+    const baselineMembers = world.memberBaseline.get(shape.name);
+    if (baselineMembers !== undefined) {
+      const now = world.members.get(shape.name);
+      if (now === undefined) {
+        problems.push({
+          rule: "member-drift",
+          detail: `${shape.name}: no member surface in the binary now`,
+        });
+      } else {
+        const added = now.filter((m) => !baselineMembers.includes(m));
+        const removed = baselineMembers.filter((m) => !now.includes(m));
+        if (added.length > 0 || removed.length > 0) {
+          problems.push({
+            rule: "member-drift",
+            detail: `${shape.name}: added [${added.join(", ")}] removed [${removed.join(", ")}]`,
+          });
+        }
+      }
+    } else if (world.members.has(shape.name)) {
+      problems.push({
+        rule: "member-unbaselined",
+        detail: shape.name,
       });
     }
 

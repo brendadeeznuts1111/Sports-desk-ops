@@ -8,7 +8,7 @@ Adding a `Bun.*` call without an entry in `lib/bun_shapes.ts` fails `tests/bun_s
 
 ## Upgrading
 
-When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@types/bun` together, run `bun run probe:bun` (baseline drift is the behaviour diff), then re-derive the declared surface with `./bin/dx bun --types`. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.
+When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@types/bun` together, run `bun run probe:bun` (baseline drift is the behaviour diff), then re-derive the declared surface with `./bin/dx bun --types`. Regenerate the member snapshot with `bun scripts/bun_shape_members.ts --baseline tests/bun_shape_members.json` and review the added/removed list. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.
 
 ---
 
@@ -178,6 +178,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (2):** `custom`, `table`
 - **Here:** `lib/wagers_report.ts`, `lib/f402_hierarchy_envelope_view.ts`
 - **Evidence:** `surface:inspect.table`, `probe:text.inspect`
 
@@ -185,6 +186,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/markdown)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (4):** `ansi`, `html`, `react`, `render`
 - **Here:** `scripts/render_tasks.ts`, `lib/docs_render_cache.ts`
 - **Evidence:** `surface:markdown` · deep dive: [§12](./bun_server_runtime_shapes_runbook.md)
 
@@ -214,6 +216,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Cookie)
 - **Shape:** value: `function` · writable false · enumerable true
+- **Members (2):** `from`, `parse`
 - **Here:** `lib/cookie_jar.ts`
 - **Evidence:** `probe:data.cookies`
 
@@ -235,6 +238,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/JSON5)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `lib/bun_xml_golden_ast.ts`
 - **Evidence:** `surface:JSON5`, `probe:data.parse`
 
@@ -242,6 +246,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/JSONC)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (1):** `parse`
 - **Here:** `lib/pm_policy.ts`
 - **Evidence:** `probe:data.json`
 
@@ -249,6 +254,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/JSONL)
 - **Shape:** value: `object` · writable false · enumerable true
+- **Members (2):** `parse`, `parseChunk`
 - **Here:** `lib/cron_journal.ts`, `scripts/gslive_all_states_suspect_cron.ts`
 - **Evidence:** `surface:JSONL`, `test:tests/bun_capabilities.test.ts`, `probe:data.parse` · deep dive: [§8.4](./bun_server_runtime_shapes_runbook.md)
 
@@ -256,6 +262,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/TOML)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `lib/gen_tokens/tokens_ssot.ts`
 - **Evidence:** `surface:TOML`, `probe:data.parse`
 
@@ -263,6 +270,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/XML)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (2):** `parse`, `stringify`
 - **Here:** `lib/bun_xml_golden_ast.ts`, `lib/customer_profile.ts`
 - **Evidence:** `surface:XML`, `probe:data.parse`
 
@@ -270,6 +278,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/YAML)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (2):** `parse`, `stringify`
 - **Here:** `bin/bun_surface.ts`, `scripts/ci_local.ts`
 - **Evidence:** `surface:YAML`, `probe:data.parse`
 
@@ -284,6 +293,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/semver)
 - **Shape:** value: `object` · writable false · enumerable true
+- **Members (2):** `order`, `satisfies`
 - **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
 - **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
 
@@ -297,6 +307,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Archive)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (1):** `write`
 - **Here:** `lib/eod_archive.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:Archive`, `probe:storage.archive`
 
@@ -318,6 +329,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3Client)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
 - **Here:** `bin/bun_surface.ts`, `scripts/r2_verify.ts`
 - **Evidence:** `surface:S3Client`
 
@@ -325,6 +337,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/SQL)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (13):** snapshot in tests/bun_shape_members.json
 - **Here:** `lib/customer_index.ts`, `lib/probe_index.ts`
 - **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`
 
@@ -332,6 +345,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/cron)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (2):** `parse`, `remove`
 - **Here:** `lib/bun_cron.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:cron`, `test:tests/bun_capabilities.test.ts`
 
@@ -339,6 +353,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/secrets)
 - **Shape:** value: `object` · writable true · enumerable true
+- **Members (3):** `delete`, `get`, `set`
 - **Here:** `scripts/secrets_f402.ts`, `scripts/capture/f402_login.ts`
 - **Evidence:** `surface:secrets.get`, `test:tests/bun_capabilities.test.ts`
 
@@ -358,6 +373,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/CryptoHasher)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (2):** `algorithms`, `hash`
 - **Here:** `lib/bun_xml_golden_ast.ts`, `lib/combo_uniqueness.ts`
 - **Evidence:** `probe:crypto.hash`
 
@@ -386,6 +402,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/hash)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (12):** `adler32`, `cityHash32`, `cityHash64`, `crc32`, `murmur32v2`, `murmur32v3`, `murmur64v2`, `rapidhash`, `wyhash`, `xxHash3`, `xxHash32`, `xxHash64`
 - **Here:** `lib/manager_fetch.ts`, `lib/f402_agent_graph_views.ts`
 - **Evidence:** `probe:crypto.hash`
 
@@ -455,6 +472,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/dns)
 - **Shape:** value: `object` · writable false · enumerable true
+- **Members (21):** snapshot in tests/bun_shape_members.json
 - **Here:** `lib/preflight.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:dns.lookup`
 
@@ -462,6 +480,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/fetch)
 - **Shape:** value: `function` · writable false · enumerable true
+- **Members (1):** `preconnect`
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:fetch`, `test:tests/bun_capabilities.test.ts`
 
@@ -494,6 +513,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Image)
 - **Shape:** value: `function` · writable true · enumerable true
+- **Members (4):** `backend`, `clipboardChangeCount`, `fromClipboard`, `hasClipboardImage`
 - **Here:** `lib/screenshot_encode.ts`, `lib/logo_image.ts`
 - **Evidence:** `surface:Image`, `test:tests/bun_capabilities.test.ts`, `probe:image.metadata`
 
@@ -501,6 +521,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/WebView)
 - **Shape:** value: `function` · writable false · enumerable true
+- **Members (1):** `closeAll`
 - **Here:** `scripts/capture/webview.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:WebView` · deep dive: [§9](./bun_server_runtime_shapes_runbook.md)
 
