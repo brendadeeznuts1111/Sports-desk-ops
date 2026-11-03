@@ -314,7 +314,7 @@ describe("acquireProfileLock", () => {
 });
 
 describe("concurrent acquisition", () => {
-  const CHILD_SOURCE = `import { writeFileSync } from "node:fs";
+  const CHILD_SOURCE = `import { renameSync, writeFileSync } from "node:fs";
 import { acquireProfileLock } from ${JSON.stringify(LOCK_MODULE_PATH)};
 
 const [profileDir, startAtRaw, statusPath] = process.argv.slice(2);
@@ -335,7 +335,10 @@ try {
     message: String(failure?.message ?? failure),
   };
 }
-writeFileSync(statusPath, JSON.stringify(status));
+// The parent polls for statusPath and reads it as soon as it exists, so it must appear complete.
+// The suffix avoids ".tmp", which the parent's leak check reserves for the lock module.
+writeFileSync(\`\${statusPath}.partial\`, JSON.stringify(status));
+renameSync(\`\${statusPath}.partial\`, statusPath);
 if (status.status === "acquired") {
   // Hold it until the parent kills us; a normal exit would release it.
   while (true) Bun.sleepSync(50);

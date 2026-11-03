@@ -10,10 +10,10 @@
  * symlinked alias of the same profile resolves to the same lock file instead of a second one.
  *
  * Creation is atomic in content as well as in name: the record is written to a sibling temp
- * file and hard-linked into place, so a record at the lock path is always complete. Takeover of
- * a stale record renames the file away, re-checks the bytes it removed, and re-links instead of
- * overwriting, so concurrent takeovers still produce exactly one winner. Releasing does the same
- * rename first, so a release never deletes a successor's record.
+ * file and hard-linked into place, so a record at the lock path is always complete. Removing a
+ * record — takeover of a stale one, or release — happens only under a sibling mutex
+ * (`<lock>.reap`) and only when the path still holds the record that was judged, so concurrent
+ * takeovers produce exactly one winner and a release never deletes a successor's record.
  *
  * Pid reuse: a record blocks while its pid is alive and its `startedAt` is younger than
  * `staleMs` — 12 hours by default ({@link DEFAULT_PROFILE_LOCK_STALE_MS}). An unrelated process
@@ -30,8 +30,8 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -48,6 +48,13 @@ const RECORD_READ_RETRY_MS = 10;
 
 /** Bound on create/read/takeover passes, so a pathological race cannot spin forever. */
 const ACQUIRE_ATTEMPTS = 8;
+
+/** Sibling file whose exclusive creation serializes every removal of a lock record. */
+const REMOVAL_MUTEX_SUFFIX = ".reap";
+/** How long a remover waits for the mutex before giving up on that removal. */
+const REMOVAL_MUTEX_WAIT_MS = 2_000;
+/** A mutex older than this was left by a process that died while holding it. */
+const REMOVAL_MUTEX_STALE_MS = 10_000;
 
 interface ProfileLockRecord {
   pid: number;
@@ -207,42 +214,65 @@ function recordMatches(
 }
 
 /**
+ * Run `fn` while holding `<lockPath>.reap`, the mutex every remover of `lockPath` takes.
+ *
+ * @returns `false` when the mutex stayed busy for {@link REMOVAL_MUTEX_WAIT_MS}; `fn` did not run.
+ */
+function withRemovalMutex(lockPath: string, fn: () => void): boolean {
+  const mutexPath = `${lockPath}${REMOVAL_MUTEX_SUFFIX}`;
+  const deadline = Date.now() + REMOVAL_MUTEX_WAIT_MS;
+  for (;;) {
+    try {
+      writeFileSync(mutexPath, "", { flag: "wx", mode: 0o600 });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    const heldMs = mutexAgeMs(mutexPath);
+    if (heldMs !== null && heldMs > REMOVAL_MUTEX_STALE_MS) {
+      // A holder died inside a section that takes microseconds.
+      removeQuietly(mutexPath);
+      continue;
+    }
+    if (Date.now() >= deadline) return false;
+    sleepSync(1);
+  }
+  try {
+    fn();
+  } finally {
+    removeQuietly(mutexPath);
+  }
+  return true;
+}
+
+function mutexAgeMs(mutexPath: string): number | null {
+  try {
+    return Date.now() - statSync(mutexPath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Remove `lockPath` only when it still holds the record we decided about.
  *
- * Rename-then-check rather than check-then-remove: the decision is made on the exact bytes that
- * were at the path, so a successor that wrote its own record in between is never deleted. A
- * record we did not expect is put back with `linkSync` — never `renameSync` — so it cannot
- * clobber a lock that a successor linked while we held the renamed copy.
+ * Creation never overwrites (it links onto an absent path) and every removal holds the removal
+ * mutex, so the record read inside the mutex is the one unlinked. The path is never emptied and
+ * refilled: putting a successor's record back opened a window in which a third contender could
+ * link its own, leaving two holders.
  *
  * @param expected `null` removes the path only if it is still unreadable.
  */
 function removeLockRecord(
   lockPath: string,
   expected: ProfileLockRecord | null,
-  pid: number,
 ): void {
-  const tmpPath = `${lockPath}.${pid}.${randomUUID()}.reap.tmp`;
-  try {
-    renameSync(lockPath, tmpPath);
-  } catch {
-    return; // already gone: nothing to remove
-  }
-  try {
-    if (recordMatches(readLockRecord(tmpPath), expected)) {
-      removeQuietly(tmpPath);
-      return;
+  withRemovalMutex(lockPath, () => {
+    if (!existsSync(lockPath)) return;
+    if (recordMatches(readLockRecord(lockPath), expected)) {
+      removeQuietly(lockPath);
     }
-    if (!existsSync(lockPath)) {
-      try {
-        linkSync(tmpPath, lockPath);
-      } catch {
-        // A successor linked its own record first; theirs wins.
-      }
-    }
-    removeQuietly(tmpPath);
-  } catch {
-    removeQuietly(tmpPath);
-  }
+  });
 }
 
 /** `process.kill(pid, 0)` probe: ESRCH means gone, EPERM means alive but not ours. */
@@ -267,7 +297,7 @@ function buildLock(
     if (released) return;
     released = true;
     process.off("exit", release);
-    removeLockRecord(lockPath, owned, pid);
+    removeLockRecord(lockPath, owned);
   };
 
   // `process.exit()` skips dispose scopes; the exit hook is what actually cleans up there.
@@ -287,7 +317,7 @@ function buildLock(
  *
  * A lock held by a live pid younger than `staleMs` throws {@link ProfileInUseError}; a lock
  * whose pid is gone (ESRCH), older than `staleMs`, or unreadable even after retries is replaced.
- * Replacement renames the old record away and then links a fresh one, so two contenders
+ * Replacement removes the judged record under the removal mutex and then links a fresh one, so two contenders
  * replacing the same stale lock leave exactly one record behind.
  */
 export function acquireProfileLock(
@@ -326,7 +356,7 @@ export function acquireProfileLock(
     // Stale, dead, or still unreadable: clear exactly the bytes we judged, then race for the
     // link again. If another contender wins that link, the next pass re-reads its record
     // instead of overwriting it.
-    removeLockRecord(lockPath, existing, pid);
+    removeLockRecord(lockPath, existing);
   }
 
   const last = readLockRecord(lockPath);
