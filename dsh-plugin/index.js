@@ -500,6 +500,21 @@ function topBy(rows, key, limit) {
 }
 
 /**
+ * Keep rows whose one field equals `wanted`, case-insensitively; an empty filter keeps all.
+ *
+ * @param {unknown} rows
+ * @param {string} key
+ * @param {unknown} wanted
+ * @returns {unknown[]}
+ */
+function filterBy(rows, key, wanted) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (typeof wanted !== "string" || wanted === "") return list;
+  const upper = wanted.toUpperCase();
+  return list.filter((row) => String(row?.[key] ?? "").toUpperCase() === upper);
+}
+
+/**
  * Read a record count out of a parsed JSON value.
  *
  * WHY THIS EXISTS AT ALL: a dataset can parse and still carry no records container (a
@@ -1263,7 +1278,8 @@ export function apply(ctx, config) {
         '"top" accepts window="lifetime" (default) or "7d" for net/volume rankings; ' +
         "clv/sharp/churn exist only in the lifetime rollup. " +
         '"sharp" returns the DERIVED sharp audit: customers at or above minSharp ' +
-        "(default 70) or with positive CLV, ranked by sharp score.",
+        '(default 70) or with positive CLV, ranked by sharp score. "agent" rolls the book ' +
+        "up per agent (customers, tickets, volume, net, CLV, sharp, churn), optionally filtered by agentId.",
       parameters: {
         type: "object",
         properties: {
@@ -1274,6 +1290,10 @@ export function apply(ctx, config) {
           customerId: {
             type: "string",
             description: 'Customer id for report "lookup".',
+          },
+          agentId: {
+            type: "string",
+            description: 'Filter "agent" (and market reports) to one agent id.',
           },
           q: {
             type: "string",
@@ -1306,7 +1326,14 @@ export function apply(ctx, config) {
       isConcurrencySafe: () => true,
       async execute(args) {
         const request = args ?? {};
-        const reports = ["summary", "top", "lookup", "search", "sharp"];
+        const reports = [
+          "summary",
+          "top",
+          "lookup",
+          "search",
+          "sharp",
+          "agent",
+        ];
         if (
           typeof request.report !== "string" ||
           !reports.includes(request.report)
@@ -1455,6 +1482,65 @@ export function apply(ctx, config) {
             totalCustomers: rows.length,
             source,
             customers: ranked,
+          };
+        }
+        if (request.report === "agent") {
+          const wanted =
+            typeof request.agentId === "string"
+              ? request.agentId.trim().toUpperCase()
+              : "";
+          const byAgent = new Map();
+          for (const row of rows) {
+            const key = String(row?.agent_id ?? "UNKNOWN");
+            if (wanted !== "" && key.toUpperCase() !== wanted) continue;
+            const group = byAgent.get(key) ?? { customers: [], tickets: 0 };
+            group.customers.push(row);
+            group.tickets += Array.isArray(row?.recent_tickets)
+              ? row.recent_tickets.length
+              : 0;
+            byAgent.set(key, group);
+          }
+          const distinctAgents = new Set(
+            rows.map((row) => String(row?.agent_id ?? "UNKNOWN")),
+          ).size;
+          if (byAgent.size === 0) {
+            return {
+              available: true,
+              ok: true,
+              report: request.report,
+              found: false,
+              agentId: request.agentId ?? "",
+              totalAgents: distinctAgents,
+              source,
+              message: `No customers under agent ${JSON.stringify(request.agentId ?? "")} in the book.`,
+            };
+          }
+          const agents = [...byAgent.entries()]
+            .map(([agentId, group]) => ({
+              agent_id: agentId,
+              customers: group.customers.length,
+              totalRecentTickets: group.tickets,
+              lifetimeVolumeUsd: sumField(
+                group.customers,
+                "lifetime_volume_usd",
+              ),
+              lifetimeNetUsd: sumField(group.customers, "lifetime_net_usd"),
+              avgClvBps: meanField(group.customers, "clv_bps"),
+              avgSharpScore: meanField(group.customers, "sharp_score"),
+              avgChurnHazard: meanField(group.customers, "churn_hazard"),
+              byContext: countField(group.customers, "context_type"),
+              byChurnMode: countField(group.customers, "churn_mode"),
+            }))
+            .sort((left, right) => right.lifetimeNetUsd - left.lifetimeNetUsd)
+            .slice(0, limit);
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            totalAgents: distinctAgents,
+            returned: agents.length,
+            source,
+            agents,
           };
         }
         if (request.report === "sharp") {
@@ -1608,6 +1694,20 @@ export function apply(ctx, config) {
             type: "number",
             description: "Rows per returned list (1-100, default 10).",
           },
+          agentId: {
+            type: "string",
+            description:
+              "Filter bridge leads and the backtest leaderboard to one agent.",
+          },
+          verdict: {
+            type: "string",
+            description: "Filter bridge leads by verdict, e.g. POLY_ONLY_UP.",
+          },
+          sport: {
+            type: "string",
+            description:
+              "Filter the backtest combo families by sport, e.g. CFB.",
+          },
         },
         required: ["report"],
         additionalProperties: false,
@@ -1693,6 +1793,21 @@ export function apply(ctx, config) {
           };
         }
         if (request.report === "bridge") {
+          let leads = data.leads;
+          if (typeof request.verdict === "string" && request.verdict !== "") {
+            leads = (Array.isArray(leads) ? leads : []).filter(
+              (lead) =>
+                String(lead?.verdict ?? "").toUpperCase() ===
+                request.verdict.toUpperCase(),
+            );
+          }
+          if (typeof request.agentId === "string" && request.agentId !== "") {
+            leads = (Array.isArray(leads) ? leads : []).filter(
+              (lead) =>
+                String(lead?.agentId ?? "").toUpperCase() ===
+                request.agentId.toUpperCase(),
+            );
+          }
           return {
             available: true,
             ok: true,
@@ -1701,7 +1816,7 @@ export function apply(ctx, config) {
             evidence: data.evidence ?? null,
             coverage: data.coverage ?? null,
             value: data.value ?? null,
-            leads: topBy(data.leads, "priorityUsd", limit),
+            leads: topBy(leads, "priorityUsd", limit),
             // `quarantined` is a COUNT in the current artifact and an ARRAY in an older one.
             // Reporting the number as `null` would turn 10 quarantined rows into "unknown",
             // which is exactly the missing-vs-zero confusion this plugin exists to avoid.
@@ -1736,12 +1851,20 @@ export function apply(ctx, config) {
           weekly: Array.isArray(data.weeklyBreakdown)
             ? data.weeklyBreakdown
             : [],
-          comboFamilies: topBy(data.comboFamilyBreakdown, "handleUsd", limit),
+          comboFamilies: topBy(
+            filterBy(data.comboFamilyBreakdown, "sport", request.sport),
+            "handleUsd",
+            limit,
+          ),
           guardAttribution: Array.isArray(data.guardAttribution)
             ? data.guardAttribution
             : [],
           customerLeaderboard: Array.isArray(data.customerLeaderboard)
-            ? data.customerLeaderboard.slice(0, limit)
+            ? filterBy(
+                data.customerLeaderboard,
+                "agentId",
+                request.agentId,
+              ).slice(0, limit)
             : [],
         };
       },

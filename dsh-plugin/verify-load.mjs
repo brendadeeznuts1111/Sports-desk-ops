@@ -429,6 +429,37 @@ await checkAsync(
       "an out-of-range minSharp was accepted",
     );
 
+    const byAgent = new Map();
+    for (const row of book) {
+      const key = row.agent_id;
+      const group = byAgent.get(key) ?? { customers: 0, net: 0 };
+      group.customers += 1;
+      group.net += row.lifetime_net_usd;
+      byAgent.set(key, group);
+    }
+    const agentReport = await tool.execute({ report: "agent", limit });
+    assert(agentReport.available === true, "agent report unavailable");
+    assert(
+      agentReport.totalAgents === byAgent.size,
+      `totalAgents ${agentReport.totalAgents} != source ${byAgent.size}`,
+    );
+    const expectedTopAgent = [...byAgent.entries()].sort(
+      (left, right) => right[1].net - left[1].net,
+    )[0]?.[0];
+    assert(
+      agentReport.agents?.[0]?.agent_id === expectedTopAgent,
+      `top agent ${agentReport.agents?.[0]?.agent_id} != source ${expectedTopAgent}`,
+    );
+    const agentFilter = await tool.execute({
+      report: "agent",
+      agentId: String(expectedTopAgent).toLowerCase(),
+    });
+    assert(
+      agentFilter.agents?.length === 1 &&
+        agentFilter.agents[0].agent_id === expectedTopAgent,
+      "agent filter did not isolate one agent",
+    );
+
     const firstId = book[0].customer_id;
     const lookup = await tool.execute({
       report: "lookup",
@@ -511,6 +542,41 @@ await checkAsync(
         backtest.customerLeaderboard?.length ===
           Math.min(2, backtestSource.customerLeaderboard.length),
       "backtest list caps are not derived from source",
+    );
+  },
+);
+
+await checkAsync(
+  "sportsdesk_markets filters lists from the source",
+  async () => {
+    const bridgeArtifact = await Bun.file(
+      `${REPO}/dist/cross-domain-bridge.json`,
+    ).json();
+    const verdict = "POLY_ONLY_UP";
+    const expectedLeads = bridgeArtifact.leads.filter(
+      (lead) => lead.verdict === verdict,
+    ).length;
+    const leads = await byName
+      .get("sportsdesk_markets")
+      .execute({ report: "bridge", verdict, limit: 100 });
+    assert(
+      leads.leads?.length === Math.min(100, expectedLeads),
+      `filtered leads ${leads.leads?.length} != source ${expectedLeads}`,
+    );
+
+    const backtestArtifact = await Bun.file(
+      `${REPO}/dist/backtest-4wk-cfb-nba.json`,
+    ).json();
+    const sport = "CFB";
+    const expectedFamilies = backtestArtifact.comboFamilyBreakdown.filter(
+      (family) => family.sport === sport,
+    ).length;
+    const families = await byName
+      .get("sportsdesk_markets")
+      .execute({ report: "backtest", sport, limit: 100 });
+    assert(
+      families.comboFamilies?.length === Math.min(100, expectedFamilies),
+      `filtered families ${families.comboFamilies?.length} != source ${expectedFamilies}`,
     );
   },
 );
