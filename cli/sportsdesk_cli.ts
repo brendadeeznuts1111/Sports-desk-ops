@@ -72,6 +72,11 @@ import {
   PER_OFFICE_IP_TRACKER_CLUSTERS,
   buildPerOfficeIpMatcherPayload,
 } from "../lib/bet_ticker_ip_tracker_bridge.ts";
+import {
+  buildCustomerRanking,
+  type CustomerRankingRow,
+  type RankingSort,
+} from "../lib/customer_rankings.ts";
 
 interface DownlineMetadata {
   readonly master_agent: string;
@@ -115,158 +120,14 @@ const repoRoot = resolve(
 
 function loadDownlineData(): DownlinePayload {
   const jsonPath = resolve(repoRoot, "sportsdesk_downline_data.json");
-  if (existsSync(jsonPath)) {
-    const rawText = readFileSync(jsonPath, "utf-8");
-    return JSON.parse(rawText) as DownlinePayload;
+  if (!existsSync(jsonPath)) {
+    throw new Error(
+      `[DOWNLINE_SNAPSHOT_MISSING] ${jsonPath} does not exist. ` +
+        "The CLI will not fabricate a downline: check in or regenerate the snapshot.",
+    );
   }
-  // Fallback production metadata
-  return {
-    meta: {
-      master_agent: "BILLY666",
-      total_sub_agents: 668,
-      active_sports_sub_agents: 460,
-      total_provisioned_accounts: 9435,
-      active_sports_bettors: 2236,
-      total_lifetime_lost: -73488698.0,
-      total_lifetime_won: 62998429.0,
-      total_lifetime_net_hold: -10487926.0,
-      total_sports_tickets: 10941,
-      total_sports_volume: 2786199.0,
-      total_sports_net: -63467.0,
-    },
-    agents: [
-      {
-        agent: "BIGDAD",
-        master: "BILLY666",
-        total_accounts: 2,
-        active_sports_accounts: 1,
-        dormant_accounts: 1,
-        lifetime_lost: -177400,
-        lifetime_won: 40000,
-        lifetime_net: -137400,
-        sports_tickets: 2,
-        sports_vol: 40000,
-        sports_net: 40000,
-      },
-      {
-        agent: "MJ2026",
-        master: "BILLY666",
-        total_accounts: 5,
-        active_sports_accounts: 2,
-        dormant_accounts: 3,
-        lifetime_lost: -155000,
-        lifetime_won: 179000,
-        lifetime_net: 24000,
-        sports_tickets: 2,
-        sports_vol: 30000,
-        sports_net: 40000,
-      },
-      {
-        agent: "GPRO50RSK",
-        master: "BILLY666",
-        total_accounts: 7,
-        active_sports_accounts: 3,
-        dormant_accounts: 4,
-        lifetime_lost: -22000,
-        lifetime_won: 55858,
-        lifetime_net: 33858,
-        sports_tickets: 22,
-        sports_vol: 46140,
-        sports_net: 33858,
-      },
-      {
-        agent: "ATEAM",
-        master: "BILLY666",
-        total_accounts: 30,
-        active_sports_accounts: 10,
-        dormant_accounts: 20,
-        lifetime_lost: -966073,
-        lifetime_won: 947963,
-        lifetime_net: -18101,
-        sports_tickets: 70,
-        sports_vol: 59171,
-        sports_net: 27434,
-      },
-      {
-        agent: "FAKEMONEY",
-        master: "BILLY666",
-        total_accounts: 1,
-        active_sports_accounts: 1,
-        dormant_accounts: 0,
-        lifetime_lost: -438000,
-        lifetime_won: 463000,
-        lifetime_net: 25000,
-        sports_tickets: 47,
-        sports_vol: 940000,
-        sports_net: 25000,
-      },
-      {
-        agent: "SPEN",
-        master: "BILLY666",
-        total_accounts: 133,
-        active_sports_accounts: 47,
-        dormant_accounts: 86,
-        lifetime_lost: -554003,
-        lifetime_won: 500622,
-        lifetime_net: -53335,
-        sports_tickets: 297,
-        sports_vol: 43949,
-        sports_net: 10258,
-      },
-      {
-        agent: "GOLD22",
-        master: "BILLY666",
-        total_accounts: 3,
-        active_sports_accounts: 1,
-        dormant_accounts: 2,
-        lifetime_lost: -5000,
-        lifetime_won: 15000,
-        lifetime_net: 10000,
-        sports_tickets: 1,
-        sports_vol: 10000,
-        sports_net: 10000,
-      },
-      {
-        agent: "MACHR",
-        master: "BILLY666",
-        total_accounts: 1,
-        active_sports_accounts: 1,
-        dormant_accounts: 0,
-        lifetime_lost: -102666,
-        lifetime_won: 10000,
-        lifetime_net: -92666,
-        sports_tickets: 1,
-        sports_vol: 10000,
-        sports_net: 10000,
-      },
-      {
-        agent: "TEXANS",
-        master: "BILLY666",
-        total_accounts: 50,
-        active_sports_accounts: 11,
-        dormant_accounts: 39,
-        lifetime_lost: -239248,
-        lifetime_won: 202425,
-        lifetime_net: -36814,
-        sports_tickets: 31,
-        sports_vol: 11389,
-        sports_net: 7936,
-      },
-      {
-        agent: "AA2300C",
-        master: "BILLY666",
-        total_accounts: 25,
-        active_sports_accounts: 3,
-        dormant_accounts: 22,
-        lifetime_lost: -125484,
-        lifetime_won: 6600,
-        lifetime_net: -118884,
-        sports_tickets: 2,
-        sports_vol: 6088,
-        sports_net: 6600,
-      },
-    ],
-  };
+  const rawText = readFileSync(jsonPath, "utf-8");
+  return JSON.parse(rawText) as DownlinePayload;
 }
 
 export function printHelp(): void {
@@ -280,7 +141,7 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 * **winners** [\`-p\` PERIOD] [\`--limit\` N] [\`--sort-by\` net|volume] [\`--format\` table|json|csv]
 * **losers** [\`-p\` PERIOD] [\`--limit\` N] [\`--sort-by\` net|gross_hold] [\`--format\` table|json|csv]
 * **leaderboard** [\`-p\` PERIOD] [\`--limit\` N] [\`--format\` table|json|csv]
-  *(Periods: 24h, 48h, 7d, month, lifetime, all)*
+  *(Periods: 7d | lifetime — derived from the customer book's 7d window and lifetime rollups)*
 
 ### 2. CORE FORENSICS & SIMULATION:
 * **-f, --forensics, --sharps, --audit-sharps**: Run forensic sharp audit (deficit drivers & playbooks)
@@ -289,9 +150,9 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 
 ### 3. HIERARCHY & SURVEILLANCE:
 * **-k, --walk-tree, --tree** [AGENT_ID]: Walk downline tree and display customer snapshot telemetry
-* **-C, --customer, --cust** <CUSTOMER_ID>: Lookup individual bettor profile across 9,435 accounts
+* **-C, --customer, --cust** <CUSTOMER_ID>: Lookup an individual bettor profile in the customer book
 * **-d, --downline, --agent** [AGENT_ID]: Query specific sub-agent volume and 50% hold share
-* **-s, --summary**: Display executive master overview (668 agents, 9,435 bettors)
+* **-s, --summary**: Display the executive overview DERIVED from the downline snapshot
 
 ### 4. PLANE 3 INGESTION REPLAY:
 * **replay** [\`--path\` FILE] [\`--pull-raw\` [URL]] [\`--pull-raw-only\`] [\`--channel\` CODE]...
@@ -340,7 +201,7 @@ export function printHelpOld(): void {
   winners [-p PERIOD] [--limit N] [--sort-by net|volume] [--format table|json|csv]
   losers [-p PERIOD] [--limit N] [--sort-by net|gross_hold] [--format table|json|csv]
   leaderboard [-p PERIOD] [--limit N] [--format table|json|csv]
-      Periods: 24h, 48h, 7d, month, lifetime (or all)
+      Periods: 7d | lifetime (derived from the customer book)
 
 2. CORE FORENSICS & SIMULATION:
   -f, --forensics, --sharps, --audit-sharps    Run forensic sharp audit (deficit drivers & playbooks)
@@ -349,9 +210,9 @@ export function printHelpOld(): void {
 
 3. HIERARCHY & SURVEILLANCE:
   -k, --walk-tree, --tree [AGENT_ID]          Walk downline tree and display customer snapshot telemetry
-  -C, --customer, --cust <CUSTOMER_ID>        Lookup individual bettor profile across 9,435 accounts
+  -C, --customer, --cust <CUSTOMER_ID>        Lookup an individual bettor profile in the customer book
   -d, --downline, --agent [AGENT_ID]          Query specific sub-agent volume and 50% hold share
-  -s, --summary                               Display executive master overview (668 agents, 9,435 bettors)
+  -s, --summary                               Display the executive overview DERIVED from the snapshot
 
 4. PLANE 3 INGESTION REPLAY:
   replay [--path FILE] [--pull-raw [URL]] [--pull-raw-only] [--channel CODE] …
@@ -1000,297 +861,141 @@ export function printTicketWriters(): void {
   );
 }
 
-export function printWinners(args: string[]): void {
-  const period = getArgValue(args, ["-p", "--period"], "24h");
-  const limit = parseInt(getArgValue(args, ["--limit"], "10"), 10);
-  const format = getArgValue(args, ["--format"], "table");
+function parseLimit(raw: string): number {
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 500) : 10;
+}
 
-  const winnersData = [
-    {
-      rank: 1,
-      customerId: "BGD101",
-      agentId: "BIGDAD",
-      league: "NFL",
-      market: "SPREAD",
-      tickets: 2,
-      volumeUSD: 40000,
-      netUSD: 40000,
-      winPct: 100.0,
-      details: "NFL • 2 Max Spread Bets (-110)",
-    },
-    {
-      rank: 2,
-      customerId: "MJ102",
-      agentId: "MJ2026",
-      league: "CFB",
-      market: "MONEYLINE",
-      tickets: 1,
-      volumeUSD: 20000,
-      netUSD: 30000,
-      winPct: 100.0,
-      details: "CFB • Underdog ML (+150)",
-    },
-    {
-      rank: 3,
-      customerId: "GX195",
-      agentId: "GOLD22",
-      league: "NFL",
-      market: "SPREAD",
-      tickets: 1,
-      volumeUSD: 10000,
-      netUSD: 10000,
-      winPct: 100.0,
-      details: "NFL • KC Chiefs -3½",
-    },
-    {
-      rank: 4,
-      customerId: "PEY101",
-      agentId: "MACHR",
-      league: "CFB",
-      market: "MONEYLINE",
-      tickets: 1,
-      volumeUSD: 10000,
-      netUSD: 10000,
-      winPct: 100.0,
-      details: "CFB • Heavy Favorite Lock ML",
-    },
-    {
-      rank: 5,
-      customerId: "GP300",
-      agentId: "GPRO50RSK",
-      league: "NFL",
-      market: "LIVE",
-      tickets: 5,
-      volumeUSD: 12000,
-      netUSD: 8500,
-      winPct: 80.0,
-      details: "NFL • In-Play Under 41½",
-    },
-    {
-      rank: 6,
-      customerId: "TEX500",
-      agentId: "TEXANS",
-      league: "NFL",
-      market: "SPREAD",
-      tickets: 2,
-      volumeUSD: 8000,
-      netUSD: 8000,
-      winPct: 100.0,
-      details: "NFL • 2 Straight Point Spreads",
-    },
-    {
-      rank: 7,
-      customerId: "AL1279",
-      agentId: "AA2300C",
-      league: "NBA",
-      market: "TOTAL",
-      tickets: 2,
-      volumeUSD: 6000,
-      netUSD: 6600,
-      winPct: 100.0,
-      details: "NBA • Over 224½ Points",
-    },
-    {
-      rank: 8,
-      customerId: "DAN245",
-      agentId: "DAN318",
-      league: "NBA",
-      market: "SPREAD",
-      tickets: 3,
-      volumeUSD: 6000,
-      netUSD: 6000,
-      winPct: 100.0,
-      details: "NBA • Boston Celtics -6½",
-    },
-  ];
+function usd(value: number): string {
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
+function signedUsd(value: number): string {
+  const sign = value < 0 ? "-" : "+";
+  return `${sign}$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function printDerivedRanking(
+  rows: readonly CustomerRankingRow[],
+  heading: string,
+  format: string,
+): void {
   if (format === "json") {
-    console.log(JSON.stringify(winnersData.slice(0, limit), null, 2));
+    console.log(JSON.stringify(rows, null, 2));
     return;
   }
-
   if (format === "csv") {
     console.log(
-      "Rank,CustomerID,AgentID,League,Market,Tickets,VolumeUSD,NetUSD,WinPct,Details",
+      "Rank,CustomerID,AgentID,League,Market,SampledTickets,VolumeUSD,NetUSD,WinPct,GrossHold,Details",
     );
-    winnersData.slice(0, limit).forEach((w) => {
+    for (const row of rows) {
       console.log(
-        `${w.rank},${w.customerId},${w.agentId},${w.league},${w.market},${w.tickets},${w.volumeUSD},${w.netUSD},${w.winPct},"${w.details}"`,
+        `${row.rank},${row.customerId},${row.agentId},${row.league},${row.market},${row.tickets},${row.volumeUSD},${row.netUSD},${row.winPct ?? ""},${row.grossHold},"${row.details}"`,
       );
-    });
+    }
     return;
   }
-
+  const divider = "=".repeat(96);
+  console.log(divider);
+  console.log(heading);
+  console.log(divider);
   console.log(
-    "================================================================================",
+    " # | Customer    | Agent        | League | Market    | Tix* | Volume ($)    | Net P&L ($)     | Win %* | Derived context",
   );
   console.log(
-    `BIGGEST WINNERS (HOUSE LEAKAGES) • PERIOD: ${period.toUpperCase()}`,
+    "---+-------------+--------------+--------+-----------+------+---------------+-----------------+--------+-----------------------------",
   );
-  console.log(
-    "================================================================================",
-  );
-  console.log(
-    " # | Bettor ID   | Owning Agent | League | Market    | Tix | Volume ($)    | Net P&L ($)     | Win %  | Market Details",
-  );
-  console.log(
-    "---+-------------+--------------+--------+-----------+-----+---------------+-----------------+--------+-----------------------------",
-  );
-  winnersData.slice(0, limit).forEach((w) => {
-    const netStr = `+$${w.netUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    const volStr = `$${w.volumeUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  for (const row of rows) {
+    const winPct = row.winPct === null ? "n/a" : `${row.winPct.toFixed(1)}%`;
     console.log(
-      `${String(w.rank).padStart(2)} | ` +
-        `${w.customerId.padEnd(11)} | ` +
-        `${w.agentId.padEnd(12)} | ` +
-        `${w.league.padEnd(6)} | ` +
-        `${w.market.padEnd(9)} | ` +
-        `${String(w.tickets).padStart(3)} | ` +
-        `${volStr.padStart(13)} | ` +
-        `${netStr.padStart(15)} | ` +
-        `${w.winPct.toFixed(1).padStart(5)}% | ` +
-        `${w.details}`,
+      `${String(row.rank).padStart(2)} | ` +
+        `${row.customerId.padEnd(11)} | ` +
+        `${row.agentId.padEnd(12)} | ` +
+        `${row.league.padEnd(6)} | ` +
+        `${row.market.padEnd(9)} | ` +
+        `${String(row.tickets).padStart(4)} | ` +
+        `${usd(row.volumeUSD).padStart(13)} | ` +
+        `${signedUsd(row.netUSD).padStart(15)} | ` +
+        `${winPct.padStart(6)} | ` +
+        `${row.details}`,
     );
-  });
+  }
+  console.log(divider);
   console.log(
-    "================================================================================\n",
+    "* Tix is the sampled recent_tickets count; Win % covers sampled WIN/LOSS tickets only.\n",
   );
 }
 
-export function printLosers(args: string[]): void {
-  const period = getArgValue(args, ["-p", "--period"], "48h");
-  const limit = parseInt(getArgValue(args, ["--limit"], "10"), 10);
+async function printRanking(
+  direction: "winners" | "losers",
+  args: string[],
+  defaultPeriod: string,
+  defaultSort: RankingSort,
+  allowedSorts: readonly RankingSort[],
+  headingFor: (period: string) => string,
+): Promise<void> {
+  const period = getArgValue(args, ["-p", "--period"], defaultPeriod);
+  const limit = parseLimit(getArgValue(args, ["--limit"], "10"));
   const format = getArgValue(args, ["--format"], "table");
-
-  const losersData = [
-    {
-      rank: 1,
-      customerId: "RF2003",
-      agentId: "FAKEMONEY",
-      league: "NFL",
-      market: "SPREAD",
-      tickets: 47,
-      volumeUSD: 940000,
-      netUSD: -1006530,
-      grossHold: 1006530,
-      details: "Lifetime Whale Loss Pillar",
-    },
-    {
-      rank: 2,
-      customerId: "STEIN_P04",
-      agentId: "STEIN421",
-      league: "NFL",
-      market: "SPREAD",
-      tickets: 8,
-      volumeUSD: 32000,
-      netUSD: -14200,
-      grossHold: 14200,
-      details: "NFL • Stale Numbers",
-    },
-    {
-      rank: 3,
-      customerId: "FAT_P02",
-      agentId: "FATSSIDE",
-      league: "NFL",
-      market: "MONEYLINE",
-      tickets: 3,
-      volumeUSD: 18000,
-      netUSD: -12000,
-      grossHold: 12000,
-      details: "NFL • Heavy Favorite ML",
-    },
-    {
-      rank: 4,
-      customerId: "SHELBY_P01",
-      agentId: "SHELBY101",
-      league: "CFB",
-      market: "SPREAD",
-      tickets: 6,
-      volumeUSD: 6200,
-      netUSD: -4600,
-      grossHold: 4600,
-      details: "CFB • Dog Spreads",
-    },
-    {
-      rank: 5,
-      customerId: "CUB_P15",
-      agentId: "CUB22A",
-      league: "NBA",
-      market: "LIVE",
-      tickets: 11,
-      volumeUSD: 5500,
-      netUSD: -3800,
-      grossHold: 3800,
-      details: "NBA • Live Spreads",
-    },
-  ];
-
-  if (format === "json") {
-    console.log(JSON.stringify(losersData.slice(0, limit), null, 2));
+  const sortBy = getArgValue(args, ["--sort-by"], defaultSort) as RankingSort;
+  if (!allowedSorts.includes(sortBy)) {
+    console.error(
+      `[SORT_UNAVAILABLE] --sort-by ${sortBy} is not supported here. Allowed: ${allowedSorts.join(", ")}.`,
+    );
+    process.exitCode = 2;
     return;
   }
-
-  if (format === "csv") {
-    console.log(
-      "Rank,CustomerID,AgentID,League,Market,Tickets,VolumeUSD,NetUSD,GrossHold,Details",
-    );
-    losersData.slice(0, limit).forEach((l) => {
-      console.log(
-        `${l.rank},${l.customerId},${l.agentId},${l.league},${l.market},${l.tickets},${l.volumeUSD},${l.netUSD},${l.grossHold},"${l.details}"`,
-      );
+  try {
+    const rows = await buildCustomerRanking({
+      direction,
+      period,
+      sortBy,
+      limit,
     });
-    return;
+    printDerivedRanking(rows, headingFor(period), format);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
   }
+}
 
-  console.log(
-    "================================================================================",
-  );
-  console.log(
-    `BIGGEST LOSERS (HOUSE HOLD GENERATORS) • PERIOD: ${period.toUpperCase()}`,
-  );
-  console.log(
-    "================================================================================",
-  );
-  console.log(
-    " # | Bettor ID   | Owning Agent | League | Market    | Tix | Volume ($)    | Net House Hold ($) | Context / Playbook",
-  );
-  console.log(
-    "---+-------------+--------------+--------+-----------+-----+---------------+--------------------+-----------------------------",
-  );
-  losersData.slice(0, limit).forEach((l) => {
-    const netStr = `-$${Math.abs(l.netUSD).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    const volStr = `$${l.volumeUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    console.log(
-      `${String(l.rank).padStart(2)} | ` +
-        `${l.customerId.padEnd(11)} | ` +
-        `${l.agentId.padEnd(12)} | ` +
-        `${l.league.padEnd(6)} | ` +
-        `${l.market.padEnd(9)} | ` +
-        `${String(l.tickets).padStart(3)} | ` +
-        `${volStr.padStart(13)} | ` +
-        `${netStr.padStart(18)} | ` +
-        `${l.details}`,
-    );
-  });
-  console.log(
-    "================================================================================\n",
+export async function printWinners(args: string[]): Promise<void> {
+  await printRanking(
+    "winners",
+    args,
+    "7d",
+    "net",
+    ["net", "volume"],
+    (period) =>
+      `BIGGEST CUSTOMERS BY NET (HOUSE LEAKAGE) • WINDOW: ${period.toUpperCase()} • derived from enriched_customers_full.json`,
   );
 }
 
-export function printLeaderboard(args: string[]): void {
-  const period = getArgValue(args, ["-p", "--period"], "month");
+export async function printLosers(args: string[]): Promise<void> {
+  await printRanking(
+    "losers",
+    args,
+    "7d",
+    "net",
+    ["net", "gross_hold", "volume"],
+    (period) =>
+      `BIGGEST CUSTOMERS BY NET (HOUSE HOLD) • WINDOW: ${period.toUpperCase()} • derived from enriched_customers_full.json`,
+  );
+}
 
+export async function printLeaderboard(args: string[]): Promise<void> {
+  const period = getArgValue(args, ["-p", "--period"], "lifetime");
+  const format = getArgValue(args, ["--format"], "table");
+  const divider = "=".repeat(96);
+  console.log(divider);
   console.log(
-    "================================================================================",
+    `DUAL-SIDED CUSTOMER LEADERBOARD • WINDOW: ${period.toUpperCase()} • derived from enriched_customers_full.json`,
   );
-  console.log(`DUAL-SIDED P&L LEADERBOARD • PERIOD: ${period.toUpperCase()}`);
-  console.log(
-    "================================================================================",
-  );
+  console.log(divider);
   console.log("TOP 5 WINNERS (LEAKAGES):");
-  printWinners(["-p", period, "--limit", "5"]);
+  await printWinners(["-p", period, "--limit", "5", "--format", format]);
   console.log("TOP 5 LOSERS (HOUSE HOLD):");
-  printLosers(["-p", period, "--limit", "5"]);
+  await printLosers(["-p", period, "--limit", "5", "--format", format]);
 }
 
 function getArgValue(
@@ -1649,17 +1354,17 @@ export async function main(): Promise<void> {
   }
 
   if (cmd === "winners" || cmd === "win") {
-    printWinners(rawArgs.slice(1));
+    await printWinners(rawArgs.slice(1));
     return;
   }
 
   if (cmd === "losers" || cmd === "lose") {
-    printLosers(rawArgs.slice(1));
+    await printLosers(rawArgs.slice(1));
     return;
   }
 
   if (cmd === "leaderboard" || cmd === "board") {
-    printLeaderboard(rawArgs.slice(1));
+    await printLeaderboard(rawArgs.slice(1));
     return;
   }
 
