@@ -12,6 +12,12 @@ mechanism.
   upstream, not reproduced: a 2 GiB allocation is flaky on any runner); `Bun.secrets` with
   `persist: "local"` (Windows only, never run).
 
+**Doc voice SSOT (not runtime):** When editing Bun upstream docs or mirroring their tone in this
+repo, use the voice section in
+[`oven-sh/bun` @ `6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing)
+(source: `docs/project/contributing.mdx`). That commit is ahead of the **1.4.4** tag (`38afee6c8`);
+do not treat it as a behavior pin. Live site: [contributing#voice](https://bun.com/docs/project/contributing#voice).
+
 ## eval-module-mode
 
 An eval is classified from its source. Referencing a CommonJS identifier (`require`, `module`,

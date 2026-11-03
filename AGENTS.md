@@ -103,3 +103,10 @@ graph CLI: **`bun run graph:agent`** (no `--token` flags).
 
 `README.md` = orientation · `ROOT_LAYOUT.md` = layout · `docs/runbooks/` = operational procedure ·
 `docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.
+
+Prose style for Bun-facing or upstream docs: [oven-sh/bun voice guidelines](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing)
+(`docs/project/contributing.mdx` at that commit — active voice, present tense, second person, no
+“easy” / “simple” / “just”). Published mirror: [bun.com/docs/project/contributing#voice](https://bun.com/docs/project/contributing#voice).
+That pin is for writing only; runtime behavior stays on the repo’s Bun **1.4.4** pin and
+`docs/bun-eval-pitfalls.md`. Evidence labels and capture-backed claims in this repo still override
+tone when they conflict.
