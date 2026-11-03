@@ -365,6 +365,75 @@ const CUSTOMER_BOOK = {
 };
 
 /**
+ * The live artifacts the desk serves, with the age after which each is stale. The budgets are
+ * policy (a feed captured four hours ago is stale for a live board), not measured numbers; the
+ * ages are read from the files and the capture run journal at call time.
+ */
+const LIVE_ARTIFACTS = [
+  {
+    name: "live-bets",
+    path: "data/live-bets.json",
+    budgetMinutes: 120,
+    role: "Pending report -> scoreboard feed (rebuilt by capture:all from Report/Pending).",
+  },
+  {
+    name: "live-wagers",
+    path: "data/live-wagers.json",
+    budgetMinutes: 120,
+    role: "getBetTicker list -> bet ticker feed (rebuilt by capture:all from getBetTicker).",
+  },
+  {
+    name: "scoreboard",
+    path: "data/scoreboard.json",
+    budgetMinutes: 360,
+    role: "Scoreboard snapshot.",
+  },
+  {
+    name: "game-admin-board",
+    path: "data/game-admin-board.json",
+    budgetMinutes: 720,
+    role: "Game admin board snapshot.",
+  },
+  {
+    name: "contests",
+    path: "data/contests.json",
+    budgetMinutes: 1_440,
+    role: "Contest entries.",
+  },
+  {
+    name: "customer-profiles",
+    path: "data/customer-profiles.json",
+    budgetMinutes: 1_440,
+    role: "Derived customer profiles.",
+  },
+  {
+    name: "analysis-cp-baseball",
+    path: "data/analysis-cp-baseball-2026-11-01.json",
+    budgetMinutes: 1_440,
+    role: "Customer-performance analysis snapshot.",
+  },
+];
+
+/** PII-free capture run journal written by `bun run capture:all`. */
+const CAPTURE_HEALTH = {
+  path: "data/capture-health.json",
+  role: "One record per live source: outcome, HTTP status, rows, bytes, artifact written, error.",
+};
+
+/**
+ * Provenance stamps an artifact may carry. The first string wins, so a file that keeps its own
+ * convention (capturedAt vs observedAt vs generatedAt) is still dated by its own claim rather
+ * than only by mtime.
+ */
+const ARTIFACT_STAMP_FIELDS = [
+  "capturedAt",
+  "observedAt",
+  "extractedAt",
+  "generatedAt",
+  "generatedAtIso",
+];
+
+/**
  * Sum one numeric field across rows; missing/non-numeric values contribute nothing.
  *
  * @param {unknown[]} rows
@@ -1596,10 +1665,19 @@ export function apply(ctx, config) {
         "profiles, evidence ledger, published OpenAPI). For each: exists, bytes, mtime, age in " +
         "minutes, and record count when the JSON parses. Set dataset=<name> to inline one " +
         "dataset (refused above 120 KB). A missing file is MISSING, never 0 records; the " +
-        "stale flag is a reported heuristic, not a verdict.",
+        'stale flag is a reported heuristic, not a verdict. report="capture" switches to ' +
+        "the live-capture view: each live artifact's own provenance stamp (capturedAt / " +
+        "observedAt / extractedAt / generatedAt), its age against a freshness budget, and " +
+        "the latest run per source from data/capture-health.json (written by bun run " +
+        "capture:all). An absent journal is reported MISSING, not as zero sources.",
       parameters: {
         type: "object",
         properties: {
+          report: {
+            type: "string",
+            description:
+              'inventory (default) lists every dataset; "capture" reports live-artifact freshness and the capture run journal.',
+          },
           dataset: {
             type: "string",
             description:
@@ -1617,6 +1695,136 @@ export function apply(ctx, config) {
           typeof request.dataset !== "string"
         ) {
           return invalidArguments("dataset must be a string.");
+        }
+        if (
+          request.report !== undefined &&
+          (typeof request.report !== "string" ||
+            !["inventory", "capture"].includes(request.report))
+        ) {
+          return {
+            available: false,
+            reason: "unknown_report",
+            message: `Unknown report ${JSON.stringify(request.report)}. Allowed: inventory, capture.`,
+          };
+        }
+        if (request.report === "capture") {
+          const nowMs = Date.now();
+          const artifacts = LIVE_ARTIFACTS.map((artifact) => {
+            const absolute = `${repoPath}/${artifact.path}`;
+            const stats = statFile(absolute);
+            const parsed = stats.exists
+              ? parseJson(readText(absolute))
+              : { ok: false, value: null };
+            let stampField = null;
+            let stampedAt = null;
+            if (parsed.ok && parsed.value !== null) {
+              for (const field of ARTIFACT_STAMP_FIELDS) {
+                const value = parsed.value[field];
+                if (typeof value === "string" && value !== "") {
+                  stampField = field;
+                  stampedAt = value;
+                  break;
+                }
+              }
+            }
+            const stampMs =
+              stampedAt === null ? Number.NaN : Date.parse(stampedAt);
+            const stampAgeMinutes = Number.isFinite(stampMs)
+              ? Math.max(0, Math.round((nowMs - stampMs) / 60_000))
+              : null;
+            const effectiveAgeMinutes = stampAgeMinutes ?? stats.ageMinutes;
+            return {
+              name: artifact.name,
+              path: artifact.path,
+              role: artifact.role,
+              exists: stats.exists,
+              bytes: stats.bytes,
+              mtime: stats.mtime,
+              artifactAgeMinutes: stats.ageMinutes,
+              stampField,
+              stampedAt,
+              stampAgeMinutes,
+              budgetMinutes: artifact.budgetMinutes,
+              stale:
+                effectiveAgeMinutes === null
+                  ? null
+                  : effectiveAgeMinutes > artifact.budgetMinutes,
+            };
+          });
+
+          const healthAbsolute = `${repoPath}/${CAPTURE_HEALTH.path}`;
+          const healthStats = statFile(healthAbsolute);
+          const healthParsed = healthStats.exists
+            ? parseJson(readText(healthAbsolute))
+            : { ok: false, value: null };
+          const healthValue =
+            healthParsed.ok && typeof healthParsed.value === "object"
+              ? healthParsed.value
+              : null;
+          const ledgerPresent =
+            healthValue !== null && healthValue.schemaVersion === 1;
+          const ledgerSources = [];
+          if (ledgerPresent && typeof healthValue.sources === "object") {
+            for (const [source, record] of Object.entries(
+              healthValue.sources,
+            )) {
+              if (record === null || typeof record !== "object") continue;
+              const finishedMs = Date.parse(String(record.finishedAt ?? ""));
+              ledgerSources.push({
+                source,
+                operation: record.operation ?? source,
+                artifact: record.artifact ?? null,
+                outcome: record.outcome ?? "unknown",
+                transport: record.transport ?? null,
+                httpStatus: record.httpStatus ?? null,
+                rows: record.rows ?? null,
+                bytes: record.bytes ?? null,
+                artifactWritten: record.artifactWritten === true,
+                keptPreviousArtifact: record.keptPreviousArtifact === true,
+                error: record.error ?? null,
+                finishedAt: record.finishedAt ?? null,
+                ageMinutes: Number.isFinite(finishedMs)
+                  ? Math.max(0, Math.round((nowMs - finishedMs) / 60_000))
+                  : null,
+              });
+            }
+          }
+          const staleArtifacts = artifacts
+            .filter((artifact) => artifact.stale === true)
+            .map((artifact) => artifact.name);
+          const failedSources = ledgerSources
+            .filter((source) => source.outcome === "failed")
+            .map((source) => source.source);
+          return {
+            available: true,
+            ok: true,
+            report: "capture",
+            source: {
+              artifacts: LIVE_ARTIFACTS.length,
+              health: CAPTURE_HEALTH.path,
+            },
+            artifacts,
+            ledger: ledgerPresent
+              ? {
+                  present: true,
+                  path: CAPTURE_HEALTH.path,
+                  updatedAt: healthValue.updatedAt ?? null,
+                  transport: healthValue.transport ?? null,
+                  ageMinutes: healthStats.ageMinutes,
+                  sources: ledgerSources,
+                }
+              : {
+                  present: false,
+                  path: CAPTURE_HEALTH.path,
+                  note: `MISSING — no capture run has written ${CAPTURE_HEALTH.path}; this is not "0 sources captured".`,
+                },
+            staleArtifacts,
+            failedSources,
+            nextStep:
+              staleArtifacts.length > 0 || failedSources.length > 0
+                ? "bun run capture:all --agent <id> --customer <id>"
+                : "no stale artifact and no failed source reported by the last run",
+          };
         }
         const requested = request.dataset;
         if (

@@ -181,6 +181,43 @@ await checkAsync("sportsdesk_data refuses an unknown dataset", async () => {
   assert(result.reason === "unknown_dataset", `reason is ${result.reason}`);
 });
 
+await checkAsync("sportsdesk_data reports live-capture freshness", async () => {
+  const tool = byName.get("sportsdesk_data");
+  const capture = await tool.execute({ report: "capture" });
+  assert(capture.available === true, "capture report was unavailable");
+  assert(Array.isArray(capture.artifacts), "capture artifacts missing");
+  const liveBets = capture.artifacts.find(
+    (entry) => entry.name === "live-bets",
+  );
+  assert(liveBets !== undefined, "live-bets artifact not reported");
+  assert(typeof liveBets.exists === "boolean", "exists must be a boolean");
+  assert(liveBets.budgetMinutes === 120, "live-bets budget drifted");
+  assert(
+    typeof capture.ledger.present === "boolean",
+    "ledger presence must be a boolean",
+  );
+  if (capture.ledger.present === false) {
+    assert(
+      String(capture.ledger.note).includes("MISSING"),
+      "an absent journal must read MISSING, not zero sources",
+    );
+  }
+  for (const artifact of capture.artifacts) {
+    const effectiveAge =
+      artifact.stampAgeMinutes ?? artifact.artifactAgeMinutes;
+    assert(
+      artifact.stale === null ||
+        artifact.stale === effectiveAge > artifact.budgetMinutes,
+      `stale flag disagrees with its own age for ${artifact.name}`,
+    );
+  }
+  const unknownReport = await tool.execute({ report: "nope" });
+  assert(
+    unknownReport.reason === "unknown_report",
+    "an unknown report was accepted",
+  );
+});
+
 await checkAsync(
   "sportsdesk_downline refuses unknown subcommands",
   async () => {

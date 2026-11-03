@@ -49,6 +49,16 @@ from how many features matched. `profile`, `signals` and `compare` carry the sam
 subnet-fixture construction rather than observed multi-accounting. The point is that a
 whale ranking computed over a synthetic fixture must not read as an observation of real
 customers.
+
+Live capture has one entry point now: `bun run capture:all --agent <id> --customer <id>` runs
+every read-only operation in `PROBE_OPS` (plus `getBetTicker`, which the probe suite does not
+carry), rebuilds `data/live-bets.json` from `Report/Pending` and `data/live-wagers.json` from
+`getBetTicker`, writes raw bodies to the gitignored `scratch/f402-captures/`, and records one
+PII-free run per source in `data/capture-health.json`. A failed or empty response never replaces
+a good artifact; the run is reported as failed and the old file is left in place.
+`sportsdesk_data` report `"capture"` reads that journal and each artifact's own provenance stamp
+(`capturedAt` / `observedAt` / `extractedAt` / `generatedAt`), compares it against the freshness
+budget, and reports an absent journal as MISSING rather than as zero sources.
 `sportsdesk_dev` also offers `ci-all` (`bun run ci:local --keep-going`) for a full failure
 inventory in one call.
 
