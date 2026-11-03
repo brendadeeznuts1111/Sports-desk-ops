@@ -1,89 +1,107 @@
-# Bun upstream documentation pins
+# Bun upstream reference (by kind)
 
-How this repo points at [oven-sh/bun](https://github.com/oven-sh/bun) docs without confusing **writing
-style**, **site navigation**, or **runtime behavior**.
+How sportsdesk-ops points at [oven-sh/bun](https://github.com/oven-sh/bun) without mixing **runtime
+behavior**, **prose style**, **site machinery**, and **this repo’s gates**.
 
-| Layer | Git pin | Use for |
-| ----- | ------- | ------- |
-| **Runtime** | [`bun-v1.4.4`](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) → [`38afee6c`](https://github.com/oven-sh/bun/commit/38afee6c84fcf48c0edb2466aa4b27d287a59c30) (2026-10-22) | Gates, `probe:bun`, `tests/bun_baseline.json`, `packageManager` / `engines`, `@types/bun@1.4.4` |
-| **Voice** | [`6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing) | Prose when editing upstream MDX or mirroring Bun tone ([live voice](https://bun.com/docs/project/contributing#voice)) |
-| **Nav + CLI flags** | [`6a380492`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets) | Guides index and CLI snippet partials ([live guides](https://bun.com/guides)) |
+Evidence labels and capture-backed claims here override upstream tone. Eval one-liners:
+[`bun-eval-pitfalls.md`](./bun-eval-pitfalls.md). This repo’s gates: `AGENTS.md`, `bun run ci:local`.
 
-The GitHub [release tag](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) points at commit
-`38afee6c84fcf48c0edb2466aa4b27d287a59c30` (matches `bun --version` / `tests/bun_baseline.json`).
-Detailed changelog text lives on [bun.com/blog](https://bun.com/blog); the tag page is the install
-and version anchor.
+## Index by kind
 
-Pins above **main** are not behavior SSOT. Evidence labels and capture-backed claims in
-sportsdesk-ops override upstream tone when they conflict. One-liner eval rules:
-[`bun-eval-pitfalls.md`](./bun-eval-pitfalls.md).
+| Kind | Artifact | Pin | Behavior SSOT? |
+| ---- | -------- | --- | -------------- |
+| [Runtime](#kind-runtime) | Released binary + tag | [`bun-v1.4.4`](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) | **Yes** (1.4.4 / `38afee6c`) |
+| [Style](#kind-style) | Docs voice rules | [`6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing) | No |
+| [Snippet](#kind-snippet) | Mintlify partials / nav | [`6a380492`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets) | No — verify flags on **1.4.4** |
+| [Reference](#kind-reference) | `/docs/*` manuals | Live [bun.com/docs](https://bun.com/docs) | Check against **1.4.4** |
+| [Guide](#kind-guide) | `/guides/*` walkthroughs | Index in [`guides.jsx`](#kind-snippet) | Check against **1.4.4** |
+| [Contributor](#kind-contributor) | How to PR upstream | `main` [`CONTRIBUTING.md`](https://github.com/oven-sh/bun?tab=contributing-ov-file) | N/A (engine build) |
 
-## Contributing (three surfaces)
+Commits **`6cdb3835`** and **`6a380492`** are on **`main` after** the 1.4.4 tag — use them for
+writing and navigation only.
 
-GitHub’s [**Contributing** tab](https://github.com/oven-sh/bun?tab=contributing-ov-file) renders
-root [`CONTRIBUTING.md`](https://github.com/oven-sh/bun/blob/main/CONTRIBUTING.md): **building the
-Bun engine** (Nix/`bun bd`, LLVM 23, WebKit local, ASAN, `bun-pr`, BuildKite `ci:*`). It does **not**
-include docs **voice** rules.
+---
 
-| Surface | Content |
-| ------- | ------- |
-| [GitHub Contributing tab](https://github.com/oven-sh/bun?tab=contributing-ov-file) | `CONTRIBUTING.md` — runtime repo onboarding |
-| [`docs/project/contributing.mdx`](https://bun.com/docs/project/contributing) | Same build material as published docs **plus** [voice](https://bun.com/docs/project/contributing#voice) for MDX authors |
-| [`docs/README.md#contributing`](https://github.com/oven-sh/bun/tree/main/docs#contributing) | Short pointer: open issues/PRs; read voice in `contributing.mdx` |
+## Kind: runtime
 
-sportsdesk-ops contributors fixing **this** repo use `AGENTS.md` and `ci:local`; upstream **docs**
-PRs use the voice pin in the table above; upstream **runtime** PRs follow `CONTRIBUTING.md`.
-
-## `docs/snippets/` @ `6a380492`
-
-Mintlify building blocks; full articles live elsewhere.
-
-| Path | Role |
+| Item | Link |
 | ---- | ---- |
-| [`guides.jsx`](https://github.com/oven-sh/bun/blob/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/guides.jsx) | React nav: every `/guides/*` title and href |
-| [`cli/`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/cli) | MDX partials imported by CLI reference pages (`import X from "/snippets/cli/…"`) |
+| Release tag | [github.com/…/releases/tag/bun-v1.4.4](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) |
+| Commit | [`38afee6c84fcf48c0edb2466aa4b27d287a59c30`](https://github.com/oven-sh/bun/commit/38afee6c84fcf48c0edb2466aa4b27d287a59c30) (2026-10-22) |
+| Changelog narrative | [bun.com/blog](https://bun.com/blog) |
 
-### CLI snippet files → live reference
+**sportsdesk-ops:** `package.json` `packageManager` / `engines`, `@types/bun@1.4.4`, `tests/bun_baseline.json`, `bun run probe:bun` after upgrades.
 
-| Snippet | Published page (typical) | sportsdesk-ops |
-| ------- | ------------------------ | -------------- |
-| `install.mdx` | [/pm/cli/install](https://bun.com/docs/pm/cli/install) | `bun-deps install`, frozen lockfile, `pm:doctor` |
-| `add.mdx` | [/pm/cli/add](https://bun.com/docs/pm/cli/add) | `bun run deps` / `bun-deps add`, `--catalog` |
-| `remove.mdx` | [/pm/cli/remove](https://bun.com/docs/pm/cli/remove) | via `bun-deps` when lock frozen |
-| `update.mdx` | [/pm/cli/update](https://bun.com/docs/pm/cli/update) | lock drift; re-install with `bun-deps` |
-| `patch.mdx` | [/pm/cli/patch](https://bun.com/docs/pm/cli/patch) | `bun-deps patch --commit` (AGENTS.md) |
-| `outdated.mdx` | [/pm/cli/outdated](https://bun.com/docs/pm/cli/outdated) | manual dependency review |
-| `publish.mdx` | [/pm/cli/publish](https://bun.com/docs/pm/cli/publish) | `@tennis-hq` registry, `.npmrc` |
-| `link.mdx` | [/pm/cli/link](https://bun.com/docs/pm/cli/link) | — |
-| `run.mdx` | [/runtime/run](https://bun.com/docs/runtime/run) | `package.json` scripts, `--filter`, `--parallel` |
-| `test.mdx` | [/test](https://bun.com/docs/test) | `bun test --parallel`, CI `tests/` |
-| `format.mdx` | [/format](https://bun.com/docs/format) | `format:check`, `bunfig.toml` `[fmt]` |
-| `lint.mdx` | [/lint](https://bun.com/docs/lint) | `lint:check`, `.oxlintrc.json` |
-| `build.mdx` | [/bundler](https://bun.com/docs/bundler) | — |
-| `compile.mdx` | [/bundler/executables](https://bun.com/docs/bundler/executables) | — |
-| `bunx.mdx` | [/pm/bunx](https://bun.com/docs/pm/bunx) | — |
-| `init.mdx` | [/runtime/templating/init](https://bun.com/docs/runtime/templating/init) | — |
+---
 
-## Long-form docs (unpinned; use live site + 1.4.4 for behavior)
+## Kind: style
 
-Prefer these `/docs/pm/*` pages for package-manager depth (not duplicated in `guides.jsx` alone):
+Prose when editing upstream MDX or mirroring Bun tone (active voice, present tense, second person; no
+“easy” / “simple” / “just”).
 
-| Topic | URL | Repo hook |
-| ----- | --- | --------- |
-| Workspaces | [/pm/workspaces](https://bun.com/docs/pm/workspaces) | `packages/*`, `lib/pm_policy.ts` |
-| Catalogs | [/pm/catalogs](https://bun.com/docs/pm/catalogs) | not adopted yet (AGENTS.md) |
-| Lifecycle / trusted | [/pm/lifecycle](https://bun.com/docs/pm/lifecycle) | `trustedDependencies: []` |
-| Lockfile | [/pm/lockfile](https://bun.com/docs/pm/lockfile) | `bun.lock`, `tests/bun_config_policy.test.ts` |
-| Isolated installs | [/pm/isolated-installs](https://bun.com/docs/pm/isolated-installs) | global `linker = isolated`, `pm:doctor` |
-| `--filter` | [/pm/filter](https://bun.com/docs/pm/filter) | `schema:*` workspace scripts |
-| bunfig | [/runtime/bunfig](https://bun.com/docs/runtime/bunfig) | project `[fmt]` / `[run]`; install keys in `~/.bunfig.toml` |
-| Typecheck | [/runtime/check](https://bun.com/docs/runtime/check) | `typecheck` → `bun check --no-script` |
-| Test parallel | [/test/parallel](https://bun.com/docs/test/parallel) | `test`, `test:changed`, `.bun-test-timings.json` |
+| Item | Link |
+| ---- | ---- |
+| Voice (pinned tree) | [`docs/project/contributing.mdx` @ `6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing) |
+| Voice (live) | [bun.com/docs/project/contributing#voice](https://bun.com/docs/project/contributing#voice) |
 
-## Guides index highlights (from `guides.jsx`)
+---
 
-Walkthroughs under [/guides/install/*](https://bun.com/guides/install/workspaces) that match this
-repo: [workspaces](https://bun.com/guides/install/workspaces), [trusted dependency](https://bun.com/guides/install/trusted), [custom registry](https://bun.com/guides/install/custom-registry), [registry scope](https://bun.com/guides/install/registry-scope), [CI install](https://bun.com/guides/install/cicd); [migrate oxlint](https://bun.com/guides/lint/migrate-from-oxlint) / [migrate Prettier](https://bun.com/guides/format/migrate-from-prettier); [run tests](https://bun.com/guides/test/run-tests).
+## Kind: snippet
+
+Reusable **docs-site** pieces at [`docs/snippets/`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets) @ **`6a380492`**. Full articles live elsewhere.
+
+| Snippet | Role |
+| ------- | ---- |
+| [`guides.jsx`](https://github.com/oven-sh/bun/blob/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/guides.jsx) | Nav catalog: every `/guides/*` title + href → [bun.com/guides](https://bun.com/guides) |
+| [`cli/*.mdx`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets/cli) | Flag lists included by CLI reference pages (`import … from "/snippets/cli/…"`) |
+
+### CLI snippets by kind
+
+| Kind | Files | Live hub | sportsdesk-ops |
+| ---- | ----- | -------- | -------------- |
+| Package manager | `install`, `add`, `remove`, `update`, `patch`, `outdated`, `publish`, `link` | [/pm/cli/install](https://bun.com/docs/pm/cli/install) | `bun-deps`, frozen lock, `pm:doctor`, `.npmrc` |
+| Runtime CLI | `run`, `test`, `init` | [/runtime/run](https://bun.com/docs/runtime/run), [/test](https://bun.com/docs/test) | `package.json` scripts, `--filter`, `bun test --parallel` |
+| Tooling | `format`, `lint` | [/format](https://bun.com/docs/format), [/lint](https://bun.com/docs/lint) | `format:check`, `lint:check`, `bunfig` `[fmt]` |
+| Bundler | `build`, `compile`, `bunx` | [/bundler](https://bun.com/docs/bundler) | — |
+
+---
+
+## Kind: reference
+
+Long-form **`/docs/*`** (unpinned; prefer live URLs + **1.4.4** for behavior).
+
+| Kind | Topics | sportsdesk-ops |
+| ---- | ------ | -------------- |
+| Package manager | [workspaces](https://bun.com/docs/pm/workspaces), [catalogs](https://bun.com/docs/pm/catalogs), [lifecycle](https://bun.com/docs/pm/lifecycle), [lockfile](https://bun.com/docs/pm/lockfile), [isolated installs](https://bun.com/docs/pm/isolated-installs), [filter](https://bun.com/docs/pm/filter) | `lib/pm_policy.ts`, `tests/bun_config_policy.test.ts`, `packages/*` |
+| Runtime | [bunfig](https://bun.com/docs/runtime/bunfig), [check](https://bun.com/docs/runtime/check) | project `[fmt]`/`[run]`; install in `~/.bunfig.toml`; `typecheck` |
+| Test | [parallel](https://bun.com/docs/test/parallel) | `.bun-test-timings.json`, CI `tests/` |
+
+---
+
+## Kind: guide
+
+Short **walkthroughs** at `/guides/*` (bodies in MDX; index in [`guides.jsx`](#kind-snippet)).
+
+| Kind | Examples |
+| ---- | -------- |
+| Install | [workspaces](https://bun.com/guides/install/workspaces), [trusted](https://bun.com/guides/install/trusted), [custom registry](https://bun.com/guides/install/custom-registry), [registry scope](https://bun.com/guides/install/registry-scope), [CI install](https://bun.com/guides/install/cicd) |
+| Lint / format | [migrate oxlint](https://bun.com/guides/lint/migrate-from-oxlint), [migrate Prettier](https://bun.com/guides/format/migrate-from-prettier) |
+| Test | [run tests](https://bun.com/guides/test/run-tests) |
+
+---
+
+## Kind: contributor
+
+Who you are contributing **to** determines the doc set.
+
+| Audience | Doc | Kind |
+| -------- | --- | ---- |
+| **sportsdesk-ops** | `AGENTS.md`, `ci:local` | This repo |
+| **Bun engine** (Rust/C++/JSC) | [GitHub Contributing tab](https://github.com/oven-sh/bun?tab=contributing-ov-file) → [`CONTRIBUTING.md`](https://github.com/oven-sh/bun/blob/main/CONTRIBUTING.md) | Runtime build (`bun bd`, LLVM 23, WebKit, `bun-pr`, BuildKite) |
+| **bun.com MDX** | [`docs/project/contributing.mdx`](https://bun.com/docs/project/contributing) | Style + same build appendix; [voice](https://bun.com/docs/project/contributing#voice) |
+| **bun.com (short)** | [`docs/README.md#contributing`](https://github.com/oven-sh/bun/tree/main/docs#contributing) | Pointer to voice + PRs |
+
+---
 
 ## Local verification
 
