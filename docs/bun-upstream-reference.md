@@ -265,6 +265,57 @@ Two consequences for code here:
 - Walkthroughs: [bun.com/guides](https://bun.com/guides)
 - PM topics that match this repo: [install](https://bun.com/docs/pm/cli/install), [add](https://bun.com/docs/pm/cli/add), [remove](https://bun.com/docs/pm/cli/remove), [workspaces](https://bun.com/docs/pm/workspaces), [lifecycle](https://bun.com/docs/pm/lifecycle), [lockfile](https://bun.com/docs/pm/lockfile), [isolated installs](https://bun.com/docs/pm/isolated-installs), [patch](https://bun.com/docs/pm/cli/patch)
 
+## Bun docs MCP (live server; repo-native client)
+
+`https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
+page. It is stateless JSON-RPC over POST (a GET returns a JSON-RPC "method not allowed"), read-only,
+no auth, and exposes four tools plus one resource:
+
+| Tool / resource                           | Use                                          |
+| ----------------------------------------- | -------------------------------------------- |
+| `search_bun {query, limit?, section?}`    | ranked sections with deep links (start here) |
+| `read_bun_page {path}`                    | full markdown of one page                    |
+| `list_bun_pages {path}`                   | pages under a prefix                         |
+| `grep_bun {pattern, paths?, ignoreCase?}` | regex over page markdown                     |
+| `bun://skill`                             | primer on Bun and the tools                  |
+
+**Harness gap:** this profile has `@deepseek-ai/dsh-mcp-resources` enabled but **unconfigured**
+(Config status `absent`) and it is resources-only; no MCP _tools_ client is installed, so
+`search_bun`/`read_bun_page`/… are **not** on the agent tool roster. The repo therefore ships its
+own client:
+
+```sh
+bun run bun:docs-mcp probe          # contract: 4 tools + bun://skill, exit 1 on drift
+bun run bun:docs-mcp search "Bun.WebView attach existing Chrome" --limit 3
+bun run bun:docs-mcp read /docs/runtime/webview
+bun run bun:docs-mcp grep -- "--inspect-wait"
+bun run bun:docs-mcp list /docs/runtime
+bun run bun:docs-mcp skill
+```
+
+`BUN_DOCS_MCP_URL` overrides the endpoint (declared in `types/env.d.ts`). Transport tests use an
+injected fetch (`scripts/bun_docs_mcp.test.ts`), so CI stays offline. Remaining gap: wiring the
+probe into a live drift check is opt-in (`probe:bun` owns the offline runtime baseline), and the
+Harness would need an MCP tools plugin plus a `mcp-resources` config to expose these natively.
+
+### Protocol behavior measured on 1.4.4
+
+| Observation                                                                                       | Consequence                                                                |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| GET returns an HTTP 405 whose body is a JSON-RPC error ("stateless; POST JSON-RPC")               | clients must POST                                                          |
+| Tool failures return **HTTP 200** with `result.isError:true` and the error in `content[].text`    | check `isError`; our `BunDocsMcp.callTool` throws (`MCP tool … failed: …`) |
+| Unknown _method_ returns JSON-RPC `-32601` ("Method not found")                                   | method errors and tool errors are different channels                       |
+| `initialize` with an older `protocolVersion` still answers `2025-06-18`                           | no version downgrade; client uses the server's version                     |
+| No `prompts` (`prompts/list` → `[]`) and `resources/subscribe` is `-32601`                        | retrieval only, no prompt/subscription surface                             |
+| Input schemas are informational: `search_bun` with `limit: 26` was accepted despite `maximum: 25` | clients validate their own arguments                                       |
+| `search_bun` returns ranked sections with deep links; `grep_bun` caps output at 30 KB             | wildcard greps need `paths`/`maxMatches`                                   |
+
+`bun run bun:docs-mcp audit` compares five repo-pinned claims against the live docs. Current
+result: `bun check`, `--inspect-wait`, WebView `headless:false`-throws, and flags-before-`run`
+ordering all match; the **skill resource is stale** ("Don't use Bun for type-checking — run `tsc`")
+even though 1.4 ships `bun check`. The audit reports it as drift; pass `--fail-on-drift` to make
+drift fatal. Transport is covered offline by `scripts/bun_docs_mcp.test.ts` (fake fetch).
+
 ## Optional git pins (upstream doc PRs only)
 
 Commits on `main` **after** 1.4.4. Navigation and voice, not runtime.

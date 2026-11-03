@@ -23,6 +23,8 @@
     "wagers:by-state": "bun run scripts/gslive_wagers_by_state.ts",
     "wagers:capture": "bun run scripts/wagers_by_state_capture.ts",
     "wagers:debug": "bun --inspect-wait scripts/wagers_by_state_capture.ts --dry-run",
+    "bun:docs-mcp": "bun scripts/bun_docs_mcp.ts",
+    "verify:bun-cli": "bun test tests/bun_cli_flags.test.ts",
     "wagers:watch": "bun --no-orphans run scripts/wagers_by_state_capture.ts --watch",
     "parse:graded-wagers": "bun run scripts/parse_graded_wagers_html.ts",
     "parse:pending-panel": "bun run scripts/parse_data_tables_html.ts",

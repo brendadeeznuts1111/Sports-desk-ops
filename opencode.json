@@ -4,7 +4,7 @@
     "servers": {
       "bun-docs": {
         "type": "remote",
-        "url": "https://bun.sh/docs/mcp",
+        "url": "https://bun.com/docs/mcp",
         "protocol": "legacy",
         "oauth": false,
         "codemode": true,
