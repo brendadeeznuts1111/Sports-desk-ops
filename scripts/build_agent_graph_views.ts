@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  AGENT_GRAPH_VIEW_RASTER,
   agentGraphArtifactPathsFromJsonOut,
   atomicWrite,
   isAgentGraphViewsFresh,
@@ -28,10 +29,7 @@ import {
   renderViewDot,
   runGraphviz,
 } from "../lib/f402_agent_graph_dot.ts";
-import {
-  type RasterFit,
-  scoreLayout,
-} from "../lib/f402_agent_graph_metrics.ts";
+import { scoreLayout } from "../lib/f402_agent_graph_metrics.ts";
 import {
   AGENT_GRAPH_VIEWS_DIR,
   type AgentGraphViewIndex,
@@ -58,7 +56,6 @@ const OUT_DIR = join(SCRATCH, AGENT_GRAPH_VIEWS_DIR);
 const paths = agentGraphArtifactPathsFromJsonOut(
   join(SCRATCH, "agent-graph.json"),
 );
-const VIEW_RASTER: RasterFit = { width: 2400, height: 4800 };
 const RENDER_DPI = 96;
 const WEBP_QUALITY = Number(Bun.env.F402_GRAPH_WEBP_QUALITY ?? 85);
 
@@ -117,10 +114,17 @@ async function renderFiles(
   const png = await runGraphviz(engine, dot, "png", [`-Gdpi=${RENDER_DPI}`]);
   const source = await new Bun.Image(png).metadata();
   let image = new Bun.Image(png);
-  if (source.width > VIEW_RASTER.width || source.height > VIEW_RASTER.height) {
-    image = image.resize(VIEW_RASTER.width, VIEW_RASTER.height, {
-      fit: "inside",
-    });
+  if (
+    source.width > AGENT_GRAPH_VIEW_RASTER.width ||
+    source.height > AGENT_GRAPH_VIEW_RASTER.height
+  ) {
+    image = image.resize(
+      AGENT_GRAPH_VIEW_RASTER.width,
+      AGENT_GRAPH_VIEW_RASTER.height,
+      {
+        fit: "inside",
+      },
+    );
   }
   const webp = await image.webp({ quality: WEBP_QUALITY }).bytes();
   await atomicWrite(join(OUT_DIR, webpName), webp);
@@ -207,7 +211,7 @@ async function main(): Promise<void> {
     );
     const metrics = scoreLayout(
       { ...laid, flow: rankdir === "LR" ? "right" : "down" },
-      VIEW_RASTER,
+      AGENT_GRAPH_VIEW_RASTER,
     );
     const files = await renderFiles(
       fv.view,

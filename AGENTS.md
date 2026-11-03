@@ -20,6 +20,8 @@ bun run ci:local --list        # print the steps without running them
 GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a green badge does
 not exist; `ci:local` _is_ the CI run. It checks the working tree, so uncommitted files from other
 work count against it — to judge only your change, run it in a clean `git worktree` at `HEAD`.
+**Merge-ready** means `ci:local` passes; git **prepush-gate** (fast) runs catalog contract +
+typecheck only — not `format:check` or the full chain.
 The `policy:check` step runs the Bun-native ratchet from the `~/platform` checkout
 (`~/platform/policy/ratchet.ts`); without that checkout it fails — say so, do not drop the step.
 

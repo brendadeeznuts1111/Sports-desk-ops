@@ -5,7 +5,21 @@
 import { rename } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
+import { envPositiveInt } from "./env.ts";
+import type { RasterFit } from "./f402_agent_graph_metrics.ts";
 import { sha256Hex } from "./f402_hierarchy_hash.ts";
+
+/** Whole-tree / capture viewport for scoreLayout (env: F402_GRAPH_VIEWPORT_W/H). */
+export const AGENT_GRAPH_CAPTURE_RASTER: RasterFit = {
+  width: envPositiveInt("F402_GRAPH_VIEWPORT_W", 1920),
+  height: envPositiveInt("F402_GRAPH_VIEWPORT_H", 1080),
+};
+
+/** Per-view raster for Graphviz small multiples (env: F402_GRAPH_VIEW_RASTER_W/H). */
+export const AGENT_GRAPH_VIEW_RASTER: RasterFit = {
+  width: envPositiveInt("F402_GRAPH_VIEW_RASTER_W", 2400),
+  height: envPositiveInt("F402_GRAPH_VIEW_RASTER_H", 4800),
+};
 
 export const AGENT_GRAPH_MANIFEST_VERSION = 1 as const;
 

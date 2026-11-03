@@ -14,7 +14,10 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import { resolveDefaultAgentGraphEnvelope } from "../lib/f402_agent_graph_artifacts.ts";
+import {
+  AGENT_GRAPH_CAPTURE_RASTER,
+  resolveDefaultAgentGraphEnvelope,
+} from "../lib/f402_agent_graph_artifacts.ts";
 import {
   LAYOUT_ENGINES,
   runLayoutEngine,
@@ -61,7 +64,7 @@ if (!Number.isInteger(runs) || runs < 1) {
 }
 
 const REPO = join(import.meta.dir, "..");
-const RASTER = { width: 1920, height: 1080 };
+const RASTER = AGENT_GRAPH_CAPTURE_RASTER;
 
 async function buildLayouts(): Promise<Record<string, LaidOutGraph>> {
   const graphJson = join(REPO, "scratch/agent-graph.json");

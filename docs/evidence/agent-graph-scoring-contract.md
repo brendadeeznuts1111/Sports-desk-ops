@@ -165,7 +165,8 @@ Override full raster via environment (read by `scripts/agent_graph_readability.t
 
 View raster defaults for sweep: `F402_GRAPH_VIEW_RASTER_W` / `F402_GRAPH_VIEW_RASTER_H` (2400 / 4800).
 
-`build_agent_graph_views.ts` hardcodes `VIEW_RASTER` 2400×4800 for scoring during view build.
+Both rasters are defined once in `lib/f402_agent_graph_artifacts.ts` (`AGENT_GRAPH_CAPTURE_RASTER`,
+`AGENT_GRAPH_VIEW_RASTER`); readability, view build, and bench import that SSOT.
 
 ---
 
