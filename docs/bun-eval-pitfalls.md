@@ -12,7 +12,9 @@ mechanism.
   upstream, not reproduced: a 2 GiB allocation is flaky on any runner); `Bun.secrets` with
   `persist: "local"` (Windows only, never run).
 
-Upstream Bun docs (not runtime): [bun-upstream-reference.md](./bun-upstream-reference.md).
+### Upstream Bun docs
+
+Not runtime SSOT. Routing table and pins: [bun-upstream-reference.md](./bun-upstream-reference.md).
 
 ## eval-module-mode
 
