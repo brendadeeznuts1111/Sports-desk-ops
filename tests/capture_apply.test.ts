@@ -342,9 +342,13 @@ describe("apply_captures", () => {
     expect(dryRun.ok).toBe(true);
     expect(dryRun.mode).toBe("dry-run");
     expect(dryRun.upgrades).toHaveLength(1);
+    // The citation must be the resolvable file form (`capture:<date>/<file>`); the digest form
+    // `capture:<date>:<sha256>` is what verify_docs rejects, so an applied capture would fail
+    // its own gate and never reach the spec.
     expect(dryRun.upgrades[0]?.evidenceSource).toBe(
-      `capture:2026-10-31:${capture.digest}`,
+      "capture:2026-10-31/getbetticker.post.json",
     );
+    expect(capture.digest.length).toBe(64);
     expect(dryRun.countsBefore).toEqual({
       A: 0,
       B: 3,
@@ -390,7 +394,11 @@ describe("apply_captures", () => {
           typeof entry === "object" && entry !== null,
       )
       .map((entry) => entry.source);
-    expect(sources).toContain(`capture:2026-10-31:${capture.digest}`);
+    expect(sources).toContain("capture:2026-10-31/getbetticker.post.json");
+    const auditRecord = JSON.parse(readText(written.auditRecord as string)) as {
+      capturesDir: string;
+    };
+    expect(auditRecord.capturesDir).toBe("docs/evidence/captures");
     expect(ledger.counts).toEqual({
       A: 1,
       B: 2,
@@ -493,7 +501,7 @@ describe("apply_captures", () => {
 
   test("upgrades a contradicted B row from a valid live capture and records the resolution", () => {
     const { root, capturesDir, dateDir } = makeRoot();
-    const capture = writeCapture(
+    writeCapture(
       dateDir,
       "contradicted.post.json",
       captureFixture({ path: "/cloud/api/Manager/getWebLog" }),
@@ -534,7 +542,7 @@ describe("apply_captures", () => {
           typeof entry === "object" && entry !== null,
       )
       .map((entry) => entry.source);
-    expect(sources).toContain(`capture:2026-10-31:${capture.digest}`);
+    expect(sources).toContain("capture:2026-10-31/contradicted.post.json");
   });
 
   test("leaves a contradicted row untouched when no valid live capture exists", () => {

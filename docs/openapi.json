@@ -2418,45 +2418,135 @@
     },
     "/cloud/api/Report/PendingDelete": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "POST /cloud/api/Report/PendingDelete",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
-        "operationId": "postCloudApiReportPendingDelete",
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Report/PendingDelete (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-11-01/PendingDelete.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/PendingDelete at 2026-11-01T04:19:29.720Z with a 200 response (response body sha256 af7ff3397ceee92fbfe8142bbcfee14c72b8cb94adc897af19555235dfbad335). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
         "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-11-01/PendingDelete.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Pending": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Other status codes were not captured by this record."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "A",
           "sources": [
-            "main:lib/combo_identity.ts:30-48",
-            "docs/evidence/captures/pending-500s/diagnostics.json"
+            "capture:2026-11-01/PendingDelete.post.json",
+            "sha256:c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e"
           ],
-          "capturedResponse": false,
-          "requiredCapture": "Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: \"PendingDelete\"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A."
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-11-01/PendingDelete.post.json",
+          "sha256": "c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e",
+          "capturedAt": "2026-11-01T04:19:29.720Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerID": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  },
+                  "ticketNumber": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
     "/cloud/api/Report/getDailyFiguresByCustomer": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "POST /cloud/api/Report/getDailyFiguresByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
-        "operationId": "postCloudApiReportGetDailyFiguresByCustomer",
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Report/getDailyFiguresByCustomer (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-11-01/getDailyFiguresByCustomer.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/getDailyFiguresByCustomer at 2026-11-01T04:05:20.098Z with a 200 response (response body sha256 b072a7a032394c3c24182b89587d8881878cb077a6a2690279d3f66eb00e54df). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
         "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-11-01/getDailyFiguresByCustomer.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "INFO": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Other status codes were not captured by this record."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "A",
           "sources": [
-            "main:lib/combo_identity.ts:30-48",
-            "docs/evidence/captures/pending-500s/diagnostics.json"
+            "capture:2026-11-01/getDailyFiguresByCustomer.post.json",
+            "sha256:2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6"
           ],
-          "capturedResponse": false,
-          "requiredCapture": "Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: \"application/json\" with JSON.stringify({agentID, customerID, week: 0, operation: \"getDailyFiguresByCustomer\"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts)."
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-11-01/getDailyFiguresByCustomer.post.json",
+          "sha256": "2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6",
+          "capturedAt": "2026-11-01T04:05:20.098Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "customerID": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  },
+                  "week": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

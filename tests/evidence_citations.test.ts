@@ -42,12 +42,13 @@ describe("evidence ledger citations", () => {
 
   test("tier-A prose agrees with the tier-A rows", () => {
     const tierA = ledger.operations.filter((op) => op.tier === "A").length;
-    // Release pin: the 2026-10-31/2026-11-01 capture store holds nine tier-A rows
-    // (getSportsType joined when its live 200 capture was published).
-    expect(tierA).toBe(9);
+    // Release pin: the 2026-10-31/2026-11-01 capture store holds eleven tier-A rows
+    // (getSportsType, getDailyFiguresByCustomer and PendingDelete joined when their live
+    // 200 captures were applied through scripts/apply_captures.ts).
+    expect(tierA).toBe(11);
     expect(ledger.tierRules.A).not.toContain(
       "Nothing in this release qualifies",
     );
-    expect(ledger.tierRules.A).toContain("Nine operations qualify");
+    expect(ledger.tierRules.A).toContain("Eleven operations qualify");
   });
 });

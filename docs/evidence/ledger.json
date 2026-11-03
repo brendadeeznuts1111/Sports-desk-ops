@@ -24,13 +24,13 @@
       "name": "Human label.",
       "tier": "D = real surface recorded in surfaces[]; its routes may be published as operations or not, and missingFromSpec says which. E = documented operation with no implementation.",
       "category": "catalog | upstream-route | local-route | blocked-contract | documented-not-implemented.",
-      "missingFromSpec": "true when docs/openapi.json does not publish every path this surface lists \u2014 including a surface whose members are field names or CLI commands rather than routes, which the spec cannot model at all. False therefore means fully published. The boolean was previously read both ways; four rows disagreed until scripts/check_ledger_consistency.ts derived it.",
+      "missingFromSpec": "true when docs/openapi.json does not publish every path this surface lists — including a surface whose members are field names or CLI commands rather than routes, which the spec cannot model at all. False therefore means fully published. The boolean was previously read both ways; four rows disagreed until scripts/check_ledger_consistency.ts derived it.",
       "what / members / evidence / note": "Inventory, member routes, citations, caveats."
     },
-    "counts": "Operation counts by tier. A+B+C+D+E = total = 59. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here \u2014 counts, surfaceCounts, countsByTag and the total below \u2014 from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
+    "counts": "Operation counts by tier. A+B+C+D+E = total = 59. Surface counts are in surfaceCounts and are not mixed into counts. scripts/check_ledger_consistency.ts recomputes every number here — counts, surfaceCounts, countsByTag and the total below — from the rows, and `bun run verify:docs` runs it first. It also resolves every evidence citation: a capture: source must name a file in docs/evidence/captures (capture:<date>/<file>, the same form docs/openapi.json uses), and a file:line source must resolve in the repo with the line inside the file.",
     "surfaceCounts": "Surface inventory counts by tier.",
     "countsByTag": "Operation tier counts per spec tag (convenience for P2/P3).",
-    "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) \u2192 a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
+    "citationAnchors": "Cited `file:line` or `file:start-end` (as written in the docs, prefix stripped) → a literal that must appear on one of the cited lines. scripts/check_spec_citations.ts (run by `bun run verify:docs`) fails on a citation with no entry, an entry no doc cites, and an anchor that has left its range, and reports where the anchor moved. Write the anchor from the range's first line where that line is distinctive, so a single hit also gives the corrected range. zip: citations name the external GS extract and are reported as unchecked."
   },
   "sourcePrefixes": {
     "(no prefix)": "Path relative to the worktree root /Users/nolarose/code/sportsdesk-ops/.worktrees/docs.",
@@ -39,7 +39,7 @@
     "fixture:": "Committed fixture under the worktree; a shape sample, not a wire capture."
   },
   "tierRules": {
-    "A": "Captured wire contract: a real request AND a real response capture exist. Nine operations qualify from the 2026-10-31/2026-11-01 live sessions (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup, Pending, getTransactions, getGrading, getSportsType); see docs/evidence/captures/manifest.json. Earlier releases had none because the 2026-10-28 HAR captured only requests.",
+    "A": "Captured wire contract: a real request AND a real response capture exist. Eleven operations qualify from the 2026-10-31/2026-11-01 live sessions (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup, getSportsType, getDailyFiguresByCustomer, Pending, PendingDelete, getTransactions, getGrading); see docs/evidence/captures/manifest.json. Earlier releases had none because the 2026-10-28 HAR captured only requests.",
     "B": "Observed first-party evidence. (i) captured wire request: getWebLog mode B and getInfoPlayer (2026-10-28 Manager HAR); (ii) observed request payload: GS getBetReport; or (iii) a route this repository serves, verified against its handler source (GET /health, GET /api/watchlist, POST /api/telegram/alert, POST /api/telegram/report). Response bodies may still be uncaptured.",
     "C": "Inferred only. Authored in docs/openapi.json or its generator scripts, or a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response was observed.",
     "D": "A real surface missing from the spec. Recorded in surfaces[], never in operations[].",
@@ -47,9 +47,9 @@
     "crawlerCandidatesRule": "B-vs-C rule for the 11 'Tracked Operational Domains' candidates (gameAdmin, getMessages, adjustBalance, createPlayer, get3rdPartyLimits, getAnalysis, getScores, getAgentTree, getBilling, getRules, getFinancialReport): a launcher tile alone is not enough for B. B requires a URL+method observed on the wire (or a handler that serves it). Those 11 rows take their path+method from hand-authored candidateEndpoint/candidateMethod constants in main:scripts/portal_tile_crawler.ts:55-206. The crawler CLI entry runs the offline branch (main:scripts/portal_tile_crawler.ts:693,777) and its live branch only replaces extracted inputs/L-keys, never the URL/method; no audit JSON or screenshot proof exists in the main tree. They are therefore tier C with candidate_url=true and ui_observed=true, never B. getAnalysis and getFinancialReport also have independent UI action-name evidence (runbook:166-167), which improves the tile evidence but does not observe the URL."
   },
   "counts": {
-    "A": 9,
+    "A": 11,
     "B": 9,
-    "C": 31,
+    "C": 29,
     "D": 0,
     "E": 10,
     "total": 59
@@ -157,9 +157,9 @@
       "total": 1
     },
     "Reporting & Forensics": {
-      "A": 3,
+      "A": 5,
       "B": 0,
-      "C": 6,
+      "C": 4,
       "D": 0,
       "E": 0,
       "total": 9
@@ -546,7 +546,7 @@
         {
           "source": "tests/fixtures/portal-left-menu-actions.html",
           "kind": "ui-observation",
-          "note": "Corrected 2026-11-01: data-action=\"get-weekly-figure\" IS real \u2014 an operator paste of the manager page's mobile left menu contains it (with data-type=\"heavy\"), beside go-home-menu, get-pending, get-game-admin and get-messaging. The earlier note that the string appeared in no artifact was wrong. What remains unproven is that this action posts to Report/getWeeklyFigure; the boot path calls Manager/getWeeklyFigureByAgentLite instead."
+          "note": "Corrected 2026-11-01: data-action=\"get-weekly-figure\" IS real — an operator paste of the manager page's mobile left menu contains it (with data-type=\"heavy\"), beside go-home-menu, get-pending, get-game-admin and get-messaging. The earlier note that the string appeared in no artifact was wrong. What remains unproven is that this action posts to Report/getWeeklyFigure; the boot path calls Manager/getWeeklyFigureByAgentLite instead."
         }
       ],
       "requiredCapture": "On manager.html (v1.0.280) boot, weekly figures are fetched via POST /cloud/api/Manager/getWeeklyFigureByAgentLite ({agentID, week: 0, type: \"A\", layout: \"byDay\", operation: \"getWeeklyFigureByAgentLite\", RRO: 1} at manager.js:52703) and POST /cloud/api/Manager/getMasterSheet (manager.js:43955). Capture getWeeklyFigureByAgentLite and reconcile.",
@@ -1597,8 +1597,8 @@
       "method": "post",
       "operationId": "reportPendingDelete",
       "tag": "Reporting & Forensics",
-      "tier": "C",
-      "capturedResponse": false,
+      "tier": "A",
+      "capturedResponse": true,
       "evidence": [
         {
           "source": "main:lib/combo_identity.ts:30-48",
@@ -1609,9 +1609,15 @@
           "source": "docs/evidence/captures/pending-500s/diagnostics.json",
           "kind": "implementation-context",
           "note": "Confirmed read-only in customer/report/report.js:8578 & 42092: fetches e.Pending[] legs for the Ticket Detail modal (logs \"View Pending Plays Selected\"). Added to READ_ONLY_OPERATIONS in scripts/apply_captures.ts."
+        },
+        {
+          "source": "capture:2026-11-01/PendingDelete.post.json",
+          "kind": "capture",
+          "note": "Live capture 2026-11-01T04:19:29.720Z from a 200 response (response bodySha256 af7ff3397ceee92fbfe8142bbcfee14c72b8cb94adc897af19555235dfbad335); request and response were captured live with redaction clean (policy v1).",
+          "reason": "body is populated with minimal request and read-inferred mutation"
         }
       ],
-      "requiredCapture": "Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: \"PendingDelete\"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A.",
+      "requiredCapture": null,
       "contradicted": false,
       "contradictedReason": null
     },
@@ -1620,8 +1626,8 @@
       "method": "post",
       "operationId": "reportDailyFiguresByCustomer",
       "tag": "Reporting & Forensics",
-      "tier": "C",
-      "capturedResponse": false,
+      "tier": "A",
+      "capturedResponse": true,
       "evidence": [
         {
           "source": "main:lib/combo_identity.ts:30-48",
@@ -1632,9 +1638,15 @@
           "source": "docs/evidence/captures/pending-500s/diagnostics.json",
           "kind": "implementation-context",
           "note": "Prefix-identical 500 (0 B) on 2026-11-01 across /Manager and /Report; report.js:25633 specifies contentType: \"application/json\"."
+        },
+        {
+          "source": "capture:2026-11-01/getDailyFiguresByCustomer.post.json",
+          "kind": "capture",
+          "note": "Live capture 2026-11-01T04:05:20.098Z from a 200 response (response bodySha256 b072a7a032394c3c24182b89587d8881878cb077a6a2690279d3f66eb00e54df); request and response were captured live with redaction clean (policy v1).",
+          "reason": "body is populated-shell (server-rendered layout chrome/metadata, dynamic content unpopulated)"
         }
       ],
-      "requiredCapture": "Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: \"application/json\" with JSON.stringify({agentID, customerID, week: 0, operation: \"getDailyFiguresByCustomer\"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts).",
+      "requiredCapture": null,
       "contradicted": false,
       "contradictedReason": null
     },
@@ -2004,7 +2016,7 @@
           "note": "OPTIONS returns 204 with CORS headers (the grant is origin-checked); /api/test/error throws a synthetic error so the error boundary can be exercised in production."
         }
       ],
-      "note": "Only POST /telegram/webhook and OPTIONS * remain outside the spec; both are deliberate \u2014 one is Telegram's callback surface, the other is transport-level."
+      "note": "Only POST /telegram/webhook and OPTIONS * remain outside the spec; both are deliberate — one is Telegram's callback surface, the other is transport-level."
     },
     {
       "id": "surface.gs-manager-cli",
@@ -2206,7 +2218,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts#GET /agent-graph.webp",
           "kind": "implementation",
-          "note": "Measured 2026-11-01: the dashboard's <img src=\"agent-graph.webp\"> resolved to GET /agent-graph.webp \u2192 404 JSON, and the file lives in scratch/ rather than docs/assets, so /assets/agent-graph.webp was a 404 too. It is now served from scratch/agent-graph.webp behind the pii guard /graph uses, with the viewer's freshness rule: missing \u2192 404, older than the graph \u2192 503."
+          "note": "Measured 2026-11-01: the dashboard's <img src=\"agent-graph.webp\"> resolved to GET /agent-graph.webp → 404 JSON, and the file lives in scratch/ rather than docs/assets, so /assets/agent-graph.webp was a 404 too. It is now served from scratch/agent-graph.webp behind the pii guard /graph uses, with the viewer's freshness rule: missing → 404, older than the graph → 503."
         }
       ],
       "requiredCapture": "Not a capture gap: these are static files the graph page already ships. A capture would only restate their bytes."
@@ -2441,6 +2453,6 @@
     "tests/fixtures/f402-report-requests-observed-2026-11-01.json:188": "\"writeObservation\": \"The last three requests are mutations, recorded as behaviour, never as a script.",
     "tests/fixtures/fantasy402-history-poll.json:2-24": "\"feed\": \"getHistory\"",
     "tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8": "\"provider\": \"fantasy402\"",
-    "docs/evidence/ledger.json:2233": "no response body has ever been seen, so no column set is documented"
+    "docs/evidence/ledger.json:2245": "no response body has ever been seen, so no column set is documented"
   }
 }

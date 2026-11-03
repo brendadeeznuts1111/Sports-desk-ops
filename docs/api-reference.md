@@ -5,10 +5,10 @@ Evidence-labelled reference generated from `docs/openapi.json` (version `2026.10
 ## What is verified vs inferred
 
 1. **Verified (tier B, 8 of 75 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
-2. **Inferred (tier C, 31 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
-3. **Captured responses (tier A, 9) and recovered surfaces (tier D, 27):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
+2. **Inferred (tier C, 29 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
+3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 27):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
 
-Ledger totals across every recorded row (including rows removed from the final spec): A 9 · B 9 · C 31 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
+Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 9 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
 
 ## GSLive Manager (Partner 118): operator deep links
 
@@ -68,8 +68,8 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 | Local Desk &amp; Telegram Gateway  | 30         | B 4 · D 26     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
 | Downline Accounting                | 3          | B 3            | Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.  |
 | Settlement History                 | 1          | D 1            | Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured.                                                                         |
-| Inferred (Unverified)              | 31         | C 31           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
-| Live-captured (request unverified) | 7          | A 7            | Tier-A operations whose path/method were previously inferred (tier C): the response is live-captured, while the request field template is not observed and remains unverified. |
+| Inferred (Unverified)              | 29         | C 29           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
+| Live-captured (request unverified) | 9          | A 9            | Tier-A operations whose path/method were previously inferred (tier C): the response is live-captured, while the request field template is not observed and remains unverified. |
 
 ## Headers matrix
 
@@ -1569,21 +1569,6 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 - **Default response (status code not captured)** — Unknown — no response was captured, so no status code or body schema is documented.
 
-### `POST /cloud/api/Report/getDailyFiguresByCustomer`
-
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
-
-**POST /cloud/api/Report/getDailyFiguresByCustomer**
-
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
-
-- **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetDailyFiguresByCustomer`
-- **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: "application/json" with JSON.stringify({agentID, customerID, week: 0, operation: "getDailyFiguresByCustomer"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts).
-
-**Responses**
-
-- **Default response (status code not captured)** — Unknown — no response was captured, so no status code or body schema is documented.
-
 ### `POST /cloud/api/Report/getDeletedWagerReport`
 
 > **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:213` · response not captured
@@ -1673,21 +1658,6 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetWeeklyFigure`
 - **Required capture:** On manager.html (v1.0.280) boot, weekly figures are fetched via POST /cloud/api/Manager/getWeeklyFigureByAgentLite ({agentID, week: 0, type: "A", layout: "byDay", operation: "getWeeklyFigureByAgentLite", RRO: 1} at manager.js:52703) and POST /cloud/api/Manager/getMasterSheet (manager.js:43955). Capture getWeeklyFigureByAgentLite and reconcile.
-
-**Responses**
-
-- **Default response (status code not captured)** — Unknown — no response was captured, so no status code or body schema is documented.
-
-### `POST /cloud/api/Report/PendingDelete`
-
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
-
-**POST /cloud/api/Report/PendingDelete**
-
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
-
-- **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportPendingDelete`
-- **Required capture:** Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: "PendingDelete"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A.
 
 **Responses**
 
@@ -1875,6 +1845,32 @@ Live-captured contract: 2026-11-01/getTransactions.post.json (schemaVersion 1, m
     - `LIST` (string) — no description
 - **Default response (status code not captured)** — Other status codes were not captured by this record.
 
+### `POST /cloud/api/Report/getDailyFiguresByCustomer`
+
+> **Evidence — tier A** · sources: `capture:2026-11-01/getDailyFiguresByCustomer.post.json`, `sha256:2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6` · response captured
+
+**Live-captured /cloud/api/Report/getDailyFiguresByCustomer (request template unverified)**
+
+Live-captured contract: 2026-11-01/getDailyFiguresByCustomer.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/getDailyFiguresByCustomer at 2026-11-01T04:05:20.098Z with a 200 response (response body sha256 b072a7a032394c3c24182b89587d8881878cb077a6a2690279d3f66eb00e54df). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.
+
+- **Tag:** Live-captured (request unverified)
+
+**Request body — `application/json`**
+
+| Field        | Type   | Required | Description | Example |
+| ------------ | ------ | -------- | ----------- | ------- |
+| `agentID`    | string | no       | —           | —       |
+| `customerID` | string | no       | —           | —       |
+| `operation`  | string | no       | —           | —       |
+| `week`       | string | no       | —           | —       |
+
+**Responses**
+
+- **HTTP 200** — Captured live 200 response from 2026-11-01/getDailyFiguresByCustomer.post.json; schema derived from the captured body skeleton.
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `INFO` (boolean) — no description
+- **Default response (status code not captured)** — Other status codes were not captured by this record.
+
 ### `POST /cloud/api/Report/getGrading`
 
 > **Evidence — tier A** · sources: `capture:2026-11-01/getGrading.post.json`, `sha256:253af38aeb01e56e32e0db8922efc7ec525cc2aa53f1b345c41be5675483c06c` · response captured
@@ -1925,6 +1921,32 @@ Live-captured contract: 2026-11-01/Pending.post.json (schemaVersion 1, mode live
     - `Pending` (array of object) — no description
 - **Default response (status code not captured)** — Other status codes were not captured by this record.
 
+### `POST /cloud/api/Report/PendingDelete`
+
+> **Evidence — tier A** · sources: `capture:2026-11-01/PendingDelete.post.json`, `sha256:c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e` · response captured
+
+**Live-captured /cloud/api/Report/PendingDelete (request template unverified)**
+
+Live-captured contract: 2026-11-01/PendingDelete.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/PendingDelete at 2026-11-01T04:19:29.720Z with a 200 response (response body sha256 af7ff3397ceee92fbfe8142bbcfee14c72b8cb94adc897af19555235dfbad335). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.
+
+- **Tag:** Live-captured (request unverified)
+
+**Request body — `application/x-www-form-urlencoded`**
+
+| Field          | Type   | Required | Description | Example |
+| -------------- | ------ | -------- | ----------- | ------- |
+| `customerID`   | string | no       | —           | —       |
+| `operation`    | string | no       | —           | —       |
+| `ticketNumber` | string | no       | —           | —       |
+| `token`        | string | no       | —           | —       |
+
+**Responses**
+
+- **HTTP 200** — Captured live 200 response from 2026-11-01/PendingDelete.post.json; schema derived from the captured body skeleton.
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `Pending` (array) — no description
+- **Default response (status code not captured)** — Other status codes were not captured by this record.
+
 ## Inferred, unverified operations
 
 These rows are **tier C**. They are authored in the spec/generators, declared from a repo type, or inferred from a UI/DOM observation; none has an observed request or response. They remain in the spec deliberately, labelled — **do not treat any of them as a contract**.
@@ -1951,19 +1973,17 @@ These rows are **tier C**. They are authored in the spec/generators, declared fr
 | POST   | `/cloud/api/Report/delete-wager`                | Inferred only: a UI/DOM observation only.                                                                                | UI stage-5 Deleted Wagers action routes to POST /cloud/api/Manager/getReportDeletedTransactions in Blob 96EA5CDA (whereas PendingDelete in report.js:8578 is the read-only Ticket Detail modal lookup). Capture getReportDeletedTransactions and reconcile.                                                                                                                                                               |
 | POST   | `/cloud/api/Report/getAnalysis`                 | Inferred only: crawler behaviour, not a wire observation; a hand-authored UI/DOM declaration; a UI/DOM observation only. | In app/manager/manager.js:93668 (v1.0.280), the Analysis view calls POST /cloud/api/Manager/getReportPlayerAnalysis ({agentID, agentOwner, customerID, reportType, startDate, endDate, lineType, operation: "getReportPlayerAnalysis", RRO: 1}). Capture getReportPlayerAnalysis and reconcile.                                                                                                                           |
 | POST   | `/cloud/api/Report/getDailyFigure`              | Inferred only: generator-authored; no artifact.                                                                          | Capture a daily figure read; confirm the request (none is documented) and the row fields. Upgrades C->A.                                                                                                                                                                                                                                                                                                                  |
-| POST   | `/cloud/api/Report/getDailyFiguresByCustomer`   | Inferred only: implementation context only; a repo TypeScript type only.                                                 | Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: "application/json" with JSON.stringify({agentID, customerID, week: 0, operation: "getDailyFiguresByCustomer"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts).                                       |
 | POST   | `/cloud/api/Report/getDeletedWagerReport`       | Inferred only: generator-authored; no artifact.                                                                          | In the Manager deleted-wagers report bundle (Blob 96EA5CDA), the wire call is POST /cloud/api/Manager/getReportDeletedTransactions. Capture getReportDeletedTransactions and reconcile with /cloud/api/Report/delete-wager.                                                                                                                                                                                               |
 | POST   | `/cloud/api/Report/getFinancialReport`          | Inferred only: crawler behaviour, not a wire observation; a hand-authored UI/DOM declaration; a UI/DOM observation only. | Open the 'Transactions History' launcher tile and capture the network request it actually triggers (URL incl. /Manager vs /Report vs another model prefix, method, content type, body, auth) plus a response. Would replace candidate_url with a confirmed URL and upgrade C->A. Do not promote to B on the tile alone.                                                                                                   |
 | POST   | `/cloud/api/Report/getGradedWagerByCustomer`    | Inferred only: implementation context only; a repo TypeScript type only.                                                 | Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 (shared handler threw before response serialization). 1. Retrieve upstream server error log for the shared handler group; 2. Re-probe with the identical captured payload, then test integer week=0 per customer/report/report.js:33171.                                                                                                            |
 | POST   | `/cloud/api/Report/getSettledFigure`            | Inferred only: a UI/DOM observation only.                                                                                | Capture one Collections request/response; verify weekDate format and the 50% split fields. Upgrades C->A.                                                                                                                                                                                                                                                                                                                 |
 | POST   | `/cloud/api/Report/getTicketDetailPrint`        | Inferred only: implementation context only; a repo TypeScript type only.                                                 | Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when ticketNumber/wagerNumber were omitted. 1. Retrieve upstream server error log; 2. Re-probe identical payload, then probe with the 5-key customer/report/report.js:108955 envelope {token, ticketNumber, wagerNumber, flag, operation}.                                                                                                          |
 | POST   | `/cloud/api/Report/getWeeklyFigure`             | Inferred only: no artifact; a UI/DOM observation only.                                                                   | On manager.html (v1.0.280) boot, weekly figures are fetched via POST /cloud/api/Manager/getWeeklyFigureByAgentLite ({agentID, week: 0, type: "A", layout: "byDay", operation: "getWeeklyFigureByAgentLite", RRO: 1} at manager.js:52703) and POST /cloud/api/Manager/getMasterSheet (manager.js:43955). Capture getWeeklyFigureByAgentLite and reconcile.                                                                 |
-| POST   | `/cloud/api/Report/PendingDelete`               | Inferred only: implementation context only; a repo TypeScript type only.                                                 | Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: "PendingDelete"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A.                                                                      |
 | POST   | `/cloud/api/System/authenticateCustomer`        | Inferred only: runbook context only; no artifact.                                                                        | Capture one authenticateCustomer POST (redacted credentials): status, Set-Cookie vs body token, response envelope/code field, lifetime, and whether Manager calls then send Authorization or the cookie. Upgrades C->A and validates the whole auth model.                                                                                                                                                                |
 | POST   | `/cloud/api/System/getMessages`                 | Inferred only: crawler behaviour, not a wire observation; a hand-authored UI/DOM declaration.                            | On manager.html (v1.0.280) boot, messages are fetched via POST /cloud/api/Manager/getMessage ({acc, type: 0, operation: "getMessage", RRO: 1} at manager.js:55125) and POST /cloud/api/Manager/getNewEmailsCount (manager.js:31845). Capture Manager/getMessage and reconcile this candidate_url.                                                                                                                         |
 | POST   | `/cloud/api/System/verifySession`               | Inferred only: generator-authored.                                                                                       | Capture a verifySession call on a live and an expired token; confirm the response shape and the 401 re-mint behaviour. Upgrades C->A.                                                                                                                                                                                                                                                                                     |
 
-Appendix rows: **31** (tier C in the ledger). The capture plan that would upgrade them is [docs/evidence/capture-requests.md](./evidence/capture-requests.md).
+Appendix rows: **29** (tier C in the ledger). The capture plan that would upgrade them is [docs/evidence/capture-requests.md](./evidence/capture-requests.md).
 
 ## Missing surfaces
 
@@ -2003,9 +2023,9 @@ Counts below are ledger totals (all recorded rows, including rows removed from t
 
 | Tier | Meaning                                                                                                                                                                                                             | Ledger surfaces | Spec operations |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | --------------- |
-| A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 9               |
+| A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 11              |
 | B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 8               |
-| C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 31              |
+| C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 29              |
 | D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 27              |
 | E    | Documented operation with no implementation in this repository.                                                                                                                                                     | 1               | 0               |
 

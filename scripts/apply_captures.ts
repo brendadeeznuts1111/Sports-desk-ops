@@ -1145,7 +1145,6 @@ export function buildPlan(input: BuildPlanInput): Plan {
       });
       continue;
     }
-    const date = record.capturedAt.slice(0, 10);
     let tierReason: string | undefined;
     if (isRecord(parsedValue) && isRecord(parsedValue.provenance)) {
       try {
@@ -1175,7 +1174,10 @@ export function buildPlan(input: BuildPlanInput): Plan {
       method: record.operation.method.toUpperCase(),
       digest,
       capturedAt: record.capturedAt,
-      evidenceSource: `capture:${date}:${digest}`,
+      // verify_docs.evidenceCitesResolvedCapture resolves `capture:<date>/<file>` against the
+      // store manifest, not `capture:<date>:<sha256>`; the digest form is why an applied capture
+      // failed its own gate and could never be published.
+      evidenceSource: `capture:${relativePath}`,
       responseStatus: record.responseStatus,
       responseBodySha256: record.responseBodySha256,
       responseBytes: record.responseBytes,
@@ -1664,7 +1666,9 @@ export function applyCaptures(
       schemaVersion: 1,
       appliedAt: deps.now().toISOString(),
       tool: "scripts/apply_captures.ts",
-      capturesDir,
+      // Repo-relative: the audit record is evidence, not a machine snapshot; an absolute
+      // /Users/... path would make the committed artifact wrong on every other checkout.
+      capturesDir: relative(root, capturesDir).split("\\").join("/"),
       ledgerCountsBefore: plan.countsBefore,
       ledgerCountsAfter: applied.countsAfter,
       upgrades: plan.upgrades,
