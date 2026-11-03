@@ -8,7 +8,7 @@ Adding a `Bun.*` call without an entry in `lib/bun_shapes.ts` fails `tests/bun_s
 
 ## Upgrading
 
-When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@types/bun` together, run `bun run probe:bun` (baseline drift is the behaviour diff), then re-derive the declared surface with `./bin/dx bun --types`. Regenerate the member snapshot with `bun scripts/bun_shape_members.ts --baseline tests/bun_shape_members.json` and review the added/removed list. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.
+When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@types/bun` together, run `bun run probe:bun` (baseline drift is the behaviour diff), then re-derive the declared surface with `./bin/dx bun --types`. Regenerate the member snapshot with `bun scripts/bun_shape_members.ts --baseline tests/bun_shape_members.json` and the catalog with `bun scripts/bun_shape_contracts.ts --write` (`--refresh-links` re-checks the permalinks), then review the diff. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.
 
 ---
 
@@ -144,7 +144,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/write)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `scripts/capture/f402_probe.ts`
+- **Here:** `scripts/capture/f402_probe.ts`, `scripts/live_positions_cron.ts`
 - **Evidence:** `surface:write`
 
 ## Text and terminal rendering
@@ -164,7 +164,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/enableANSIColors)
 - **Shape:** value: `boolean` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `scripts/render_tasks.ts`
+- **Here:** `scripts/render_tasks.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.escapeHTML
@@ -179,7 +179,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `custom`, `table`
-- **Here:** `lib/wagers_report.ts`, `lib/f402_hierarchy_envelope_view.ts`
+- **Here:** `lib/f402_hierarchy_envelope_view.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:inspect.table`, `probe:text.inspect`
 
 #### Bun.markdown
@@ -194,7 +194,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `scripts/render_tasks.ts`
+- **Here:** `scripts/render_tasks.ts`
 - **Evidence:** `probe:text.width`
 
 #### Bun.wrapAnsi
@@ -231,7 +231,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Glob)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/pm_policy.ts`, `dsh-plugin/verify-load.mjs`
+- **Here:** `lib/pm_policy.ts`, `lib/eod_archive.ts`
 - **Evidence:** `probe:data.glob`
 
 #### Bun.JSON5
@@ -271,7 +271,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/XML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
-- **Here:** `lib/bun_xml_golden_ast.ts`, `lib/customer_profile.ts`
+- **Here:** `lib/bun_xml_golden_ast.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:XML`, `probe:data.parse`
 
 #### Bun.YAML
@@ -294,7 +294,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/semver)
 - **Shape:** value: `object` · writable false · enumerable true
 - **Members (2):** `order`, `satisfies`
-- **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/ops_audit.ts`
 - **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
 
 #### Bun.ImportKind (type, declared-only)
@@ -323,7 +323,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/CronController)
 - **Shape:** type-only: declared, no runtime value
-- **Here:** `scripts/wagers_by_state_capture.ts`, `lib/bun_cron.ts`
+- **Here:** `lib/bun_cron.ts`, `scripts/artifacts_cron.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`
 
 #### Bun.RedisClient
@@ -411,7 +411,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/hash)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (12):** `adler32`, `cityHash32`, `cityHash64`, `crc32`, `murmur32v2`, `murmur32v3`, `murmur64v2`, `rapidhash`, `wyhash`, `xxHash3`, `xxHash32`, `xxHash64`
-- **Here:** `lib/manager_fetch.ts`, `lib/f402_agent_graph_views.ts`
+- **Here:** `lib/f402_agent_graph_views.ts`, `services/sportsdesk_ingestion_replay.ts`
 - **Evidence:** `probe:crypto.hash`
 
 #### Bun.randomUUIDv7
@@ -563,7 +563,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version)
 - **Shape:** value: `string` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
+- **Here:** `bin/bun_surface.ts`, `scripts/evidence_capture.ts`
 - **Evidence:** `probe:proc.meta`
 
 #### Bun.version_with_sha
