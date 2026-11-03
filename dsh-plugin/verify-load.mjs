@@ -590,6 +590,8 @@ await checkAsync(
     const result = await tool.execute({ report: "subsport", limit: 100 });
     assert(result.available === true, "subsport unavailable");
     assert(result.dimension === "league", "default dimension is not league");
+    assert(result.cohort === "curated-profiles", `cohort ${result.cohort}`);
+    assert(typeof result.cohortNote === "string", "cohortNote missing");
     const byLeague = new Map();
     for (const row of book) {
       for (const ticket of row.recent_tickets ?? []) {
@@ -642,6 +644,14 @@ await checkAsync(
       `wagered ${pending.wagered} != source ${expectedWagered}`,
     );
     assert(
+      pending.scope === "agent-pending-report",
+      `pending scope ${pending.scope}`,
+    );
+    assert(
+      typeof pending.ageMinutes === "number",
+      "pending ageMinutes missing",
+    );
+    assert(
       pending.totalGames === pendingSource.games.length,
       "game count does not match the source",
     );
@@ -660,6 +670,30 @@ await checkAsync(
     assert(
       wagers.wagered === expectedAmount,
       `wagered ${wagers.wagered} != source ${expectedAmount}`,
+    );
+    assert(
+      wagers.scope === "clipboard-ticker-sample",
+      `wagers scope ${wagers.scope}`,
+    );
+    assert(wagers.parseWarnings === 0, `parseWarnings ${wagers.parseWarnings}`);
+    assert(
+      typeof wagers.wagerTypeLegend === "string",
+      "wagerTypeLegend missing",
+    );
+    assert(
+      typeof wagers.wagers?.[0]?.descCode === "string",
+      "wager descCode missing",
+    );
+
+    const reconcile = await tool.execute({ report: "reconcile" });
+    assert(
+      reconcile.scope === "disjoint",
+      `reconcile scope ${reconcile.scope}`,
+    );
+    assert(reconcile.overlapKeys === 0, "reconcile found an overlap");
+    assert(
+      typeof reconcile.magnitudeGapWagered === "number",
+      "magnitude gap missing",
     );
 
     const unknown = await tool.execute({ report: "nope" });

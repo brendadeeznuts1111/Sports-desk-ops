@@ -521,13 +521,71 @@ function filterBy(rows, key, wanted) {
  * @param {unknown} desc
  * @returns {string}
  */
-function parseTickerSport(desc) {
-  let text = String(desc ?? "").trim();
-  text = text.replace(/^[MPS][.:]/, "");
-  text = text.replace(/^G\d+/, "");
-  text = text.replace(/^[\r\n]+/, "");
-  const word = text.split(/\s+/)[0] ?? "";
-  return word.replace(/[-\u2013].*$/, "");
+/**
+ * The bet ticker's `WagerType` is a RAW code set, distinct from the grading panel's bet-type
+ * enum. Pinned from docs/evidence/surfaces.md: the panel labels `betType:M` "Money Line" but on a
+ * DIFFERENT screen (it does not document the ticker); `M` has no documented meaning in the ticker
+ * (docs/evidence/capture-requests.md — "carried as a raw code rather than guessed"); the panel's
+ * `Straight` betType is the comma set `S,M,L,E,C` and `I` is if-bets/action reverses. The ticker
+ * codes observed in the artifacts are M, L, S, P, I, T, G, A, C, N.
+ */
+const TICKER_WAGER_TYPES = new Set([
+  "M",
+  "L",
+  "S",
+  "P",
+  "I",
+  "T",
+  "G",
+  "A",
+  "C",
+  "N",
+]);
+
+const TICKER_WAGER_TYPE_FACTS =
+  "The ticker WagerType is a raw code set (observed: M, L, S, P, I, T, G, A, C, N), distinct " +
+  "from the grading panel's bet-type enum (Straight = S,M,L,E,C; I = if-bets/action reverses). " +
+  "M has no documented meaning in the ticker; the panel's betType:M is 'Money Line' on a " +
+  "different screen, so these codes must not be joined across screens.";
+
+/**
+ * Structurally split a ticker ShortDesc into its wager-type code, optional game id and sport. The
+ * leading token before the first `.`/`:` is the wager type; `G<digits>` may follow; the sport is
+ * the next whitespace-delimited token. A leading token outside the known ticker set is flagged
+ * `unknown` instead of silently passing through as a sport.
+ *
+ * @param {unknown} desc
+ * @returns {{ wagerType: string | null, gameNumber: string | null, descCode: string | null, sport: string | null, unknown: boolean }}
+ */
+function tokenizeShortDesc(desc) {
+  const text = String(desc ?? "").trim();
+  const typeMatch = text.match(/^([A-Z]+)[.:]/);
+  if (typeMatch === null) {
+    return {
+      wagerType: null,
+      gameNumber: null,
+      descCode: null,
+      sport: null,
+      unknown: true,
+    };
+  }
+  const wagerType = typeMatch[1];
+  let rest = text.slice(typeMatch[0].length);
+  let gameNumber = null;
+  const gameMatch = rest.match(/^G(\d+)/);
+  if (gameMatch !== null) {
+    gameNumber = gameMatch[1];
+    rest = rest.slice(gameMatch[0].length);
+  }
+  rest = rest.replace(/^[\r\n]+/, "");
+  const sportToken = (rest.split(/\s+/)[0] ?? "").replace(/[-\u2013].*$/, "");
+  return {
+    wagerType,
+    gameNumber,
+    descCode: typeMatch[0] + (gameNumber ?? ""),
+    sport: sportToken === "" ? null : sportToken,
+    unknown: !TICKER_WAGER_TYPES.has(wagerType),
+  };
 }
 
 /**
@@ -1292,8 +1350,8 @@ export function apply(ctx, config) {
         "path, mtime and age; a missing file is MISSING, not an empty book. Note: " +
         "recent_tickets is a per-customer SAMPLE, while lifetime_* fields are the full rollup. " +
         '"top" accepts window="lifetime" (default) or "7d" for net/volume rankings; ' +
-        '"subsport" derives per-league (or per-market) ROI, win rate and CLV from the sampled ' +
-        "tickets and the customers who placed them. " +
+        '"subsport" derives per-league (or per-market) ROI, win rate and CLV for the CURATED ' +
+        "customer-book cohort (not platform-wide) from the sampled tickets and their customers. " +
         "clv/sharp/churn exist only in the lifetime rollup. " +
         '"sharp" returns the DERIVED sharp audit: customers at or above minSharp ' +
         '(default 70) or with positive CLV, ranked by sharp score. "agent" rolls the book ' +
@@ -1593,6 +1651,12 @@ export function apply(ctx, config) {
             ok: true,
             report: request.report,
             dimension,
+            cohort: "curated-profiles",
+            cohortNote:
+              "The customer book is a 220-row curated fixture, not the full 9,435-account " +
+              "downline (docs/customer-poly-bridge.md). ROI, win rate and CLV are for this " +
+              "cohort, not platform-wide. The sample carries no parlay-leg marker, so win % " +
+              "treats each sampled ticket as one bet.",
             source,
             subsports,
           };
@@ -2030,7 +2094,7 @@ export function apply(ctx, config) {
       isConcurrencySafe: () => true,
       async execute(args) {
         const request = args ?? {};
-        const reports = ["pending", "wagers"];
+        const reports = ["pending", "wagers", "reconcile"];
         if (
           typeof request.report !== "string" ||
           !reports.includes(request.report)
@@ -2097,6 +2161,11 @@ export function apply(ctx, config) {
             available: true,
             ok: true,
             report: request.report,
+            scope: "agent-pending-report",
+            scopeNote:
+              "Agent /Report/Pending snapshot; DISJOINT from the clipboard ticker (data/live-wagers.json).",
+            capturedAt: data.capturedAt ?? null,
+            ageMinutes: stats.ageMinutes,
             source: {
               path: "data/live-bets.json",
               role: "Captured /Report/Pending snapshot.",
@@ -2138,6 +2207,75 @@ export function apply(ctx, config) {
             })),
           };
         }
+        if (request.report === "reconcile") {
+          const pendingPath = `${repoPath}/data/live-bets.json`;
+          const wagersPath = `${repoPath}/data/live-wagers.json`;
+          const pStats = statFile(pendingPath);
+          const wStats = statFile(wagersPath);
+          const pParsed = parseJson(readText(pendingPath));
+          const wParsed = parseJson(readText(wagersPath));
+          const pGames =
+            pParsed.ok && Array.isArray(pParsed.value?.games)
+              ? pParsed.value.games
+              : [];
+          const wList =
+            wParsed.ok && Array.isArray(wParsed.value?.LIST)
+              ? wParsed.value.LIST
+              : [];
+          const sumNum = (rows, key) =>
+            rows.reduce((total, row) => {
+              const value = Number(row?.[key]);
+              return total + (Number.isFinite(value) ? value : 0);
+            }, 0);
+          const pendingWagered = sumNum(pGames, "wagered");
+          const wagersWagered = sumNum(wList, "AmountWagered");
+          const pendingKeys = new Set(
+            pGames.map((game) => String(game?.ticketNumber ?? "")),
+          );
+          const wagerKeys = new Set(
+            wList.map((wager) => String(wager?.WagerNumber ?? "")),
+          );
+          let overlap = 0;
+          for (const key of pendingKeys) {
+            if (key !== "" && wagerKeys.has(key)) overlap += 1;
+          }
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            scope: "disjoint",
+            verdict: "disjoint",
+            note:
+              "The two feeds are DISJOINT sources: pending is the agent /Report/Pending snapshot " +
+              "and wagers is a clipboard paste sample, with different keyspaces (ticketNumber vs " +
+              "WagerNumber) and a large magnitude gap in wagered. Do not join them.",
+            pending: {
+              capturedAt: pParsed.ok
+                ? (pParsed.value?.capturedAt ?? null)
+                : null,
+              ageMinutes: pStats.ageMinutes,
+              tickets: pGames.length,
+              wagered: pendingWagered,
+              toWin: sumNum(pGames, "toWin"),
+            },
+            wagers: {
+              observedAt: wParsed.ok
+                ? (wParsed.value?.observedAt ?? null)
+                : null,
+              ageMinutes: wStats.ageMinutes,
+              tickets: wList.length,
+              wagered: wagersWagered,
+              toWin: sumNum(wList, "ToWinAmount"),
+            },
+            overlapKeys: overlap,
+            magnitudeGapWagered:
+              wagersWagered === 0 ? null : pendingWagered / wagersWagered,
+            captureGapMinutes:
+              pStats.ageMinutes === null || wStats.ageMinutes === null
+                ? null
+                : Math.abs(pStats.ageMinutes - wStats.ageMinutes),
+          };
+        }
         const absolute = `${repoPath}/data/live-wagers.json`;
         const stats = statFile(absolute);
         const parsed = parseJson(readText(absolute));
@@ -2160,15 +2298,18 @@ export function apply(ctx, config) {
         const list = Array.isArray(data.LIST) ? data.LIST : [];
         const wantedAgent = filter(request.agentId);
         const wantedSport = filter(request.sport);
-        const withSport = list.map((wager) => ({
-          ...wager,
-          _sport: parseTickerSport(wager?.ShortDesc),
-        }));
+        let parseWarnings = 0;
+        const withSport = list.map((wager) => {
+          const parsed = tokenizeShortDesc(wager?.ShortDesc);
+          if (parsed.unknown) parseWarnings += 1;
+          return { ...wager, ...parsed };
+        });
         const filtered = withSport.filter(
           (wager) =>
             (wantedAgent === "" ||
               String(wager?.AgentID ?? "").toUpperCase() === wantedAgent) &&
-            (wantedSport === "" || wager._sport.toUpperCase() === wantedSport),
+            (wantedSport === "" ||
+              (wager.sport ?? "").toUpperCase() === wantedSport),
         );
         const sum = (key) =>
           filtered.reduce((total, wager) => {
@@ -2179,6 +2320,13 @@ export function apply(ctx, config) {
           available: true,
           ok: true,
           report: request.report,
+          scope: "clipboard-ticker-sample",
+          scopeNote:
+            "Clipboard paste sample; DISJOINT from the agent /Report/Pending snapshot (data/live-bets.json).",
+          observedAt: data.observedAt ?? null,
+          ageMinutes: stats.ageMinutes,
+          parseWarnings,
+          wagerTypeLegend: TICKER_WAGER_TYPE_FACTS,
           source: {
             path: "data/live-wagers.json",
             role: "Clipboard bet-ticker rows.",
@@ -2193,16 +2341,18 @@ export function apply(ctx, config) {
           toWin: sum("ToWinAmount"),
           byAgent: countField(filtered, "AgentID"),
           byWagerType: countField(filtered, "WagerType"),
-          bySport: countField(filtered, "_sport"),
+          bySport: countField(filtered, "sport"),
           wagers: filtered.slice(0, limit).map((wager) => ({
             wagerNumber: wager?.WagerNumber ?? null,
             agentId: wager?.AgentID ?? null,
             customerId: wager?.CustomerID ?? null,
-            wagerType: wager?.WagerType ?? null,
+            wagerType: wager?.wagerType ?? null,
+            descCode: wager?.descCode ?? null,
+            gameNumber: wager?.gameNumber ?? null,
             amountWagered: wager?.AmountWagered ?? null,
             toWinAmount: wager?.ToWinAmount ?? null,
             insertDateTime: wager?.InsertDateTime ?? null,
-            sport: wager._sport || null,
+            sport: wager?.sport ?? null,
             shortDesc: wager?.ShortDesc ?? null,
           })),
         };
