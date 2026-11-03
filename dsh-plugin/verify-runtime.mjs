@@ -82,8 +82,8 @@ await check("the shim has Node globals the plugin relies on", () => {
   assert(typeof process.versions === "object", "process.versions is missing");
 });
 
-await check("the module loaded and registered six tools", () => {
-  assert(registered.length === 6, `registered ${registered.length} tools`);
+await check("the module loaded and registered seven tools", () => {
+  assert(registered.length === 7, `registered ${registered.length} tools`);
 });
 
 await check(
@@ -146,6 +146,14 @@ await check("sportsdesk_markets executes (dist artifact parse)", async () => {
     typeof result.totals?.baselineTotalDeskNetUsd4Wk === "number",
     "backtest totals missing",
   );
+  JSON.stringify(result);
+});
+
+await check("sportsdesk_ticker executes (ticker captures)", async () => {
+  const result = await byName
+    .get("sportsdesk_ticker")
+    .execute({ report: "wagers", limit: 3 });
+  assert(result.available === true, "wagers was unavailable");
   JSON.stringify(result);
 });
 

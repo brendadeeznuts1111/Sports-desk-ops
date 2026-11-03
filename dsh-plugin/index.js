@@ -515,6 +515,22 @@ function filterBy(rows, key, wanted) {
 }
 
 /**
+ * Pull the sport token out of a ticker ShortDesc, which carries a wager-type/keys prefix and a
+ * leading carriage return ("M.G319748913\r\nFootball - ...", "P.Football #263 ...").
+ *
+ * @param {unknown} desc
+ * @returns {string}
+ */
+function parseTickerSport(desc) {
+  let text = String(desc ?? "").trim();
+  text = text.replace(/^[MPS][.:]/, "");
+  text = text.replace(/^G\d+/, "");
+  text = text.replace(/^[\r\n]+/, "");
+  const word = text.split(/\s+/)[0] ?? "";
+  return word.replace(/[-\u2013].*$/, "");
+}
+
+/**
  * Read a record count out of a parsed JSON value.
  *
  * WHY THIS EXISTS AT ALL: a dataset can parse and still carry no records container (a
@@ -1276,6 +1292,8 @@ export function apply(ctx, config) {
         "path, mtime and age; a missing file is MISSING, not an empty book. Note: " +
         "recent_tickets is a per-customer SAMPLE, while lifetime_* fields are the full rollup. " +
         '"top" accepts window="lifetime" (default) or "7d" for net/volume rankings; ' +
+        '"subsport" derives per-league (or per-market) ROI, win rate and CLV from the sampled ' +
+        "tickets and the customers who placed them. " +
         "clv/sharp/churn exist only in the lifetime rollup. " +
         '"sharp" returns the DERIVED sharp audit: customers at or above minSharp ' +
         '(default 70) or with positive CLV, ranked by sharp score. "agent" rolls the book ' +
@@ -1314,6 +1332,11 @@ export function apply(ctx, config) {
             description:
               'For "sharp": sharp_score cutoff, 0-100 (default 70). Positive CLV also qualifies.',
           },
+          dimension: {
+            type: "string",
+            description:
+              'For "subsport": "league" (default) or "market" — the outcome-bearing dimension of the sampled tickets.',
+          },
           limit: {
             type: "number",
             description: "Rows for list reports (1-100, default 10).",
@@ -1333,6 +1356,7 @@ export function apply(ctx, config) {
           "search",
           "sharp",
           "agent",
+          "subsport",
         ];
         if (
           typeof request.report !== "string" ||
@@ -1482,6 +1506,95 @@ export function apply(ctx, config) {
             totalCustomers: rows.length,
             source,
             customers: ranked,
+          };
+        }
+        if (request.report === "subsport") {
+          const dimension =
+            typeof request.dimension === "string"
+              ? request.dimension
+              : "league";
+          if (dimension !== "league" && dimension !== "market") {
+            return invalidArguments(
+              'dimension must be "league" (default) or "market".',
+            );
+          }
+          const buckets = new Map();
+          for (const row of rows) {
+            const tickets = Array.isArray(row?.recent_tickets)
+              ? row.recent_tickets
+              : [];
+            const customerId = String(row?.customer_id ?? "UNKNOWN");
+            const profile = {
+              clv: Number(row?.clv_bps),
+              sharp: Number(row?.sharp_score),
+              churn: Number(row?.churn_hazard),
+            };
+            for (const ticket of tickets) {
+              const key = String(ticket?.[dimension] ?? "UNKNOWN");
+              const bucket = buckets.get(key) ?? {
+                tickets: 0,
+                riskUsd: 0,
+                netUsd: 0,
+                wins: 0,
+                decisive: 0,
+                customers: new Map(),
+              };
+              bucket.tickets += 1;
+              const risk = Number(ticket?.risk_usd);
+              const net = Number(ticket?.net_usd);
+              if (Number.isFinite(risk)) bucket.riskUsd += risk;
+              if (Number.isFinite(net)) bucket.netUsd += net;
+              const result = ticket?.result;
+              if (result === "WIN" || result === "LOSS") {
+                bucket.decisive += 1;
+                if (result === "WIN") bucket.wins += 1;
+              }
+              if (!bucket.customers.has(customerId)) {
+                bucket.customers.set(customerId, profile);
+              }
+              buckets.set(key, bucket);
+            }
+          }
+          const meanOf = (values) => {
+            const finite = values.filter((value) => Number.isFinite(value));
+            return finite.length === 0
+              ? null
+              : finite.reduce((a, b) => a + b, 0) / finite.length;
+          };
+          const subsports = [...buckets.entries()]
+            .map(([key, bucket]) => ({
+              [dimension]: key,
+              tickets: bucket.tickets,
+              customers: bucket.customers.size,
+              riskUsd: bucket.riskUsd,
+              netUsd: bucket.netUsd,
+              roiPct:
+                bucket.riskUsd === 0
+                  ? null
+                  : (bucket.netUsd / bucket.riskUsd) * 100,
+              winPct:
+                bucket.decisive === 0
+                  ? null
+                  : (bucket.wins / bucket.decisive) * 100,
+              avgClvBps: meanOf(
+                [...bucket.customers.values()].map((entry) => entry.clv),
+              ),
+              avgSharpScore: meanOf(
+                [...bucket.customers.values()].map((entry) => entry.sharp),
+              ),
+              avgChurnHazard: meanOf(
+                [...bucket.customers.values()].map((entry) => entry.churn),
+              ),
+            }))
+            .sort((left, right) => right.riskUsd - left.riskUsd)
+            .slice(0, limit);
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            dimension,
+            source,
+            subsports,
           };
         }
         if (request.report === "agent") {
@@ -1866,6 +1979,232 @@ export function apply(ctx, config) {
                 request.agentId,
               ).slice(0, limit)
             : [],
+        };
+      },
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // sportsdesk_ticker — the live bet ticker and pending report, derived
+  // ---------------------------------------------------------------------------
+  ctx.tools.register(
+    defineReadTool({
+      name: "sportsdesk_ticker",
+      description:
+        'Read-only, derived view of the bet ticker: "pending" (data/live-bets.json — the ' +
+        "captured /Report/Pending snapshot: pending count, summed wagered/to-win, by sport, " +
+        'sub-sport and wager type, plus the game rows) and "wagers" (data/live-wagers.json — ' +
+        "the clipboard ticker rows: count, summed amount/to-win, by agent and wager type). " +
+        "Every number is summed at call time; the answer carries the file's capturedAt/observedAt " +
+        "and age, because a ticker is a point-in-time sample, not a live feed. Filters: agentId, " +
+        "sport, subSport (pending only). limit caps each returned list.",
+      parameters: {
+        type: "object",
+        properties: {
+          report: {
+            type: "string",
+            description: "One of: pending, wagers.",
+          },
+          agentId: {
+            type: "string",
+            description: "Filter rows to one agent id.",
+          },
+          sport: {
+            type: "string",
+            description:
+              'Filter "pending" games (and parsed "wagers" sport) to one sport.',
+          },
+          subSport: {
+            type: "string",
+            description: 'Filter "pending" games to one sub-sport.',
+          },
+          limit: {
+            type: "number",
+            description: "Rows for the returned lists (1-100, default 10).",
+          },
+        },
+        required: ["report"],
+        additionalProperties: false,
+      },
+      output: { ...TEXT_OUTPUT, presentationMeta: (_args, value) => value },
+      isConcurrencySafe: () => true,
+      async execute(args) {
+        const request = args ?? {};
+        const reports = ["pending", "wagers"];
+        if (
+          typeof request.report !== "string" ||
+          !reports.includes(request.report)
+        ) {
+          return {
+            available: false,
+            reason: "unknown_report",
+            message: `Unknown report ${JSON.stringify(request.report)}. Allowed: ${reports.join(", ")}.`,
+          };
+        }
+        const limit = request.limit ?? 10;
+        if (
+          typeof limit !== "number" ||
+          !Number.isInteger(limit) ||
+          limit < 1 ||
+          limit > 100
+        ) {
+          return invalidArguments("limit must be an integer from 1 to 100.");
+        }
+        const filter = (value) =>
+          typeof value === "string" && value !== "" ? value.toUpperCase() : "";
+        if (request.report === "pending") {
+          const absolute = `${repoPath}/data/live-bets.json`;
+          const stats = statFile(absolute);
+          const parsed = parseJson(readText(absolute));
+          if (
+            !stats.exists ||
+            !parsed.ok ||
+            typeof parsed.value !== "object" ||
+            parsed.value === null
+          ) {
+            return {
+              available: false,
+              reason: stats.exists ? "ticker_unparseable" : "ticker_missing",
+              message: stats.exists
+                ? `${absolute} exists but is not a JSON object. This is NOT an empty ticker.`
+                : `${absolute} does not exist. This is NOT an empty ticker — no capture has run.`,
+              source: { path: "data/live-bets.json", ...stats },
+            };
+          }
+          const data = parsed.value;
+          const games = Array.isArray(data.games) ? data.games : [];
+          const wantedAgent = filter(request.agentId);
+          const wantedSport = filter(request.sport);
+          const wantedSub = filter(request.subSport);
+          const filtered = games.filter(
+            (game) =>
+              (wantedAgent === "" ||
+                String(game?.agent?.id ?? "").toUpperCase() === wantedAgent) &&
+              (wantedSport === "" ||
+                String(game?.sport ?? "").toUpperCase() === wantedSport) &&
+              (wantedSub === "" ||
+                String(game?.subSport ?? "").toUpperCase() === wantedSub),
+          );
+          const sum = (key) =>
+            filtered.reduce((total, game) => {
+              const value = Number(game?.[key]);
+              return total + (Number.isFinite(value) ? value : 0);
+            }, 0);
+          const agentList = Array.isArray(data.agents?.agents)
+            ? data.agents.agents
+            : [];
+          return {
+            available: true,
+            ok: true,
+            report: request.report,
+            source: {
+              path: "data/live-bets.json",
+              role: "Captured /Report/Pending snapshot.",
+              ...stats,
+              capturedAt: data.capturedAt ?? null,
+              note: "Point-in-time capture, not a live feed.",
+            },
+            pendingCount: data.pendingCount ?? null,
+            returnedGames: filtered.length,
+            totalGames: games.length,
+            wagered: sum("wagered"),
+            toWin: sum("toWin"),
+            bySport: countField(filtered, "sport"),
+            bySubSport: countField(filtered, "subSport"),
+            byWagerType: countField(filtered, "wagerType"),
+            agents: {
+              rows: agentList.slice(0, limit),
+              count: agentList.length,
+              unresolved: Array.isArray(data.agents?.unresolved)
+                ? data.agents.unresolved.length
+                : null,
+              unassignedGames: data.agents?.unassignedGames ?? null,
+              maxLevel: data.agents?.maxLevel ?? null,
+              hierarchyLoaded: data.agents?.hierarchyLoaded ?? null,
+            },
+            games: filtered.slice(0, limit).map((game) => ({
+              ticketNumber: game?.ticketNumber ?? null,
+              customerID: game?.customerID ?? null,
+              agentId: game?.agent?.id ?? null,
+              status: game?.status ?? null,
+              sport: game?.sport ?? null,
+              subSport: game?.subSport ?? null,
+              period: game?.period ?? null,
+              wagerType: game?.wagerType ?? null,
+              chosenTeam: game?.chosenTeam ?? null,
+              wagered: game?.wagered ?? null,
+              toWin: game?.toWin ?? null,
+              gameDateTime: game?.gameDateTime ?? null,
+            })),
+          };
+        }
+        const absolute = `${repoPath}/data/live-wagers.json`;
+        const stats = statFile(absolute);
+        const parsed = parseJson(readText(absolute));
+        if (
+          !stats.exists ||
+          !parsed.ok ||
+          typeof parsed.value !== "object" ||
+          parsed.value === null
+        ) {
+          return {
+            available: false,
+            reason: stats.exists ? "ticker_unparseable" : "ticker_missing",
+            message: stats.exists
+              ? `${absolute} exists but is not a JSON object. This is NOT an empty ticker.`
+              : `${absolute} does not exist. This is NOT an empty ticker — no ticker rows were pasted.`,
+            source: { path: "data/live-wagers.json", ...stats },
+          };
+        }
+        const data = parsed.value;
+        const list = Array.isArray(data.LIST) ? data.LIST : [];
+        const wantedAgent = filter(request.agentId);
+        const wantedSport = filter(request.sport);
+        const withSport = list.map((wager) => ({
+          ...wager,
+          _sport: parseTickerSport(wager?.ShortDesc),
+        }));
+        const filtered = withSport.filter(
+          (wager) =>
+            (wantedAgent === "" ||
+              String(wager?.AgentID ?? "").toUpperCase() === wantedAgent) &&
+            (wantedSport === "" || wager._sport.toUpperCase() === wantedSport),
+        );
+        const sum = (key) =>
+          filtered.reduce((total, wager) => {
+            const value = Number(wager?.[key]);
+            return total + (Number.isFinite(value) ? value : 0);
+          }, 0);
+        return {
+          available: true,
+          ok: true,
+          report: request.report,
+          source: {
+            path: "data/live-wagers.json",
+            role: "Clipboard bet-ticker rows.",
+            ...stats,
+            observedAt: data.observedAt ?? null,
+            partial: data.partial ?? null,
+            note: "Point-in-time sample, not a live feed.",
+          },
+          returnedWagers: filtered.length,
+          totalWagers: list.length,
+          wagered: sum("AmountWagered"),
+          toWin: sum("ToWinAmount"),
+          byAgent: countField(filtered, "AgentID"),
+          byWagerType: countField(filtered, "WagerType"),
+          bySport: countField(filtered, "_sport"),
+          wagers: filtered.slice(0, limit).map((wager) => ({
+            wagerNumber: wager?.WagerNumber ?? null,
+            agentId: wager?.AgentID ?? null,
+            customerId: wager?.CustomerID ?? null,
+            wagerType: wager?.WagerType ?? null,
+            amountWagered: wager?.AmountWagered ?? null,
+            toWinAmount: wager?.ToWinAmount ?? null,
+            insertDateTime: wager?.InsertDateTime ?? null,
+            sport: wager._sport || null,
+            shortDesc: wager?.ShortDesc ?? null,
+          })),
         };
       },
     }),

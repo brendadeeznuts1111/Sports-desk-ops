@@ -3,7 +3,7 @@
  * Stage 1 of two: prove DSH can LOAD this plugin under Bun, and that its tools REFUSE
  * input they do not understand.
  *
- * WHAT THIS PROVES: the module imports, `apply` registers exactly the six tools, every tool
+ * WHAT THIS PROVES: the module imports, `apply` registers exactly the seven tools, every tool
  * declaration is complete (description, parameters, output schema/render, execute), and the
  * closed sets reject unknown names — including prototype keys such as `toString` and
  * `__proto__`, which a plain `in` check would let through.
@@ -86,6 +86,7 @@ const EXPECTED = [
   "sportsdesk_downline",
   "sportsdesk_markets",
   "sportsdesk_status",
+  "sportsdesk_ticker",
 ];
 
 console.log("verify-load: plugin shape");
@@ -108,7 +109,7 @@ check("module exports the cordis apply/name/inject contract", () => {
   }
 });
 
-check("registers exactly the six read-only tools", () => {
+check("registers exactly the seven read-only tools", () => {
   assert(
     registered.length === EXPECTED.length,
     `registered ${registered.length} tools`,
@@ -581,9 +582,97 @@ await checkAsync(
   },
 );
 
+await checkAsync(
+  "sportsdesk_customer subsport derives ROI and CLV per league",
+  async () => {
+    const book = await Bun.file(`${REPO}/enriched_customers_full.json`).json();
+    const tool = byName.get("sportsdesk_customer");
+    const result = await tool.execute({ report: "subsport", limit: 100 });
+    assert(result.available === true, "subsport unavailable");
+    assert(result.dimension === "league", "default dimension is not league");
+    const byLeague = new Map();
+    for (const row of book) {
+      for (const ticket of row.recent_tickets ?? []) {
+        const league = ticket.league ?? "UNKNOWN";
+        const bucket = byLeague.get(league) ?? { risk: 0, net: 0 };
+        bucket.risk += Number(ticket.risk_usd ?? 0);
+        bucket.net += Number(ticket.net_usd ?? 0);
+        byLeague.set(league, bucket);
+      }
+    }
+    const topLeague = [...byLeague.entries()].sort(
+      (left, right) => right[1].risk - left[1].risk,
+    )[0];
+    assert(
+      result.subsports?.[0]?.league === topLeague?.[0],
+      `top league ${result.subsports?.[0]?.league} != source ${topLeague?.[0]}`,
+    );
+    assert(
+      result.subsports?.[0]?.riskUsd === topLeague?.[1].risk,
+      `league risk ${result.subsports?.[0]?.riskUsd} != source ${topLeague?.[1].risk}`,
+    );
+    const badDimension = await tool.execute({
+      report: "subsport",
+      dimension: "nope",
+    });
+    assert(
+      badDimension.reason === "invalid_arguments",
+      "an unsupported dimension was accepted",
+    );
+  },
+);
+
+await checkAsync(
+  "sportsdesk_ticker derives pending and wagers from the captures",
+  async () => {
+    const tool = byName.get("sportsdesk_ticker");
+    const pendingSource = await Bun.file(`${REPO}/data/live-bets.json`).json();
+    const pending = await tool.execute({ report: "pending", limit: 100 });
+    assert(pending.available === true, "pending unavailable");
+    assert(
+      pending.pendingCount === pendingSource.pendingCount,
+      `pendingCount ${pending.pendingCount} != source ${pendingSource.pendingCount}`,
+    );
+    const expectedWagered = pendingSource.games.reduce(
+      (total, game) => total + Number(game.wagered ?? 0),
+      0,
+    );
+    assert(
+      pending.wagered === expectedWagered,
+      `wagered ${pending.wagered} != source ${expectedWagered}`,
+    );
+    assert(
+      pending.totalGames === pendingSource.games.length,
+      "game count does not match the source",
+    );
+
+    const wagersSource = await Bun.file(`${REPO}/data/live-wagers.json`).json();
+    const wagers = await tool.execute({ report: "wagers", limit: 100 });
+    assert(wagers.available === true, "wagers unavailable");
+    assert(
+      wagers.totalWagers === wagersSource.LIST.length,
+      "wager count does not match the source",
+    );
+    const expectedAmount = wagersSource.LIST.reduce(
+      (total, wager) => total + Number(wager.AmountWagered ?? 0),
+      0,
+    );
+    assert(
+      wagers.wagered === expectedAmount,
+      `wagered ${wagers.wagered} != source ${expectedAmount}`,
+    );
+
+    const unknown = await tool.execute({ report: "nope" });
+    assert(
+      unknown.reason === "unknown_report",
+      "unknown ticker report accepted",
+    );
+  },
+);
+
 console.log(
   failed === 0
-    ? "\nverify-load: PASS — 6 tools load and refuse invalid input (stage 1/2)."
+    ? "\nverify-load: PASS — 7 tools load and refuse invalid input (stage 1/2)."
     : `\nverify-load: ${failed} FAILURE(S) (stage 1/2).`,
 );
 process.exit(failed === 0 ? 0 : 1);

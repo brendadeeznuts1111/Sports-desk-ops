@@ -10,6 +10,7 @@ sportsdesk_data      what the desk has on disk: dataset inventory, record counts
 sportsdesk_downline  questions over the downline snapshot: summary, one agent, top agents
 sportsdesk_customer  customer-book questions with every count DERIVED at call time
 sportsdesk_markets   staged combo/CLV reports: identity gates, wallet attribution, 4-week counterfactual
+sportsdesk_ticker    the bet ticker and pending report, derived from the capture files
 sportsdesk_dev       the repo's verification gates, reported not_run until executed
 ```
 
@@ -153,7 +154,7 @@ Two stages, because they prove different things.
 bun dsh-plugin/verify-load.mjs
 ```
 
-Imports the module with a fake `ctx`, asserts the zero-dependency contract and the six
+Imports the module with a fake `ctx`, asserts the zero-dependency contract and the seven
 tool declarations, and exercises every closed set with unknown names — including
 `toString`, `__proto__` and `constructor` — plus the report form (`sportsdesk_dev` with no
 `run`) leaving every gate `not_run` and `ok:null`.
@@ -202,12 +203,12 @@ Both stay shell commands where a human is in the loop.
 
 ## Layout
 
-| File                 | Role                                                                    |
-| -------------------- | ----------------------------------------------------------------------- |
-| `index.js`           | The Host plugin: raw tool definitions, config normalization, six tools. |
-| `cordis.patch.yml`   | Bundle layer that inserts the plugin row and its config.                |
-| `package.json`       | Manifest: `dsh.bundle.patch`, exports (entry, patch, locale, icon).     |
-| `locale/en.json`     | Plugin Manager title and description.                                   |
-| `icon.svg`           | Original icon for the plugin row.                                       |
-| `verify-load.mjs`    | Stage 1: Bun load + refusal test.                                       |
-| `verify-runtime.mjs` | Stage 2: host-runtime execution test.                                   |
+| File                 | Role                                                                      |
+| -------------------- | ------------------------------------------------------------------------- |
+| `index.js`           | The Host plugin: raw tool definitions, config normalization, seven tools. |
+| `cordis.patch.yml`   | Bundle layer that inserts the plugin row and its config.                  |
+| `package.json`       | Manifest: `dsh.bundle.patch`, exports (entry, patch, locale, icon).       |
+| `locale/en.json`     | Plugin Manager title and description.                                     |
+| `icon.svg`           | Original icon for the plugin row.                                         |
+| `verify-load.mjs`    | Stage 1: Bun load + refusal test.                                         |
+| `verify-runtime.mjs` | Stage 2: host-runtime execution test.                                     |
