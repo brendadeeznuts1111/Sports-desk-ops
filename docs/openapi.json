@@ -312,7 +312,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Pending wager legs snapshot",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:91-104 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:104-117 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerGetPending",
         "responses": {
           "default": {
@@ -322,7 +322,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "services/simulate_bettor_churn_suite.ts:91-104",
+            "services/simulate_bettor_churn_suite.ts:104-117",
             "lib/fantasy402_wager_universe_scope.ts:13-21",
             "docs/openapi.json",
             "docs/evidence/captures/pending-500s/diagnostics.json"
@@ -459,7 +459,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Padded-field customer mutation",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,140-158 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,136-154 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerUpdateByColumn",
         "responses": {
           "default": {
@@ -470,7 +470,7 @@
           "tier": "C",
           "sources": [
             "docs/runbooks/operational_guardrails_runbook.md:215",
-            "design/domain-branded-types.ts:9,140-158",
+            "design/domain-branded-types.ts:9,136-154",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1086,11 +1086,11 @@
           "tier": "B",
           "sources": [
             "services/sportsdesk_webview_server.ts#GET /api/watchlist",
-            "services/sportsdesk_webview_server.ts:171-190",
+            "services/sportsdesk_webview_server.ts:184-203",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:33-46)."
+          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:184-203)."
         }
       }
     },
@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1881-1906",
+            "services/sportsdesk_webview_server.ts:2016-2041",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1590,8 +1590,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:41",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:57-66",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1624,8 +1624,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:52",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:68-77",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1658,8 +1658,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:63",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:79-89",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1692,8 +1692,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:74",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:91-107",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:213"
           ],
@@ -1728,8 +1728,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:85",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:109-120",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1757,8 +1757,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:96",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:122-132",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:166"
           ],
@@ -1981,8 +1981,8 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:55-108",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:134-149",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/evidence/capture-requests.md"
           ],
@@ -2006,8 +2006,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:118",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:151-161",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2039,8 +2039,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:129",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:163-172",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2072,8 +2072,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:140",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:174-188",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2105,8 +2105,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:151",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:190-205",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:167"
           ],
@@ -2420,7 +2420,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/PendingDelete",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportPendingDelete",
         "responses": {
           "default": {
@@ -2430,7 +2430,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2442,7 +2442,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getDailyFiguresByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetDailyFiguresByCustomer",
         "responses": {
           "default": {
@@ -2452,7 +2452,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2464,7 +2464,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getGradedWagerByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetGradedWagerByCustomer",
         "responses": {
           "default": {
@@ -2474,7 +2474,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2620,7 +2620,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getTicketDetailPrint",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetTicketDetailPrint",
         "responses": {
           "default": {
@@ -2630,7 +2630,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2687,7 +2687,7 @@
           "sources": [
             "lib/fantasy402_settlement_ingest.ts:347-357",
             "lib/fantasy402_wager_universe_scope.ts:22-31",
-            "fixture:tests/fixtures/fantasy402-history-poll.json:1-25"
+            "fixture:tests/fixtures/fantasy402-history-poll.json:2-24"
           ],
           "capturedResponse": false,
           "requiredCapture": "Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance."
@@ -2728,8 +2728,8 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:185-192",
-            "services/sportsdesk_webview_server.ts:688-690"
+            "services/sportsdesk_webview_server.ts:1118-1125",
+            "services/sportsdesk_webview_server.ts:701-702"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured)."
@@ -2769,7 +2769,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:175-182"],
+          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -3087,7 +3087,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1590-1602"],
+          "sources": ["services/sportsdesk_webview_server.ts:1720-1732"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -3741,7 +3741,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:359-360"],
+          "sources": ["services/sportsdesk_webview_server.ts:1481-1555"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },
@@ -3990,7 +3990,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:175-182"],
+          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4058,7 +4058,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:175-182"],
+          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4149,7 +4149,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:175-182"],
+          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
         },
@@ -4235,7 +4235,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:728-826"],
+          "sources": ["services/sportsdesk_webview_server.ts:894-990"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
         },
@@ -4398,7 +4398,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1207-1228",
+            "services/sportsdesk_webview_server.ts:1220-1250",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -4524,7 +4524,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:599-601,391-397"
+            "services/sportsdesk_webview_server.ts:756-758,749-753"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
@@ -4640,7 +4640,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:599-601,391-397"
+            "services/sportsdesk_webview_server.ts:756-758,749-753"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
@@ -4818,7 +4818,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:599-601,391-397"
+            "services/sportsdesk_webview_server.ts:756-758,749-753"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
@@ -4890,7 +4890,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:599-601,391-397"
+            "services/sportsdesk_webview_server.ts:756-758,749-753"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."

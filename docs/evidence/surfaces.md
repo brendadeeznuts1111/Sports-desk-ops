@@ -17,23 +17,23 @@ Every `id` below is the same string as the `surfaces[].id` in the ledger, so the
 
 Fantasy402 desk navigation catalog: sub-sport lanes plus per-sport period menus. Not in the spec at all.
 
-| Fact                    | Value                                                                                                                           | Source                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Sports                  | 19                                                                                                                              | `fixture:tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8` |
-| Sub-sports              | 230                                                                                                                             | same fixture                                                          |
-| Period menus            | 42                                                                                                                              | same fixture (`sportPeriodCount`)                                     |
-| Desk-link collision ids | 2 — `Arena` → Football + Horse Racing; `NCAA Extra` → Basketball + Hockey                                                       | same fixture `collisions`; `fantasy402_sport_catalog.ts:229-245`      |
-| Provenance digests      | 4 — `subSportTreeSha256Hex`, `periodMenusSha256Hex`, `collisionRegistrySha256Hex`, `expectedEmptyPathsSha256Hex`                | `fantasy402_sport_catalog.ts:133-158,648-663`                         |
-| `capturedAt`            | `2026-10-21T16:38:53.513Z`                                                                                                      | fixture                                                               |
-| `periodsCapturedAt`     | `2026-10-30T04:59:14.572Z`                                                                                                      | fixture                                                               |
-| Structural empties      | stable: Football/Coll Ext, Hockey/NCAA Extra, Horse Racing/Arena, Soccer/France Ligue; volatile: LIVE/MMA Live, LIVE/WNCAA Live | `fantasy402_sport_catalog.ts:57-66`                                   |
+| Fact                    | Value                                                                                                                                                                                                                                                                                                        | Source                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Sports                  | 19                                                                                                                                                                                                                                                                                                           | `fixture:tests/fixtures/fantasy402-sport-catalog-2026-10-21.json:2-8`    |
+| Sub-sports              | 230                                                                                                                                                                                                                                                                                                          | same fixture                                                             |
+| Period menus            | 42                                                                                                                                                                                                                                                                                                           | same fixture (`sportPeriodCount`)                                        |
+| Desk-link collision ids | 2 — `Arena` → Football + Horse Racing; `NCAA Extra` → Basketball + Hockey                                                                                                                                                                                                                                    | same fixture `collisions`; `catalog/fantasy402_sport_catalog.ts:229-245` |
+| Provenance digests      | 4 — `subSportTreeSha256Hex`, `periodMenusSha256Hex`, `collisionRegistrySha256Hex`, `expectedEmptyPathsSha256Hex`. **Contradicted, re-read 2026-11-02:** `CatalogDigestSet`'s fourth digest is `observedCollisionSetSha256Hex`; `expectedEmptyPathsSha256Hex` is computed under `metrics`, not the digest set | `catalog/fantasy402_sport_catalog.ts:133-140,627-676`                    |
+| `capturedAt`            | `2026-10-21T16:38:53.513Z`                                                                                                                                                                                                                                                                                   | fixture                                                                  |
+| `periodsCapturedAt`     | `2026-10-30T04:59:14.572Z`                                                                                                                                                                                                                                                                                   | fixture                                                                  |
+| Structural empties      | stable: Football/Coll Ext, Hockey/NCAA Extra, Horse Racing/Arena, Soccer/France Ligue; volatile: LIVE/MMA Live, LIVE/WNCAA Live                                                                                                                                                                              | `catalog/fantasy402_sport_catalog.ts:57-66`                              |
 
 Why it matters: these are the `link_id` keys scoped ingestion uses. Two codes (`Arena`, `NCAA Extra`) are
 shared across sports, which is why `makeDeskLinkId` rewrites them to `<Sport>|<code>` — a collision that
 silently breaks ingestion if it is not represented.
 
 **Caveat:** the fixture is the committed SSOT sample, not a raw wire capture. `capturedAt` is
-fixture-declared. Validation is real (`validateFantasy402SportCatalog`, `fantasy402_sport_catalog.ts:448-530`):
+fixture-declared. Validation is real (`validateFantasy402SportCatalog`, `catalog/fantasy402_sport_catalog.ts:448-625`):
 declared counts must match computed counts, codes must be unique per sport, periods must number `0..n-1`
 with period `0` named `Game`, and the two timestamps must not invert.
 
@@ -70,7 +70,7 @@ Declared "wired" but not implemented at the transport layer.
   (`lib/fantasy402_settlement_ingest.ts:17`).
 - Row type: `RawGradingLegRow` — `CustomerID`, `WagerNumber`, `LegNumber`, `Amount` (cents, customer
   perspective: win > 0, loss < 0, void = 0), `SettlementDateTime`, `Result` (`WIN|LOSS|VOID|PUSH`),
-  `Description` (`simulate_bettor_churn_suite.ts:81-89`).
+  `Description` (`services/simulate_bettor_churn_suite.ts:94-102`).
 - **No fetch exists:** repo-wide the only settlement poll is `pollManagerGetHistory`, which targets
   `getHistory`. `getGrading` is a declared feed with no client.
 
@@ -107,17 +107,17 @@ spec and should stay out until the transport is real.
 
 Real routes, no spec rows:
 
-| Route                               | Behaviour                                             | Source                                 |
-| ----------------------------------- | ----------------------------------------------------- | -------------------------------------- |
-| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `sportsdesk_webview_server.ts:200-348` |
-| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `sportsdesk_webview_server.ts:363-375` |
-| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `sportsdesk_webview_server.ts:377-385` |
-| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `sportsdesk_webview_server.ts:385-392` |
-| `OPTIONS *`                         | 204 preflight with CORS headers                       | `sportsdesk_webview_server.ts:128-132` |
-| `GET /api/test/error`               | Synthetic throw for the error boundary                | `sportsdesk_webview_server.ts:120-126` |
+| Route                               | Behaviour                                             | Source                                            |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `services/sportsdesk_webview_server.ts:1915-1934` |
+| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `services/sportsdesk_webview_server.ts:1950-1962` |
+| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `services/sportsdesk_webview_server.ts:1965-1976` |
+| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `services/sportsdesk_webview_server.ts:1978-2000` |
+| `OPTIONS *`                         | 204 preflight with CORS headers                       | `services/sportsdesk_webview_server.ts:756-758`   |
+| `GET /api/test/error`               | Synthetic throw for the error boundary                | `services/sportsdesk_webview_server.ts:749-753`   |
 
 All `/api/telegram/*` and `/api/watchlist` calls pass through `adminRejection`
-(`sportsdesk_webview_server.ts:176-195,176-187`): constant-time comparison against `SPORTSDESK_ADMIN_TOKEN`,
+(`services/sportsdesk_webview_server.ts:184-203`): constant-time comparison against `SPORTSDESK_ADMIN_TOKEN`,
 503 when the token is unset, 401 otherwise.
 
 ---
@@ -181,11 +181,11 @@ Why "9 paths / 10 operations": `/api/desk/auth/session` carries both `POST` and 
 
 Evidence of absence:
 
-- `sportsdesk_webview_server.ts:116-1894` is the complete daemon router: `/health`, `/`, `/dashboard`,
+- `services/sportsdesk_webview_server.ts:740-2075` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
-  404 JSON fallback at `:299-307`. No `/api/desk` prefix is matched.
+  404 JSON fallback at `services/sportsdesk_webview_server.ts:2066-2074`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
-  (`main:tests/api_reference.test.ts:55-56,91-100`) and the generator that wrote the spec
+  (`tests/capture_apply.test.ts:84,96`; re-measured 2026-11-02 — `tests/api_reference.test.ts`, cited here before, no longer mentions `/api/desk`) and the generator that wrote the spec
   (`scripts/enhance_docs.mjs:115,237,249,269,289,301,321`).
 - There is no HMAC verifier, no `DESK-*` token codec, no `CookieMap` session store and no HITL queue store
   in either tree.
@@ -196,7 +196,7 @@ present these as callable routes in the docs release.
 ## D-8. `surface.daemon-live-bets`
 
 - `GET /api/live-bets` and `GET /api/live-bets/summary` derive a scoreboard payload from captured
-  `Report/Pending` rows (`sportsdesk_webview_server.ts:531-642`).
+  `Report/Pending` rows (`services/sportsdesk_webview_server.ts:787-891`).
 - Amounts stay in integer cents; `Password`, `NameFirst` and `Login` are stripped by name, and
   `buildArtifact()` refuses to write when any survive (`lib/live_bets.ts`).
 - Both paths call the same loader and `summarizeGames()` in one request, so the summary cannot
@@ -207,7 +207,7 @@ present these as callable routes in the docs release.
 ## D-9. `surface.daemon-agent-tree`
 
 - `GET /api/agent-tree` serves `data/agent-tree.json` joined with per-agent exposure
-  (`sportsdesk_webview_server.ts:958-978`).
+  (`services/sportsdesk_webview_server.ts:1828-1888`).
 - The forest is built from the portal's own `baseHeriarchy` parent pointers
   (`scripts/build_agent_tree.ts`), keyed by canonical `agentLoginKey`.
 - A key owned by more than one `AgentID` keeps its node but is flagged `a: true` and never given a
@@ -319,7 +319,7 @@ master account — in `source` or a sibling field.
 
 ## D-10. `surface.daemon-scoreboard`
 
-- `GET /api/scoreboard` serves `data/scoreboard.json` (`sportsdesk_webview_server.ts:1508-1520`):
+- `GET /api/scoreboard` serves `data/scoreboard.json` (`services/sportsdesk_webview_server.ts:1720-1732`):
   22 games (NFL 12, NHL 5, NBA 4, NCAA 1) transcribed from the manager page.
 - The payload carries `source` and `observedAt`. These games are **transcribed, not captured**; the
   pasted logo column was offset by one game, so logos are resolved by team name and verified against
@@ -329,21 +329,21 @@ master account — in `source` or a sibling field.
 ## D-11. `surface.daemon-sports-taxonomy`
 
 - `GET /api/sports` returns the portal's 18 categories with counts for the loaded wagers and the
-  scoreboard (`sportsdesk_webview_server.ts:920-945`).
+  scoreboard (`services/sportsdesk_webview_server.ts:1692-1717`).
 - `All Sports` is the absence of a filter and `LIVE` is a state, so neither is modelled as a category;
   unmapped sports surface as `Other` (`lib/sport_taxonomy.ts`).
 
 ## D-12. `surface.daemon-game-admin`
 
 - `GET /api/game-admin` returns exposure per fixture split by position (`Straight`/`Parlay`/`Teaser`),
-  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`sportsdesk_webview_server.ts:902-918`).
+  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`services/sportsdesk_webview_server.ts:1674-1689`).
 - `preGame` is computed from `gameDateTime` against the request clock and is a fact about the fixture,
   **not** a claim about the operator's delete permission (manual F.A.Q. #3).
 
 ## D-13. `surface.daemon-graph-data-plane`
 
 The generated graph page fetches its data relative to the document, so serving only `/graph` and
-`/graph.js` left it dead. These paths now serve it (`sportsdesk_webview_server.ts:711-777`):
+`/graph.js` left it dead. These paths now serve it (`services/sportsdesk_webview_server.ts:1220-1250,1890-1912`):
 
 | Route                           | Serves                                         |
 | ------------------------------- | ---------------------------------------------- |
@@ -358,9 +358,9 @@ Asset names are validated (separators, control characters, `..`) and traversal i
 ## D-14. `surface.daemon-analysis`
 
 - `GET /api/analysis/filters` returns the report kinds (CP/CPS/CPV/G), 14 activity codes, 2 group
-  modes and 4 week windows, with provenance (`sportsdesk_webview_server.ts:1246-1262`).
+  modes and 4 week windows, with provenance (`services/sportsdesk_webview_server.ts:1559-1574`).
 - `GET /api/analysis/reports` lists transcribed results with the selection each was run under
-  (`sportsdesk_webview_server.ts:978-1006`).
+  (`services/sportsdesk_webview_server.ts:1254-1296`).
 - `GET /api/analysis` answers **200** only when a stored report matches the selection, and **501**
   with the required capture otherwise. A 200 carries the rows, the published totals, a recomputed
   copy and a `discrepancies` array.
@@ -455,14 +455,14 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 ## D-15. `surface.daemon-agent-search`
 
 - `GET /api/agents/search?q=` searches `data/agent-tree.json`, prefix hits first
-  (`sportsdesk_webview_server.ts:1416-1475`).
+  (`services/sportsdesk_webview_server.ts:1765-1825`).
 - Requires two characters, clamps `limit` to 1–100, and is loopback-gated because agent names are
   identity data.
 
 ## D-16. `surface.daemon-game-admin-board`
 
 - `GET /api/game-admin/board` serves the Admin module — spread, moneyline, total and team totals
-  with the money on each side (`sportsdesk_webview_server.ts:1086-1160`).
+  with the money on each side (`services/sportsdesk_webview_server.ts:1412-1478`).
 - Window values are the portal's: `48` yesterday, `24` today, `-1` current board. A single-day
   board answers Yesterday with no games rather than repeating today.
 - Abbreviated amounts (`120k`) carry `amountExact: null` and are excluded from every sum.
@@ -471,21 +471,21 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 
 - `GET /api/sports/catalog` exposes 19 sports, 230 sub-sports and 42 period entries from
   `tests/fixtures/fantasy402-sport-catalog-2026-10-21.json`
-  (`sportsdesk_webview_server.ts:1168-1245`).
+  (`services/sportsdesk_webview_server.ts:1481-1555`).
 - Period numbers are sport-specific; `periodTypes` reports every name a number carries and flags the
   ambiguous ones. Sub-sport codes claimed by two sports are marked.
 
 ## D-18. `surface.daemon-contests`
 
 - `GET /api/contests` serves 227 futures extracted from the sports nav by
-  `scripts/extract_contests.ts` (`sportsdesk_webview_server.ts:1052-1085`).
+  `scripts/extract_contests.ts` (`services/sportsdesk_webview_server.ts:1370-1409`).
 - Rows are keyed by the portal's numeric `contestNum`; sport, market and subject are parsed from the
   padded type string. `?group` and `?q` filter server-side.
 
 ## D-19. `surface.daemon-live-wagers`
 
 - `GET /api/live-wagers` serves the `{LIST: [...]}` ticker feed
-  (`services/sportsdesk_webview_server.ts:1015-1060`), which is **not** the Pending shape:
+  (`services/sportsdesk_webview_server.ts:1299-1367`), which is **not** the Pending shape:
   `WagerNumber` is the ticket id and `ShortDesc` carries one line per leg.
 - Both `ShortDesc` grammars are parsed; a leg with no `/ Period / Market / Pick` segments is flagged
   `compact` and its sport is matched against the known sport names.
@@ -546,13 +546,16 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 ## D-20. `surface.daemon-logo-proxy`
 
 - `GET /api/logo/{name}` fetches `https://cdn.fastassets.io/images/team-logos/{name}` and returns the
-  bytes with an immutable day-long cache (`services/sportsdesk_webview_server.ts:762-860`).
+  bytes with an immutable day-long cache (`services/sportsdesk_webview_server.ts:894-990`).
 - The name is validated by rejecting separators, control characters and `..` rather than by
   allowlisting the characters the feed happens to use — the feed sends names with spaces
   (`Arsenal FC.png`), so an allowlist would have to grow with the feed.
 - A malformed percent-escape is **400**, not 500: `decodeURIComponent` used to throw straight into
   the error boundary (measured `/api/logo/%E0%A4%A`).
 - An upstream response that is not `image/*` is **502**; a non-2xx upstream status is passed through.
+  **Partly contradicted, re-read 2026-11-02:** no content-type check exists. `fetchLogo`
+  (`services/sportsdesk_webview_server.ts:596-645`) decodes the bytes, and the route answers 502 when
+  they do not decode or exceed 4 MiB; the status passthrough holds.
   The fetch is bounded by an 8s `AbortSignal.timeout`.
 - Public by design: fixed host, image bytes only, no customer data.
 

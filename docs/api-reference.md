@@ -75,20 +75,20 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 
 ### Outbound request headers
 
-| Header             | Required    | Declared value                                                                   | Purpose                                                                                                   | Evidence                                                                                                                                                                                                                                                                                             |
-| ------------------ | ----------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Authorization`    | yes         | `Bearer <token>`                                                                 | Bearer token used by the local daemon surface.                                                            | Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:27-47`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). |
-| `Content-Type`     | conditional | `application/x-www-form-urlencoded` or `application/json` depending on operation | Payload serialization announced by the caller.                                                            | Observed on the `getWebLog` mode-B request as `application/x-www-form-urlencoded; charset=UTF-8` (`docs/runbooks/operational_guardrails_runbook.md:129-140`); other content types are spec declarations, not captures.                                                                               |
-| `Cookie`           | yes         | `session`                                                                        | Session cookie used by the cloud Manager surface.                                                         | Observed: the 2026-10-28 Manager HAR session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.                                                                                                                |
-| `X-Requested-With` | yes         | string, example `XMLHttpRequest`                                                 | Observed on the captured 2026-10-28 mode-B Manager request. Whether the portal enforces it is unverified. | Observed on the `getWebLog` mode-B request (`XMLHttpRequest`, `docs/runbooks/operational_guardrails_runbook.md:129-140`).                                                                                                                                                                            |
+| Header             | Required    | Declared value                                                                   | Purpose                                                                                                   | Evidence                                                                                                                                                                                                                                                                                               |
+| ------------------ | ----------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Authorization`    | yes         | `Bearer <token>`                                                                 | Bearer token used by the local daemon surface.                                                            | Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:184-203`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). |
+| `Content-Type`     | conditional | `application/x-www-form-urlencoded` or `application/json` depending on operation | Payload serialization announced by the caller.                                                            | Observed on the `getWebLog` mode-B request as `application/x-www-form-urlencoded; charset=UTF-8` (`docs/runbooks/operational_guardrails_runbook.md:129-140`); other content types are spec declarations, not captures.                                                                                 |
+| `Cookie`           | yes         | `session`                                                                        | Session cookie used by the cloud Manager surface.                                                         | Observed: the 2026-10-28 Manager HAR session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.                                                                                                                  |
+| `X-Requested-With` | yes         | string, example `XMLHttpRequest`                                                 | Observed on the captured 2026-10-28 mode-B Manager request. Whether the portal enforces it is unverified. | Observed on the `getWebLog` mode-B request (`XMLHttpRequest`, `docs/runbooks/operational_guardrails_runbook.md:129-140`).                                                                                                                                                                              |
 
 ### Inbound response security headers
 
-| Header                    | Declared value                                                                     | Purpose                                                                                                                                                                                     | Evidence                                                                                                                                   |
-| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Content-Security-Policy` | `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:` | Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders). | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured. |
-| `Referrer-Policy`         | `strict-origin-when-cross-origin`                                                  | Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                      | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured. |
-| `X-Content-Type-Options`  | `nosniff`                                                                          | X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                                       | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:83-91`). Upstream cloud response headers were not captured. |
+| Header                    | Declared value                                                                     | Purpose                                                                                                                                                                                     | Evidence                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Security-Policy` | `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:` | Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders). | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:697-711`). Upstream cloud response headers were not captured. |
+| `Referrer-Policy`         | `strict-origin-when-cross-origin`                                                  | Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                      | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:697-711`). Upstream cloud response headers were not captured. |
+| `X-Content-Type-Options`  | `nosniff`                                                                          | X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                                       | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:697-711`). Upstream cloud response headers were not captured. |
 
 ## Authentication & sessions
 
@@ -106,7 +106,7 @@ Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authori
 
 Static daemon admin token: Authorization: Bearer &lt;SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts, adminRejection). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.
 
-Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:27-47`), protects `/api/watchlist` and `/api/telegram/*` (`:176-183`) and returns 503 when the token is not configured.
+Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:184-203`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:1938-1947`) and returns 503 when the token is not configured.
 
 ### Session lifecycle
 
@@ -118,7 +118,7 @@ One section per operation present in the final spec. Each section starts with it
 
 ### `POST /cloud/api/Manager/getScores`
 
-> **Evidence — tier B** · sources: `main:scripts/portal_tile_crawler.ts:55-108`, `main:scripts/portal_tile_crawler.ts:164-245`, `docs/evidence/capture-requests.md` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier B** · sources: `main:scripts/portal_tile_crawler.ts:134-149`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/evidence/capture-requests.md` · response not captured · candidate URL+method (not observed on the wire)
 
 **Scores leaderboard (request observed 2026-11-02; response shape partly observed)**
 
@@ -473,7 +473,7 @@ Serves the transcribed Admin module: spread, moneyline, total and team-total sid
 
 ### `GET /api/graph-feed`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1207-1228`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1220-1250`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Graph live feed (GET /api/graph-feed, /graph-live-feed.json)**
 
@@ -506,7 +506,7 @@ Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds —
 
 ### `GET /api/kpis`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
 
 **Dashboard headline KPIs (GET /api/kpis)**
 
@@ -610,7 +610,7 @@ The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumbe
 
 ### `GET /api/logo/{name}`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:728-826` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:894-990` · response not captured
 
 **Team-logo proxy (GET /api/logo/{name})**
 
@@ -646,7 +646,7 @@ Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image
 
 ### `POST /api/parse-formdata`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
 
 **Form-data parse probe (POST /api/parse-formdata)**
 
@@ -675,7 +675,7 @@ Echoes the fields of one multipart or urlencoded body as {name: string | string[
 
 ### `GET /api/scoreboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1590-1602` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1720-1732` · response not captured
 
 **Transcribed portal scoreboard (games, scores, status)**
 
@@ -730,7 +730,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/sports/catalog`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:359-360` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1481-1555` · response not captured
 
 **Sub-sports and period menus with their types**
 
@@ -759,7 +759,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
 
 **Daemon status and process telemetry (GET /api/status, GET /status.json)**
 
@@ -784,7 +784,7 @@ Answers {ok, status, checks, health, telegram, timestamp} from the running proce
 
 ### `GET /api/telegram/activity`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
 
 **Recent Telegram activity (GET /api/telegram/activity)**
 
@@ -819,7 +819,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1881-1906` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:2016-2041` · response not captured
 
 **Dispatch an instant Telegram alert**
 
@@ -918,7 +918,7 @@ Report type is selected by the ?type= query parameter and defaults to EVENING_SE
 
 ### `GET /api/telegram/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
 
 **Telegram configuration and schedules (GET /api/telegram/status)**
 
@@ -955,7 +955,7 @@ Returns {success, status, schedules, reportTypes} from the bot service and the i
 
 ### `POST /api/telegram/webhook`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
 
 **Register or delete the Telegram webhook (POST /api/telegram/webhook)**
 
@@ -1012,7 +1012,7 @@ Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook
 
 ### `GET /api/test/error`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:599-601,391-397` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
 
 **Error-boundary probe (GET /api/test/error)**
 
@@ -1034,14 +1034,14 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/watchlist`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:171-190` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:184-203` · response not captured
 
 **Monitored watch-list accounts**
 
 Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts). Requires Authorization: Bearer &lt;SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiWatchlist`
-- **Required capture:** No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:33-46).
+- **Required capture:** No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:184-203).
 
 **Responses**
 
@@ -1070,7 +1070,7 @@ Returns {success, count, data} from telegramService.getWatchList() (services/spo
 
 ### `GET /dashboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:175-182` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
 
 **Operator dashboard (GET /dashboard)**
 
@@ -1117,7 +1117,7 @@ Handler-defined contract: services/sportsdesk_webview_server.ts returns the daem
 
 ### `GET /miniapp`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:185-192`, `services/sportsdesk_webview_server.ts:688-690` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1118-1125`, `services/sportsdesk_webview_server.ts:701-702` · response not captured
 
 **Telegram Mini App dashboard (GET /miniapp)**
 
@@ -1173,7 +1173,7 @@ Request observed 2026-11-01 on the agent-performance screen: a form-urlencoded P
 
 ### `POST /cloud/api/Manager/getHistory`
 
-> **Evidence — tier D** · sources: `lib/fantasy402_settlement_ingest.ts:347-357`, `lib/fantasy402_wager_universe_scope.ts:22-31`, `fixture:tests/fixtures/fantasy402-history-poll.json:1-25` · response not captured
+> **Evidence — tier D** · sources: `lib/fantasy402_settlement_ingest.ts:347-357`, `lib/fantasy402_wager_universe_scope.ts:22-31`, `fixture:tests/fixtures/fantasy402-history-poll.json:2-24` · response not captured
 
 **Manager getHistory (wired settlement-history poll; no response capture)**
 
@@ -1190,7 +1190,7 @@ The only upstream Fantasy402 route in this repository with a real fetch client: 
 
 ### `POST /cloud/api/Manager/adjustBalance`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:63`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:79-89`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Cashier**
 
@@ -1209,7 +1209,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/createPlayer`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:74`, `main:scripts/portal_tile_crawler.ts:164-245`, `docs/runbooks/operational_guardrails_runbook.md:213` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:91-107`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:213` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Add Customer**
 
@@ -1258,7 +1258,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/gameAdmin`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:41`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:57-66`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Game Admin**
 
@@ -1277,7 +1277,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/get3rdPartyLimits`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:85`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:109-120`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: 3rd Party Limits**
 
@@ -1296,7 +1296,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/getAgentTree`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:118`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:151-161`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Agent Admin**
 
@@ -1315,7 +1315,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/getBilling`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:129`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:163-172`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Billing**
 
@@ -1364,11 +1364,11 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/getPending`
 
-> **Evidence — tier C** · sources: `services/simulate_bettor_churn_suite.ts:91-104`, `lib/fantasy402_wager_universe_scope.ts:13-21`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured · **contradicted by a concrete artifact**
+> **Evidence — tier C** · sources: `services/simulate_bettor_churn_suite.ts:104-117`, `lib/fantasy402_wager_universe_scope.ts:13-21`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured · **contradicted by a concrete artifact**
 
 **Pending wager legs snapshot**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:91-104 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:104-117 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiManagerGetPending`
 - **Required capture:** Prefix-divergent from /cloud/api/Report/Pending (Tier A, 200 41-46 KB). In Manager report bundle (Blob A7FD1C99), Manager/getPending sends form-urlencoded {agentID, type, operation: "getPending", RRO} and reads {LIST, TOTAL}. Re-probe with {agentID, type: "", operation: "getPending", RRO: "1"} or retire in favor of /cloud/api/Report/Pending.
@@ -1380,7 +1380,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/getRules`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:140`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:174-188`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Rules**
 
@@ -1414,11 +1414,11 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/updateByColumn`
 
-> **Evidence — tier C** · sources: `docs/runbooks/operational_guardrails_runbook.md:215`, `design/domain-branded-types.ts:9,140-158` · response not captured
+> **Evidence — tier C** · sources: `docs/runbooks/operational_guardrails_runbook.md:215`, `design/domain-branded-types.ts:9,136-154` · response not captured
 
 **Padded-field customer mutation**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,140-158 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,136-154 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiManagerUpdateByColumn`
 - **Required capture:** Highest-value mutation capture: one updateByColumn with a safe column (confirmationDelaySeconds) plus the getInfoPlayer read-back. Record exact form fields, content type, padding width actually required (11 vs the observed 10), sub-agent vs master scope, and the Result envelope. Upgrades C->A and is the only way to validate the SILENT_NO_OP / REJECTED_SCOPE claims.
@@ -1474,7 +1474,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getAnalysis`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:96`, `main:scripts/portal_tile_crawler.ts:164-245`, `docs/runbooks/operational_guardrails_runbook.md:166` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:122-132`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:166` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Analysis**
 
@@ -1508,11 +1508,11 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Report/getDailyFiguresByCustomer`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:24-40`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/getDailyFiguresByCustomer**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetDailyFiguresByCustomer`
 - **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: "application/json" with JSON.stringify({agentID, customerID, week: 0, operation: "getDailyFiguresByCustomer"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts).
@@ -1538,7 +1538,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Report/getFinancialReport`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:151`, `main:scripts/portal_tile_crawler.ts:164-245`, `docs/runbooks/operational_guardrails_runbook.md:167` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:190-205`, `main:scripts/portal_tile_crawler.ts:545-670`, `docs/runbooks/operational_guardrails_runbook.md:167` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Transactions History**
 
@@ -1557,11 +1557,11 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getGradedWagerByCustomer`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:24-40`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/getGradedWagerByCustomer**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetGradedWagerByCustomer`
 - **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 (shared handler threw before response serialization). 1. Retrieve upstream server error log for the shared handler group; 2. Re-probe with the identical captured payload, then test integer week=0 per customer/report/report.js:33171.
@@ -1587,11 +1587,11 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getTicketDetailPrint`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:24-40`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/getTicketDetailPrint**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetTicketDetailPrint`
 - **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when ticketNumber/wagerNumber were omitted. 1. Retrieve upstream server error log; 2. Re-probe identical payload, then probe with the 5-key customer/report/report.js:108955 envelope {token, ticketNumber, wagerNumber, flag, operation}.
@@ -1617,11 +1617,11 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Report/PendingDelete`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:24-40`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/PendingDelete**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportPendingDelete`
 - **Required capture:** Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: "PendingDelete"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A.
@@ -1647,7 +1647,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/System/getMessages`
 
-> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:52`, `main:scripts/portal_tile_crawler.ts:164-245` · response not captured · candidate URL+method (not observed on the wire)
+> **Evidence — tier C** · sources: `main:scripts/portal_tile_crawler.ts:68-77`, `main:scripts/portal_tile_crawler.ts:545-670` · response not captured · candidate URL+method (not observed on the wire)
 
 **Launcher tile: Messaging**
 
