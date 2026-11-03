@@ -27,17 +27,25 @@ const TicketSchema = z.object({
   league: z.string().optional(),
   market: z.string().optional(),
   result: z.string().optional(),
+  risk_usd: z.number().optional(),
+  net_usd: z.number().optional(),
+  placed_at: z.string().optional(),
 });
 
 const CustomerSchema = z.object({
   customer_id: z.string(),
   agent_id: z.string(),
+  master_agent: z.string().optional(),
+  status: z.string().optional(),
   context_type: z.string().optional(),
   churn_mode: z.string().optional(),
   lifetime_volume_usd: z.number(),
   lifetime_net_usd: z.number(),
   sports_7d_volume_usd: z.number().optional(),
   sports_7d_net_usd: z.number().optional(),
+  clv_bps: z.number().optional(),
+  sharp_score: z.number().optional(),
+  churn_hazard: z.number().optional(),
   recent_tickets: z.array(TicketSchema).optional(),
 });
 
@@ -111,6 +119,177 @@ export async function loadCustomerBook(): Promise<
   return parsed.data;
 }
 
+type Ticket = z.infer<typeof TicketSchema>;
+
+export interface TicketSample {
+  readonly tickets: number;
+  readonly results: Record<string, number>;
+  readonly leagues: Record<string, number>;
+  readonly riskUsd: number;
+  readonly netUsd: number;
+  /** Percent over sampled WIN/LOSS tickets; null when the sample has none. */
+  readonly winPct: number | null;
+  readonly firstPlacedAt: string | null;
+  readonly lastPlacedAt: string | null;
+}
+
+/**
+ * Aggregate the per-customer ticket SAMPLE. Callers must present this as a sample: the book
+ * does not carry full ticket history, and the CLI labels those columns with `*`.
+ *
+ * @param {readonly Ticket[]} tickets
+ * @returns {TicketSample}
+ */
+export function summarizeSample(tickets: readonly Ticket[]): TicketSample {
+  const results = new Map<string, number>();
+  const leagues = new Map<string, number>();
+  let riskUsd = 0;
+  let netUsd = 0;
+  let wins = 0;
+  let decisive = 0;
+  let first: string | null = null;
+  let last: string | null = null;
+  for (const ticket of tickets) {
+    const result = ticket.result ?? "UNKNOWN";
+    results.set(result, (results.get(result) ?? 0) + 1);
+    const league = ticket.league ?? "UNKNOWN";
+    leagues.set(league, (leagues.get(league) ?? 0) + 1);
+    if (typeof ticket.risk_usd === "number") riskUsd += ticket.risk_usd;
+    if (typeof ticket.net_usd === "number") netUsd += ticket.net_usd;
+    if (result === "WIN" || result === "LOSS") {
+      decisive += 1;
+      if (result === "WIN") wins += 1;
+    }
+    if (typeof ticket.placed_at === "string") {
+      if (first === null || ticket.placed_at < first) first = ticket.placed_at;
+      if (last === null || ticket.placed_at > last) last = ticket.placed_at;
+    }
+  }
+  return {
+    tickets: tickets.length,
+    results: Object.fromEntries(results),
+    leagues: Object.fromEntries(leagues),
+    riskUsd,
+    netUsd,
+    winPct: decisive === 0 ? null : (wins / decisive) * 100,
+    firstPlacedAt: first,
+    lastPlacedAt: last,
+  };
+}
+
+export interface CustomerLookup {
+  readonly found: boolean;
+  /** The id as provided (not normalised), so an error can name what was asked for. */
+  readonly requested: string;
+  readonly customerId: string | null;
+  readonly totalCustomers: number;
+  readonly record: z.infer<typeof CustomerSchema> | null;
+  readonly sample: TicketSample | null;
+}
+
+/**
+ * Look one customer up by id, case-insensitively.
+ *
+ * @param {string} customerId
+ * @returns {Promise<CustomerLookup>}
+ */
+export async function lookupCustomer(
+  customerId: string,
+): Promise<CustomerLookup> {
+  const wanted = customerId.trim().toUpperCase();
+  const book = await loadCustomerBook();
+  const record = book.find((row) => row.customer_id.toUpperCase() === wanted);
+  if (record === undefined) {
+    return {
+      found: false,
+      requested: customerId,
+      customerId: null,
+      totalCustomers: book.length,
+      record: null,
+      sample: null,
+    };
+  }
+  return {
+    found: true,
+    requested: customerId,
+    customerId: record.customer_id,
+    totalCustomers: book.length,
+    record,
+    sample: summarizeSample(record.recent_tickets ?? []),
+  };
+}
+
+export interface SharpAuditRow {
+  readonly rank: number;
+  readonly customerId: string;
+  readonly agentId: string;
+  readonly contextType: string;
+  readonly clvBps: number | null;
+  readonly sharpScore: number | null;
+  readonly lifetimeVolumeUsd: number;
+  readonly lifetimeNetUsd: number;
+  readonly churnHazard: number | null;
+  readonly sampleWinPct: number | null;
+}
+
+export interface SharpAudit {
+  /** The sharp_score cutoff that was applied; echoed so a report is reproducible. */
+  readonly threshold: number;
+  readonly bookCustomers: number;
+  readonly candidates: number;
+  readonly rows: readonly SharpAuditRow[];
+}
+
+/**
+ * Derived sharp audit: customers at or above a sharp-score cutoff, OR with positive CLV.
+ * No scripted "playbooks" and no canned names — the candidate set is a function of the book.
+ *
+ * @param {{ minSharpScore?: number, limit?: number }} [options]
+ * @returns {Promise<SharpAudit>}
+ */
+export async function buildSharpAudit(
+  options: { minSharpScore?: number; limit?: number } = {},
+): Promise<SharpAudit> {
+  const threshold =
+    typeof options.minSharpScore === "number" &&
+    Number.isFinite(options.minSharpScore)
+      ? options.minSharpScore
+      : 70;
+  const requestedLimit = options.limit;
+  const limit =
+    Number.isInteger(requestedLimit) && (requestedLimit ?? 0) > 0
+      ? Math.min(requestedLimit ?? 10, 500)
+      : 10;
+  const book = await loadCustomerBook();
+  const candidates = book.filter(
+    (row) =>
+      (row.sharp_score ?? Number.NEGATIVE_INFINITY) >= threshold ||
+      (row.clv_bps ?? 0) > 0,
+  );
+  const rows = candidates
+    .slice()
+    .sort((left, right) => (right.sharp_score ?? 0) - (left.sharp_score ?? 0))
+    .slice(0, limit)
+    .map((row, index) => ({
+      rank: index + 1,
+      customerId: row.customer_id,
+      agentId: row.agent_id,
+      contextType: row.context_type ?? "UNKNOWN",
+      clvBps: row.clv_bps ?? null,
+      sharpScore: row.sharp_score ?? null,
+      lifetimeVolumeUsd: row.lifetime_volume_usd,
+      lifetimeNetUsd: row.lifetime_net_usd,
+      churnHazard: row.churn_hazard ?? null,
+      sampleWinPct: summarizeSample(row.recent_tickets ?? []).winPct,
+    }));
+  return {
+    threshold,
+    bookCustomers: book.length,
+    candidates: candidates.length,
+    rows,
+  };
+}
+
 /**
  * The most frequent non-empty value in the sample, or "N/A" when there is none.
  *
@@ -154,10 +333,7 @@ export async function buildCustomerRanking(options: {
       : 10;
   const rows = book.map((entry) => {
     const tickets = entry.recent_tickets ?? [];
-    const decisive = tickets.filter(
-      (ticket) => ticket.result === "WIN" || ticket.result === "LOSS",
-    );
-    const wins = decisive.filter((ticket) => ticket.result === "WIN").length;
+    const sample = summarizeSample(tickets);
     const netUSD =
       window === "7d" ? (entry.sports_7d_net_usd ?? 0) : entry.lifetime_net_usd;
     const volumeUSD =
@@ -170,10 +346,10 @@ export async function buildCustomerRanking(options: {
       agentId: entry.agent_id,
       league: dominantValue(tickets.map((ticket) => ticket.league)),
       market: dominantValue(tickets.map((ticket) => ticket.market)),
-      tickets: tickets.length,
+      tickets: sample.tickets,
       volumeUSD,
       netUSD,
-      winPct: decisive.length === 0 ? null : (wins / decisive.length) * 100,
+      winPct: sample.winPct,
       grossHold: Math.abs(netUSD),
       details:
         `${entry.context_type ?? "UNKNOWN"} • ${tickets.length} sampled ` +

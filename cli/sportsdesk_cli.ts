@@ -74,6 +74,8 @@ import {
 } from "../lib/bet_ticker_ip_tracker_bridge.ts";
 import {
   buildCustomerRanking,
+  buildSharpAudit,
+  lookupCustomer,
   type CustomerRankingRow,
   type RankingSort,
 } from "../lib/customer_rankings.ts";
@@ -144,14 +146,14 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
   *(Periods: 7d | lifetime — derived from the customer book's 7d window and lifetime rollups)*
 
 ### 2. CORE FORENSICS & SIMULATION:
-* **-f, --forensics, --sharps, --audit-sharps**: Run forensic sharp audit (deficit drivers & playbooks)
+* **-f, --forensics, --sharps, --audit-sharps**: Run the DERIVED sharp audit (sharp_score / positive-CLV candidates)
 * **-S, --simulate, --sim, --run-sim**: Run full 52-week dual-basis bettor churn simulation
 * **-o, --onepass, --liability, --agent-risk**: Run streaming Agent OnePass 50% liability aggregator
 
 ### 3. HIERARCHY & SURVEILLANCE:
-* **-k, --walk-tree, --tree** [AGENT_ID]: Walk downline tree and display customer snapshot telemetry
-* **-C, --customer, --cust** <CUSTOMER_ID>: Lookup an individual bettor profile in the customer book
-* **-d, --downline, --agent** [AGENT_ID]: Query specific sub-agent volume and 50% hold share
+* **-k, --walk-tree, --tree** [AGENT_ID]: Walk the snapshot's master→agent links with derived subtree rollups
+* **-C, --customer, --cust** <CUSTOMER_ID>: Lookup a bettor profile DERIVED from the customer book
+* **-d, --downline, --agent** [AGENT_ID]: Query sub-agent rollup(s) DERIVED from the downline snapshot
 * **-s, --summary**: Display the executive overview DERIVED from the downline snapshot
 
 ### 4. PLANE 3 INGESTION REPLAY:
@@ -204,14 +206,14 @@ export function printHelpOld(): void {
       Periods: 7d | lifetime (derived from the customer book)
 
 2. CORE FORENSICS & SIMULATION:
-  -f, --forensics, --sharps, --audit-sharps    Run forensic sharp audit (deficit drivers & playbooks)
+  -f, --forensics, --sharps, --audit-sharps    Run the DERIVED sharp audit (sharp_score / positive CLV)
   -S, --simulate, --sim, --run-sim            Run full 52-week dual-basis bettor churn simulation
   -o, --onepass, --liability, --agent-risk     Run streaming Agent OnePass 50% liability aggregator
 
 3. HIERARCHY & SURVEILLANCE:
-  -k, --walk-tree, --tree [AGENT_ID]          Walk downline tree and display customer snapshot telemetry
-  -C, --customer, --cust <CUSTOMER_ID>        Lookup an individual bettor profile in the customer book
-  -d, --downline, --agent [AGENT_ID]          Query specific sub-agent volume and 50% hold share
+  -k, --walk-tree, --tree [AGENT_ID]          Walk master→agent links in the snapshot (flat source)
+  -C, --customer, --cust <CUSTOMER_ID>        Lookup a bettor profile DERIVED from the customer book
+  -d, --downline, --agent [AGENT_ID]          Query sub-agent rollup(s) DERIVED from the snapshot
   -s, --summary                               Display the executive overview DERIVED from the snapshot
 
 4. PLANE 3 INGESTION REPLAY:
@@ -858,6 +860,297 @@ export function printTicketWriters(): void {
 
   console.log(
     "========================================================================================================================\n",
+  );
+}
+
+function formatCounts(counts: Record<string, number>): string {
+  const entries = Object.entries(counts).sort(
+    (left, right) => right[1] - left[1],
+  );
+  return entries.length === 0
+    ? "n/a"
+    : entries.map(([key, count]) => `${key}=${count}`).join(", ");
+}
+
+export async function printCustomerProfile(
+  customerId: string,
+  args: string[],
+): Promise<void> {
+  const asJson =
+    args.includes("--json") ||
+    getArgValue(args, ["--format"], "table") === "json";
+  let result;
+  try {
+    result = await lookupCustomer(customerId);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+  if (!result.found) {
+    console.error(
+      `[CUSTOMER_NOT_FOUND] ${JSON.stringify(result.requested)} is not in the customer book (${result.totalCustomers} customers).`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  const record = result.record;
+  const sample = result.sample;
+  if (record === null || sample === null) {
+    console.error(
+      "[CUSTOMER_BOOK_INVALID] lookup returned no record or sample",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  const divider = "=".repeat(96);
+  console.log(divider);
+  console.log(
+    `CUSTOMER PROFILE • DERIVED from enriched_customers_full.json • ${result.totalCustomers} customers in book`,
+  );
+  console.log(divider);
+  console.log(`  Customer       : ${record.customer_id}`);
+  console.log(
+    `  Agent / master : ${record.agent_id} / ${record.master_agent ?? "UNKNOWN"}`,
+  );
+  console.log(
+    `  Status/context : ${record.status ?? "UNKNOWN"} / ${record.context_type ?? "UNKNOWN"}`,
+  );
+  console.log(
+    `  Churn mode     : ${record.churn_mode ?? "UNKNOWN"} (hazard ${record.churn_hazard ?? "n/a"})`,
+  );
+  console.log(
+    `  Lifetime       : volume ${usd(record.lifetime_volume_usd)} | net ${signedUsd(record.lifetime_net_usd)}`,
+  );
+  console.log(
+    `  7d window      : volume ${usd(record.sports_7d_volume_usd ?? 0)} | net ${signedUsd(record.sports_7d_net_usd ?? 0)}`,
+  );
+  console.log(
+    `  CLV / sharp    : ${record.clv_bps ?? "n/a"} bps / ${record.sharp_score ?? "n/a"}`,
+  );
+  console.log(
+    `  Sample         : ${sample.tickets} recent ticket(s) | risk ${usd(sample.riskUsd)} | net ${signedUsd(sample.netUsd)} | win ${sample.winPct === null ? "n/a" : `${sample.winPct.toFixed(1)}%`}`,
+  );
+  console.log(`  Sample results : ${formatCounts(sample.results)}`);
+  console.log(`  Sample leagues : ${formatCounts(sample.leagues)}`);
+  console.log(
+    `  Sample window  : ${sample.firstPlacedAt ?? "n/a"} .. ${sample.lastPlacedAt ?? "n/a"}`,
+  );
+  console.log(divider);
+  console.log(
+    "* recent_tickets is a per-customer SAMPLE; lifetime_* fields are the full rollup.\n",
+  );
+}
+
+export function printDownline(agentId: string, args: string[]): void {
+  let snapshot: DownlinePayload;
+  try {
+    snapshot = loadDownlineData();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+  const wanted = agentId.trim().toUpperCase();
+  const agents =
+    wanted === ""
+      ? snapshot.agents
+      : snapshot.agents.filter(
+          (agent) =>
+            agent.agent.toUpperCase() === wanted ||
+            agent.agent.toUpperCase().includes(wanted),
+        );
+  if (args.includes("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          snapshotMeta: snapshot.meta,
+          listedAgents: snapshot.agents.length,
+          returned: agents.length,
+          agents,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  if (agents.length === 0) {
+    console.error(
+      `[AGENT_NOT_FOUND] ${JSON.stringify(agentId)} matches none of the ${snapshot.agents.length} agent rows in the snapshot.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const total = (key: keyof AgentDownlineRecord): number =>
+    agents.reduce((sum, agent) => {
+      const value = Number(agent[key]);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  const divider = "=".repeat(116);
+  console.log(divider);
+  console.log(
+    `DOWNLINE SNAPSHOT • ${agents.length} of ${snapshot.agents.length} agent rows shown • meta claims ${snapshot.meta.total_sub_agents} sub-agents`,
+  );
+  console.log(divider);
+  console.log(
+    " Agent        | Master    | Acct | Active | Dormant | Tickets | Sports Vol ($) | Lifetime Net ($) | 50% Share ($)",
+  );
+  console.log(
+    "--------------+-----------+------+--------+---------+---------+----------------+------------------+--------------",
+  );
+  for (const agent of agents) {
+    const share = Number(agent.lifetime_net) * 0.5;
+    console.log(
+      ` ${agent.agent.padEnd(12)} | ${agent.master.padEnd(9)} | ` +
+        `${String(agent.total_accounts).padStart(4)} | ` +
+        `${String(agent.active_sports_accounts).padStart(6)} | ` +
+        `${String(agent.dormant_accounts).padStart(7)} | ` +
+        `${String(agent.sports_tickets).padStart(7)} | ` +
+        `${usd(agent.sports_vol).padStart(14)} | ` +
+        `${signedUsd(agent.lifetime_net).padStart(16)} | ` +
+        `${signedUsd(share).padStart(12)}`,
+    );
+  }
+  console.log(divider);
+  console.log(
+    `TOTALS (${agents.length} row(s)): accounts ${total("total_accounts")} | active ${total("active_sports_accounts")} | tickets ${total("sports_tickets")} | volume ${usd(total("sports_vol"))} | net ${signedUsd(total("lifetime_net"))} | 50% share ${signedUsd(total("lifetime_net") * 0.5)}`,
+  );
+  console.log(divider + "\n");
+}
+
+export function printDownlineTree(agentId: string): void {
+  let snapshot: DownlinePayload;
+  try {
+    snapshot = loadDownlineData();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+  const byMaster = new Map<string, AgentDownlineRecord[]>();
+  const ids = new Set<string>();
+  for (const agent of snapshot.agents) {
+    ids.add(agent.agent.toUpperCase());
+    const master = agent.master.toUpperCase();
+    const children = byMaster.get(master) ?? [];
+    children.push(agent);
+    byMaster.set(master, children);
+  }
+  const divider = "=".repeat(96);
+  console.log(divider);
+  console.log(
+    "DOWNLINE TREE • flat snapshot (master→agent links only; depth is derived from those links)",
+  );
+  console.log(divider);
+  const renderChildren = (
+    master: string,
+    depth: number,
+    seen: Set<string>,
+  ): { rows: number; net: number } => {
+    let rows = 0;
+    let net = 0;
+    for (const child of byMaster.get(master) ?? []) {
+      const childNet = Number(child.lifetime_net) || 0;
+      rows += 1;
+      net += childNet;
+      console.log(
+        `${"  ".repeat(depth)}└─ ${child.agent} [${child.total_accounts} acct, net ${signedUsd(childNet)}, 50% ${signedUsd(childNet * 0.5)}]`,
+      );
+      const childId = child.agent.toUpperCase();
+      if (seen.has(childId)) continue;
+      seen.add(childId);
+      const deeper = renderChildren(childId, depth + 1, seen);
+      rows += deeper.rows;
+      net += deeper.net;
+    }
+    return { rows, net };
+  };
+  const focus = agentId.trim().toUpperCase();
+  if (focus !== "") {
+    const row = snapshot.agents.find(
+      (agent) => agent.agent.toUpperCase() === focus,
+    );
+    if (row === undefined && !byMaster.has(focus)) {
+      console.error(
+        `[AGENT_NOT_FOUND] ${JSON.stringify(agentId)} matches none of the ${snapshot.agents.length} agent rows.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const summary = renderChildren(focus, 0, new Set([focus]));
+    console.log(
+      `${focus} • ${summary.rows} descendant row(s), net ${signedUsd(summary.net)}`,
+    );
+  } else {
+    const roots = [...byMaster.keys()].filter((master) => !ids.has(master));
+    if (roots.length === 0) {
+      console.log(
+        "[NO_ROOTS] every master in the snapshot is also an agent row; the flat source carries no top-level node.",
+      );
+    }
+    for (const root of roots) {
+      const summary = renderChildren(root, 0, new Set([root]));
+      console.log(
+        `${root} • ${summary.rows} descendant row(s), net ${signedUsd(summary.net)}`,
+      );
+    }
+  }
+  console.log(divider + "\n");
+}
+
+export async function printSharpAudit(args: string[]): Promise<void> {
+  const asJson =
+    args.includes("--json") ||
+    getArgValue(args, ["--format"], "table") === "json";
+  const parsedThreshold = Number.parseInt(
+    getArgValue(args, ["--min-sharp", "--min-sharp-score"], "70"),
+    10,
+  );
+  const threshold = Number.isFinite(parsedThreshold) ? parsedThreshold : 70;
+  const limit = parseLimit(getArgValue(args, ["--limit"], "10"));
+  let audit;
+  try {
+    audit = await buildSharpAudit({ minSharpScore: threshold, limit });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 2;
+    return;
+  }
+  if (asJson) {
+    console.log(JSON.stringify(audit, null, 2));
+    return;
+  }
+  const divider = "=".repeat(112);
+  console.log(divider);
+  console.log(
+    `SHARP AUDIT • DERIVED: ${audit.candidates} candidate(s) of ${audit.bookCustomers} customers (sharp_score >= ${audit.threshold} OR clv_bps > 0)`,
+  );
+  console.log(divider);
+  console.log(
+    " # | Customer    | Agent        | Context           | CLV bps | Sharp | Lifetime Vol ($) | Lifetime Net ($) | Win %* | Churn",
+  );
+  console.log(
+    "---+-------------+--------------+-------------------+---------+-------+------------------+------------------+--------+------",
+  );
+  for (const row of audit.rows) {
+    console.log(
+      `${String(row.rank).padStart(2)} | ${row.customerId.padEnd(11)} | ${row.agentId.padEnd(12)} | ${row.contextType.padEnd(17)} | ` +
+        `${String(row.clvBps ?? "n/a").padStart(7)} | ` +
+        `${String(row.sharpScore ?? "n/a").padStart(5)} | ` +
+        `${usd(row.lifetimeVolumeUsd).padStart(16)} | ` +
+        `${signedUsd(row.lifetimeNetUsd).padStart(16)} | ` +
+        `${(row.sampleWinPct === null ? "n/a" : `${row.sampleWinPct.toFixed(1)}%`).padStart(6)} | ` +
+        `${row.churnHazard ?? "n/a"}`,
+    );
+  }
+  console.log(divider);
+  console.log(
+    "* Win % is computed over the sampled WIN/LOSS tickets only; the candidate set is derived from the book.\n",
   );
 }
 
@@ -1586,6 +1879,60 @@ export async function main(): Promise<void> {
       stdin: "inherit",
     });
     process.exitCode = await proc.exited;
+    return;
+  }
+
+  if (
+    cmd === "customer" ||
+    cmd === "cust" ||
+    rawArgs.includes("-C") ||
+    rawArgs.includes("--customer")
+  ) {
+    const customerId = getArgValue(rawArgs, ["-C", "--customer"], "");
+    if (customerId === "") {
+      console.error(
+        "usage: bun cli/sportsdesk_cli.ts -C <CUSTOMER_ID> [--json]",
+      );
+      process.exitCode = 2;
+      return;
+    }
+    await printCustomerProfile(customerId, rawArgs);
+    return;
+  }
+
+  if (
+    cmd === "downline" ||
+    cmd === "agent" ||
+    rawArgs.includes("-d") ||
+    rawArgs.includes("--downline") ||
+    rawArgs.includes("--agent")
+  ) {
+    const agentId = getArgValue(rawArgs, ["-d", "--downline", "--agent"], "");
+    printDownline(agentId, rawArgs);
+    return;
+  }
+
+  if (
+    cmd === "tree" ||
+    cmd === "walk-tree" ||
+    rawArgs.includes("-k") ||
+    rawArgs.includes("--tree") ||
+    rawArgs.includes("--walk-tree")
+  ) {
+    const agentId = getArgValue(rawArgs, ["-k", "--tree", "--walk-tree"], "");
+    printDownlineTree(agentId);
+    return;
+  }
+
+  if (
+    cmd === "forensics" ||
+    cmd === "sharps" ||
+    rawArgs.includes("-f") ||
+    rawArgs.includes("--forensics") ||
+    rawArgs.includes("--sharps") ||
+    rawArgs.includes("--audit-sharps")
+  ) {
+    await printSharpAudit(rawArgs);
     return;
   }
 
