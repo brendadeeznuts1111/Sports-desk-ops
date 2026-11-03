@@ -26,6 +26,17 @@ Legal list and licenses: [project/license → type declarations](https://bun.com
 
 [reference/globals/bun](https://bun.com/reference/globals/bun) is the **third** upstream surface: an index of the symbols in the `bun` module, one page per symbol, generated from the release's TypeScript declarations rather than written by hand. Pages exist for symbols ([`wrapAnsi`](https://bun.com/reference/globals/bun/wrapAnsi)), the types in their signatures ([`WrapAnsiOptions`](https://bun.com/reference/globals/bun/WrapAnsiOptions)), and nested members ([`Image/ErrorCode`](https://bun.com/reference/globals/bun/Image/ErrorCode)). Each page carries the release it was generated from (`Bun v 1.4.4` on 2026-11-03).
 
+Four URL shapes, each with one job (counts read off the site on 2026-11-03):
+
+| URL                                                               | Covers                                                                  | Use when                                 |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
+| [`/reference`](https://bun.com/reference)                         | the tree: 51 `node:*` pages, 6 `bun:*` pages, and `/reference/globals`  | you do not know which namespace holds it |
+| [`/reference/globals/bun`](https://bun.com/reference/globals/bun) | every symbol in the `bun` module, value and type — **322** symbol pages | you have a name and need its page        |
+| `/reference/node/<module>`                                        | Node-compat surface, one page per module                                | a dependency's Node call, not repo code  |
+| `/reference/bun/<module>`                                         | `bun:test`, `bun:sqlite`, `bun:ffi`, `bun:jsc`, `bun:bundle`            | the module behind an import              |
+
+Search is **UI-only**: press `/` on the site, and note there is no addressable query — `/reference?q=stringWidth` returns byte-identical HTML, and `/reference/search` is 404 (both checked 2026-11-03). So the shareable unit is a symbol permalink, never a search URL; that is why this doc cites `/reference/globals/bun/<symbol>` rather than pointing at a query.
+
 ### The module and the global are one surface
 
 The page opens with the model itself: _"The `bun` module is where most of Bun's APIs are located. You can import all of the values and types in this module with an import statement, or by referencing the `Bun` global namespace."_ On 1.4.4 that is one object set, not two implementations:
@@ -60,6 +71,20 @@ The same 117 names on both, every value identical (`m.file === Bun.file`, and so
 
 - **There is no default export** (`m.default === undefined`). `import Bun from "bun"` does not give you the global; use `import { … } from "bun"`, `import * as Bun from "bun"`, or the bare `Bun` global.
 - **Filed under the module page ≠ exported.** `WebSocket`, `Worker` and `EventSource` are listed on the module page yet are properties of neither `m` nor `Bun` — `globalThis.WebSocket` is the only spelling, which is the `websocket-global` drift id below.
+
+The module page files **25 namespaces** under `Bun.*`. Eighteen exist at runtime — `$`, `CSRF`, `dns`, `Image`, `inspect`, `JSON5`, `JSONC`, `JSONL`, `markdown`, `peek`, `RedisClient`, `semver`, `SQL`, `TOML`, `unsafe`, `WebView`, `XML`, `YAML` — and seven do **not** (`typeof Bun.X === "undefined"`). Those seven are type companions, not missing features:
+
+| Declared, type-only | Runtime value to reach for | What the namespace is for                        |
+| ------------------- | -------------------------- | ------------------------------------------------ |
+| `Bun.Serve`         | `Bun.serve()`              | server/handler option types                      |
+| `Bun.Spawn`         | `Bun.spawn()`              | `Subprocess` and spawn option types              |
+| `Bun.Password`      | `Bun.password`             | argon2/bcrypt hash + verify types                |
+| `Bun.udp`           | `Bun.udpSocket()`          | UDP socket types                                 |
+| `Bun.Build`         | `Bun.build()`              | build result and option types                    |
+| `Bun.Security`      | —                          | `bun install` security-scanner declarations only |
+| `Bun.WebAssembly`   | `globalThis.WebAssembly`   | types only; the value is the JS global           |
+
+`./bin/dx bun --types` prints the same split (`namespace 18 value · 7 type-only`, same seven names), so this table is machine-checked rather than read off prose. The consequence is small but sharp: `Bun.Serve` and friends are for **type positions** — annotations and signatures — and are `undefined` if you reach for them as values. The lower-case counterparts each have their own symbol page ([`serve`](https://bun.com/reference/globals/bun/serve), [`spawn`](https://bun.com/reference/globals/bun/spawn), [`password`](https://bun.com/reference/globals/bun/password), [`udpSocket`](https://bun.com/reference/globals/bun/udpSocket), [`build`](https://bun.com/reference/globals/bun/build)); the capitalised one is the type.
 
 Pick the layer by the question you are asking:
 
