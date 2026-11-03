@@ -960,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1007-1026",
+            "services/sportsdesk_webview_server.ts:1180-1199",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1007-1026 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1180-1199 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },
@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:2016-2041",
+            "services/sportsdesk_webview_server.ts:2202-2227",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1270,7 +1270,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Trigger a scheduled Telegram report",
-        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).",
+        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:80-84). Admin-token gated (services/sportsdesk_webview_server.ts).",
         "operationId": "postApiTelegramReport",
         "security": [
           {
@@ -1432,7 +1432,7 @@
           "tier": "B",
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /api/telegram/report",
-            "services/sportsdesk_telegram_bot.ts:77-81",
+            "services/sportsdesk_telegram_bot.ts:80-84",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2939,6 +2939,721 @@
         }
       }
     },
+    "/api/v1/blobs/{key}": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Presigned download URL for one blob",
+        "description": "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "getApiV1BlobsKey",
+        "responses": {
+          "302": {
+            "description": "Redirect to a short-lived presigned URL.",
+            "headers": {
+              "location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid blob key.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Presign failed.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/blob_and_live_bets_server.ts:3-11",
+            "tests/blob_and_live_bets_server.test.ts:9-48"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a presigned redirect (route is handler-verified only; no response was captured)."
+        },
+        "x-surface-id": "surface.blob-live-bets",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ]
+      },
+      "put": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bounded image upload, transcoded to WebP",
+        "description": "Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = \"bun\"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "putApiV1BlobsKey",
+        "responses": {
+          "200": {
+            "description": "Stored WebP metadata.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "bytesWritten": {
+                      "type": "integer"
+                    },
+                    "bytes": {
+                      "type": "integer"
+                    },
+                    "width": {
+                      "type": "integer"
+                    },
+                    "height": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid blob key.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body or decoded pixel count too large.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported image content type.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Image could not be decoded.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Store failed.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/blob_and_live_bets_server.ts:3-11",
+            "tests/blob_and_live_bets_server.test.ts:9-48"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a successful upload (route is handler-verified only; no response was captured)."
+        },
+        "x-surface-id": "surface.blob-live-bets",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ]
+      }
+    },
+    "/api/v1/ws-tickets": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Short-lived one-time WebSocket ticket",
+        "description": "Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over {exp, nonce}; issued nonces are kept in a pending allowlist capped at 4096 (429 when full), deleted on the first successful upgrade, and replayed/unissued tickets are rejected. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "postApiV1WsTickets",
+        "responses": {
+          "200": {
+            "description": "Ticket and TTL.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "string"
+                    },
+                    "expiresInSec": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Active-ticket cap reached.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/blob_and_live_bets_server.ts:3-11",
+            "tests/blob_and_live_bets_server.test.ts:9-48"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a ticket response (route is handler-verified only)."
+        },
+        "x-surface-id": "surface.blob-live-bets"
+      }
+    },
+    "/api/v1/live-bets": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Publish a live-bets event to subscribers",
+        "description": "Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "postApiV1LiveBets",
+        "responses": {
+          "200": {
+            "description": "Subscriber count.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string"
+                    },
+                    "published": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, channel or body.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Event is not serializable.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/blob_and_live_bets_server.ts:3-11",
+            "tests/blob_and_live_bets_server.test.ts:9-48"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a publish result (route is handler-verified only)."
+        },
+        "x-surface-id": "surface.blob-live-bets",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["channel", "event"],
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]{1,32}$"
+                  },
+                  "event": {
+                    "description": "JSON-serializable event payload."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws/live-bets": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Live-bets WebSocket upgrade",
+        "description": "Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.<token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "getWsLiveBets",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols."
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Upgrade required.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/blob_and_live_bets_server.ts:3-11",
+            "tests/blob_and_live_bets_server.test.ts:9-48"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of the 101 upgrade and a PING/PONG frame (handler-verified only)."
+        },
+        "x-surface-id": "surface.blob-live-bets",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "One-time HMAC ticket; the subprotocol form is preferred for browsers."
+          }
+        ]
+      }
+    },
     "/cloud/api/Manager/getHistory": {
       "post": {
         "tags": ["Settlement History"],
@@ -3029,7 +3744,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1118-1125",
+            "services/sportsdesk_webview_server.ts:1291-1298",
             "services/sportsdesk_webview_server.ts:701-702"
           ],
           "capturedResponse": false,
@@ -3070,7 +3785,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -3388,7 +4103,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1720-1732"],
+          "sources": ["services/sportsdesk_webview_server.ts:1893-1905"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -4042,7 +4757,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1481-1555"],
+          "sources": ["services/sportsdesk_webview_server.ts:1654-1728"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },
@@ -4291,7 +5006,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4359,7 +5074,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4450,9 +5165,529 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1098-1105"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-xml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "XML parse probe (POST /api/parse-xml)",
+        "description": "Parses one XML body with Bun.XML.parse and returns the compact tree (services/sportsdesk_webview_server.ts#/api/parse-xml). Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseXml",
+        "responses": {
+          "200": {
+            "description": "The parsed XML as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-xml round trip (well-formed XML)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-customer-profile": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Customer profile XML parse (POST /api/parse-customer-profile)",
+        "description": "Parses one customer-profile XML document via parseCustomerProfileXml (lib/customer_profile.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseCustomerProfile",
+        "responses": {
+          "200": {
+            "description": "The parsed profile as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-customer-profile round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-bet-ticker": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bet-ticker XML parse (POST /api/parse-bet-ticker)",
+        "description": "Parses one bet-ticker XML feed via parseBetTickerXml (lib/live_wagers.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseBetTicker",
+        "responses": {
+          "200": {
+            "description": "The parsed feed as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-bet-ticker round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-customer-performance": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Customer performance XML parse (POST /api/parse-customer-performance)",
+        "description": "Parses one customer-performance XML document via parseCustomerPerformanceXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseCustomerPerformance",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-customer-performance round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-transactions": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Transactions XML parse (POST /api/parse-transactions)",
+        "description": "Parses one transactions XML document via parseTransactionsXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseTransactions",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-transactions round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-ajax-xml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "AJAX XML parse (POST /api/parse-ajax-xml)",
+        "description": "Parses one AJAX-delivered XML response via parseAjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseAjaxXml",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-ajax-xml round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-fantasy402-ajax": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Fantasy402 AJAX XML parse (POST /api/parse-fantasy402-ajax)",
+        "description": "Parses one Fantasy402 AJAX XML response via parseFantasy402AjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseFantasy402Ajax",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-fantasy402-ajax round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-toml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "TOML parse (POST /api/parse-toml)",
+        "description": "Parses one TOML document via parseToml and returns the result. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseToml",
+        "responses": {
+          "200": {
+            "description": "The parsed document.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as TOML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-toml round trip."
         },
         "x-surface-id": "surface.daemon-dashboard"
       }
@@ -4536,7 +5771,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:894-990"],
+          "sources": ["services/sportsdesk_webview_server.ts:1067-1163"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
         },
@@ -4699,7 +5934,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1220-1250",
+            "services/sportsdesk_webview_server.ts:1393-1423",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -4825,7 +6060,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:756-758,749-753"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
@@ -4941,7 +6176,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:756-758,749-753"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
@@ -5119,7 +6354,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:756-758,749-753"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
@@ -5191,7 +6426,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:756-758,749-753"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."

@@ -295,6 +295,19 @@ or rewritten as "blocked, capture required". See [evidence/capture-requests.md](
 
 ---
 
+## Operator UI observations (2026-11-03)
+
+Nine operator-supplied screenshots of the Manager Tools console (Manage Players agent/player
+profile grids, Find Player, Events → Last Bets, and the five Reports pages) are filed as **UI
+observation only**, with sha256 and dimensions per image, in
+[evidence/manager-ui-observations-2026-11-03.md](./evidence/manager-ui-observations-2026-11-03.md)
+(images under `docs/evidence/screenshots/manager-ui-2026-11-03/`). They record the console's control
+vocabulary — including `State: All` on Last Bets and the `Grade time / Bet time` date-filter choice —
+and the profile totals shown at that moment (190 agent profiles, 2,964 player profiles). They do not
+carry a method, request, headers, auth or response, so they do **not** change the `ajax.php`
+`blocked_contract` status above; all Last Bets and report grids were empty for the selected filters,
+which is zero rows for that selection, not evidence that no wagers exist.
+
 ## Surfaces recorded outside `operations[]` (D/E)
 
 Twenty-one rows: D 20, E 1. Most local daemon routes are now published in `docs/openapi.json`, so this
@@ -311,6 +324,7 @@ the graph data plane's companion JSON and `docs/assets/*`, and the blocked GS CL
 | `surface.manager-getGrading`           | D    | Declared settlement feed; no fetch client exists ("wired" is a type/config claim only)                        |
 | `surface.daemon-dashboard`             | D    | `GET /` and `GET /dashboard` dashboard HTML                                                                   |
 | `surface.daemon-miniapp`               | D    | `GET /miniapp` Telegram Mini App HTML                                                                         |
+| `surface.blob-live-bets`               | D    | Bearer-auth R2 blobs, one-time WS tickets, live-bets WebSocket                                                |
 | `surface.daemon-telegram-admin-routes` | D    | Webhook, telegram status/activity, preflight, error trigger                                                   |
 | `surface.daemon-live-bets`             | D    | `GET /api/live-bets` + `/summary`; derives games and aggregates from captured rows (PII stripped)             |
 | `surface.daemon-agent-tree`            | D    | `GET /api/agent-tree`; canonical agent-keyed forest joined with per-agent exposure                            |

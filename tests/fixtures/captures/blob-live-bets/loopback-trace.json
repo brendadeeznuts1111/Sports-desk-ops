@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "kind": "loopback-fixture",
+  "note": "Sanitized loopback HTTP + WebSocket trace. NOT live evidence: docs/evidence/captures is live-only and this fixture cannot upgrade a ledger tier.",
+  "gateway": "surface.blob-live-bets",
+  "capturedAt": "2026-11-03T23:30:15.214Z",
+  "baseUrl": "http://127.0.0.1:<port>",
+  "server": {
+    "bun": "1.4.4",
+    "revision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "routes": [
+      "GET /health",
+      "POST /api/v1/ws-tickets",
+      "GET /api/v1/blobs/{key}",
+      "PUT /api/v1/blobs/{key}",
+      "POST /api/v1/live-bets",
+      "GET /ws/live-bets"
+    ],
+    "publishedProgrammatically": "function"
+  },
+  "steps": [
+    {
+      "name": "get-health",
+      "request": {
+        "method": "GET",
+        "path": "/health",
+        "headers": {
+          "authorization": "<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "body": {
+          "status": "ok",
+          "bunRevision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+          "uptimeNs": 32862500
+        }
+      }
+    },
+    {
+      "name": "post-ws-ticket",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/ws-tickets",
+        "headers": {
+          "authorization": "<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "body": {
+          "ticket": "eyJleHAiOjE3OTM3NDg2NzUsIm5vbmNlIjoiNjFhNjQ2MWEtMDhhZi00MTkzLWFjYmItMjIwZWI4NTlhZmIzIn0.kS6Kff1QYwzrAgMjMkav39EnfiQs0-vMIfRIZvr2XZw",
+          "expiresInSec": 60
+        }
+      }
+    },
+    {
+      "name": "get-presigned-blob",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/blobs/trace",
+        "headers": {
+          "authorization": "<redacted>"
+        }
+      },
+      "response": {
+        "status": 302,
+        "contentType": null,
+        "body": {
+          "location": "<presigned-url-redacted>"
+        }
+      }
+    },
+    {
+      "name": "put-blob",
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/blobs/trace",
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "image/png"
+        }
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "body": {
+          "key": "blobs/trace.webp",
+          "bytesWritten": 44,
+          "bytes": 44,
+          "width": 1,
+          "height": 1
+        }
+      }
+    },
+    {
+      "name": "post-publish",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/live-bets",
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "contentType": "application/json;charset=utf-8",
+        "body": {
+          "channel": "alerts",
+          "published": 0
+        }
+      }
+    },
+    {
+      "name": "ws-live-bets",
+      "request": {
+        "method": "GET",
+        "path": "/ws/live-bets",
+        "headers": {
+          "sec-websocket-protocol": "live-bets.v1, ticket.<redacted>"
+        }
+      },
+      "response": {
+        "status": 101,
+        "contentType": null,
+        "body": "switching protocols"
+      },
+      "websocket": [
+        {
+          "direction": "send",
+          "data": "ping"
+        },
+        {
+          "direction": "receive",
+          "data": "{\"type\":\"PONG\",\"ts\":1793748615115}"
+        },
+        {
+          "direction": "receive",
+          "data": "{\"type\":\"SUBSCRIBED\",\"channel\":\"alerts\"}"
+        },
+        {
+          "direction": "receive",
+          "data": "{\"type\":\"UNSUBSCRIBED\",\"channel\":\"alerts\"}"
+        },
+        {
+          "direction": "close",
+          "data": "101"
+        }
+      ]
+    }
+  ]
+}

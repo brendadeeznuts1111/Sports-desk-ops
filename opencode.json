@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "bun-docs": {
+        "type": "remote",
+        "url": "https://bun.sh/docs/mcp",
+        "protocol": "legacy",
+        "oauth": false,
+        "codemode": true,
+        "timeout": {
+          "startup": 30000,
+          "catalog": 30000,
+          "execution": 60000
+        }
+      }
+    }
+  }
+}

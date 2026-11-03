@@ -4,11 +4,11 @@ Evidence-labelled reference generated from `docs/openapi.json` (version `2026.10
 
 ## What is verified vs inferred
 
-1. **Verified (tier B, 8 of 75 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
+1. **Verified (tier B, 8 of 88 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
 2. **Inferred (tier C, 29 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
-3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 27):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
+3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 40):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
 
-Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 9 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
+Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 9 · C 29 · E 10 · surfaces D 21 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
 
 ## GSLive Manager (Partner 118): operator deep links
 
@@ -65,7 +65,7 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 | ---------------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Forensic Surveillance              | 2          | A 1 · B 1      | Cloud Manager surveillance operations with first-party evidence; tier-A rows carry a live request+response capture.                                                            |
 | Customer State Mutations           | 1          | A 1            | Cloud Manager customer state operations with first-party evidence; tier-A rows carry a live request+response capture.                                                          |
-| Local Desk &amp; Telegram Gateway  | 30         | B 4 · D 26     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
+| Local Desk &amp; Telegram Gateway  | 43         | B 4 · D 39     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
 | Downline Accounting                | 3          | B 3            | Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.  |
 | Settlement History                 | 1          | D 1            | Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured.                                                                         |
 | Inferred (Unverified)              | 29         | C 29           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
@@ -473,7 +473,7 @@ Serves the transcribed Admin module: spread, moneyline, total and team-total sid
 
 ### `GET /api/graph-feed`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1220-1250`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1393-1423`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Graph live feed (GET /api/graph-feed, /graph-live-feed.json)**
 
@@ -506,7 +506,7 @@ Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds —
 
 ### `GET /api/kpis`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
 
 **Dashboard headline KPIs (GET /api/kpis)**
 
@@ -610,7 +610,7 @@ The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumbe
 
 ### `GET /api/logo/{name}`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:894-990` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1067-1163` · response not captured
 
 **Team-logo proxy (GET /api/logo/{name})**
 
@@ -644,9 +644,134 @@ Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image
   - content `application/json`: **authored response schema — no response body was captured**
     - `error` (string) — no description
 
+### `POST /api/parse-ajax-xml`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**AJAX XML parse (POST /api/parse-ajax-xml)**
+
+Parses one AJAX-delivered XML response via parseAjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseAjaxXml`
+- **Required capture:** HTTP capture of a POST /api/parse-ajax-xml round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed document as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-bet-ticker`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**Bet-ticker XML parse (POST /api/parse-bet-ticker)**
+
+Parses one bet-ticker XML feed via parseBetTickerXml (lib/live_wagers.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseBetTicker`
+- **Required capture:** HTTP capture of a POST /api/parse-bet-ticker round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed feed as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-customer-performance`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**Customer performance XML parse (POST /api/parse-customer-performance)**
+
+Parses one customer-performance XML document via parseCustomerPerformanceXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseCustomerPerformance`
+- **Required capture:** HTTP capture of a POST /api/parse-customer-performance round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed document as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-customer-profile`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**Customer profile XML parse (POST /api/parse-customer-profile)**
+
+Parses one customer-profile XML document via parseCustomerProfileXml (lib/customer_profile.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseCustomerProfile`
+- **Required capture:** HTTP capture of a POST /api/parse-customer-profile round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed profile as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-fantasy402-ajax`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**Fantasy402 AJAX XML parse (POST /api/parse-fantasy402-ajax)**
+
+Parses one Fantasy402 AJAX XML response via parseFantasy402AjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseFantasy402Ajax`
+- **Required capture:** HTTP capture of a POST /api/parse-fantasy402-ajax round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed document as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
 ### `POST /api/parse-formdata`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
 
 **Form-data parse probe (POST /api/parse-formdata)**
 
@@ -673,9 +798,84 @@ Echoes the fields of one multipart or urlencoded body as {name: string | string[
   - response header `X-Content-Type-Options`: value `nosniff`
   - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
 
+### `POST /api/parse-toml`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**TOML parse (POST /api/parse-toml)**
+
+Parses one TOML document via parseToml and returns the result. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseToml`
+- **Required capture:** HTTP capture of a POST /api/parse-toml round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed document.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as TOML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-transactions`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**Transactions XML parse (POST /api/parse-transactions)**
+
+Parses one transactions XML document via parseTransactionsXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseTransactions`
+- **Required capture:** HTTP capture of a POST /api/parse-transactions round trip.
+
+**Responses**
+
+- **HTTP 200** — The parsed document as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
+### `POST /api/parse-xml`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
+
+**XML parse probe (POST /api/parse-xml)**
+
+Parses one XML body with Bun.XML.parse and returns the compact tree (services/sportsdesk_webview_server.ts#/api/parse-xml). Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiParseXml`
+- **Required capture:** HTTP capture of a POST /api/parse-xml round trip (well-formed XML).
+
+**Responses**
+
+- **HTTP 200** — The parsed XML as a compact object tree.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+- **HTTP 400** — The body is not parseable as XML.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (string) — no description
+
 ### `GET /api/scoreboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1720-1732` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1893-1905` · response not captured
 
 **Transcribed portal scoreboard (games, scores, status)**
 
@@ -730,7 +930,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/sports/catalog`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1481-1555` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1654-1728` · response not captured
 
 **Sub-sports and period menus with their types**
 
@@ -759,7 +959,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
 
 **Daemon status and process telemetry (GET /api/status, GET /status.json)**
 
@@ -784,7 +984,7 @@ Answers {ok, status, checks, health, telegram, timestamp} from the running proce
 
 ### `GET /api/telegram/activity`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:757-759,750-754` · response not captured
 
 **Recent Telegram activity (GET /api/telegram/activity)**
 
@@ -819,7 +1019,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:2016-2041` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:2202-2227` · response not captured
 
 **Dispatch an instant Telegram alert**
 
@@ -869,11 +1069,11 @@ Request body {customerId?} defaults to RF2003; dispatches through telegramServic
 
 ### `POST /api/telegram/report`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#POST /api/telegram/report`, `services/sportsdesk_telegram_bot.ts:77-81` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#POST /api/telegram/report`, `services/sportsdesk_telegram_bot.ts:80-84` · response not captured
 
 **Trigger a scheduled Telegram report**
 
-Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).
+Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:80-84). Admin-token gated (services/sportsdesk_webview_server.ts).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiTelegramReport`
 - **Required capture:** No capture gap; add the ?type= query parameter (enum REPORT_TYPES) and 'ok' to the spec.
@@ -918,7 +1118,7 @@ Report type is selected by the ?type= query parameter and defaults to EVENING_SE
 
 ### `GET /api/telegram/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:757-759,750-754` · response not captured
 
 **Telegram configuration and schedules (GET /api/telegram/status)**
 
@@ -955,7 +1155,7 @@ Returns {success, status, schedules, reportTypes} from the bot service and the i
 
 ### `POST /api/telegram/webhook`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:757-759,750-754` · response not captured
 
 **Register or delete the Telegram webhook (POST /api/telegram/webhook)**
 
@@ -1012,7 +1212,7 @@ Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook
 
 ### `GET /api/test/error`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:756-758,749-753` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:757-759,750-754` · response not captured
 
 **Error-boundary probe (GET /api/test/error)**
 
@@ -1031,6 +1231,201 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
     - `success` (boolean) — no description
     - `error` (string) — no description
     - `message` (string) — no description
+
+### `GET /api/v1/blobs/{key}`
+
+> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+
+**Presigned download URL for one blob**
+
+Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV1BlobsKey`
+- **Required capture:** HTTP capture of a presigned redirect (route is handler-verified only; no response was captured).
+
+**Parameters**
+
+| Name  | In   | Required | Type   | Description                                            |
+| ----- | ---- | -------- | ------ | ------------------------------------------------------ |
+| `key` | path | yes      | string | Validated blob key; `..` and leading dots are refused. |
+
+**Responses**
+
+- **HTTP 302** — Redirect to a short-lived presigned URL.
+  - response header `location`: declared, no example
+- **HTTP 400** — Invalid blob key.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 502** — Presign failed.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+
+### `PUT /api/v1/blobs/{key}`
+
+> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+
+**Bounded image upload, transcoded to WebP**
+
+Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `putApiV1BlobsKey`
+- **Required capture:** HTTP capture of a successful upload (route is handler-verified only; no response was captured).
+
+**Parameters**
+
+| Name  | In   | Required | Type   | Description                                            |
+| ----- | ---- | -------- | ------ | ------------------------------------------------------ |
+| `key` | path | yes      | string | Validated blob key; `..` and leading dots are refused. |
+
+**Request body — `image/png`**
+
+No declared fields.
+
+**Responses**
+
+- **HTTP 200** — Stored WebP metadata.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `key` (string) — no description
+    - `bytesWritten` (integer) — no description
+    - `bytes` (integer) — no description
+    - `width` (integer) — no description
+    - `height` (integer) — no description
+- **HTTP 400** — Invalid blob key.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 413** — Body or decoded pixel count too large.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 415** — Unsupported image content type.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 422** — Image could not be decoded.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 502** — Store failed.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+
+### `POST /api/v1/live-bets`
+
+> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+
+**Publish a live-bets event to subscribers**
+
+Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiV1LiveBets`
+- **Required capture:** HTTP capture of a publish result (route is handler-verified only).
+
+**Request body — `application/json`**
+
+| Field     | Type   | Required | Description                      | Example |
+| --------- | ------ | -------- | -------------------------------- | ------- |
+| `channel` | string | yes      | —                                | —       |
+| `event`   | object | yes      | JSON-serializable event payload. | —       |
+
+**Responses**
+
+- **HTTP 200** — Subscriber count.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `channel` (string) — no description
+    - `published` (integer) — no description
+- **HTTP 400** — Invalid JSON, channel or body.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 413** — Body too large.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 422** — Event is not serializable.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+
+### `POST /api/v1/ws-tickets`
+
+> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+
+**Short-lived one-time WebSocket ticket**
+
+Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over {exp, nonce}; issued nonces are kept in a pending allowlist capped at 4096 (429 when full), deleted on the first successful upgrade, and replayed/unissued tickets are rejected. Surface: surface.blob-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `postApiV1WsTickets`
+- **Required capture:** HTTP capture of a ticket response (route is handler-verified only).
+
+**Responses**
+
+- **HTTP 200** — Ticket and TTL.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `ticket` (string) — no description
+    - `expiresInSec` (integer) — no description
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 429** — Active-ticket cap reached.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
 
 ### `GET /api/watchlist`
 
@@ -1070,7 +1465,7 @@ Returns {success, count, data} from telegramService.getWatchList() (services/spo
 
 ### `GET /dashboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1098-1105` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1271-1278` · response not captured
 
 **Operator dashboard (GET /dashboard)**
 
@@ -1089,14 +1484,14 @@ Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdes
 
 ### `GET /health`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1007-1026` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1180-1199` · response not captured
 
 **Daemon health and telemetry probe**
 
 Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getHealth`
-- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1007-1026 (add url + timestamp). A curl capture would only confirm the handler.
+- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1180-1199 (add url + timestamp). A curl capture would only confirm the handler.
 
 **Responses**
 
@@ -1117,7 +1512,7 @@ Handler-defined contract: services/sportsdesk_webview_server.ts returns the daem
 
 ### `GET /miniapp`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1118-1125`, `services/sportsdesk_webview_server.ts:701-702` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1291-1298`, `services/sportsdesk_webview_server.ts:701-702` · response not captured
 
 **Telegram Mini App dashboard (GET /miniapp)**
 
@@ -1133,6 +1528,39 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
   - response header `X-Content-Type-Options`: value `nosniff`
   - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
   - content `text/html`: **authored response schema — no response body was captured**
+
+### `GET /ws/live-bets`
+
+> **Evidence — tier D** · sources: `services/blob_and_live_bets_server.ts:3-11`, `tests/blob_and_live_bets_server.test.ts:9-48` · response not captured
+
+**Live-bets WebSocket upgrade**
+
+Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.&lt;token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getWsLiveBets`
+- **Required capture:** HTTP capture of the 101 upgrade and a PING/PONG frame (handler-verified only).
+
+**Parameters**
+
+| Name     | In    | Required | Type   | Description                                                           |
+| -------- | ----- | -------- | ------ | --------------------------------------------------------------------- |
+| `ticket` | query | no       | string | One-time HMAC ticket; the subprotocol form is preferred for browsers. |
+
+**Responses**
+
+- **HTTP 101** — Switching Protocols.
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 426** — Upgrade required.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
 
 ### `POST /cloud/api/Manager/getAgentPerformance`
 
@@ -1991,11 +2419,12 @@ Real surfaces recorded by the ledger that the final spec does not (or cannot) pr
 
 | Surface                                | Tier | Category                   | What it is                                                                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | In final spec                                                                   |
 | -------------------------------------- | ---- | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `surface.blob-live-bets`               | D    | local-route                | Blob / live-bets gateway routes                                                        | services/blob_and_live_bets_server.ts: bearer-auth R2 blob upload/download, short-lived one-time WebSocket tickets, and the ws/live-bets stream. Uploads are bounded and transcoded with Bun.Image under maxPixels; GET redirects to a presigned URL.                                                                                                                                                                                                                                                                                                                          | yes (4/4 member path(s))                                                        |
 | `surface.daemon-agent-search`          | D    | local-route                | Agent lookup for the Analysis form (GET /api/agents/search)                            | Case-insensitive prefix-first search over the committed agent tree; used to offer agent suggestions instead of a free-text field that silently accepts typos. Loopback-gated like the tree itself, because agent names are identity data.                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                        |
 | `surface.daemon-agent-tree`            | D    | local-route                | Agent hierarchy with wager rollup (GET /api/agent-tree)                                | Serves data/agent-tree.json (2,276 agents, 4 roots) joined with per-agent exposure. Keys are canonical agentLoginKey values; a key owned by more than one AgentID is flagged and never given a level.                                                                                                                                                                                                                                                                                                                                                                          | yes (1/1 member path(s))                                                        |
 | `surface.daemon-analysis`              | D    | local-route                | Analysis report (GET /api/analysis, /api/analysis/filters, /api/analysis/reports)      | The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes. The recorded context names the agent the report was run for, so /api/analysis and /api/analysis/reports both carry the PII guard: loopback answers, any other peer must present SPORTSDESK_ADMIN_TOKEN. | yes (3/3 member path(s))                                                        |
 | `surface.daemon-contests`              | D    | local-route                | Contest / futures list (GET /api/contests)                                             | Every contest the sports nav links (data-action=get-games-prop), keyed by the portal's numeric contestNum with sport/market/subject parsed out of the padded type string.                                                                                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                        |
-| `surface.daemon-dashboard`             | D    | local-route                | Daemon dashboard routes (GET / and GET /dashboard)                                     | GET / and GET /dashboard serve customer-churn-simulation-dashboard.html as text/html from the Bun daemon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | yes (4/7 member path(s))                                                        |
+| `surface.daemon-dashboard`             | D    | local-route                | Daemon dashboard routes (GET / and GET /dashboard)                                     | GET / and GET /dashboard serve customer-churn-simulation-dashboard.html as text/html from the Bun daemon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | yes (12/15 member path(s))                                                      |
 | `surface.daemon-game-admin`            | D    | local-route                | Game Admin exposure (GET /api/game-admin)                                              | Exposure per fixture split by position (Straight/Parlay/Teaser), the report the portal manual v1.0.280 describes in F.A.Q. #4. preGame is computed from gameDateTime and is a fact about the fixture, not a claim about the operator's delete permission.                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                        |
 | `surface.daemon-game-admin-board`      | D    | local-route                | Game Admin board with per-side exposure (GET /api/game-admin/board)                    | The Admin module of the portal's Game Admin report: each game's spread, moneyline, total and team-total lines with the money on each side. Amounts the portal abbreviates (120k) stay approximate and are excluded from every sum.                                                                                                                                                                                                                                                                                                                                             | yes (1/1 member path(s))                                                        |
 | `surface.daemon-graph-data-plane`      | D    | local-route                | Graph data plane (feed, companion JSON, assets)                                        | docs/graph.js fetches its data relative to the document, so the generated graph page was dead when served by the daemon. These paths serve it: the live feed at two paths, the two companion JSON files, docs/assets/*, and the dashboard's agent-tree raster.                                                                                                                                                                                                                                                                                                                 | yes (1/6 member path(s))                                                        |
@@ -2013,7 +2442,7 @@ Real surfaces recorded by the ledger that the final spec does not (or cannot) pr
 | `surface.manager-getHistory`           | D    | upstream-route             | Manager/getHistory (wired settlement-history poll)                                     | POST {SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory - append-only settlement-history poll; response is an array or {data: []}.                                                                                                                                                                                                                                                                                                                                                                                                                                     | yes (1/1 member path(s))                                                        |
 | `surface.desk-api-unimplemented`       | E    | documented-not-implemented | /api/desk/* routes documented with no implementation                                   | 9 spec paths / 10 operations under /api/desk/* (auth session POST+DELETE, auth/me, hitl approve/queue/reject, forensics audit/scores, rfq quote/hedge) have no handler, no HMAC verifier, no CookieMap session code and no queue store anywhere in the repo.                                                                                                                                                                                                                                                                                                                   | no — no implementation exists; removed by design                                |
 
-4 of 21 ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](./gs-manager-contracts.md)).
+4 of 22 ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](./gs-manager-contracts.md)).
 
 ## Evidence & limitations
 
@@ -2026,7 +2455,7 @@ Counts below are ledger totals (all recorded rows, including rows removed from t
 | A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 11              |
 | B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 8               |
 | C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 29              |
-| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 27              |
+| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 21              | 40              |
 | E    | Documented operation with no implementation in this repository.                                                                                                                                                     | 1               | 0               |
 
 > The ledger distinguishes captured wire evidence from observation and inference: eight operations have live request+response captures — `getWebLog`, `getInfoPlayer`, `getBetTicker`, `getBetTickerConfig` and `getSportsVigSetup` from 2026-10-31, plus `Report/Pending`, `getTransactions` and `getGrading` from 2026-11-01 — and publish capture-derived response schemas. For four of them the captured body is an empty envelope, so the schema describes the envelope and nothing inside it. The Analysis report, `POST /cloud/api/Manager/getAgentPerformance`, has its request observed in full (three calls, 2026-11-01) but no response, and remains tier B. Every other response schema is authored unless its row says otherwise. Earlier wire artifacts are the 2026-10-28 Manager HAR (mode-B request only) and the 2026-10-31 live run, whose three remaining requests (`getPending`, `getInfoManager`, `getCustomerNotes`) returned HTTP 500 with the current request template. Sub-sport lanes and period menus are desk-navigation catalog data, not yet captured live; live pregame sports parity is verified separately (19/19 sports, `getSportsType`). GS Buckeye 2 Partner 118 live acquisition is blocked by design — no endpoint, method, authentication mechanism or response contract for any GS report has been verified, and the observed `getBetReport` payload does not establish a transport. The 11 "Tracked Operational Domains" entries are UI/DOM declarations with candidate URLs and methods, not wire contracts, and the `/api/desk/*` routes are documented without any implementation. Treat any schema or behaviour not backed by a cited capture as a proposal to be confirmed, not as a contract.

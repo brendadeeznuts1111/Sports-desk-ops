@@ -136,6 +136,8 @@
     "scheduler": "bun run services/reporting_scheduler_service.ts",
     "onepass": "bun run services/agent_onepass_plugin.ts",
     "serve": "bun run services/sportsdesk_webview_server.ts",
+    "serve:blob-live-bets": "bun run services/blob_and_live_bets_server.ts",
+    "supervise": "bun run services/supervisor.ts",
     "deploy": "./scripts/deploy/deploy_to_vps.sh",
     "docs:stage": "mkdir -p dist/assets && cp docs/index.html dist/index.html && cp docs/graph.html dist/graph.html && cp docs/graph.js dist/graph.js && cp docs/gslive-links.js dist/gslive-links.js && cp docs/graph-live-feed.json dist/graph-live-feed.json && cp docs/backtest-4wk-cfb-nba.json dist/backtest-4wk-cfb-nba.json && cp docs/combo-uniqueness.json dist/combo-uniqueness.json && cp docs/cross-domain-bridge.json dist/cross-domain-bridge.json && cp docs/openapi.json dist/openapi.json && cp docs/api-reference.md dist/api-reference.md && cp -f docs/assets/* dist/assets/ && cp infra/pages/_headers dist/_headers",
     "docs:openapi": "bun run scripts/generate_openapi.ts",
@@ -184,6 +186,7 @@
     "env:audit": "bun run scripts/env_audit.ts",
     "registry:check": "bun run scripts/registry_check.ts",
     "artifacts:cron": "bun --no-orphans run scripts/artifacts_cron.ts",
+    "positions:cron": "bun --no-env-file --no-orphans run scripts/live_positions_cron.ts",
     "probes:index": "bun run scripts/capture/probe_index.ts",
     "probes:prune": "bun run scripts/capture/probes_prune.ts",
     "customers": "bun run scripts/customer_lookup.ts",
@@ -205,7 +208,12 @@
     "graph:deploy": "./bin/dx deploy",
     "backtest:4wk": "./bin/dx backtest",
     "image:meta": "bun run bin/image-meta.ts",
-    "blob:formdata": "bun run bin/blob-formdata.ts"
+    "blob:formdata": "bun run bin/blob-formdata.ts",
+    "xml:parse": "bun run bin/xml-parse.ts",
+    "fetch-config": "bun run fetch-config.ts",
+    "fetch-bet-tally": "bun run scripts/fetch-bet-tally.ts",
+    "fetch-periods": "bun run scripts/fetch-periods.ts",
+    "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts"
   },
   "keywords": [
     "sportsdesk",

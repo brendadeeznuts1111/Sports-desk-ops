@@ -52,6 +52,15 @@ declare module "bun" {
     readonly R2_ENDPOINT?: string;
     readonly R2_BUCKET_NAME?: string;
     readonly R2_PUBLIC_URL?: string;
+    /** Bearer token for the hardened blob/live-bets gateway. */
+    readonly BLOB_API_TOKEN?: string;
+    /** HMAC secret for short-lived WebSocket tickets. */
+    readonly BLOB_TICKET_SECRET?: string;
+    readonly BLOB_MAX_UPLOAD_BYTES?: string;
+    readonly BLOB_MAX_PIXELS?: string;
+    readonly BLOB_PORT?: string;
+    readonly BLOB_HEALTH_URL?: string;
+    readonly WEBVIEW_HEALTH_URL?: string;
 
     // Telegram Bot & Mini App Integration
     readonly TELEGRAM_BOT_TOKEN?: string;
