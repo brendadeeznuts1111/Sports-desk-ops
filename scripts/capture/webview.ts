@@ -85,6 +85,12 @@ export interface WebViewLaunchOptions {
    * storage per view, so a second view really does get its own directory.
    */
   dataStoreDir?: string;
+  /**
+   * Chrome backend: let Bun auto-connect to an already-running Chrome (a new tab in the existing
+   * browser) instead of forcing a spawn. Requires Chrome's remote-debugging toggle; without it Bun
+   * falls back to spawning, so the caller still fails closed on a missing session.
+   */
+  attachToExistingChrome?: boolean;
   /** Route the browser subprocess's stdout to Bun's (Chrome: `"ignore"` by default). */
   stdout?: "inherit" | "ignore";
   /** Route the browser subprocess's stderr to Bun's (Chrome is chatty; useful when it dies silently). */
@@ -352,6 +358,21 @@ export class ManagedWebView {
   static launch(options: WebViewLaunchOptions = {}): ManagedWebView {
     registerExitCleanup();
     const backend = options.backend ?? "chrome";
+    if (options.attachToExistingChrome === true && backend !== "chrome") {
+      throw new WebViewError(
+        "unsupported-backend",
+        "attachToExistingChrome is only available on the chrome backend",
+      );
+    }
+    if (
+      options.attachToExistingChrome === true &&
+      options.dataStoreDir !== undefined
+    ) {
+      throw new WebViewError(
+        "launch-failed",
+        "attachToExistingChrome uses the running browser's profile; dataStoreDir cannot be pinned too",
+      );
+    }
     const consoleLines: ConsoleLine[] = [];
     const consoleLimit = options.consoleLimit ?? DEFAULT_CONSOLE_LIMIT;
     // Both backends accept the object form, so stdout/stderr reach the Chrome
@@ -360,10 +381,9 @@ export class ManagedWebView {
       backend === "chrome"
         ? {
             type: "chrome",
-            // For unattended Chrome automation, pass `url: false` so Bun always
-            // spawns a fresh headless instance instead of auto-connecting via
-            // DevToolsActivePort.
-            url: false,
+            // Unattended automation forces a fresh headless spawn (`url:false`); attach mode
+            // omits it so Bun auto-connects via DevToolsActivePort instead.
+            ...(options.attachToExistingChrome === true ? {} : { url: false }),
             ...(options.stdout === undefined ? {} : { stdout: options.stdout }),
             ...(options.stderr === undefined ? {} : { stderr: options.stderr }),
           }
@@ -395,7 +415,11 @@ export class ManagedWebView {
     // Pin the directory only after the view exists. A throwing constructor
     // never created a view, so it must not make a later successful launch's
     // different directory look like an ignored conflict.
-    if (backend === "chrome" && options.dataStoreDir !== undefined) {
+    if (
+      backend === "chrome" &&
+      options.attachToExistingChrome !== true &&
+      options.dataStoreDir !== undefined
+    ) {
       noteChromeDataStoreDir(options.dataStoreDir);
     }
     const managed = new ManagedWebView(view, backend, consoleLines, options);

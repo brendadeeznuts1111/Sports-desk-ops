@@ -23,6 +23,7 @@
  */
 
 import { z } from "zod";
+import { requireF402ReportHtml } from "../lib/f402_report_html.ts";
 import { decodeEntities } from "../lib/ticket_html.ts";
 
 /**
@@ -446,6 +447,6 @@ if (import.meta.main) {
     path === undefined || path === "-"
       ? await Bun.stdin.text()
       : await Bun.file(path).text();
-  const panel = parsePendingPanelHtml(html);
+  const panel = parsePendingPanelHtml(requireF402ReportHtml(html, "pending"));
   console.log(JSON.stringify(panel, null, 2));
 }
