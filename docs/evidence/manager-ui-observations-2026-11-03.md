@@ -11,17 +11,17 @@ Machine-readable record: [manager-ui-observations-2026-11-03.json](./manager-ui-
 
 ## What the images are
 
-| # | Screen | File |
-| - | ------ | ---- |
-| 01 | Manage Players — Agent tab (profile grid) | [01-manage-players-agent-profiles.webp](./screenshots/manager-ui-2026-11-03/01-manage-players-agent-profiles.webp) |
-| 02 | Manage Players — Player tab (profile grid) | [02-manage-players-player-profiles.webp](./screenshots/manager-ui-2026-11-03/02-manage-players-player-profiles.webp) |
-| 03 | Find Player search | [03-find-player.webp](./screenshots/manager-ui-2026-11-03/03-find-player.webp) |
-| 04 | Events → Last Bets (empty result) | [04-events-last-bets-empty.webp](./screenshots/manager-ui-2026-11-03/04-events-last-bets-empty.webp) |
-| 05 | Reports → Summary report (empty) | [05-reports-summary-empty.webp](./screenshots/manager-ui-2026-11-03/05-reports-summary-empty.webp) |
-| 06 | Reports → Bettor report (empty) | [06-reports-bettor-empty.webp](./screenshots/manager-ui-2026-11-03/06-reports-bettor-empty.webp) |
-| 07 | Reports → Open bet report (empty) | [07-reports-open-bet-empty.webp](./screenshots/manager-ui-2026-11-03/07-reports-open-bet-empty.webp) |
-| 08 | Reports → Player report (empty) | [08-reports-player-empty.webp](./screenshots/manager-ui-2026-11-03/08-reports-player-empty.webp) |
-| 09 | Reports → Event report (empty) | [09-reports-event-empty.webp](./screenshots/manager-ui-2026-11-03/09-reports-event-empty.webp) |
+| #   | Screen                                     | File                                                                                                                 |
+| --- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 01  | Manage Players — Agent tab (profile grid)  | [01-manage-players-agent-profiles.webp](./screenshots/manager-ui-2026-11-03/01-manage-players-agent-profiles.webp)   |
+| 02  | Manage Players — Player tab (profile grid) | [02-manage-players-player-profiles.webp](./screenshots/manager-ui-2026-11-03/02-manage-players-player-profiles.webp) |
+| 03  | Find Player search                         | [03-find-player.webp](./screenshots/manager-ui-2026-11-03/03-find-player.webp)                                       |
+| 04  | Events → Last Bets (empty result)          | [04-events-last-bets-empty.webp](./screenshots/manager-ui-2026-11-03/04-events-last-bets-empty.webp)                 |
+| 05  | Reports → Summary report (empty)           | [05-reports-summary-empty.webp](./screenshots/manager-ui-2026-11-03/05-reports-summary-empty.webp)                   |
+| 06  | Reports → Bettor report (empty)            | [06-reports-bettor-empty.webp](./screenshots/manager-ui-2026-11-03/06-reports-bettor-empty.webp)                     |
+| 07  | Reports → Open bet report (empty)          | [07-reports-open-bet-empty.webp](./screenshots/manager-ui-2026-11-03/07-reports-open-bet-empty.webp)                 |
+| 08  | Reports → Player report (empty)            | [08-reports-player-empty.webp](./screenshots/manager-ui-2026-11-03/08-reports-player-empty.webp)                     |
+| 09  | Reports → Event report (empty)             | [09-reports-event-empty.webp](./screenshots/manager-ui-2026-11-03/09-reports-event-empty.webp)                       |
 
 ## What is observed
 

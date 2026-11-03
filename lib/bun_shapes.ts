@@ -155,6 +155,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:proc.shell"],
   },
   {
+    name: "$",
+    kind: "value",
+    subsystem: "process",
+    heading: "Bun.$",
+    evidence: ["test:tests/bun_shapes_coverage.test.ts"],
+  },
+  {
     name: "file",
     kind: "value",
     subsystem: "process",

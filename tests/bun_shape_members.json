@@ -4,6 +4,17 @@
   "bunCommit": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
   "shapes": {
     "Terminal": [],
+    "$": [
+      "Shell",
+      "ShellError",
+      "ShellPromise",
+      "braces",
+      "cwd",
+      "env",
+      "escape",
+      "nothrow",
+      "throws"
+    ],
     "file": [],
     "fileURLToPath": [],
     "gc": [],

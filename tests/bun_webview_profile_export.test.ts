@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { ManagedWebView } from "../scripts/capture/webview.ts";
+import { join, resolve } from "node:path";
 
 /**
  * Chrome integration test for `session:login --from-profile`.
@@ -49,9 +47,54 @@ function detectChromeExecutable(): string | null {
 }
 
 const chromePath = detectChromeExecutable();
+const REPO_ROOT = resolve(import.meta.dir, "..");
 
 let server: ReturnType<typeof Bun.serve> | undefined;
 let baseUrl = "";
+
+/**
+ * Seed cookies in a CHILD process: Chrome's `--user-data-dir` is process-wide, so a
+ * in-process seed can silently reuse a dataStore another test already pinned. The child
+ * exits before the CLI runs, leaving the parent process unpinned.
+ */
+async function seedProfileInChild(profile: string): Promise<void> {
+  const webviewUrl = new URL("../scripts/capture/webview.ts", import.meta.url)
+    .href;
+  const script = `
+    import { ManagedWebView } from ${JSON.stringify(webviewUrl)};
+    const view = ManagedWebView.launch({
+      backend: "chrome",
+      width: 400,
+      height: 300,
+      dataStoreDir: process.argv[1],
+    });
+    await view.navigate(process.argv[2]);
+    const cookies = await view.getAllCookies();
+    await view.close();
+    Bun.WebView.closeAll();
+    if (cookies.length < 3) {
+      console.error("seed wrote " + cookies.length + " cookies");
+      process.exit(1);
+    }
+  `;
+  const proc = Bun.spawn({
+    cmd: [process.execPath, "-e", script, profile, `${baseUrl}/`],
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      PATH: Bun.env["PATH"] ?? "",
+      HOME: Bun.env["HOME"] ?? "",
+      TMPDIR: Bun.env["TMPDIR"] ?? "",
+      F402_BASE_URL: baseUrl,
+    },
+  });
+  const [stderr, code] = await Promise.all([proc.stderr.text(), proc.exited]);
+  if (code !== 0) {
+    throw new Error(`profile seed failed (${code}): ${stderr.slice(0, 300)}`);
+  }
+  await Bun.sleep(1_000); // release the child's Chrome/profile singleton
+}
 
 const root = mkdtempSync(join(tmpdir(), "profile-export-integration-"));
 afterAll(() => {
@@ -92,19 +135,8 @@ describe.skipIf(chromePath === null)(
       const profile = join(root, "profile");
       const sessionPath = join(root, "session.json");
 
-      // 1) Seed the profile through a real Chrome dataStore.
-      const seed = ManagedWebView.launch({
-        backend: "chrome",
-        width: 400,
-        height: 300,
-        dataStoreDir: profile,
-      });
-      await seed.navigate(`${baseUrl}/`);
-      const cookies = await seed.getAllCookies();
-      expect(cookies.length).toBeGreaterThanOrEqual(3);
-      await seed.close();
-      Bun.WebView.closeAll();
-      await Bun.sleep(1_000); // release the parent's Chrome/profile singleton
+      // 1) Seed the profile in a child process (Chrome dataStore is process-wide).
+      await seedProfileInChild(profile);
 
       // 2) Export the profile via the CLI.
       const proc = Bun.spawn({
@@ -163,17 +195,8 @@ describe.skipIf(chromePath === null)(
       const profile = join(root, "lock-profile");
       const sessionPath = join(root, "lock-session.json");
 
-      // Seed.
-      const seed = ManagedWebView.launch({
-        backend: "chrome",
-        width: 400,
-        height: 300,
-        dataStoreDir: profile,
-      });
-      await seed.navigate(`${baseUrl}/`);
-      await seed.close();
-      Bun.WebView.closeAll();
-      await Bun.sleep(1_000);
+      // Seed in a child so the test process never pins Chrome's dataStore.
+      await seedProfileInChild(profile);
 
       // Hold the lock externally.
       const { acquireProfileLock } =

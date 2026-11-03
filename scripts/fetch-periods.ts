@@ -11,10 +11,14 @@
 
 import { readFileSync } from "node:fs";
 
-const input = process.argv[2] ? readFileSync(process.argv[2], "utf8") : await Bun.stdin.text();
+const input = process.argv[2]
+  ? readFileSync(process.argv[2], "utf8")
+  : await Bun.stdin.text();
 const j = JSON.parse(input);
-const periods: Record<string, { m: string; h1: string; h2: string; ht: string; [k: string]: unknown }> =
-  j.periods ?? j ?? {};
+const periods: Record<
+  string,
+  { m: string; h1: string; h2: string; ht: string; [k: string]: unknown }
+> = j.periods ?? j ?? {};
 const periodNames: Record<string, string> = j.periodNames ?? {};
 const abbreviations: Record<string, string> = j.abbreviations ?? {};
 
