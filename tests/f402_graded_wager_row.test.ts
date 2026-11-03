@@ -5,6 +5,7 @@ import {
   parseGradedWagerRows,
   parseGradedWagerRowsSoA,
   countLive,
+  isLive,
   averageRisk,
   marketsMatching,
   type GradedWagerRow,
@@ -88,9 +89,9 @@ describe("parseGradedWagerRow", () => {
 
     const row = parseGradedWagerRow(fixtureHtml);
     const joined = findScore(scoreboard, {
-      team1: row.team1,
-      team2: row.team2,
-      league: row.league,
+      team1: row.team1 ?? "",
+      team2: row.team2 ?? "",
+      league: row.league ?? "",
     });
     expect(joined).not.toBeNull();
     if (joined === null) return;
@@ -119,12 +120,12 @@ describe("parseGradedWagerRow", () => {
   test("the scored result covers the line", () => {
     const row = parseGradedWagerRow(fixtureHtml);
     const match = /Vikings \(Live\) (\d+) - Lions \(Live\) (\d+)/.exec(
-      row.score,
+      row.score ?? "",
     );
     const vikings = Number(match?.[1]);
     const lions = Number(match?.[2]);
     const margin = lions - vikings;
-    const line = lineValue(row.line);
+    const line = lineValue(row.line ?? "");
 
     expect(vikings).toBe(15);
     expect(lions).toBe(19);
@@ -277,9 +278,9 @@ describe("parseGradedWagerRows", () => {
 
     for (const [index, row] of rows.entries()) {
       const joined = findScore(scoreboard, {
-        team1: row.team1,
-        team2: row.team2,
-        league: row.league,
+        team1: row.team1 ?? "",
+        team2: row.team2 ?? "",
+        league: row.league ?? "",
       });
       const exp = expected[index]!;
       if (exp.team1Score === null) {
@@ -335,7 +336,7 @@ describe("parseGradedWagerRows", () => {
       ],
       games: ["Vikings / Lions", "Patriots / Bills", "Chiefs / Raiders"],
       leagues: ["NFL", "NFL", "NFL"],
-      lives: [true, false, true],
+      lives: 0b101n,
       gameNumbers: ["9240", "9241", "9242"],
       markets: ["Game Spread", "Game Moneyline", "Game Total"],
       scheduleds: ["Nov 1, 2026 10:00 PM", "Nov 2, 1:00 PM", "Nov 3, 4:25 PM"],
@@ -367,7 +368,7 @@ describe("parseGradedWagerRows", () => {
       ],
       games: ["Vikings / Lions", "Patriots / Bills", "Chiefs / Raiders"],
       leagues: ["NFL", "NFL", "NFL"],
-      lives: [true, false, true],
+      lives: 0b101n,
       gameNumbers: ["9240", "9241", "9242"],
       markets: ["Game Spread", "Game Moneyline", "Game Total"],
       scheduleds: ["Nov 1, 2026 10:00 PM", "Nov 2, 1:00 PM", "Nov 3, 4:25 PM"],
@@ -405,7 +406,7 @@ describe("parseGradedWagerRows", () => {
         "Raiders / Chiefs",
       ],
       leagues: ["NFL", "NFL", "NFL", "NFL"],
-      lives: [true, false, true, false],
+      lives: 0b0101n,
       gameNumbers: ["9240", "9241", "9242", "9243"],
       markets: ["Game Spread", null, "Game Total", "Game Moneyline"],
       scheduleds: [
@@ -452,7 +453,6 @@ describe("parseGradedWagerRows", () => {
       soa.scores.length,
       soa.games.length,
       soa.leagues.length,
-      soa.lives.length,
       soa.gameNumbers.length,
       soa.markets.length,
       soa.scheduleds.length,
@@ -487,7 +487,6 @@ describe("parseGradedWagerRows", () => {
       soa.scores.length,
       soa.games.length,
       soa.leagues.length,
-      soa.lives.length,
       soa.gameNumbers.length,
       soa.markets.length,
       soa.scheduleds.length,
@@ -498,5 +497,107 @@ describe("parseGradedWagerRows", () => {
     const allEqual = lengths.every((l) => l === lengths[0]);
     expect(allEqual).toBe(true);
     expect(lengths[0]).toBe(3);
+  });
+});
+
+describe("parseGradedWagerRow E-type college team total", () => {
+  test("parses the 1st-half team-total row from the Oct 31 graded panel", async () => {
+    const html = await Bun.file(
+      new URL(
+        "./fixtures/f402-graded-wager-row-e-1072619695.html",
+        import.meta.url,
+      ),
+    ).text();
+    const row = parseGradedWagerRow(html);
+    expect(row.ticketNumber).toBe("1072619695");
+    expect(row.wagerNumber).toBe("1072619695-1");
+    expect(row.wagerType).toBe("E");
+    expect(row.selection).toBe("Colorado St");
+    expect(row.team1).toBe("Colorado St");
+    expect(row.team2).toBe("Utah St");
+    expect(row.line).toBe("U 13½");
+    expect(row.price).toBe("+100");
+    expect(row.riskCents).toBe(200000);
+    expect(row.winCents).toBe(200000);
+    expect(row.status).toBe("Win");
+    expect(row.score).toBe("Colorado St 0 - Utah St 17");
+    expect(row.league).toBe("College");
+    expect(row.live).toBe(false);
+    expect(row.gameNumber).toBe("205");
+    expect(row.market).toBe("1st Half Team Total");
+    expect(row.placedOn).toBe("Internet");
+    expect(row.gradedAmount).toBe("+$2,000");
+  });
+});
+
+describe("parseGradedWagerRows G-type game combos", () => {
+  test("Won and Lost G rows parse with nulls where the panel prints placeholders", async () => {
+    const html = await Bun.file(
+      new URL("./fixtures/f402-graded-wager-rows-g.html", import.meta.url),
+    ).text();
+    const rows = parseGradedWagerRows(html);
+    expect(rows).toHaveLength(2);
+
+    const won = rows[0]!;
+    expect(won.ticketNumber).toBe("1074338151");
+    expect(won.wagerNumber).toBe("1074338151-1");
+    expect(won.wagerType).toBe("G");
+    expect(won.status).toBe("Won");
+    expect(won.score).toBeNull();
+    expect(won.line).toBeNull();
+    expect(won.price).toBeNull();
+    expect(won.team1).toBeNull();
+    expect(won.team2).toBeNull();
+    expect(won.league).toBeNull();
+    expect(won.market).toBeNull();
+    expect(won.live).toBe(false);
+    expect(won.gameNumber).toBe("319977747");
+    expect(won.riskCents).toBe(17500);
+    expect(won.winCents).toBe(66325);
+    expect(won.scheduled).toBeNull();
+    expect(won.accepted).toBe("Nov 2, 2026 11:17 PM - (CST)");
+    expect(won.gradedAmount).toBe("+$663");
+
+    const lost = rows[1]!;
+    expect(lost.ticketNumber).toBe("1074340989");
+    expect(lost.status).toBe("Lost");
+    expect(lost.score).toBeNull();
+    expect(lost.gameNumber).toBe("319979060");
+    expect(lost.riskCents).toBe(8700);
+    expect(lost.winCents).toBe(14007);
+    expect(lost.gradedAmount).toBe("-$87");
+  });
+
+  test("G rows stay lockstep in the SoA shape", async () => {
+    const html = await Bun.file(
+      new URL("./fixtures/f402-graded-wager-rows-g.html", import.meta.url),
+    ).text();
+    const soa = parseGradedWagerRowsSoA(html);
+    expect(soa.gameNumbers).toEqual(["319977747", "319979060"]);
+    expect(soa.markets).toEqual([null, null]);
+    expect(soa.scores).toEqual([null, null]);
+    expect(soa.statuses).toEqual(["Won", "Lost"]);
+  });
+});
+
+describe("graded wager bitset property", () => {
+  test("countLive and isLive agree with a random bitset across 1000 cases", () => {
+    for (let t = 0; t < 1000; t++) {
+      const n = 1 + Math.floor(Math.random() * 64);
+      let bits = 0n;
+      const expected: boolean[] = [];
+      for (let i = 0; i < n; i++) {
+        const live = Math.random() < 0.5;
+        expected.push(live);
+        if (live) bits |= 1n << BigInt(i);
+      }
+      const soa = { lives: bits } as unknown as GradedWagerRowsSoA;
+      let pop = 0;
+      for (const b of expected) if (b) pop++;
+      expect(countLive(soa)).toBe(pop);
+      for (let i = 0; i < n; i++) {
+        expect(isLive(soa, i)).toBe(expected[i]!);
+      }
+    }
   });
 });

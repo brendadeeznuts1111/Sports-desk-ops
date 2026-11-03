@@ -31,34 +31,43 @@ export interface GradedWagerRow {
   selection: string;
   /** `.choosen` text without a trailing (Live), e.g. "Lions". */
   selectedTeam: string;
-  /** First `Game` team without a trailing `(Live)`, e.g. "Vikings". */
-  team1: string;
-  /** Second `Game` team without a trailing `(Live)`, e.g. "Lions". */
-  team2: string;
-  /** First token of `.line-selected`, e.g. "-2½". */
-  line: string;
-  /** Second token of `.line-selected`, e.g. "-130". */
-  price: string;
+  /** First `Game` team without a trailing `(Live)`, e.g. "Vikings". Null for `G`
+   * rows, whose `Game` is a game id plus the full line, not `team1 / team2`. */
+  team1: string | null;
+  /** Second `Game` team without a trailing `(Live)`, e.g. "Lions". Null for `G` rows. */
+  team2: string | null;
+  /** First token of `.line-selected`, e.g. "-2½". Null when the row carries no
+   * line (`G` rows render an empty `.line-selected`). */
+  line: string | null;
+  /** Second token of `.line-selected`, e.g. "-130". Null when the row carries
+   * no line. */
+  price: string | null;
   /** `Risk/Win` risk side in integer cents, e.g. 2600000. */
   riskCents: number;
   /** `Risk/Win` win side in integer cents, e.g. 2000000. */
   winCents: number;
-  /** `Status` before the parenthesized score, e.g. "Win". */
+  /** `Status` before the parenthesized score, e.g. "Win". `G` rows print a bare
+   * "Won"/"Lost" with no score; the raw text is carried through, never renamed. */
   status: string;
-  /** Result text inside the `Status` parentheses, e.g. "Vikings (Live) 15 - Lions (Live) 19". */
-  score: string;
-  /** `Game` field, e.g. "Vikings (Live) / Lions (Live)". */
+  /** Result text inside the `Status` parentheses, e.g. "Vikings (Live) 15 - Lions (Live) 19".
+   * Null for `G` rows, whose status has no parenthesized score. */
+  score: string | null;
+  /** `Game` field, e.g. "Vikings (Live) / Lions (Live)". For `G` rows this is the
+   * game id plus the full line (e.g. "G319977747 Basketball - …"). */
   game: string;
-  /** League token of `Selection`, e.g. "NFL". */
-  league: string;
+  /** League token of `Selection`, e.g. "NFL". Null for `G` rows, whose Selection
+   * reads "- 0  Not available". */
+  league: string | null;
   /** Whether `Selection` carries the optional `Live` token. */
   live: boolean;
-  /** Game number token of `Selection`, e.g. "9240". */
-  gameNumber: string;
-  /** Market text after the game number, e.g. "Game Spread". */
-  market: string;
-  /** `Scheduled` field, e.g. "Nov 1, 2026 10:00 PM - (CST)". */
-  scheduled: string;
+  /** Game number token of `Selection`, e.g. "9240". For `G` rows the id comes
+   * from the `.choosen` `G<digits>` prefix instead. Null when neither carries one. */
+  gameNumber: string | null;
+  /** Market text after the game number, e.g. "Game Spread". Null for `G` rows. */
+  market: string | null;
+  /** `Scheduled` field, e.g. "Nov 1, 2026 10:00 PM - (CST)". Null when the panel
+   * prints the "--" placeholder (`G` rows). */
+  scheduled: string | null;
   /** `Accepted` field, e.g. "Nov 1, 2:30 PM - (CST)". */
   accepted: string;
   /** `Placed On` field, e.g. "Internet". */
@@ -94,20 +103,20 @@ const gradedWagerRowSchema = z
     wagerType: z.string().min(1),
     selection: z.string().min(1),
     selectedTeam: z.string().min(1),
-    team1: z.string().min(1),
-    team2: z.string().min(1),
-    line: z.string().min(1),
-    price: z.string().min(1),
+    team1: z.string().min(1).nullable(),
+    team2: z.string().min(1).nullable(),
+    line: z.string().min(1).nullable(),
+    price: z.string().min(1).nullable(),
     riskCents: z.number().int().nonnegative(),
     winCents: z.number().int().nonnegative(),
     status: z.string().min(1),
-    score: z.string().min(1),
+    score: z.string().min(1).nullable(),
     game: z.string().min(1),
-    league: z.string().min(1),
+    league: z.string().min(1).nullable(),
     live: z.boolean(),
-    gameNumber: z.string().regex(/^\d+$/),
-    market: z.string().min(1),
-    scheduled: z.string().min(1),
+    gameNumber: z.string().regex(/^\d+$/).nullable(),
+    market: z.string().min(1).nullable(),
+    scheduled: z.string().min(1).nullable(),
     accepted: z.string().min(1),
     placedOn: z.string().min(1),
     gradedAmount: z.string().min(1),
@@ -182,18 +191,21 @@ function parseRiskWin(value: string): { riskCents: number; winCents: number } {
   };
 }
 
-/** "Win  (Vikings (Live) 15 - Lions (Live) 19)" -> status and inner score. */
-function parseStatus(value: string): { status: string; score: string } {
-  const open = value.indexOf("(");
-  const close = value.lastIndexOf(")");
-  if (open < 0 || close <= open) {
-    throw new GradedWagerRowError(
-      ["status", "score"],
-      "expected status (score)",
-    );
+/** "Win  (Vikings (Live) 15 - Lions (Live) 19)" -> status and inner score.
+ * A bare status with no parentheses (`G` rows print "Won"/"Lost") yields the
+ * whole text as status and a null score. */
+function parseStatus(value: string): { status: string; score: string | null } {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    throw new GradedWagerRowError(["status"], "missing field");
   }
-  const status = value.slice(0, open).trim();
-  const score = value.slice(open + 1, close).trim();
+  const open = trimmed.indexOf("(");
+  const close = trimmed.lastIndexOf(")");
+  if (open < 0 || close <= open) {
+    return { status: trimmed, score: null };
+  }
+  const status = trimmed.slice(0, open).trim();
+  const score = trimmed.slice(open + 1, close).trim();
   if (status === "" || score === "") {
     throw new GradedWagerRowError(
       ["status", "score"],
@@ -240,9 +252,16 @@ function parseSelection(value: string): {
   return { league, live, gameNumber, market };
 }
 
-/** "-2½  -130" -> line and price tokens; "O 48½  -105" -> line "O 48½". */
-function parseLineSelected(value: string): { line: string; price: string } {
+/** "-2½  -130" -> line and price tokens; "O 48½  -105" -> line "O 48½".
+ * An empty line-selected (`G` rows) yields nulls instead of throwing. */
+function parseLineSelected(value: string): {
+  line: string | null;
+  price: string | null;
+} {
   const tokens = value.split(" ").filter((token) => token !== "");
+  if (tokens.length === 0) {
+    return { line: null, price: null };
+  }
   if (tokens.length < 2) {
     throw new GradedWagerRowError(["line", "price"], "expected line and price");
   }
@@ -383,11 +402,29 @@ function parseRowFromExtracted(extracted: ExtractedRow): GradedWagerRow {
     requireField(fields, LABELS.status, "status"),
   );
   const { line, price } = parseLineSelected(extracted.lineSelected);
-  const selectionFields = parseSelection(
-    requireField(fields, LABELS.selection, "selection"),
-  );
   const game = requireField(fields, LABELS.game, "game");
-  const { team1, team2 } = parseGameTeams(game);
+  const scheduledRaw = requireField(fields, LABELS.scheduled, "scheduled");
+  // The panel prints "--" for a missing schedule (`G` rows); a placeholder is
+  // absent data, not a date.
+  const scheduled = scheduledRaw === "--" ? null : scheduledRaw;
+
+  // `G` rows are game-combo tickets, not `team1 / team2` selections: their
+  // Selection reads "- 0  Not available", the line-selected is empty, and the
+  // game id rides the `.choosen` `G<digits>` prefix instead. Those fields are
+  // null rather than forced through parsers whose grammar they don't match.
+  const isGameCombo = extracted.wagerType === "G";
+  const { team1, team2 } = isGameCombo
+    ? { team1: null, team2: null }
+    : parseGameTeams(game);
+  const selectionFields = isGameCombo
+    ? {
+        league: null,
+        live: false,
+        gameNumber:
+          /^G(\d+)/.exec(normalizeText(extracted.selection))?.[1] ?? null,
+        market: null,
+      }
+    : parseSelection(requireField(fields, LABELS.selection, "selection"));
   const selectedTeam = stripLiveSuffix(extracted.selection);
   if (selectedTeam === "") {
     throw new GradedWagerRowError(["selectedTeam"], "missing selection");
@@ -412,7 +449,7 @@ function parseRowFromExtracted(extracted: ExtractedRow): GradedWagerRow {
     live: selectionFields.live,
     gameNumber: selectionFields.gameNumber,
     market: selectionFields.market,
-    scheduled: requireField(fields, LABELS.scheduled, "scheduled"),
+    scheduled,
     accepted: requireField(fields, LABELS.accepted, "accepted"),
     placedOn: requireField(fields, LABELS.placedOn, "placedOn"),
     gradedAmount: extracted.gradedAmount,
@@ -490,25 +527,26 @@ export function parseGradedWagerRowsSoA(html: string): GradedWagerRowsSoA {
   const wagerTypes: string[] = [];
   const selections: string[] = [];
   const selectedTeams: string[] = [];
-  const team1s: string[] = [];
-  const team2s: string[] = [];
-  const lines: string[] = [];
-  const prices: string[] = [];
+  const team1s: (string | null)[] = [];
+  const team2s: (string | null)[] = [];
+  const lines: (string | null)[] = [];
+  const prices: (string | null)[] = [];
   const riskCentsList: number[] = [];
   const winCentsList: number[] = [];
   const statuses: string[] = [];
-  const scores: string[] = [];
+  const scores: (string | null)[] = [];
   const games: string[] = [];
-  const leagues: string[] = [];
-  const lives: boolean[] = [];
-  const gameNumbers: string[] = [];
-  const markets: string[] = [];
-  const scheduleds: string[] = [];
+  const leagues: (string | null)[] = [];
+  let lives = 0n;
+  const gameNumbers: (string | null)[] = [];
+  const markets: (string | null)[] = [];
+  const scheduleds: (string | null)[] = [];
   const accepteds: string[] = [];
   const placedOns: string[] = [];
   const gradedAmounts: string[] = [];
 
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
     ticketNumbers.push(row.ticketNumber);
     wagerNumbers.push(row.wagerNumber);
     wagerTypes.push(row.wagerType);
@@ -524,7 +562,7 @@ export function parseGradedWagerRowsSoA(html: string): GradedWagerRowsSoA {
     scores.push(row.score);
     games.push(row.game);
     leagues.push(row.league);
-    lives.push(row.live);
+    if (row.live) lives |= 1n << BigInt(i);
     gameNumbers.push(row.gameNumber);
     markets.push(row.market);
     scheduleds.push(row.scheduled);
@@ -576,34 +614,34 @@ export interface GradedWagerRowsSoA {
   selections: string[];
   /** .choosen without (Live) suffix, e.g. ["Lions", "Patriots"] */
   selectedTeams: string[];
-  /** First game team, e.g. ["Vikings", "Patriots"] */
-  team1s: string[];
-  /** Second game team, e.g. ["Lions", "Bills"] */
-  team2s: string[];
-  /** .line-selected text, e.g. ["-2½ -130", "-7 -110"] */
-  lines: string[];
-  /** .line-selected price token, e.g. ["-130", "-110"] */
-  prices: string[];
+  /** First game team, e.g. ["Vikings", "Patriots"] (null for `G` rows) */
+  team1s: (string | null)[];
+  /** Second game team, e.g. ["Lions", "Bills"] (null for `G` rows) */
+  team2s: (string | null)[];
+  /** .line-selected text, e.g. ["-2½ -130", "-7 -110"] (null for `G` rows) */
+  lines: (string | null)[];
+  /** .line-selected price token, e.g. ["-130", "-110"] (null for `G` rows) */
+  prices: (string | null)[];
   /** Risk/Win risk side in cents, e.g. [2600000, 1100000] */
   riskCents: (number | null)[];
   /** Risk/Win win side in cents, e.g. [2000000, 1000000] */
   winCents: number[];
-  /** Status text, e.g. ["Win", "Loss"] */
+  /** Status text, e.g. ["Win", "Loss"] (`G` rows print "Won"/"Lost") */
   statuses: string[];
-  /** Result text in parens, e.g. ["Vikings (Live) 15 - Lions (Live) 19", "Patriots (Live) 20 - Bills (Live) 24"] */
-  scores: string[];
+  /** Result text in parens, e.g. ["Vikings (Live) 15 - Lions (Live) 19", "Patriots (Live) 20 - Bills (Live) 24"] (null for `G` rows) */
+  scores: (string | null)[];
   /** Game field, e.g. ["Vikings (Live) / Lions (Live)", "Patriots (Live) / Bills (Live)"] */
   games: string[];
-  /** League token, e.g. ["NFL", "NFL"] */
-  leagues: string[];
-  /** Whether Selection carries the optional Live token, e.g. [true, true] */
-  lives: boolean[];
-  /** Game number token, e.g. ["9240", "9241"] */
-  gameNumbers: string[];
+  /** League token, e.g. ["NFL", "NFL"] (null for `G` rows) */
+  leagues: (string | null)[];
+  /** Bitset of live rows: bit i is 1 when row i's Selection carried the (Live) token. */
+  lives: bigint;
+  /** Game number token, e.g. ["9240", "9241"] (for `G` rows, the `.choosen` `G<digits>` id) */
+  gameNumbers: (string | null)[];
   /** Market text, e.g. ["Game Spread", "Game Moneyline"] */
   markets: (string | null)[];
-  /** Scheduled field, e.g. ["Nov 1, 2026 10:00 PM - (CST)", "Nov 2, 1:00 PM - (CST)"] */
-  scheduleds: string[];
+  /** Scheduled field, e.g. ["Nov 1, 2026 10:00 PM - (CST)", "Nov 2, 1:00 PM - (CST)"] (null for "--" placeholders) */
+  scheduleds: (string | null)[];
   /** Accepted field, e.g. ["Nov 1, 2:30 PM - (CST)", "Nov 2, 12:45 PM - (CST)"] */
   accepteds: string[];
   /** Placed On field, e.g. ["Internet", "Mobile"] */
@@ -613,8 +651,19 @@ export interface GradedWagerRowsSoA {
 }
 
 /** Count how many rows have live === true. */
-export const countLive = (s: GradedWagerRowsSoA): number =>
-  s.lives.filter((l): l is boolean => l).length;
+export const countLive = (s: GradedWagerRowsSoA): number => {
+  let n = 0;
+  let b = s.lives;
+  while (b) {
+    n += Number(b & 1n);
+    b >>= 1n;
+  }
+  return n;
+};
+
+/** True when row i carried the (Live) token. */
+export const isLive = (s: GradedWagerRowsSoA, i: number): boolean =>
+  ((s.lives >> BigInt(i)) & 1n) === 1n;
 
 /** Average riskCents across all rows. Returns null when no rows. */
 export const averageRisk = (s: GradedWagerRowsSoA): number | null => {
