@@ -229,6 +229,6 @@ describe("the committed tree", () => {
     expect(compareRouteSurfaces(inputs)).toEqual([]);
     // 47 API/page paths, plus the dashboard's agent-graph raster: a page asset, not an /api
     // contract path, so it is declared by a ledger surface and correctly absent from the spec.
-    expect(inputs.served.size).toBe(48);
+    expect(inputs.served.size).toBe(56);
   });
 });

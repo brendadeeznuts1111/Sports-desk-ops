@@ -47,7 +47,7 @@ const CONTENT_SETTLED_MIN_TEXT_LENGTH = 1_000;
 const LIVE_FETCH_TIMEOUT_MS = 15_000;
 // Release contract: the committed spec must document exactly these paths. Bumped from 47 when
 // the daemon routes (live-bets, agent-tree, scoreboard, sports, game-admin) became spec surfaces.
-const EXPECTED_OPENAPI_PATH_COUNT = 75;
+const EXPECTED_OPENAPI_PATH_COUNT = 83;
 const REQUIRED_TITLE_PATTERN = /Wire API Reference|Scalar/i;
 const DOCUMENTED_OPERATION_MARKERS = [
   "getWebLog",
