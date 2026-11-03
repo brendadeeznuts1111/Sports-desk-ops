@@ -1,0 +1,32 @@
+# Capture-automation settings (Bun.TOML, validated by lib/wagers_capture_config.ts).
+# Precedence: CLI flag > this file > built-in defaults. Secrets are never stored here.
+# The report renderer has its own config/wagers.json; this file is only the capture pipeline.
+
+[capture]
+retries = 2 # transient 5xx/timeout/network retries after the first attempt
+retryBackoffMs = 250 # wait = base x attempt
+timeoutMs = 15000
+dateFilterBy = "calcTime" # calcTime | betTime | logTime
+lookbackDays = 7 # OS worker window
+cron = "*/15 * * * *" # in-process watch + install preview default
+keepRuns = 20 # journal entries kept
+keepHistory = 500 # JSONL history lines kept
+
+[paths]
+# Defaults are the paths the sportsdesk_wagers plugin reads.
+artifact = "Scratch/gslive-wagers-by-state.summary.json"
+status = "Scratch/wagers-by-state.status.json"
+# history/tickets/alerts default to siblings of the artifact; override here if needed.
+# archive = "Scratch/wagers-by-state.bundle.tar"
+
+[alerts]
+pendingWarnHours = 24
+spikePct = 25
+spikeMin = 20
+churnPct = 25
+churnMin = 20
+cadenceMinutes = 30
+
+[session]
+# Chrome --user-data-dir signed in to Manager Tools. Empty -> Bun.secrets keychain, then GSID env.
+webviewProfile = ""
