@@ -610,9 +610,31 @@ await checkAsync(
       `top league ${result.subsports?.[0]?.league} != source ${topLeague?.[0]}`,
     );
     assert(
-      result.subsports?.[0]?.riskUsd === topLeague?.[1].risk,
-      `league risk ${result.subsports?.[0]?.riskUsd} != source ${topLeague?.[1].risk}`,
+      result.subsports?.[0]?.sample?.riskUsd === topLeague?.[1].risk,
+      `league risk ${result.subsports?.[0]?.sample?.riskUsd} != source ${topLeague?.[1].risk}`,
     );
+    const expectedLifetimeRoi =
+      (book.reduce((total, row) => total + row.lifetime_net_usd, 0) /
+        book.reduce((total, row) => total + row.lifetime_volume_usd, 0)) *
+      100;
+    assert(
+      Math.abs((result.cohortLifetime?.roiPct ?? 0) - expectedLifetimeRoi) <
+        1e-9,
+      `cohort lifetime ROI ${result.cohortLifetime?.roiPct} != source ${expectedLifetimeRoi}`,
+    );
+    assert(
+      typeof result.subsports?.[0]?.lifetime?.roiPct === "number",
+      "lifetime ROI missing from the row",
+    );
+    for (const row of result.subsports) {
+      assert(
+        typeof row.sample === "object" &&
+          typeof row.lifetime === "object" &&
+          row.sample !== null &&
+          row.lifetime !== null,
+        "row is missing the sample/lifetime split",
+      );
+    }
     const badDimension = await tool.execute({
       report: "subsport",
       dimension: "nope",

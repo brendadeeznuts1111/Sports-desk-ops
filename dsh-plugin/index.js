@@ -1586,6 +1586,8 @@ export function apply(ctx, config) {
               clv: Number(row?.clv_bps),
               sharp: Number(row?.sharp_score),
               churn: Number(row?.churn_hazard),
+              lifetimeVolume: Number(row?.lifetime_volume_usd),
+              lifetimeNet: Number(row?.lifetime_net_usd),
             };
             for (const ticket of tickets) {
               const key = String(ticket?.[dimension] ?? "UNKNOWN");
@@ -1619,33 +1621,64 @@ export function apply(ctx, config) {
               ? null
               : finite.reduce((a, b) => a + b, 0) / finite.length;
           };
+          const lifetimeTotals = (bucket) => {
+            let volumeUsd = 0;
+            let netUsd = 0;
+            for (const profile of bucket.customers.values()) {
+              if (Number.isFinite(profile.lifetimeVolume)) {
+                volumeUsd += profile.lifetimeVolume;
+              }
+              if (Number.isFinite(profile.lifetimeNet)) {
+                netUsd += profile.lifetimeNet;
+              }
+            }
+            return {
+              volumeUsd,
+              netUsd,
+              roiPct: volumeUsd === 0 ? null : (netUsd / volumeUsd) * 100,
+            };
+          };
           const subsports = [...buckets.entries()]
-            .map(([key, bucket]) => ({
-              [dimension]: key,
-              tickets: bucket.tickets,
-              customers: bucket.customers.size,
-              riskUsd: bucket.riskUsd,
-              netUsd: bucket.netUsd,
-              roiPct:
-                bucket.riskUsd === 0
-                  ? null
-                  : (bucket.netUsd / bucket.riskUsd) * 100,
-              winPct:
-                bucket.decisive === 0
-                  ? null
-                  : (bucket.wins / bucket.decisive) * 100,
-              avgClvBps: meanOf(
-                [...bucket.customers.values()].map((entry) => entry.clv),
-              ),
-              avgSharpScore: meanOf(
-                [...bucket.customers.values()].map((entry) => entry.sharp),
-              ),
-              avgChurnHazard: meanOf(
-                [...bucket.customers.values()].map((entry) => entry.churn),
-              ),
-            }))
-            .sort((left, right) => right.riskUsd - left.riskUsd)
+            .map(([key, bucket]) => {
+              const lifetime = lifetimeTotals(bucket);
+              return {
+                [dimension]: key,
+                customers: bucket.customers.size,
+                sample: {
+                  tickets: bucket.tickets,
+                  riskUsd: bucket.riskUsd,
+                  netUsd: bucket.netUsd,
+                  roiPct:
+                    bucket.riskUsd === 0
+                      ? null
+                      : (bucket.netUsd / bucket.riskUsd) * 100,
+                  winPct:
+                    bucket.decisive === 0
+                      ? null
+                      : (bucket.wins / bucket.decisive) * 100,
+                },
+                lifetime,
+                avgClvBps: meanOf(
+                  [...bucket.customers.values()].map((entry) => entry.clv),
+                ),
+                avgSharpScore: meanOf(
+                  [...bucket.customers.values()].map((entry) => entry.sharp),
+                ),
+                avgChurnHazard: meanOf(
+                  [...bucket.customers.values()].map((entry) => entry.churn),
+                ),
+              };
+            })
+            .sort((left, right) => right.sample.riskUsd - left.sample.riskUsd)
             .slice(0, limit);
+          const cohortLifetimeVolumeUsd = rows.reduce((total, row) => {
+            const value = Number(row?.lifetime_volume_usd);
+            return total + (Number.isFinite(value) ? value : 0);
+          }, 0);
+          const cohortLifetimeNetUsd = rows.reduce((total, row) => {
+            const value = Number(row?.lifetime_net_usd);
+            return total + (Number.isFinite(value) ? value : 0);
+          }, 0);
           return {
             available: true,
             ok: true,
@@ -1653,10 +1686,21 @@ export function apply(ctx, config) {
             dimension,
             cohort: "curated-profiles",
             cohortNote:
-              "The customer book is a 220-row curated fixture, not the full 9,435-account " +
-              "downline (docs/customer-poly-bridge.md). ROI, win rate and CLV are for this " +
-              "cohort, not platform-wide. The sample carries no parlay-leg marker, so win % " +
-              "treats each sampled ticket as one bet.",
+              "The customer book is a curated fixture, not the full downline " +
+              "(docs/customer-poly-bridge.md), and it is mixed: both positive and negative " +
+              "lifetime net. ROI is reported TWICE per row: `sample` covers the per-customer " +
+              "5-ticket window and is NOT representative of lifetime returns; `lifetime` sums " +
+              "the full rollup for the same customers. Neither is platform-wide. The sample " +
+              "carries no parlay-leg marker, so win % treats each sampled ticket as one bet.",
+            cohortLifetime: {
+              customers: rows.length,
+              volumeUsd: cohortLifetimeVolumeUsd,
+              netUsd: cohortLifetimeNetUsd,
+              roiPct:
+                cohortLifetimeVolumeUsd === 0
+                  ? null
+                  : (cohortLifetimeNetUsd / cohortLifetimeVolumeUsd) * 100,
+            },
             source,
             subsports,
           };
