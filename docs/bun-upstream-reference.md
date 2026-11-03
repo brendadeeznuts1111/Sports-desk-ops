@@ -5,9 +5,14 @@ style**, **site navigation**, or **runtime behavior**.
 
 | Layer | Git pin | Use for |
 | ----- | ------- | ------- |
-| **Runtime** | `bun-v1.4.4` (`38afee6c8`) | Gates, `probe:bun`, `tests/bun_baseline.json`, `packageManager` / `engines` |
+| **Runtime** | [`bun-v1.4.4`](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) → [`38afee6c`](https://github.com/oven-sh/bun/commit/38afee6c84fcf48c0edb2466aa4b27d287a59c30) (2026-10-22) | Gates, `probe:bun`, `tests/bun_baseline.json`, `packageManager` / `engines`, `@types/bun@1.4.4` |
 | **Voice** | [`6cdb3835`](https://github.com/oven-sh/bun/tree/6cdb3835d90f8e05e4ebff86c7135078c9eb7e88/docs#contributing) | Prose when editing upstream MDX or mirroring Bun tone ([live voice](https://bun.com/docs/project/contributing#voice)) |
 | **Nav + CLI flags** | [`6a380492`](https://github.com/oven-sh/bun/tree/6a38049270e99f0989c912aaa335f177c9d1bbf0/docs/snippets) | Guides index and CLI snippet partials ([live guides](https://bun.com/guides)) |
+
+The GitHub [release tag](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4) points at commit
+`38afee6c84fcf48c0edb2466aa4b27d287a59c30` (matches `bun --version` / `tests/bun_baseline.json`).
+Detailed changelog text lives on [bun.com/blog](https://bun.com/blog); the tag page is the install
+and version anchor.
 
 Pins above **main** are not behavior SSOT. Evidence labels and capture-backed claims in
 sportsdesk-ops override upstream tone when they conflict. One-liner eval rules:
