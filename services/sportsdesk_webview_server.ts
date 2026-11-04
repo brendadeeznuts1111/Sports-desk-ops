@@ -2298,23 +2298,68 @@ export function startServer(options?: ServerOptions) {
   return server;
 }
 
+/**
+ * The webview daemon is the long-lived process, so it owns the bridge rollup schedules. The
+ * standalone Telegram bot daemon excludes them (`BRIDGE_SCHEDULE_IDS`), so running both does not
+ * publish twice or send duplicate digests.
+ */
+export function startBridgeSchedules(): () => void {
+  const scheduler = new ReportingSchedulerService();
+  const stop = scheduler.startBridgeSchedules();
+  console.log(
+    "[Bridge Cron] bridge schedules active (America/Chicago): 3a/3b/3c every 15m, weblog hourly at :07",
+  );
+  return stop;
+}
+
 if (import.meta.main) {
   const server = startServer();
+  const stopBridgeCron = startBridgeSchedules();
   const location = server.url ? server.url.toString() : "unix domain socket";
   console.log(`[SportsDesk Webview Server] Active on ${location}`);
   console.log(` • Master Dashboard : ${location}`);
   console.log(` • Mini App (TMA)   : ${location}miniapp`);
   console.log(` • Health Probe     : ${location}health`);
   console.log(` • Watch List API   : ${location}api/watchlist`);
+  const shutdown = (): void => {
+    stopBridgeCron();
+    server.stop(true);
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
-/** Merge the latest f402-weblog rollup into an aggregate response. */
+/**
+ * Merge the latest f402-weblog rollup and the last bridge rollup cycle into an aggregate response.
+ * The cycle state is the same file the reporting scheduler writes, so the dashboard's Review Queue
+ * and the Telegram digest can never disagree about what the last run saw.
+ */
 async function withWeblog<T extends Record<string, unknown>>(
   value: T,
-): Promise<T & { weblog: unknown }> {
+): Promise<T & { weblog: unknown; bridge: unknown }> {
   const mod = await import("../lib/f402_weblog_latest.ts");
-  const latest = await mod.loadWeblogLatest();
-  return { ...value, weblog: latest.status === "ok" ? latest.rollup : latest };
+  const [latest, bridge] = await Promise.all([
+    mod.loadWeblogLatest(),
+    readBridgeRollupState(),
+  ]);
+  return {
+    ...value,
+    weblog: latest.status === "ok" ? latest.rollup : latest,
+    bridge,
+  };
+}
+
+/** Last bridge rollup cycle, or an explicit empty state so the panel can say "no cycle yet". */
+export async function readBridgeRollupState(): Promise<unknown> {
+  const path =
+    Bun.env.BRIDGE_ROLLUP_STATE_PATH?.trim() ||
+    "scratch/bridge-rollup-state.json";
+  try {
+    return JSON.parse(await Bun.file(path).text()) as unknown;
+  } catch {
+    return { updatedAt: null, jobs: [], alerts: [] };
+  }
 }
 
 /*

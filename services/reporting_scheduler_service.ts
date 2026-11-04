@@ -24,12 +24,25 @@ import {
   type LivePositionsPulseSummary,
 } from "../scripts/live_positions_cron.ts";
 import { SportsDeskTelegramService } from "./sportsdesk_telegram_bot.ts";
+import {
+  formatBridgeDigestHtml,
+  runBridgeRollupCycle,
+  type BridgeRollupCycleResult,
+  type BridgeRollupJobId,
+} from "../lib/bridge_rollup_cron.ts";
+
+/** The bridge schedules; the webview daemon owns them and the bot daemon must not duplicate them. */
+export const BRIDGE_SCHEDULE_IDS = [
+  "sched_bridge_rollup_15m",
+  "sched_bridge_weblog_hourly",
+] as const;
 
 export type ReportType =
   | "MORNING_BRIEFING"
   | "MIDDAY_STEAM"
   | "EVENING_SETTLEMENT"
   | "TEN_MINUTE_POSITIONS_PULSE"
+  | "BRIDGE_ROLLUP_DIGEST"
   | "CUSTOM_HOURLY_PULSE";
 
 export interface ScheduleDefinition {
@@ -39,6 +52,10 @@ export interface ScheduleDefinition {
   readonly reportType: ReportType;
   readonly description: string;
   readonly targetChatId?: string;
+  /** Cron timezone; bridge schedules run on the desk clock (America/Chicago). */
+  readonly tz?: string;
+  /** Rollup jobs a bridge schedule runs; omitted means the whole cycle. */
+  readonly bridgeJobs?: readonly BridgeRollupJobId[];
   enabled: boolean;
   lastTriggeredAt?: string;
 }
@@ -55,6 +72,22 @@ const SUMMARY_JSON_PATH = resolve(
   import.meta.dir,
   "../reports/live-positions-summary.json",
 );
+
+const BRIDGE_STATE_PATH = resolve(
+  import.meta.dir,
+  "../scratch/bridge-rollup-state.json",
+);
+
+/** The last cycle the scheduler wrote; the digest generator and the dashboard both read it. */
+function readLatestBridgeState(): BridgeRollupCycleResult | null {
+  const path = Bun.env.BRIDGE_ROLLUP_STATE_PATH?.trim() || BRIDGE_STATE_PATH;
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as BridgeRollupCycleResult;
+  } catch {
+    return null;
+  }
+}
 
 function readLatestLiveSummary(): LivePositionsPulseSummary | null {
   if (!existsSync(SUMMARY_JSON_PATH)) return null;
@@ -78,10 +111,23 @@ export class ReportingSchedulerService {
     this.initDefaultSchedules();
   }
 
-  /** Fires each enabled schedule (`HH:MM` or 5-field cron expression) in America/New_York; returns a stop function. */
-  public start(): () => void {
+  /**
+   * Fires each enabled schedule (`HH:MM` or 5-field cron expression) in its own timezone (the
+   * legacy reports keep America/New_York, the bridge schedules use America/Chicago); returns a
+   * stop function. `only`/`exclude` let two processes split ownership instead of double-firing.
+   */
+  public start(
+    options: {
+      readonly only?: readonly string[];
+      readonly exclude?: readonly string[];
+    } = {},
+  ): () => void {
+    const only = options.only === undefined ? null : new Set(options.only);
+    const exclude = new Set(options.exclude ?? []);
     const jobs = this.getSchedules()
       .filter((s) => s.enabled)
+      .filter((s) => (only === null ? true : only.has(s.id)))
+      .filter((s) => !exclude.has(s.id))
       .map((s) => {
         const cronExpr = s.scheduleTime.includes(" ")
           ? s.scheduleTime
@@ -98,11 +144,13 @@ export class ReportingSchedulerService {
                 schedule: cronExpr,
                 ...(s.targetChatId ? { chatIdOverride: s.targetChatId } : {}),
               });
+            } else if (s.reportType === "BRIDGE_ROLLUP_DIGEST") {
+              await this.dispatchBridgeDigest(s.bridgeJobs, s.targetChatId);
             } else {
               await this.dispatchReportNow(s.reportType, s.targetChatId);
             }
           },
-          { tz: "America/New_York" },
+          { tz: s.tz ?? "America/New_York" },
         );
       });
     console.log(
@@ -114,6 +162,11 @@ export class ReportingSchedulerService {
     return () => {
       for (const job of jobs) job.stop();
     };
+  }
+
+  /** Start exactly the bridge schedules; the webview daemon owns them. */
+  public startBridgeSchedules(): () => void {
+    return this.start({ only: BRIDGE_SCHEDULE_IDS });
   }
 
   private initDefaultSchedules(): void {
@@ -154,6 +207,28 @@ export class ReportingSchedulerService {
           "Settled volume, customer payout/loss, net book hold, and agent 50% liability shares.",
         enabled: true,
       },
+      {
+        id: "sched_bridge_rollup_15m",
+        name: "Bridge Rollup Cycle (3a/3b/3c)",
+        scheduleTime: "*/15 * * * *",
+        reportType: "BRIDGE_ROLLUP_DIGEST",
+        description:
+          "Runs the one-shot bridge rollups (bet ticker, pending, GSLive tally), publishes them and sends an on-change digest. Overlaps are skipped.",
+        tz: "America/Chicago",
+        bridgeJobs: ["bridge3a", "bridge3b", "bridge3c"],
+        enabled: true,
+      },
+      {
+        id: "sched_bridge_weblog_hourly",
+        name: "Bridge WebLog Rollup (hourly)",
+        scheduleTime: "7 * * * *",
+        reportType: "BRIDGE_ROLLUP_DIGEST",
+        description:
+          "Runs the WebLog corpus rollup hourly at minute 7 and sends an on-change Mode 6 digest. Overlaps are skipped.",
+        tz: "America/Chicago",
+        bridgeJobs: ["weblog"],
+        enabled: true,
+      },
     ];
 
     for (const item of defaultList) {
@@ -175,6 +250,20 @@ export class ReportingSchedulerService {
         reportType: type,
         title: "10-Minute Live Volume & Positions Pulse",
         contentHtml: formatTelegramPulseHtml(liveSummary),
+        generatedAt: nowStr,
+        targetMiniappTab: "live",
+      };
+    }
+
+    if (type === "BRIDGE_ROLLUP_DIGEST") {
+      const latest = readLatestBridgeState();
+      return {
+        reportType: type,
+        title: "Bridge Rollup Digest",
+        contentHtml:
+          latest === null
+            ? "🛰️ <b>BRIDGE ROLLUP DIGEST</b>\n\nNo rollup cycle recorded yet. Run <code>bun run bridge3a:poll --once</code> or wait for the 15-minute cycle."
+            : formatBridgeDigestHtml(latest, { quiet: true }),
         generatedAt: nowStr,
         targetMiniappTab: "live",
       };
@@ -268,6 +357,17 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
     type: ReportType,
     chatId?: string,
   ): Promise<boolean> {
+    if (type === "BRIDGE_ROLLUP_DIGEST") {
+      // Manual dispatch sends what the last scheduled cycle saw; it must not run a fresh cycle
+      // inside an HTTP request (the rollups can take minutes). The cron branch runs the cycle.
+      const rep = this.generateReport(type);
+      const res = await this.telegramService.sendMessage(
+        chatId || "",
+        rep.contentHtml,
+        { parse_mode: "HTML" },
+      );
+      return res.ok;
+    }
     if (type === "TEN_MINUTE_POSITIONS_PULSE") {
       const summary = await runLivePositionsPulse({
         schedule: "*/10 * * * *",
@@ -288,13 +388,51 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
     );
     return res.ok;
   }
+
+  /**
+   * Run the bridge cycle (optionally a subset of jobs) and send its change digest. The quiet form
+   * keeps a 15-minute schedule from paging when nothing moved.
+   */
+  public async dispatchBridgeDigest(
+    jobs?: readonly BridgeRollupJobId[],
+    chatId?: string,
+  ): Promise<boolean> {
+    const result = await bridgeCycleRunner(jobs);
+    const res = await this.telegramService.sendMessage(
+      chatId || "",
+      formatBridgeDigestHtml(result, { quiet: true }),
+      { parse_mode: "HTML" },
+    );
+    console.log(
+      `[Reporting Scheduler] Bridge digest ${result.updatedAt}: ${result.alerts.length} alert(s), ` +
+        `jobs=${result.jobs.map((job) => `${job.id}:${job.ok ? "ok" : "fail"}`).join(",")} delivery=${res.ok}`,
+    );
+    return res.ok;
+  }
+}
+
+/** Indirection so tests can drive the scheduler without spawning the four CLIs. */
+let bridgeCycleRunner: (
+  jobs?: readonly BridgeRollupJobId[],
+) => Promise<BridgeRollupCycleResult> = (jobs) =>
+  runBridgeRollupCycle(jobs === undefined ? {} : { jobs });
+
+/** Replace the cycle runner; tests only. */
+export function setBridgeCycleRunner(
+  runner: (
+    jobs?: readonly BridgeRollupJobId[],
+  ) => Promise<BridgeRollupCycleResult>,
+): void {
+  bridgeCycleRunner = runner;
 }
 
 /** Scheduled reports plus inbound commands; polls only when no webhook is registered. */
 export async function startBotDaemon(): Promise<void> {
   const bot = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(bot);
-  const stopSchedules = scheduler.start();
+  // Bridge rollups are owned by the webview daemon (it is the long-lived process); starting them
+  // here too would publish twice and send duplicate digests.
+  const stopSchedules = scheduler.start({ exclude: BRIDGE_SCHEDULE_IDS });
   const shutdown = () => {
     stopSchedules();
     bot.stopPolling();

@@ -2284,6 +2284,25 @@
           </tbody>
         </table>
       </section>
+
+      <!-- Bridge review: the rollup's job results and alerts, plus the existing digest dispatch. -->
+      <section
+        class="section-card"
+        id="review-panel"
+        aria-labelledby="rv-title"
+        aria-live="polite"
+      >
+        <div class="section-head">
+          <h2 id="rv-title">Bridge Review Queue</h2>
+        </div>
+        <p id="rv-status">—</p>
+        <div id="rv-jobs"></div>
+        <div id="rv-alerts"></div>
+        <button class="btn btn-ghost" type="button" id="rv-dispatch">
+          Dispatch digest
+        </button>
+      </section>
+
       <section class="section-card" id="live-desk" aria-labelledby="ld-title">
         <div class="section-title">
           <span id="ld-title">Live Desk — Pending Exposure</span>
@@ -4834,6 +4853,136 @@
           );
       }
 
+      /*
+       * Bridge review queue: the rollup's job results and alerts, read-only. The
+       * server contract is all-optional, so a missing or malformed payload settles
+       * on the empty prompt instead of throwing inside the KPI loader.
+       */
+      function renderBridgeReview(bridge) {
+        const status = document.getElementById("rv-status");
+        const jobsBox = document.getElementById("rv-jobs");
+        const alertsBox = document.getElementById("rv-alerts");
+        const setStatus = (text) => {
+          if (status) status.textContent = text;
+        };
+        if (jobsBox) jobsBox.replaceChildren();
+        if (alertsBox) alertsBox.replaceChildren();
+        const data = bridge && typeof bridge === "object" ? bridge : null;
+        if (!data) {
+          setStatus("No rollup cycle recorded yet");
+          return;
+        }
+        try {
+          const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+          const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+          const plural = (n, noun) => n + " " + noun + (n === 1 ? "" : "s");
+          const failing = jobs.filter((job) => job?.ok === false).length;
+          const summary = [
+            plural(jobs.length, "job"),
+            plural(failing, "failing job"),
+            plural(alerts.length, "alert"),
+          ];
+          if (typeof data.updatedAt === "string" && data.updatedAt !== "")
+            summary.unshift("updated " + data.updatedAt);
+          setStatus(summary.join(" · "));
+          if (jobsBox && jobs.length > 0) {
+            const table = document.createElement("table");
+            table.setAttribute("aria-label", "Bridge rollup jobs");
+            const thead = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            for (const heading of ["Job", "State", "Duration", "Error"]) {
+              const th = document.createElement("th");
+              th.scope = "col";
+              th.textContent = heading;
+              headRow.append(th);
+            }
+            thead.append(headRow);
+            const tbody = document.createElement("tbody");
+            for (const job of jobs) {
+              const row = document.createElement("tr");
+              const label = document.createElement("td");
+              label.textContent = String(job?.label ?? job?.id ?? "—");
+              const state = document.createElement("td");
+              state.textContent = job?.ok === true ? "OK" : "FAIL";
+              const duration = document.createElement("td");
+              duration.textContent =
+                typeof job?.durationMs === "number"
+                  ? job.durationMs.toLocaleString() + " ms"
+                  : "—";
+              const error = document.createElement("td");
+              error.textContent =
+                typeof job?.error === "string" && job.error !== ""
+                  ? job.error
+                  : "—";
+              row.append(label, state, duration, error);
+              tbody.append(row);
+            }
+            table.append(thead, tbody);
+            jobsBox.append(table);
+          }
+          if (alertsBox && alerts.length > 0) {
+            const list = document.createElement("ul");
+            list.setAttribute("aria-label", "Bridge alerts");
+            for (const alert of alerts) {
+              const item = document.createElement("li");
+              const severity = String(alert?.severity ?? "info");
+              item.dataset.severity = severity;
+              const title = document.createElement("strong");
+              title.textContent =
+                severity + " · " + String(alert?.title ?? "—");
+              const detail = document.createElement("span");
+              detail.textContent =
+                typeof alert?.detail === "string" ? alert.detail : "";
+              item.append(title, detail);
+              list.append(item);
+            }
+            alertsBox.append(list);
+          }
+        } catch {
+          // Rendering is read-only: a bad row degrades to the empty prompt.
+          if (jobsBox) jobsBox.replaceChildren();
+          if (alertsBox) alertsBox.replaceChildren();
+          setStatus("No rollup cycle recorded yet");
+        }
+      }
+
+      /* The digest route already exists; this only triggers it with the same credential. */
+      (() => {
+        const button = document.getElementById("rv-dispatch");
+        if (!button) return;
+        button.addEventListener("click", async () => {
+          const status = document.getElementById("rv-status");
+          const setStatus = (text) => {
+            if (status) status.textContent = text;
+          };
+          button.disabled = true;
+          setStatus("Dispatching digest…");
+          try {
+            const res = await authed(
+              "/api/telegram/report?type=BRIDGE_ROLLUP_DIGEST",
+              { method: "POST" },
+            );
+            if (!res.ok) {
+              setStatus("Dispatch failed: HTTP " + res.status);
+              return;
+            }
+            const body = await res.json().catch(() => ({}));
+            const reportType =
+              typeof body.reportType === "string" ? body.reportType : "unknown";
+            setStatus(
+              "Digest " +
+                (body.ok === false ? "rejected" : "ok") +
+                " · " +
+                reportType,
+            );
+          } catch {
+            setStatus("Digest dispatch failed");
+          } finally {
+            button.disabled = false;
+          }
+        });
+      })();
+
       const BRIDGE_TOPICS = [
         "wagers-by-state",
         "f402-bet-ticker",
@@ -4996,6 +5145,7 @@
           if (!res.ok) throw new Error("HTTP " + res.status);
           const payload = await res.json();
           renderWeblogPanel(payload.weblog);
+          renderBridgeReview(payload.bridge);
         } catch {
           const el = document.getElementById("weblog-status");
           if (el) el.textContent = "Bridge WebLog: unavailable";
