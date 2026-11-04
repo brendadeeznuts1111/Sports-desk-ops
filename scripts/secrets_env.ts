@@ -22,16 +22,18 @@ import {
   childEnv,
   describeSource,
   expandSecretSelection,
+  manifestStatus,
   resolveSecretEnv,
   SECRET_ENV_GROUPS,
   SECRET_ENV_NAMES,
 } from "../lib/secret_env.ts";
 import { secretSetOptions } from "../lib/r2_s3_client.ts";
+import { SECRET_MANIFEST } from "../lib/secret_manifest.ts";
 import { UsageError } from "../lib/usage_error.ts";
 
 const USAGE = `usage:
   secrets_env.ts exec --with <group|NAME>[,…] [--] <program> [args…]
-  secrets_env.ts status [--with <group|NAME>[,…]] [--json]
+  secrets_env.ts status [--with <group|NAME>[,…] | --all] [--json]
   secrets_env.ts set <NAME>          (value on stdin, never argv)
 
 groups: ${Object.keys(SECRET_ENV_GROUPS).join(", ")}`;
@@ -46,9 +48,31 @@ async function status(argv: readonly string[]): Promise<number> {
     options: {
       with: { type: "string", multiple: true },
       json: { type: "boolean", default: false },
+      all: { type: "boolean", default: false },
     },
     strict: true,
   });
+  if (values.all) {
+    if (values.with !== undefined) {
+      throw new UsageError("--all lists the whole manifest; drop --with");
+    }
+    const rows = await manifestStatus();
+    if (values.json) {
+      console.log(JSON.stringify(rows, null, 2));
+    } else {
+      const width = Math.max(...rows.map((row) => row.name.length));
+      const groupWidth = Math.max(
+        ...rows.map((row) => row.groups.join("+").length),
+      );
+      for (const row of rows) {
+        const inject = row.injectable ? "inject" : "no-inject";
+        console.log(
+          `${row.name.padEnd(width)}  ${row.groups.join("+").padEnd(groupWidth)}  ${inject.padEnd(9)}  ${describeSource(row.source)}`,
+        );
+      }
+    }
+    return rows.some((row) => row.source.kind === "missing") ? 1 : 0;
+  }
   const names =
     values.with === undefined
       ? [...SECRET_ENV_NAMES]
@@ -132,10 +156,13 @@ async function set(argv: readonly string[]): Promise<number> {
     );
   }
   const value = (await Bun.stdin.text()).trim();
+  const entry =
+    SECRET_MANIFEST.find((secret) => secret.envName === name)?.keychainName ??
+    name;
   await Bun.secrets.set(
-    secretSetOptions(CANONICAL_SECRETS_SERVICE, name, value),
+    secretSetOptions(CANONICAL_SECRETS_SERVICE, entry, value),
   );
-  const check = await readSecretWithSource(name);
+  const check = await readSecretWithSource(entry);
   console.log(
     `${name}: stored in ${CANONICAL_SECRETS_SERVICE} (read back ${check === null ? "FAILED" : "ok"}, ${new TextEncoder().encode(value).byteLength} bytes)`,
   );

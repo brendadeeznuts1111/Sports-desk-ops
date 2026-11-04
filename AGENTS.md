@@ -21,6 +21,7 @@ bun run test:docs
 bun run verify:docs
 bun run check:route-surface
 bun run check:secrets
+bun run audit:secrets
 bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json
 bun run audit:ops
 bun run artifacts:lock
@@ -89,6 +90,15 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
   missing from the environment, and no source scan sees a shell wrapper. A test may call it only
   with every requested name already set in the spawned environment (see `tests/dx_cli.test.ts`);
   otherwise inject through a fake provider (`lib/secret_env.ts` takes `read`).
+- **Never set `BUN_CONFIG_VERBOSE_FETCH` while the process holds a bearer token, session cookie or
+  keychain-injected secret.** Bun's docs say it logs request headers verbatim (`Authorization`,
+  `Cookie`), and a cron or daemon sends them on to its log files. Use `--dry-run` output or the
+  capture fixtures; `scripts/wagers_by_state_capture.ts` already limits it to loopback.
+- **A new secret-like environment variable goes in `lib/secret_manifest.ts`.** Names ending in
+  `_TOKEN`, `_SECRET`, `_PASSWORD`, `_COOKIE`, `_SESSION` or `_API_KEY` must be registered; `_KEY`,
+  `_KEY_ID` and `_ID` must be registered or listed in `NON_SECRET_ALLOWLIST` with a reason. Run
+  `bun run audit:secrets` (`--explain NAME`, `--report-only`); `bun run secrets:env status --all`
+  lists every entry and where its value would come from.
 - **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml` is
   wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
   `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the

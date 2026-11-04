@@ -17,46 +17,58 @@ import {
   LEGACY_SECRETS_SERVICE,
   readSecretWithSource,
 } from "./secrets.ts";
+import {
+  getSecretsForGroup,
+  SECRET_GROUPS,
+  SECRET_MANIFEST,
+} from "./secret_manifest.ts";
+import type { SecretDefinition } from "./secret_manifest.ts";
 import { UsageError } from "./usage_error.ts";
 
 /**
- * Credentials a child process may be handed. The keychain entry is named after the variable, under
- * the canonical service (legacy service read as a fallback), the same layout `secrets:r2` seeds.
+ * Credentials a child process may be handed, derived from `lib/secret_manifest.ts`: the entries
+ * marked `inject`, grouped by `--with` group. The keychain entry is `keychainName` under the
+ * canonical service (legacy service read as a fallback), the layout `secrets:r2` seeds.
  *
- * Deliberately absent: `F402_PASSWORD` / `F402_AGENT_ID`. Those are policy-gated (env credentials
- * only with `F402_ALLOW_ENV_CREDENTIALS=1`, see types/env.d.ts) and the F402 scripts read the
- * keychain themselves, so injecting them into arbitrary children would undo that rule.
+ * Absent by design: F402 (`inject: false`). Env credentials are policy-gated there (only with
+ * `F402_ALLOW_ENV_CREDENTIALS=1`, see types/env.d.ts) and the F402 scripts read the keychain
+ * themselves, so injecting them into arbitrary children would undo that rule.
  */
-export const SECRET_ENV_GROUPS = {
-  r2: [
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
-    "CLOUDFLARE_ACCOUNT_ID",
-    "R2_BUCKET_NAME",
-  ],
-  pages: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
-  blob: ["BLOB_API_TOKEN", "BLOB_TICKET_SECRET"],
-  gslive: ["GSLIVE_SESSION_ID"],
-  daemon: ["SPORTSDESK_ADMIN_TOKEN"],
-  telegram: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
-} as const satisfies Readonly<Record<string, readonly string[]>>;
+function injectableGroups(): Record<string, readonly string[]> {
+  const groups: Record<string, readonly string[]> = {};
+  for (const group of SECRET_GROUPS) {
+    const names = getSecretsForGroup(group)
+      .filter((secret) => secret.inject)
+      .map((secret) => String(secret.envName));
+    if (names.length > 0) groups[group] = names;
+  }
+  return groups;
+}
 
-export type SecretEnvGroup = keyof typeof SECRET_ENV_GROUPS;
+export const SECRET_ENV_GROUPS: Readonly<Record<string, readonly string[]>> =
+  injectableGroups();
 
-/**
- * Pre-rename names, read as a fallback and injected under the registry name. `GSID` is also the
- * portal's cookie name; only the variable and keychain entry were renamed.
- */
+export type SecretEnvGroup = string;
+
+/** Pre-rename names, read as a fallback and injected under the registry name. */
 export const SECRET_ENV_ALIASES: Readonly<
   Record<string, readonly string[] | undefined>
-> = { GSLIVE_SESSION_ID: ["GSID"] };
+> = Object.fromEntries(
+  SECRET_MANIFEST.filter((secret) => secret.aliases !== undefined).map(
+    (secret) => [secret.envName, secret.aliases],
+  ),
+);
 
-/** Every name the registry knows, de-duplicated and sorted. */
+/** Every name the registry can inject, de-duplicated and sorted. */
 export const SECRET_ENV_NAMES: readonly string[] = [
   ...new Set(Object.values(SECRET_ENV_GROUPS).flat()),
 ].sort();
 
-function isGroup(token: string): token is SecretEnvGroup {
+function definitionFor(name: string): SecretDefinition | undefined {
+  return SECRET_MANIFEST.find((secret) => secret.envName === name);
+}
+
+function isGroup(token: string): boolean {
   return Object.hasOwn(SECRET_ENV_GROUPS, token);
 }
 
@@ -70,7 +82,7 @@ export function expandSecretSelection(tokens: readonly string[]): string[] {
     const token = raw.trim();
     if (token === "") continue;
     if (isGroup(token)) {
-      for (const name of SECRET_ENV_GROUPS[token]) names.add(name);
+      for (const name of SECRET_ENV_GROUPS[token] ?? []) names.add(name);
     } else if (SECRET_ENV_NAMES.includes(token)) {
       names.add(token);
     } else {
@@ -89,7 +101,9 @@ export type SecretSource =
       readonly service: string;
       readonly via?: string;
     }
-  | { readonly kind: "missing" };
+  | { readonly kind: "missing" }
+  /** Environment-only secret that is not set: there is no keychain entry to look in. */
+  | { readonly kind: "unset" };
 
 export interface SecretReportRow {
   readonly name: string;
@@ -111,6 +125,93 @@ export interface ResolveSecretEnvOptions {
   ) => Promise<{ readonly value: string; readonly service: string } | null>;
 }
 
+type Found =
+  | { readonly kind: "env"; readonly value: string; readonly via?: string }
+  | {
+      readonly kind: "keychain";
+      readonly value: string;
+      readonly service: string;
+      readonly via?: string;
+    }
+  | { readonly kind: "missing" }
+  | { readonly kind: "unset" };
+
+type KeychainRead = NonNullable<ResolveSecretEnvOptions["read"]>;
+
+/**
+ * Where one variable's value would come from: the environment (the name, then any pre-rename
+ * alias), then the keychain entry the manifest names (then the alias as a keychain name).
+ */
+async function lookup(
+  name: string,
+  env: Readonly<Record<string, string | undefined>>,
+  read: KeychainRead,
+): Promise<Found> {
+  const definition = definitionFor(name);
+  const aliases = definition?.aliases ?? [];
+  const viaOf = (candidate: string) =>
+    candidate === name ? {} : { via: candidate };
+  for (const candidate of [name, ...aliases]) {
+    const value = (env[candidate] ?? "").trim();
+    if (value !== "") return { kind: "env", value, ...viaOf(candidate) };
+  }
+  const keychainName =
+    definition === undefined ? name : definition.keychainName;
+  if (keychainName === null) return { kind: "unset" };
+  const entries = [keychainName, ...aliases];
+  for (const entry of entries) {
+    const stored = await read(entry);
+    if (stored !== null) {
+      return {
+        kind: "keychain",
+        value: stored.value,
+        service: stored.service,
+        ...(entry === keychainName ? {} : { via: entry }),
+      };
+    }
+  }
+  return { kind: "missing" };
+}
+
+/** One row per manifest entry, injectable or not: the answer to "did we track every key?". */
+export interface ManifestStatusRow {
+  readonly name: string;
+  readonly groups: readonly string[];
+  readonly injectable: boolean;
+  readonly source: SecretSource;
+}
+
+export async function manifestStatus(
+  options: ResolveSecretEnvOptions = {},
+): Promise<ManifestStatusRow[]> {
+  const env = options.env ?? Bun.env;
+  const read = options.read ?? readSecretWithSource;
+  const rows: ManifestStatusRow[] = [];
+  for (const secret of SECRET_MANIFEST) {
+    const found = await lookup(secret.envName, env, read);
+    const source: SecretSource =
+      found.kind === "env"
+        ? {
+            kind: "env",
+            ...(found.via === undefined ? {} : { via: found.via }),
+          }
+        : found.kind === "keychain"
+          ? {
+              kind: "keychain",
+              service: found.service,
+              ...(found.via === undefined ? {} : { via: found.via }),
+            }
+          : { kind: found.kind };
+    rows.push({
+      name: secret.envName,
+      groups: secret.groups,
+      injectable: secret.inject,
+      source,
+    });
+  }
+  return rows;
+}
+
 /** Environment first (non-blank), then the keychain. */
 export async function resolveSecretEnv(
   names: readonly string[],
@@ -121,34 +222,26 @@ export async function resolveSecretEnv(
   const resolved: Record<string, string> = {};
   const report: SecretReportRow[] = [];
   for (const name of names) {
-    const candidates = [name, ...(SECRET_ENV_ALIASES[name] ?? [])];
-    const via = (candidate: string) =>
-      candidate === name ? {} : { via: candidate };
-    const found = candidates.find((c) => (env[c] ?? "").trim() !== "");
-    if (found !== undefined) {
-      resolved[name] = (env[found] ?? "").trim();
-      report.push({ name, source: { kind: "env", ...via(found) } });
-      continue;
+    const source = await lookup(name, env, read);
+    if (source.kind === "env" || source.kind === "keychain") {
+      resolved[name] = source.value;
+      report.push({
+        name,
+        source:
+          source.kind === "env"
+            ? {
+                kind: "env",
+                ...(source.via === undefined ? {} : { via: source.via }),
+              }
+            : {
+                kind: "keychain",
+                service: source.service,
+                ...(source.via === undefined ? {} : { via: source.via }),
+              },
+      });
+    } else {
+      report.push({ name, source });
     }
-    let stored: { readonly value: string; readonly service: string } | null =
-      null;
-    let storedAs = name;
-    for (const candidate of candidates) {
-      stored = await read(candidate);
-      if (stored !== null) {
-        storedAs = candidate;
-        break;
-      }
-    }
-    if (stored === null) {
-      report.push({ name, source: { kind: "missing" } });
-      continue;
-    }
-    resolved[name] = stored.value;
-    report.push({
-      name,
-      source: { kind: "keychain", service: stored.service, ...via(storedAs) },
-    });
   }
   return { env: resolved, report };
 }
@@ -169,6 +262,8 @@ export function describeSource(source: SecretSource): string {
     }
     case "missing":
       return "missing";
+    case "unset":
+      return "unset (environment only)";
   }
 }
 

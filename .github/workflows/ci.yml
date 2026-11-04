@@ -120,6 +120,9 @@ jobs:
       - name: "No credentials in tracked files"
         timeout-minutes: 2
         run: bun run check:secrets
+      - name: "Every secret-like env var is in lib/secret_manifest.ts"
+        timeout-minutes: 2
+        run: bun run audit:secrets
       - name: "Bun docs coverage baseline (catalog vs bun-docs MCP audit, offline)"
         timeout-minutes: 2
         run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json

@@ -38,6 +38,8 @@ declare module "bun" {
     readonly F402_PINNED_MANAGER_BUST?: string;
     /** @deprecated Use F402_WEBVIEW_PROFILE + WebView login or F402_SESSION_FILE. */
     readonly F402_COOKIE?: string;
+    /** Minted Fantasy402 JWT; environment only (see lib/secret_manifest.ts). */
+    readonly F402_BEARER_TOKEN?: string;
     readonly F402_WEBVIEW_PROFILE?: string;
     readonly F402_REPLAY_PROXY_URL?: string;
     readonly F402_PORTAL_DRIFT_CRON?: string;
@@ -48,6 +50,8 @@ declare module "bun" {
     readonly GSLIVE_SESSION_ID?: string;
     /** Pre-rename name of `GSLIVE_SESSION_ID`: still read, never written. */
     readonly GSID?: string;
+    /** A full `GSID=...` cookie header or a bare id; wins over the keychain. */
+    readonly GSID_COOKIE?: string;
     /** Optional second gate for GSLive `ajax.php`; sent as `x-gs-session`, see fetch-bet-tally.ts */
     readonly GS_SESSION?: string;
     /** Chrome `--user-data-dir` signed in to Manager Tools; preferred over stored secrets */

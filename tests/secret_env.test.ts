@@ -29,7 +29,10 @@ describe("expandSecretSelection", () => {
   test("a group expands to its names, sorted and de-duplicated across groups", () => {
     expect(expandSecretSelection(["pages", "r2"])).toEqual(
       [
-        ...new Set([...SECRET_ENV_GROUPS.pages, ...SECRET_ENV_GROUPS.r2]),
+        ...new Set([
+          ...(SECRET_ENV_GROUPS["pages"] ?? []),
+          ...(SECRET_ENV_GROUPS["r2"] ?? []),
+        ]),
       ].sort(),
     );
   });
