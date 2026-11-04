@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   aggregateWatchlistSignals,
   americanToImpliedProbability,
+  collectWatchlistCandidates,
   deriveWatchlistSignals,
   parseCanonicalMarket,
   parseLiveBetsGame,
@@ -339,5 +340,291 @@ describe("watchlist aggregation", () => {
         { now: NOW },
       ),
     ).toEqual([]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Bet-time freshness                                                         */
+/* -------------------------------------------------------------------------- */
+
+const TICKER_TOTAL =
+  "M.G319748913\r\nFootball - Denver Broncos vs Kansas City Chiefs / Game / Total / Over 46.5 -108";
+
+function wagerRow(
+  login: string,
+  shortDesc: string,
+  amountCents: number,
+  insertDateTime: string | null,
+): Record<string, unknown> {
+  return {
+    WagerNumber: "767173499",
+    AgentID: "AGENT",
+    CustomerID: login,
+    Login: login,
+    WagerType: "M",
+    AmountWagered: amountCents,
+    InsertDateTime: insertDateTime,
+    TicketWriter: "Internet",
+    ShortDesc: shortDesc,
+  };
+}
+
+function pendingGame(
+  login: string,
+  acceptedAt: string | null,
+): Record<string, unknown> {
+  return {
+    customerID: login,
+    agent: { id: "AGENT", key: "AGENT" },
+    wagered: 250_000,
+    acceptedAt,
+    sport: "Basketball",
+    period: "1st Quarter",
+    description: "Basketball #501 LAL -1.5 -110 - 1st Quarter",
+    chosenTeam: "LAL",
+    team1: { shortName: "LAL" },
+    team2: { shortName: "BOS" },
+  };
+}
+
+describe("bet-time freshness", () => {
+  test("a ticker row ages from InsertDateTime, not the capture clock", () => {
+    const inputs = {
+      feed: null,
+      wagers: {
+        schemaVersion: 1,
+        source: "capture:/cloud/api/Manager/getBetTicker",
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [
+          wagerRow(
+            ACCOUNT_A.customerLogin,
+            TICKER_TOTAL,
+            2_500,
+            "2026-11-01 17:18:20",
+          ),
+        ],
+      },
+      wagersAsOf: "2026-11-04T11:59:00.000Z",
+      liveBets: null,
+    };
+    const signals = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    expect(signals).toHaveLength(1);
+    const provenance = signals[0]?.provenance;
+    expect(provenance?.stale).toBe(true);
+    expect(provenance?.ageSeconds).toBeGreaterThan(3_600);
+    expect(provenance?.asOf).not.toBe("2026-11-04T11:59:00.000Z");
+  });
+
+  test("a ticker row without InsertDateTime falls back to the capture clock", () => {
+    const inputs = {
+      feed: null,
+      wagers: {
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [wagerRow(ACCOUNT_A.customerLogin, TICKER_TOTAL, 2_500, null)],
+      },
+      wagersAsOf: null,
+      liveBets: null,
+    };
+    const signals = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    expect(signals[0]?.provenance.asOf).toBe("2026-11-04T11:59:00.000Z");
+    expect(signals[0]?.provenance.stale).toBe(false);
+  });
+
+  test("a pending ticket ages from acceptedAt, not the capture clock", () => {
+    const inputs = {
+      feed: null,
+      wagers: null,
+      liveBets: {
+        capturedAt: "2026-11-04T11:59:00.000Z",
+        dataSource: "capture:/cloud/api/Report/Pending",
+        games: [
+          pendingGame(ACCOUNT_B.customerLogin, "2026-11-01 14:33:47.900"),
+        ],
+      },
+    };
+    const signals = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.provenance.stale).toBe(true);
+    expect(signals[0]?.provenance.ageSeconds).toBeGreaterThan(3_600);
+  });
+
+  test("reads the zone-less portal wall-clock in the portal's Eastern zone", () => {
+    const inputs = {
+      feed: null,
+      wagers: {
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [
+          wagerRow(
+            ACCOUNT_A.customerLogin,
+            TICKER_TOTAL,
+            2_500,
+            "2026-11-04 06:30:00",
+          ),
+        ],
+      },
+      wagersAsOf: null,
+      liveBets: null,
+    };
+    const signals = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    // 06:30 America/New_York (EST, UTC-5) is 11:30Z, i.e. 30 minutes before NOW.
+    const provenance = signals[0]?.provenance;
+    expect(provenance?.asOf).toBe("2026-11-04T11:30:00.000Z");
+    expect(provenance?.ageSeconds).toBe(1_800);
+    expect(provenance?.stale).toBe(false);
+  });
+
+  test("a future-dated portal timestamp is refused as stale, never fresh", () => {
+    const inputs = {
+      feed: null,
+      wagers: {
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [
+          wagerRow(
+            ACCOUNT_A.customerLogin,
+            TICKER_TOTAL,
+            2_500,
+            "2026-11-04 08:00:00",
+          ),
+        ],
+      },
+      wagersAsOf: null,
+      liveBets: null,
+    };
+    const signals = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    // 08:00 Eastern is 13:00Z: an hour after NOW. An impossible clock is not freshness.
+    expect(signals[0]?.provenance.asOf).toBe("2026-11-04T13:00:00.000Z");
+    expect(signals[0]?.provenance.stale).toBe(true);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Candidate discovery                                                        */
+/* -------------------------------------------------------------------------- */
+
+describe("watchlist candidates", () => {
+  test("lists accounts the registry does not watch, ranked by risk", () => {
+    const feed = liveFeed({
+      dataMode: "LIVE",
+      f402Source: "live",
+      pendingBets: [
+        feedRow(
+          ACCOUNT_A.customerLogin,
+          "NBA_LAL_BOS_1Q_TOTAL_OVER_55.5",
+          16_200,
+          "+115",
+        ),
+      ],
+    });
+    const wagers = {
+      source: "capture:/cloud/api/Manager/getBetTicker",
+      observedAt: "2026-11-04T11:59:00.000Z",
+      LIST: [
+        wagerRow("jp1833.", TICKER_TOTAL, 21_600, "2026-11-01 17:18:20"),
+        wagerRow("MG314", TICKER_TOTAL, 20_000, "2026-11-01 17:18:37"),
+      ],
+    };
+    const liveBets = {
+      capturedAt: "2026-11-04T11:59:00.000Z",
+      dataSource: "capture:/cloud/api/Report/Pending",
+      games: [pendingGame("CC364", "2026-11-01 14:33:47.900")],
+    };
+    const candidates = collectWatchlistCandidates(
+      {
+        feed,
+        wagers,
+        wagersAsOf: "2026-11-04T11:59:00.000Z",
+        liveBets,
+      },
+      { now: NOW, registry: REGISTRY },
+    );
+    expect(candidates.map((candidate) => candidate.login)).toEqual([
+      "CC364",
+      "JP1833",
+      "MG314",
+    ]);
+    expect(candidates[0]).toMatchObject({
+      login: "CC364",
+      agentId: "AGENT",
+      riskUsd: 2_500,
+      wagers: 1,
+      sources: ["data/live-bets.json"],
+      leagues: ["NBA"],
+    });
+    expect(candidates[0]?.ageSeconds).toBeGreaterThan(3_600);
+    expect(candidates[1]).toMatchObject({
+      login: "JP1833",
+      agentId: "AGENT",
+      riskUsd: 216,
+      sources: ["data/live-wagers.json"],
+      leagues: ["NFL"],
+    });
+    expect(
+      candidates.some(
+        (candidate) => candidate.login === ACCOUNT_A.customerLogin,
+      ),
+    ).toBe(false);
+  });
+
+  test("an unparseable market still surfaces the account", () => {
+    const candidates = collectWatchlistCandidates(
+      {
+        feed: null,
+        wagers: {
+          observedAt: "2026-11-04T11:59:00.000Z",
+          LIST: [
+            wagerRow("NEW1", "not a market", 1_000, "2026-11-01 17:18:20"),
+          ],
+        },
+        liveBets: null,
+      },
+      { now: NOW, registry: REGISTRY },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.login).toBe("NEW1");
+    expect(candidates[0]?.sampleMarkets).toEqual([]);
+    expect(candidates[0]?.leagues).toEqual([]);
+  });
+
+  test("limit and minRiskUsd bound the ranked list without inventing accounts", () => {
+    const inputs = {
+      feed: null,
+      wagers: {
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [
+          wagerRow("A1", TICKER_TOTAL, 5_000_000, "2026-11-01 17:18:20"),
+          wagerRow("B2", TICKER_TOTAL, 2_500, "2026-11-01 17:18:20"),
+        ],
+      },
+      liveBets: null,
+    };
+    expect(
+      collectWatchlistCandidates(inputs, {
+        now: NOW,
+        registry: REGISTRY,
+        limit: 1,
+      }).map((candidate) => candidate.login),
+    ).toEqual(["A1"]);
+    expect(
+      collectWatchlistCandidates(inputs, {
+        now: NOW,
+        registry: REGISTRY,
+        minRiskUsd: 100,
+      }).map((candidate) => candidate.login),
+    ).toEqual(["A1"]);
   });
 });
