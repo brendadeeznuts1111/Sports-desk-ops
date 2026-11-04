@@ -1,8 +1,30 @@
 /** Auto-mint the GSLive GSID from keychain credentials; no secret is logged or printed. */
+import { readFileSync, writeFileSync } from "node:fs";
 import { GSID_SECRET } from "../scripts/fetch-bet-tally.ts";
 
 export const GSLIVE_AJAX =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
+let cachedGsid: string | null = null;
+const SESSION_FILE = () => (Bun.env.GSLIVE_SESSION_FILE ?? "").trim();
+function readSessionFile(): string | null {
+  const path = SESSION_FILE();
+  if (path === "") return null;
+  try {
+    const value = readFileSync(path, "utf8").trim();
+    return value === "" ? null : value;
+  } catch {
+    return null;
+  }
+}
+function writeSessionFile(value: string): void {
+  const path = SESSION_FILE();
+  if (path === "") return;
+  try {
+    writeFileSync(path, value, { mode: 0o600 });
+  } catch {
+    /* best effort */
+  }
+}
 async function secret(name: string): Promise<string | null> {
   try {
     return await Bun.secrets.get({
@@ -14,7 +36,11 @@ async function secret(name: string): Promise<string | null> {
   }
 }
 export async function getGsid(): Promise<string | null> {
-  return (await secret(GSID_SECRET.name)) ?? (await secret("GSID"));
+  if (cachedGsid !== null) return cachedGsid;
+  const fromKeychain =
+    (await secret(GSID_SECRET.name)) ?? (await secret("GSID"));
+  if (fromKeychain !== null && fromKeychain !== "") return fromKeychain;
+  return readSessionFile();
 }
 async function probe(gsid: string, fetchImpl: typeof fetch): Promise<boolean> {
   try {
@@ -93,12 +119,18 @@ export async function mintGsid(
     throw new Error(
       `GSLive login did not return a GSID (HTTP ${res.status}); set GSID manually via bun run secrets:gslive set`,
     );
-  await Bun.secrets.set({
-    service: "com.bookdeskops.sportsdesk",
-    name: GSID_SECRET.name,
-    value: gsid,
-    persist: "local",
-  } as never);
+  cachedGsid = gsid;
+  try {
+    await Bun.secrets.set({
+      service: "com.bookdeskops.sportsdesk",
+      name: GSID_SECRET.name,
+      value: gsid,
+      persist: "local",
+    } as never);
+  } catch {
+    // Best effort: keychain writes are denied (ERR_SECRETS_PLATFORM_ERROR) in some sandboxes.
+  }
+  writeSessionFile(gsid);
   if (await probe(gsid, fetchImpl)) return gsid;
   throw new Error("minted GSID did not verify against ajax.php");
 }
