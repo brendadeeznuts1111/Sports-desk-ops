@@ -2,16 +2,23 @@
 
 ## Why this exists
 
-The default F402 session TTL in `lib/f402_session.ts` is 30 minutes (`DEFAULT_TTL_MINUTES = 30`).
-An operator who runs `session:login` and walks away gets a silent bridge outage half an hour
-later; `scripts/bridge3a:poll` reads the session file, finds it expired or absent, and the
-whole bridge rollup cron starts returning `ok:false`. On 2026-11-04 this cost 14+ hours of
-stale R2 bridge keys — the credential rotation at 06:03 UTC minted a session that expired at
-06:33, and nothing caught it until the external R2 staleness alerter was shipped at 20:22 UTC.
+On 2026-11-04 a credential rotation at 06:03 UTC minted a session that expired at 06:33 under
+the then-default 30-minute TTL; every bridge rollup after that returned `ok:false` for 14+
+hours until the external R2 staleness alerter ([PR #43](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/43))
+paged us at 20:22 UTC. Two fixes shipped together:
 
-This feature closes the loop: a LaunchAgent fires every 5 min, checks whether the current
-session is about to expire, and re-mints it before it does. The decision is pure (no I/O) and
-unit-tested; the runner is thin and never logs a cookie, password, or stderr.
+1. **Raise the default TTL to 24h** ([PR #45](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/45),
+   `DEFAULT_TTL_MINUTES = 1440` in `lib/f402_session.ts`). Pure safety-net: an operator who
+   runs `session:login` and walks away now has 24h of runway instead of 30 min.
+2. **This runbook's feature** ([PR #44](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/44)):
+   a LaunchAgent fires every 5 min, checks whether the current session is about to expire, and
+   re-mints it before it does. The decision is pure (no I/O) and unit-tested; the runner is thin
+   and never logs a cookie, password, or stderr.
+
+The two are complementary, not redundant. The 24h TTL ensures a clean window even if the
+LaunchAgent is uninstalled or launchd is paused (operator laptop closed overnight); the
+refresher ensures the window never actually closes. Delete either one and you re-introduce a
+silent-bridge-outage class of bug.
 
 ## How it works
 

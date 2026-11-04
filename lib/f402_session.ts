@@ -198,7 +198,7 @@ export interface RefreshF402SessionOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Login timeout for the WebView flow; unrelated to the session TTL. */
   readonly timeoutMs?: number;
-  /** Session TTL in minutes; defaults to `F402_SESSION_TTL_MIN` then 30. */
+  /** Session TTL in minutes; defaults to `F402_SESSION_TTL_MIN` then 1440 (24h; see `DEFAULT_TTL_MINUTES` above). */
   readonly ttlMinutes?: number;
 }
 
