@@ -508,6 +508,11 @@ enforces that with no undocumented surface.
 - `Bun.secrets`: `get` returns `string | null`, `delete` returns `boolean`, and `set` takes
   `{ service, name, value, persist?: "local" | "enterprise" }` (persist is Windows-only, default
   `"enterprise"`) — https://bun.com/docs/runtime/secrets
+  The same page also shows a positional `Bun.secrets.get("my-app", "alice@example.com")` overload.
+  Measured on 1.4.4: it **works at runtime** (returns the value; the declared arity is 1), but
+  `@types/bun` accepts only the options object — TypeScript reports `TS2554: Expected 1 arguments,
+but got 2`. Repo code therefore uses the object form exclusively, and `lib/secrets.ts` types its
+  provider as `Pick<typeof Bun.secrets, "get">` so a positional call cannot slip in.
 - `Bun.markdown`: `html` callbacks receive `html` — "Raw HTML content"; `tagFilter` is the GFM tag
   filter, `noHtmlBlocks`/`noHtmlSpans` disable HTML, and the API is marked "Unstable API" —
   https://bun.com/docs/runtime/markdown
