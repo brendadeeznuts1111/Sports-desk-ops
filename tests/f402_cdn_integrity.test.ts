@@ -251,6 +251,21 @@ describe("app module graph", () => {
     ).toEqual([]);
   });
 
+  test("covers variable-selected dynamic modules the AMD literal scan cannot see", () => {
+    const host = "www.fantasy402.com";
+    // The controller chooses these through a variable, so extractAmdModuleIds misses them.
+    const managerJs =
+      'var a="manager/module/weekly-figure";"thin"===t.type&&(a="manager/module/weekly-figure-thin");require([a]);';
+    const base = manifest({});
+    expect(extractAmdModuleIds(managerJs)).toEqual([]);
+    expect(appModuleCoverage(managerJs, base)).toContain(
+      appModuleUrl(host, "manager/module/weekly-figure") ?? "",
+    );
+    expect(appModuleCoverage(managerJs, base)).toContain(
+      appModuleUrl(host, "manager/module/weekly-figure-thin") ?? "",
+    );
+  });
+
   test("only same-origin app pins get the AMD bust query", () => {
     const cdn = pin();
     const app = pin({ source: "app", sameOrigin: true });

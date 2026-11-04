@@ -6,8 +6,10 @@ found by a targeted probe, not by an audit. This census covers the lazily loaded
 
 ## Method
 
-- Modules: the 29 `manager/module/*.js` assets in `pinned/cdn-manifest.json`, fetched live for vendor
-  **1.0.281** (`/tmp/modules` this session; the manifest pins hashes, not bodies).
+- Modules: the **31** `manager/module/*.js` assets in `pinned/cdn-manifest.json`, fetched live for
+  vendor **1.0.281** (`/tmp/modules` this session; the manifest pins hashes, not bodies). The last two
+  (`weekly-figure`, `weekly-figure-thin`) were invisible until the pin gate learned to carry
+  variable-selected modules; see “Coverage gap” below.
 - Counts: `.html(` plus `.append(`/`.prepend(` occurrences; then for each `.html()` call, inspect the
   next 700 characters for a player-adjacent field (`NameFirst`, `Login`, `Password`, `Note`,
   `Comments`, `Description`, `Message`, `Subject`, `FromE`, `AgentLogin`, `CustomerID`,
@@ -30,8 +32,16 @@ found by a targeted probe, not by an audit. This census covers the lazily loaded
 | `message.js`               |         7 |        11 |                         7 | `FromE`, `Login`, `Message`                                          |
 | `delete-wager.js`          |         6 |         8 |                         0 | —                                                                    |
 
-**Totals:** 29 modules, **651 `.html()` calls**, **98 candidate calls** with a player-adjacent field
+**Totals:** 31 modules, **739 `.html()` calls**, **102 candidate calls** with a player-adjacent field
 in the window. The remaining modules have 0–5 `.html()` calls.
+
+## Coverage gap — two variable-selected modules
+
+The controller chooses `manager/module/weekly-figure` vs `weekly-figure-thin` through a variable
+(`a="manager/module/weekly-figure"; "thin"===t.type&&(a="manager/module/weekly-figure-thin")`), so
+`extractAmdModuleIds` (literal `require([...])` only) skipped both. The pin gate reported green while
+they were unpinned. Fixed by adding `DYNAMIC_APP_MODULES` to the coverage list; both are now pinned
+(137 assets total, 31 module assets) and the gate fails if a variable-selected module is missing.
 
 ## Known findings already classified
 
@@ -44,6 +54,15 @@ in the window. The remaining modules have 0–5 `.html()` calls.
   module; classified system/game data pending a server-schema check.
 - Select2 demo (`escapeMarkup` identity, `http://api.github.com`) — cached `transaction-history-main`
   fragment, absent from `manager.html` and the pinned graph; cleanup-only/latent.
+
+## Census scope — what it does not catch
+
+This counts `.html()`/`.append()`/`.prepend()` calls where a player-adjacent field appears in a
+700-character window. It does **not** count `.text()` (safe in itself, but excluded from
+classification), direct `innerHTML` assignment, template-literal interpolation, `document.write`, or
+a field and sink separated by more than 700 characters or across functions. A zero-count module means
+“no candidates in this window,” not “no sinks.” Treat the numbers as a prioritized worklist, not a
+coverage proof.
 
 ## Next audit order
 

@@ -61,6 +61,15 @@ export type CdnAssetSource = "document" | "explicit" | "app";
  * `require`/`define` lists are discovered from its bytes at pin time, so a module the loader can
  * reach is either pinned or reported.
  */
+/**
+ * Modules the controller chooses through a variable rather than a literal `require([...])` entry.
+ * They are invisible to AMD-literal extraction, so the pin gate must carry them explicitly.
+ */
+export const DYNAMIC_APP_MODULES: readonly string[] = [
+  "manager/module/weekly-figure",
+  "manager/module/weekly-figure-thin",
+] as const;
+
 export const APP_BOOT_MODULES: readonly string[] = [
   "setting/version",
   "setting/config-manager",
@@ -111,7 +120,11 @@ export function appModuleCoverage(
 ): string[] {
   const missing: string[] = [];
   const seen = new Set<string>();
-  for (const id of [...APP_BOOT_MODULES, ...extractAmdModuleIds(managerJs)]) {
+  for (const id of [
+    ...APP_BOOT_MODULES,
+    ...DYNAMIC_APP_MODULES,
+    ...extractAmdModuleIds(managerJs),
+  ]) {
     const url = appModuleUrl(manifest.host, id);
     if (url === null || seen.has(url)) continue;
     seen.add(url);

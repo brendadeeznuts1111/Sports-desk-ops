@@ -27,6 +27,7 @@ import {
   appModuleCoverage,
   appModuleUrl,
   APP_BOOT_MODULES,
+  DYNAMIC_APP_MODULES,
   buildPin,
   CDN_MANIFEST_PATH,
   checkDocumentCoverage,
@@ -176,7 +177,11 @@ async function update(): Promise<void> {
 
   const appUrls = [
     ...new Set(
-      [...APP_BOOT_MODULES, ...extractAmdModuleIds(managerJs)]
+      [
+        ...APP_BOOT_MODULES,
+        ...DYNAMIC_APP_MODULES,
+        ...extractAmdModuleIds(managerJs),
+      ]
         .map((id) => appModuleUrl(host, id))
         .filter((url): url is string => url !== null),
     ),

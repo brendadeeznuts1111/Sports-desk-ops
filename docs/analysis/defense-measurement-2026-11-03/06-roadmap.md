@@ -90,9 +90,13 @@ watchdog sweep. `player-info.js` is the first entry; it renders `n.Password` via
 `[data-field="password-h"]` and is wrapped by intercepting `getInfoPlayer` success and escaping only
 that selector; `.val()` and stored data stay raw. Module anchors (`password-h`, `bet-desc`,
 `gameReport`, `data-ticket`, `getDetailWager`) are checked by `pin:cdn` against the live module
-bytes. See [07-module-sink-census.md](./07-module-sink-census.md): 29 modules, 651 `.html()` calls,
-98 candidate calls with a player-adjacent field in the window — not all sinks, but the remaining
-audit surface. `bet-desc` is
+bytes. See [07-module-sink-census.md](./07-module-sink-census.md): 31 modules, 739 `.html()` calls,
+102 candidate calls with a player-adjacent field in the window — not all sinks, but the remaining
+audit surface. Two modules (`weekly-figure`, `weekly-figure-thin`) were invisible because the
+controller selects them through a variable; `DYNAMIC_APP_MODULES` now covers them and the pin gate
+pins 137 assets (31 module assets). `weekly-figure`'s `Password` hits are static column definitions,
+not sinks. `agent-management-thin` has credential-adjacent `.html()` renders and is the first triage
+module (#22); `bet-desc`'s `Comments` source is tracked as player-adjacent in #21. `bet-desc` is
 **not** an independent sink: it copies already-rendered `.gameReport` HTML into the delete modal; the
 origin is `getResultTicketPending` / `getResultTicketMobileDetails`, which substitute raw
 `Description`/`ChosenTeamID`/line/`Content` into the pending-row HTML. Fixing `bet-desc` alone would
