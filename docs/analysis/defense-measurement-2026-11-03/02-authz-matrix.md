@@ -23,22 +23,23 @@ Three outcomes, each with a different consequence:
 | **Body-trusting** | Server uses `agentID`/`agentOwner`/`customerID` from the body as the target/caller identity                                      | Any subordinate agent can act as a peer/superior; this outranks every client-side control in flight |
 | **Hybrid**        | Some endpoints validate, others do not                                                                                           | The matrix is the deliverable; per-endpoint allowlists required                                     |
 
-## Minimum viable test — the actual ask is five requests, not a full matrix
+## Minimum viable test — the actual ask is six requests, not a full matrix
 
 One low-privilege subordinate-agent session and a proxy are enough to answer the question with
-**four read-only requests**, plus one mutation only if the test tenant and authorization explicitly
+**five read-only requests**, plus one mutation only if the test tenant and authorization explicitly
 allow disposable money data:
 
-| #   | Request                        | Tamper                                      | Answer signal                                                                                           |
-| --- | ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 1   | `Manager/getMasterSheet`       | `agentID = peer`                            | peer's accounting rows returned → body-trusting                                                         |
-| 2   | `Manager/getListAgenstByAgent` | `MASTER_ID` in sessionStorage → peer master | peer's downline returned → body/`MASTER_ID`-trusting                                                    |
-| 3   | `Manager/searchCustomerAdmin`  | `agentID`/`customerID` = peer's player      | player's PII returned → body-trusting                                                                   |
-| 4   | `Manager/getTransactions`      | `customerID` = peer's customer              | peer's transactions returned → body-trusting                                                            |
-| 5   | `Manager/updateDistribution`   | `agentID = peer`, value below parent        | **only with explicit mutation authorization**: 200 + no ledger artifact → financial gap plus body-trust |
+| #   | Request                        | Tamper                                      | Answer signal                                                                                                          |
+| --- | ------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | `Manager/getMasterSheet`       | `agentID = peer`                            | peer's accounting rows returned → body-trusting                                                                        |
+| 2   | `Manager/getListAgenstByAgent` | `MASTER_ID` in sessionStorage → peer master | peer's downline returned → body/`MASTER_ID`-trusting                                                                   |
+| 3   | `Manager/searchCustomerAdmin`  | `agentID`/`customerID` = peer's player      | player's PII returned → body-trusting                                                                                  |
+| 4   | `Manager/getTransactions`      | `customerID` = peer's customer              | peer's transactions returned → body-trusting                                                                           |
+| 5   | `Manager/getAuthorizations`    | session `MASTER_ID`/`agentID` = peer        | peer's permission flags returned → body-trusting; also the reconnaissance call that tells an attacker what to try next |
+| 6   | `Manager/updateDistribution`   | `agentID = peer`, value below parent        | **only with explicit mutation authorization**: 200 + no ledger artifact → financial gap plus body-trust                |
 
 If any read returns another principal's rows, the verdict is **client-supplied identity**; if all
-four return 403/empty, the verdict is **claim-derived**. The full matrix refines per-endpoint gaps
+five read-only requests return 403/empty, the verdict is **claim-derived**. The full matrix refines per-endpoint gaps
 afterwards. Server-team ask: roughly **two hours** with a test account, not a multi-day matrix.
 
 ## What the client sends (measured from pinned code and captures)

@@ -204,6 +204,9 @@ so an id resolves without guessing which artifact it came from.
   - **Ref:** `RT-DEFENSE-MEASURE`
   - **Owner:** security/operator (needs vendor + server team + business owner)
   - **Issue:** [#17](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/17)
+  - **Decision surface:** `docs/analysis/defense-measurement-2026-11-03/00-executive-summary.md`.
+  - **Expiry:** if item 2 is not funded by **2026-12-03** (30 days), the `searchComponent` pause
+    acceptance is re-opened deliberately on issue #17, not silently extended.
   - **Basis:** `[CODE]`/`[OBSERVED]` the pack at
     `docs/analysis/defense-measurement-2026-11-03/`: adversary model (6 actors); authz _deliverable_
     is one paragraph — Bearer claims vs client-supplied identity — with a five-request minimum test;

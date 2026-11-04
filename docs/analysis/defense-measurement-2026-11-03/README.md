@@ -3,6 +3,9 @@
 Answers the question the roadmap could not: **which client-side controls are load-bearing, and what
 do they not defend?** Scope is adversary-centric, not control-centric.
 
+**Start here:** [00-executive-summary.md](./00-executive-summary.md) — the one-page decision surface
+for leadership, legal and the server-team lead. The rest of this pack is the evidence behind it.
+
 ## Status: what is measured, what is not
 
 | Item                          | Status                               | Basis                                                                                                                          | Blocker                                                                                                                              |
@@ -34,6 +37,7 @@ test. That cannot be satisfied by repository analysis, and this pack does not pr
 
 ## Index
 
+- [00-executive-summary.md](./00-executive-summary.md) — finding, pause/cost/owner/expiry, three decisions, both verdict branches.
 - [01-adversary-model.md](./01-adversary-model.md) — six actors, goals, capability, budget, detection signature, what the system currently allows, stopping control.
 - [02-authz-matrix.md](./02-authz-matrix.md) — matrix template, client-side identity rewriting evidence, tamper protocol, and the Bearer question.
 - [03-financial-controls.md](./03-financial-controls.md) — the four operations, bounds, audit path, invariant candidates, and the finding.

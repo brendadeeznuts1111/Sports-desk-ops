@@ -42,15 +42,17 @@ pin expansion, and the sink migrations. They resume once item 2 either confirms 
 load-bearing (client work matters and resumes with `searchComponent`) or shows the server trusts
 client-supplied identity (client work is cosmetic and the roadmap changes shape).
 
-**Raised instead:** the Bearer verdict (item 2 — five requests, ~2 server-team hours) and the
+**Raised instead:** the Bearer verdict (item 2 — six requests, ~2 server-team hours) and the
 financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is
 maintained, not expanded.
 
 **Cost, named:** `searchComponent` XSS remains live until item 2 returns. That is a live exposure
 accepted against the possibility that item 2 shows the XSS is not the crown-jewel path. The
-acceptance is owned by the **desk security owner (operator role)** and **expires when item 2 returns,
-whichever way it goes**. If item 2 is not funded, this acceptance has no expiry and must be
-re-opened rather than silently extended.
+acceptance is owned by the **desk security owner (operator role)**. **Expiry is a control, not a
+clause:** the acceptance expires on **2026-12-03** (30 days from the pack). It is tracked by issue
+[#17](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/17) with that deadline and by a
+scheduled reminder; if item 2 is not funded by then, it must be **re-opened deliberately**, not
+silently extended. If the deadline is missed and re-accepted, that decision is recorded on #17.
 
 ## Unblock, by owner
 
@@ -60,8 +62,8 @@ The unblock is three decisions, not "waiting on access":
    touched.
 2. **Compliance/legal + operator** — signed scope for tamper testing (the server team saying OK is
    not the same approval).
-3. **Server team lead** — ~2 hours to answer the Bearer question by test (five requests against one
-   account). This is the entire technical ask for item 2.
+3. **Server team lead** — ~2 hours to answer the Bearer question by test (six requests against one
+   account: five read-only tampers plus one optional mutation). This is the entire technical ask for item 2.
 
 Item 3's server-side half needs the same business owner to name the ledger, and the server team to
 confirm or deny its existence.
