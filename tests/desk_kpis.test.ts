@@ -46,7 +46,12 @@ describe("deriveDeskKpis", () => {
       },
       NOW,
     );
-    expect(kpis.agents).toMatchObject({ total: 4, agents: 2, masters: 1 });
+    expect(kpis.agents).toMatchObject({
+      total: 4,
+      agents: 2,
+      masters: 1,
+      unclassified: 1,
+    });
     expect(kpis.agents?.provenance).toMatchObject({
       asOfFrom: "file-mtime",
       ageSeconds: 7200,

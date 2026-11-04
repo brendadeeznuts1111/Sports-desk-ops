@@ -77,7 +77,10 @@ describe("WebLog dashboard panel", () => {
     expect(html).toContain("Array.isArray(msg.subscriptions)");
     expect(html).toContain("BRIDGE_BADGE_IDS");
     expect(html).toContain("WS: subscribed ${active.size}/5");
-    expect(html).toContain('" · ws"');
+    expect(html).toContain(": LIVE · ws");
+    // A dropped socket must not leave a LIVE pill behind.
+    expect(html).toContain("applySubscriptions([])");
+    expect(html).toContain("WS: disconnected");
   });
 
   test("renders Mode 6 through one shared renderer on both paths", () => {

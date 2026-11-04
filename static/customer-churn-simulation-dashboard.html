@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="sportsdesk-bridge-ws" content="" />
     <script
@@ -1703,7 +1703,9 @@
         </div>
       </div>
       <div class="status-badges">
-        <span class="badge badge-accent">● LIVE ENGINE</span>
+        <span class="badge badge-primary" id="engine-badge"
+          >● DATA LOADING</span
+        >
         <span class="badge badge-primary">BUN v1.4+</span>
         <span class="badge badge-purple">50% SHARED AGENT</span>
       </div>
@@ -1711,9 +1713,7 @@
 
     <!-- Agent Tree Graph dropdown -->
     <details class="agent-tree-dropdown">
-      <summary class="agent-tree-toggle" aria-expanded="false">
-        🌳 Agent Tree Graph
-      </summary>
+      <summary class="agent-tree-toggle">🌳 Agent Tree Graph</summary>
       <div class="agent-tree-panel">
         <div class="agent-tree-toolbar">
           <button type="button" class="agent-tree-btn" data-zoom="in">
@@ -2052,7 +2052,7 @@
         <div class="lw-bar" id="lw-writers"></div>
         <div class="lw-bar" id="lw-types"></div>
 
-        <table class="lw-table">
+        <table class="lw-table" aria-label="Bet ticker wagers">
           <thead>
             <tr>
               <th scope="col">Wager</th>
@@ -2250,17 +2250,17 @@
       <section
         class="section-card"
         id="weblog-panel"
-        aria-labelledby="wl-title"
+        aria-labelledby="weblog-title"
         aria-live="polite"
       >
         <div class="section-head">
-          <h2 id="wl-title">WebLog &amp; Session Overlap (Mode 6)</h2>
+          <h2 id="weblog-title">WebLog &amp; Session Overlap (Mode 6)</h2>
         </div>
         <div id="bridge-status" aria-label="Bridge status">
-          <span id="bridge-1-status">Bridge 1: LIVE</span>
-          <span id="bridge-3a-status">Bridge 3a: LIVE</span>
+          <span id="bridge-1-status">Bridge 1: not subscribed</span>
+          <span id="bridge-3a-status">Bridge 3a: not subscribed</span>
           <span id="bridge-3b-status">Bridge 3b: awaiting_live_capture</span>
-          <span id="bridge-3c-status">Bridge 3c: LIVE</span>
+          <span id="bridge-3c-status">Bridge 3c: not subscribed</span>
           <span id="weblog-status">Bridge WebLog: loading</span>
           <span id="bridge-ws-state">WS: connecting</span>
         </div>
@@ -2468,7 +2468,7 @@
           </select>
         </div>
         <div class="table-scroll">
-          <table>
+          <table aria-label="High-exposure accounts watch list">
             <thead id="wl-head">
               <tr>
                 <th aria-sort="none">
@@ -3299,7 +3299,11 @@
               "agents",
               agents ? `${count.format(agents.total)} Agents` : "",
               agents
-                ? `${count.format(agents.agents)} agent · ${count.format(agents.masters)} master`
+                ? `${count.format(agents.agents)} agent · ${count.format(agents.masters)} master${
+                    agents.unclassified > 0
+                      ? ` · ${count.format(agents.unclassified)} unclassified`
+                      : ""
+                  }`
                 : "",
               agents?.provenance ?? null,
               "No data/agent-tree.json. Run bun run build:agent-tree.",
@@ -3335,7 +3339,46 @@
               customerBook?.provenance ?? null,
               "No data/customer-profiles.json. Run bun run customers:profiles.",
             );
+
+            const engine = document.getElementById("engine-badge");
+            if (engine !== null) {
+              const sources = [
+                ["agent tree", agents?.provenance],
+                ["open wagers", pending?.provenance],
+                ["bet ticker", ticker?.provenance],
+                ["customer book", customerBook?.provenance],
+              ];
+              const missing = sources.filter(([, p]) => !p).map(([n]) => n);
+              const stale = sources.filter(([, p]) => p?.stale).map(([n]) => n);
+              const fixtures = sources
+                .filter(([, p]) => p?.basis === "fixture")
+                .map(([n]) => n);
+              if (missing.length > 0) {
+                engine.textContent = "● DATA UNAVAILABLE";
+                engine.className = "badge badge-alert";
+                engine.title = `Missing: ${missing.join(", ")}`;
+              } else if (stale.length > 0 || fixtures.length > 0) {
+                engine.textContent = "● MIXED DATA";
+                engine.className = "badge badge-warning";
+                engine.title = [
+                  stale.length > 0 ? `stale: ${stale.join(", ")}` : "",
+                  fixtures.length > 0 ? `fixture: ${fixtures.join(", ")}` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+              } else {
+                engine.textContent = "● LIVE DATA";
+                engine.className = "badge badge-accent";
+                engine.title = "All KPI sources are fresh captures";
+              }
+            }
           } catch (err) {
+            const engine = document.getElementById("engine-badge");
+            if (engine !== null) {
+              engine.textContent = "● DATA UNAVAILABLE";
+              engine.className = "badge badge-alert";
+              engine.title = String(err);
+            }
             for (const node of grid.querySelectorAll("[data-kpi]")) {
               node.dataset.source = "unavailable";
               node.querySelector(".kpi-age").textContent =
@@ -3609,6 +3652,7 @@
             result.append(make("strong", "", body.description ?? "Analysis"));
 
             const table = make("table", "an-table");
+            table.setAttribute("aria-label", "Analysis report rows");
             const thead = make("thead");
             const headRow = make("tr");
             for (const label of [
@@ -3823,8 +3867,19 @@
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             catalog = await res.json();
-            badge.textContent = `${catalog.summary.sports} SPORTS`;
-            badge.className = "badge badge-accent";
+            const fixture =
+              typeof catalog.source === "string" &&
+              catalog.source.startsWith("tests/fixtures/");
+            badge.textContent = `${catalog.summary.sports} SPORTS${fixture ? " · FIXTURE" : ""}`;
+            badge.className = fixture
+              ? "badge badge-warning"
+              : "badge badge-accent";
+            badge.title = [
+              catalog.source,
+              catalog.capturedAt ? `captured ${catalog.capturedAt}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
             render();
           } catch (err) {
             badge.textContent = "UNAVAILABLE";
@@ -3947,6 +4002,10 @@
             card.append(head);
 
             const table = make("table", "gb-table");
+            table.setAttribute(
+              "aria-label",
+              `Game board: ${game.teams[0]} vs ${game.teams[1]}`,
+            );
             const tbody = make("tbody");
             const entries = Object.entries(game.positions ?? {});
             if (entries.length === 0) {
@@ -4014,6 +4073,10 @@
             card.append(head);
 
             const table = make("table", "gb-table");
+            table.setAttribute(
+              "aria-label",
+              `Game board: ${game.teams[0]} vs ${game.teams[1]}`,
+            );
             const thead = make("thead");
             const headRow = make("tr");
             for (const label of ["Market", "Side", "Line", "Price", "Amount"]) {
@@ -4064,8 +4127,11 @@
                   `${m.market}: ${m.proven} exact, ${m.approximate} approximate`,
               )
               .join(" · ");
-            badge.textContent = `${summary.games} GAMES`;
+            badge.textContent = `${summary.games} GAMES${
+              body.observedAt ? ` · ${body.observedAt}` : ""
+            }`;
             badge.className = "badge badge-accent";
+            badge.title = body.source ?? "source not recorded";
             note.textContent =
               `${parts}. Proven spread exposure sums to ` +
               `$${(summary.byMarket.find((m) => m.market === "spread")?.sumExact ?? 0).toLocaleString()}. ` +
@@ -4243,8 +4309,12 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const body = await res.json();
             all = body.entries ?? [];
-            badge.textContent = `${all.length} CONTESTS`;
+            const observed = body.extractedAt
+              ? ` · ${sdFormatTs(body.extractedAt)}`
+              : "";
+            badge.textContent = `${all.length} CONTESTS${observed}`;
             badge.className = "badge badge-accent";
+            badge.title = body.source ?? "source not recorded";
             buildGroups(all);
             render();
           } catch (err) {
@@ -5050,9 +5120,10 @@
           if (!badge) return;
           if (badge.dataset.baseText === undefined) {
             badge.dataset.baseText = badge.textContent;
+            badge.dataset.label = badge.textContent.split(":")[0];
           }
           badge.textContent = live
-            ? badge.dataset.baseText + " · ws"
+            ? `${badge.dataset.label}: LIVE · ws`
             : badge.dataset.baseText;
         };
 
@@ -5120,6 +5191,9 @@
           });
           ws.addEventListener("close", () => {
             if (socket === ws) socket = null;
+            // Do not leave a "LIVE · ws" pill behind after the socket drops.
+            applySubscriptions([]);
+            setState("WS: disconnected");
             scheduleReconnect();
           });
           ws.addEventListener("error", scheduleReconnect);

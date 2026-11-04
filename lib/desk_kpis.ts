@@ -62,6 +62,8 @@ export interface DeskKpis {
     readonly agents: number;
     /** Node type `M` in the tree. */
     readonly masters: number;
+    /** Nodes with neither `A` nor `M`; the total is agents + masters + unclassified. */
+    readonly unclassified: number;
     readonly provenance: KpiProvenance;
   } | null;
   readonly pending: {
@@ -170,6 +172,8 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       total: nodes.length,
       agents: nodes.filter((node) => node.t === "A").length,
       masters: nodes.filter((node) => node.t === "M").length,
+      unclassified: nodes.filter((node) => node.t !== "A" && node.t !== "M")
+        .length,
       provenance: provenance(
         "data/agent-tree.json",
         "capture",
