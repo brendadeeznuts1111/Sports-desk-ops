@@ -267,6 +267,114 @@ export async function fetchAndPersistPending(
   return result;
 }
 
+/** Decode a JWT `exp` claim (no signature verification); null when absent/malformed. */
+export function f402TokenExpiresAtMs(token: string): number | null {
+  try {
+    const segment = token.split(".")[1];
+    if (segment === undefined || segment === "") return null;
+    const json = Buffer.from(
+      segment.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64",
+    ).toString("utf8");
+    const payload = JSON.parse(json) as unknown;
+    const exp = isRecord(payload) ? payload["exp"] : undefined;
+    return typeof exp === "number" && Number.isFinite(exp)
+      ? Math.round(exp * 1000)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A token refresh failed; a batch must abort, never downgrade this to a per-customer skip. */
+export class F402TokenRefreshError extends F402PendingFetchError {
+  constructor(message: string) {
+    super(message);
+    this.name = "F402TokenRefreshError";
+  }
+}
+
+export interface RenewF402BearerTokenOptions {
+  /** Current (possibly about-to-expire) JWT. Never logged. */
+  readonly token: string;
+  readonly baseUrl?: string;
+  readonly fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
+  readonly timeoutMs?: number;
+}
+
+export interface RenewedF402BearerToken {
+  /** New JWT. Never log this field. */
+  readonly token: string;
+  readonly tokenChars: number;
+  readonly expiresAtMs: number | null;
+  readonly expiresAtIso: string | null;
+}
+
+/**
+ * `POST /cloud/api/System/renewToken` — measured 2026-11-04: HTTP 200 with `{ code }` for a valid
+ * bearer. Used by long customer batches so a 20-minute JWT cannot expire mid-cycle.
+ */
+export async function renewF402BearerToken(
+  options: RenewF402BearerTokenOptions,
+): Promise<RenewedF402BearerToken> {
+  const token = validateF402Token(options.token);
+  if (token === null) throw new F402TokenRefreshError(INVALID_TOKEN_MESSAGE);
+  const baseUrl = (
+    options.baseUrl ??
+    ((Bun.env.F402_BASE_URL ?? "").trim() || "https://www.fantasy402.com")
+  ).replace(/\/+$/, "");
+  const fetchImpl =
+    options.fetchImpl ??
+    ((input: string, init: RequestInit) => fetch(input, init));
+  let response: Response;
+  try {
+    response = await fetchImpl(`${baseUrl}/cloud/api/System/renewToken`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/javascript, */*; q=0.01",
+        "x-requested-with": "XMLHttpRequest",
+      },
+      body: JSON.stringify({ operation: "renewToken", RRO: 1 }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+    });
+  } catch (error) {
+    throw new F402TokenRefreshError(
+      `renewToken request failed: ${error instanceof Error ? error.message : "unknown"}`,
+    );
+  }
+  const text = await response.text();
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    /* non-JSON */
+  }
+  if (response.status !== 200) {
+    const msg = isRecord(payload) ? shortServerMessage(payload["msg"]) : "";
+    throw new F402TokenRefreshError(
+      `renewToken returned HTTP ${response.status}${msg === "" ? "" : `: ${msg}`}`,
+    );
+  }
+  const code = isRecord(payload) ? payload["code"] : undefined;
+  const renewed = typeof code === "string" ? validateF402Token(code) : null;
+  if (renewed === null) {
+    throw new F402TokenRefreshError(
+      "renewToken returned no valid `code` token",
+    );
+  }
+  const expiresAtMs = f402TokenExpiresAtMs(renewed);
+  return {
+    token: renewed,
+    tokenChars: renewed.length,
+    expiresAtMs,
+    expiresAtIso:
+      expiresAtMs === null ? null : new Date(expiresAtMs).toISOString(),
+  };
+}
+
 /* ------------------------------------------------------------------------- */
 /* Report/Pending (customer-scoped) — the bearer path that actually works     */
 /* ------------------------------------------------------------------------- */
@@ -282,9 +390,25 @@ export interface ReportPendingBatchOptions {
   readonly fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
   /** Parallel requests; default 6. */
   readonly concurrency?: number;
+  /** Hard cap on parallelism; default 8 (operator can raise it to at most 16). */
+  readonly maxConcurrency?: number;
   readonly timeoutMs?: number;
   /** `throw` (default) fails the whole batch on any customer; `skip` records the failure. */
   readonly onCustomerFailure?: "throw" | "skip";
+  /** `exp` of the initial token, from `f402TokenExpiresAtMs`; enables proactive refresh. */
+  readonly expiresAtMs?: number | null;
+  /** Renew at this point before expiry; default 120_000 ms (2 min). */
+  readonly refreshLeadMs?: number;
+  /** Mint a fresh token when the current one is near expiry or a request returns 401. */
+  readonly refreshToken?: (
+    currentToken: string,
+  ) => Promise<{ readonly token: string; readonly expiresAtMs: number | null }>;
+  /** Called after a successful refresh (safe logging hook). */
+  readonly onRefresh?: () => void;
+  /** Retries for 429/5xx/network failures per customer; default 2 (3 attempts). */
+  readonly maxRetries?: number;
+  /** Injectable delay for tests; defaults to `Bun.sleep`. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export interface ReportPendingCustomerResult {
@@ -309,6 +433,16 @@ function shortServerMessage(value: unknown): string {
   const text = value.trim();
   if (text === "" || text.length > 80) return "";
   return /^[\x20-\x7E]+$/.test(text) ? text : "";
+}
+
+class ReportPendingResponseError extends F402PendingFetchError {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ReportPendingResponseError";
+    this.status = status;
+  }
 }
 
 /** Parse one Report/Pending response into rows; throws `F402PendingFetchError` with a class. */
@@ -356,8 +490,10 @@ function reportPendingRows(
 export async function fetchF402ReportPendingBatch(
   options: ReportPendingBatchOptions,
 ): Promise<ReportPendingBatchResult> {
-  const token = validateF402Token(options.token);
-  if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  const initialToken = validateF402Token(options.token);
+  if (initialToken === null) {
+    throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  }
   const baseUrl = (
     options.baseUrl ??
     ((Bun.env.F402_BASE_URL ?? "").trim() || "https://www.fantasy402.com")
@@ -377,10 +513,139 @@ export async function fetchF402ReportPendingBatch(
     options.fetchImpl ??
     ((input: string, init: RequestInit) => fetch(input, init));
   const onFailure = options.onCustomerFailure ?? "throw";
-  const concurrency = Math.min(
+  const maxConcurrency = Math.min(
     16,
-    Math.max(1, Math.floor(options.concurrency ?? 6)),
+    Math.max(1, Math.floor(options.maxConcurrency ?? 8)),
   );
+  const concurrency = Math.min(
+    maxConcurrency,
+    Math.max(1, Math.floor(options.concurrency ?? 6)),
+    customerIds.length,
+  );
+  const maxRetries = Math.max(0, Math.floor(options.maxRetries ?? 2));
+  const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
+
+  // Mutable token state for a long batch; shared by every worker.
+  let currentToken = initialToken;
+  let expiresAtMs = options.expiresAtMs ?? null;
+  let refreshing: Promise<void> | null = null;
+  async function refreshNow(): Promise<void> {
+    if (options.refreshToken === undefined) {
+      throw new F402TokenRefreshError(
+        "token expired or was rejected and no refresh is configured",
+      );
+    }
+    if (refreshing === null) {
+      refreshing = (async () => {
+        let next: {
+          readonly token: string;
+          readonly expiresAtMs: number | null;
+        };
+        try {
+          next = await options.refreshToken!(currentToken);
+        } catch (error) {
+          throw new F402TokenRefreshError(
+            `token refresh failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        const valid = validateF402Token(next.token);
+        if (valid === null) {
+          throw new F402TokenRefreshError("refresh returned an invalid token");
+        }
+        currentToken = valid;
+        expiresAtMs = next.expiresAtMs;
+        options.onRefresh?.();
+      })().finally(() => {
+        refreshing = null;
+      });
+    }
+    await refreshing;
+  }
+  async function ensureFresh(): Promise<void> {
+    if (expiresAtMs === null || options.refreshToken === undefined) return;
+    const lead = options.refreshLeadMs ?? 120_000;
+    if (Date.now() < expiresAtMs - lead) return;
+    await refreshNow();
+  }
+  function backoffMs(attempt: number, response?: Response): number {
+    const retryAfter = (response?.headers.get("retry-after") ?? "").trim();
+    if (/^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000;
+    const base = Math.min(8_000, 250 * 2 ** attempt);
+    return base + Math.floor(Math.random() * base * 0.3);
+  }
+
+  /** One customer with proactive refresh, 401 refresh, and 429/5xx/network backoff. */
+  async function fetchRows(
+    customerID: string,
+  ): Promise<{ status: number; rows: readonly Record<string, unknown>[] }> {
+    await ensureFresh();
+    let attempts = 0;
+    let authRetried = false;
+    for (;;) {
+      let response: Response;
+      try {
+        response = await fetchImpl(url, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${currentToken}`,
+            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            accept: "application/json, text/plain, */*",
+            "x-requested-with": "XMLHttpRequest",
+          },
+          body: new URLSearchParams({
+            customerID,
+            token: "",
+            operation: "Pending",
+          }).toString(),
+          redirect: "manual",
+          signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+        });
+      } catch (error) {
+        if (attempts < maxRetries) {
+          await sleep(backoffMs(attempts));
+          attempts += 1;
+          continue;
+        }
+        throw new F402PendingFetchError(
+          `Report/Pending request failed: ${error instanceof Error ? error.message : "unknown"}`,
+        );
+      }
+      if (
+        response.status === 401 &&
+        !authRetried &&
+        options.refreshToken !== undefined
+      ) {
+        authRetried = true;
+        await refreshNow();
+        continue;
+      }
+      if (
+        (response.status === 429 || response.status >= 500) &&
+        attempts < maxRetries
+      ) {
+        await sleep(backoffMs(attempts, response));
+        attempts += 1;
+        continue;
+      }
+      const text = await response.text();
+      try {
+        return {
+          status: response.status,
+          rows: reportPendingRows(
+            response.status,
+            response.headers.get("content-type") ?? "",
+            text,
+          ),
+        };
+      } catch (error) {
+        throw new ReportPendingResponseError(
+          response.status,
+          error instanceof Error ? error.message : "Report/Pending failed",
+        );
+      }
+    }
+  }
+
   const results = new Map<
     number,
     {
@@ -398,39 +663,21 @@ export async function fetchF402ReportPendingBatch(
       const customerID = customerIds[index]!;
       let status: number | null = null;
       try {
-        const response = await fetchImpl(url, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${token}`,
-            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-            accept: "application/json, text/plain, */*",
-            "x-requested-with": "XMLHttpRequest",
-          },
-          body: new URLSearchParams({
-            customerID,
-            token: "",
-            operation: "Pending",
-          }).toString(),
-          redirect: "manual",
-          signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-        });
-        status = response.status;
-        const rows = reportPendingRows(
-          response.status,
-          response.headers.get("content-type") ?? "",
-          await response.text(),
-        );
+        const fetched = await fetchRows(customerID);
+        status = fetched.status;
         results.set(index, {
-          rows,
+          rows: fetched.rows,
           result: {
             customerIdChars: customerID.length,
             ok: true,
             status,
-            legs: rows.length,
+            legs: fetched.rows.length,
             error: null,
           },
         });
       } catch (error) {
+        if (error instanceof F402TokenRefreshError) throw error;
+        if (error instanceof ReportPendingResponseError) status = error.status;
         const message =
           error instanceof Error ? error.message : "Report/Pending failed";
         results.set(index, {
@@ -447,11 +694,7 @@ export async function fetchF402ReportPendingBatch(
       }
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, customerIds.length) }, () =>
-      worker(),
-    ),
-  );
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
   const rows: Record<string, unknown>[] = [];
   const perCustomer: ReportPendingCustomerResult[] = [];

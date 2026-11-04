@@ -5,7 +5,9 @@ import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
 import {
   defaultPendingDate,
   fetchAndPersistPending,
+  f402TokenExpiresAtMs,
   fetchAndPersistReportPending,
+  renewF402BearerToken,
   resolveF402BearerToken,
 } from "../lib/f402_pending_fetch.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
@@ -29,6 +31,8 @@ const { values } = parseArgs({
     "customers-file": { type: "string" },
     "allow-partial": { type: "boolean", default: false },
     "allow-legacy-manager": { type: "boolean", default: false },
+    "max-concurrency": { type: "string" },
+    "max-retries": { type: "string" },
     live: { type: "boolean", default: false },
     "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
@@ -39,7 +43,7 @@ const { values } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--customers id,id | --customers-file path] [--allow-partial] [--allow-legacy-manager] [--live] [--dry-run] [--no-r2] [--no-ws]",
+    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--customers id,id | --customers-file path] [--allow-partial] [--allow-legacy-manager] [--max-concurrency 1-16] [--max-retries n] [--live] [--dry-run] [--no-r2] [--no-ws]",
   );
   process.exit(0);
 }
@@ -58,6 +62,24 @@ if (
     "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
   );
 }
+function boundedInt(
+  raw: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  flag: string,
+): number {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    console.error(
+      `bridge3b: ${flag} must be an integer ${min}..${max} (got ${JSON.stringify(raw)})`,
+    );
+    process.exit(2);
+  }
+  return value;
+}
+
 /** Explicit customer list for the verified Report/Pending bearer path (no enumeration). */
 async function resolveCustomerIds(): Promise<string[] | null> {
   const split = (text: string): string[] =>
@@ -119,14 +141,40 @@ if (fetchRequested) {
     ((Bun.env.F402_PENDING_CAPTURE_PATH ?? "").trim() ||
       `Scratch/f402-pending/capture-${date}.json`);
   if (customerIds !== null) {
+    const maxConcurrency = boundedInt(
+      values["max-concurrency"] as string | undefined,
+      6,
+      1,
+      16,
+      "--max-concurrency",
+    );
+    const maxRetries = boundedInt(
+      values["max-retries"] as string | undefined,
+      2,
+      0,
+      6,
+      "--max-retries",
+    );
+    const expiresAtMs = f402TokenExpiresAtMs(token);
     const fetched = await fetchAndPersistReportPending({
       token,
       customerIds,
       capturePath,
       onCustomerFailure: values["allow-partial"] ? "skip" : "throw",
+      maxConcurrency,
+      concurrency: maxConcurrency,
+      maxRetries,
+      expiresAtMs,
+      refreshToken: async (current) => {
+        const renewed = await renewF402BearerToken({ token: current });
+        console.error(
+          `[bridge3b] bearer refreshed (expires ${renewed.expiresAtIso ?? "unknown"})`,
+        );
+        return { token: renewed.token, expiresAtMs: renewed.expiresAtMs };
+      },
     });
     console.error(
-      `[bridge3b] Report/Pending: ${fetched.rows.length} legs across ${fetched.okCount}/${customerIds.length} customer(s) for ${date} -> ${capturePath}`,
+      `[bridge3b] Report/Pending: ${fetched.rows.length} legs across ${fetched.okCount}/${customerIds.length} customer(s) for ${date} (concurrency=${String(values["max-concurrency"] ?? "6")}) -> ${capturePath}`,
     );
     if (fetched.failedCount > 0) {
       console.error(
