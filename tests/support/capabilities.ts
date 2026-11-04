@@ -38,7 +38,7 @@ const withTimeout = async <T>(
   }
 };
 
-async function probeCdp(): Promise<CapabilityDiagnostics["cdp"]> {
+async function runCdpProbe(): Promise<CapabilityDiagnostics["cdp"]> {
   let view: ReturnType<typeof ManagedWebView.launch> | undefined;
   try {
     view = ManagedWebView.launch({
@@ -62,6 +62,26 @@ async function probeCdp(): Promise<CapabilityDiagnostics["cdp"]> {
         () => undefined,
       );
     }
+  }
+}
+
+async function probeCdp(): Promise<CapabilityDiagnostics["cdp"]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<CapabilityDiagnostics["cdp"]>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({
+            available: false,
+            reason: "CDP probe timed out (2500ms)",
+          }),
+        2_500,
+      );
+      timer.unref?.();
+    });
+    return await Promise.race([runCdpProbe(), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
