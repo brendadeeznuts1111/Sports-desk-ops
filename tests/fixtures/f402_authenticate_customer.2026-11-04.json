@@ -1,0 +1,126 @@
+{
+  "capture": "POST /cloud/api/System/authenticateCustomer",
+  "capturedAtIso": "2026-11-04T10:11:18Z",
+  "evidenceClass": "live HTTP capture (Bun fetch, legacy keychain credential; no secret or token retained)",
+  "request": {
+    "method": "POST",
+    "path": "/cloud/api/System/authenticateCustomer",
+    "contentType": "application/json",
+    "bodyFields": [
+      "customerID",
+      "state",
+      "password",
+      "sufix",
+      "prefix",
+      "multiaccount",
+      "response_type",
+      "client_id",
+      "domain",
+      "redirect_uri",
+      "token",
+      "operation",
+      "RRO"
+    ],
+    "shapeDerivedFrom": "verification/manager-boot-oracle/pinned/security.js (login request construction)",
+    "customerIdForm": "uppercase; client_id duplicates customerID",
+    "credentialSource": "keychain service sportsdesk-ops (legacy), canonical fallback com.bookdeskops.sportsdesk",
+    "agentIdChars": 8
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "server": "cloudflare",
+    "setCookieNames": [],
+    "bodyKeys": ["accountInfo", "code"],
+    "accountInfo": {
+      "keys": [
+        "UseCaptcha",
+        "customerID",
+        "AgentType",
+        "AgentSkinOverride",
+        "Office",
+        "Language",
+        "DefaultSiteSkin"
+      ],
+      "customerIdChars": 10,
+      "customerIdDiffersFromKeychainAgentId": true,
+      "agentTypeChars": 1
+    },
+    "code": {
+      "present": true,
+      "kind": "JWT",
+      "alg": "HS256",
+      "typ": "JWT",
+      "chars": 221,
+      "claimNames": ["ag", "exp", "imp", "nbf", "off", "rb", "sub", "type"],
+      "subChars": 8,
+      "expiresInSec": 1200
+    }
+  },
+  "tokenAcceptance": {
+    "probe": "POST /cloud/api/System/renewToken with Authorization: Bearer <response.code>",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bodyKeys": ["code"],
+    "newToken": {
+      "kind": "JWT",
+      "alg": "HS256",
+      "chars": 221
+    },
+    "verdict": "the authenticateCustomer token is a valid System-API bearer credential"
+  },
+  "nextCallGetPending": {
+    "endpoint": "POST /cloud/api/Manager/getPending",
+    "variants": [
+      {
+        "body": "JSON, agentID=accountInfo.customerID",
+        "status": 500,
+        "contentType": "text/html; charset=UTF-8",
+        "bodyChars": 0
+      },
+      {
+        "body": "JSON, agentID=keychain f402-agent-id",
+        "status": 500,
+        "contentType": "text/html; charset=UTF-8",
+        "bodyChars": 0
+      },
+      {
+        "body": "form-urlencoded {agentID,type,operation:\"getPending\",RRO}",
+        "status": 500,
+        "contentType": "text/html; charset=UTF-8",
+        "bodyChars": 0
+      },
+      {
+        "body": "JSON + warm-up Cloudflare cookies",
+        "status": 500,
+        "contentType": "text/html; charset=UTF-8",
+        "bodyChars": 0
+      },
+      {
+        "body": "JSON (also getInfoManager control)",
+        "status": 500,
+        "contentType": "text/html; charset=UTF-8",
+        "bodyChars": 0
+      }
+    ],
+    "verdict": "500 empty HTML from cloudflare for every shape; not a 401/403 auth rejection, so the Manager request contract is unresolved"
+  },
+  "sessionCookiePath": {
+    "authResponseSetCookies": [],
+    "warmUpCookieNames": ["__cf_bm"],
+    "getPendingWithWarmUpCookies": {
+      "status": 401,
+      "contentType": "text/html",
+      "bodyChars": 176
+    },
+    "verdict": "authenticateCustomer issues no session cookie; cookie replay alone is unauthorized"
+  },
+  "conclusion": {
+    "bearerReturned": true,
+    "bearerAcceptedBySystemApi": true,
+    "bearerAcceptedByManagerGetPending": false,
+    "managerGetPendingFailureIsAuthRejection": false,
+    "sessionCookieSufficient": false,
+    "note": "authenticateCustomer C->A for the token contract; Manager/getPending still needs a real browser request capture (or /cloud/api/Report/Pending) before 3b can use Bearer"
+  }
+}
