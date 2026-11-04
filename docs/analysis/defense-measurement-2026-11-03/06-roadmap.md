@@ -56,8 +56,12 @@ values, so a literal `&`/`<` in a name/password no longer matches — **accepted
 owner (operator role), 2026-11-04**, mitigation search-by-login, escalate if agents report failures;
 (2) the `players`/`agents` arrays hold escaped values after setup — new code must not read those
 fields directly (the pinned `setPlayers()` does, and can show escaped text for special characters).
-Recorded in #16; `setPlayers()` is reachable (`getPlayers`/hierarchy success populate `.players`),
-so treat the array landmine as live and prefer render-copy for new sinks.
+Recorded in #16; the array landmine is live for anything reading the module-level `players`/`agents`
+arrays (searchComponent does). **But `setPlayers()` is not one of them:** it takes its argument from
+hierarchy nodes; the hierarchy success sets the global array and then clears non-master node
+`players` to `[]` before lazy expansion; GENERAL rows in the captured envelope carry no `players`
+key (0/2,466); `getPlayers()` has no call sites. The `setPlayers()` direct-read risk is therefore
+**theoretical**, not live. Prefer render-copy for new sinks regardless.
 
 **Render-copy decision:** adopted for `getMessageInit` (and `getPopUpMessages` if it follows the same
 multi-consumer shape). `setCommunicationMessages` is the exception — one `.html()` call containing a

@@ -457,10 +457,15 @@
   // the browser parses the generated attribute, so data-login/data-pass still carry the real value
   // (obj:true callers keep working); only the raw-string interpolation is neutralised.
   //
-  // Landmine: after setup, players/agents hold escaped values. Do not read NameFirst/Login/
-  // Password/customerID/AgentID directly from those arrays in new code; use the rendered DOM
-  // (attr decodes back to the real value) or a render copy. setPlayers() in the pinned controller
-  // reads Login/customerID directly, so it can display escaped text for special characters.
+  // Landmine: after setup, the module-level players/agents arrays hold escaped values. Do not read
+  // NameFirst/Login/Password/customerID/AgentID directly from those arrays in new code; use the
+  // rendered DOM (attr decodes back to the real value) or a render copy.
+  //
+  // setPlayers() is not a consumer of these arrays: it takes its argument from hierarchy nodes.
+  // The hierarchy success sets global players, then clears non-master node players to [] before
+  // lazy expansion; GENERAL rows in the captured envelope carry no players key, and getPlayers()
+  // has no call sites. So the setPlayers direct-read risk is theoretical, not live. The live
+  // landmine is anything reading the module-level arrays directly (searchComponent itself).
   //
   // Tradeoff: the search filter compares the typed term against the escaped field, so searching for
   // a literal "&" or "<" inside a name/password no longer matches. Those are the characters that
