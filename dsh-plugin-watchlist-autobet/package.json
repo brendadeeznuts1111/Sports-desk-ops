@@ -1,11 +1,12 @@
 {
   "name": "dsh-plugin-watchlist-autobet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Paper-only DSH Host tools for the sportsdesk-ops watchlist autobet pipeline: read status/signals/plan/queue/journal, and confirm-gated enqueue, approve/reject, paper execute and settle. No live order path exists; live betting is not implemented.",
+  "description": "Paper-only watchlist autobet control plane for sportsdesk-ops: nine Host tools (status/signals/plan/queue/journal plus confirm-gated enqueue, approve/reject, paper execute and settle) and a Web UI operator page with an approval queue, decision tracking, intent context and same-origin control-plane routes. No live order path exists; live betting is not implemented.",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
@@ -13,6 +14,7 @@
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -22,6 +24,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   },
   "engines": {

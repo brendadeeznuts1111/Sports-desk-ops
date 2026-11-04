@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Watchlist autobet (paper only)",
-    "description": "Read-only watchlist signal, gate, plan, queue and journal tools plus confirm-gated paper-ledger actions for the sportsdesk-ops autobet pipeline: enqueue intents for human approval, record approve/reject decisions, paper-fill approved intents and settle them. Live betting is not implemented and no live order path exists."
+    "title": "Watchlist autobet control plane (paper only)",
+    "description": "Paper-only watchlist autobet control plane for sportsdesk-ops: nine Host tools (status, signals, plan, queue, journal, and confirm-gated enqueue/approve/reject/paper execute/settle) plus a Web UI operator page with an approval queue, decision tracking, per-intent context and a Signals inspector that shows every gate check. It manages the human in the loop and records decisions in the append-only paper ledger. Live betting is not implemented and no live order path exists."
   }
 }

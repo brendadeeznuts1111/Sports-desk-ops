@@ -7,8 +7,8 @@
  * operator before a paper fill, and the append-only ledger records every transition.
  *
  * Contract:
- * - one command per invocation: status | signals | plan | enqueue | list | approve | reject |
- *   execute | settle | journal | watch
+ * - one command per invocation: status | signals | candidates | plan | enqueue | list | approve |
+ *   reject | execute | settle | journal | watch
  * - each command has detailed help: `bun run autobet <command> --help` (arguments, long and short
  *   flags, defaults, safety notes, examples); the root `--help` prints the command table
  * - global flags anywhere on the line: --root/-r <path>, --config/-c <path>, --json/-j,
@@ -49,9 +49,12 @@ import {
   type SettlementResult,
   type SkippedEnqueue,
 } from "../lib/watchlist_autobet.ts";
+import { collectWatchlistCandidates } from "../lib/watchlist_signal_engine.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
+/** How many unwatched candidates ride along in the Signals inspector payload. */
+const SIGNALS_CANDIDATE_PREVIEW = 25;
 
 interface CliContext {
   readonly root: string;
@@ -558,6 +561,11 @@ async function cmdSignals(
     }));
   const eligible = evaluations.filter((evaluation) => evaluation.gate.eligible);
   const visible = includeRejected ? evaluations : eligible;
+  // Advisory discovery: accounts in the same artifacts that the registry does not watch.
+  // Never gated, never queued — the Signals inspector shows them so a new account is not silent.
+  const discovered = collectWatchlistCandidates(snapshot.inputs, {
+    now: context.now,
+  });
 
   return emitSuccess(context, "signals", {
     sources: snapshot.sources.map(sourceJson),
@@ -565,8 +573,50 @@ async function cmdSignals(
       total: evaluations.length,
       eligible: eligible.length,
       rejected: evaluations.length - eligible.length,
+      candidates: discovered.length,
     },
     signals: visible.slice(0, limit),
+    candidates: discovered.slice(0, SIGNALS_CANDIDATE_PREVIEW),
+  });
+}
+
+async function cmdCandidates(
+  tokens: readonly string[],
+  context: CliContext,
+): Promise<number> {
+  const flags = parseCommandFlags("candidates", tokens, {
+    valueFlags: ["--limit", "--min-risk-usd"],
+    shortAliases: { "-l": "--limit" },
+  });
+  assertNoPositionals("candidates", flags);
+  const limit = integerFlag("candidates", flags, "--limit", 50, 1, 200);
+  const minRiskUsd = numberFlag(
+    "candidates",
+    flags,
+    "--min-risk-usd",
+    0,
+    0,
+    1_000_000_000,
+  );
+
+  const config = await loadConfig(context);
+  const snapshot = await loadAutobetSignals(context.root, config, context.now);
+  const discovered = collectWatchlistCandidates(snapshot.inputs, {
+    now: context.now,
+    minRiskUsd,
+  });
+  const totalRiskUsd =
+    Math.round(discovered.reduce((sum, c) => sum + c.riskUsd, 0) * 100) / 100;
+
+  return emitSuccess(context, "candidates", {
+    sources: snapshot.sources.map(sourceJson),
+    counts: {
+      total: discovered.length,
+      returned: Math.min(discovered.length, limit),
+      minRiskUsd,
+      riskUsd: totalRiskUsd,
+    },
+    candidates: discovered.slice(0, limit),
   });
 }
 
@@ -1023,6 +1073,8 @@ async function dispatch(
       return cmdStatus(args, context);
     case "signals":
       return cmdSignals(args, context);
+    case "candidates":
+      return cmdCandidates(args, context);
     case "plan":
       return cmdPlan(args, context);
     case "enqueue":
@@ -1144,6 +1196,32 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       "bun run autobet signals --json",
       "bun run autobet signals -i -m 60 -l 20",
       "bun run autobet signals --include-rejected --json",
+    ],
+  },
+  {
+    name: "candidates",
+    summary: "Accounts in the captures that are not on the watchlist",
+    usage: "candidates [--limit N] [--min-risk-usd 0..] [flags]",
+    detail: [
+      "Read-only discovery pass over the same three artifacts as `signals`: every login the",
+      "watchlist registry does not cover, with the risk and latest bet time the captures show.",
+      "Advisory only — it never queues, approves, fills or settles, and the signal engine still",
+      "ignores these logins for derivation until an operator promotes the account.",
+    ],
+    options: [
+      {
+        flags: "-l, --limit <N>",
+        description: "Maximum candidates to print (1-200, default 50).",
+      },
+      {
+        flags: "--min-risk-usd <amount>",
+        description:
+          "Drop accounts whose summed capture risk is below this many dollars (default 0).",
+      },
+    ],
+    examples: [
+      "bun run autobet candidates --json",
+      "bun run autobet candidates --min-risk-usd 100 -l 20",
     ],
   },
   {

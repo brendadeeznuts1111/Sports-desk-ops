@@ -36,6 +36,7 @@ import type {
   OverUnder,
   SignalProvenance,
   WatchlistSignal,
+  WatchlistSignalInputs,
 } from "./watchlist_signal_engine.ts";
 import {
   deriveWatchlistSignals,
@@ -604,6 +605,8 @@ export async function describeSignalSources(
 export interface AutobetSignalSnapshot {
   readonly signals: readonly WatchlistSignal[];
   readonly sources: readonly AutobetSourceStatus[];
+  /** The parsed artifacts this snapshot read, so a caller runs the advisory candidate pass once. */
+  readonly inputs: WatchlistSignalInputs;
 }
 
 /** Load the local artifacts, derive signals with the existing engine, and report source ages. */
@@ -619,7 +622,7 @@ export async function loadAutobetSignals(
     config.maxSignalAgeSeconds,
     now,
   );
-  return { signals, sources };
+  return { signals, sources, inputs };
 }
 
 /* -------------------------------------------------------------------------- */

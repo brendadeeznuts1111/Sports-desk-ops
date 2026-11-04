@@ -60,6 +60,8 @@
 
 // ast-grep-ignore: node-child-process -- Host plugin code runs in Electron's Node main process, where the Bun global does not exist; spawning bun is the shim's whole job.
 import { execFile } from "node:child_process";
+// The control-plane CSRF token is generated per plugin activation; node:crypto is a builtin.
+import { randomUUID } from "node:crypto";
 // ast-grep-ignore: node-fs-read-write-file -- same runtime: Bun.file() is not defined in Electron's Node, and the pre-spawn CLI existence check needs node:fs.
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -118,6 +120,100 @@ const MAX_ACTOR_LENGTH = 120;
 const MAX_FREE_TEXT_LENGTH = 2000;
 /** How much captured stdout/stderr a failure result keeps before eliding the rest. */
 const MAX_EXCERPT = 4000;
+
+/**
+ * Same-origin control-plane API consumed by this bundle's Client page. It is a thin,
+ * paper-only adapter over the same CLI the tools shell: reads compose the operator board
+ * and the signals inspector, and the single mutation endpoint maps a closed action set onto
+ * the CLI commands. The routes never construct a shell string, and every mutation requires
+ * `confirm: true` plus a per-activation CSRF token, so a cross-site page cannot drive the
+ * ledger.
+ */
+const HTTP_PREFIX = "/api/watchlist-autobet";
+const MAX_HTTP_BODY_BYTES = 32 * 1024;
+const HTTP_BOARD_CACHE_MS = 4_000;
+/** Signals derivation is one CLI spawn per key; cache it briefly to absorb UI re-renders. */
+const HTTP_SIGNALS_CACHE_MS = 4_000;
+/** Bound the signals cache; each entry is one derived snapshot. */
+const HTTP_SIGNALS_CACHE_MAX_KEYS = 8;
+/** CLI contract bounds for `signals` (see the command's --help). */
+const HTTP_SIGNALS_DEFAULT_LIMIT = 50;
+const HTTP_SIGNALS_MAX_LIMIT = 200;
+const HTTP_SIGNALS_MAX_MIN_CONFIDENCE = 100;
+/** Journal event type → the operator decision it records (the UI's decision feed). */
+const HTTP_DECISION_ACTIONS = Object.freeze({
+  intent_approved: "approve",
+  intent_rejected: "reject",
+  intent_filled: "execute",
+  intent_settled: "settle",
+  intent_expired: "expire",
+});
+
+/**
+ * Parse and validate the `/signals` query string before any spawn. The query is the only
+ * caller-controlled input on that route; every value is bounded here so the CLI receives a
+ * closed flag set. Unknown parameters are ignored (forward-compatible), not forwarded.
+ *
+ * @param {unknown} rawUrl the request URL (path + query)
+ * @returns {{ ok: true, value: { includeRejected: boolean, limit: number, minConfidence: number | undefined } } | { ok: false, message: string }}
+ */
+function readSignalsQuery(rawUrl) {
+  let params;
+  try {
+    params = new URL(String(rawUrl ?? "/"), "http://carrier.invalid")
+      .searchParams;
+  } catch {
+    return { ok: false, message: "the request URL could not be parsed" };
+  }
+  const includeRaw = params.get("includeRejected");
+  let includeRejected = false;
+  if (includeRaw !== null) {
+    if (includeRaw === "true" || includeRaw === "1") includeRejected = true;
+    else if (includeRaw === "false" || includeRaw === "0")
+      includeRejected = false;
+    else {
+      return {
+        ok: false,
+        message: "includeRejected must be true, false, 1 or 0",
+      };
+    }
+  }
+  const limitRaw = params.get("limit");
+  let limit = HTTP_SIGNALS_DEFAULT_LIMIT;
+  if (limitRaw !== null) {
+    if (!/^\d+$/.test(limitRaw)) {
+      return {
+        ok: false,
+        message: `limit must be an integer 1-${HTTP_SIGNALS_MAX_LIMIT}`,
+      };
+    }
+    limit = Number(limitRaw);
+    if (limit < 1 || limit > HTTP_SIGNALS_MAX_LIMIT) {
+      return {
+        ok: false,
+        message: `limit must be an integer 1-${HTTP_SIGNALS_MAX_LIMIT}`,
+      };
+    }
+  }
+  const confidenceRaw = params.get("minConfidence");
+  let minConfidence;
+  if (confidenceRaw !== null) {
+    if (!/^\d+$/.test(confidenceRaw)) {
+      return {
+        ok: false,
+        message: `minConfidence must be an integer 0-${HTTP_SIGNALS_MAX_MIN_CONFIDENCE}`,
+      };
+    }
+    minConfidence = Number(confidenceRaw);
+    if (minConfidence > HTTP_SIGNALS_MAX_MIN_CONFIDENCE) {
+      return {
+        ok: false,
+        message: `minConfidence must be an integer 0-${HTTP_SIGNALS_MAX_MIN_CONFIDENCE}`,
+      };
+    }
+  }
+  return { ok: true, value: { includeRejected, limit, minConfidence } };
+}
 
 /**
  * Merge the row's config over the defaults, keeping only values of the right shape.
@@ -569,6 +665,101 @@ async function runProcess(bin, argv, options) {
 }
 
 /**
+ * Write one JSON HTTP response without throwing.
+ *
+ * @param {import("node:http").ServerResponse} res
+ * @param {number} status
+ * @param {Record<string, unknown>} body
+ */
+function sendJson(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("x-content-type-options", "nosniff");
+  res.end(payload);
+}
+
+/**
+ * Read one bounded JSON object from a Node request body, without throwing.
+ *
+ * @param {import("node:http").IncomingMessage} req
+ * @returns {Promise<{ ok: true, value: Record<string, unknown> } | { ok: false, status: number, message: string }>}
+ */
+async function readHttpJsonBody(req) {
+  const contentType = String(req.headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.startsWith("application/json")) {
+    // The frozen control-plane contract collapses malformed requests to 400 invalid_body;
+    // the action handler keeps the specific reason in the message.
+    return {
+      ok: false,
+      status: 400,
+      message: "content-type must be application/json",
+    };
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_HTTP_BODY_BYTES) {
+      return {
+        ok: false,
+        status: 400,
+        message: `request body exceeds ${MAX_HTTP_BODY_BYTES} bytes`,
+      };
+    }
+    chunks.push(chunk);
+  }
+  const parsed = parseJson(Buffer.concat(chunks).toString("utf8"));
+  if (!parsed.ok || !isPlainObjectValue(parsed.value)) {
+    return {
+      ok: false,
+      status: 400,
+      message: "request body must be one JSON object",
+    };
+  }
+  return { ok: true, value: parsed.value };
+}
+
+/**
+ * Human-readable market label for the operator UI, derived only from intent fields the
+ * engine already recorded. It is a projection, never a new market interpretation.
+ *
+ * @param {Record<string, unknown>} intent
+ * @returns {string}
+ */
+function buildIntentMarketLabel(intent) {
+  if (!isPlainObjectValue(intent)) return "";
+  const parts = [];
+  if (typeof intent.league === "string" && intent.league !== "") {
+    parts.push(intent.league);
+  }
+  if (Array.isArray(intent.teams) && intent.teams.length > 0) {
+    parts.push(intent.teams.join(" vs "));
+  }
+  if (typeof intent.marketKind === "string" && intent.marketKind !== "") {
+    parts.push(intent.marketKind.replaceAll("_", " "));
+  }
+  if (typeof intent.line === "number") parts.push(String(intent.line));
+  const side = intent.overUnder ?? intent.sideTeam ?? null;
+  if (typeof side === "string" && side !== "") parts.push(side);
+  return parts.join(" · ");
+}
+
+/**
+ * The one primary action an operator can take next, mirroring the CLI transition rules.
+ *
+ * @param {unknown} status
+ * @returns {"approve" | "execute" | "settle" | null}
+ */
+function nextActionForStatus(status) {
+  if (status === "queued") return "approve";
+  if (status === "approved") return "execute";
+  if (status === "filled") return "settle";
+  return null;
+}
+
+/**
  * @param {{ tools: { register: (definition: object) => () => void } }} ctx
  *   Host context; only the `tools` service is injected, so no other service is touched.
  * @param {unknown} config the bundle row's config (normalized above)
@@ -742,6 +933,617 @@ export function apply(ctx, config) {
       command,
       exitCode: result.exitCode,
       result,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Control-plane HTTP API (the operator UI half of this bundle)
+  //
+  // Three same-origin routes are served by the Harness browser carrier when it exists; a
+  // headless profile keeps the tools and simply has no UI routes. All three delegate to
+  // the same CLI as the tools, so the engine, gates, ledger and money math have exactly
+  // one implementation. Mutations are confirm-gated and CSRF-guarded; execute is hard-coded
+  // to the paper venue and no route can place a live bet.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Raw CLI JSON for HTTP. A transport failure is `{ ok:false, reason, message }`; a CLI
+   * answer (success OR refusal) is `{ ok:true, body }` so the UI can render the CLI error
+   * code instead of losing it.
+   *
+   * @param {string[]} commandArgv
+   * @returns {Promise<{ ok: true, body: Record<string, unknown> } | { ok: false, reason: string, message: string, exitCode?: number | null, stderr?: string }>}
+   */
+  async function runCliJson(commandArgv) {
+    const command = String(commandArgv[0] ?? "unknown");
+    if (!existsSync(cliAbsolutePath)) {
+      return {
+        ok: false,
+        reason: "cli_missing",
+        message: `The watchlist autobet CLI was not found at ${cliAbsolutePath}. Nothing was executed.`,
+      };
+    }
+    const argv = [
+      "run",
+      CLI_RELATIVE_PATH,
+      ...commandArgv,
+      "--json",
+      "--root",
+      repoPath,
+      "--config",
+      settings.configPath,
+    ];
+    const result = await runProcess(resolveBun(settings.bunPath), argv, {
+      cwd: repoPath,
+      timeoutMs: settings.timeoutMs,
+    });
+    if (result.spawnError !== null) {
+      return {
+        ok: false,
+        reason: "cli_missing",
+        message: `Could not start bun (${result.spawnError}). Nothing was executed.`,
+      };
+    }
+    if (result.timedOut) {
+      return {
+        ok: false,
+        reason: "cli_timeout",
+        message: `The CLI did not finish within ${settings.timeoutMs} ms and was stopped.`,
+      };
+    }
+    const parsed = parseJson(result.stdout);
+    if (!parsed.ok || !isPlainObjectValue(parsed.value)) {
+      return {
+        ok: false,
+        reason: "cli_unparseable",
+        message: `${command}: the CLI stdout was not a JSON object (exit ${result.exitCode}).`,
+        exitCode: result.exitCode,
+        stderr: excerpt(result.stderr),
+      };
+    }
+    return { ok: true, body: parsed.value };
+  }
+
+  /** Board cache: a board is four CLI reads; the UI polls every 20 s. */
+  let boardCacheAt = 0;
+  /** @type {Record<string, unknown> | null} */
+  let boardCacheValue = null;
+  /** Signals cache keyed by the full validated query; insertion order is the eviction order. */
+  /** @type {Map<string, { at: number, value: Record<string, unknown> }>} */
+  const signalsCache = new Map();
+
+  /**
+   * Compose the operator board: safety, config, source freshness, ledger counts, intents
+   * with UI derivations, paper summary, the current plan (what would queue) and the recent
+   * decision feed. Four read-only CLI calls; no mutation.
+   */
+  async function readBoard(force = false) {
+    const nowMs = Date.now();
+    if (
+      !force &&
+      boardCacheValue !== null &&
+      nowMs - boardCacheAt < HTTP_BOARD_CACHE_MS
+    ) {
+      return { ok: true, value: boardCacheValue };
+    }
+    const [status, list, journal, plan] = await Promise.all([
+      runCliJson(["status"]),
+      runCliJson(["list", "--limit", "500"]),
+      runCliJson(["journal", "--limit", "500"]),
+      runCliJson(["plan"]),
+    ]);
+    const parts = { status, list, journal, plan };
+    for (const [name, part] of Object.entries(parts)) {
+      if (!part.ok) {
+        return {
+          ok: false,
+          reason: part.reason,
+          message: `${name}: ${part.message}`,
+        };
+      }
+      if (part.body.success !== true) {
+        const error = isPlainObjectValue(part.body.error)
+          ? part.body.error
+          : {};
+        return {
+          ok: false,
+          reason:
+            typeof error.code === "string" && error.code !== ""
+              ? error.code
+              : "cli_failed",
+          message:
+            typeof error.message === "string" && error.message !== ""
+              ? `${name}: ${error.message}`
+              : `${name}: the CLI reported failure.`,
+        };
+      }
+    }
+    const now = new Date();
+    const rawIntents = Array.isArray(list.body.intents)
+      ? list.body.intents
+      : [];
+    const intents = rawIntents.map((intent) => {
+      const expiresAtMs =
+        typeof intent.expiresAt === "string"
+          ? Date.parse(intent.expiresAt)
+          : Number.NaN;
+      return {
+        ...intent,
+        marketLabel: buildIntentMarketLabel(intent),
+        expiresInMinutes: Number.isFinite(expiresAtMs)
+          ? Math.round((expiresAtMs - now.getTime()) / 60_000)
+          : null,
+        nextAction: nextActionForStatus(intent.status),
+      };
+    });
+    const byId = new Map(intents.map((intent) => [intent.intentId, intent]));
+    const rawEvents = Array.isArray(journal.body.events)
+      ? journal.body.events
+      : [];
+    const decisions = rawEvents
+      .filter(
+        (event) =>
+          typeof event.type === "string" &&
+          HTTP_DECISION_ACTIONS[event.type] !== undefined,
+      )
+      .map((event) => {
+        const intent = byId.get(event.intentId) ?? null;
+        const data = isPlainObjectValue(event.data) ? event.data : {};
+        return {
+          intentId: event.intentId,
+          signalId: intent === null ? null : intent.signalId,
+          marketLabel: intent === null ? null : intent.marketLabel,
+          type: event.type,
+          action: HTTP_DECISION_ACTIONS[event.type],
+          actor: event.actor,
+          at: event.at,
+          note: typeof data.note === "string" ? data.note : null,
+          reason: typeof data.reason === "string" ? data.reason : null,
+          stakeUsd: intent === null ? null : intent.stakeUsd,
+          status: intent === null ? null : intent.status,
+        };
+      })
+      .reverse();
+    const value = {
+      ok: true,
+      schemaVersion: 1,
+      generatedAt: now.toISOString(),
+      safety: status.body.safety,
+      config: status.body.config,
+      sources: status.body.sources,
+      ledger: status.body.ledger,
+      counts: list.body.counts,
+      intents,
+      summary: journal.body.summary,
+      plan: plan.body,
+      decisions,
+    };
+    boardCacheAt = Date.now();
+    boardCacheValue = value;
+    return { ok: true, value };
+  }
+
+  /**
+   * Derive the watchlist signals for the operator inspector. One read-only CLI call per
+   * (includeRejected, limit, minConfidence) key, cached for a moment because the browser may
+   * activate the tab or refresh in quick succession. The cache is keyed, never global: a
+   * different query can never receive another query's payload.
+   *
+   * @param {{ includeRejected: boolean, limit: number, minConfidence: number | undefined }} query
+   * @param {boolean} [force]
+   * @returns {Promise<{ ok: true, value: Record<string, unknown> } | { ok: false, reason: string, message: string }>}
+   */
+  async function readSignals(query, force = false) {
+    const cacheKey = `${query.includeRejected ? "1" : "0"}|${query.limit}|${query.minConfidence ?? ""}`;
+    const nowMs = Date.now();
+    const cached = signalsCache.get(cacheKey);
+    if (
+      !force &&
+      cached !== undefined &&
+      nowMs - cached.at < HTTP_SIGNALS_CACHE_MS
+    ) {
+      return { ok: true, value: cached.value };
+    }
+    const argv = ["signals", "--limit", String(query.limit)];
+    if (query.includeRejected) argv.push("--include-rejected");
+    if (query.minConfidence !== undefined) {
+      argv.push("--min-confidence", String(query.minConfidence));
+    }
+    const cli = await runCliJson(argv);
+    if (!cli.ok) {
+      return { ok: false, reason: cli.reason, message: cli.message };
+    }
+    if (cli.body.success !== true) {
+      const error = isPlainObjectValue(cli.body.error) ? cli.body.error : {};
+      return {
+        ok: false,
+        reason:
+          typeof error.code === "string" && error.code !== ""
+            ? error.code
+            : "cli_failed",
+        message:
+          typeof error.message === "string" && error.message !== ""
+            ? `signals: ${error.message}`
+            : "signals: the CLI reported failure.",
+      };
+    }
+    // Keep the CLI contract shape and add the envelope marker the other control-plane
+    // answers use; the UI reads `ok` before trusting the payload.
+    const value = { ...cli.body, ok: true };
+    if (signalsCache.size >= HTTP_SIGNALS_CACHE_MAX_KEYS) {
+      const oldestKey = signalsCache.keys().next().value;
+      if (oldestKey !== undefined) signalsCache.delete(oldestKey);
+    }
+    signalsCache.set(cacheKey, { at: nowMs, value });
+    return { ok: true, value };
+  }
+
+  /** Closed action set the operator UI may post. */
+  const HTTP_ACTIONS = Object.freeze([
+    "enqueue",
+    "approve",
+    "reject",
+    "execute",
+    "settle",
+  ]);
+
+  /**
+   * Validate one action body and run the matching CLI command. Every branch maps to an
+   * argv array of literal flags and validated values — never a shell string. Approve and
+   * reject require an explicit operator name; execute is pinned to the paper venue.
+   */
+  async function performHttpAction(body) {
+    if (!isPlainObjectValue(body)) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          reason: "invalid_body",
+          message: "request body must be a JSON object",
+        },
+      };
+    }
+    const action = typeof body.action === "string" ? body.action : "";
+    if (!HTTP_ACTIONS.includes(action)) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          reason: "invalid_action",
+          message: `action must be one of: ${HTTP_ACTIONS.join(", ")}`,
+        },
+      };
+    }
+    if (body.confirm !== true) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          reason: "confirmation_required",
+          message:
+            "re-run with confirm: true; the control plane never mutates on a poll or a bare request",
+        },
+      };
+    }
+    const actorResult = readActor({
+      actor: typeof body.actor === "string" ? body.actor : undefined,
+    });
+    if (!actorResult.ok) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          reason: "invalid_arguments",
+          message: actorResult.message,
+        },
+      };
+    }
+    const actorProvided =
+      typeof body.actor === "string" && body.actor.trim() !== "";
+    if ((action === "approve" || action === "reject") && !actorProvided) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          reason: "actor_required",
+          message:
+            "approve/reject are human decisions: send the operator name as `actor`",
+        },
+      };
+    }
+    const actor = actorProvided ? actorResult.value : "operator";
+
+    /** @type {string[]} */
+    let argv;
+    if (action === "enqueue") {
+      argv = ["enqueue", "--actor", actor];
+    } else {
+      const intentResult = readIntentId({ intentId: body.intentId });
+      if (!intentResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: intentResult.message,
+          },
+        };
+      }
+      const intentId = intentResult.value;
+      if (action === "approve") {
+        const noteResult = readFreeText({ note: body.note }, "note");
+        if (!noteResult.ok) {
+          return {
+            status: 400,
+            body: {
+              ok: false,
+              reason: "invalid_arguments",
+              message: noteResult.message,
+            },
+          };
+        }
+        argv = ["approve", intentId, "--actor", actor];
+        if (noteResult.present) argv.push("--note", noteResult.value);
+      } else if (action === "reject") {
+        const reasonResult = readFreeText({ reason: body.reason }, "reason");
+        if (!reasonResult.ok) {
+          return {
+            status: 400,
+            body: {
+              ok: false,
+              reason: "invalid_arguments",
+              message: reasonResult.message,
+            },
+          };
+        }
+        if (!reasonResult.present) {
+          return {
+            status: 400,
+            body: {
+              ok: false,
+              reason: "invalid_arguments",
+              message: "reject requires a non-empty reason",
+            },
+          };
+        }
+        argv = [
+          "reject",
+          intentId,
+          "--actor",
+          actor,
+          "--reason",
+          reasonResult.value,
+        ];
+      } else if (action === "execute") {
+        // The venue is not caller-controlled: paper is the only adapter in v1.
+        argv = ["execute", intentId, "--venue", "paper"];
+      } else {
+        const resultResult = readEnum(
+          { result: body.result },
+          "result",
+          SETTLE_RESULTS,
+        );
+        if (!resultResult.ok) {
+          return {
+            status: 400,
+            body: {
+              ok: false,
+              reason: "invalid_arguments",
+              message: resultResult.message,
+            },
+          };
+        }
+        if (!resultResult.present) {
+          return {
+            status: 400,
+            body: {
+              ok: false,
+              reason: "invalid_arguments",
+              message: "settle requires result: won, lost or void",
+            },
+          };
+        }
+        argv = ["settle", intentId, "--result", resultResult.value];
+      }
+    }
+
+    const cli = await runCliJson(argv);
+    if (!cli.ok) {
+      return {
+        status: 502,
+        body: { ok: false, reason: cli.reason, message: cli.message },
+      };
+    }
+    const refreshed = await readBoard(true);
+    const answer = {
+      ok: cli.body.success === true,
+      action,
+      actor,
+      actedAt: new Date().toISOString(),
+      cli: cli.body,
+    };
+    if (refreshed.ok) {
+      answer.board = refreshed.value;
+    } else {
+      answer.boardError = {
+        reason: refreshed.reason,
+        message: refreshed.message,
+      };
+    }
+    return { status: 200, body: answer };
+  }
+
+  // The browser carrier is optional: when this bundle is loaded in a headless profile the
+  // tools still work and there is simply no operator UI to serve. The guard also keeps the
+  // dependency-free loader harness (and any non-Cordis test double) working.
+  if (typeof ctx.inject === "function") {
+    ctx.inject(["webServer"], (serverCtx) => {
+      const webServer = serverCtx.webServer;
+      let origin = null;
+      try {
+        origin = webServer.getOrigin();
+      } catch {
+        origin = null;
+      }
+      const csrfToken = randomUUID();
+      /** GETs may omit Origin (same-origin fetch/curl); a present Origin must match. */
+      const readOriginAllowed = (req) => {
+        const requestOrigin =
+          typeof req.headers.origin === "string" ? req.headers.origin : null;
+        if (origin === null) return requestOrigin === null;
+        return requestOrigin === null || requestOrigin === origin;
+      };
+      const boardRoute = webServer.register({
+        kind: "exact",
+        path: `${HTTP_PREFIX}/board`,
+        handler: async (req, res) => {
+          if (req.method !== "GET") {
+            sendJson(res, 405, {
+              ok: false,
+              reason: "method_not_allowed",
+              message: "GET only",
+            });
+            return;
+          }
+          if (!readOriginAllowed(req)) {
+            sendJson(res, 403, {
+              ok: false,
+              reason: "origin_refused",
+              message: "cross-origin request refused",
+            });
+            return;
+          }
+          try {
+            const board = await readBoard(false);
+            if (!board.ok) {
+              sendJson(res, 502, {
+                ok: false,
+                reason: board.reason,
+                message: board.message,
+              });
+              return;
+            }
+            sendJson(res, 200, { ...board.value, csrfToken });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: "internal_error",
+              message: String(error?.message ?? error),
+            });
+          }
+        },
+      });
+      const actionRoute = webServer.register({
+        kind: "exact",
+        path: `${HTTP_PREFIX}/action`,
+        handler: async (req, res) => {
+          if (req.method !== "POST") {
+            sendJson(res, 405, {
+              ok: false,
+              reason: "method_not_allowed",
+              message: "POST only",
+            });
+            return;
+          }
+          // Mutations require the exact same origin the carrier advertises: a cross-site
+          // page cannot drive the paper ledger, and a no-Origin local client cannot approve.
+          if (origin === null || req.headers.origin !== origin) {
+            sendJson(res, 403, {
+              ok: false,
+              reason: "origin_refused",
+              message: "mutations require the same-origin control-plane UI",
+            });
+            return;
+          }
+          if (req.headers["x-autobet-csrf"] !== csrfToken) {
+            sendJson(res, 403, {
+              ok: false,
+              reason: "csrf_refused",
+              message: "missing or stale CSRF token; reload the control plane",
+            });
+            return;
+          }
+          try {
+            const read = await readHttpJsonBody(req);
+            if (!read.ok) {
+              sendJson(res, read.status, {
+                ok: false,
+                reason: "invalid_body",
+                message: read.message,
+              });
+              return;
+            }
+            const outcome = await performHttpAction(read.value);
+            // The refreshed board is composed without the per-activation token (the GET
+            // route adds it); re-attach it so an action answer is a drop-in board snapshot.
+            const responseBody =
+              isPlainObjectValue(outcome.body) &&
+              isPlainObjectValue(outcome.body.board)
+                ? {
+                    ...outcome.body,
+                    board: { ...outcome.body.board, csrfToken },
+                  }
+                : outcome.body;
+            sendJson(res, outcome.status, responseBody);
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: "internal_error",
+              message: String(error?.message ?? error),
+            });
+          }
+        },
+      });
+      const signalsRoute = webServer.register({
+        kind: "exact",
+        path: `${HTTP_PREFIX}/signals`,
+        handler: async (req, res) => {
+          if (req.method !== "GET") {
+            sendJson(res, 405, {
+              ok: false,
+              reason: "method_not_allowed",
+              message: "GET only",
+            });
+            return;
+          }
+          if (!readOriginAllowed(req)) {
+            sendJson(res, 403, {
+              ok: false,
+              reason: "origin_refused",
+              message: "cross-origin request refused",
+            });
+            return;
+          }
+          const query = readSignalsQuery(req.url);
+          if (!query.ok) {
+            sendJson(res, 400, {
+              ok: false,
+              reason: "invalid_arguments",
+              message: query.message,
+            });
+            return;
+          }
+          try {
+            const signals = await readSignals(query.value);
+            if (!signals.ok) {
+              sendJson(res, 502, {
+                ok: false,
+                reason: signals.reason,
+                message: signals.message,
+              });
+              return;
+            }
+            sendJson(res, 200, signals.value);
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: "internal_error",
+              message: String(error?.message ?? error),
+            });
+          }
+        },
+      });
+      disposers.push(boardRoute, actionRoute, signalsRoute);
     });
   }
 

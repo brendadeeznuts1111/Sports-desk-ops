@@ -492,13 +492,150 @@ function rowProvenance(
 ): RowProvenance {
   const asOf = recordedAsOf ?? fallbackAsOf;
   const age = ageSeconds(asOf, now);
+  // A bet cannot be accepted after it was read. A clock that lands in the future is a
+  // broken/unknown clock, never evidence of freshness, so it is refused as stale.
+  const recordedMs = asOf === null ? Number.NaN : Date.parse(asOf);
+  const future =
+    Number.isFinite(recordedMs) &&
+    recordedMs - now.getTime() > FUTURE_TOLERANCE_SECONDS * 1_000;
   return {
     source,
     fixture: options.fixture,
     asOf,
     dataMode: options.dataMode,
-    stale: age !== null && age > staleAfterSeconds,
+    stale: future || (age !== null && age > staleAfterSeconds),
   };
+}
+
+/** How far ahead of "now" a portal timestamp may sit before the clock is treated as wrong. */
+const FUTURE_TOLERANCE_SECONDS = 120;
+
+/** The portal's wall-clock zone. Evidence (2026-11-04): live-captured rows land 3.7 min
+ * before the measurement instant only when read as America/New_York — UTC is ~5 h early
+ * and the desk's own Central clock is ~56 min in the future — so the portal writes Eastern. */
+const PORTAL_TIME_ZONE = "America/New_York";
+
+/** Offset of `timeZone` from UTC at the instant whose *wall clock* is `wallMs` (two-pass for DST). */
+function zoneOffsetMs(timeZone: string, wallMs: number): number {
+  return offsetAt(timeZone, wallMs - offsetAt(timeZone, wallMs));
+}
+
+function offsetAt(timeZone: string, instantMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(instantMs));
+  const part = (type: string): number => {
+    const value = parts.find((entry) => entry.type === type)?.value;
+    return value === undefined ? Number.NaN : Number(value);
+  };
+  const asUtc = Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+  return asUtc - instantMs;
+}
+
+/**
+ * Portal wall-clock → ISO in the portal's zone. `getBetTicker` `InsertDateTime` and
+ * `Report/Pending` `acceptedAt` carry no zone. Reading them as host-local (what `Date.parse`
+ * does) put the desk's own Central offset on an Eastern clock, i.e. ~56 min *in the future*
+ * for a just-captured row; that made old activity look indefinitely fresh. The point is the
+ * clock the portal wrote — when the bet was placed — not the moment this capture re-read a
+ * frozen page, so a capture that keeps returning the same tickets cannot read as fresh.
+ */
+function portalClockIso(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text === "") return null;
+  // An explicit zone is already an instant; let Date.parse own it.
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  }
+  const wall =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(
+      text,
+    );
+  if (wall === null) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  }
+  const [, year, month, day, hour, minute, second = "00", fraction = "0"] =
+    wall;
+  const wallMs = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(fraction.padEnd(3, "0")),
+  );
+  return new Date(
+    wallMs - zoneOffsetMs(PORTAL_TIME_ZONE, wallMs),
+  ).toISOString();
+}
+
+/** Candidate logins come from the same fields as signal logins; trailing dots are noise. */
+function candidateLogin(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\.+$/, "");
+}
+
+/** `AgentID` is a string on the ticker; `Report/Pending` carries an `{ id, key }` object. */
+function agentIdFrom(value: unknown): string | null {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value.trim().toUpperCase();
+  }
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    for (const key of ["id", "key", "agentId"]) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim() !== "") {
+        return candidate.trim().toUpperCase();
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * One parsed-but-unwatched observation. The signal engine deliberately ignores logins
+ * that are not on the watchlist rather than attributing them to someone else; this is the
+ * advisory trail those rows leave so a genuinely new account is visible instead of silent.
+ */
+export interface WatchlistCandidateObservation {
+  readonly login: string;
+  readonly agentId: string | null;
+  readonly riskUsd: number;
+  readonly source: string;
+  readonly betAt: string | null;
+  readonly parsed: ParsedMarket | null;
+}
+
+type CandidateSink = (observation: WatchlistCandidateObservation) => void;
+
+/** A login seen in the captures that the watchlist registry does not cover. */
+export interface WatchlistCandidate {
+  readonly login: string;
+  readonly agentId: string | null;
+  readonly riskUsd: number;
+  readonly wagers: number;
+  readonly sources: readonly string[];
+  readonly leagues: readonly League[];
+  readonly lastBetAt: string | null;
+  readonly ageSeconds: number | null;
+  readonly sampleMarkets: readonly string[];
 }
 
 export interface WatchlistSignalInputs {
@@ -515,6 +652,7 @@ function rowsFromFeed(
   feed: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
   now: Date,
+  onCandidate?: CandidateSink,
 ): SignalRow[] {
   if (typeof feed !== "object" || feed === null) return [];
   const record = feed as Record<string, unknown>;
@@ -546,18 +684,29 @@ function rowsFromFeed(
     const login = String(row["f402CustomerId"] ?? "")
       .trim()
       .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
-    const canonical = String(row["canonicalMarket"] ?? "");
-    const parsed = parseCanonicalMarket(canonical);
-    if (parsed === null) continue;
+    if (login === "") continue;
+    const parsed = parseCanonicalMarket(String(row["canonicalMarket"] ?? ""));
     const risk = Number(row["riskUsd"]);
+    const riskUsd = Number.isFinite(risk) ? Math.max(0, risk) : 0;
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["agentOwner"]),
+        riskUsd,
+        source: "docs/graph-live-feed.json",
+        betAt: portalClockIso(row["placedAtUtc"]),
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
       agentId: String(row["agentOwner"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(risk) ? Math.max(0, risk) : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(row["oddsAmerican"]),
       parsed,
       provenance: rowProvenance(
@@ -578,6 +727,7 @@ function rowsFromWagers(
   registry: Map<string, WatchlistUnifiedEntry>,
   fallbackAsOf: string | null,
   now: Date,
+  onCandidate?: CandidateSink,
 ): SignalRow[] {
   if (typeof wagers !== "object" || wagers === null) return [];
   const record = wagers as Record<string, unknown>;
@@ -588,6 +738,9 @@ function rowsFromWagers(
       : [];
   const observedAt =
     typeof record["observedAt"] === "string" ? record["observedAt"] : null;
+  const fixture =
+    typeof record["source"] === "string" &&
+    record["source"].includes("fixture");
   const rows: SignalRow[] = [];
   for (const raw of list) {
     if (typeof raw !== "object" || raw === null) continue;
@@ -595,35 +748,45 @@ function rowsFromWagers(
     const login = String(row["Login"] ?? row["CustomerID"] ?? "")
       .trim()
       .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
+    if (login === "") continue;
     const parsed = parseWagerShortDesc(String(row["ShortDesc"] ?? ""));
-    if (parsed === null) continue;
     const wageredCents = Number(row["AmountWagered"]);
+    const riskUsd = Number.isFinite(wageredCents)
+      ? Math.max(0, wageredCents / 100)
+      : 0;
+    // The bet's own clock, not the capture's: a re-read of the same ticker rows can be
+    // seconds old while the wagers themselves are days old.
+    const betAt = portalClockIso(row["InsertDateTime"]);
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["AgentID"]),
+        riskUsd,
+        source: "data/live-wagers.json",
+        betAt,
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
       agentId: String(row["AgentID"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(wageredCents)
-        ? Math.max(0, wageredCents / 100)
-        : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(
         /([+-]\d{3,4})\b/.exec(String(row["ShortDesc"] ?? ""))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
         "data/live-wagers.json",
-        observedAt,
+        betAt ?? observedAt,
         fallbackAsOf,
         CAPTURE_STALE_SECONDS,
         now,
-        {
-          fixture:
-            typeof record["source"] === "string" &&
-            record["source"].includes("fixture"),
-          dataMode: null,
-        },
+        { fixture, dataMode: null },
       ),
     });
   }
@@ -634,6 +797,7 @@ function rowsFromLiveBets(
   liveBets: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
   now: Date,
+  onCandidate?: CandidateSink,
 ): SignalRow[] {
   if (typeof liveBets !== "object" || liveBets === null) return [];
   const record = liveBets as Record<string, unknown>;
@@ -649,26 +813,39 @@ function rowsFromLiveBets(
     const login = String(row["customerID"] ?? "")
       .trim()
       .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
+    if (login === "") continue;
     const parsed = parseLiveBetsGame(raw);
-    if (parsed === null) continue;
     const wageredCents = Number(row["wagered"]);
+    const riskUsd = Number.isFinite(wageredCents)
+      ? Math.max(0, wageredCents / 100)
+      : 0;
+    const betAt = portalClockIso(row["acceptedAt"]);
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["agent"]),
+        riskUsd,
+        source: "data/live-bets.json",
+        betAt,
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
       agentId: entry.agentId,
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(wageredCents)
-        ? Math.max(0, wageredCents / 100)
-        : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(
         /([+-]\d{3,4})\b/.exec(String(row["description"] ?? ""))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
         "data/live-bets.json",
-        capturedAt,
+        betAt ?? capturedAt,
         null,
         CAPTURE_STALE_SECONDS,
         now,
@@ -827,6 +1004,107 @@ export function deriveWatchlistSignals(
     ...rowsFromLiveBets(inputs.liveBets, registry, now),
   ];
   return aggregateWatchlistSignals(rows, now);
+}
+
+export interface CollectWatchlistCandidatesOptions {
+  readonly now?: Date;
+  readonly registry?: readonly WatchlistUnifiedEntry[];
+  /** Max candidates returned after ranking (default: all). */
+  readonly limit?: number;
+  /** Drop accounts whose summed risk is below this USD amount (default 0). */
+  readonly minRiskUsd?: number;
+  /** Max sample markets kept per candidate (default 3). */
+  readonly sampleLimit?: number;
+}
+
+/**
+ * Advisory discovery pass: every login in the three captures that the registry does not
+ * watch, ranked by the risk the captures show. This never gates and never writes — the
+ * signal engine still ignores these rows for derivation; the operator decides whether an
+ * account is promoted onto the watchlist.
+ */
+export function collectWatchlistCandidates(
+  inputs: WatchlistSignalInputs,
+  options: CollectWatchlistCandidatesOptions = {},
+): WatchlistCandidate[] {
+  const now = options.now ?? new Date();
+  const registry = registryLookup(
+    options.registry ?? getUnifiedWatchlistRegistry(),
+  );
+  const sampleLimit = Math.max(0, options.sampleLimit ?? 3);
+  const byLogin = new Map<
+    string,
+    {
+      login: string;
+      agentId: string | null;
+      riskUsd: number;
+      wagers: number;
+      sources: Set<string>;
+      leagues: Set<League>;
+      lastBetAt: string | null;
+      markets: Set<string>;
+    }
+  >();
+
+  const sink: CandidateSink = (observation) => {
+    if (observation.login === "") return;
+    const entry = byLogin.get(observation.login) ?? {
+      login: observation.login,
+      agentId: null as string | null,
+      riskUsd: 0,
+      wagers: 0,
+      sources: new Set<string>(),
+      leagues: new Set<League>(),
+      lastBetAt: null as string | null,
+      markets: new Set<string>(),
+    };
+    entry.riskUsd += Math.max(0, observation.riskUsd);
+    entry.wagers += 1;
+    entry.sources.add(observation.source);
+    if (entry.agentId === null && observation.agentId !== null) {
+      entry.agentId = observation.agentId;
+    }
+    if (observation.parsed !== null) {
+      entry.leagues.add(observation.parsed.league);
+      if (entry.markets.size < sampleLimit) {
+        entry.markets.add(observation.parsed.raw.slice(0, 96));
+      }
+    }
+    if (
+      observation.betAt !== null &&
+      (entry.lastBetAt === null || observation.betAt > entry.lastBetAt)
+    ) {
+      entry.lastBetAt = observation.betAt;
+    }
+    byLogin.set(observation.login, entry);
+  };
+
+  rowsFromFeed(inputs.feed, registry, now, sink);
+  rowsFromWagers(inputs.wagers, registry, inputs.wagersAsOf ?? null, now, sink);
+  rowsFromLiveBets(inputs.liveBets, registry, now, sink);
+
+  const minRiskUsd = Math.max(0, options.minRiskUsd ?? 0);
+  const ranked = [...byLogin.values()]
+    .filter((candidate) => candidate.riskUsd >= minRiskUsd)
+    .map<WatchlistCandidate>((candidate) => ({
+      login: candidate.login,
+      agentId: candidate.agentId,
+      riskUsd: Math.round(candidate.riskUsd * 100) / 100,
+      wagers: candidate.wagers,
+      sources: [...candidate.sources].sort(),
+      leagues: [...candidate.leagues].sort(),
+      lastBetAt: candidate.lastBetAt,
+      ageSeconds: ageSeconds(candidate.lastBetAt, now),
+      sampleMarkets: [...candidate.markets],
+    }))
+    .sort(
+      (a, b) =>
+        b.riskUsd - a.riskUsd ||
+        b.wagers - a.wagers ||
+        a.login.localeCompare(b.login),
+    );
+  const limit = options.limit;
+  return limit === undefined ? ranked : ranked.slice(0, Math.max(0, limit));
 }
 
 /* -------------------------------------------------------------------------- */
