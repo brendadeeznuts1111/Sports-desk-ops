@@ -288,6 +288,8 @@ export function extractBetLogAuditTargets(
     if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
       reasons.push("ODDS_DRIFT");
     const acceptSeconds = Number(row.acceptTime);
+    const delaySec = Number(row.delay);
+    const logSeconds = Number(row.logTime);
     if (
       Number.isFinite(acceptSeconds) &&
       Number.isFinite(delaySec) &&
@@ -317,7 +319,8 @@ export function extractBetLogAuditTargets(
     const eventId = String(row.eID ?? "");
     const eventLog = eventLogs?.get(eventId);
     if (snapshot !== null && eventLog !== undefined) {
-      const logEpochMs = Number.isFinite(logSeconds) ? logSeconds * 1000 : NaN;
+      const logValue = Number(row.logTime);
+      const logEpochMs = Number.isFinite(logValue) ? logValue * 1000 : NaN;
       const ticks = parseEventLog(eventLog).filter(
         (tick) => tick.updateTimeMs <= logEpochMs,
       );
