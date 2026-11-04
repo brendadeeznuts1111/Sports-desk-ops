@@ -49,11 +49,16 @@ import {
   type PendingRow,
 } from "../lib/live_bets.ts";
 import {
+  publishLivePositionsToR2,
+  type LivePositionsR2PublishResult,
+} from "../lib/live_positions_r2_publisher.ts";
+import {
   betTickerFile,
   isTickerNoise,
   toLiveWager,
   type LiveWager,
 } from "../lib/live_wagers.ts";
+import { R2S3Client } from "../lib/r2_s3_client.ts";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
 import {
   loadDodCustomerLifetimeMap,
@@ -235,6 +240,10 @@ export interface LivePositionsPulseSummary {
     readonly liveBetsPath: string;
     readonly liveBetsCount: number;
     readonly captureHealthPath: string;
+    readonly r2Publish: {
+      readonly ok: boolean;
+      readonly summary: string;
+    };
   };
   readonly telegramDelivery: {
     readonly ok: boolean;
@@ -943,15 +952,42 @@ export async function runLivePositionsPulse(options?: {
       provenanceClass: "api",
     },
   ];
-  await writeCaptureHealth(
-    healthPath,
-    mergeCaptureHealth(
-      prevHealth,
-      newHealthRecords,
-      nowIso,
-      "f402-live-stream-bridge",
-    ),
+  const mergedHealth = mergeCaptureHealth(
+    prevHealth,
+    newHealthRecords,
+    nowIso,
+    "f402-live-stream-bridge",
   );
+  await writeCaptureHealth(healthPath, mergedHealth);
+
+  // 4. Mirror the three local KPI artifacts to R2 under `<prefix>/latest.json`. The sinks pull
+  //    their credentials from Bun.secrets (`r2` group); if the keychain has no R2 entry the publish
+  //    is a logged no-op so this unseeded laptops still run the local path. R2 errors never fail
+  //    the tick that already wrote to disk; `live-positions-cron.jsonl` records the outcome.
+  let r2Publish: LivePositionsR2PublishResult | { ok: false; summary: string } =
+    { ok: false, summary: "R2 publish: skipped (no credentials)" };
+  try {
+    const client = await R2S3Client.fromEnvOrSecrets();
+    if (client !== null) {
+      r2Publish = await publishLivePositionsToR2(client, {
+        liveWagersText,
+        liveBetsText,
+        captureHealthText: JSON.stringify(mergedHealth),
+        observedAtIso: nowIso,
+        schemaVersions: {
+          liveWagers: liveWagersPayload.schemaVersion,
+          liveBets: liveBetsArtifact.schemaVersion,
+          captureHealth: mergedHealth.schemaVersion ?? 1,
+        },
+      });
+    }
+  } catch (error) {
+    r2Publish = {
+      ok: false,
+      summary: `R2 publish: client-init failed (${error instanceof Error ? error.message : String(error)})`,
+    };
+  }
+  console.log(`[live-positions-cron] ${r2Publish.summary}`);
 
   const latestCountedWagers = parsedWagers
     .filter((x) => !isTickerNoise(x.wager))
@@ -1030,6 +1066,10 @@ export async function runLivePositionsPulse(options?: {
       liveBetsPath: "data/live-bets.json",
       liveBetsCount: liveBetsArtifact.pendingCount,
       captureHealthPath: CAPTURE_HEALTH_PATH,
+      r2Publish: {
+        ok: r2Publish.ok,
+        summary: r2Publish.summary,
+      },
     },
     telegramDelivery: {
       ok: true,
