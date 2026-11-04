@@ -23,6 +23,15 @@ Three outcomes, each with a different consequence:
 | **Body-trusting** | Server uses `agentID`/`agentOwner`/`customerID` from the body as the target/caller identity                                      | Any subordinate agent can act as a peer/superior; this outranks every client-side control in flight |
 | **Hybrid**        | Some endpoints validate, others do not                                                                                           | The matrix is the deliverable; per-endpoint allowlists required                                     |
 
+## Known-account check (2026-11-03) — no second unblock path
+
+The only live account appearing in this repository's evidence is **`BILLY666`, and it is a
+master**: the 2026-11-01 boot HAR posts `agentID=BILLY666&agentType=M&operation=getListAgenstByAgent&RRO=1&agentOwner=BILLY666`, and `.env.example` (`F402_AGENT_ID=BILLY666`) plus the CLI label it
+`MASTER: BILLY666`. A master session cannot serve as item 2's low-privilege account: it tests the
+wrong role and materially widens the authorization scope. **Provisioning a subordinate agent remains
+the first decision**; cached session material is not a substitute, because item 2 needs authorized
+tamper testing against a named test account, not a borrowed master session.
+
 ## Minimum viable test — the actual ask is six requests, not a full matrix
 
 One low-privilege subordinate-agent session and a proxy are enough to answer the question with
