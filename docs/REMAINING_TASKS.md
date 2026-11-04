@@ -182,17 +182,6 @@ so an id resolves without guessing which artifact it came from.
     `headersObserved: false`.
   - **Blocked by:** a local Chrome/Chromium binary (`BUN_CHROME_PATH`) to execute the single-op CDP re-capture.
 
-- [ ] **P0.4 Restore the gslive_report_columns `labelsFor` export (typecheck red on main)**
-  - **Ref:** `RT-GSLIVE-TYPECHECK`
-  - **Owner:** gslive workstream (@bw496915-cmyk)
-  - **Issue:** [#14](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/14)
-  - **Basis:** `[OBSERVED]` 2026-11-03, clean `origin/main` worktree, `bun run typecheck`:
-    `tests/gslive_report_columns.test.ts(4,3): error TS2305: Module '"../lib/gslive_report_columns.ts"'
-has no exported member 'labelsFor'` (753 files, that single error); introduced by `a102219`.
-  - **Fix:** re-export `labelsFor` from `lib/gslive_report_columns.ts`, or update the test import to the
-    replacement API.
-  - **Exit:** `bun run typecheck` green on `main`; the client/seam change merges only after this closes.
-
 ## P1 — coverage and data quality
 
 - [ ] **P1.6 Capture GSLive deep-link behaviour**
@@ -224,6 +213,9 @@ has no exported member 'labelsFor'` (753 files, that single error); introduced b
 
 ## Done (for context)
 
+- [x] `[OBSERVED]` Restore the gslive_report_columns `labelsFor` export (`RT-GSLIVE-TYPECHECK`, issue #14):
+      introduced by `a102219`, reproduced on a clean `origin/main` worktree; fixed on main by `5413ade`.
+      Full `bun run typecheck` is green (771 files) and the pre-push gate passed on `5413ade..820ed43`.
 - [x] `[CODE]` Untracked `gs-manager-cli.zip` deleted (`P2.1`, `RT-CLI-ZIP`): its extracted contents remain in
       `scratch/docs-audit/gs-manager-cli/` for local audit reference, and `bun run audit:archives` passes with zero warnings.
 - [x] `[OBSERVED]` Channel model: 955 live `getBetTicker` rows carry `TicketWriter` = Internet, ALERT,

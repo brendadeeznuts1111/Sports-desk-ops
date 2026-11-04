@@ -313,12 +313,14 @@ handler on a test page is blocked; a normal session produces no legitimate viola
 
 ## Merge preconditions
 
-- **CI is red on `main` for an external reason.** `tests/gslive_report_columns.test.ts` imports
-  `labelsFor`, which `lib/gslive_report_columns.ts` no longer exports (introduced by `a102219`).
-  Reproduced on a clean `origin/main` worktree with no local changes: 753 files, that single error.
-  Tracked as issue [#14](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/14), owner
-  **gslive workstream (@bw496915-cmyk)**; task `RT-GSLIVE-TYPECHECK` in `docs/REMAINING_TASKS.md`.
-  The client-seam change is typecheck-clean in a scoped check; merge after #14 closes.
+- **CI precondition resolved (was external red).** `tests/gslive_report_columns.test.ts` briefly
+  imported `labelsFor`, which `lib/gslive_report_columns.ts` no longer exported (introduced by
+  `a102219`). That was proved on a clean `origin/main` worktree (753 files, that single error) and
+  tracked as issue [#14](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/14), owner
+  **gslive workstream (@bw496915-cmyk)**, task `RT-GSLIVE-TYPECHECK` in `docs/REMAINING_TASKS.md`.
+  It was fixed on `main` by `5413ade`; full `bun run typecheck` is green (771 files), the pre-push
+  gate passed on `5413ade..820ed43`, and issue #14 is closed. No client/seam merge precondition
+  remains from this break.
 - **Authenticated bet-ticker probe (exit 0 + render selector).** The canary does not open until a
   logged-in profile produces exit 0; this environment has no credentials. Merge of the held
   `external-view` guard is conditioned on that, not on code review alone.
