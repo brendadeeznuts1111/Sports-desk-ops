@@ -85,6 +85,34 @@ async function probeCdp(): Promise<CapabilityDiagnostics["cdp"]> {
   }
 }
 
+/**
+ * Release a PTY-backed child completely: close the terminal master (`/dev/ptmx` fd), signal the
+ * child only while it is still running, and reap it before the next probe. A probe that only kills
+ * the child leaves the PTY master open, leaking one descriptor per run. Cleanup never throws.
+ */
+export async function closePtyProcess(
+  proc: ReturnType<typeof Bun.spawn> | undefined,
+): Promise<void> {
+  if (proc === undefined) return;
+  try {
+    proc.terminal?.close();
+  } catch {
+    /* the terminal was never allocated, or was already closed */
+  }
+  if (proc.exitCode === null) {
+    try {
+      proc.kill();
+    } catch {
+      /* exited between the exitCode check and the signal */
+    }
+  }
+  try {
+    await proc.exited;
+  } catch {
+    /* the process died from a signal; exited is still settled and the child is reaped */
+  }
+}
+
 async function probePty(): Promise<CapabilityDiagnostics["pty"]> {
   try {
     const fd = openSync("/dev/ptmx", constants.O_RDWR | constants.O_NOCTTY);
@@ -113,11 +141,7 @@ async function probePty(): Promise<CapabilityDiagnostics["pty"]> {
       reason: `PTY spawn unavailable: ${String(error).slice(0, 120)}`,
     };
   } finally {
-    try {
-      proc?.kill();
-    } catch {
-      /* already exited */
-    }
+    await closePtyProcess(proc);
   }
 }
 

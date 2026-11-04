@@ -241,7 +241,12 @@ export async function readF402TickerJsonl(
       const chunk = parseChunk(view.subarray(skip, completeEnd));
       if (chunk.error === null || chunk.error === undefined) {
         for (const payload of chunk.values) accept(payload);
+        // `chunk.read` is a BYTE count for a Uint8Array chunk (it is a character count for string
+        // input; moving a byte buffer here would corrupt every multi-byte UTF-8 record). It also
+        // excludes the newline that terminates the final parsed record, so advance over the
+        // delimiter: the recorded offset must be the first unread byte, never a replayed newline.
         consumed = skip + chunk.read;
+        while (consumed < completeEnd && view[consumed] === 0x0a) consumed += 1;
       } else {
         // Malformed line mid-chunk: fall back to per-line parsing of complete lines so valid
         // records before/after the bad one are still consumed deterministically.

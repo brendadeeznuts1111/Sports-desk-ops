@@ -6,6 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <meta name="sportsdesk-bridge-ws" content="" />
     <script
       src="https://telegram.org/js/telegram-web-app.js"
       integrity="sha384-PyI6uk8O3pfRRl4+CaepaS++FqtEbco/HaV3jzdYl4y+U7HMQvn3gWVfKhjuzfzG"
@@ -2261,6 +2262,7 @@
           <span id="bridge-3b-status">Bridge 3b: awaiting_live_capture</span>
           <span id="bridge-3c-status">Bridge 3c: LIVE</span>
           <span id="weblog-status">Bridge WebLog: loading</span>
+          <span id="bridge-ws-state">WS: not configured</span>
         </div>
         <p id="wl-gates">GATE-WL-01..04: loading…</p>
         <p id="wl-parsed">—</p>
@@ -4733,107 +4735,238 @@
         }
       })();
 
+      /* Mode 6 renderer: shared by the KPI load and by live WebLog frames. */
+      function renderWeblogPanel(d) {
+        const data = d || {};
+        const rows = data.rows || {},
+          join = data.join || {},
+          flags = data.flags || {};
+        const set = (id, text) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = text;
+        };
+        set(
+          "wl-gates",
+          (data.gates || []).map((g) => g.gate + ": " + g.status).join(" · "),
+        );
+        set(
+          "wl-parsed",
+          (rows.parsed || 0).toLocaleString() +
+            " / " +
+            (rows.total || 0).toLocaleString() +
+            " parsed · " +
+            (rows.distinctTemplates || 0) +
+            " templates · " +
+            (rows.unrecognized || 0) +
+            " unrecognized",
+        );
+        set(
+          "wl-matched",
+          (join.matched || 0).toLocaleString() +
+            " / " +
+            (join.totalWindowWagers || 0).toLocaleString() +
+            " matched · " +
+            (join.persistentUnmatched || 0).toLocaleString() +
+            " persistent · " +
+            (join.nonWebChannel || 0).toLocaleString() +
+            " non-web · " +
+            (join.futureJoins || 0) +
+            " future",
+        );
+        const q = join.deltaQuantilesMs || {};
+        set(
+          "wl-quantiles",
+          "p01 " +
+            ((q.p01 || 0) / 1000).toFixed(2) +
+            "s · p05 " +
+            ((q.p05 || 0) / 1000).toFixed(2) +
+            "s · p50 " +
+            ((q.p50 || 0) / 1000).toFixed(2) +
+            "s · p95 " +
+            ((q.p95 || 0) / 60000).toFixed(2) +
+            "m · p99 " +
+            ((q.p99 || 0) / 60000).toFixed(2) +
+            "m",
+        );
+        set(
+          "wl-flags",
+          "executionSnipers " +
+            (flags.executionSnipers || 0).toLocaleString() +
+            " · sniperTwins " +
+            (flags.sniperTwins || 0) +
+            " · crossOfficeBeards " +
+            (flags.crossOfficeBeards || 0) +
+            " · botRingAccounts " +
+            (flags.botRingAccounts || 0) +
+            " · lineShoppers " +
+            (flags.lineShoppers || 0).toLocaleString(),
+        );
+        const neg = data.negativeControls || {};
+        set(
+          "wl-negative",
+          (neg.falsePositiveFlags || 0) +
+            " / " +
+            (neg.checked || 7) +
+            " false positives",
+        );
+        set(
+          "weblog-status",
+          "Bridge WebLog: " +
+            (data.kind === "f402-weblog"
+              ? "LIVE (" + (rows.total || 0).toLocaleString() + " rows)"
+              : "unavailable"),
+        );
+        const tbody = document.getElementById("wl-net-table");
+        if (tbody)
+          tbody.replaceChildren(
+            ...Object.entries(data.ipClasses || {})
+              .sort((a, b) => b[1] - a[1])
+              .map(([key, value]) => {
+                const tr = document.createElement("tr");
+                const th = document.createElement("th");
+                th.scope = "row";
+                th.textContent = key;
+                const td = document.createElement("td");
+                td.textContent = Number(value).toLocaleString();
+                tr.append(th, td);
+                return tr;
+              }),
+          );
+      }
+
+      const BRIDGE_TOPICS = [
+        "wagers-by-state",
+        "f402-bet-ticker",
+        "f402-pending",
+        "gslive-tally",
+        "f402-weblog",
+      ];
+
+      const BRIDGE_BADGE_IDS = {
+        "wagers-by-state": "bridge-1-status",
+        "f402-bet-ticker": "bridge-3a-status",
+        "f402-pending": "bridge-3b-status",
+        "gslive-tally": "bridge-3c-status",
+        "f402-weblog": "weblog-status",
+      };
+
+      /*
+       * Live bridge client. The deployment fills the meta content with its ws endpoint; an empty
+       * content means disabled, so there is deliberately no baked-in default URL.
+       */
+      (() => {
+        const meta = document.querySelector(
+          'meta[name="sportsdesk-bridge-ws"]',
+        );
+        const endpoint = (meta?.content || "").trim();
+        const stateEl = document.getElementById("bridge-ws-state");
+        const setState = (text) => {
+          if (stateEl) stateEl.textContent = text;
+        };
+        if (!endpoint) {
+          setState("WS: not configured");
+          return;
+        }
+        if (typeof WebSocket === "undefined") {
+          setState("WS: unsupported");
+          return;
+        }
+
+        const active = new Set();
+        let socket = null;
+        let reconnectTimer = null;
+        let backoffMs = 1_000;
+
+        const markBadge = (topic, live) => {
+          const badge = document.getElementById(BRIDGE_BADGE_IDS[topic]);
+          if (!badge) return;
+          if (badge.dataset.baseText === undefined) {
+            badge.dataset.baseText = badge.textContent;
+          }
+          badge.textContent = live
+            ? badge.dataset.baseText + " · ws"
+            : badge.dataset.baseText;
+        };
+
+        const applySubscriptions = (subscriptions) => {
+          active.clear();
+          for (const topic of BRIDGE_TOPICS) {
+            if (subscriptions.includes(topic)) active.add(topic);
+          }
+          setState(`WS: subscribed ${active.size}/5`);
+          for (const topic of BRIDGE_TOPICS) {
+            markBadge(topic, active.has(topic));
+          }
+        };
+
+        const scheduleReconnect = () => {
+          if (reconnectTimer !== null) return;
+          setState(`WS: reconnecting in ${backoffMs / 1000}s`);
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, backoffMs);
+          backoffMs = Math.min(backoffMs * 2, 30_000);
+        };
+
+        const connect = () => {
+          let ws;
+          setState("WS: connecting");
+          try {
+            ws = new WebSocket(endpoint);
+          } catch {
+            scheduleReconnect();
+            return;
+          }
+          socket = ws;
+          ws.addEventListener("open", () => {
+            setState("WS: connected");
+            for (const topic of BRIDGE_TOPICS) {
+              ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: topic }));
+            }
+          });
+          ws.addEventListener("message", (event) => {
+            let msg;
+            try {
+              msg = JSON.parse(event.data);
+            } catch {
+              return;
+            }
+            if (!msg || typeof msg !== "object") return;
+            if (msg.type === "SUBSCRIBED" || msg.type === "UNSUBSCRIBED") {
+              if (!Array.isArray(msg.subscriptions)) return;
+              if (msg.type === "SUBSCRIBED") backoffMs = 1_000;
+              applySubscriptions(msg.subscriptions);
+              return;
+            }
+            if (msg.type === "PONG" || msg.type === "ERROR") return;
+            // A published bridge event arrives as the raw rollup with no envelope, so the
+            // topic is carried by the payload's own `kind` field — not by `msg.payload`.
+            const kind = msg.kind;
+            if (!BRIDGE_TOPICS.includes(kind)) return;
+            if (kind === "f402-weblog") {
+              renderWeblogPanel(msg);
+              return;
+            }
+            markBadge(kind, true);
+          });
+          ws.addEventListener("close", () => {
+            if (socket === ws) socket = null;
+            scheduleReconnect();
+          });
+          ws.addEventListener("error", scheduleReconnect);
+        };
+
+        connect();
+      })();
+
       (async () => {
         try {
           const res = await authed("/api/kpis", { cache: "no-store" });
           if (!res.ok) throw new Error("HTTP " + res.status);
           const payload = await res.json();
-          const d = payload.weblog || {},
-            rows = d.rows || {},
-            join = d.join || {},
-            flags = d.flags || {};
-          const set = (id, text) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = text;
-          };
-          set(
-            "wl-gates",
-            (d.gates || []).map((g) => g.gate + ": " + g.status).join(" · "),
-          );
-          set(
-            "wl-parsed",
-            (rows.parsed || 0).toLocaleString() +
-              " / " +
-              (rows.total || 0).toLocaleString() +
-              " parsed · " +
-              (rows.distinctTemplates || 0) +
-              " templates · " +
-              (rows.unrecognized || 0) +
-              " unrecognized",
-          );
-          set(
-            "wl-matched",
-            (join.matched || 0).toLocaleString() +
-              " / " +
-              (join.totalWindowWagers || 0).toLocaleString() +
-              " matched · " +
-              (join.persistentUnmatched || 0).toLocaleString() +
-              " persistent · " +
-              (join.nonWebChannel || 0).toLocaleString() +
-              " non-web · " +
-              (join.futureJoins || 0) +
-              " future",
-          );
-          const q = join.deltaQuantilesMs || {};
-          set(
-            "wl-quantiles",
-            "p01 " +
-              ((q.p01 || 0) / 1000).toFixed(2) +
-              "s · p05 " +
-              ((q.p05 || 0) / 1000).toFixed(2) +
-              "s · p50 " +
-              ((q.p50 || 0) / 1000).toFixed(2) +
-              "s · p95 " +
-              ((q.p95 || 0) / 60000).toFixed(2) +
-              "m · p99 " +
-              ((q.p99 || 0) / 60000).toFixed(2) +
-              "m",
-          );
-          set(
-            "wl-flags",
-            "executionSnipers " +
-              (flags.executionSnipers || 0).toLocaleString() +
-              " · sniperTwins " +
-              (flags.sniperTwins || 0) +
-              " · crossOfficeBeards " +
-              (flags.crossOfficeBeards || 0) +
-              " · botRingAccounts " +
-              (flags.botRingAccounts || 0) +
-              " · lineShoppers " +
-              (flags.lineShoppers || 0).toLocaleString(),
-          );
-          const neg = d.negativeControls || {};
-          set(
-            "wl-negative",
-            (neg.falsePositiveFlags || 0) +
-              " / " +
-              (neg.checked || 7) +
-              " false positives",
-          );
-          set(
-            "weblog-status",
-            "Bridge WebLog: " +
-              (d.kind === "f402-weblog"
-                ? "LIVE (" + (rows.total || 0).toLocaleString() + " rows)"
-                : "unavailable"),
-          );
-          const tbody = document.getElementById("wl-net-table");
-          if (tbody)
-            tbody.replaceChildren(
-              ...Object.entries(d.ipClasses || {})
-                .sort((a, b) => b[1] - a[1])
-                .map(([key, value]) => {
-                  const tr = document.createElement("tr");
-                  const th = document.createElement("th");
-                  th.scope = "row";
-                  th.textContent = key;
-                  const td = document.createElement("td");
-                  td.textContent = Number(value).toLocaleString();
-                  tr.append(th, td);
-                  return tr;
-                }),
-            );
-        } catch (err) {
+          renderWeblogPanel(payload.weblog);
+        } catch {
           const el = document.getElementById("weblog-status");
           if (el) el.textContent = "Bridge WebLog: unavailable";
         }

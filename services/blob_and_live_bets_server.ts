@@ -125,7 +125,7 @@ export interface BlobLiveBetsOptions {
 
 export interface SocketData {
   readonly clientId: string;
-  readonly channels: Set<string>;
+  /** Topic membership lives in uWebSockets; mirroring it in JS drifts. */
 }
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -411,10 +411,10 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
   const pendingTickets = new Map<string, number>();
   const maxActiveTickets = options.maxActiveTickets ?? MAX_ACTIVE_TICKETS;
   const maxWsSubscriptions = options.maxWsSubscriptions ?? 32;
+  /** uWebSockets is the only subscription store: Bun's `ServerWebSocket#subscriptions`. */
   const subscriptionsOf = (socket: {
-    readonly subscriptions?: string[];
-    readonly data: { readonly channels: ReadonlySet<string> };
-  }): readonly string[] => socket.subscriptions ?? [...socket.data.channels];
+    readonly subscriptions: readonly string[];
+  }): readonly string[] => socket.subscriptions;
   // Resized bytes differ between platforms unless the Bun backend is pinned (AGENTS.md).
   Bun.Image.backend = "bun";
 
@@ -496,6 +496,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               "Event is not serializable",
             );
           }
+          const subscribers = server.subscriberCount(parsed.data.channel);
           if (published === -1) {
             return jsonError(
               503,
@@ -503,16 +504,15 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               "Live-bets subscriber queue is full",
             );
           }
-          if (published === 0) {
-            return Response.json(
-              { channel: parsed.data.channel, published, delivered: false },
-              { status: 202 },
-            );
-          }
-          return Response.json({
-            channel: parsed.data.channel,
-            published,
-          });
+          return Response.json(
+            {
+              channel: parsed.data.channel,
+              published,
+              delivered: published > 0,
+              subscribers,
+            },
+            { status: published === 0 ? 202 : 200 },
+          );
         },
       },
       "/api/v1/blobs/:key": {
@@ -638,7 +638,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
         const upgraded = srv.upgrade(request, {
           data: {
             clientId: randomUUID(),
-            channels: new Set<string>(["live-bets"]),
+            // Topic membership is created by open() in uWebSockets only.
           },
           ...(extracted.echoProtocol === null
             ? {}
@@ -653,7 +653,8 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
     fetch: () => jsonError(404, "not_found", "Not Found"),
     websocket: {
       open(ws) {
-        for (const channel of ws.data.channels) ws.subscribe(channel);
+        // Bun auto-corks open/message; this stays synchronous on purpose.
+        ws.subscribe("live-bets");
       },
       message(ws, message) {
         const size =
@@ -670,59 +671,67 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             typeof message === "string" ? message : message.toString("utf8"),
           );
         } catch {
-          ws.send(JSON.stringify({ type: "ERROR", code: "invalid_json" }));
+          sendFrame(ws, { type: "ERROR", code: "invalid_json" });
           return;
         }
         const result = clientMessageSchema.safeParse(parsed);
         if (!result.success) {
-          ws.send(JSON.stringify({ type: "ERROR", code: "invalid_message" }));
+          sendFrame(ws, { type: "ERROR", code: "invalid_message" });
           return;
         }
         const msg = result.data;
         if (msg.type === "PING") {
-          ws.send(JSON.stringify({ type: "PONG", ts: Date.now() }));
+          sendFrame(ws, { type: "PONG", ts: Date.now() });
           return;
         }
         if (!CHANNEL_PATTERN.test(msg.channel)) {
-          ws.send(JSON.stringify({ type: "ERROR", code: "invalid_channel" }));
+          sendFrame(ws, { type: "ERROR", code: "invalid_channel" });
           return;
         }
         if (msg.type === "SUBSCRIBE") {
-          const current = subscriptionsOf(ws);
           if (
-            !current.includes(msg.channel) &&
-            current.length >= maxWsSubscriptions
+            !ws.isSubscribed(msg.channel) &&
+            ws.subscriptions.length >= maxWsSubscriptions
           ) {
-            ws.send(JSON.stringify({ type: "ERROR", code: "channel_limit" }));
+            sendFrame(ws, { type: "ERROR", code: "channel_limit" });
             return;
           }
           ws.subscribe(msg.channel);
-          ws.data.channels.add(msg.channel);
-          ws.send(
-            JSON.stringify({
-              type: "SUBSCRIBED",
-              channel: msg.channel,
-              channels: subscriptionsOf(ws),
-              subscriptions: ws.subscriptions,
-            }),
-          );
+          sendFrame(ws, {
+            type: "SUBSCRIBED",
+            channel: msg.channel,
+            channels: subscriptionsOf(ws),
+            subscriptions: subscriptionsOf(ws),
+          });
           return;
         }
         ws.unsubscribe(msg.channel);
-        ws.data.channels.delete(msg.channel);
-        ws.send(
-          JSON.stringify({
-            type: "UNSUBSCRIBED",
-            channel: msg.channel,
-            channels: subscriptionsOf(ws),
-          }),
-        );
-      },
-      close(ws) {
-        for (const channel of subscriptionsOf(ws)) ws.unsubscribe(channel);
+        sendFrame(ws, {
+          type: "UNSUBSCRIBED",
+          channel: msg.channel,
+          channels: subscriptionsOf(ws),
+          subscriptions: subscriptionsOf(ws),
+        });
       },
     },
   });
+
+  /**
+   * Frame writer. Bun's `ws.send` returns bytes sent, `0` when dropped and `-1` when the
+   * socket's send buffer is full, so backpressure closes instead of losing frames silently.
+   * Declared as a hoisted function: it is only called from the handlers above.
+   */
+  function sendFrame(
+    socket: {
+      send: (frame: string) => number;
+      close: (code: number, reason: string) => void;
+    },
+    payload: unknown,
+  ): void {
+    if (socket.send(JSON.stringify(payload)) === -1) {
+      socket.close(1011, "backpressure");
+    }
+  }
 
   const memoryPressure = (level: "warning" | "critical"): void => {
     const now = nowSec();

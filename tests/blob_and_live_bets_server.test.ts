@@ -601,3 +601,165 @@ describe("no upscaling, ticket cap and publish", () => {
     }
   });
 });
+
+/**
+ * uWebSockets' topic table is the single source of truth (Bun `ServerWebSocket#subscriptions`,
+ * `#isSubscribed`, `Server#subscriberCount`). These pin the contract the dashboard depends on.
+ */
+describe("uWebSockets subscription state is authoritative", () => {
+  test("acks derive channels and subscriptions from ws.subscriptions", async () => {
+    const h = start();
+    const ws = await openTicketSocket(h);
+    try {
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "alerts" }));
+      const sub = JSON.parse(await nextMessage(ws)) as {
+        type: string;
+        channels: string[];
+        subscriptions: string[];
+      };
+      expect(sub.type).toBe("SUBSCRIBED");
+      expect(sub.channels).toEqual(sub.subscriptions);
+      expect(sub.subscriptions).toContain("live-bets");
+      expect(sub.subscriptions.filter((c) => c === "alerts")).toHaveLength(1);
+
+      ws.send(JSON.stringify({ type: "UNSUBSCRIBE", channel: "alerts" }));
+      const unsub = JSON.parse(await nextMessage(ws)) as {
+        type: string;
+        channels: string[];
+        subscriptions: string[];
+      };
+      expect(unsub.type).toBe("UNSUBSCRIBED");
+      expect(unsub.channels).toEqual(unsub.subscriptions);
+      expect(unsub.subscriptions).not.toContain("alerts");
+      expect(unsub.subscriptions).toContain("live-bets");
+    } finally {
+      ws.close();
+    }
+  });
+
+  test("publish reports server.subscriberCount for the channel", async () => {
+    const h = start();
+    const sockets = [await openTicketSocket(h), await openTicketSocket(h)];
+    try {
+      for (const ws of sockets) {
+        ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "f402-weblog" }));
+        expect(
+          (JSON.parse(await nextMessage(ws)) as { type: string }).type,
+        ).toBe("SUBSCRIBED");
+      }
+      const response = await fetch(`${h.url}/api/v1/live-bets`, {
+        method: "POST",
+        headers: { ...auth(), "content-type": "application/json" },
+        body: JSON.stringify({
+          channel: "f402-weblog",
+          event: { kind: "f402-weblog" },
+        }),
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        delivered: boolean;
+        published: number;
+        subscribers: number;
+      };
+      expect(body.subscribers).toBe(2);
+      expect(body.delivered).toBe(true);
+      expect(body.published).toBeGreaterThan(0);
+    } finally {
+      for (const ws of sockets) ws.close();
+    }
+  });
+
+  test("publish with no subscriber reports subscribers: 0 and 202", async () => {
+    const h = start();
+    const response = await fetch(`${h.url}/api/v1/live-bets`, {
+      method: "POST",
+      headers: { ...auth(), "content-type": "application/json" },
+      body: JSON.stringify({ channel: "nobody-here", event: { n: 1 } }),
+    });
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as {
+      delivered: boolean;
+      subscribers: number;
+    };
+    expect(body.subscribers).toBe(0);
+    expect(body.delivered).toBe(false);
+  });
+
+  test("the cap counts isSubscribed slots, so re-subscribing costs nothing", async () => {
+    const h = start({ maxWsSubscriptions: 2 });
+    const ws = await openTicketSocket(h);
+    try {
+      // "live-bets" is the open() default, so exactly one slot is free.
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "alerts" }));
+      expect((JSON.parse(await nextMessage(ws)) as { type: string }).type).toBe(
+        "SUBSCRIBED",
+      );
+
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "alerts" }));
+      const again = JSON.parse(await nextMessage(ws)) as {
+        type: string;
+        subscriptions: string[];
+      };
+      expect(again.type).toBe("SUBSCRIBED");
+      // uWebSockets returns topics in hash order, not insertion order: compare as sets.
+      expect([...again.subscriptions].sort()).toEqual(["alerts", "live-bets"]);
+
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "f402-weblog" }));
+      expect(JSON.parse(await nextMessage(ws))).toMatchObject({
+        type: "ERROR",
+        code: "channel_limit",
+      });
+
+      ws.send(JSON.stringify({ type: "UNSUBSCRIBE", channel: "alerts" }));
+      expect(JSON.parse(await nextMessage(ws))).toMatchObject({
+        type: "UNSUBSCRIBED",
+      });
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "f402-weblog" }));
+      expect(JSON.parse(await nextMessage(ws))).toMatchObject({
+        type: "SUBSCRIBED",
+        channel: "f402-weblog",
+      });
+    } finally {
+      ws.close();
+    }
+  });
+});
+
+/**
+ * The dashboard subscribes to bridge topics and routes frames by `kind`. The gateway publishes
+ * the raw bridge event (no `{payload}` envelope), which is the shape this test pins.
+ */
+describe("published bridge frames carry the raw event", () => {
+  test("a rollup arrives unwrapped so a client can route on kind", async () => {
+    const h = start();
+    const ws = await openTicketSocket(h);
+    try {
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "f402-weblog" }));
+      expect((JSON.parse(await nextMessage(ws)) as { type: string }).type).toBe(
+        "SUBSCRIBED",
+      );
+
+      const rollup = {
+        kind: "f402-weblog",
+        rows: { total: 523632 },
+        gates: [{ gate: "GATE-WL-01", status: "pass" }],
+      };
+      const delivered = nextMessage(ws);
+      const response = await fetch(`${h.url}/api/v1/live-bets`, {
+        method: "POST",
+        headers: { ...auth(), "content-type": "application/json" },
+        body: JSON.stringify({ channel: "f402-weblog", event: rollup }),
+      });
+      expect(response.status).toBe(200);
+      const frame = JSON.parse(await delivered) as {
+        kind?: string;
+        payload?: unknown;
+      };
+      expect(frame).toEqual(rollup);
+      expect(frame.kind).toBe("f402-weblog");
+      expect(frame.payload).toBeUndefined();
+    } finally {
+      ws.close();
+    }
+  });
+});

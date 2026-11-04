@@ -43,4 +43,59 @@ describe("WebLog dashboard panel", () => {
     expect(withPanel).toHaveLength(1);
     expect(withPanel[0]?.[1]).toContain('document.getElementById("live-desk")');
   });
+
+  test("declares the bridge WebSocket endpoint meta, empty by default", () => {
+    const bridgeMeta = html.match(
+      /<meta[^>]*name="sportsdesk-bridge-ws"[^>]*>/,
+    );
+    expect(bridgeMeta).not.toBeNull();
+    expect(bridgeMeta?.[0]).toContain('content=""');
+    expect(html).toContain('id="bridge-ws-state"');
+    expect(html).toContain("WS: not configured");
+  });
+
+  test("subscribes to the five bridge topics", () => {
+    for (const topic of [
+      "wagers-by-state",
+      "f402-bet-ticker",
+      "f402-pending",
+      "gslive-tally",
+      "f402-weblog",
+    ])
+      expect(html).toContain(`"${topic}"`);
+    expect(html).toContain('type: "SUBSCRIBE"');
+    expect(html).toContain("channel: topic");
+  });
+
+  test("applies the acknowledged subscriptions to the bridge badges", () => {
+    expect(html).toContain("msg.subscriptions");
+    expect(html).toContain("Array.isArray(msg.subscriptions)");
+    expect(html).toContain("BRIDGE_BADGE_IDS");
+    expect(html).toContain("WS: subscribed ${active.size}/5");
+    expect(html).toContain('" · ws"');
+  });
+
+  test("renders Mode 6 through one shared renderer on both paths", () => {
+    const definitions = [...html.matchAll(/function renderWeblogPanel\s*\(/g)];
+    expect(definitions).toHaveLength(1);
+    expect(html).toContain("renderWeblogPanel(payload.weblog)");
+    expect(html).toContain("renderWeblogPanel(msg)");
+  });
+
+  test("uses no HTML sinks and only the authed KPI route", () => {
+    expect(html).not.toContain("innerHTML");
+    expect(html).not.toContain("insertAdjacentHTML");
+    expect(html).not.toContain("outerHTML");
+    expect(html).not.toContain("document.write");
+    expect(html).not.toMatch(/fetch\(\s*["']\/api\//);
+    expect(html).not.toContain("/api/weblog");
+  });
+
+  test("keeps exactly two script tags and hosts the WS client in the module", () => {
+    expect([...html.matchAll(/<script\b/g)]).toHaveLength(2);
+    const blocks = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)];
+    const module = blocks.find((b) => b[1]?.includes("BRIDGE_TOPICS"));
+    expect(module).toBeDefined();
+    expect(module?.[1]).toContain("renderWeblogPanel");
+  });
 });

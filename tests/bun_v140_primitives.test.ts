@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readF402TickerJsonl } from "../lib/f402_bet_ticker_jsonl.ts";
@@ -298,6 +298,116 @@ describe("Bun v1.4.0 primitives", () => {
       kty: string;
     };
     expect(jwk.kty).toBe("AKP");
+  });
+
+  test("Bun.JSONL.parseChunk byte offsets survive multi-byte UTF-8 across chunk splits", async () => {
+    const encoder = new TextEncoder();
+    const records = [
+      {
+        Login: "スナイパー",
+        CustomerID: "CUST-1",
+        WagerNumber: 1,
+        ShortDesc: "Football",
+        InsertDateTime: "2026-11-03T00:00:00Z",
+        AmountWagered: 100,
+      },
+      {
+        Login: "🌍 visitor",
+        CustomerID: "CUST-2",
+        WagerNumber: 2,
+        ShortDesc: "Tennis",
+        InsertDateTime: "2026-11-03T00:00:01Z",
+        AmountWagered: 200,
+      },
+      {
+        Login: "plain",
+        CustomerID: "CUST-3",
+        WagerNumber: 3,
+        ShortDesc: "Soccer",
+        InsertDateTime: "2026-11-03T00:00:02Z",
+        AmountWagered: 300,
+      },
+    ];
+    const text = `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+    const bytes = encoder.encode(text);
+    const byteOffsetOf = (needle: string): number =>
+      encoder.encode(text.slice(0, text.indexOf(needle))).length;
+    const splitOffsets = [
+      1,
+      // Inside the three-byte "ス" sequence of the first record.
+      byteOffsetOf("ス") + 1,
+      // Inside the four-byte "🌍" sequence of the second record.
+      byteOffsetOf("🌍") + 2,
+      // The newline that terminates the final record.
+      bytes.length - 1,
+    ];
+
+    // `read` counts bytes for Uint8Array input and characters for string input. Both leave the
+    // delimiter newline after the last record unread; the difference must be the UTF-8 overhead.
+    const fromBytes = Bun.JSONL.parseChunk(bytes);
+    const fromString = Bun.JSONL.parseChunk(text);
+    expect(fromBytes.error).toBeNull();
+    expect(fromString.error).toBeNull();
+    expect(fromBytes.values).toEqual(records);
+    expect(fromString.values).toEqual(records);
+    expect(fromBytes.read).toBe(bytes.length - 1);
+    expect(fromString.read).toBe(text.length - 1);
+    expect(bytes.length - text.length).toBeGreaterThan(0);
+    expect(fromBytes.read - fromString.read).toBe(bytes.length - text.length);
+
+    // Drive a byte cursor over each split. If `read` were treated as a character count, the
+    // cursor would land inside a multi-byte sequence and the next record would decode corrupt.
+    for (const split of splitOffsets) {
+      const values: unknown[] = [];
+      let consumed = 0;
+      const ends = [...new Set([split, bytes.length])].sort((a, b) => a - b);
+      for (const end of ends) {
+        if (end <= consumed) continue;
+        const chunk = Bun.JSONL.parseChunk(bytes.subarray(consumed, end));
+        expect(chunk.error).toBeNull();
+        values.push(...chunk.values);
+        let next = consumed + chunk.read;
+        while (next < end && bytes[next] === 0x0a) next += 1;
+        consumed = next;
+      }
+      expect(values).toEqual(records);
+      expect(consumed).toBe(bytes.length);
+    }
+
+    // The real reader must resume on the same byte offsets when a write lands inside a
+    // multi-byte character: the partial record is held back, then completed by the next read.
+    const dir = await tempDir();
+    const path = join(dir, "f402-bets.jsonl");
+    const expectedLogins = records.map((record) => record.Login);
+    for (const split of splitOffsets) {
+      await writeFile(path, bytes.subarray(0, split));
+      const first = await readF402TickerJsonl(path, {
+        windowBytes: 10_000_000,
+      });
+      await appendFile(path, bytes.subarray(split));
+      const second = await readF402TickerJsonl(path, { state: first.state });
+      const rows = [...first.rows, ...second.rows];
+      expect(rows.map((row) => row.login)).toEqual(expectedLogins);
+      expect(rows.map((row) => row.wagerNumber)).toEqual(["1", "2", "3"]);
+      expect(second.state.offset).toBe(bytes.length);
+      expect(first.skippedLines + second.skippedLines).toBe(0);
+    }
+
+    // A full read consumes exactly the file's bytes: the recorded offset is the first unread byte.
+    await writeFile(path, bytes);
+    const whole = await readF402TickerJsonl(path, { windowBytes: 10_000_000 });
+    expect(whole.rows.map((row) => row.login)).toEqual(expectedLogins);
+    expect(whole.state.offset).toBe(bytes.length);
+
+    // An initial window that starts inside a multi-byte character drops the line fragment only.
+    const start = byteOffsetOf("🌍") + 2;
+    const windowed = await readF402TickerJsonl(path, {
+      windowBytes: bytes.length - start,
+    });
+    expect(windowed.reset).toBe("initial");
+    expect(windowed.rows.map((row) => row.login)).toEqual(["plain"]);
+    expect(windowed.state.offset).toBe(bytes.length);
+    expect(windowed.skippedLines).toBe(0);
   });
 
   test("ML-KEM-768 encapsulates and decapsulates; node:crypto ML-DSA-65 signs and verifies", async () => {
