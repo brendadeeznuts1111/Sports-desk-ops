@@ -406,7 +406,7 @@ effort, so a shared blind spot survives both. That is not hypothetical: the firs
 omitted seven real fields (period `L_h1`; sport `in`; league `pn` and `mn`; country `code`, `po` and
 `mo`) and the self-check passed anyway, because it only asserted what the prose already said.
 
-The one control against that failure mode is a **key-enumeration diff**: `Scratch/verify_gs_contracts.ts`
+The one control against that failure mode is a **key-enumeration diff**: `scratch/verify_gs_contracts.ts`
 compares the live key union of each object with the documented shape and fails on a key that appears in
 one and not the other. That catches a dropped field or a server-side addition; it does not make the
 author independent.
@@ -502,9 +502,9 @@ Player (`partnerUserId`), Agent (`agent`), Event Id (`eventId`), Bet Id (`betId`
 Id (`freeBetId`), State (`state`), Sport (`sId`), Period (`period`), Min Wager (`minVolume`),
 **Max Time Until Score** (`maxTimeUntilScore`), Market (`mId`).
 
-Wire reconciliation: `Scratch/betReport-all.json` has **69** raw row keys; 38 of the 52 columns map
+Wire reconciliation: `scratch/betReport-all.json` has **69** raw row keys; 38 of the 52 columns map
 to a single wire key, 14 are UI-only/derived/nested (`betDetails.m`, Logs, Actions, Time Until Score,
-Bet Time parts, Featured Bet fields, Prop figure, Figure, Sport / League, Wager Type Category). `Scratch/ajax-getBetReport-body.json` has
-**20** body keys and contains every mapped filter key. `Scratch/gslive-wagers-by-state.csv` has **18**
+Bet Time parts, Featured Bet fields, Prop figure, Figure, Sport / League, Wager Type Category). `scratch/ajax-getBetReport-body.json` has
+**20** body keys and contains every mapped filter key. `scratch/gslive-wagers-by-state.csv` has **18**
 columns; all 18 canonicalize through the label map. This catalog is UI vocabulary, not a transport
 contract: every report kind remains `blocked_contract` until a redacted request/response pair lands.

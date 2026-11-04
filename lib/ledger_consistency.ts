@@ -115,6 +115,8 @@ const SKIP_DIRS = [
   "dist/",
   ".git/",
   "Scratch/",
+  // Case-sensitive checkouts keep the lowercase spelling; skip both rather than read scratch text.
+  "scratch/",
 ] as const;
 
 /** Where a citation may be looked up, in order. */

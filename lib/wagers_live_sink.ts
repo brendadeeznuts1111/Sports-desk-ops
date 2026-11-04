@@ -18,7 +18,7 @@ export const WAGERS_LIVE_CHANNEL = "gslive-wagers";
 export const WAGERS_LIVE_EVENT_SCHEMA_VERSION = 1;
 export const WAGERS_LIVE_EVENT_KIND = "gslive-wagers";
 export const WAGERS_R2_SUMMARY_KEY = "wagers-by-state/latest.json";
-export const WAGERS_LOCAL_SIDECAR_PATH = "Scratch/gslive-wagers/latest.json";
+export const WAGERS_LOCAL_SIDECAR_PATH = "scratch/gslive-wagers/latest.json";
 export const DEFAULT_GATEWAY_URL = "http://127.0.0.1:4021";
 
 export interface WagersLiveEvent {

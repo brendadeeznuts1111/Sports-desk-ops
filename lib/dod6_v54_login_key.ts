@@ -8,8 +8,6 @@ export const KEY64_PAYLOAD_MASK = (1n << 62n) - 1n;
 export const KEY64_MODE_BASE40_EXACT_12 = 1n;
 export const KEY64_MODE_FNV1A64_LONG = 2n;
 
-const BASE40_CHARS = "\x000123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_-.";
-
 function charToBase40(code: number): bigint {
   if (code >= 48 && code <= 57) return BigInt(code - 48 + 1);
   if (code >= 65 && code <= 90) return BigInt(code - 65 + 11);
@@ -20,7 +18,9 @@ function charToBase40(code: number): bigint {
   return 39n;
 }
 
-export function encodeCustomerPackedKey64(rawCustomerId: string): CustomerPackedKey64 {
+export function encodeCustomerPackedKey64(
+  rawCustomerId: string,
+): CustomerPackedKey64 {
   let start = 0;
   let end = rawCustomerId.length;
   while (start < end && rawCustomerId.charCodeAt(start) <= 32) start++;
@@ -44,7 +44,10 @@ export function encodeCustomerPackedKey64(rawCustomerId: string): CustomerPacked
       payload =
         payload * 40n + charToBase40(rawCustomerId.charCodeAt(start + i));
     }
-    return (KEY64_MODE_BASE40_EXACT_12 << KEY64_MODE_SHIFT) | (payload & KEY64_PAYLOAD_MASK);
+    return (
+      (KEY64_MODE_BASE40_EXACT_12 << KEY64_MODE_SHIFT) |
+      (payload & KEY64_PAYLOAD_MASK)
+    );
   }
 
   let h64 = 0xcbf29ce484222325n;
@@ -54,7 +57,9 @@ export function encodeCustomerPackedKey64(rawCustomerId: string): CustomerPacked
     h64 ^= BigInt(c);
     h64 = BigInt.asUintN(64, h64 * 0x100000001b3n);
   }
-  return (KEY64_MODE_FNV1A64_LONG << KEY64_MODE_SHIFT) | (h64 & KEY64_PAYLOAD_MASK);
+  return (
+    (KEY64_MODE_FNV1A64_LONG << KEY64_MODE_SHIFT) | (h64 & KEY64_PAYLOAD_MASK)
+  );
 }
 
 export function murmur3AvalancheFinalizer32(h: number): number {

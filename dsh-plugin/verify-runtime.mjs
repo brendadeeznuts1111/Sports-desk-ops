@@ -30,11 +30,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO = "/Users/nolarose/code/sportsdesk-ops";
+// Derive the checkout from this script, not from the operator's home: a copied/linked plugin or a
+// second worktree would otherwise run its gates against a checkout that is not the one it lives in.
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const CONFIG = {
-  repoPath: "/Users/nolarose/code/sportsdesk-ops",
+  repoPath: REPO,
   bunPath: "bun",
   serviceUrl: "http://127.0.0.1:4020",
   timeoutMs: 60_000,

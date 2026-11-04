@@ -153,8 +153,8 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
   {
     id: "bridge3c",
     label: "GSLive tally rollup (3c)",
-    // Fetch the open-bet capture instead of reading the CLI's capital-S default
-    // `Scratch/betReport-all.json` (a case-sensitive host only has lowercase `scratch/`).
+    // Fetch the open-bet capture instead of relying on the CLI's default
+    // `scratch/betReport-all.json`; `--fetch-open` fetches it into the bridge directory.
     // manager_fetch reads Bun.env.GSID; gslive_auto_session reads GSLIVE_SESSION_FILE.
     args: [
       "bun",

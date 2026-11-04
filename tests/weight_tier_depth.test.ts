@@ -47,10 +47,7 @@ describe("DOD6 v54 columnar lifetime", () => {
   test("overlay prefers dodbin columnar over CSV when both provided", async () => {
     const overlay = await createDod6SpineOverlay({
       dodbinPath: resolve(REPO, "data/sportsdesk_unified_baseline_v54.dodbin"),
-      lifetimeCsvPath: resolve(
-        REPO,
-        "tests/fixtures/dod6-lifetime-sample.csv",
-      ),
+      lifetimeCsvPath: resolve(REPO, "tests/fixtures/dod6-lifetime-sample.csv"),
     });
     const row = overlay.lookup("GX195");
     expect(row?.source).toBe("dodbin_columnar");
@@ -60,10 +57,7 @@ describe("DOD6 v54 columnar lifetime", () => {
 describe("lifetime CSV sharp gate", () => {
   test(`GX195 passes >= ${SHARP_CAND_MIN_CLV_LEGS_V54} CLV leg gate`, async () => {
     const overlay = await createDod6SpineOverlay({
-      lifetimeCsvPath: resolve(
-        REPO,
-        "tests/fixtures/dod6-lifetime-sample.csv",
-      ),
+      lifetimeCsvPath: resolve(REPO, "tests/fixtures/dod6-lifetime-sample.csv"),
     });
     const row = overlay.lookup("GX195");
     expect(row?.sharpCandidateGatePassed).toBe(true);
@@ -78,7 +72,7 @@ describe("GSLive steam index", () => {
     );
     const hit = index.lookup("ROT 516");
     expect(hit?.flags.within15s).toBe(true);
-    expect(hit?.flags.word0SteamMask & 0x2000).not.toBe(0);
+    expect((hit?.flags.word0SteamMask ?? 0) & 0x2000).not.toBe(0);
   });
 
   test("steamFlagsFromTimeUntilScoreSec matches spec bits", () => {

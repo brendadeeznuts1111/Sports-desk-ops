@@ -22,7 +22,9 @@ export function signedTimeUntilScoreFromWord2(word2: bigint | number): number {
   return w >= 128 ? w - 256 : w;
 }
 
-export function parseGsLivePackedWord0(word0: bigint | number): GslivePackedWord0Parse {
+export function parseGsLivePackedWord0(
+  word0: bigint | number,
+): GslivePackedWord0Parse {
   const w0 = typeof word0 === "bigint" ? word0 : BigInt(word0 >>> 0);
   const flags32 = Number(w0 & 0xffff_ffffn) >>> 0;
   const tusByte = signedTimeUntilScoreFromWord2(w0 >> 32n);
@@ -44,12 +46,14 @@ export function parseGsLivePackedWord0(word0: bigint | number): GslivePackedWord
   };
 }
 
-export function loadGslivePackedWordIndexFromJson(
-  parsed: unknown,
-): { lookup(rotationKey: string): GslivePackedWord0Parse | null } {
+export function loadGslivePackedWordIndexFromJson(parsed: unknown): {
+  lookup(rotationKey: string): GslivePackedWord0Parse | null;
+} {
   const byRot = new Map<string, GslivePackedWord0Parse>();
   if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
       if (value === null || typeof value !== "object") continue;
       const record = value as Record<string, unknown>;
       let word0: bigint | null = null;

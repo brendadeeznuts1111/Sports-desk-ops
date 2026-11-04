@@ -46,10 +46,8 @@ export function watchlistSignalFromF402TickerRow(
 ): WatchlistSignal | null {
   const parsed = parseWagerShortDesc(row.shortDesc);
   const offline = resolveTickerMarketOffline(row);
-  const league: League | null =
-    parsed?.league ?? offline.league ?? null;
-  const marketKind =
-    parsed?.marketKind ?? offline.marketKind ?? null;
+  const league: League | null = parsed?.league ?? offline.league ?? null;
+  const marketKind = parsed?.marketKind ?? offline.marketKind ?? null;
   if (
     league === null ||
     league === "UNKNOWN" ||
@@ -64,7 +62,8 @@ export function watchlistSignalFromF402TickerRow(
   const line = parsed?.line ?? null;
   const overUnder = parsed?.overUnder ?? null;
   const american = parseAmericanFromShortDesc(row.shortDesc);
-  const asOf = row.insertedAt.trim() !== "" ? row.insertedAt : now.toISOString();
+  const asOf =
+    row.insertedAt.trim() !== "" ? row.insertedAt : now.toISOString();
   const ageSeconds = ageSecondsFromIso(asOf, now);
 
   const id = [
@@ -148,7 +147,7 @@ export async function joinKalshiForStreamEmissions(
     prepared.map((entry) => entry.signal),
     {
       client: options.client,
-      config: options.config,
+      ...(options.config === undefined ? {} : { config: options.config }),
     },
   );
 

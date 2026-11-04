@@ -60,7 +60,7 @@ families, guard attribution, CLV). Every answer carries the artifact's `generate
 file age, because a staged report is not a live number.
 
 `sportsdesk_wagers` reads the v2 wager-state artifact
-(`Scratch/gslive-wagers-by-state.summary.json`, produced by
+(`scratch/gslive-wagers-by-state.summary.json`, produced by
 `scripts/gslive_wagers_by_state.ts --json`) and returns `identity`, `totals`, per-state rows
 and the producer's computed `quality` block. The contract matters: `legs` is one source row
 per leg, while `wagers` counts distinct `Ticket`s; `wagerRisk` is deduped/allocated by ticket
@@ -70,12 +70,12 @@ from the artifact; it adds the freshness of the DATA (`window.ageMinutes`, recom
 `observedEnd`) next to the age of the FILE (`source.ageMinutes` from its mtime). A missing
 artifact is `MISSING` (never zero states), an unparseable file is an explicit error, and any
 `schemaVersion` other than 2 is `UNSUPPORTED` instead of a best-effort parse. The artifact
-lives in gitignored `Scratch/`, so this is a snapshot, not a live feed — the plugin config
+lives in gitignored `scratch/`, so this is a snapshot, not a live feed — the plugin config
 field `wagersArtifact` points it at another path when needed.
 
 The same tool answers two automation questions from the files
 `scripts/wagers_by_state_capture.ts` writes next to the artifact, per the frozen
-`Scratch/wagers-automation.schema.v1.json` contract:
+`scratch/wagers-automation.schema.v1.json` contract:
 
 | Report       | Answers                                                                                                                                                                                                                                                                                            | Source files (each independently MISSING-able)   |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -226,7 +226,7 @@ counts and paths rather than the identifiers themselves.
 | An OR rule must prove its increment                      | The same scan reports `incrementalByClv` and the sharp/CLV correlation; a rule that adds 0 candidates is called out as non-independent instead of being presented as a second signal.                                                                                                                                                                                                                                |
 | A scanner is calibrated before its findings are trusted  | `sportsdesk_security` runs the identifier shape over two labeled-safe fixtures and reports `calibration`; a hit there means the scanner drifted, and the verdict becomes `uncalibrated` rather than `findings`.                                                                                                                                                                                                      |
 | A snapshot is not a trend                                | `sportsdesk_endpoints` reads the `applied-*.json` journal and reports tier growth, upgrades, skips and rejections; the file count and the rejection rate are separate signals, so "more rejected" is not reported as "improved".                                                                                                                                                                                     |
-| No artifact is not an empty table                        | `sportsdesk_wagers` distinguishes MISSING, unparseable and UNSUPPORTED; none of them returns `states: []` or `totals: 0`, because a gitignored `Scratch/` artifact is absent in a fresh checkout and "no rows" is the number that would look plausible.                                                                                                                                                              |
+| No artifact is not an empty table                        | `sportsdesk_wagers` distinguishes MISSING, unparseable and UNSUPPORTED; none of them returns `states: []` or `totals: 0`, because a gitignored `scratch/` artifact is absent in a fresh checkout and "no rows" is the number that would look plausible.                                                                                                                                                              |
 | A missing journal is not "no failures"                   | The `automation`/`trends` reports read the capture journal, history and alerts document per file. An absent journal reports its attempt outcome as unmeasured (`lastSuccess`/`lastFailure` null), never as a clean or failing pipeline; an absent alerts document reports `count: null`, never zero; malformed JSONL lines are counted and skipped, never thrown.                                                    |
 
 Nothing here reimplements a repo behaviour. Whatever runs is the existing command
@@ -282,10 +282,10 @@ values of the right shape, falling back to the defaults in `DEFAULT_CONFIG`:
 | `timeoutMs`         | `60000`                                       | Cheap reads and checks.                                                |
 | `gateTimeoutMs`     | `900000`                                      | `unit` and `ci` gate executions.                                       |
 | `staleAfterMinutes` | `1440`                                        | Dataset age threshold for the reported `stale` flag.                   |
-| `wagersArtifact`    | `Scratch/gslive-wagers-by-state.summary.json` | v2 wager-state artifact; relative to `repoPath`, or absolute.          |
-| `wagersStatus`      | `Scratch/wagers-by-state.status.json`         | Capture journal (attempt success/failure) for the `automation` report. |
-| `wagersHistory`     | `Scratch/wagers-by-state.history.jsonl`       | Append-only capture history for the `trends` report.                   |
-| `wagersAlerts`      | `Scratch/wagers-by-state.alerts.json`         | Derived alerts document for the `automation` report.                   |
+| `wagersArtifact`    | `scratch/gslive-wagers-by-state.summary.json` | v2 wager-state artifact; relative to `repoPath`, or absolute.          |
+| `wagersStatus`      | `scratch/wagers-by-state.status.json`         | Capture journal (attempt success/failure) for the `automation` report. |
+| `wagersHistory`     | `scratch/wagers-by-state.history.jsonl`       | Append-only capture history for the `trends` report.                   |
+| `wagersAlerts`      | `scratch/wagers-by-state.alerts.json`         | Derived alerts document for the `automation` report.                   |
 
 ## Install
 

@@ -19,10 +19,11 @@ import {
   GSLIVE_BET_HISTORY_STATES,
   GSLIVE_GROUP_KINDS,
 } from "../lib/gslive_manager_deeplink_sidecar.ts";
+import { resolve } from "node:path";
 
 const HERE = import.meta.dir;
 /** Every expected count below is read from this checkout, never written down. */
-const REPO = "/Users/nolarose/code/sportsdesk-ops";
+const REPO = resolve(HERE, "..");
 
 /**
  * Configuration is duplicated from `cordis.patch.yml` on purpose: the loader applies the
@@ -30,7 +31,7 @@ const REPO = "/Users/nolarose/code/sportsdesk-ops";
  * parsing the patch.
  */
 const CONFIG = {
-  repoPath: "/Users/nolarose/code/sportsdesk-ops",
+  repoPath: REPO,
   bunPath: "bun",
   serviceUrl: "http://127.0.0.1:4020",
   timeoutMs: 60_000,
@@ -87,7 +88,7 @@ const byName = new Map(registered.map((tool) => [tool.name, tool]));
 
 /**
  * The v2 wager-state fixture used by the sportsdesk_wagers checks. Each check writes it to a
- * gitignored `Scratch/` temp directory and deletes that directory in a `finally`, so the real
+ * gitignored `scratch/` temp directory and deletes that directory in a `finally`, so the real
  * artifact (gitignored, absent in a fresh checkout) is never required and never mutated.
  */
 const WAGERS_FIXTURE = {
@@ -174,8 +175,8 @@ const WAGERS_FIXTURE = {
 
 /**
  * Automation fixtures for the `report:"automation"` / `report:"trends"` checks. They follow the
- * frozen `Scratch/wagers-automation.schema.v1.json` contract and are written to a gitignored
- * `Scratch/` temp directory, never to the real journal/history/alerts paths.
+ * frozen `scratch/wagers-automation.schema.v1.json` contract and are written to a gitignored
+ * `scratch/` temp directory, never to the real journal/history/alerts paths.
  */
 const WAGERS_CAPTURE_TIMES = [
   "2026-11-03T19:30:00.000Z",
@@ -370,9 +371,9 @@ function applyWith(overrides) {
   return new Map(tools.map((tool) => [tool.name, tool]));
 }
 
-/** A path under the gitignored Scratch/ directory, unique per check run. */
+/** A path under the gitignored scratch/ directory, unique per check run. */
 function wagersTempDir(label) {
-  return `${REPO}/Scratch/dsh-plugin-verify-${label}-${crypto.randomUUID()}`;
+  return `${REPO}/scratch/dsh-plugin-verify-${label}-${crypto.randomUUID()}`;
 }
 
 /**

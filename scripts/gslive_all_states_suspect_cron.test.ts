@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readTickerBetsJsonl } from "./gslive_all_states_suspect_cron.ts";
 
-const dir = `Scratch/jsonl-reader-${Date.now()}`;
+const dir = `scratch/jsonl-reader-${Date.now()}`;
 let n = 0;
 
 async function fixture(name: string, content: string): Promise<string> {

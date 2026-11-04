@@ -1,0 +1,28 @@
+# Bundle layer: insert the watchlist autobet tools into any DSH profile that
+# installs this package.
+#
+# PAPER ONLY. This bundle exposes the repo's paper-trading pipeline as nine
+# tools: five read-only (status, signals, plan, queue, journal) and four that
+# change the append-only local ledger (enqueue, decide, execute, settle). Every
+# writing tool requires `confirm: true`; without it the tool returns a
+# structured `confirmation_required` refusal and executes nothing. There is no
+# live order path in the plugin, and none in the CLI it shells: `execute` only
+# runs the paper adapter, and any venue other than `paper` is refused by the
+# CLI with `live_disabled`. Approval of a queued intent is a human decision;
+# these tools record it, they do not make it.
+#
+# The tools shell `bun run cli/watchlist_autobet_cli.ts …` with cwd=repoPath,
+# so there is one implementation of the engine, gates, ledger and paper math.
+# Do not add a second one here.
+#
+# repoPath is this checkout. bunPath may be a bare `bun` (resolved from the
+# Host's PATH/known install locations) or an absolute path. configPath is
+# repo-relative and must stay the paper config.
+- insert:
+    - id: watchlist-autobet
+      name: dsh-plugin-watchlist-autobet
+      config:
+        repoPath: /Users/nolarose/code/sportsdesk-ops
+        bunPath: bun
+        configPath: config/watchlist-autobet.json
+        timeoutMs: 60000

@@ -328,7 +328,8 @@ function routingTagForTier(
   if (tierId === "tier2_blindspot_clv_whales") return "SILO3_SHADOW_MIRROR";
   if (tierId === "tier3_probe_hammer_syndicate") return "PROBE_HAMMER_2STAGE";
   if (tierId === "tier5_miami_syndicate") return "MIAMI_SYNDICATE_CLUSTER";
-  if (tierId === "tier7_correlated_parlay_extractors") return "PROBIT_SGP_PENALTY";
+  if (tierId === "tier7_correlated_parlay_extractors")
+    return "PROBIT_SGP_PENALTY";
   return null;
 }
 
@@ -666,8 +667,7 @@ export function planStreamSignalForRow(
     return null;
   }
 
-  const gsliveSteam =
-    options.gsliveSteamIndex?.lookup(rotationKey) ?? null;
+  const gsliveSteam = options.gsliveSteamIndex?.lookup(rotationKey) ?? null;
   const dod6Lifetime = options.dod6Spine?.lookup(row.login) ?? null;
   const dod6Header = options.dod6Spine?.header;
   const diagnostics = buildStreamSignalDiagnostics(row, {
@@ -737,8 +737,7 @@ export function planStreamSignalsForRows(
   const seen = new Set<string>();
   const out: StreamSignalEmission[] = [];
   const tracker = options.clusterTracker ?? new MiamiSyndicateClusterTracker();
-  const pickTwinTracker =
-    options.pickTwinTracker ?? new PickShapeTwinTracker();
+  const pickTwinTracker = options.pickTwinTracker ?? new PickShapeTwinTracker();
   const scoutTracker = options.scoutTracker ?? new ScoutApexTracker();
   for (const row of rows) {
     const key =

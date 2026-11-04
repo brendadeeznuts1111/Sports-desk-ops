@@ -12,7 +12,10 @@ export interface CircuitScoreBreakdown {
 }
 
 const MECH_WEIGHT: Readonly<
-  Record<WeightMechanismHit["id"], keyof Omit<CircuitScoreBreakdown, "scoreHundredths">>
+  Record<
+    WeightMechanismHit["id"],
+    keyof Omit<CircuitScoreBreakdown, "scoreHundredths">
+  >
 > = {
   qk_ov_induction_virtual: "inductionHundredths",
   bitwise_score_proximity_steam: "steamHundredths",
@@ -23,8 +26,11 @@ const MECH_WEIGHT: Readonly<
 export function circuitScoreFromMechanisms(
   mechanisms: readonly WeightMechanismHit[],
 ): CircuitScoreBreakdown {
-  const parts: CircuitScoreBreakdown = {
-    scoreHundredths: 0,
+  // Mutable accumulator: the public breakdown is readonly, but the loop raises each slot.
+  const parts: Record<
+    Exclude<keyof CircuitScoreBreakdown, "scoreHundredths">,
+    number
+  > = {
     inductionHundredths: 0,
     steamHundredths: 0,
     clvHundredths: 0,

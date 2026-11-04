@@ -1,0 +1,30 @@
+{
+  "name": "dsh-plugin-watchlist-autobet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Paper-only DSH Host tools for the sportsdesk-ops watchlist autobet pipeline: read status/signals/plan/queue/journal, and confirm-gated enqueue, approve/reject, paper execute and settle. No live order path exists; live betting is not implemented.",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "verify-load.mjs",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

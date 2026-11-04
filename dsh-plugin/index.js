@@ -71,13 +71,13 @@ const DEFAULT_CONFIG = {
   gateTimeoutMs: 900_000,
   staleAfterMinutes: 1_440,
   // Relative to repoPath, so moving the checkout does not leave this pointing at an old one.
-  wagersArtifact: "Scratch/gslive-wagers-by-state.summary.json",
+  wagersArtifact: "scratch/gslive-wagers-by-state.summary.json",
   // The automation trio: the capture journal (authoritative for attempt success/failure), the
   // append-only capture history (JSONL) and the derived alerts document. Keep these in step with
   // WAGERS_AUTOMATION below.
-  wagersStatus: "Scratch/wagers-by-state.status.json",
-  wagersHistory: "Scratch/wagers-by-state.history.jsonl",
-  wagersAlerts: "Scratch/wagers-by-state.alerts.json",
+  wagersStatus: "scratch/wagers-by-state.status.json",
+  wagersHistory: "scratch/wagers-by-state.history.jsonl",
+  wagersAlerts: "scratch/wagers-by-state.alerts.json",
 };
 
 /**
@@ -390,21 +390,21 @@ const CUSTOMER_BOOK = {
  * The wager-state table artifact: the interface between
  * `scripts/gslive_wagers_by_state.ts` (producer, `--json`) and `sportsdesk_wagers` (consumer).
  *
- * WHY A SEPARATE CONFIG FIELD: the artifact is gitignored (`Scratch/`), so a fresh checkout does
+ * WHY A SEPARATE CONFIG FIELD: the artifact is gitignored (`scratch/`), so a fresh checkout does
  * not have one. The tool reports MISSING explicitly instead of an empty table, and an operator can
  * point `wagersArtifact` at another path (absolute, or relative to `repoPath`) without editing
  * code. The consumer knows schemaVersion 2 only; anything else is UNSUPPORTED, never
  * best-effort parsed.
  */
 const WAGERS_ARTIFACT = {
-  path: "Scratch/gslive-wagers-by-state.summary.json",
+  path: "scratch/gslive-wagers-by-state.summary.json",
   schemaVersion: 2,
   role: "Wager table by GSLive wager state: legs vs wagers (distinct Ticket), deduped wagerRisk vs legRisk, spanning, per-state rows and a computed quality block.",
 };
 
 /**
  * The automation side of the wager pipeline: the capture journal, the append-only capture history
- * and the derived alerts document, per `Scratch/wagers-automation.schema.v1.json` (the frozen
+ * and the derived alerts document, per `scratch/wagers-automation.schema.v1.json` (the frozen
  * contract shared with `scripts/wagers_by_state_capture.ts`).
  *
  * WHY THESE ARE SEPARATE FROM THE ARTIFACT: the artifact is one snapshot and says nothing about
@@ -416,17 +416,17 @@ const WAGERS_ARTIFACT = {
  */
 const WAGERS_AUTOMATION = {
   status: {
-    path: "Scratch/wagers-by-state.status.json",
+    path: "scratch/wagers-by-state.status.json",
     schemaVersion: 1,
     role: "Capture journal: one capped entry per attempt, plus lastSuccess and lastFailure. Authoritative for success/failure.",
   },
   history: {
-    path: "Scratch/wagers-by-state.history.jsonl",
+    path: "scratch/wagers-by-state.history.jsonl",
     schemaVersion: 1,
     role: "Append-only capture history (one JSONL line per SUCCESSFUL capture): totals, per-state rows, delta, qualityFlags and alerts. Carries no ticket ids.",
   },
   alerts: {
-    path: "Scratch/wagers-by-state.alerts.json",
+    path: "scratch/wagers-by-state.alerts.json",
     schemaVersion: 1,
     role: "Derived, thresholded alerts from the latest successful capture (empty array is a measured value).",
   },
@@ -1881,7 +1881,7 @@ function readCustomerBook(repoPath) {
 
 /**
  * Resolve one configured path against the checkout. Absolute paths win; a relative one is joined
- * under `repoPath`, which is how the defaults (`Scratch/...`) are derived.
+ * under `repoPath`, which is how the defaults (`scratch/...`) are derived.
  *
  * @param {string} repoPath
  * @param {string} configured
@@ -3913,7 +3913,7 @@ export function apply(ctx, config) {
       name: "sportsdesk_wagers",
       description:
         "Read-only wager table by GSLive wager state, from the v2 snapshot artifact " +
-        "(Scratch/gslive-wagers-by-state.summary.json, produced by " +
+        "(scratch/gslive-wagers-by-state.summary.json, produced by " +
         "scripts/gslive_wagers_by_state.ts): legs vs wagers (distinct Ticket), deduped wagerRisk " +
         "vs leg-scoped legRisk, spanning wagers, per-state rows, the producer's computed quality " +
         'block and file freshness. Reports: "summary" (default: identity, totals, limited states, ' +

@@ -137,9 +137,7 @@ export async function loadDodCustomerLifetimeMap(
 
 function lifetimeToLookup(meta: DodCustomerLifetimeMeta): Dod6LifetimeLookup {
   const clvBps =
-    meta.avgClvPoints !== 0
-      ? Math.round(meta.avgClvPoints * 100)
-      : null;
+    meta.avgClvPoints !== 0 ? Math.round(meta.avgClvPoints * 100) : null;
   return {
     clvBps,
     sharpScore: null,
@@ -163,9 +161,8 @@ export async function createDod6SpineOverlay(options: {
   let columnarLookup: ((login: string) => Dod6LifetimeLookup | null) | null =
     null;
   if (dodbinPath !== "") {
-    const { createDod6V54LifetimeReader } = await import(
-      "./dod6_v54_lifetime_reader.ts"
-    );
+    const { createDod6V54LifetimeReader } =
+      await import("./dod6_v54_lifetime_reader.ts");
     const reader = await createDod6V54LifetimeReader(resolve(dodbinPath));
     if (reader !== null) {
       columnarLookup = (login: string) => {
@@ -182,9 +179,8 @@ export async function createDod6SpineOverlay(options: {
 
   let jsonLookup: ((login: string) => Dod6LifetimeLookup | null) | null = null;
   if (options.jsonBookPath !== undefined && options.jsonBookPath !== "") {
-    const { loadDod6BookOverlayFromJson } = await import(
-      "./weight_tier_signal_enrichment.ts"
-    );
+    const { loadDod6BookOverlayFromJson } =
+      await import("./weight_tier_signal_enrichment.ts");
     const book = loadDod6BookOverlayFromJson(options.jsonBookPath);
     jsonLookup = (login: string) => {
       const row = book.lookup(login);

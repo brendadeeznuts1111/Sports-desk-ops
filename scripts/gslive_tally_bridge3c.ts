@@ -6,8 +6,8 @@
  * `gslive-tally/latest.json` pointer to R2. No raw row, identifier or free text is written.
  *
  * Usage:
- *   bun run bridge3c:rollup --from Scratch/betReport-all.json --dry-run
- *   bun run bridge3c:rollup --from Scratch/betReport-all.json
+ *   bun run bridge3c:rollup --from scratch/betReport-all.json --dry-run
+ *   bun run bridge3c:rollup --from scratch/betReport-all.json
  */
 
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
@@ -22,7 +22,7 @@ import { publishGsliveTallyRollup } from "../lib/gslive_tally_sink.ts";
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
-    from: { type: "string", default: "Scratch/betReport-all.json" },
+    from: { type: "string", default: "scratch/betReport-all.json" },
     "desk-date": { type: "string" },
     "chunk-bytes": { type: "string" },
     out: { type: "string" },
@@ -103,7 +103,7 @@ let fromPath = values.from as string;
 if (values["fetch-open"] === true) {
   fromPath =
     (values["save-capture"] as string | undefined) ??
-    "Scratch/open-bets-capture.json";
+    "scratch/open-bets-capture.json";
   await fetchOpenCapture(fromPath);
 }
 const rollup = await buildGsliveTallyRollup(fromPath, {

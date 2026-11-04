@@ -19,6 +19,21 @@
 import { realpathSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
+/**
+ * Decode the URL path segment used as an asset name.
+ *
+ * A browser percent-encodes spaces and non-ASCII file names, so the raw `URL.pathname` slice is not
+ * a file name: `/assets/arch%20guide.png` must be looked up as `arch guide.png`. Returns null for a
+ * malformed escape (`%E0%A4%A`), which is a client error, not a 500.
+ */
+export function decodeAssetName(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** Reject names that cannot be a file under the directory, before touching the filesystem. */
 export function isSafeAssetName(name: string): boolean {
   if (name === "" || name.includes("..")) return false;
@@ -32,16 +47,18 @@ export function isSafeAssetName(name: string): boolean {
 /**
  * The real path to serve, or null when the name is unsafe, missing, or resolves outside `dir`.
  *
- * `realpath` is what catches a symlink: the lexical check above cannot see one, and neither can
- * `Bun.file(...).exists()`.
+ * `name` is a URL path segment, so it is decoded first (`arch%20guide.png` → `arch guide.png`);
+ * a malformed escape is simply not a name this handler can serve. `realpath` is what catches a
+ * symlink: the lexical check above cannot see one, and neither can `Bun.file(...).exists()`.
  */
 export function containedAssetPath(dir: string, name: string): string | null {
-  if (!isSafeAssetName(name)) return null;
+  const decoded = decodeAssetName(name);
+  if (decoded === null || !isSafeAssetName(decoded)) return null;
   let resolvedDir: string;
   let resolvedFile: string;
   try {
     resolvedDir = realpathSync(dir);
-    resolvedFile = realpathSync(join(dir, name));
+    resolvedFile = realpathSync(join(dir, decoded));
   } catch {
     return null; // missing, dangling link, or an unreadable parent
   }

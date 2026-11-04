@@ -72,7 +72,7 @@ const HELP = [
   "  --from-jsonl <path>  tail the live 4C ticker JSONL (new bytes only; no F402 session)",
   "  --jsonl-window-bytes <n>  initial tail window for --from-jsonl (default 2000000)",
   "  --jsonl-state <path>  persisted offset/watermark for --from-jsonl",
-  "                        (default Scratch/f402-bet-ticker/jsonl-state.json)",
+  "                        (default scratch/f402-bet-ticker/jsonl-state.json)",
   "  --jsonl-window-snapshot  ignore persisted state; read the window and write R2",
   "  --r2-window-every <n>  refresh the R2 window snapshot every n loop ticks",
   "                        with new bytes (default 4 = 60s at 15s)",
@@ -327,7 +327,7 @@ async function main(): Promise<number> {
     return parsed;
   })();
   const jsonlStatePath =
-    values["jsonl-state"] ?? "Scratch/f402-bet-ticker/jsonl-state.json";
+    values["jsonl-state"] ?? "scratch/f402-bet-ticker/jsonl-state.json";
   const forceWindowSnapshot = values["jsonl-window-snapshot"];
   let jsonlState: F402TickerJsonlState | undefined =
     fromJsonl === undefined || forceWindowSnapshot

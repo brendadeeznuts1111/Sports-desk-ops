@@ -13,7 +13,7 @@ state rows, quality) is response-derived. Provenance fields (`source.*`, the req
 GSID=... bun run wagers:capture
 
 # exact operator-supplied body, verbatim
-GSID=... bun run wagers:capture --payload Scratch/ajax-getBetReport-body.json
+GSID=... bun run wagers:capture --payload scratch/ajax-getBetReport-body.json
 
 # session bootstrap the SPA itself uses (POST signin {checkSession:true} -> x-gs-session)
 GSID=... bun run wagers:capture --bootstrap-session
@@ -24,7 +24,7 @@ GSID=... bun run wagers:capture --bootstrap-session
 GSID=... bun run wagers:watch --cron "0,15,30,45 * * * *"
 
 # inspect without network or journal writes
-bun run wagers:capture --dry-run --payload Scratch/ajax-getBetReport-body.json
+bun run wagers:capture --dry-run --payload scratch/ajax-getBetReport-body.json
 ```
 
 `--ajax-url` exists for a local stand-in or proxy and defaults to the public endpoint. `--from`,
@@ -34,9 +34,9 @@ bun run wagers:capture --dry-run --payload Scratch/ajax-getBetReport-body.json
 
 | Path                                                               | Meaning                                                                                                |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `Scratch/gslive-wagers-by-state.summary.json`                      | v2 artifact, same contract the `sportsdesk_wagers` plugin tool reads (`source.kind` = `live-ajax.php`) |
-| `Scratch/wagers-by-state.status.json`                              | run journal: capped attempts, `lastSuccess`, `lastFailure`, sanitized error text, `alertCodes`         |
-| `Scratch/wagers-by-state.{history.jsonl,tickets.json,alerts.json}` | capture history, ticket-state delta join key, derived alerts (see below)                               |
+| `scratch/gslive-wagers-by-state.summary.json`                      | v2 artifact, same contract the `sportsdesk_wagers` plugin tool reads (`source.kind` = `live-ajax.php`) |
+| `scratch/wagers-by-state.status.json`                              | run journal: capped attempts, `lastSuccess`, `lastFailure`, sanitized error text, `alertCodes`         |
+| `scratch/wagers-by-state.{history.jsonl,tickets.json,alerts.json}` | capture history, ticket-state delta join key, derived alerts (see below)                               |
 
 Both writes are atomic (temp file + rename). **A failed read never overwrites the last good
 artifact.** A missing `GSID` fails before any request and journals the failure.
@@ -74,7 +74,7 @@ channel = "gslive-wagers"
 - R2: `wagers-by-state/latest.json` in `sportsdesk-ops-reports`, written with
   `lib/r2_s3_client.ts` `writeWithMetadata`; metadata carries schema version, capture time and
   `source=gslive-wagers-capture`.
-- The sink also writes `Scratch/gslive-wagers/latest.json`. The graph poller reads it and embeds a
+- The sink also writes `scratch/gslive-wagers/latest.json`. The graph poller reads it and embeds a
   `gsliveWagers` block in `docs/graph-live-feed.json`; its `--r2` publish carries that block to the
   deployed feed. This keeps the graph feed single-writer and avoids a capture overwriting topology.
 - Cadence: capture defaults to `*/15` and the graph poller defaults to 60s. The feed can lag the
@@ -92,13 +92,13 @@ channel = "gslive-wagers"
 ## History, ticket deltas, alerts
 
 Every successful capture also updates three files next to the artifact (all atomic, all
-`Scratch/`, gitignored):
+`scratch/`, gitignored):
 
 | Path                                    | Content                                                                                                                                                                                       |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Scratch/wagers-by-state.history.jsonl` | one line per successful capture: totals, per-state rows, delta, quality flags, alerts. Bounded rewrite (`--keep-history`, default 500); never written on failure                              |
-| `Scratch/wagers-by-state.tickets.json`  | previous/current `ticketId -> state` map used to compute `newTickets`, `goneTickets` and `migrations` (counts only; no ids leave this file)                                                   |
-| `Scratch/wagers-by-state.alerts.json`   | deterministic derived alerts: `capture_stale`, `unknown_state`, `coherence_violation`, `pending_aging`, `state_spike`, `ticket_churn`, `alert_read_error`. Empty array = measured "no alerts" |
+| `scratch/wagers-by-state.history.jsonl` | one line per successful capture: totals, per-state rows, delta, quality flags, alerts. Bounded rewrite (`--keep-history`, default 500); never written on failure                              |
+| `scratch/wagers-by-state.tickets.json`  | previous/current `ticketId -> state` map used to compute `newTickets`, `goneTickets` and `migrations` (counts only; no ids leave this file)                                                   |
+| `scratch/wagers-by-state.alerts.json`   | deterministic derived alerts: `capture_stale`, `unknown_state`, `coherence_violation`, `pending_aging`, `state_spike`, `ticket_churn`, `alert_read_error`. Empty array = measured "no alerts" |
 
 Thresholds: `--pending-warn-hours` (default 24), `--spike-pct` (25) with `--spike-min` (20),
 `--cadence-minutes` (30, staleness = 2× cadence), churn = >25% of previous wagers with ≥20 previous.
@@ -140,7 +140,7 @@ open -na "Google Chrome" --args --user-data-dir="$HOME/.cache/sportsdesk/gslive-
   https://plive.sportswidgets.pro/manager-tools/
 # sign in, close Chrome, then:
 bun run wagers:capture --webview-profile "$HOME/.cache/sportsdesk/gslive-profile" \
-  --payload Scratch/ajax-getBetReport-body.json
+  --payload scratch/ajax-getBetReport-body.json
 ```
 
 For the OS-level worker (no argv), set `GSLIVE_WEBVIEW_PROFILE` in the mounted environment. A
@@ -177,11 +177,11 @@ fault. Each attempt is journaled honestly, and a failed run still writes no arti
 - `bun test scripts/gslive_wagers_by_state.test.ts scripts/fetch-bet-tally.test.ts` — producer and
   wire client contracts.
 - Live numbers are **not** available until a session is provisioned; the offline artifact in
-  `Scratch/` is labelled `offline-csv` and must not be presented as a live read.
+  `scratch/` is labelled `offline-csv` and must not be presented as a live read.
 
 ## Integrity sidecar and portable bundle
 
-- Every successful capture writes `Scratch/wagers-by-state.sha256` next to the artifact, atomically
+- Every successful capture writes `scratch/wagers-by-state.sha256` next to the artifact, atomically
   with it: SHA-256 of the exact artifact bytes via `Bun.CryptoHasher`. `--debug` is not needed to
   consume it; the file is outside the frozen automation contract, so the plugin and verifiers are
   unaffected.
@@ -202,7 +202,7 @@ live session instead of a profile/keychain copy:
 2. Run `bun run wagers:capture --attach-chrome` (or `--dry-run --attach-chrome` first).
 
 Trace provenance: every `--debug-wire` run writes a **unique** body file
-(`Scratch/wagers-wire-response-<uuid>.json`) and logs the full 64-character sha256 plus byte count;
+(`scratch/wagers-wire-response-<uuid>.json`) and logs the full 64-character sha256 plus byte count;
 the `in N ms` figure is local trace timing, not endpoint latency. Unknown response fields are
 tolerated by the producer (columns are looked up by name) and surface as `unknown [...]`;
 `not-present [...]` lists contract columns absent from that response. Neither is fatal — a wire
@@ -223,7 +223,7 @@ it prints the complete request/response **shape** — method, URL, every header,
 (validated against `parseBetReportRequest`), response status/headers, nested JSON shape, and the
 producer's row-field coverage (`unknown` and `not-present` fields). It masks only the `Cookie`,
 `set-cookie`, and `x-gs-session` **values**. The full response body is written to
-`Scratch/wagers-wire-response.json` (gitignored) with its sha256, so row values stay out of
+`scratch/wagers-wire-response.json` (gitignored) with its sha256, so row values stay out of
 terminal/session logs.
 
 Bun's native `BUN_CONFIG_VERBOSE_FETCH` section is available as `--verbose-fetch=<curl|true>`, but
@@ -259,7 +259,7 @@ can finish before a debugger connects.
 ## Verification matrix (local stand-in)
 
 Pinned by `scripts/wagers_by_state_history.test.ts` (`verification matrix`) and reproduced with
-`Scratch/wagers-demo/` fixtures (gitignored):
+`scratch/wagers-demo/` fixtures (gitignored):
 
 - One wager with two legs → `legs 7 / wagers 6`; the producer suite also pins legs-vs-wagers and
   spanning-parlay counting, so the distinction is not only fixture-level.

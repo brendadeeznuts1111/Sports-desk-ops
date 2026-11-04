@@ -60,7 +60,9 @@ export async function loadGsliveSteamIndexFromJson(
   const byRot = new Map<string, GsliveSteamEntry>();
 
   if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
       if (value === null || typeof value !== "object") continue;
       const record = value as Record<string, unknown>;
       const timeUntilScoreSec = Number(record.timeUntilScoreSec);

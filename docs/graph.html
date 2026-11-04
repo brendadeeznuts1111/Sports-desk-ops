@@ -3,13 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>
-      SportsDesk &amp; Fantasy402 — ac5824d Ingestion Data Plane (5 Bridges),
-      Phase 6C Surveillance Graph &amp; 39-Wallet Profile Registry
-    </title>
+    <title>SportsDesk — Ingestion Data Plane &amp; Surveillance Graph</title>
     <meta
       name="description"
-      content="ac5824d ingestion data plane and Phase 6C surveillance command center: 5 Fantasy402/GSLive bridges (wagers-by-state, f402-bet-ticker, f402-pending, gslive-tally, f402-weblog Mode 6), Bun.cron bridge rollups on the America/Chicago desk clock, the same-origin guarded WebSocket hub on /api/live-bets, live-bets telemetry, and 39 tracked syndicate wallets with direct Polymarket & Fantasy402 profile links."
+      content="SportsDesk surveillance command center: the Fantasy402/GSLive ingestion bridges (wagers-by-state, f402-bet-ticker, f402-pending, gslive-tally, f402-weblog Mode 6), Bun.cron bridge rollups on the America/Chicago desk clock, the same-origin guarded WebSocket hub on /api/live-bets, live-bets telemetry, and the tracked syndicate wallet registry with Polymarket & Fantasy402 profile links. Every metric is hydrated from /api/graph/summary, the SSE stream, or the live feed and states its source and age."
     />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#070b14" />
@@ -106,6 +103,11 @@
         background: rgba(244, 63, 94, 0.18);
         color: #fda4af;
         border: 1px solid rgba(244, 63, 94, 0.5);
+      }
+      .pill-slate {
+        background: rgba(148, 163, 184, 0.16);
+        color: #cbd5e1;
+        border: 1px solid rgba(148, 163, 184, 0.45);
       }
       .sync-banner {
         background: linear-gradient(
@@ -418,7 +420,7 @@
         background: #f59e0b;
         color: #070b14;
       }
-      /* ac5824d ingestion data plane (bridges → scheduler → gateway/edge) */
+      /* ingestion data plane (bridges → scheduler → gateway/edge) */
       .data-plane-svg {
         width: 100%;
         height: auto;
@@ -521,24 +523,22 @@
       .ops-kpis .kpi-card .value {
         font-size: 1.15rem;
       }
+      .col-help {
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+        cursor: help;
+      }
     </style>
   </head>
   <body>
     <header class="topbar" aria-label="SportsDesk Surveillance Navigation">
       <strong
-        >🕸️ ac5824d INGESTION DATA PLANE + PHASE 6C SURVEILLANCE GRAPH</strong
+        >🕸️ INGESTION DATA PLANE + SURVEILLANCE GRAPH · HEAD
+        <span id="head-commit">—</span></strong
       >
       <span>•</span>
-      <span class="pill pill-emerald">5 bridges · 4 LIVE / 1 WIRED</span>
-      <span class="pill pill-amber"
-        >WSS: not ingested · 345ms fixture sample</span
-      >
-      <span class="pill pill-cyan"
-        >MEV Shield: 0% Mempool (bor_sendRawBundle)</span
-      >
-      <span class="pill pill-amber"
-        >Silo 3 Shadow Cap: 15% ($37.5K / Tennis Clamped)</span
-      >
+      <span class="pill pill-emerald" id="bridge-counts">—</span>
+      <span class="pill pill-amber" id="wss-state">—</span>
       <span class="spacer"></span>
       <a href="./graph-live-feed.json" download="graph-live-feed.json"
         >graph-live-feed.json</a
@@ -584,6 +584,12 @@
           class="pill pill-amber"
           id="live-data-mode"
           >data: FIXTURE</span
+        >
+        <span
+          style="margin-left: 0.35rem"
+          class="pill pill-cyan"
+          id="data-stream-state"
+          >stream: probing</span
         >
       </div>
       <div
@@ -694,72 +700,67 @@
       <!-- TOP KPI STRIP -->
       <section
         class="kpi-strip"
-        aria-label="ac5824d Data Plane and Verified Repo KPIs"
+        id="kpi-strip"
+        aria-label="Data plane and verified repo KPIs"
       >
         <div class="kpi-card" data-source="polymarket">
           <div class="label">Tracked Polymarket Wallets</div>
           <div class="value" style="color: var(--accent-cyan)">
-            <span id="kpi-active-wallets">22</span> Valid 0x Wallets
+            <span id="kpi-active-wallets">—</span> Valid 0x Wallets
           </div>
-          <div class="sub" id="kpi-wallet-provenance">
-            Direct PM Profile &amp; F402 Customer Links
-          </div>
+          <div class="sub" id="kpi-wallet-provenance">—</div>
         </div>
         <div class="kpi-card" data-source="bridge">
           <div class="label">Bridge 1 · wagers-by-state</div>
           <div class="value" style="color: var(--accent-emerald)">
-            24,778 Legs · 22,611 Tix
+            <span id="kpi-bridge-1">—</span>
           </div>
-          <div class="sub">LIVE · deskDate 2026-11-03 · operator run</div>
+          <div class="sub" id="kpi-bridge-1-sub">—</div>
         </div>
         <div class="kpi-card" data-source="bridge">
           <div class="label">Bridge 3a · f402-bet-ticker</div>
           <div class="value" style="color: var(--accent-cyan)">
-            836,848 Wagers
+            <span id="kpi-bridge-3a">—</span>
           </div>
-          <div class="sub">
-            115,660 in 7d window · 15s tail (Bun.JSONL.parseChunk)
-          </div>
+          <div class="sub" id="kpi-bridge-3a-sub">—</div>
         </div>
         <div class="kpi-card" data-source="bridge">
           <div class="label">Bridge 3b · f402-pending</div>
           <div class="value value-sm" style="color: var(--accent-amber)">
-            WIRED · GATE-08
+            <span id="kpi-bridge-3b">—</span>
           </div>
-          <div class="sub">
-            Ticket-Wager-totalPicks dedupe · GATE-08 needs --three-c-rollup
-          </div>
+          <div class="sub" id="kpi-bridge-3b-sub">—</div>
         </div>
         <div class="kpi-card" data-source="bridge">
           <div class="label">Bridge 3c · gslive-tally</div>
           <div class="value" style="color: var(--accent-emerald)">
-            24,778 Legs · 22,611 M.G
+            <span id="kpi-bridge-3c">—</span>
           </div>
-          <div class="sub">
-            LIVE · GATE-01..06 pass on committed fixture · --fetch-open
-          </div>
+          <div class="sub" id="kpi-bridge-3c-sub">—</div>
         </div>
         <div class="kpi-card" data-source="bridge">
           <div class="label">Bridge WebLog · Mode 6</div>
-          <div class="value" style="color: #c084fc">523,632 Rows</div>
-          <div class="sub">
-            52,116 / 62,409 matched (83.5%) · 0/7 negative controls
+          <div class="value" style="color: #c084fc">
+            <span id="kpi-weblog">—</span>
           </div>
+          <div class="sub" id="kpi-weblog-sub">—</div>
         </div>
         <div class="kpi-card" data-source="repo">
           <div class="label">Verified Repo Gates</div>
           <div class="value" style="color: var(--accent-cyan)">
-            2,706 Tests · 0 Fail
+            <span id="kpi-repo">—</span>
           </div>
-          <div class="sub">
-            773 files typechecked (ac5824d) · 56 daemon routes · 427 citations ·
-            9/9 verify:docs
-          </div>
+          <div class="sub" id="kpi-repo-sub">—</div>
         </div>
       </section>
 
       <!-- INTERACTIVE 3-TAB NAVIGATION BAR -->
-      <nav class="tab-bar" role="tablist" aria-label="Surveillance Views">
+      <nav
+        class="tab-bar"
+        id="tab-bar"
+        role="tablist"
+        aria-label="Surveillance Views"
+      >
         <button
           type="button"
           class="tab-btn active"
@@ -767,7 +768,8 @@
           aria-selected="true"
           data-tab-target="TAB_TOPOLOGY"
         >
-          🕸️ 1. Node Topology &amp; 14 Cluster Overview
+          🕸️ 1. Node Topology &amp;
+          <span id="tab-cluster-count">—</span> Cluster Overview
         </button>
         <button
           type="button"
@@ -777,9 +779,9 @@
           data-tab-target="TAB_PENDING_BETS"
         >
           ⏳ 2. Pending Bets &amp; Live Sync Feed (<span id="tab-pending-legs"
-            >222</span
+            >—</span
           >
-          Active Legs • Last Updated)
+          Active Legs • Updated <span id="tab-pending-updated">—</span>)
         </button>
         <button
           type="button"
@@ -788,7 +790,8 @@
           aria-selected="false"
           data-tab-target="TAB_WALLET_REGISTRY"
         >
-          📋 3. 39-Wallet Polymarket &amp; Customer Profile Registry
+          📋 3. <span id="tab-wallet-count">—</span>-Wallet Polymarket &amp;
+          Customer Profile Registry
         </button>
 
         <button
@@ -798,8 +801,11 @@
           aria-selected="false"
           data-tab-target="TAB_BACKTEST_4WK"
         >
-          📈 4. 4-Week Backtest + Cross-Domain Value Bridge (9,435 Customers •
-          Scenario +$1.17M)
+          📈 4. 4-Week Backtest + Cross-Domain Value Bridge (<span
+            id="tab-customers"
+            >—</span
+          >
+          Customers • Scenario <span id="tab-savings">—</span>)
         </button>
         <button
           type="button"
@@ -808,7 +814,10 @@
           aria-selected="false"
           data-tab-target="TAB_ROT_TICKER"
         >
-          ⚡ 5. Watchlist Bet-Ticker by ROT &amp; Per-Office IP-Tracker (13
+          ⚡ 5. Watchlist Bet-Ticker by ROT &amp; Per-Office IP-Tracker (<span
+            id="tab-ip-clusters"
+            >—</span
+          >
           Clusters)
         </button>
         <button
@@ -820,6 +829,24 @@
         >
           🔬 6. 10-Mode Forensic, Risk, Cross-Market &amp; Reconciliation Matrix
         </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          data-tab-target="TAB_KALSHI_SIGNALS"
+        >
+          🔮 7. Kalshi Signals &amp; Liquidity
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          data-tab-target="TAB_EXECUTION"
+        >
+          ⚙️ 8. Execution (paper)
+        </button>
       </nav>
 
       <!-- ================================================================== -->
@@ -827,21 +854,21 @@
       <!-- ================================================================== -->
       <div data-tab-panel="TAB_TOPOLOGY">
         <!-- ============================================================== -->
-        <!-- TAB 1a: ac5824d INGESTION DATA PLANE — 5 BRIDGES → GATEWAY    -->
+        <!-- TAB 1a: INGESTION DATA PLANE — BRIDGES → GATEWAY               -->
         <!-- ============================================================== -->
         <section
           class="section-panel"
           id="data-plane-panel"
-          aria-label="ac5824d Ingestion Data Plane"
+          aria-label="Ingestion Data Plane"
           style="margin-bottom: 1.25rem"
         >
           <div class="section-header">
             <h2>
-              🛠️ ac5824d Ingestion Data Plane — 5 Bridges → Gateway / WS Hub →
-              Dashboard
+              🛠️ Ingestion Data Plane — Bridges → Gateway / WS Hub → Dashboard
             </h2>
             <span class="pill pill-emerald"
-              >ac5824d architecture · deployed 8522a04</span
+              >repo-derived · hydrates from
+              <code>/api/graph/summary</code></span
             >
           </div>
           <p
@@ -853,17 +880,18 @@
           >
             Operational topology of the ingestion and distribution path. Counts
             marked <strong>repo</strong> are re-measured by committed gates;
-            counts marked <strong>reported</strong> are the 2026-11-04 operator
-            run over the desk corpus (<code>out/f402/</code>,
-            <code>Scratch/</code>; gitignored) and cannot be reproduced from a
-            clean checkout. Node = one committed artifact or process; edge = one
-            measured write or stream path.
+            counts marked <strong>reported</strong> are the operator run over
+            the desk corpus (<code>out/f402/</code>, <code>scratch/</code>;
+            gitignored) whose last census is
+            <span data-bridge-metric="census.asOf">—</span>, so they cannot be
+            reproduced from a clean checkout. Node = one committed artifact or
+            process; edge = one measured write or stream path.
           </p>
           <svg
             class="data-plane-svg"
             viewBox="0 0 1280 430"
             role="img"
-            aria-label="ac5824d ingestion data plane: Bridges 1, 3a, 3b, 3c and WebLog feed the Bun.cron rollup scheduler, which publishes to the R2 edge and the dashboard; the same-origin guarded WebSocket hub streams live bets to the dashboard"
+            aria-label="ingestion data plane: Bridges 1, 3a, 3b, 3c and WebLog feed the Bun.cron rollup scheduler, which publishes to the R2 edge and the dashboard; the same-origin guarded WebSocket hub streams live bets to the dashboard. Card values hydrate from /api/graph/summary and state their source and age."
           >
             <defs>
               <linearGradient id="dpEdge" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -925,11 +953,23 @@
               >
                 BRIDGE 1 · wagers-by-state
               </text>
-              <text x="14" y="36" fill="#e2e8f0" font-size="10">
-                24,778 legs / 22,611 tickets · deskDate 2026-11-03
+              <text
+                x="14"
+                y="36"
+                fill="#e2e8f0"
+                font-size="10"
+                id="bridge-1-value"
+              >
+                —
               </text>
-              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
-                ● LIVE · reported 2026-11-04
+              <text
+                x="14"
+                y="51"
+                fill="#6ee7b7"
+                font-size="9.5"
+                id="bridge-1-sub"
+              >
+                —
               </text>
             </g>
             <g transform="translate(20, 90)">
@@ -950,11 +990,23 @@
               >
                 BRIDGE 3a · f402-bet-ticker
               </text>
-              <text x="14" y="36" fill="#e2e8f0" font-size="10">
-                836,848 archive · 115,660 in 7d window
+              <text
+                x="14"
+                y="36"
+                fill="#e2e8f0"
+                font-size="10"
+                id="bridge-3a-value"
+              >
+                —
               </text>
-              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
-                ● LIVE · 15s tail via Bun.JSONL.parseChunk
+              <text
+                x="14"
+                y="51"
+                fill="#6ee7b7"
+                font-size="9.5"
+                id="bridge-3a-sub"
+              >
+                —
               </text>
             </g>
             <g transform="translate(20, 162)">
@@ -975,11 +1027,23 @@
               >
                 BRIDGE 3b · f402-pending
               </text>
-              <text x="14" y="36" fill="#e2e8f0" font-size="10">
-                fetch + rollup · Ticket-Wager-totalPicks dedupe
+              <text
+                x="14"
+                y="36"
+                fill="#e2e8f0"
+                font-size="10"
+                id="bridge-3b-value"
+              >
+                —
               </text>
-              <text x="14" y="51" fill="#fcd34d" font-size="9.5">
-                ◐ WIRED · GATE-08 skipped (no --three-c-rollup)
+              <text
+                x="14"
+                y="51"
+                fill="#fcd34d"
+                font-size="9.5"
+                id="bridge-3b-sub"
+              >
+                —
               </text>
             </g>
             <g transform="translate(20, 234)">
@@ -1000,11 +1064,23 @@
               >
                 BRIDGE 3c · gslive-tally
               </text>
-              <text x="14" y="36" fill="#e2e8f0" font-size="10">
-                24,778 legs / 22,611 M.G&lt;betGroupId&gt; tickets
+              <text
+                x="14"
+                y="36"
+                fill="#e2e8f0"
+                font-size="10"
+                id="bridge-3c-value"
+              >
+                —
               </text>
-              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
-                ● LIVE · GATE-01..06 fixture pass · --fetch-open
+              <text
+                x="14"
+                y="51"
+                fill="#6ee7b7"
+                font-size="9.5"
+                id="bridge-3c-sub"
+              >
+                —
               </text>
             </g>
             <g transform="translate(20, 306)">
@@ -1025,11 +1101,23 @@
               >
                 BRIDGE WL · f402-weblog (Mode 6)
               </text>
-              <text x="14" y="36" fill="#e2e8f0" font-size="10">
-                523,632 rows · 52,116 / 62,409 matched (83.5%)
+              <text
+                x="14"
+                y="36"
+                fill="#e2e8f0"
+                font-size="10"
+                id="weblog-value"
+              >
+                —
               </text>
-              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
-                ● LIVE · GATE-WL-02/03 enforced · 0/7 negative controls
+              <text
+                x="14"
+                y="51"
+                fill="#6ee7b7"
+                font-size="9.5"
+                id="weblog-sub"
+              >
+                —
               </text>
             </g>
 
@@ -1184,7 +1272,8 @@
 
             <text x="20" y="414" fill="#94a3b8" font-size="9.5">
               Bridge counts: repo-verified where a committed census/citation
-              exists; otherwise the 2026-11-04 operator run. A failed bridge
+              exists; otherwise the operator run, whose last census is
+              <tspan data-bridge-metric="census.asOf">—</tspan>. A failed bridge
               never throws the cycle and never publishes a partial artifact.
             </text>
           </svg>
@@ -1218,9 +1307,18 @@
               >edge sync: awaiting live feed</span
             >
           </div>
+          <p
+            style="
+              margin: 0 0 0.4rem;
+              font-size: 0.72rem;
+              color: var(--text-muted);
+            "
+          >
+            Hover a column header for its definition.
+          </p>
 
           <div class="table-wrap">
-            <table aria-label="ac5824d source bridges">
+            <table aria-label="source bridges">
               <caption
                 style="
                   caption-side: top;
@@ -1256,19 +1354,32 @@
                   </td>
                   <td><span class="pill pill-emerald">LIVE</span></td>
                   <td>
-                    deskDate <strong>2026-11-03</strong> ·
-                    <strong>24,778</strong> legs / <strong>22,611</strong>
+                    deskDate <span data-bridge-metric="census.asOf">—</span> ·
+                    <strong
+                      ><span data-bridge-metric="census.rows">—</span></strong
+                    >
+                    legs /
+                    <strong
+                      ><span data-bridge-metric="census.tickets"
+                        >—</span
+                      ></strong
+                    >
                     tickets
                   </td>
                   <td>capture freshness · never-discard artifact</td>
                 </tr>
                 <tr class="bridge-detail" hidden>
                   <td colspan="5">
-                    <strong>Reported 2026-11-04</strong> (operator run over the
-                    desk corpus; not reproducible from a clean checkout). The
-                    24,778 / 22,611 aggregate is the same GSLive capture as the
-                    committed 3c census; Bridge 1's own operator artifact is not
-                    committed. Runbook:
+                    <strong
+                      >Reported
+                      <span data-bridge-metric="census.asOf">—</span></strong
+                    >
+                    (operator run over the desk corpus; not reproducible from a
+                    clean checkout). The
+                    <span data-bridge-metric="census.rows">—</span> /
+                    <span data-bridge-metric="census.tickets">—</span> aggregate
+                    is the same GSLive capture as the committed 3c census;
+                    Bridge 1's own operator artifact is not committed. Runbook:
                     <code>docs/runbooks/wagers-by-state.md</code>. The capture
                     is fail-closed: a missing fixture aborts with no partial
                     write.
@@ -1286,8 +1397,16 @@
                   </td>
                   <td><span class="pill pill-emerald">LIVE</span></td>
                   <td>
-                    <strong>836,848</strong> archive wagers ·
-                    <strong>115,660</strong> in the 7-day window · 15s tail via
+                    <strong
+                      ><span data-bridge-metric="ticker.archive"
+                        >—</span
+                      ></strong
+                    >
+                    archive wagers ·
+                    <strong
+                      ><span data-bridge-metric="ticker.window">—</span></strong
+                    >
+                    in the 7-day window · 15s tail via
                     <code>Bun.JSONL.parseChunk</code>
                   </td>
                   <td>15s locked poll interval</td>
@@ -1295,9 +1414,12 @@
                 <tr class="bridge-detail" hidden>
                   <td colspan="5">
                     Archive and 7-day counts are the
-                    <strong>reported 2026-11-04</strong> operator run. The
-                    15_000 ms default interval and the byte-offset JSONL tail
-                    are repo-verified in
+                    <strong
+                      >reported
+                      <span data-bridge-metric="census.asOf">—</span></strong
+                    >
+                    operator run. The 15_000 ms default interval and the
+                    byte-offset JSONL tail are repo-verified in
                     <code>scripts/f402_bet_ticker_bridge3a.ts</code> and
                     <code>lib/f402_bet_ticker_jsonl.ts</code>.
                   </td>
@@ -1344,7 +1466,15 @@
                   </td>
                   <td><span class="pill pill-emerald">LIVE</span></td>
                   <td>
-                    <strong>24,778</strong> legs / <strong>22,611</strong>
+                    <strong
+                      ><span data-bridge-metric="census.rows">—</span></strong
+                    >
+                    legs /
+                    <strong
+                      ><span data-bridge-metric="census.tickets"
+                        >—</span
+                      ></strong
+                    >
                     <code>M.G&lt;betGroupId&gt;</code> tickets ·
                     <code>--fetch-open</code> wired
                   </td>
@@ -1354,12 +1484,14 @@
                 </tr>
                 <tr class="bridge-detail" hidden>
                   <td colspan="5">
-                    Repo-verified: row and ticket cardinalities match
-                    <code>docs/design/census/2026-11-04.json</code> (24,778
-                    rows; C_max 22,611 tickets / 22,611 groups). GATE-01..06
-                    pass on the committed synthetic fixture
+                    Repo-verified: row and ticket cardinalities match the latest
+                    committed census (<code>docs/design/census/</code>):
+                    <span data-bridge-metric="census.rows">—</span> rows; C_max
+                    <span data-bridge-metric="census.tickets">—</span> tickets /
+                    <span data-bridge-metric="census.tickets">—</span> groups.
+                    GATE-01..06 pass on the committed synthetic fixture
                     (<code>tests/gslive_tally_rollup.test.ts</code>); the
-                    24,778-row capture has no committed gate artifact.
+                    captured rows have no committed gate artifact.
                     <code>--fetch-open</code> is wired into the scheduled
                     rollup, and dedupe is on the numeric group key, never a
                     login hash.
@@ -1380,13 +1512,56 @@
                   </td>
                   <td><span class="pill pill-emerald">LIVE</span></td>
                   <td>
-                    <strong>523,632</strong> rows · <strong>52,116</strong> /
-                    <strong>62,409</strong> matched wagers (83.5%) ·
-                    <strong>3,462</strong> executionSnipers ·
-                    <strong>98</strong> sniperTwins ·
-                    <strong>1,069</strong> crossOfficeBeards ·
-                    <strong>144</strong> botRingAccounts ·
-                    <strong>0 / 7</strong> negative-control false positives
+                    <strong
+                      ><span data-bridge-metric="weblog.rows">—</span></strong
+                    >
+                    rows ·
+                    <strong
+                      ><span data-bridge-metric="weblog.matched"
+                        >—</span
+                      ></strong
+                    >
+                    /
+                    <strong
+                      ><span data-bridge-metric="weblog.window">—</span></strong
+                    >
+                    matched wagers (<span data-bridge-metric="weblog.matchedPct"
+                      >—</span
+                    >) ·
+                    <strong
+                      ><span data-bridge-metric="weblog.executionSnipers"
+                        >—</span
+                      ></strong
+                    >
+                    executionSnipers ·
+                    <strong
+                      ><span data-bridge-metric="weblog.sniperTwins"
+                        >—</span
+                      ></strong
+                    >
+                    sniperTwins ·
+                    <strong
+                      ><span data-bridge-metric="weblog.crossOfficeBeards"
+                        >—</span
+                      ></strong
+                    >
+                    crossOfficeBeards ·
+                    <strong
+                      ><span data-bridge-metric="weblog.botRingAccounts"
+                        >—</span
+                      ></strong
+                    >
+                    botRingAccounts ·
+                    <strong
+                      ><span data-bridge-metric="weblog.falsePositiveFlags"
+                        >—</span
+                      >
+                      /
+                      <span data-bridge-metric="weblog.negativeControls"
+                        >—</span
+                      ></strong
+                    >
+                    negative-control false positives
                   </td>
                   <td>
                     <span class="pill pill-emerald"
@@ -1396,17 +1571,20 @@
                 </tr>
                 <tr class="bridge-detail" hidden>
                   <td colspan="5">
-                    523,632 rows is the row/grammar-conservation constant
-                    recorded in
+                    <span data-bridge-metric="weblog.rows">—</span> rows is the
+                    row/grammar-conservation constant recorded in
                     <code>docs/bun-upstream-reference.md</code> and asserted by
                     GATE-WL-01. The match ratio and flag populations are the
-                    <strong>reported 2026-11-04</strong> operator run. Gate
-                    reality as shipped: GATE-WL-02 (causal wager conservation)
-                    and GATE-WL-03 (negative/positive controls) are real checks;
-                    GATE-WL-01's status expression returns
-                    <code>"pass"</code> on both branches and GATE-WL-04 is a
-                    constant <code>"pass"</code>, so those two cannot fail. 0/7
-                    negative-control false positives is the measured WL-03
+                    <strong
+                      >reported
+                      <span data-bridge-metric="census.asOf">—</span></strong
+                    >
+                    operator run. Gate reality as shipped: GATE-WL-02 (causal
+                    wager conservation) and GATE-WL-03 (negative/positive
+                    controls) are real checks; GATE-WL-01's status expression
+                    returns <code>"pass"</code> on both branches and GATE-WL-04
+                    is a constant <code>"pass"</code>, so those two cannot fail.
+                    0/7 negative-control false positives is the measured WL-03
                     control result. Modes A/B/C/I and IPv4 + IPv6 /64
                     classification are repo-verified.
                   </td>
@@ -1503,7 +1681,7 @@
           </div>
 
           <div class="table-wrap" style="margin-top: 0.9rem">
-            <table aria-label="Verified repo metrics">
+            <table id="repo-gates-table" aria-label="Verified repo metrics">
               <caption
                 style="
                   caption-side: top;
@@ -1513,10 +1691,11 @@
                   padding-bottom: 0.4rem;
                 "
               >
-                Current verified repo metrics. Suite and typecheck counts are
-                the ac5824d verification record (2026-11-04); route, citation
-                and docs-gate counts were re-run on this deployment and are
-                unchanged.
+                Derived from the running daemon and committed artifacts; each
+                row states source + age. A check that has not been run in this
+                checkout is
+                <em>not measured</em
+                >, never zero.
               </caption>
               <thead>
                 <tr>
@@ -1528,25 +1707,17 @@
               <tbody>
                 <tr>
                   <td>Test suite</td>
-                  <td>
-                    <strong>2,706</strong> tests · <strong>0</strong> fail
-                  </td>
-                  <td><code>bun test</code> (bare, ac5824d record)</td>
+                  <td><span id="gate-tests-value">—</span></td>
+                  <td><code>bun test</code></td>
                 </tr>
                 <tr>
                   <td>Typecheck</td>
-                  <td>
-                    <strong>773</strong> files · 0 errors <br /><span
-                      style="color: #94a3b8"
-                      >783 at this deployment (+2 test files since
-                      8522a04)</span
-                    >
-                  </td>
+                  <td><span id="gate-typecheck-value">not measured</span></td>
                   <td><code>bun run typecheck</code></td>
                 </tr>
                 <tr>
                   <td>Daemon route surface</td>
-                  <td><strong>56</strong> routes</td>
+                  <td><span id="gate-routes-value">—</span></td>
                   <td>
                     <code>lib/daemon_routes.ts</code> ·
                     <code>bun run check:route-surface</code>
@@ -1554,15 +1725,12 @@
                 </tr>
                 <tr>
                   <td>Docs citations</td>
-                  <td>
-                    <strong>427</strong> citations /
-                    <strong>112</strong> anchors
-                  </td>
+                  <td><span id="gate-citations-value">—</span></td>
                   <td><code>bun run check:spec-citations</code></td>
                 </tr>
                 <tr>
                   <td>Docs gate</td>
-                  <td><strong>9 / 9</strong> checks pass</td>
+                  <td><span id="gate-docs-value">not measured</span></td>
                   <td><code>bun run verify:docs</code></td>
                 </tr>
               </tbody>
@@ -1576,16 +1744,107 @@
             "
           >
             Evidence notes: bare <code>bun test</code> covers
-            <code>tests/</code> plus the colocated tests and is the count the
-            ac5824d commit recorded; the CI gate is
-            <code>bun test tests/</code> (2,026 tests at ac5824d). The deployed
-            HEAD 8522a04 adds 8 <code>.ts</code> files, so
-            <code>bun run typecheck</code> reports 781 files there. Bridge gate
-            labels above state what each gate actually enforces as shipped:
-            GATE-08 is skipped unless <code>--three-c-rollup</code> is passed,
-            and WebLog GATE-WL-01/GATE-WL-04 are constant-pass while GATE-WL-02
-            and GATE-WL-03 are real checks.
+            <code>tests/</code> plus the colocated tests; the CI gate is
+            <code>bun test tests/</code>. Each row carries its own provenance: a
+            measured row states what was measured and when (junit report mtime,
+            or the daemon's derived route/citation tables), and an unrun check
+            renders <em>not measured</em> with the command to run — it never
+            falls back to a remembered number. Bridge gate labels above state
+            what each gate actually enforces as shipped: GATE-08 is skipped
+            unless <code>--three-c-rollup</code> is passed, and WebLog
+            GATE-WL-01/GATE-WL-04 are constant-pass while GATE-WL-02 and
+            GATE-WL-03 are real checks.
           </p>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 1c: AUTOMATION — POLLER / EVENT LOG / CRON / TELEGRAM      -->
+        <!-- ============================================================== -->
+        <section
+          class="section-panel"
+          id="automation-panel"
+          aria-label="Automation — poller, bridge event log, cron and Telegram"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>
+              ⚙️ Automation — Poller, Bridge Event Log, Cron &amp; Telegram
+            </h2>
+            <span class="live-badge-row">
+              <span class="pill pill-amber" id="auto-overall-state"
+                >automation: probing</span
+              >
+            </span>
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            Derived from <code>/api/graph/summary</code> (<code
+              >automation</code
+            >
+            + <code>feed</code>). A value that cannot be measured here renders
+            <em>daemon-only</em>, never <code>0</code>. Provenance is host-only
+            on purpose: no tokens, no ticket URLs. The bridge event log itself
+            is the wager-tape panel below.
+          </p>
+          <div class="kpi-strip ops-kpis" aria-label="Automation state">
+            <div class="kpi-card live-kpi" data-source="bridge">
+              <div class="label">Feed poller</div>
+              <div
+                class="value"
+                style="color: var(--accent-cyan)"
+                id="auto-feed-value"
+              >
+                —
+              </div>
+              <div class="sub" id="auto-feed-sub">—</div>
+              <span class="pill pill-amber" id="auto-feed-state">feed: —</span>
+            </div>
+            <div class="kpi-card live-kpi" data-source="bridge">
+              <div class="label">Bridge WS relay</div>
+              <div
+                class="value"
+                style="color: var(--accent-emerald)"
+                id="auto-relay-value"
+              >
+                —
+              </div>
+              <div class="sub" id="auto-relay-sub">—</div>
+              <span class="pill pill-amber" id="auto-relay-state"
+                >relay: —</span
+              >
+            </div>
+            <div class="kpi-card live-kpi" data-source="bridge">
+              <div class="label">Cron schedules</div>
+              <div
+                class="value"
+                style="color: var(--accent-amber)"
+                id="auto-cron-value"
+              >
+                —
+              </div>
+              <div class="sub" id="auto-cron-sub">—</div>
+              <span class="pill pill-amber" id="auto-cron-state">cron: —</span>
+            </div>
+            <div class="kpi-card live-kpi" data-source="f402">
+              <div class="label">Telegram digest</div>
+              <div
+                class="value"
+                style="color: #c084fc"
+                id="auto-telegram-value"
+              >
+                —
+              </div>
+              <div class="sub" id="auto-telegram-sub">—</div>
+              <span class="pill pill-amber" id="auto-telegram-state"
+                >telegram: —</span
+              >
+            </div>
+          </div>
         </section>
 
         <!-- ============================================================== -->
@@ -1709,6 +1968,15 @@
               >
                 Desk book (F402)
               </button>
+              <button
+                type="button"
+                class="btn"
+                role="tab"
+                aria-selected="false"
+                data-ops-target="OPS_GAMES"
+              >
+                Game state
+              </button>
             </div>
             <span class="ops-spacer"></span>
             <button
@@ -1728,6 +1996,12 @@
           </div>
 
           <div class="ops-panel" data-ops-panel="OPS_TAPE">
+            <div class="live-badge-row" style="margin: 0 0 0.5rem">
+              <span class="pill pill-amber" id="eventlog-source">relay: —</span>
+              <span class="pill pill-cyan" id="eventlog-count"
+                >events: awaiting feed</span
+              >
+            </div>
             <div class="table-wrap">
               <table class="live-table" aria-label="Live wager and bridge tape">
                 <thead>
@@ -1813,6 +2087,41 @@
             </div>
           </div>
 
+          <div class="ops-panel" data-ops-panel="OPS_GAMES" hidden>
+            <div class="live-badge-row" style="margin: 0 0 0.5rem">
+              <span class="pill pill-cyan" id="game-state-source"
+                >source: /api/live-bets</span
+              >
+              <span class="pill pill-amber" id="game-state-age">age: —</span>
+              <button type="button" class="btn" id="game-state-refresh">
+                Refresh games
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table class="live-table" aria-label="Game state">
+                <thead>
+                  <tr>
+                    <th scope="col">Game</th>
+                    <th scope="col">Sport / Period</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="wrap">Pending risk / to-win</th>
+                    <th scope="col" class="wrap">Source &amp; age</th>
+                  </tr>
+                </thead>
+                <tbody id="game-state-tbody">
+                  <tr>
+                    <td colspan="6" class="tape-empty">
+                      Game state has not loaded — it comes from the daemon-only
+                      <code>/api/live-bets</code>; the static Pages edge says so
+                      instead of showing fixture rows.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <p
             style="
               margin: 0.7rem 0 0;
@@ -1835,8 +2144,8 @@
         >
           <div class="graph-header">
             <h1>
-              Phase 6C Counter-Adversarial Node Topology — Polymarket CLOB &amp;
-              Shadow Stream ↔ Fantasy402 Downlines
+              Counter-Adversarial Node Topology — Polymarket CLOB &amp; Shadow
+              Stream ↔ Fantasy402 Downlines
             </h1>
             <div>
               <button
@@ -2354,30 +2663,29 @@
         >
           <div class="section-header">
             <h2>
-              🔥 Today's 14 Syndicate Cluster Summary ($<span
-                id="topology-exposure"
-                >702,700</span
-              >
-              Total Exposure Across <span id="topology-legs">222</span> Active
-              Legs)
+              🔥 Today's <span id="clusters-heading">—</span> Syndicate Cluster
+              Summary ($<span id="clusters-exposure-heading">—</span> Total
+              Exposure Across <span id="topology-legs">—</span> Active Legs)
             </h2>
             <div style="display: flex; gap: 0.4rem; flex-wrap: wrap">
               <button type="button" class="btn active" data-bet-filter="ALL">
-                All Clusters (14)
+                All Clusters (<span id="clusters-all-count">—</span>)
               </button>
               <button type="button" class="btn" data-bet-filter="SHADOW_ALPHA">
-                Off-Tracker Shadow Alpha (6)
+                Off-Tracker Shadow Alpha (<span id="shadow-alpha-count">—</span
+                >)
               </button>
               <button type="button" class="btn" data-bet-filter="MATCHED_BOOK">
-                Matched F402 Parlays (7)
+                Matched F402 Parlays (<span id="parlays-heading">—</span>)
               </button>
               <button type="button" class="btn" data-bet-filter="TRAP_RESOLVED">
-                Quarantine Trap Resolved (1)
+                Quarantine Trap Resolved (<span id="trap-resolved-count">—</span
+                >)
               </button>
             </div>
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Cluster summary">
               <thead>
                 <tr>
                   <th>Cluster ID</th>
@@ -3022,7 +3330,7 @@
             </div>
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="F402 tick preview">
               <thead>
                 <tr>
                   <th>Time (raw)</th>
@@ -3068,14 +3376,14 @@
                 class="btn active"
                 data-pending-filter="ALL"
               >
-                All Pending (222 Legs)
+                All Pending (<span id="pending-heading">—</span> Legs)
               </button>
               <button
                 type="button"
                 class="btn"
                 data-pending-filter="POLYMARKET_SHADOW"
               >
-                Polymarket Shadow (84)
+                Polymarket Shadow (<span id="pending-shadow-count">—</span>)
               </button>
               <button
                 type="button"
@@ -3109,7 +3417,7 @@
           </div>
 
           <div class="table-wrap">
-            <table>
+            <table aria-label="Pending bets ledger">
               <thead>
                 <tr>
                   <th>Ticket / Order ID</th>
@@ -3845,7 +4153,7 @@
       </div>
 
       <!-- ================================================================== -->
-      <!-- TAB 3: COMPLETE 39-WALLET POLYMARKET & CUSTOMER PROFILE REGISTRY   -->
+      <!-- TAB 3: WALLET POLYMARKET & CUSTOMER PROFILE REGISTRY               -->
       <!-- ================================================================== -->
       <div data-tab-panel="TAB_WALLET_REGISTRY" hidden>
         <section
@@ -3854,8 +4162,9 @@
         >
           <div class="section-header">
             <h2>
-              📋 Complete 39-Wallet Polymarket &amp; Customer Profile Registry
-              (+ 6 HD Burners &amp; 3 Treasury Silos)
+              📋 Complete
+              <span id="wallet-registry-count">—</span>-Wallet Polymarket &amp;
+              Customer Profile Registry (+ 6 HD Burners &amp; 3 Treasury Silos)
             </h2>
             <input
               type="search"
@@ -3866,7 +4175,7 @@
             />
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Wallet registry">
               <thead>
                 <tr>
                   <th>#</th>
@@ -7815,47 +8124,37 @@
           <div class="kpi-card" data-source="f402">
             <div class="label">Full Customer Universe Scanned</div>
             <div class="value" style="color: var(--accent-cyan)">
-              9,435 Accounts
+              <span id="bt-customers">—</span> Accounts
             </div>
-            <div class="sub">
-              2,236 Active Bettors • 220 Enriched • 22 Valid 0x Wallets
-            </div>
+            <div class="sub" id="bt-customers-sub">—</div>
           </div>
           <div class="kpi-card" data-source="f402">
             <div class="label">4-Week CFB Parlays (Wks 6–9)</div>
-            <div class="value" style="color: #38bdf8">$2,426,400 Handle</div>
-            <div class="sub">
-              4,085 Tickets (9,368 Legs) • -$203.4K → +$384.1K
+            <div class="value" style="color: #38bdf8">
+              $<span id="bt-cfb-handle">—</span> Handle
             </div>
+            <div class="sub" id="bt-cfb-sub">—</div>
           </div>
           <div class="kpi-card" data-source="f402">
             <div class="label">4-Week NBA Parlays (Pre + Wk 1–2)</div>
-            <div class="value" style="color: #c084fc">$2,289,800 Handle</div>
-            <div class="sub">
-              3,578 Tickets (8,087 Legs) • -$209.0K → +$378.2K
+            <div class="value" style="color: #c084fc">
+              $<span id="bt-nba-handle">—</span> Handle
             </div>
+            <div class="sub" id="bt-nba-sub">—</div>
           </div>
           <div class="kpi-card" data-source="backtest">
             <div class="label">Counterfactual Desk Net (4 Wks)</div>
             <div class="value" style="color: var(--accent-emerald)">
-              +$762,280 (+16.16%)
+              <span id="bt-desk-net">—</span>
             </div>
-            <div class="sub">
-              vs Baseline Unprotected -$412,380 (-8.74% Hold)
-            </div>
+            <div class="sub" id="bt-desk-net-sub">—</div>
           </div>
           <div class="kpi-card" data-source="backtest">
             <div class="label">Total 4-Week Desk Savings</div>
             <div class="value" style="color: var(--accent-amber)">
-              +
-
-              <!-- ================================================================== -->
-              <!-- TAB 5: CROSS-VENUE WATCHLIST BET-TICKER BY ROT (POLY <-> F402)     -->
-              <!-- ================================================================== -->
-
-              $1,174,660 Saved
+              <span id="bt-savings">—</span>
             </div>
-            <div class="sub">+24.90% Hold Swing • 99.4% Rec Flow Retained</div>
+            <div class="sub" id="bt-savings-sub">—</div>
           </div>
         </section>
         <section
@@ -7924,7 +8223,7 @@
             </div>
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Combo uniqueness gates">
               <thead>
                 <tr>
                   <th>Gate</th>
@@ -7958,8 +8257,10 @@
         >
           <div class="section-header">
             <h2>
-              📅 1. Week-by-Week CFB &amp; NBA Parlay &amp; Combo Backtest (Oct
-              03 – Oct 31, 2026 • 7,663 Tickets / 17,455 Legs)
+              📅 1. Week-by-Week CFB &amp; NBA Parlay &amp; Combo Backtest
+              (<span id="bt-window">—</span> •
+              <span id="bt-tickets">—</span> Tickets /
+              <span id="bt-legs">—</span> Legs)
             </h2>
             <a
               class="link-badge"
@@ -7968,8 +8269,22 @@
               >Download 4-Week Backtest JSON ↗</a
             >
           </div>
+          <p
+            style="
+              margin: 0 0 0.6rem;
+              font-size: 0.72rem;
+              color: var(--text-muted);
+            "
+          >
+            Rows below are the committed <code>backtest-4wk-cfb-nba.json</code>
+            sample (<code>weeklyBreakdown</code>,
+            <code>comboFamilyBreakdown</code>, <code>guardAttribution</code>,
+            <code>customerLeaderboard</code>). The KPI cards and this heading
+            hydrate from the live feed's <code>backtest4Wk</code>; a row below
+            is a labelled sample, never a re-measured claim.
+          </p>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Week-by-week backtest">
               <thead>
                 <tr>
                   <th>Backtest Week</th>
@@ -8144,10 +8459,10 @@
                 All Families &amp; Customers
               </button>
               <button type="button" class="btn" data-bt-filter="CFB">
-                CFB Focus (4,085 Tix)
+                CFB Focus (<span id="bt-cfb-tix">—</span> Tix)
               </button>
               <button type="button" class="btn" data-bt-filter="NBA">
-                NBA Focus (3,578 Tix)
+                NBA Focus (<span id="bt-nba-tix">—</span> Tix)
               </button>
               <button type="button" class="btn" data-bt-filter="SHARP">
                 Sharp / Syndicate Extractors
@@ -8158,7 +8473,7 @@
             </div>
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Combo family performance">
               <thead>
                 <tr>
                   <th>Sport</th>
@@ -8420,7 +8735,7 @@
             />
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Customer leaderboard">
               <thead>
                 <tr>
                   <th>Rank</th>
@@ -12487,7 +12802,7 @@
             </div>
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="Office IP tracker">
               <thead>
                 <tr>
                   <th>Office / Sub-Agent &amp; Wire Query</th>
@@ -13899,6 +14214,9 @@
           </div>
         </section>
       </div>
+      <!-- ================================================================== -->
+      <!-- TAB 5: CROSS-VENUE WATCHLIST BET-TICKER BY ROT (POLY <-> F402)     -->
+      <!-- ================================================================== -->
       <div data-tab-panel="TAB_ROT_TICKER" hidden>
         <section
           class="kpi-strip"
@@ -14043,7 +14361,7 @@
             >
           </div>
           <div class="table-wrap">
-            <table>
+            <table aria-label="ROT watchlist">
               <thead>
                 <tr>
                   <th>Board ROT &amp; Period</th>
@@ -15227,7 +15545,7 @@
           </div>
 
           <div class="table-wrap">
-            <table>
+            <table aria-label="Forensic modes catalog">
               <thead>
                 <tr>
                   <th>Domain</th>
@@ -15791,6 +16109,310 @@
                 loading="lazy"
               />
             </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- TAB 7: KALSHI SIGNALS & LIQUIDITY (READ-ONLY)                       -->
+      <!-- ================================================================== -->
+      <div data-tab-panel="TAB_KALSHI_SIGNALS" hidden>
+        <section
+          class="section-panel"
+          id="kalshi-signals-panel"
+          aria-label="Kalshi signals and liquidity"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>🔮 Kalshi Signals &amp; Liquidity</h2>
+            <span class="live-badge-row">
+              <span class="pill pill-amber" id="kalshi-signals-state"
+                >state: —</span
+              >
+              <span class="pill pill-amber" id="kalshi-signals-age"
+                >age: —</span
+              >
+              <span class="pill pill-cyan" id="kalshi-config"
+                >thresholds: —</span
+              >
+              <button type="button" class="btn" id="kalshi-signals-refresh">
+                Refresh signals
+              </button>
+            </span>
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            Watchlist-account betting flow matched to open Kalshi markets and
+            their order books.
+            <strong
+              >Read-only signals. No orders are placed and no Kalshi credentials
+              are used.</strong
+            >
+            This page only reads <code>/api/signals/kalshi</code>; it never
+            calls Kalshi. Rows hydrate on tab open and refresh at most once a
+            minute while this tab is visible.
+          </p>
+          <div class="table-wrap">
+            <table aria-label="Kalshi signals">
+              <thead>
+                <tr>
+                  <th scope="col">Signal</th>
+                  <th scope="col" class="wrap">Watchlist flow</th>
+                  <th scope="col" class="wrap">Kalshi market</th>
+                  <th scope="col">Kalshi price</th>
+                  <th scope="col" class="wrap">Liquidity</th>
+                  <th scope="col">Edge</th>
+                  <th scope="col">Verdict</th>
+                  <th scope="col" class="wrap">Source &amp; age</th>
+                </tr>
+              </thead>
+              <tbody id="kalshi-signals-tbody">
+                <tr>
+                  <td colspan="8" class="tape-empty">
+                    Kalshi signals have not loaded — they come from the
+                    daemon-only <code>/api/signals/kalshi</code>; the static
+                    Pages edge says so instead of showing fixture prices.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section
+          class="section-panel"
+          id="gslive-weblogs-panel"
+          aria-label="GSLive weblog activity"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>📜 GSLive WebLog Activity</h2>
+            <span class="live-badge-row">
+              <span class="pill pill-amber" id="gslive-weblogs-state"
+                >state: —</span
+              >
+              <span class="pill pill-amber" id="gslive-weblogs-age"
+                >age: —</span
+              >
+              <button type="button" class="btn" id="gslive-weblogs-refresh">
+                Refresh logs
+              </button>
+            </span>
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            Audited GSLive bet/event logs per watchlist account, read from the
+            daemon's committed <code>scratch/gslive-weblogs/latest.json</code>.
+            An unmeasured artifact states its reason and the refresh command; a
+            missing log is never reported as zero activity.
+          </p>
+          <div class="table-wrap">
+            <table aria-label="GSLive weblogs">
+              <thead>
+                <tr>
+                  <th scope="col">Account</th>
+                  <th scope="col">Agent</th>
+                  <th scope="col">Bets audited</th>
+                  <th scope="col" class="wrap">Flags</th>
+                  <th scope="col">Last log</th>
+                  <th scope="col" class="wrap">Provenance</th>
+                </tr>
+              </thead>
+              <tbody id="gslive-weblogs-tbody">
+                <tr>
+                  <td colspan="6" class="tape-empty">
+                    GSLive weblog activity has not loaded — it comes from the
+                    daemon-only <code>/api/gslive/weblogs</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- TAB 8: EXECUTION — PAPER BY DEFAULT (LIVE GATED)                    -->
+      <!-- ================================================================== -->
+      <div data-tab-panel="TAB_EXECUTION" hidden>
+        <section
+          class="section-panel"
+          id="execution-panel"
+          aria-label="Execution plan and paper fills"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>⚙️ Execution — Wire Signal → Venue / Style / Size (Paper)</h2>
+            <span class="live-badge-row">
+              <span class="pill pill-cyan" id="exec-state">state: —</span>
+              <span class="pill pill-cyan" id="exec-kalshi-live"
+                >kalshi: —</span
+              >
+              <span class="pill pill-amber" id="exec-polymarket-live"
+                >polymarket: —</span
+              >
+              <span class="pill pill-cyan" id="exec-policy">policy: —</span>
+            </span>
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            <strong
+              >Paper execution by default — this page sends no live orders
+              unless the daemon reports Kalshi live-ready and the operator
+              confirms twice. Polymarket live is unavailable (no
+              signer).</strong
+            >
+            The page only reads <code>/api/execution/plan</code> and posts the
+            daemon's own <code>/api/execution/mode</code> /
+            <code>/api/execution/run</code>; it never calls Kalshi or Polymarket
+            directly. A planning call never places an order.
+          </p>
+          <div class="ops-toolbar">
+            <button type="button" class="btn" id="exec-run">Run plan</button>
+            <button type="button" class="btn" id="exec-pause">
+              Pause / kill
+            </button>
+            <button type="button" class="btn" id="exec-resume">
+              Resume paper
+            </button>
+            <span class="ops-spacer"></span>
+            <span class="pill pill-amber" id="exec-state-detail"
+              >mode: awaiting plan</span
+            >
+          </div>
+
+          <div class="kpi-strip ops-kpis" aria-label="Execution risk limits">
+            <div class="kpi-card live-kpi" data-source="bridge">
+              <div class="label">Risk limits</div>
+              <div
+                class="value"
+                style="color: var(--accent-amber); font-size: 1rem"
+                id="exec-risk"
+              >
+                —
+              </div>
+              <div class="sub" id="exec-risk-sub">
+                daily planned · open intents · market exposure · caps
+              </div>
+            </div>
+          </div>
+
+          <div id="exec-live-controls" hidden>
+            <p
+              style="
+                margin: 0.6rem 0 0.4rem;
+                font-size: 0.75rem;
+                color: #fda4af;
+              "
+            >
+              Live is armed by the daemon, but each order still needs two
+              operator confirmations. Type <code>PLACE LIVE ORDERS</code> in
+              both boxes to enable the live button.
+            </p>
+            <div
+              class="live-badge-row"
+              style="margin: 0 0 0.75rem; flex-wrap: wrap"
+            >
+              <input
+                type="text"
+                id="exec-live-confirm-1"
+                class="search-input"
+                placeholder="type PLACE LIVE ORDERS"
+                aria-label="Live confirmation 1"
+              />
+              <input
+                type="text"
+                id="exec-live-confirm-2"
+                class="search-input"
+                placeholder="type PLACE LIVE ORDERS again"
+                aria-label="Live confirmation 2"
+              />
+              <button type="button" class="btn" id="exec-live" disabled>
+                LIVE — place orders
+              </button>
+            </div>
+          </div>
+
+          <h3
+            style="
+              margin: 0.9rem 0 0.45rem;
+              font-size: 0.85rem;
+              color: var(--text-main);
+            "
+          >
+            Decisions
+          </h3>
+          <div class="table-wrap">
+            <table aria-label="Execution decisions">
+              <thead>
+                <tr>
+                  <th scope="col">Signal</th>
+                  <th scope="col">Venue &amp; style</th>
+                  <th scope="col">Size / limit</th>
+                  <th scope="col">Edge / slippage</th>
+                  <th scope="col" class="wrap">Verdict &amp; reasons</th>
+                  <th scope="col" class="wrap">Provenance</th>
+                </tr>
+              </thead>
+              <tbody id="exec-decisions-tbody">
+                <tr>
+                  <td colspan="6" class="tape-empty">
+                    Execution decisions have not loaded — press
+                    <strong>Run plan</strong>; the plan comes from the
+                    daemon-only <code>/api/execution/plan</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3
+            style="
+              margin: 1rem 0 0.45rem;
+              font-size: 0.85rem;
+              color: var(--text-main);
+            "
+          >
+            Paper fills &amp; resting quotes
+          </h3>
+          <div class="table-wrap">
+            <table aria-label="Paper fills">
+              <thead>
+                <tr>
+                  <th scope="col">Intent</th>
+                  <th scope="col">Venue/ticker</th>
+                  <th scope="col">Side</th>
+                  <th scope="col">Price</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Age</th>
+                </tr>
+              </thead>
+              <tbody id="exec-fills-tbody">
+                <tr>
+                  <td colspan="7" class="tape-empty">
+                    No paper fills yet — the daemon's paper ledger fills takers
+                    and rests maker quotes; nothing is filled just because a
+                    quote was posted.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
       </div>

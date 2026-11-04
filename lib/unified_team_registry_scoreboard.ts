@@ -20,59 +20,60 @@ const SCOREBOARD_LEAGUE: Readonly<Record<string, League | null>> = {
 };
 
 /** Nickname → canonical code (scoreboard `team.name` column). */
-const NICKNAME_CODE: Readonly<Record<League, Readonly<Record<string, string>>>> =
-  {
-    NFL: {
-      Vikings: "MIN",
-      Lions: "DET",
-      Raiders: "LV",
-      Jets: "NYJ",
-      Cardinals: "ARI",
-      Cowboys: "DAL",
-      Falcons: "ATL",
-      Buccaneers: "TB",
-      Ravens: "BAL",
-      Bills: "BUF",
-      Colts: "IND",
-      Jaguars: "JAX",
-      Titans: "TEN",
-      Bengals: "CIN",
-      Browns: "CLE",
-      Steelers: "PIT",
-      Chargers: "LAC",
-      Rams: "LAR",
-      Chiefs: "KC",
-      Broncos: "DEN",
-      Patriots: "NE",
-      Dolphins: "MIA",
-      Eagles: "PHI",
-      Commanders: "WAS",
-    },
-    NBA: {
-      Celtics: "BOS",
-      Magic: "ORL",
-      Nets: "BKN",
-      Pacers: "IND",
-      Clippers: "LAC",
-      Warriors: "GSW",
-      Raptors: "TOR",
-      Lakers: "LAL",
-    },
-    NHL: {
-      Jets: "WPG",
-      Hurricanes: "CAR",
-      Wild: "MIN",
-      Capitals: "WSH",
-      Oilers: "EDM",
-      Rangers: "NYR",
-      Senators: "OTT",
-      Ducks: "ANA",
-    },
-    MLB: {},
-    CFB: {},
-    EPL: {},
-    UNKNOWN: {},
-  };
+const NICKNAME_CODE: Readonly<
+  Record<League, Readonly<Record<string, string>>>
+> = {
+  NFL: {
+    Vikings: "MIN",
+    Lions: "DET",
+    Raiders: "LV",
+    Jets: "NYJ",
+    Cardinals: "ARI",
+    Cowboys: "DAL",
+    Falcons: "ATL",
+    Buccaneers: "TB",
+    Ravens: "BAL",
+    Bills: "BUF",
+    Colts: "IND",
+    Jaguars: "JAX",
+    Titans: "TEN",
+    Bengals: "CIN",
+    Browns: "CLE",
+    Steelers: "PIT",
+    Chargers: "LAC",
+    Rams: "LAR",
+    Chiefs: "KC",
+    Broncos: "DEN",
+    Patriots: "NE",
+    Dolphins: "MIA",
+    Eagles: "PHI",
+    Commanders: "WAS",
+  },
+  NBA: {
+    Celtics: "BOS",
+    Magic: "ORL",
+    Nets: "BKN",
+    Pacers: "IND",
+    Clippers: "LAC",
+    Warriors: "GSW",
+    Raptors: "TOR",
+    Lakers: "LAL",
+  },
+  NHL: {
+    Jets: "WPG",
+    Hurricanes: "CAR",
+    Wild: "MIN",
+    Capitals: "WSH",
+    Oilers: "EDM",
+    Rangers: "NYR",
+    Senators: "OTT",
+    Ducks: "ANA",
+  },
+  MLB: {},
+  CFB: {},
+  EPL: {},
+  UNKNOWN: {},
+};
 
 function logoToDisplayName(logoFile: string, nickname: string): string {
   const stem = logoFile.replace(/\.png$/i, "").replace(/_/g, " ");
@@ -138,7 +139,8 @@ export function mergeScoreboardIntoRegistryFile(
         continue;
       }
       const id = slugId(league, nickname);
-      const displayName = logo !== "" ? logoToDisplayName(logo, nickname) : nickname;
+      const displayName =
+        logo !== "" ? logoToDisplayName(logo, nickname) : nickname;
       const existing = byId.get(id) ?? byCode.get(`${league}:${code}`);
       if (existing !== undefined) {
         const merged: UnifiedTeamRecord = {
@@ -146,7 +148,8 @@ export function mergeScoreboardIntoRegistryFile(
           nicknames: Array.from(
             new Set([...(existing.nicknames ?? []), nickname]),
           ),
-          portalLogoFile: logo !== "" ? logo : (existing.portalLogoFile ?? null),
+          portalLogoFile:
+            logo !== "" ? logo : (existing.portalLogoFile ?? null),
         };
         byId.set(existing.id, merged);
         updated += 1;
@@ -158,7 +161,10 @@ export function mergeScoreboardIntoRegistryFile(
           displayName,
           nicknames: [nickname],
           portalLogoFile: logo !== "" ? logo : null,
-          polymarketHints: [displayName.split(" ").slice(-1)[0] ?? nickname, displayName],
+          polymarketHints: [
+            displayName.split(" ").slice(-1)[0] ?? nickname,
+            displayName,
+          ],
         };
         byId.set(id, record);
         byCode.set(`${league}:${code}`, record);

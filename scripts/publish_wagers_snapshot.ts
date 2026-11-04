@@ -8,8 +8,8 @@
  * this script.
  *
  * Usage:
- *   bun run wagers:publish-snapshot --from Scratch/gslive-wagers-by-state.summary.json --dry-run
- *   bun run wagers:publish-snapshot --from Scratch/gslive-wagers-by-state.summary.json
+ *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json --dry-run
+ *   bun run wagers:publish-snapshot --from scratch/gslive-wagers-by-state.summary.json
  */
 
 import { readFileSync, statSync } from "node:fs";
@@ -54,7 +54,7 @@ const { values } = parseArgs({
   options: {
     from: {
       type: "string",
-      default: "Scratch/gslive-wagers-by-state.summary.json",
+      default: "scratch/gslive-wagers-by-state.summary.json",
     },
     "dry-run": { type: "boolean", default: false },
   },

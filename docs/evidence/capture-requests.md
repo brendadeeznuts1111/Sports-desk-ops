@@ -291,7 +291,7 @@ capture operator can generate the request instead of hand-building a curl. Field
 
 **The response side is empty.** No response body has ever been seen — not a status, response
 `Content-Type`, envelope or row — so no column set is documented, which is what the ledger row says too
-(`docs/evidence/ledger.json:575,2355`). The module deliberately describes no response either.
+(`docs/evidence/ledger.json:575,2362`). The module deliberately describes no response either.
 
 **What to capture.** One CP call and one CPS call with the fixtures' agent and date range, recording the
 full response (status, content type, body), plus a zero-row case if the filter can produce one. Reconcile
@@ -457,7 +457,7 @@ Observed 2026-11-02 (operator transcript — one 100-row page, no artifact):
   therefore at least two passes — walk back from the highest known cursor, then forward from the
   last row — not one request per scope. The initial `wagerNumber=0` call is not one of those pages:
   six `scripts/capture/discover_customers.ts` runs (2026-11-01, 01:53–04:19 UTC; gitignored
-  summaries under `Scratch/f402-discover/*/getBetTicker.json`) returned 449–955 rows each, never
+  summaries under `scratch/f402-discover/*/getBetTicker.json`) returned 449–955 rows each, never
   100, so it answers with the whole current list and only nonzero cursors page. `/api/live-wagers`
   serves the newest valid saved list (`data/bet-ticker.json` or `data/live-wagers.json`), so it
   inherits whatever that file captured.
@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:1184-1203`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:1468-1487`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:2206-2231`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:2234-2254`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3131-3156`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3159-3179`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:2256-2264`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3181-3189`).
 
 ## P7 — the customer report surface (7 candidates)
 

@@ -13,13 +13,17 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   looksBinary,
   scanText,
   type SecretFinding,
 } from "../lib/secret_scan.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+// `URL.pathname` percent-encodes the checkout path (`my%20repo`), so it is not a filesystem path:
+// on a checkout with a space this scanner would find no files and pass. `fileURLToPath` decodes it.
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /** Paths whose contents are vendored, generated, or deliberately scratch. */
 const SKIP = [
@@ -45,7 +49,7 @@ let scanned = 0;
 
 for (const path of trackedFiles()) {
   if (SKIP.some((pattern) => pattern.test(path))) continue;
-  const bytes = await Bun.file(`${ROOT}${path}`)
+  const bytes = await Bun.file(join(ROOT, path))
     .bytes()
     .catch(() => null);
   if (bytes === null || looksBinary(bytes)) continue;

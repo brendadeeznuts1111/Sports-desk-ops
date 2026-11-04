@@ -154,7 +154,7 @@ describe.skipIf(
         "--ttl-min",
         "5",
       ],
-      cwd: "/Users/nolarose/code/sportsdesk-ops",
+      cwd: REPO_ROOT,
       stdout: "pipe",
       stderr: "pipe",
       env: {
@@ -218,7 +218,7 @@ describe.skipIf(
           "--ttl-min",
           "5",
         ],
-        cwd: "/Users/nolarose/code/sportsdesk-ops",
+        cwd: REPO_ROOT,
         stdout: "pipe",
         stderr: "pipe",
         env: {

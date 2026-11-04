@@ -26,6 +26,16 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { renderGSLiveDocsMarkdown } from "../lib/gslive_api_docs.ts";
 
+/**
+ * Absolute link base for the generated reference.
+ *
+ * The file is served from the deploy root (`dist/api-reference.md`) and can be downloaded on its
+ * own, so `./EVIDENCE.md` and `./evidence/...` resolve only in the repo's `docs/` directory and
+ * 404 everywhere the file is actually consumed. Keep links absolute to the committed docs.
+ */
+const REPO_BLOB_URL =
+  "https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main";
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -950,7 +960,7 @@ function renderIntro(context: RenderContext): string[] {
     "Ledger totals across every recorded row (including rows removed from the final spec): " +
       `A ${ledgerCounts.A ?? 0} · B ${ledgerCounts.B ?? 0} · C ${ledgerCounts.C ?? 0} · E ${ledgerCounts.E ?? 0} · ` +
       `surfaces D ${context.ledger.surfaceCounts.D ?? 0} / E ${context.ledger.surfaceCounts.E ?? 0}. ` +
-      "Full model: [docs/EVIDENCE.md](./EVIDENCE.md).",
+      `Full model: [docs/EVIDENCE.md](${REPO_BLOB_URL}/docs/EVIDENCE.md).`,
   );
   lines.push("");
   return lines;
@@ -1042,7 +1052,7 @@ function renderDomains(context: RenderContext): string[] {
 
 const HEADER_EVIDENCE: Readonly<Record<string, string>> = {
   authorization:
-    "Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:188-207`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`).",
+    "Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:225-244`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`).",
   cookie:
     "Observed: the 2026-10-28 Manager HAR session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.",
   "content-type":
@@ -1057,11 +1067,11 @@ const HEADER_EVIDENCE: Readonly<Record<string, string>> = {
 
 const RESPONSE_HEADER_EVIDENCE: Readonly<Record<string, string>> = {
   "content-security-policy":
-    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:701-715`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:756-770`). Upstream cloud response headers were not captured.",
   "x-content-type-options":
-    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:701-715`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:756-770`). Upstream cloud response headers were not captured.",
   "referrer-policy":
-    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:701-715`). Upstream cloud response headers were not captured.",
+    "Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:756-770`). Upstream cloud response headers were not captured.",
 };
 
 function renderHeadersMatrix(context: RenderContext): string[] {
@@ -1170,7 +1180,7 @@ function renderHeadersMatrix(context: RenderContext): string[] {
   if (responseHeaders.size === 0) {
     lines.push("### Inbound response security headers", "");
     lines.push(
-      "No response headers are declared in the spec. The local daemon implements `Content-Security-Policy`, `X-Content-Type-Options` and `Referrer-Policy` (`services/sportsdesk_webview_server.ts:701-715`); upstream cloud response headers were not captured.",
+      "No response headers are declared in the spec. The local daemon implements `Content-Security-Policy`, `X-Content-Type-Options` and `Referrer-Policy` (`services/sportsdesk_webview_server.ts:756-770`); upstream cloud response headers were not captured.",
     );
     lines.push("");
   } else {
@@ -1204,7 +1214,7 @@ const SCHEME_NOTES: Readonly<Record<string, string>> = {
   fantasy402cookie:
     "Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authorization header (`docs/runbooks/operational_guardrails_runbook.md:153`). The 2026-10-31 captures record an `authorization` key with a **redacted** value, so whether the current session also sends a bearer token is **unverified — check this**. No login/`Set-Cookie` exchange was captured, so the cookie name, lifetime, renewal window and scope are **unverified**. Do not assume a JWT lifetime — the earlier “~20–25 minute” claim had no source and was removed.",
   daemonbearer:
-    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:188-207`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:1942-1951`) and returns 503 when the token is not configured.",
+    "Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:225-244`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:2867-2876`) and returns 503 when the token is not configured.",
   bearerAuth:
     "Unverified — declared only for tier C operations; no bearer token exchange was ever captured.",
 };
@@ -1219,7 +1229,7 @@ function renderAuth(context: RenderContext): string[] {
     Object.keys(securitySchemes).length === 0
   ) {
     lines.push(
-      "The spec declares no security schemes. The only observed authenticated session is the cookie-based Manager session from the 2026-10-28 HAR (`docs/runbooks/operational_guardrails_runbook.md:153`); the local daemon's bearer check is implementation-verified (`services/sportsdesk_webview_server.ts:188-207`). Everything else is unverified.",
+      "The spec declares no security schemes. The only observed authenticated session is the cookie-based Manager session from the 2026-10-28 HAR (`docs/runbooks/operational_guardrails_runbook.md:153`); the local daemon's bearer check is implementation-verified (`services/sportsdesk_webview_server.ts:225-244`). Everything else is unverified.",
     );
     lines.push("");
   } else {
@@ -1253,7 +1263,7 @@ function renderAuth(context: RenderContext): string[] {
 
   lines.push("### Session lifecycle", "");
   lines.push(
-    "No login, refresh or logout exchange was captured in this release. The only real wire artifact is the 2026-10-28 Manager HAR request capture, which shows a cookie-based session and no `Authorization` header; its response bodies and `Set-Cookie` were not captured. Treat any token lifetime, refresh window or logout behaviour as a **proposal** until captured (see [docs/evidence/capture-requests.md](./evidence/capture-requests.md)).",
+    `No login, refresh or logout exchange was captured in this release. The only real wire artifact is the 2026-10-28 Manager HAR request capture, which shows a cookie-based session and no \`Authorization\` header; its response bodies and \`Set-Cookie\` were not captured. Treat any token lifetime, refresh window or logout behaviour as a **proposal** until captured (see [docs/evidence/capture-requests.md](${REPO_BLOB_URL}/docs/evidence/capture-requests.md)).`,
   );
   lines.push("");
   return lines;
@@ -1459,7 +1469,7 @@ function renderInferredAppendix(context: RenderContext): string[] {
   );
   lines.push("");
   lines.push(
-    `Appendix rows: **${rows.length}** (tier C in the ledger). The capture plan that would upgrade them is [docs/evidence/capture-requests.md](./evidence/capture-requests.md).`,
+    `Appendix rows: **${rows.length}** (tier C in the ledger). The capture plan that would upgrade them is [docs/evidence/capture-requests.md](${REPO_BLOB_URL}/docs/evidence/capture-requests.md).`,
   );
   lines.push("");
   return lines;
@@ -1477,7 +1487,7 @@ function surfaceAppearsInSpec(
   );
   if (routeMembers.length === 0) {
     return surface.id === "surface.gs-manager-cli"
-      ? "no — blocked contract, see [gs-manager-contracts.md](./gs-manager-contracts.md)"
+      ? `no — blocked contract, see [gs-manager-contracts.md](${REPO_BLOB_URL}/docs/gs-manager-contracts.md)`
       : "no — schemas only, no HTTP path";
   }
   const found = routeMembers.filter((member) => {
@@ -1497,7 +1507,7 @@ function surfaceAppearsInSpec(
 function renderMissingSurfaces(context: RenderContext): string[] {
   const lines: string[] = ["## Missing surfaces", ""];
   lines.push(
-    "Real surfaces recorded by the ledger that the final spec does not (or cannot) present as operations. Full inventory: [docs/evidence/surfaces.md](./evidence/surfaces.md) and [docs/EVIDENCE.md](./EVIDENCE.md).",
+    `Real surfaces recorded by the ledger that the final spec does not (or cannot) present as operations. Full inventory: [docs/evidence/surfaces.md](${REPO_BLOB_URL}/docs/evidence/surfaces.md) and [docs/EVIDENCE.md](${REPO_BLOB_URL}/docs/EVIDENCE.md).`,
   );
   lines.push("");
   const rows: string[][] = [];
@@ -1527,7 +1537,7 @@ function renderMissingSurfaces(context: RenderContext): string[] {
   );
   if (nonSpec.length > 0) {
     lines.push(
-      `${nonSpec.length} of ${surfaces.length} ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](./gs-manager-contracts.md)).`,
+      `${nonSpec.length} of ${surfaces.length} ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](${REPO_BLOB_URL}/docs/gs-manager-contracts.md)).`,
     );
     lines.push("");
   }
@@ -1618,13 +1628,13 @@ function renderEvidence(context: RenderContext): string[] {
     lines.push(
       `**Removed contradicted claim${contradictedAbsent.length === 1 ? "" : "s"}:** ` +
         `${contradictedAbsent.length} ledger row${contradictedAbsent.length === 1 ? "" : "s"} contradicted by a concrete artifact ${contradictedAbsent.length === 1 ? "is" : "are"} not ${contradictedAbsent.length === 1 ? "an operation" : "operations"} in the final spec. ` +
-        "The GS extract contradicted the fabricated steam-ingestion route and its partner gateway; that surface is now documented as blocked, without an HTTP contract, in [gs-manager-contracts.md](./gs-manager-contracts.md). See [docs/EVIDENCE.md](./EVIDENCE.md) for the quotes.",
+        `The GS extract contradicted the fabricated steam-ingestion route and its partner gateway; that surface is now documented as blocked, without an HTTP contract, in [gs-manager-contracts.md](${REPO_BLOB_URL}/docs/gs-manager-contracts.md). See [docs/EVIDENCE.md](${REPO_BLOB_URL}/docs/EVIDENCE.md) for the quotes.`,
     );
     lines.push("");
   }
 
   lines.push(
-    "Sources: [docs/openapi.json](./openapi.json) · [docs/evidence/ledger.json](./evidence/ledger.json) · [docs/EVIDENCE.md](./EVIDENCE.md) · [docs/evidence/capture-requests.md](./evidence/capture-requests.md) · [docs/evidence/surfaces.md](./evidence/surfaces.md) · [docs/gs-manager-contracts.md](./gs-manager-contracts.md).",
+    `Sources: [docs/openapi.json](${REPO_BLOB_URL}/docs/openapi.json) · [docs/evidence/ledger.json](${REPO_BLOB_URL}/docs/evidence/ledger.json) · [docs/EVIDENCE.md](${REPO_BLOB_URL}/docs/EVIDENCE.md) · [docs/evidence/capture-requests.md](${REPO_BLOB_URL}/docs/evidence/capture-requests.md) · [docs/evidence/surfaces.md](${REPO_BLOB_URL}/docs/evidence/surfaces.md) · [docs/gs-manager-contracts.md](${REPO_BLOB_URL}/docs/gs-manager-contracts.md).`,
   );
   lines.push("");
   return lines;

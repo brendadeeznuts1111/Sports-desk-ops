@@ -424,21 +424,21 @@ Bun ships the profilers; no npm package is involved.
 
 ```sh
 # CPU profile (Chrome DevTools / VS Code), Markdown summary for bugs or review
-bun --cpu-prof --cpu-prof-dir Scratch/profiles --cpu-prof-name bridge3a.cpuprofile scripts/f402_bet_ticker_bridge3a.ts --once
-bun --cpu-prof-md --cpu-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+bun --cpu-prof --cpu-prof-dir scratch/profiles --cpu-prof-name bridge3a.cpuprofile scripts/f402_bet_ticker_bridge3a.ts --once
+bun --cpu-prof-md --cpu-prof-dir scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
 
 # V8-compatible heap snapshot + Markdown report
-bun --heap-prof --heap-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
-bun --heap-prof-md --heap-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+bun --heap-prof --heap-prof-dir scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+bun --heap-prof-md --heap-prof-dir scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
 ```
 
 For processes the supervisor starts, set the environment instead of editing argv:
 
 ```sh
-BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=Scratch/profiles BUN_CPU_PROFILE_NAME=supervisor bun run services/supervisor.ts
+BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=scratch/profiles BUN_CPU_PROFILE_NAME=supervisor bun run services/supervisor.ts
 ```
 
-Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
+Profiles are diagnostics, not artifacts: write them under `scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
 
 ## v1.4.0 feed/transport primitives in use
 
@@ -477,7 +477,7 @@ WS channel `f402-weblog` when the live-bets gateway is running.
 
 ## bun-docs MCP probe (2026-11-04)
 
-Probe method: `https://bun.com/docs/mcp` speaks JSON-RPC 2.0 (protocol `2025-06-18`) and exposes
+Probe method: `https://bun.sh/docs/mcp` speaks JSON-RPC 2.0 (protocol `2025-06-18`) and exposes
 `search_bun`, `read_bun_page`, `list_bun_pages`, `grep_bun`. It matches the shape recorded in
 [`bun-mcp.md`](./bun-mcp.md). The repo-native client (`bun run bun:docs-mcp`) now owns this probe: `surfaces` audits every
 catalog shape against the docs and `surfaces --check` is an offline CI gate on the committed

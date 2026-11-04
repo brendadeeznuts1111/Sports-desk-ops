@@ -13,7 +13,9 @@ import { planStreamSignalsForRows } from "../lib/weight_tier_stream_signals.ts";
 const SPREAD_DESC =
   "S.\r\nFootball - Chiefs vs Bills / Game / Point spread / Chiefs -3 -110";
 
-function row(partial: Partial<F402TickerRow> & Pick<F402TickerRow, "login">): F402TickerRow {
+function row(
+  partial: Partial<F402TickerRow> & Pick<F402TickerRow, "login">,
+): F402TickerRow {
   return {
     customerId: partial.login,
     agentId: partial.agentId ?? "GOLD22",
@@ -82,7 +84,10 @@ describe("pick shape twins", () => {
 describe("DOD6 book overlay", () => {
   test("loads enriched customer fixture", () => {
     const book = loadDod6BookOverlayFromJson(
-      resolve(import.meta.dir, "fixtures/backtest/enriched_customers_full.json"),
+      resolve(
+        import.meta.dir,
+        "fixtures/backtest/enriched_customers_full.json",
+      ),
     );
     expect(book.lookup("SYNTH_SYN_01")?.clvBps).toBe(40);
   });
@@ -92,7 +97,10 @@ describe("ScoutApexTracker unit", () => {
   test("records scout before apex", () => {
     const tracker = new ScoutApexTracker(30_000);
     tracker.record(row({ login: "WC8406" }), 1_000);
-    const hit = tracker.record(row({ login: "GX195", wagerNumber: "2" }), 30_500);
+    const hit = tracker.record(
+      row({ login: "GX195", wagerNumber: "2" }),
+      30_500,
+    );
     expect(hit?.deltaMs).toBe(29_500);
   });
 });

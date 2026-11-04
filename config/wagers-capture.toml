@@ -14,10 +14,10 @@ keepHistory = 500 # JSONL history lines kept
 
 [paths]
 # Defaults are the paths the sportsdesk_wagers plugin reads.
-artifact = "Scratch/gslive-wagers-by-state.summary.json"
-status = "Scratch/wagers-by-state.status.json"
+artifact = "scratch/gslive-wagers-by-state.summary.json"
+status = "scratch/wagers-by-state.status.json"
 # history/tickets/alerts default to siblings of the artifact; override here if needed.
-# archive = "Scratch/wagers-by-state.bundle.tar"
+# archive = "scratch/wagers-by-state.bundle.tar"
 
 [alerts]
 pendingWarnHours = 24

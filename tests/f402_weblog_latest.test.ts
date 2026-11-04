@@ -31,8 +31,8 @@ describe("f402 weblog latest", () => {
       join(root, "f402-weblog-latest.json"),
       JSON.stringify({ key: "rollup.json" }),
     );
-    // resolver probes Scratch/weblog/latest.json; place the pointer there
-    const scratch = join(root, "Scratch/weblog");
+    // resolver probes scratch/weblog/latest.json; place the pointer there
+    const scratch = join(root, "scratch/weblog");
     const { mkdirSync } = await import("node:fs");
     mkdirSync(scratch, { recursive: true });
     writeFileSync(

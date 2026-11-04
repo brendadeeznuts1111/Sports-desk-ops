@@ -70,7 +70,7 @@ if (fetchRequested) {
   const capturePath =
     (values["save-capture"] as string | undefined) ??
     ((Bun.env.F402_PENDING_CAPTURE_PATH ?? "").trim() ||
-      `Scratch/f402-pending/capture-${date}.json`);
+      `scratch/f402-pending/capture-${date}.json`);
   const fetched = await fetchAndPersistPending({
     token,
     date,

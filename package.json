@@ -237,8 +237,10 @@
     "bridge3b:rollup": "bun run scripts/f402_pending_bridge3b.ts",
     "gslive:audit-bet": "bun run scripts/gslive_bet_event_audit.ts",
     "gslive:weblogs:refresh": "bun run scripts/gslive_weblog_refresh.ts",
+    "execution:plan": "bun run scripts/execution_cli.ts",
     "signals:kalshi": "bun run scripts/signals_kalshi_cli.ts",
-    "weblog:rollup": "bun run scripts/f402_weblog_bridge.ts"
+    "weblog:rollup": "bun run scripts/f402_weblog_bridge.ts",
+    "autobet": "bun run cli/watchlist_autobet_cli.ts"
   },
   "keywords": [
     "sportsdesk",

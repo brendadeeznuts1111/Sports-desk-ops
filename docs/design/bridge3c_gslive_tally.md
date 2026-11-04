@@ -11,7 +11,7 @@ Data-Oriented Design means transforming actual measured layouts and cardinalitie
 cache-contiguous SoA columns: Richard Fabian, [Data-Oriented Design (2018)](https://www.dataorienteddesign.com/dodbook/);
 Mike Acton, [CppCon 2014](https://www.youtube.com/watch?v=rX0ItVEVjHc).
 
-**Census source:** `Scratch/betReport-all.json` (`{r:{bets:[…]}}`), read-only in memory.
+**Census source:** `scratch/betReport-all.json` (`{r:{bets:[…]}}`), read-only in memory.
 
 | Census metric                            | 3c observation                                                                                                                          |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |

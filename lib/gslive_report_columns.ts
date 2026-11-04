@@ -5,7 +5,7 @@
  * Observed in the live browser 2026-11-03 (Table settings shows 53 / 53): 52 named columns plus
  * the row-selection checkbox. The checkbox is modeled separately and is not a wire field until a
  * table-schema capture confirms it. Wire mappings are best-effort against
- * `Scratch/betReport-all.json` (69 raw keys); `null` means UI-only or a nested/derived value.
+ * `scratch/betReport-all.json` (69 raw keys); `null` means UI-only or a nested/derived value.
  */
 export const UI_LAST_BETS_SLOT_COUNT = 53;
 export const UI_LAST_BETS_NAMED_COLUMN_COUNT = 52;

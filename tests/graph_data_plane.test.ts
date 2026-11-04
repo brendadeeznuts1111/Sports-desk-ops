@@ -74,6 +74,20 @@ describe("graph data plane", () => {
     expect(meta.headers.get("content-type")).toContain("application/json");
   });
 
+  test("decodes percent-escaped asset names before looking them up", async () => {
+    // A browser sends `pipeline-artifacts-metadata%2Ejson`; the raw pathname is not the file name.
+    const res = await get("assets/pipeline-artifacts-metadata%2Ejson");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/json");
+  });
+
+  test("rejects a malformed percent-escape without throwing", async () => {
+    // `decodeURIComponent` would throw a 500; the name simply cannot resolve.
+    const res = await get("assets/%E0%A4%A");
+    expect([400, 404]).toContain(res.status);
+    expect(await res.text()).not.toContain("sportsdesk-ops");
+  });
+
   test("refuses to escape the assets directory", async () => {
     for (const path of [
       "assets/%2e%2e%2fpackage.json",

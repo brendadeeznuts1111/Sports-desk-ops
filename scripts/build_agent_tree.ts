@@ -4,7 +4,7 @@
  * @description Builds `data/agent-tree.json` (parent pointers + level) from the agent graph.
  *
  * The portal's "Agent Tree" sidebar renders `baseHeriarchy`; this repository already has the
- * same forest in `Scratch/agent-graph.json` (nodes + `parent->child` edges). This script reduces
+ * same forest in `scratch/agent-graph.json` (nodes + `parent->child` edges). This script reduces
  * it to the minimum the scoreboard needs, keyed by the canonical `agentLoginKey` so lookups
  * against wagers can never miss by case.
  *
@@ -14,8 +14,8 @@
  * PII: agent ids only. No logins-with-passwords, no rates, no customers.
  *
  * Usage:
- *   bun run build:agent-tree --graph Scratch/agent-graph.json
- *   bun run build:agent-tree --graph Scratch/agent-graph.json --hierarchy Scratch/raw-f402-list-agents.json
+ *   bun run build:agent-tree --graph scratch/agent-graph.json
+ *   bun run build:agent-tree --graph scratch/agent-graph.json --hierarchy scratch/raw-f402-list-agents.json
  */
 
 import { mkdirSync } from "node:fs";
@@ -36,7 +36,7 @@ interface Args {
 
 function parseArgs(argv: readonly string[]): Args {
   const args: Args = {
-    graph: "Scratch/agent-graph.json",
+    graph: "scratch/agent-graph.json",
     hierarchy: null,
     out: "data/agent-tree.json",
     indexOut: "data/agent-index.json",
@@ -75,7 +75,7 @@ function parseArgs(argv: readonly string[]): Args {
           [
             "Usage: bun run build:agent-tree [flags]",
             "",
-            "  --graph <path>      cytoscape agent graph (default Scratch/agent-graph.json)",
+            "  --graph <path>      cytoscape agent graph (default scratch/agent-graph.json)",
             "  --hierarchy <path>  list-agents envelope, adds AgentType",
             "  --out <path>        output (default data/agent-tree.json)",
             "  --index-out <path>  identity index (default data/agent-index.json)",

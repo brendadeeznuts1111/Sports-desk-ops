@@ -86,8 +86,7 @@ function rowToLookup(
   const avgLh = columns.avgClvLineHundredths[rowIndex]!;
   const avgClvPoints =
     avgLh !== NULL_CLV_SENTINEL && clvLegs > 0 ? avgLh / 100 : null;
-  const clvBps =
-    avgClvPoints !== null ? Math.round(avgClvPoints * 100) : null;
+  const clvBps = avgClvPoints !== null ? Math.round(avgClvPoints * 100) : null;
   const roiBps = columns.roiBasisPoints[rowIndex]!;
   const netCents = Number(columns.lifetimeNetProfitCents[rowIndex]!);
 
@@ -151,11 +150,7 @@ function mountLifetimeColumns(
       offset(SEC.radixHeadRowCol),
       RADIX_SLOT_COUNT,
     ),
-    loginKey64Col: new BigUint64Array(
-      buffer,
-      offset(SEC.loginKey64Col),
-      rows,
-    ),
+    loginKey64Col: new BigUint64Array(buffer, offset(SEC.loginKey64Col), rows),
     nextInRadixBucketCol: new Int32Array(
       buffer,
       offset(SEC.nextInRadixBucketCol),

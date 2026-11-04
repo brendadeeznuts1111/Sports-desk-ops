@@ -21,9 +21,7 @@ const SPORT_NAME_TO_LEAGUE: Readonly<Record<string, League>> = {
 };
 
 export type MarketResolveStatus =
-  | "resolved_series"
-  | "unparsed_short_desc"
-  | "no_kalshi_series";
+  "resolved_series" | "unparsed_short_desc" | "no_kalshi_series";
 
 export interface TickerMarketResolve {
   readonly status: MarketResolveStatus;
@@ -45,7 +43,9 @@ function stripWagerTypePrefix(shortDesc: string): string {
   return shortDesc.replace(/^[SLM]\.\s*(\r?\n|\s*)/i, "").trim();
 }
 
-export function resolveTickerMarketOffline(row: F402TickerRow): TickerMarketResolve {
+export function resolveTickerMarketOffline(
+  row: F402TickerRow,
+): TickerMarketResolve {
   const rotationKey = rotationKeyFromTickerShortDesc(row.shortDesc);
   let parsed = parseWagerShortDesc(stripWagerTypePrefix(row.shortDesc));
   if (parsed === null) {
@@ -83,11 +83,7 @@ export function resolveTickerMarketOffline(row: F402TickerRow): TickerMarketReso
   const registryTeams =
     parsed.league === "UNKNOWN"
       ? null
-      : registry.resolveTeamSide(
-          parsed.league,
-          parsed.teams,
-          parsed.sideTeam,
-        );
+      : registry.resolveTeamSide(parsed.league, parsed.teams, parsed.sideTeam);
   const canonicalTeamCodes =
     registryTeams === null
       ? parsed.teams

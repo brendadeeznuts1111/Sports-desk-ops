@@ -19,7 +19,7 @@
  *    GSID=... bun run bet:tally --from 1793163600 --to 1793771999
  *    bun run bet:tally --dry-run                 # print the request body; no network, no secret
  *
- *  Writes `Scratch/bet-tally.json` (gitignored) and prints a compact table.
+ *  Writes `scratch/bet-tally.json` (gitignored) and prints a compact table.
  */
 
 import { readFileSync } from "node:fs";
@@ -755,7 +755,7 @@ async function main(args: readonly string[]): Promise<void> {
     options: {
       from: { type: "string" },
       to: { type: "string" },
-      out: { type: "string", default: "Scratch/bet-tally.json" },
+      out: { type: "string", default: "scratch/bet-tally.json" },
       "date-filter-by": { type: "string", default: "calcTime" },
       probe: { type: "string", default: "auto" },
       timeout: { type: "string", default: "15000" },

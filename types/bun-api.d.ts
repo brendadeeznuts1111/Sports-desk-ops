@@ -9,7 +9,8 @@
  * global type surface changes, update the aliases here in one place.
  *
  * These are type-only aliases — they erase at compile time and add no runtime
- * cost. Import with `import type { BunResponse } from "@/types/bun-api"`.
+ * cost. Import with `import type { BunResponse } from "../types/bun-api.ts"`
+ * (from a file in `lib/`; there is no `@/` path alias in this repo).
  */
 
 export type BunResponse = Response;

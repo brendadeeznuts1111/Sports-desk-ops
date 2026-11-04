@@ -20,18 +20,18 @@
  *  Numeric state codes are mapped through the observed table (see `fetch-bet-tally.ts`) and every
  *  observed code is reported; unmapped codes stay visible as `(code N)` and count as unknown.
  *
- *  The contract this file produces is `Scratch/wagers-by-state.schema.v2.json` (input to
+ *  The contract this file produces is `scratch/wagers-by-state.schema.v2.json` (input to
  *  `dsh-plugin/index.js` `sportsdesk_wagers`). A missing artifact is MISSING, never zero states;
  *  an unknown `schemaVersion` is UNSUPPORTED, never best-effort parsed.
  *
  *  Usage:
- *    GSID=... bun run wagers:by-state --live --payload Scratch/ajax-getBetReport-body.json    # verbatim body
+ *    GSID=... bun run wagers:by-state --live --payload scratch/ajax-getBetReport-body.json    # verbatim body
  *    GSID=... bun run wagers:by-state --live --from 1793163600 --to 1793771999
  *    bun run wagers:by-state --live --dry-run            # payload only; no network, no secret
  *    GSID=... bun run wagers:by-state --live --bootstrap-session   # signin -> x-gs-session
- *    bun run wagers:by-state --csv <path/bet-report.csv> --json Scratch/gslive-wagers-by-state.summary.json
+ *    bun run wagers:by-state --csv <path/bet-report.csv> --json scratch/gslive-wagers-by-state.summary.json
  *
- *  Wager rows include customer logins, so outputs live in `Scratch/` (gitignored).
+ *  Wager rows include customer logins, so outputs live in `scratch/` (gitignored).
  */
 
 import { mkdir, rename } from "node:fs/promises";
@@ -1819,9 +1819,9 @@ export async function fetchWagersByStateLive(
 
 /** Default artifact the plugin reads. Live and offline capture both write this path. */
 export const WAGERS_ARTIFACT_PATH =
-  "Scratch/gslive-wagers-by-state.summary.json";
+  "scratch/gslive-wagers-by-state.summary.json";
 /** Run journal written by the automation next to the artifact. */
-export const WAGERS_STATUS_PATH = "Scratch/wagers-by-state.status.json";
+export const WAGERS_STATUS_PATH = "scratch/wagers-by-state.status.json";
 
 /** One live read from `ajax.php` -> the same v2 report, with that endpoint as its source. */
 export interface CaptureWagersOptions {
@@ -1948,23 +1948,23 @@ export async function recordCaptureRun(
 
 /* -------------------------------------------------------------------------------------------------
  * Capture automation: history, ticket-state delta and alerts
- * (`Scratch/wagers-automation.schema.v1.json`, frozen contract shared with the plugin).
+ * (`scratch/wagers-automation.schema.v1.json`, frozen contract shared with the plugin).
  *
  * The v2 artifact above is one snapshot. These documents are the series: a bounded JSONL history
  * (one line per successful capture), the ticket-state join key used to compute the next delta, and
  * the thresholded alert document. Every file is written atomically; a failed capture writes none.
- * The ticket-state document carries ticket ids and therefore lives only in `Scratch/`; the history,
+ * The ticket-state document carries ticket ids and therefore lives only in `scratch/`; the history,
  * alerts and journal carry counts, deltas, timestamps and alert text only.
  * ---------------------------------------------------------------------------------------------- */
 
-/** Frozen automation contract version (`Scratch/wagers-automation.schema.v1.json`). */
+/** Frozen automation contract version (`scratch/wagers-automation.schema.v1.json`). */
 export const WAGERS_AUTOMATION_SCHEMA_VERSION = 1;
 /** One JSONL line per successful capture (bounded; rotated by atomic rewrite). */
-export const WAGERS_HISTORY_PATH = "Scratch/wagers-by-state.history.jsonl";
+export const WAGERS_HISTORY_PATH = "scratch/wagers-by-state.history.jsonl";
 /** Cross-capture ticket -> state join key, computed against before replacement. */
-export const WAGERS_TICKETS_PATH = "Scratch/wagers-by-state.tickets.json";
+export const WAGERS_TICKETS_PATH = "scratch/wagers-by-state.tickets.json";
 /** Thresholded alert document; an empty `alerts` array is a measured value, not MISSING. */
-export const WAGERS_ALERTS_PATH = "Scratch/wagers-by-state.alerts.json";
+export const WAGERS_ALERTS_PATH = "scratch/wagers-by-state.alerts.json";
 export const DEFAULT_KEEP_HISTORY = 500;
 
 /** Pending legs older than this many hours raise `pending_aging` (CLI: --pending-warn-hours). */
@@ -3030,7 +3030,7 @@ async function main(args: readonly string[]): Promise<void> {
   console.log(formatWagerTable(report));
   console.log(`\n${formatWagerQuality(report)}`);
 
-  const out = values.out ?? "Scratch/gslive-wagers-by-state.csv";
+  const out = values.out ?? "scratch/gslive-wagers-by-state.csv";
   if (out !== "-") {
     await writeTextAtomic(out, toCsv(rows));
     console.log(`\nwrote ${out} (${rows.length} legs)`);

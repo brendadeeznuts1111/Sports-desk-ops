@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { looksBinary, scanText } from "../lib/secret_scan.ts";
 
 /**
@@ -69,10 +70,7 @@ describe("the scanner's own fixtures", () => {
   test("no tracked file carries the shapes it looks for", () => {
     // The pattern is assembled in the private-key case above so this file can be scanned like
     // any other; this assertion is the regression guard for that.
-    const source = readFileSync(
-      new URL(import.meta.url).pathname.replace(/^\//, "/"),
-      "utf8",
-    );
+    const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
     expect(scanText(source)).toEqual([]);
   });
 });

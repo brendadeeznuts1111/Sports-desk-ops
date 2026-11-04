@@ -21,10 +21,10 @@ it.** Everything else is labelled as observed, inferred or unimplemented — in 
 | **E** | Documented operation with no implementation in this repository.                                                                                                                                              | 10          |
 
 **Operations:** the ledger has 65 rows = 62 paths (`/api/desk/auth/session` carries both `POST` and
-`DELETE`): A 11 + B 15 + C 29 + D 0 + E 10 = 65. The published spec has **87 paths / 89 operations**
+`DELETE`): A 11 + B 15 + C 29 + D 0 + E 10 = 65. The published spec has **94 paths / 96 operations**
 (`scripts/audit_docs_webview_cron.ts`): the 52 ledger paths that are not reserved — 65 rows minus the
-10 tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 35 routes recorded only as
-`surfaces[]` members (34 daemon routes and `POST /cloud/api/Manager/getHistory`).
+10 tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 40 routes recorded only as
+`surfaces[]` members (39 daemon routes and `POST /cloud/api/Manager/getHistory`).
 **Surfaces:** 21 rows (D 20, E 1). Surface counts are kept separate from operation counts.
 
 **Tier A comes from two live sessions.** The 2026-10-31 run (Bun.WebView login → portal JWT handoff →

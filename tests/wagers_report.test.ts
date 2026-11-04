@@ -65,7 +65,7 @@ describe("wagers config", () => {
 
   test("rejects an invalid config", async () => {
     resetConfig();
-    const tmp = `Scratch/wagers-bad-${Date.now()}.json`;
+    const tmp = `scratch/wagers-bad-${Date.now()}.json`;
     await Bun.write(tmp, JSON.stringify({ version: 1 }));
     await expect(loadConfig(tmp)).rejects.toThrow(
       /wagers config validation failed/,
@@ -356,8 +356,8 @@ describe("group sizes, filters, buckets", () => {
 
   test("parseOutArg reads = and space-separated paths", () => {
     expect(parseOutArg([])).toBeUndefined();
-    expect(parseOutArg(["--out=Scratch/a.json"])).toBe("Scratch/a.json");
-    expect(parseOutArg(["--out", "Scratch/b.csv"])).toBe("Scratch/b.csv");
+    expect(parseOutArg(["--out=scratch/a.json"])).toBe("scratch/a.json");
+    expect(parseOutArg(["--out", "scratch/b.csv"])).toBe("scratch/b.csv");
   });
 
   test("parseGroupBy defaults from config and validates", async () => {

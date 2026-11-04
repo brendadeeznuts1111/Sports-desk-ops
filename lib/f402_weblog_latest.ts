@@ -17,6 +17,26 @@ export interface WeblogLatestFailure {
 }
 export type WeblogLatest = WeblogLatestSuccess | WeblogLatestFailure;
 
+/**
+ * Local-only resolution, for callers that must not touch the network.
+ *
+ * The dashboard summary is derived on every SSE tick, so it needs the rollup path and the
+ * record without an R2 fallback that could hang the request. `loadWeblogLatest` keeps the
+ * network chain for the reporting panel; this is the same local discovery without it.
+ */
+export interface WeblogLocalSuccess {
+  readonly status: "ok";
+  readonly source: "local";
+  /** Absolute path to the rollup file that answered, so the caller can report mtime/relative path. */
+  readonly path: string;
+  readonly rollup: Record<string, unknown>;
+}
+export interface WeblogLocalFailure {
+  readonly status: "unavailable";
+  readonly reason: string;
+}
+export type WeblogLocal = WeblogLocalSuccess | WeblogLocalFailure;
+
 function readJson(path: string): Record<string, unknown> | null {
   try {
     return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -33,13 +53,18 @@ function isRollup(value: Record<string, unknown> | null): boolean {
   );
 }
 
-function resolveLocal(root: string): Record<string, unknown> | null {
+/**
+ * Probe order for a local rollup: the two pointer files first, then `scratch/weblog/*.json`
+ * newest-name-first. Shared by the resolver and by {@link findWeblogLatestLocalPath}, so a
+ * fingerprint and the value it guards cannot disagree about which file is "latest".
+ */
+function localCandidates(root: string): string[] {
   const candidates = [
-    join(root, "Scratch/weblog/latest.json"),
+    join(root, "scratch/weblog/latest.json"),
     join(root, "f402-weblog/latest.json"),
   ];
   try {
-    const dir = join(root, "Scratch/weblog");
+    const dir = join(root, "scratch/weblog");
     if (existsSync(dir)) {
       candidates.push(
         ...readdirSync(dir)
@@ -52,18 +77,55 @@ function resolveLocal(root: string): Record<string, unknown> | null {
   } catch {
     /* ignore unreadable dirs */
   }
-  for (const path of candidates) {
+  return candidates;
+}
+
+interface LocalEntry {
+  readonly path: string;
+  readonly rollup: Record<string, unknown>;
+}
+
+function resolveLocalEntry(root: string): LocalEntry | null {
+  for (const path of localCandidates(root)) {
     if (!existsSync(path)) continue;
     const parsed = readJson(path);
-    if (isRollup(parsed)) return parsed;
+    if (parsed !== null && isRollup(parsed)) return { path, rollup: parsed };
     const key = parsed?.key;
     if (typeof key === "string") {
       const target = resolve(root, key);
       const rollup = readJson(target);
-      if (isRollup(rollup)) return rollup;
+      if (rollup !== null && isRollup(rollup)) return { path: target, rollup };
     }
   }
   return null;
+}
+
+/**
+ * The local rollup path a fingerprint can stat, without parsing the file.
+ *
+ * This is discovery only: an existing pointer may still fail validation in
+ * {@link loadWeblogLatestLocal}. It exists so the 5s SSE fingerprint stays a stat call.
+ */
+export function findWeblogLatestLocalPath(
+  root: string = process.cwd(),
+): string | null {
+  for (const path of localCandidates(root)) {
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
+
+/** Local rollup or an explicit unavailable result. Never performs network I/O. */
+export function loadWeblogLatestLocal(
+  root: string = process.cwd(),
+): WeblogLocal {
+  const entry = resolveLocalEntry(root);
+  return entry === null
+    ? {
+        status: "unavailable",
+        reason: "no local f402-weblog rollup under scratch/weblog/",
+      }
+    : { status: "ok", source: "local", path: entry.path, rollup: entry.rollup };
 }
 
 export async function loadWeblogLatest(
@@ -73,8 +135,9 @@ export async function loadWeblogLatest(
     readonly r2LatestUrl?: string;
   } = {},
 ): Promise<WeblogLatest> {
-  const local = resolveLocal(options.root ?? process.cwd());
-  if (local !== null) return { status: "ok", source: "local", rollup: local };
+  const local = resolveLocalEntry(options.root ?? process.cwd());
+  if (local !== null)
+    return { status: "ok", source: "local", rollup: local.rollup };
   const fetchImpl = options.fetchImpl ?? fetch;
   const latestUrl = options.r2LatestUrl ?? DEFAULT_R2_LATEST;
   try {

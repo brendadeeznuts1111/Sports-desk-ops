@@ -4,15 +4,15 @@
  *  One command derives the v2 artifact the plugin reads (`sportsdesk_wagers`), and nothing in
  *  this path can read the offline CSV: the only input is the `getBetReport` response. On top of
  *  the artifact it maintains the automation contract in
- *  `Scratch/wagers-automation.schema.v1.json`:
+ *  `scratch/wagers-automation.schema.v1.json`:
  *
- *    - `Scratch/wagers-by-state.history.jsonl` — one line per SUCCESSFUL capture (bounded)
- *    - `Scratch/wagers-by-state.tickets.json`  — ticket -> state join key for the next delta
- *    - `Scratch/wagers-by-state.alerts.json`   — deterministic, thresholded alerts
- *    - `Scratch/wagers-by-state.status.json`   — authoritative attempt journal
+ *    - `scratch/wagers-by-state.history.jsonl` — one line per SUCCESSFUL capture (bounded)
+ *    - `scratch/wagers-by-state.tickets.json`  — ticket -> state join key for the next delta
+ *    - `scratch/wagers-by-state.alerts.json`   — deterministic, thresholded alerts
+ *    - `scratch/wagers-by-state.status.json`   — authoritative attempt journal
  *
  *    GSID=... bun run wagers:capture                        # one capture now
- *    GSID=... bun run wagers:capture --payload Scratch/ajax-getBetReport-body.json
+ *    GSID=... bun run wagers:capture --payload scratch/ajax-getBetReport-body.json
  *    GSID=... bun run wagers:watch --cron "0,15,30,45 * * * *"    # initial capture + in-process Bun.cron
  *    bun run wagers:capture --dry-run                       # endpoint + body, no network, no journal
  *    bun run wagers:capture --print-schedule                # next OS-level fire, no session needed
@@ -299,7 +299,7 @@ export function assertVerboseFetchAllowed(options: {
 }
 
 export interface WireTraceOptions {
-  /** Full response text is written here (gitignored Scratch/), never printed. */
+  /** Full response text is written here (gitignored scratch/), never printed. */
   readonly responsePath: string;
   readonly log?: (line: string) => void;
 }
@@ -1277,7 +1277,7 @@ async function main(args: readonly string[]): Promise<void> {
     ? createWireTraceFetch({
         // Per-invocation path: a second run must not overwrite the first run's evidence.
         // Use the whole UUID: the v7 *prefix* is time-ordered and can repeat within a bucket.
-        responsePath: `Scratch/wagers-wire-response-${randomUUIDv7()}.json`,
+        responsePath: `scratch/wagers-wire-response-${randomUUIDv7()}.json`,
       })
     : undefined;
   if (values["dry-run"]) {

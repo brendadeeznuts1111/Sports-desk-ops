@@ -261,7 +261,7 @@ import {
 1. **Console error interception**:
    - Captures page-side `console.*` calls through the WebView `console` callback and flags lines matching `CONSOLE_ERROR_PATTERN` (`error`, `uncaught`, `exception`, `refused`, `failed to load`, `typeerror`, `syntaxerror`). It does **not** install `window.onerror` or subscribe to `Runtime.exceptionThrown`, so an exception that never reaches `console` is invisible.
 2. **Rendered-contract crawl**:
-   - Waits for the Scalar shell to hydrate (`webview-content-settled`), then asserts the deployed body renders the documented operation markers (`getWebLog`, `getBetTicker`, `inferred`), the title pattern (`Wire API Reference|Scalar`), and the OpenAPI path contract (`EXPECTED_OPENAPI_PATH_COUNT = 71`). It does not issue search queries.
+   - Waits for the Scalar shell to hydrate (`webview-content-settled`), then asserts the deployed body renders the documented operation markers (`getWebLog`, `getBetTicker`, `inferred`), the title pattern (`Wire API Reference|Scalar`), and the OpenAPI path contract (`EXPECTED_OPENAPI_PATH_COUNT = 89`). It does not issue search queries.
 3. **Visual proof on every live pass**:
    - Captures a JPEG screenshot unconditionally for each completed live pass — not only on exceptions — to `reports/doc_audit_proofs/audit_<timestamp>.jpg`. A failed capture is recorded as a `MEDIUM` `SCREENSHOT` issue rather than aborting the pass.
 4. **Structured JSON Diagnostics**:

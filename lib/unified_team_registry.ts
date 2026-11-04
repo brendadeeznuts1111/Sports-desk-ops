@@ -157,13 +157,12 @@ export class UnifiedTeamRegistry {
     league: League,
     teams: readonly string[],
   ): readonly string[] {
-    return teams.map((team) => this.canonicalCode(league, team) ?? normalizeToken(team));
+    return teams.map(
+      (team) => this.canonicalCode(league, team) ?? normalizeToken(team),
+    );
   }
 
-  normalizeSideTeam(
-    league: League,
-    sideTeam: string | null,
-  ): string | null {
+  normalizeSideTeam(league: League, sideTeam: string | null): string | null {
     if (sideTeam === null || sideTeam.trim() === "") return null;
     return this.canonicalCode(league, sideTeam) ?? normalizeToken(sideTeam);
   }
@@ -221,7 +220,9 @@ let cached: UnifiedTeamRegistry | null = null;
 export function loadUnifiedTeamRegistry(
   path: string = DEFAULT_REGISTRY_PATH,
 ): UnifiedTeamRegistry {
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as UnifiedTeamRegistryFile;
+  const parsed = JSON.parse(
+    readFileSync(path, "utf8"),
+  ) as UnifiedTeamRegistryFile;
   if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.teams)) {
     throw new Error(`Invalid unified team registry: ${path}`);
   }

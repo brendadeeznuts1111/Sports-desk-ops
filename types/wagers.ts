@@ -5,7 +5,8 @@
  * zod inference); zod-bound config types (WagersConfig, StateDef, etc.) live
  * in lib/wagers_config.ts.
  *
- * Import with `import type { WagerRow } from "@/types/wagers"`.
+ * Import with `import type { WagerRow } from "../types/wagers.ts"`
+ * (from a file in `lib/`; there is no `@/` path alias in this repo).
  */
 
 export interface WagerRow {

@@ -214,8 +214,9 @@ async function emitSignals(
       const row = rowByKey.get(emissionLookupKey(emission));
       return row === undefined ? null : { emission, row };
     })
-    .filter((pair): pair is { emission: StreamSignalEmission; row: F402TickerRow } =>
-      pair !== null,
+    .filter(
+      (pair): pair is { emission: StreamSignalEmission; row: F402TickerRow } =>
+        pair !== null,
     );
 
   const client = new KalshiClient();
@@ -224,7 +225,10 @@ async function emitSignals(
     config: joinConfigFromEnv(),
   });
   const joinByKey = new Map(
-    joined.map((entry) => [emissionLookupKey(entry.emission), entry.kalshiJoin]),
+    joined.map((entry) => [
+      emissionLookupKey(entry.emission),
+      entry.kalshiJoin,
+    ]),
   );
 
   for (const emission of visible) {
@@ -429,9 +433,7 @@ async function main(): Promise<number> {
   const enrichBook = values["enrich-book"]?.trim();
   const dodbin = values.dodbin?.trim();
   const lifetimeCsv =
-    values["lifetime-csv"]?.trim() ??
-    Bun.env.F402_LIFETIME_CSV?.trim() ??
-    "";
+    values["lifetime-csv"]?.trim() ?? Bun.env.F402_LIFETIME_CSV?.trim() ?? "";
   const gsliveSteamPath = values["gslive-steam-index"]?.trim();
 
   if (enrichBook !== undefined && enrichBook !== "") {
@@ -452,9 +454,13 @@ async function main(): Promise<number> {
   ) {
     try {
       dod6Spine = await createDod6SpineOverlay({
-        dodbinPath: dodbin,
-        lifetimeCsvPath: lifetimeCsv !== "" ? lifetimeCsv : undefined,
-        jsonBookPath: enrichBook,
+        ...(dodbin === undefined || dodbin === ""
+          ? {}
+          : { dodbinPath: dodbin }),
+        ...(lifetimeCsv === "" ? {} : { lifetimeCsvPath: lifetimeCsv }),
+        ...(enrichBook === undefined || enrichBook === ""
+          ? {}
+          : { jsonBookPath: enrichBook }),
       });
     } catch (error) {
       console.error(
@@ -488,8 +494,6 @@ async function main(): Promise<number> {
 
   const fromBody = values["from-body"];
   const fromJsonl = values["from-jsonl"];
-  const usePoll =
-    values.poll || (fromBody === undefined && fromJsonl === undefined);
   const intervalMs = Number(values["interval-ms"]);
   if (!Number.isFinite(intervalMs) || intervalMs < 1000) {
     usage("--interval-ms must be >= 1000");

@@ -18,7 +18,7 @@ const scanArgs = Bun.argv
   .map((arg, index, all) =>
     arg === "--scan-report" &&
     (all[index + 1] === undefined || all[index + 1]?.startsWith("--"))
-      ? "--scan-report=Scratch/betReport-all.json"
+      ? "--scan-report=scratch/betReport-all.json"
       : arg,
   );
 const { values } = parseArgs({

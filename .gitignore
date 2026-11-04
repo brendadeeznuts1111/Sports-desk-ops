@@ -12,6 +12,9 @@ reports/
 tests/.tmp-*
 schema/manifest.bin
 scratch/
+# The same directory is spelled `Scratch/` by some writers; on a case-sensitive CI checkout the
+# lowercase pattern does not match it, so name both or the outputs show up as untracked.
+Scratch/
 verification/gen-tokens-zero-drift-gate/out/
 *.log
 .DS_Store

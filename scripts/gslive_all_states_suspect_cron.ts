@@ -23,6 +23,21 @@ import { existsSync } from "node:fs";
 import { parseCliArgs } from "../lib/cli_args.ts";
 import { resolve } from "node:path";
 
+/**
+ * Retained desk exports. These live outside the repo, so the last operator path is the default;
+ * each is overridable (`GSLIVE_BET_REPORT_CSV`, `F402_BETS_JSONL`, `F402_HISTORY_DB`) instead of
+ * baking one machine's home directory into the audit on a VPS or a second checkout.
+ */
+const GSLIVE_BET_REPORT_CSV =
+  Bun.env.GSLIVE_BET_REPORT_CSV ??
+  "/Users/nolarose/code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv";
+const F402_BETS_JSONL =
+  Bun.env.F402_BETS_JSONL ??
+  "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
+const F402_HISTORY_DB =
+  Bun.env.F402_HISTORY_DB ??
+  "/Users/nolarose/4c-odds-intergration/probes/out11/history.db";
+
 export const GSLIVE_ALL_STATES = [
   "pending",
   "win",
@@ -386,8 +401,7 @@ export async function runGSLiveAllStatesSuspectAudit(
   windowEnd = "2026-11-03",
 ): Promise<GSLiveAllStateAuditReport> {
   // 1. Parse board-wide GSLive states from retained export (`bet-report.csv`)
-  const csvPath =
-    "/Users/nolarose/code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv";
+  const csvPath = GSLIVE_BET_REPORT_CSV;
   const boardStateSummaryCsv: GSLiveAllStateAuditReport["boardStateSummaryCsv"] =
     {};
   const cancelByPlayer: Record<
@@ -483,8 +497,7 @@ export async function runGSLiveAllStatesSuspectAudit(
     .slice(0, 15);
 
   // 2. Inspect targetAccount (`CCC107`) in `f402-bets.jsonl` across all time and `10/28-11/03`
-  const tickerPath =
-    "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
+  const tickerPath = F402_BETS_JSONL;
   const uniqueBets = await readTickerBetsJsonl(tickerPath, targetAccount);
 
   const allBets = [...uniqueBets.values()].sort((a, b) =>
@@ -809,8 +822,7 @@ export async function runGSLiveAllStatesSuspectAudit(
   ];
 
   // 4. Query Fantasy402 WebLog in `history.db` (`weblog_event` table) for `CCC107`
-  const histDbPath =
-    "/Users/nolarose/4c-odds-intergration/probes/out11/history.db";
+  const histDbPath = F402_HISTORY_DB;
   let totalEventsInHistoryDb = 0;
   let wlFrom = "";
   let wlTo = "";

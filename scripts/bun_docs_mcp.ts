@@ -17,7 +17,8 @@ import { env } from "bun";
 import { z } from "zod";
 import { BUN_SHAPES, type BunShape } from "../lib/bun_shapes.ts";
 
-export const DEFAULT_BUN_DOCS_MCP_URL = "https://bun.com/docs/mcp";
+/** Keep in sync with ~/dotfiles/lib/cli/bun-docs-mcp-url.ts */
+export const DEFAULT_BUN_DOCS_MCP_URL = "https://bun.sh/docs/mcp";
 const PROTOCOL_VERSION = "2025-06-18";
 
 export const MCP_TOOL_NAMES = [

@@ -149,7 +149,9 @@ export class PickShapeTwinTracker {
 
   private prune(nowMs: number): void {
     for (const [hash, entries] of this.byHash) {
-      const kept = entries.filter((entry) => nowMs - entry.atMs <= this.windowMs);
+      const kept = entries.filter(
+        (entry) => nowMs - entry.atMs <= this.windowMs,
+      );
       if (kept.length === 0) this.byHash.delete(hash);
       else this.byHash.set(hash, kept);
     }
@@ -181,7 +183,9 @@ export class ScoutApexTracker {
   }
 }
 
-export function loadDod6BookOverlayFromJson(path: string): Dod6CustomerBookOverlay {
+export function loadDod6BookOverlayFromJson(
+  path: string,
+): Dod6CustomerBookOverlay {
   const absolute = resolve(path);
   const raw = JSON.parse(readFileSync(absolute, "utf8")) as unknown;
   if (!Array.isArray(raw)) {
@@ -189,7 +193,11 @@ export function loadDod6BookOverlayFromJson(path: string): Dod6CustomerBookOverl
   }
   const byLogin = new Map<
     string,
-    { clvBps: number | null; sharpScore: number | null; lifetimeNetUsd: number | null }
+    {
+      clvBps: number | null;
+      sharpScore: number | null;
+      lifetimeNetUsd: number | null;
+    }
   >();
   for (const row of raw) {
     if (row === null || typeof row !== "object") continue;
@@ -242,7 +250,10 @@ function inferMechanisms(
             100,
             Math.max(
               40,
-              Math.abs(lifetime.clvBps ?? Math.round((lifetime.avgClvPoints ?? 0) * 100)),
+              Math.abs(
+                lifetime.clvBps ??
+                  Math.round((lifetime.avgClvPoints ?? 0) * 100),
+              ),
             ),
           )
         : 35,
@@ -403,7 +414,9 @@ export function buildStreamSignalDiagnostics(
   };
 }
 
-export function polymarketClobOrderSkeleton(role: "maker" | "taker"): Record<string, unknown> {
+export function polymarketClobOrderSkeleton(
+  role: "maker" | "taker",
+): Record<string, unknown> {
   return {
     orderType: role === "taker" ? "FOK" : "GTC",
     tokenID: "<UNRESOLVED_FROM_GAMMA_OR_COMBO_MAP>",
@@ -415,7 +428,9 @@ export function polymarketClobOrderSkeleton(role: "maker" | "taker"): Record<str
   };
 }
 
-export function kalshiOrderSkeleton(role: "maker" | "taker"): Record<string, unknown> {
+export function kalshiOrderSkeleton(
+  role: "maker" | "taker",
+): Record<string, unknown> {
   return {
     action: role === "taker" ? "buy" : "buy",
     client_order_id: "<uuid>",
@@ -427,7 +442,9 @@ export function kalshiOrderSkeleton(role: "maker" | "taker"): Record<string, unk
   };
 }
 
-export function explainDiagnostics(diagnostics: StreamSignalDiagnostics): string {
+export function explainDiagnostics(
+  diagnostics: StreamSignalDiagnostics,
+): string {
   const lines = [
     `rotation=${diagnostics.rotationKey} pick_shape=${diagnostics.pickShapeSha256.slice(0, 12)}…`,
     `steam=${diagnostics.steam.steamPriority} (gslive=${diagnostics.steam.gsliveChannel} liveLeg=${diagnostics.steam.liveLeg} alert=${diagnostics.steam.alertTwinChannel})`,
@@ -457,9 +474,7 @@ export function explainDiagnostics(diagnostics: StreamSignalDiagnostics): string
       `circuit_score=${diagnostics.section11Circuit.scoreHundredths} (ind=${diagnostics.section11Circuit.inductionHundredths} steam=${diagnostics.section11Circuit.steamHundredths} clv=${diagnostics.section11Circuit.clvHundredths})`,
     );
   }
-  lines.push(
-    `mechanisms=${diagnostics.mechanisms.map((m) => m.id).join(",")}`,
-  );
+  lines.push(`mechanisms=${diagnostics.mechanisms.map((m) => m.id).join(",")}`);
   if (diagnostics.routingTag !== null) {
     lines.push(`routing=${diagnostics.routingTag}`);
   }

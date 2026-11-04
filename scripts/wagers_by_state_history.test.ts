@@ -750,9 +750,9 @@ describe("OS-level scheduling: plan and validate only, never install here", () =
 describe("capture paths", () => {
   test("automation documents are siblings of the artifact (contract paths by default)", () => {
     expect(automationPathsForArtifact(WAGERS_ARTIFACT_PATH)).toEqual({
-      history: "Scratch/wagers-by-state.history.jsonl",
-      tickets: "Scratch/wagers-by-state.tickets.json",
-      alerts: "Scratch/wagers-by-state.alerts.json",
+      history: "scratch/wagers-by-state.history.jsonl",
+      tickets: "scratch/wagers-by-state.tickets.json",
+      alerts: "scratch/wagers-by-state.alerts.json",
     });
     expect(automationPathsForArtifact("tmp/x/artifact.json")).toEqual({
       history: "tmp/x/wagers-by-state.history.jsonl",

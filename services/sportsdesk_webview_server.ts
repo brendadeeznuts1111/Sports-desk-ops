@@ -103,6 +103,43 @@ import {
 import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
 import { cachedJsonFile, readFileBytes } from "../lib/artifact_cache.ts";
 import {
+  buildStatusTelemetry,
+  graphFingerprint,
+  loadDashboardSummary,
+  type DashboardAutomation,
+} from "../lib/dashboard_metrics.ts";
+import { KalshiClient } from "../lib/kalshi_client.ts";
+import {
+  joinConfigFromEnv,
+  joinWatchlistSignals,
+} from "../lib/kalshi_signal_join.ts";
+import {
+  deriveWatchlistSignals,
+  loadWatchlistSignalInputs,
+  type WatchlistSignal,
+} from "../lib/watchlist_signal_engine.ts";
+import { loadGsliveWeblogActivity } from "../lib/gslive_weblog_activity.ts";
+import {
+  buildExecutionPlan,
+  placeKalshiLiveOrder,
+  resolveKalshiLiveReady,
+} from "../lib/execution_planner.ts";
+import {
+  LIVE_CONFIRM_PHRASE,
+  type ExecutionDecision,
+  type ExecutionMode,
+} from "../lib/execution_decision.ts";
+import {
+  appendExecutionLedgerRow,
+  fillTakerFromDecision,
+  makeMakerQuote,
+  paperIntentId,
+  readExecutionLedger,
+  sweepMakerQuotes,
+  type PaperFill,
+  type PaperQuote,
+} from "../lib/execution_paper.ts";
+import {
   defaultAgentGraphViewPaths,
   isAgentGraphWebpFresh,
 } from "../lib/f402_agent_graph_view_http.ts";
@@ -270,6 +307,20 @@ export interface ServerOptions {
   readonly development?: boolean;
   /** Where `bet-ticker.json` and `live-wagers.json` live; defaults to the repo's `data/`. */
   readonly wagerListDir?: string;
+  /** Kalshi fetch, injectable so the API tests stay offline (defaults to global `fetch`). */
+  readonly kalshiFetch?: typeof fetch;
+  /** Kalshi clock, injectable for deterministic cache/TTL tests (defaults to `Date.now`). */
+  readonly kalshiNow?: () => number;
+  /** Threshold source for the join; defaults to `Bun.env`. */
+  readonly kalshiEnv?: Readonly<Record<string, string | undefined>>;
+  /** Polymarket gamma/CLOB fetch, injectable so execution tests stay offline. */
+  readonly polymarketFetch?: typeof fetch;
+  /** Execution clock, injectable for deterministic plans and the 2s run rate limit. */
+  readonly executionNow?: () => Date;
+  /** Ledger checkout root; tests point this at a temp dir so no real ledger is written. */
+  readonly executionLedgerRoot?: string;
+  /** Policy env for the execution engine; defaults to `Bun.env`. */
+  readonly executionEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -663,6 +714,10 @@ const GRAPH_DOCS_JSON = new Set([
  */
 const MAX_REQUEST_BODY_BYTES = 1 << 20;
 
+/** Polymarket live is unavailable by construction in this checkout (no EIP-712 signer deps). */
+const POLYMARKET_LIVE_UNAVAILABLE_REASON =
+  "Polymarket live has no EIP-712 signer in this checkout (viem/ethers absent); paper only";
+
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(telegramService);
@@ -734,6 +789,235 @@ export function startServer(options?: ServerOptions) {
     proxied: Boolean(unixSocket),
     trustProxy: (Bun.env.SPORTSDESK_TRUST_PROXY ?? "") === "1",
   };
+
+  /**
+   * Automation state for `summary.automation`, composed field by field.
+   *
+   * The telegram object is built explicitly instead of forwarding `getStatus()`: that object's
+   * `bot`/`webhook` values carry URLs (a Telegram webhook URL embeds its bearer secret in the
+   * path), and the summary is a PII-guarded response. Fields not named here cannot leak by
+   * accident; the contract currently asks for `bot: null` and `webhook: null`.
+   */
+  async function summarizeDashboardAutomation(): Promise<{
+    automation: DashboardAutomation;
+    checks: Record<string, "ok" | "error">;
+  }> {
+    const relay = await getBridgeRelayStatus();
+    const schedules = scheduler.getSchedules();
+    let telegram: DashboardAutomation["telegram"];
+    let telegramOk = true;
+    try {
+      const status = await telegramService.getStatus();
+      telegram = {
+        mode: status.mode,
+        modeReason: status.modeReason.trim() === "" ? null : status.modeReason,
+        tokenConfigured: status.tokenConfigured,
+        defaultChatConfigured: status.defaultChatConfigured,
+        authorizedChatCount: Number.isFinite(status.authorizedChatCount)
+          ? status.authorizedChatCount
+          : null,
+        inbound: status.inbound,
+        // Deliberately dropped: see the comment above. The panel renders these as "not exposed".
+        bot: null,
+        webhook: null,
+        error: status.error,
+      };
+    } catch (error) {
+      // A missing/broken bot service is null mode + the message; "simulation" is a configured
+      // mode, not a stand-in for "we could not ask".
+      telegramOk = false;
+      telegram = {
+        mode: null,
+        modeReason: null,
+        tokenConfigured: false,
+        defaultChatConfigured: false,
+        authorizedChatCount: null,
+        inbound: "none",
+        bot: null,
+        webhook: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    return {
+      automation: {
+        wsRelay: relay,
+        cron: {
+          // The feed's `schedulerEngine` overrides this in the loader; `Bun.cron` is the
+          // documented fallback when the feed carries none.
+          engine: "Bun.cron",
+          total: schedules.length,
+          enabled: schedules.filter((schedule) => schedule.enabled).length,
+          schedules: schedules.map((schedule) => ({
+            id: schedule.id,
+            name: schedule.name,
+            scheduleTime: schedule.scheduleTime,
+            enabled: schedule.enabled,
+          })),
+        },
+        telegram,
+      },
+      // Same "ok" meaning /api/status uses: the service answered. A Telegram API error stays in
+      // telegram.error for the panel and does not rewrite the daemon's own health.
+      checks: { telegram: telegramOk ? "ok" : "error" },
+    };
+  }
+
+  /** The non-file half of the SSE change signal; see `graphFingerprint`'s `extra`. */
+  function automationChangeSignal(automation: DashboardAutomation): string {
+    return [
+      `relay:${automation.wsRelay.status}`,
+      `relayStarted:${automation.wsRelay.started}`,
+      `relayFrame:${automation.wsRelay.lastFrameAtIso ?? "-"}`,
+      `telegram:${automation.telegram.mode ?? "-"}:${automation.telegram.tokenConfigured}:${automation.telegram.inbound}`,
+      `cron:${automation.cron.enabled}/${automation.cron.total}`,
+    ].join("|");
+  }
+
+  /**
+   * The union of the signal sources' provenance for the route envelope.
+   *
+   * `fixture` is sticky: one fixture-derived signal makes the whole response's source block
+   * fixture-capped, which is what the dashboard's pill renders.
+   */
+  function aggregateSignalProvenance(
+    signals: readonly WatchlistSignal[],
+    now: Date,
+  ): {
+    dataMode: string | null;
+    asOf: string | null;
+    ageSeconds: number | null;
+    stale: boolean;
+    fixture: boolean;
+    sources: string[];
+  } {
+    const sources = new Set<string>();
+    let dataMode: string | null = null;
+    let asOf: string | null = null;
+    let stale = false;
+    let fixture = false;
+    for (const signal of signals) {
+      for (const source of signal.provenance.sources) sources.add(source);
+      stale = stale || signal.provenance.stale;
+      fixture = fixture || signal.provenance.fixture;
+      if (dataMode === null && signal.provenance.dataMode !== null) {
+        dataMode = signal.provenance.dataMode;
+      }
+      if (
+        signal.provenance.asOf !== null &&
+        (asOf === null || signal.provenance.asOf > asOf)
+      ) {
+        asOf = signal.provenance.asOf;
+      }
+    }
+    const parsed = asOf === null ? null : Date.parse(asOf);
+    return {
+      dataMode,
+      asOf,
+      ageSeconds:
+        parsed !== null && Number.isFinite(parsed)
+          ? Math.max(0, Math.floor((now.getTime() - parsed) / 1000))
+          : null,
+      stale,
+      fixture,
+      sources: [...sources].sort(),
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Execution engine (paper-first; live placement is gated below)       */
+  /* ------------------------------------------------------------------ */
+
+  const executionEnv = options?.executionEnv ?? Bun.env;
+  const executionLedgerRoot = options?.executionLedgerRoot ?? repoRoot;
+  const executionNow = (): Date => options?.executionNow?.() ?? new Date();
+  const initialModeRaw = (executionEnv["EXECUTION_MODE"] ?? "paper")
+    .trim()
+    .toLowerCase();
+  /** In-memory operator mode; the ledger records every change. */
+  let executionMode: ExecutionMode =
+    initialModeRaw === "paused"
+      ? "paused"
+      : initialModeRaw === "live"
+        ? "live"
+        : "paper";
+  let lastExecutionRunAtMs = 0;
+  const EXECUTION_RUN_INTERVAL_MS = 2_000;
+
+  function executionPlanOptions(
+    limit: number,
+    mode: ExecutionMode,
+    liveConfirm: string | null = null,
+  ): Parameters<typeof buildExecutionPlan>[0] {
+    return {
+      root: repoRoot,
+      now: executionNow(),
+      limit,
+      mode,
+      liveConfirm,
+      ledgerRoot: executionLedgerRoot,
+      policyEnv: executionEnv,
+      kalshiNow: options?.kalshiNow ?? (() => executionNow().getTime()),
+      polymarketNow: () => executionNow().getTime(),
+      ...(options?.kalshiFetch === undefined
+        ? {}
+        : { kalshiFetch: options.kalshiFetch }),
+      ...(options?.polymarketFetch === undefined
+        ? {}
+        : { polymarketFetch: options.polymarketFetch }),
+    };
+  }
+
+  function executionRiskSnapshot(plan: {
+    readonly risk: {
+      readonly dailyPlannedUsd: number;
+      readonly openIntents: number;
+      readonly marketExposureUsd: Readonly<Record<string, number>>;
+    };
+  }): {
+    dailyPlannedUsd: number;
+    openIntents: number;
+    marketExposureUsd: Readonly<Record<string, number>>;
+  } {
+    return {
+      dailyPlannedUsd: plan.risk.dailyPlannedUsd,
+      openIntents: plan.risk.openIntents,
+      marketExposureUsd: plan.risk.marketExposureUsd,
+    };
+  }
+
+  function appendExecutionIntent(
+    decision: ExecutionDecision,
+    fill: PaperFill | null,
+    quote: PaperQuote | null,
+    snapshot: ReturnType<typeof executionRiskSnapshot>,
+  ): void {
+    const now = executionNow();
+    appendExecutionLedgerRow(executionLedgerRoot, {
+      kind: "intent",
+      intentId: paperIntentId(decision, now),
+      atIso: now.toISOString(),
+      mode: "paper",
+      decision,
+      fill,
+      quote,
+      riskSnapshot: snapshot,
+    });
+  }
+
+  /** Strip internal book evidence from a decision before it leaves the API. */
+  function publicDecision(
+    decision: ExecutionDecision,
+  ): Omit<ExecutionDecision, "bookLevels"> {
+    const { bookLevels: _bookLevels, ...rest } = decision;
+    return rest;
+  }
+
+  function executionHeaders(): Record<string, string> {
+    return {
+      "Cache-Control": "no-store",
+      Vary: "Origin, Authorization",
+    };
+  }
 
   const serveConfig = {
     development: isDevelopment,
@@ -1326,7 +1610,7 @@ export function startServer(options?: ServerOptions) {
           req,
           resolve(repoRoot, "docs/graph.html"),
           "text/html; charset=utf-8",
-          cors,
+          { ...cors, "Cache-Control": "no-store" },
         );
       }
 
@@ -1335,7 +1619,7 @@ export function startServer(options?: ServerOptions) {
           req,
           resolve(repoRoot, "docs/graph.js"),
           "application/javascript; charset=utf-8",
-          cors,
+          { ...cors, "Cache-Control": "no-store" },
         );
       }
 
@@ -1414,6 +1698,647 @@ export function startServer(options?: ServerOptions) {
           resolve(repoRoot, "docs/graph-live-feed.json"),
           "application/json; charset=utf-8",
           { ...cors, "Cache-Control": "no-store" },
+        );
+      }
+
+      // 11.1 Derived dashboard summary. Every count `docs/graph.html` renders comes from this
+      // body, each section carrying its source/asOf/ageSeconds/stale (or an explicit
+      // not_measured), so the page cannot claim a number it did not measure. The guard is the
+      // graph page's own: the same data plane, and the route catalog names identifying surfaces.
+      if (pathname === "/api/graph/summary" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        const { automation, checks } = await summarizeDashboardAutomation();
+        const summary = await loadDashboardSummary({
+          status: buildStatusTelemetry(checks),
+          automation,
+        });
+        return Response.json(summary, {
+          headers: {
+            ...cors,
+            "Cache-Control": "no-store",
+            // The body is derived from artifacts *and* is served only because the peer allowed
+            // the PII guard; the credential is part of the cache key.
+            Vary: "Origin, Authorization",
+          },
+        });
+      }
+
+      // 11.2 The summary as server-sent events. The first frame is the whole summary; a 5s tick
+      // re-derives it only when a stat fingerprint changes, and every tick also emits a
+      // heartbeat comment. 5s, not 15s: Bun's default `idleTimeout` is 10s, so a 15s beat would
+      // let the server close an otherwise healthy stream between beats.
+      if (pathname === "/api/graph/stream" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+
+        const encoder = new TextEncoder();
+        let closed = false;
+        let heartbeat: ReturnType<typeof setInterval> | null = null;
+        const cleanup = (): void => {
+          if (closed) return;
+          closed = true;
+          if (heartbeat !== null) {
+            clearInterval(heartbeat);
+            heartbeat = null;
+          }
+        };
+        const frame = (event: string, data: unknown): string =>
+          `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+        // `req.signal` is Bun's disconnect notification; `cancel()` covers a stream the server
+        // drops itself. Either path must clear the interval or each reconnecting tab leaks one.
+        req.signal.addEventListener("abort", cleanup, { once: true });
+
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            const send = (chunk: string): void => {
+              if (closed) return;
+              try {
+                controller.enqueue(encoder.encode(chunk));
+              } catch {
+                cleanup();
+              }
+            };
+            let fingerprint: string | null = null;
+            try {
+              const { automation, checks } =
+                await summarizeDashboardAutomation();
+              const summary = await loadDashboardSummary({
+                status: buildStatusTelemetry(checks),
+                automation,
+              });
+              fingerprint = await graphFingerprint({
+                extra: [automationChangeSignal(automation)],
+              });
+              if (closed) return;
+              send(frame("summary", summary));
+              send(`: heartbeat ${Date.now()}\n\n`);
+            } catch {
+              cleanup();
+              try {
+                controller.close();
+              } catch {
+                /* already closed */
+              }
+              return;
+            }
+            heartbeat = setInterval(() => {
+              if (closed) return;
+              void (async () => {
+                try {
+                  const { automation, checks } =
+                    await summarizeDashboardAutomation();
+                  const next = await graphFingerprint({
+                    extra: [automationChangeSignal(automation)],
+                  });
+                  if (closed) return;
+                  if (next !== fingerprint) {
+                    fingerprint = next;
+                    const summary = await loadDashboardSummary({
+                      status: buildStatusTelemetry(checks),
+                      automation,
+                    });
+                    if (closed) return;
+                    send(frame("summary", summary));
+                  }
+                } catch {
+                  // A bad stat must not kill the stream; the heartbeat below still proves life.
+                }
+                if (!closed) send(`: heartbeat ${Date.now()}\n\n`);
+              })();
+            }, 5_000);
+          },
+          cancel() {
+            cleanup();
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            ...cors,
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-store",
+            // Nginx buffers proxied responses by default, which turns a stream into one
+            // delayed write; this header is the documented opt-out.
+            "X-Accel-Buffering": "no",
+            Vary: "Origin, Authorization",
+          },
+        });
+      }
+
+      // 11.3 Watchlist signals joined to live Kalshi markets. Read-only by construction: the
+      // client has no auth header and no order/portfolio URL, and a Kalshi failure becomes
+      // `degraded` + `no_market`, never a fabricated price. Same guard as the graph page: the
+      // accounts and their flow are customer-identifying.
+      if (pathname === "/api/signals/kalshi" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        const now = new Date();
+        const config = joinConfigFromEnv(options?.kalshiEnv ?? Bun.env);
+        const client = new KalshiClient({
+          ...(options?.kalshiFetch === undefined
+            ? {}
+            : { fetchImpl: options.kalshiFetch }),
+          ...(options?.kalshiNow === undefined
+            ? {}
+            : { now: options.kalshiNow }),
+        });
+        const headers = {
+          ...cors,
+          "Cache-Control": "no-store",
+          Vary: "Origin, Authorization",
+        };
+        try {
+          const inputs = await loadWatchlistSignalInputs(repoRoot);
+          const signals = deriveWatchlistSignals(inputs, { now });
+          const joined = await joinWatchlistSignals(signals, {
+            client,
+            config,
+          });
+          return Response.json(
+            {
+              success: true,
+              schemaVersion: 1,
+              generatedAt: now.toISOString(),
+              config,
+              provenance: aggregateSignalProvenance(signals, now),
+              kalshi: client.telemetry(),
+              signals: joined,
+            },
+            { headers },
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          const telemetry = client.telemetry();
+          return Response.json(
+            {
+              success: true,
+              schemaVersion: 1,
+              generatedAt: now.toISOString(),
+              config,
+              provenance: {
+                dataMode: null,
+                asOf: null,
+                ageSeconds: null,
+                stale: false,
+                fixture: false,
+                sources: [],
+              },
+              kalshi: {
+                ...telemetry,
+                ok: false,
+                degraded: true,
+                errors: [
+                  ...telemetry.errors,
+                  { scope: "events", reason: message },
+                ],
+              },
+              signals: [],
+            },
+            { headers },
+          );
+        }
+      }
+
+      // 11.4 GSLive WebLog activity from the local artifact. The reader never touches the
+      // network; a missing artifact is `not_measured` with the refresh command, not zeros.
+      if (pathname === "/api/gslive/weblogs" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        const now = new Date();
+        const headers = {
+          ...cors,
+          "Cache-Control": "no-store",
+          Vary: "Origin, Authorization",
+        };
+        try {
+          const activity = loadGsliveWeblogActivity({ root: repoRoot, now });
+          return Response.json(
+            {
+              ...activity,
+              success: true,
+              schemaVersion: 1,
+              generatedAt: now.toISOString(),
+            },
+            { headers },
+          );
+        } catch (error) {
+          return Response.json(
+            {
+              success: true,
+              schemaVersion: 1,
+              generatedAt: now.toISOString(),
+              status: "not_measured",
+              source: null,
+              asOf: null,
+              ageSeconds: null,
+              stale: false,
+              accounts: [],
+              summary: { accounts: 0, bets: 0, flagsByCode: {} },
+              reason: `GSLive WebLog reader failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              command: "bun run gslive:weblogs:refresh",
+            },
+            { headers },
+          );
+        }
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* 11.5 Execution engine (paper-first; no order call on plan/read)     */
+      /* ------------------------------------------------------------------ */
+
+      // Read-only plan: public books only, no order endpoint is reachable from this path.
+      if (pathname === "/api/execution/plan" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        const limitRaw = Number(url.searchParams.get("limit") ?? "25");
+        const limit = Number.isFinite(limitRaw)
+          ? Math.max(1, Math.min(200, Math.trunc(limitRaw)))
+          : 25;
+        const plan = await buildExecutionPlan(
+          executionPlanOptions(limit, executionMode),
+        );
+        return Response.json(
+          {
+            success: true,
+            schemaVersion: 1,
+            generatedAt: plan.generatedAt,
+            mode: plan.mode,
+            killSwitch: plan.killSwitch,
+            policy: plan.policy,
+            venues: plan.venues,
+            risk: plan.risk,
+            decisions: plan.decisions.map(publicDecision),
+            paper: {
+              quotes: plan.paper.quotes,
+              fills: plan.paper.fills,
+              ledgerTail: plan.paper.ledgerTail,
+            },
+            blockedReasons: plan.blockedReasons,
+            provenance: plan.provenance,
+          },
+          { headers: { ...cors, ...executionHeaders() } },
+        );
+      }
+
+      // Mode switch (paper/paused, or live only with env + adapter + explicit confirm).
+      if (pathname === "/api/execution/mode" && req.method === "POST") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json(
+            { success: false, error: "invalid_json" },
+            { status: 400, headers: cors },
+          );
+        }
+        const record =
+          typeof body === "object" && body !== null
+            ? (body as Record<string, unknown>)
+            : {};
+        const requested = record["mode"];
+        if (
+          requested !== "paper" &&
+          requested !== "paused" &&
+          requested !== "live"
+        ) {
+          return Response.json(
+            {
+              success: false,
+              error: "invalid_mode",
+              allowed: ["paper", "paused", "live"],
+            },
+            { status: 400, headers: cors },
+          );
+        }
+        if (requested === "live") {
+          const readiness = await resolveKalshiLiveReady(
+            repoRoot,
+            executionEnv,
+          );
+          const reasons: string[] = [];
+          if (executionEnv["EXECUTION_LIVE"] !== "1") {
+            reasons.push("EXECUTION_LIVE is not 1");
+          }
+          if (!readiness.ready) {
+            reasons.push(readiness.reason ?? "kalshi live not ready");
+          }
+          if (record["confirm"] !== "LIVE") {
+            reasons.push('confirm must be "LIVE"');
+          }
+          if (reasons.length > 0) {
+            return Response.json(
+              {
+                success: false,
+                error: "live_not_armed",
+                reasons,
+                venues: {
+                  kalshi: readiness,
+                  polymarket: {
+                    liveReady: false,
+                    reason: POLYMARKET_LIVE_UNAVAILABLE_REASON,
+                  },
+                },
+              },
+              { status: 409, headers: cors },
+            );
+          }
+        }
+        const previousMode = executionMode;
+        executionMode = requested;
+        const now = executionNow();
+        appendExecutionLedgerRow(executionLedgerRoot, {
+          kind: "mode_change",
+          intentId: `mode:${now.getTime()}`,
+          atIso: now.toISOString(),
+          mode: "paper",
+          decision: null,
+          fill: null,
+          quote: null,
+          riskSnapshot: null,
+          note: requested,
+        });
+        return Response.json(
+          {
+            success: true,
+            mode: executionMode,
+            previousMode,
+            killSwitch: executionMode === "paused",
+            generatedAt: now.toISOString(),
+          },
+          { headers: { ...cors, ...executionHeaders() } },
+        );
+      }
+
+      // One run: paper-fill (default) or live-place behind the full gate.
+      if (pathname === "/api/execution/run" && req.method === "POST") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          body = {};
+        }
+        const record =
+          typeof body === "object" && body !== null
+            ? (body as Record<string, unknown>)
+            : {};
+        const live = record["live"] === true;
+        const now = executionNow();
+        const elapsed = now.getTime() - lastExecutionRunAtMs;
+        if (lastExecutionRunAtMs !== 0 && elapsed < EXECUTION_RUN_INTERVAL_MS) {
+          return Response.json(
+            {
+              success: false,
+              error: "rate_limited",
+              retryAfterMs: EXECUTION_RUN_INTERVAL_MS - elapsed,
+            },
+            { status: 429, headers: cors },
+          );
+        }
+        lastExecutionRunAtMs = now.getTime();
+
+        const plan = await buildExecutionPlan(
+          executionPlanOptions(
+            25,
+            executionMode,
+            live && record["confirm"] === LIVE_CONFIRM_PHRASE
+              ? LIVE_CONFIRM_PHRASE
+              : null,
+          ),
+        );
+        const snapshot = executionRiskSnapshot(plan);
+
+        if (live) {
+          const readiness = await resolveKalshiLiveReady(
+            repoRoot,
+            executionEnv,
+          );
+          const reasons: string[] = [];
+          if (executionMode === "paused") reasons.push("execution is paused");
+          if (executionEnv["EXECUTION_LIVE"] !== "1") {
+            reasons.push("EXECUTION_LIVE is not 1");
+          }
+          if (record["confirm"] !== LIVE_CONFIRM_PHRASE) {
+            reasons.push(`confirm must be "${LIVE_CONFIRM_PHRASE}"`);
+          }
+          if (!readiness.ready) {
+            reasons.push(readiness.reason ?? "kalshi live not ready");
+          }
+          if (reasons.length > 0) {
+            return Response.json(
+              {
+                success: false,
+                error: "live_not_armed",
+                reasons,
+                venues: {
+                  kalshi: readiness,
+                  polymarket: plan.venues.polymarket,
+                },
+              },
+              { status: 409, headers: cors },
+            );
+          }
+          const placed: unknown[] = [];
+          const refused: unknown[] = [];
+          for (const decision of plan.decisions) {
+            if (decision.venue === "polymarket") {
+              refused.push({
+                decisionId: decision.id,
+                venue: "polymarket",
+                ok: false,
+                reason: plan.venues.polymarket.reason,
+              });
+              continue;
+            }
+            if (
+              decision.blocked ||
+              decision.paper ||
+              decision.venue !== "kalshi"
+            )
+              continue;
+            const placement = await placeKalshiLiveOrder({
+              decision,
+              root: repoRoot,
+              now: executionNow(),
+              ...(options?.kalshiFetch === undefined
+                ? {}
+                : { fetchImpl: options.kalshiFetch }),
+            });
+            appendExecutionLedgerRow(executionLedgerRoot, {
+              kind: "intent",
+              intentId: `live:${placement.venueOrderId ?? decision.id}`,
+              atIso: executionNow().toISOString(),
+              mode: "paper",
+              decision,
+              fill: null,
+              quote: null,
+              riskSnapshot: snapshot,
+              note: `live:${placement.reason ?? placement.status ?? "placed"}`,
+            });
+            placed.push({
+              decisionId: decision.id,
+              ok: placement.ok,
+              reason: placement.reason,
+              venueOrderId: placement.venueOrderId,
+              status: placement.status,
+              filledCount: placement.filledCount,
+              avgPriceUsd: placement.avgPriceUsd,
+            });
+          }
+          return Response.json(
+            {
+              success: true,
+              mode: executionMode,
+              generatedAt: now.toISOString(),
+              live: true,
+              placed,
+              refused,
+            },
+            { headers: { ...cors, ...executionHeaders() } },
+          );
+        }
+
+        // Paper path: sweep resting maker quotes first, then fill/quote this plan.
+        const ledgerBefore = readExecutionLedger(executionLedgerRoot);
+        const sweep = sweepMakerQuotes(
+          ledgerBefore.openQuotes,
+          plan.venueBooks,
+          now,
+        );
+        for (const fill of sweep.fills) {
+          appendExecutionLedgerRow(executionLedgerRoot, {
+            kind: "intent",
+            intentId: fill.intentId,
+            atIso: now.toISOString(),
+            mode: "paper",
+            decision: null,
+            fill,
+            quote: null,
+            riskSnapshot: snapshot,
+            note: "maker_sweep_fill",
+          });
+        }
+        for (const quote of sweep.quotes) {
+          if (quote.status !== "expired") continue;
+          appendExecutionLedgerRow(executionLedgerRoot, {
+            kind: "intent",
+            intentId: quote.intentId,
+            atIso: now.toISOString(),
+            mode: "paper",
+            decision: null,
+            fill: null,
+            quote,
+            riskSnapshot: snapshot,
+            note: "maker_quote_expired",
+          });
+        }
+        const fills: PaperFill[] = [...sweep.fills];
+        const quotes: PaperQuote[] = sweep.quotes.filter(
+          (quote) => quote.status === "open",
+        );
+        for (const decision of plan.decisions) {
+          if (decision.blocked) continue;
+          if (decision.style === "taker") {
+            const fill = fillTakerFromDecision(
+              decision,
+              paperIntentId(decision, now),
+              now,
+            );
+            if (fill.status !== "rejected") fills.push(fill);
+            appendExecutionIntent(decision, fill, null, snapshot);
+            continue;
+          }
+          if (decision.style === "maker") {
+            const quote = makeMakerQuote(
+              decision,
+              paperIntentId(decision, now),
+              now,
+            );
+            if (quote !== null) quotes.push(quote);
+            appendExecutionIntent(decision, null, quote, snapshot);
+          }
+        }
+        return Response.json(
+          {
+            success: true,
+            mode: executionMode,
+            generatedAt: now.toISOString(),
+            live: false,
+            decisions: plan.decisions.map(publicDecision),
+            paper: { fills, quotes },
+            blockedReasons: plan.blockedReasons,
+          },
+          { headers: { ...cors, ...executionHeaders() } },
         );
       }
 
@@ -2420,6 +3345,8 @@ let bridgeRelaySocket: WebSocket | null = null;
 let bridgeRelayTimer: ReturnType<typeof setTimeout> | null = null;
 let bridgeRelayBackoffMs = 1_000;
 let bridgeRelayStarted = false;
+/** When the gateway last delivered a publishable frame; read by the automation panel. */
+let bridgeRelayLastFrameAtIso: string | null = null;
 
 /** Give the upgrade path the live server instance; `startServer` calls this after `Bun.serve`. */
 export function attachBridgeHub(server: Bun.Server<undefined>): void {
@@ -2635,6 +3562,7 @@ async function connectBridgeRelay(): Promise<void> {
       ) {
         return;
       }
+      bridgeRelayLastFrameAtIso = new Date().toISOString();
       bridgeHub.publish(kind, raw);
     });
     socket.addEventListener("close", () => {
@@ -2663,6 +3591,7 @@ function scheduleBridgeRelay(): void {
 export function stopBridgeHub(): void {
   bridgeRelayStarted = false;
   bridgeRelayBackoffMs = 1_000;
+  bridgeRelayLastFrameAtIso = null;
   if (bridgeRelayTimer !== null) {
     clearTimeout(bridgeRelayTimer);
     bridgeRelayTimer = null;
@@ -2671,4 +3600,61 @@ export function stopBridgeHub(): void {
   bridgeRelaySocket = null;
   bridgeHub = null;
   socket?.close();
+}
+
+export interface BridgeRelayStatus {
+  readonly status: "connected" | "disconnected" | "no_token" | "unavailable";
+  readonly started: boolean;
+  readonly lastFrameAtIso: string | null;
+  readonly lastFrameAgeSeconds: number | null;
+  readonly topics: readonly string[];
+  /** URL host only — never the ticket-bearing stream URL. */
+  readonly gatewayHost: string | null;
+}
+
+function frameAgeSeconds(iso: string | null, now: Date): number | null {
+  if (iso === null) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms)
+    ? Math.max(0, Math.floor((now.getTime() - ms) / 1000))
+    : null;
+}
+
+/**
+ * The relay's own state, for `summary.automation.wsRelay`.
+ *
+ * The token and the stream URL are deliberately not returned: the URL embeds the WebSocket
+ * ticket and the token is a bearer secret. `gatewayHost` is the URL's host, which is safe to
+ * render, and an open socket is the only proof of "connected" — `started` alone means a retry
+ * loop is running, not that frames are arriving.
+ */
+export async function getBridgeRelayStatus(
+  now: Date = new Date(),
+): Promise<BridgeRelayStatus> {
+  const { resolveBlobApiToken, resolveBlobGatewayUrl } =
+    await import("../lib/blob_upload.ts");
+  let gatewayHost: string | null = null;
+  try {
+    gatewayHost = new URL(resolveBlobGatewayUrl()).host;
+  } catch {
+    gatewayHost = null;
+  }
+  const base = {
+    started: bridgeRelayStarted,
+    lastFrameAtIso: bridgeRelayLastFrameAtIso,
+    lastFrameAgeSeconds: frameAgeSeconds(bridgeRelayLastFrameAtIso, now),
+    topics: [...BRIDGE_WS_TOPICS],
+    gatewayHost,
+  } as const;
+  let token: string;
+  try {
+    token = await resolveBlobApiToken();
+  } catch {
+    return { ...base, status: "unavailable" };
+  }
+  const socket = bridgeRelaySocket;
+  const open = socket !== null && socket.readyState === WebSocket.OPEN;
+  const status: BridgeRelayStatus["status"] =
+    token.trim() === "" ? "no_token" : open ? "connected" : "disconnected";
+  return { ...base, status };
 }

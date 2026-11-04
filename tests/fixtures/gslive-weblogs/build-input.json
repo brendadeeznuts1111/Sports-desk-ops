@@ -1,0 +1,253 @@
+{
+  "note": "Synthetic GSLive WebLog payloads for offline tests. Shapes follow lib/gslive_bet_event_log.ts and the retained fixture tests/fixtures/gslive-bet-event-log-350826311.json; no live capture is reproduced here.",
+  "accounts": [
+    {
+      "customerLogin": "BGD101",
+      "gsLivePlayerId": "player_BGD101",
+      "agentId": "BIGDAD",
+      "sourceCategory": "POLY_ONCHAIN_CTF_WHALE",
+      "archetype": "On-Chain CTF Whale #1"
+    },
+    {
+      "customerLogin": "MJ102",
+      "gsLivePlayerId": "player_MJ102",
+      "agentId": "MJ2026",
+      "sourceCategory": "POLY_PARLAY_SYNDICATE",
+      "archetype": "Parlay Syndicate"
+    },
+    {
+      "customerLogin": "CB112_1",
+      "gsLivePlayerId": "player_CB112_1",
+      "agentId": "CUB22HR",
+      "sourceCategory": "SUBNET_BRIDGED_SHARP",
+      "archetype": "Subnet Bridged Sharp"
+    }
+  ],
+  "reports": [
+    {
+      "customerLogin": "BGD101",
+      "rows": [
+        {
+          "id": "350826311",
+          "partnerUserId": "BGD101",
+          "eID": "207059651",
+          "logTime": "1793761946",
+          "acceptTime": "1793761947",
+          "fVal": "2431",
+          "fVal_new": "2731",
+          "delay": "1",
+          "adminUser": null,
+          "manualLogExists": "0",
+          "isSuspectedBot": "0",
+          "reversedCredit": null,
+          "eventResult": "{\"m\":[10,4],\"p\":1}",
+          "state": "0"
+        },
+        {
+          "id": "350826312",
+          "partnerUserId": "BGD101",
+          "eID": "",
+          "logTime": "1793762000",
+          "acceptTime": "1793762001",
+          "fVal": "150",
+          "fVal_new": "150",
+          "delay": "1",
+          "adminUser": null,
+          "manualLogExists": "0",
+          "isSuspectedBot": "0",
+          "reversedCredit": null,
+          "eventResult": "",
+          "state": "0"
+        }
+      ]
+    },
+    {
+      "customerLogin": "MJ102",
+      "rows": [
+        {
+          "id": "990001",
+          "partnerUserId": "MJ102",
+          "eID": "",
+          "logTime": "1793762200",
+          "acceptTime": "1793762200",
+          "fVal": "110",
+          "fVal_new": "110",
+          "delay": "0",
+          "adminUser": "opsadmin",
+          "manualLogExists": "1",
+          "isSuspectedBot": "0",
+          "reversedCredit": null,
+          "eventResult": "",
+          "state": "0"
+        },
+        {
+          "id": "990002",
+          "partnerUserId": "MJ102",
+          "eID": "",
+          "logTime": "1793762300",
+          "acceptTime": "1793762301",
+          "fVal": "220",
+          "fVal_new": "220",
+          "delay": "1",
+          "adminUser": null,
+          "manualLogExists": "0",
+          "isSuspectedBot": "0",
+          "reversedCredit": null,
+          "eventResult": "",
+          "state": "0"
+        }
+      ]
+    },
+    {
+      "customerLogin": "CB112_1",
+      "rows": [
+        {
+          "id": "990003",
+          "partnerUserId": "CB112_1",
+          "eID": "",
+          "logTime": "1793762400",
+          "acceptTime": "1793762401",
+          "fVal": "500",
+          "fVal_new": "500",
+          "delay": "0",
+          "adminUser": null,
+          "manualLogExists": "0",
+          "isSuspectedBot": "0",
+          "reversedCredit": null,
+          "eventResult": "",
+          "state": "0"
+        }
+      ]
+    }
+  ],
+  "bets": [
+    {
+      "customerLogin": "BGD101",
+      "betId": "350826311",
+      "betLog": {
+        "r": [
+          {
+            "betLogId": "1",
+            "logDetails": "Bet placed @ +2431",
+            "logTime": "1793761946000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          },
+          {
+            "betLogId": "2",
+            "logDetails": "Ticket# 1074652273 accepted @ +2731",
+            "logTime": "1793761947000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          }
+        ],
+        "e": 0,
+        "d": ""
+      },
+      "eventLog": {
+        "r": [
+          {
+            "id": "1",
+            "updateTime": "1793761945500",
+            "eventResult": "{\"m\":[10,4],\"p\":1,\"t\":1000,\"ht\":false,\"tu\":1793761945,\"ls_guid\":\"a\"}"
+          },
+          {
+            "id": "2",
+            "updateTime": "1793761947000",
+            "eventResult": "{\"m\":[10,4],\"p\":1,\"t\":1000,\"ht\":false,\"tu\":1793761947,\"ls_guid\":\"b\"}"
+          },
+          {
+            "id": "3",
+            "updateTime": "1793761948000",
+            "eventResult": "{\"m\":[13,4],\"p\":2,\"t\":995,\"ht\":false,\"tu\":1793761948,\"ls_guid\":\"c\"}"
+          }
+        ],
+        "e": 0,
+        "d": ""
+      },
+      "eventState": "unblocked"
+    },
+    {
+      "customerLogin": "BGD101",
+      "betId": "350826312",
+      "betLog": {
+        "r": [
+          {
+            "betLogId": "3",
+            "logDetails": "Bet placed @ +150",
+            "logTime": "1793762000000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          },
+          {
+            "betLogId": "4",
+            "logDetails": "Ticket# 1074652274 accepted @ +250",
+            "logTime": "1793762001000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          }
+        ],
+        "e": 0,
+        "d": ""
+      }
+    },
+    {
+      "customerLogin": "MJ102",
+      "betId": "990001",
+      "betLog": {
+        "r": [
+          {
+            "betLogId": "5",
+            "logDetails": "Bet placed @ +110",
+            "logTime": "1793762200000",
+            "isManuallyEntered": "1",
+            "adminUserName": "opsadmin"
+          }
+        ],
+        "e": 0,
+        "d": ""
+      }
+    },
+    {
+      "customerLogin": "MJ102",
+      "betId": "990002",
+      "betLog": {
+        "r": [
+          {
+            "betLogId": "6",
+            "logDetails": "Bet placed @ +220",
+            "logTime": "1793762300000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          },
+          {
+            "betLogId": "7",
+            "logDetails": "Ticket# 1074652275 accepted @ +320",
+            "logTime": "1793762301000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          }
+        ],
+        "e": 0,
+        "d": ""
+      }
+    },
+    {
+      "customerLogin": "CB112_1",
+      "betId": "990003",
+      "betLog": {
+        "r": [
+          {
+            "betLogId": "8",
+            "logDetails": "Affiliate adjustment posted",
+            "logTime": "1793762400000",
+            "isManuallyEntered": "0",
+            "adminUserName": null
+          }
+        ],
+        "e": 0,
+        "d": ""
+      }
+    }
+  ]
+}

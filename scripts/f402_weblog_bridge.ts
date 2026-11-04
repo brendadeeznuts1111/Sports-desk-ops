@@ -57,7 +57,7 @@ if (values["dry-run"]) {
 }
 const out =
   (values.out as string | undefined) ??
-  `Scratch/weblog/rollup-${new Date(fromMs).toISOString().slice(0, 10)}.json`;
+  `scratch/weblog/rollup-${new Date(fromMs).toISOString().slice(0, 10)}.json`;
 mkdirSync(dirname(out), { recursive: true });
 const temp = `${out}.tmp-${process.pid}`;
 writeFileSync(temp, `${JSON.stringify(rollup, null, 2)}\n`, { mode: 0o600 });

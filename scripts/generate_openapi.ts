@@ -3048,6 +3048,344 @@ function surfaceOperationSpecs(
       },
     },
     {
+      path: "/api/graph/summary",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Derived dashboard summary (GET /api/graph/summary)",
+      description:
+        "Derives every metric docs/graph.html renders — feed counts, repo routes/citations/tests/typecheck/docs/head, bridge values and live process status — from the checkout's own artifacts (lib/dashboard_metrics.ts, services/sportsdesk_webview_server.ts#/api/graph/summary). Each section carries source/asOf/ageSeconds/stale, and an unmeasured metric is `not_measured` with the command that would measure it; it never reports a fabricated zero. It reads captures and the route catalog, so it uses the graph plane's `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/graph/summary (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": {
+          description:
+            "Summary envelope: schemaVersion 1 with feed, repo, bridges and status blocks.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "success",
+                  "schemaVersion",
+                  "generatedAt",
+                  "feed",
+                  "repo",
+                  "bridges",
+                  "status",
+                ],
+                properties: {
+                  success: { type: "boolean", const: true },
+                  schemaVersion: { type: "integer", const: 1 },
+                  generatedAt: { type: "string", format: "date-time" },
+                  feed: { type: "object", additionalProperties: true },
+                  repo: { type: "object", additionalProperties: true },
+                  bridges: { type: "array", items: { type: "object" } },
+                  status: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/graph/stream",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Dashboard summary stream (GET /api/graph/stream, SSE)",
+      description:
+        "Server-sent events: the first `event: summary` frame carries the /api/graph/summary body; every 5s a stat fingerprint (feed, junit, census/weblog/live-bets, route table) is re-read and a fresh summary frame is emitted only when it changed, and every 5s a `: heartbeat <epochMs>` comment is sent — 5s because Bun's default idleTimeout is 10s, so a 15s beat would leave the server free to close between beats (services/sportsdesk_webview_server.ts#/api/graph/stream). Timers are cleared on client abort. It streams the guarded summary, so it uses the same `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of one SSE connection, including the initial summary frame and a heartbeat (handler-verified only; no streaming response was captured).",
+      responses: {
+        "200": {
+          description:
+            "SSE stream: `event: summary` frames and `: heartbeat` comments, blank-line terminated.",
+          headers: daemonHeaders(),
+          content: { "text/event-stream": { schema: { type: "string" } } },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/signals/kalshi",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary:
+        "Watchlist signals joined to Kalshi markets (GET /api/signals/kalshi)",
+      description:
+        "Derives watchlist signals from the graph feed's pendingBets, data/live-wagers.json and data/live-bets.json (lib/watchlist_signal_engine.ts), then joins each to one open Kalshi market and walks its order book for liquidity and an executable edge (lib/kalshi_signal_join.ts, services/sportsdesk_webview_server.ts#/api/signals/kalshi). Read-only: the Kalshi client (lib/kalshi_client.ts) uses public GET endpoints only, sends no auth header, and ignores KALSHI_API_KEY; no order or portfolio endpoint is reachable. A fixture-sourced signal is capped at `fixture_only`; network failure is `degraded` with a reason instead of a fabricated price. The body carries watchlist logins and risk, so it uses the graph plane's `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/signals/kalshi (handler-verified only; no HTTP response was captured), plus a Kalshi order-book capture for the liquidity fields.",
+      responses: {
+        "200": {
+          description:
+            "Signal envelope: config thresholds, provenance, Kalshi telemetry (ok/degraded/requests/cacheHits/errors) and joined signals with a verdict.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "success",
+                  "schemaVersion",
+                  "generatedAt",
+                  "config",
+                  "provenance",
+                  "kalshi",
+                  "signals",
+                ],
+                properties: {
+                  success: { type: "boolean", const: true },
+                  schemaVersion: { type: "integer", const: 1 },
+                  generatedAt: { type: "string", format: "date-time" },
+                  config: {
+                    type: "object",
+                    properties: {
+                      minEdgeBps: { type: "number" },
+                      minContracts: { type: "number" },
+                      maxSpreadCents: { type: "number" },
+                      referenceNotionalUsd: { type: "number" },
+                    },
+                  },
+                  provenance: { type: "object", additionalProperties: true },
+                  kalshi: {
+                    type: "object",
+                    properties: {
+                      ok: { type: "boolean" },
+                      degraded: { type: "boolean" },
+                      requests: { type: "integer" },
+                      cacheHits: { type: "integer" },
+                      errors: {
+                        type: "array",
+                        items: { type: "object", additionalProperties: true },
+                      },
+                    },
+                  },
+                  signals: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/gslive/weblogs",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "GSLive WebLog activity (GET /api/gslive/weblogs)",
+      description:
+        "Serves the last GSLive WebLog audit pass from the local git-ignored artifact (lib/gslive_weblog_activity.ts, services/sportsdesk_webview_server.ts#/api/gslive/weblogs). Local-only: a request never touches GSLive or the network; a missing/stale artifact is `not_measured`/`stale` with the `bun run gslive:weblogs:refresh` command instead of zeros. Rows carry account logins and audit flags, so it uses the graph plane's `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/gslive/weblogs (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": {
+          description:
+            "Activity envelope: measured or not_measured, source/asOf/ageSeconds/stale, account rows and summary.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "success",
+                  "schemaVersion",
+                  "generatedAt",
+                  "status",
+                  "accounts",
+                  "summary",
+                ],
+                properties: {
+                  success: { type: "boolean", const: true },
+                  schemaVersion: { type: "integer", const: 1 },
+                  generatedAt: { type: "string", format: "date-time" },
+                  status: {
+                    type: "string",
+                    enum: ["measured", "not_measured"],
+                  },
+                  source: { type: "string", nullable: true },
+                  asOf: { type: "string", nullable: true },
+                  ageSeconds: { type: "number", nullable: true },
+                  stale: { type: "boolean" },
+                  accounts: { type: "array", items: { type: "object" } },
+                  summary: { type: "object", additionalProperties: true },
+                  reason: { type: "string" },
+                  command: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/execution/plan",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Execution plan, read-only (GET /api/execution/plan)",
+      description:
+        "Plans venue/style/size for the current watchlist signals from public books only (lib/execution_planner.ts, lib/execution_decision.ts; services/sportsdesk_webview_server.ts#/api/execution/plan). The engine is paper by default: decisions carry `paper`, `reasons` and `blockReason`, and this route never calls an order endpoint. Live readiness is reported per venue (Kalshi adapter credentials; Polymarket has no EIP-712 signer in this checkout). The body carries watchlist logins/risk, so it uses the graph plane's `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/execution/plan (handler-verified only; no HTTP response was captured and no live order exists to capture).",
+      responses: {
+        "200": {
+          description:
+            "Plan envelope: mode/killSwitch/policy/venues/risk/decisions and the paper quote+fill tail.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "success",
+                  "schemaVersion",
+                  "generatedAt",
+                  "mode",
+                  "killSwitch",
+                  "policy",
+                  "venues",
+                  "risk",
+                  "decisions",
+                  "paper",
+                ],
+                properties: {
+                  success: { type: "boolean", const: true },
+                  schemaVersion: { type: "integer", const: 1 },
+                  generatedAt: { type: "string", format: "date-time" },
+                  mode: { type: "string", enum: ["paper", "paused", "live"] },
+                  killSwitch: { type: "boolean" },
+                  policy: { type: "object", additionalProperties: true },
+                  venues: { type: "object", additionalProperties: true },
+                  risk: { type: "object", additionalProperties: true },
+                  decisions: { type: "array", items: { type: "object" } },
+                  paper: { type: "object", additionalProperties: true },
+                  blockedReasons: {
+                    type: "object",
+                    additionalProperties: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/execution/mode",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "Paper/paused/live mode switch (POST /api/execution/mode)",
+      description:
+        'Sets the in-memory execution mode and audits the change in the local execution ledger (services/sportsdesk_webview_server.ts#/api/execution/mode). `paper` and `paused` are always accepted; `live` requires `EXECUTION_LIVE=1`, a live-ready Kalshi adapter and `confirm:"LIVE"`, otherwise it answers 409 with the reasons. Admin-token/PII gate applies. Surface: surface.daemon-graph-data-plane (tier D).',
+      requiredCapture:
+        "HTTP capture of a paper→paused→paper round trip (handler-verified only).",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["mode"],
+              properties: {
+                mode: { type: "string", enum: ["paper", "paused", "live"] },
+                confirm: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse("Mode changed and audited.", {
+          success: { type: "boolean", const: true },
+          mode: { type: "string" },
+          previousMode: { type: "string" },
+          killSwitch: { type: "boolean" },
+          generatedAt: { type: "string", format: "date-time" },
+        }),
+        "400": jsonSurfaceResponse("Invalid mode or body.", {
+          success: { type: "boolean", const: false },
+          error: { type: "string" },
+        }),
+        "409": jsonSurfaceResponse(
+          'mode:"live" without EXECUTION_LIVE=1 + adapter credentials + confirm:"LIVE".',
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+            reasons: { type: "array", items: { type: "string" } },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/execution/run",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary:
+        "Run the plan: paper fills, or gated live placement (POST /api/execution/run)",
+      description:
+        'Plans once, then paper-fills (taker book walk / resting maker quotes) unless `live:true` with `confirm:"PLACE LIVE ORDERS"` and every gate is satisfied, in which case only unblocked, non-paper Kalshi decisions are handed to the live adapter (services/sportsdesk_webview_server.ts#/api/execution/run, lib/kalshi_live_execution.ts). Polymarket live is always refused with its reason. One run per 2s answers 429. PII-gated. Surface: surface.daemon-graph-data-plane (tier D).',
+      requiredCapture:
+        "HTTP capture of a paper run with a temp ledger (handler-verified only); a live run is not possible in this checkout.",
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                live: { type: "boolean" },
+                confirm: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Paper fills/quotes, or live placement results.",
+          {
+            success: { type: "boolean", const: true },
+            mode: { type: "string" },
+            generatedAt: { type: "string", format: "date-time" },
+            live: { type: "boolean" },
+            paper: { type: "object", additionalProperties: true },
+            placed: { type: "array", items: { type: "object" } },
+          },
+        ),
+        "409": jsonSurfaceResponse(
+          "Live run requested without the env flag, credentials or confirm phrase.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+            reasons: { type: "array", items: { type: "string" } },
+          },
+        ),
+        "429": jsonSurfaceResponse(
+          "A run happened less than 2s ago; retry after the given delay.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+            retryAfterMs: { type: "number" },
+          },
+        ),
+        ...adminRejectionResponses(),
+      },
+    },
+    {
       path: "/api/telegram/status",
       httpMethod: "GET",
       surfaceId: "surface.daemon-telegram-admin-routes",

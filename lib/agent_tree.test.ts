@@ -12,7 +12,7 @@ import {
 /** Shape mirrors a real slice of `data/agent-tree.json` (BILLY666's four children). */
 const file: AgentTreeFile = {
   schemaVersion: 1,
-  source: "Scratch/agent-graph.json",
+  source: "scratch/agent-graph.json",
   agentCount: 6,
   roots: ["BILLY667", "NOLAWOLF"],
   nodes: {

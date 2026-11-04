@@ -371,10 +371,10 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
 
   test("artifacts land where the plugin reads them", async () => {
     expect(WAGERS_ARTIFACT_PATH).toBe(
-      "Scratch/gslive-wagers-by-state.summary.json",
+      "scratch/gslive-wagers-by-state.summary.json",
     );
     const plugin = await file("dsh-plugin/index.js").text();
-    expect(plugin).toContain("Scratch/gslive-wagers-by-state.summary.json");
+    expect(plugin).toContain("scratch/gslive-wagers-by-state.summary.json");
     expect(plugin).toContain("wagersArtifact");
   });
 

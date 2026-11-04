@@ -9,7 +9,11 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { containedAssetPath, isSafeAssetName } from "../lib/asset_path.ts";
+import {
+  containedAssetPath,
+  decodeAssetName,
+  isSafeAssetName,
+} from "../lib/asset_path.ts";
 
 /**
  * `/assets/*` containment, including the case the platform does not cover.
@@ -46,6 +50,21 @@ describe("isSafeAssetName", () => {
   });
 });
 
+describe("decodeAssetName", () => {
+  test("decodes the escapes a browser puts in a file name", () => {
+    expect(decodeAssetName("arch%20guide.png")).toBe("arch guide.png");
+    expect(decodeAssetName("pipeline-artifacts-metadata%2Ejson")).toBe(
+      "pipeline-artifacts-metadata.json",
+    );
+    expect(decodeAssetName("%E2%9C%93.txt")).toBe("✓.txt");
+  });
+
+  test("returns null for a malformed escape instead of throwing", () => {
+    expect(decodeAssetName("%E0%A4%A")).toBeNull();
+    expect(decodeAssetName("%")).toBeNull();
+  });
+});
+
 describe("containedAssetPath", () => {
   const root = mkdtempSync(join(tmpdir(), "asset-path-"));
   const dir = join(root, "assets");
@@ -65,6 +84,12 @@ describe("containedAssetPath", () => {
     expect(containedAssetPath(dir, "inside-link.txt")).toBe(
       join(realDir, "ok.txt"),
     );
+  });
+
+  test("percent-escaped URL segments resolve to the file they name", () => {
+    // A browser sends `ok%2Etxt`; the handler must not look for a literal `%2E` file.
+    expect(containedAssetPath(dir, "ok%2Etxt")).toBe(join(realDir, "ok.txt"));
+    expect(containedAssetPath(dir, "%E0%A4%A")).toBeNull(); // malformed escape
   });
 
   test("an absolute or relative symlink out of the directory is refused", () => {

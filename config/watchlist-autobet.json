@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "mode": "paper",
+  "stakeUsd": 25,
+  "maxStakeUsd": 100,
+  "dailyStakeCapUsd": 500,
+  "perLeagueDailyStakeCapUsd": 250,
+  "minConfidence": 60,
+  "minDistinctAccounts": 2,
+  "minOneSidedShare": 0.6,
+  "maxSignalAgeSeconds": 900,
+  "allowFixtureSignals": false,
+  "allowLiveExecution": false,
+  "paperSlippageBps": 50,
+  "expireApprovedAfterMinutes": 120,
+  "ledgerPath": "Scratch/watchlist-autobet/ledger.jsonl",
+  "eligibleLeagues": ["NBA", "NFL", "CFB", "EPL", "NHL", "MLB"]
+}

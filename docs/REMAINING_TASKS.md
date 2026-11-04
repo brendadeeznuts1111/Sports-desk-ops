@@ -262,7 +262,7 @@ so an id resolves without guessing which artifact it came from.
     customer, has no overlap with BB55103, no `Balance`, and only deposits/withdrawals — the
     deletion/running-balance question is untestable locally. **Next local step:** 3–5 more redacted
     ledgers/INFO in
-    `Scratch/` for the same 33-row invariant; 3/5 pass moves “one customer” to “ledger model,” any
+    `scratch/` for the same 33-row invariant; 3/5 pass moves “one customer” to “ledger model,” any
     fail is a headline finding. No server call.
   - **Exit:** Path A — 20-customer manual sample matches, settlement confirms end-of-day on a named
     date, compliance confirms definition, negative cases hold; or Path B — written finding linked

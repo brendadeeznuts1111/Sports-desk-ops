@@ -130,6 +130,30 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
+    path: "/api/execution/mode",
+    method: "POST",
+    guard: "pii",
+    // Changes the paper/live state of the execution engine and audits it.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/execution/plan",
+    method: "GET",
+    guard: "pii",
+    // Decisions carry watchlist logins/risk and venue books; same plane as the signals route.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/execution/run",
+    method: "POST",
+    guard: "pii",
+    // Mutates paper state (and could place live orders behind the gate); pii like the plan.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
     path: "/api/f402/get-pending",
     method: "ANY",
     guard: "none",
@@ -154,6 +178,32 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     path: "/api/graph-feed",
     method: "ANY",
     guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/graph/stream",
+    method: "GET",
+    guard: "pii",
+    // Server-sent frames carry the summary, whose catalog names agent-graph surfaces and whose
+    // bridge values come from captures; the guard is the page's own, on the same plane.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/graph/summary",
+    method: "GET",
+    guard: "pii",
+    // The envelope carries route surfaces and capture provenance, and `/graph` itself is
+    // customer-identifying; keeping one guard for the whole graph plane avoids a second policy.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/gslive/weblogs",
+    method: "GET",
+    guard: "pii",
+    // Account logins, archetypes and audit flags from the GSLive WebLog artifact.
     dataClass: "customer-identifying",
     surface: "surface.daemon-graph-data-plane",
   }),
@@ -257,6 +307,15 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     guard: "none",
     dataClass: "aggregate",
     surface: "surface.daemon-scoreboard",
+  }),
+  defineRoute({
+    path: "/api/signals/kalshi",
+    method: "GET",
+    guard: "pii",
+    // Watchlist account logins, agent owners and their risk sit in each signal; the market
+    // prices are public but the flow that produced the signal is not.
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
     path: "/api/sports",

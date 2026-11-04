@@ -1,0 +1,135 @@
+{
+  "capturedAtIso": "2026-11-04T13:55:40.223Z",
+  "source": "https://gamma-api.polymarket.com/public-search?q=Milwaukee%20Boston&limit_per_type=5",
+  "events": [
+    {
+      "id": "335914",
+      "title": "Milwaukee Brewers vs. Boston Red Sox",
+      "slug": "mlb-mil-bos-2026-04-08",
+      "active": true,
+      "closed": true,
+      "markets": [
+        {
+          "id": "1829047",
+          "question": "Milwaukee Brewers vs. Boston Red Sox",
+          "active": true,
+          "closed": true,
+          "slug": "mlb-mil-bos-2026-04-08",
+          "clobTokenIds": "[\"84408948904219571341124620325449233170107996995926954688829485349505729749178\", \"81545573859123964053354738335592796975153246690929858813113339350465590310436\"]",
+          "outcomes": "[\"Milwaukee Brewers\", \"Boston Red Sox\"]",
+          "outcomePrices": "[\"0\", \"1\"]",
+          "conditionId": "0xf14f3b6232f9951d362d2212aced4a0d6b70e89f716ccb59e0bcb7d24c38da5d"
+        },
+        {
+          "id": "1829049",
+          "question": "Will there be a run scored in the first inning?: Milwaukee Brewers vs. Boston Red Sox",
+          "active": false,
+          "closed": false,
+          "slug": "mlb-mil-bos-2026-04-08-nrfi",
+          "clobTokenIds": "[\"66493253227856532358009520938483745187034045547758907807838839182642556655162\", \"106789562004913652964683725013197862084172702089479016852164293263505880459479\"]",
+          "outcomes": "[\"Yes Run\", \"No Run\"]",
+          "outcomePrices": "[\"0.505\", \"0.495\"]",
+          "conditionId": "0xa7a007c608c4140f3a47be1cc9a214428bb92f0a436a67baa8d02f8d0eb29aea",
+          "liquidity": "0.0558"
+        }
+      ]
+    },
+    {
+      "id": "328981",
+      "title": "Milwaukee Brewers vs. Boston Red Sox",
+      "slug": "mlb-mil-bos-2026-04-06",
+      "active": true,
+      "closed": true,
+      "markets": [
+        {
+          "id": "1806245",
+          "question": "Milwaukee Brewers vs. Boston Red Sox",
+          "active": true,
+          "closed": true,
+          "slug": "mlb-mil-bos-2026-04-06",
+          "clobTokenIds": "[\"94839761024455212495382448000927677297863136455048622052080632812813054001212\", \"105064818792982393800795917096349869966721690092301002635940116888724493567990\"]",
+          "outcomes": "[\"Milwaukee Brewers\", \"Boston Red Sox\"]",
+          "outcomePrices": "[\"1\", \"0\"]",
+          "conditionId": "0x5dacbec31ab3832f8478825a8dafe74c7df8d59ee15e1ae63b4785600a6a423d"
+        },
+        {
+          "id": "1806246",
+          "question": "Will there be a run scored in the first inning?: Milwaukee Brewers vs. Boston Red Sox",
+          "active": false,
+          "closed": false,
+          "slug": "mlb-mil-bos-2026-04-06-nrfi",
+          "clobTokenIds": "[\"48279534638418820672074975822011101309453888435460286503217899863439079351777\", \"48603956073215099852229305310736990079953021385680475751556901350425694250417\"]",
+          "outcomes": "[\"Yes Run\", \"No Run\"]",
+          "outcomePrices": "[\"0.5\", \"0.5\"]",
+          "conditionId": "0xe36a28295fdd65eb3e7522a0fdae302b83ea1958491e0de7708099dfba53f78b"
+        }
+      ]
+    },
+    {
+      "id": "332391",
+      "title": "Milwaukee Brewers vs. Boston Red Sox",
+      "slug": "mlb-mil-bos-2026-04-07",
+      "active": true,
+      "closed": true,
+      "markets": [
+        {
+          "id": "1815841",
+          "question": "Milwaukee Brewers vs. Boston Red Sox",
+          "active": true,
+          "closed": true,
+          "slug": "mlb-mil-bos-2026-04-07",
+          "clobTokenIds": "[\"90271236287737621755046307955039712474456559511566716847339469782422474245574\", \"27228901848899621181833069665822572555798892281943855463262452818250361972939\"]",
+          "outcomes": "[\"Milwaukee Brewers\", \"Boston Red Sox\"]",
+          "outcomePrices": "[\"0\", \"1\"]",
+          "conditionId": "0xcf5e6aaa21f97656f068d135a0a0f07450772decd1d717acc0fb8f57989caf5c"
+        },
+        {
+          "id": "1815842",
+          "question": "Will there be a run scored in the first inning?: Milwaukee Brewers vs. Boston Red Sox",
+          "active": false,
+          "closed": false,
+          "slug": "mlb-mil-bos-2026-04-07-nrfi",
+          "clobTokenIds": "[\"21975202308652434055471969542277443288398418950669375126964073070435951523406\", \"26424860867505333139157732563994765000234389646067426604313090706014389579838\"]",
+          "outcomes": "[\"Yes Run\", \"No Run\"]",
+          "outcomePrices": "[\"0.5\", \"0.5\"]",
+          "conditionId": "0xb8381f89f26f3615ca2b3cef1b9ca3432951586b29e8420cd0b8929f9fd27af6"
+        }
+      ]
+    },
+    {
+      "id": "901536",
+      "title": "NBA: 2023-03-30",
+      "slug": "nba-dailies-2023-03-30",
+      "active": true,
+      "closed": true,
+      "markets": [
+        {
+          "id": "249633",
+          "question": "NBA: Milwaukee Bucks vs. Boston Celtics 2023-03-30",
+          "active": true,
+          "closed": true,
+          "slug": "nba-mil-bos-2023-03-30",
+          "clobTokenIds": "[\"100297339343257434514422758473424619485889477606687839077483102627579367055234\", \"36854946797607260841932648725838920884778039712402866877693966248061492357009\"]",
+          "outcomes": "[\"Bucks\", \"Celtics\"]",
+          "outcomePrices": "[\"0\", \"1\"]",
+          "conditionId": "0xa90c416b36e8b659a3edae5ac61508caec265b7ff93f07ad664e191f752a5d29",
+          "volume24hr": 0,
+          "liquidity": "0"
+        },
+        {
+          "id": "249637",
+          "question": "NBA: Denver Nuggets vs. New Orleans Pelicans 2023-03-30",
+          "active": true,
+          "closed": true,
+          "slug": "nba-den-no-2023-03-30",
+          "clobTokenIds": "[\"91845865612625090730621269965648972523913697253197093435981277858169660376932\", \"105407800332124051023409981727766087524332427678362046546852275986524733033865\"]",
+          "outcomes": "[\"Nuggets\", \"Pelicans\"]",
+          "outcomePrices": "[\"0\", \"1\"]",
+          "conditionId": "0x72abaf9a9e44f733d43d1e603ec3045c1a74a81130416d4148a13a82bb6f9dbc",
+          "volume24hr": 0,
+          "liquidity": "0"
+        }
+      ]
+    }
+  ]
+}

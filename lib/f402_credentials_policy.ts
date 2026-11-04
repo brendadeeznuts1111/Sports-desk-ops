@@ -20,6 +20,7 @@
  */
 
 import * as readline from "node:readline/promises";
+import { homedir } from "node:os";
 import { stdin as input, stdout as output } from "node:process";
 
 import {
@@ -63,7 +64,8 @@ type Env = Record<string, string | undefined>;
 export function buildMinimalSpawnEnv(
   extraAllowed?: Readonly<Record<string, string>>,
 ): Record<string, string> {
-  const home = Bun.env.HOME ?? "/Users/nolarose";
+  // Never a hard-coded operator home: a VPS/CI child would get a path that does not exist.
+  const home = Bun.env.HOME ?? homedir();
   return {
     PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     HOME: home,
