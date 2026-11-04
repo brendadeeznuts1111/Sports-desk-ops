@@ -464,7 +464,10 @@
   // setPlayers() is not a consumer of these arrays: it takes its argument from hierarchy nodes.
   // The hierarchy success sets global players, then clears non-master node players to [] before
   // lazy expansion; GENERAL rows in the captured envelope carry no players key, and getPlayers()
-  // has no call sites. So the setPlayers direct-read risk is theoretical, not live. The live
+  // has no call sites. So the setPlayers direct-read risk is theoretical, not live. A browser check
+  // also showed escaped Login renders as text A&B, id/for decode to c&d, and label association /
+  // getElementById work; only raw #id selectors with &/< would differ, and setPlayers uses none.
+  // The live
   // landmine is anything reading the module-level arrays directly (searchComponent itself).
   //
   // Tradeoff: the search filter compares the typed term against the escaped field, so searching for

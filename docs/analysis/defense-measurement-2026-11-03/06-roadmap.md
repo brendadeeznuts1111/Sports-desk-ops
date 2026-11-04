@@ -61,7 +61,10 @@ arrays (searchComponent does). **But `setPlayers()` is not one of them:** it tak
 hierarchy nodes; the hierarchy success sets the global array and then clears non-master node
 `players` to `[]` before lazy expansion; GENERAL rows in the captured envelope carry no `players`
 key (0/2,466); `getPlayers()` has no call sites. The `setPlayers()` direct-read risk is therefore
-**theoretical**, not live. Prefer render-copy for new sinks regardless.
+**theoretical**, not live. A browser check settles the display question: escaped `Login = "A&B"`
+renders as text `A&B` (not `A&amp;B`), `id`/`for` attributes decode to `c&d`, label association and
+`getElementById` work. Only a raw `#id` jQuery/CSS selector containing `&`/`<` would differ, and
+`setPlayers()` does not use one. Prefer render-copy for new sinks regardless.
 
 **Render-copy decision:** adopted for `getMessageInit` (and `getPopUpMessages` if it follows the same
 multi-consumer shape). `setCommunicationMessages` is the exception — one `.html()` call containing a
