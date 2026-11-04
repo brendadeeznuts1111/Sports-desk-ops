@@ -121,6 +121,26 @@ To unblock: provide an aggregate endpoint (customer ID → pending count/balance
 authoritative transaction log/replica with a join key and signed settlement/compliance definitions.
 Then run the 20-customer sample acceptance from the task.
 
+## Multi-customer sample — planned, not run
+
+Only **one** customer ledger is on disk (BB55103). The other transaction-shaped artifacts are not
+usable for the invariant: the `getTransactions` probes are empty/500, the deleted-transactions
+sample has 11 rows but no `Balance`, and the customer-admin list has 2 customer rows but no ledgers.
+Therefore the generalization test has not been run.
+
+To run it: place 3–5 redacted ledgers and their INFO responses in `Scratch/` using the same shape as
+BB55103. The check is scripted and takes minutes, not an hour:
+
+1. `Balance[n] = Balance[n-1] + signed(Amount)` for every row.
+2. Final balance = `INFO.data.CurrentBalance`.
+3. `INFO.balance.AvailableBalance = CurrentBalance − PendingWagerBalance + CreditLimit`.
+4. `PendingWagerCount`/`PendingWagerBalance` do not appear as ledger rows.
+5. `TranType` table remains free of a pending row type.
+
+**Acceptance:** 3/5 or better pass → “ledger model” instead of “one customer.” Any fail → report the
+failing row and treat it as the headline finding, not a Path B blocker. Until the ledgers exist, the
+invariant is verified for **one** customer only.
+
 ## What this does not answer
 
 - The actual count.
