@@ -34,6 +34,21 @@ bun scripts/secrets_r2.ts status    # names only: present/missing
 fallback. `BLOB_API_TOKEN` is not derivable from the R2 keys and must be supplied separately when
 the gateway sink is used.
 
+### 1.2. `.env` delivery: FIFO for development, explicit `--env-file` for production
+
+The repo `.env` is a 1Password-mounted FIFO (`code-project sync-environments`). Bun reads it once
+at process start, which is fine for an interactive shell but wrong for a daemon that restarts or
+forks: a `--watch` reload or a `child_process.fork()` child inherits `execArgv` and re-reads the
+path, where the pipe is empty and a FIFO waits for a new writer. Production entrypoints should
+therefore deliver `.env`-style values explicitly — one fetch at process start, no persistent mount:
+
+- fresh fetch, no stale mount: `bun --env-file=<(op read "op://<vault>/<item>/env") run <script>`
+- no `.env` at all (cron, keychain-only): `bun --no-env-file run <script>`
+- the flag placement is the same as for tests (`bun --no-env-file test …`): put it before the
+  subcommand. Verified on Bun 1.4.4 with a script that prints `process.env.BUN_CHROME_PATH`:
+  present by default, `null` under `bun --no-env-file run`, and present again with
+  `--env-file=<(printf …)`.
+
 ## 2. Token Verification & Cloudflare Edge Services
 
 ### 2.1. Instant Verification (Bun, no curl)

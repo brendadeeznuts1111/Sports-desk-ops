@@ -324,6 +324,15 @@ Every bridge child runs as `bun --no-orphans --no-env-file run <cli>`:
 - The flag belongs on the production/cron entrypoints, **not** in `bunfig.toml` (a developer
   shell still wants `.env`). `--no-env-file` only suppresses _automatic_ loading; explicit
   `Bun.env.FOO` reads are unaffected.
+- The same placement applies to every `bun run <script>`, not only `bun test`: verified on
+  Bun 1.4.4 with a script printing `process.env.BUN_CHROME_PATH` (present by default, `null`
+  under `bun --no-env-file run <script>`). Cron/daemon entrypoints that do not need `.env` must
+  pass it; `--from-keychain` always runs with `--no-env-file` because it reads the Keychain, and
+  the FIFO has to be inert so the credential source is unambiguous.
+- Production `.env`-style delivery should prefer a one-shot `--env-file=<(op read "op://…")`
+  over the persistent 1Password FIFO: it is fetched fresh at process start, cannot go stale, and
+  leaves exactly one credential mechanism in play (1Password at fetch time, macOS Keychain only
+  at `Bun.secrets` time).
 
 ### Credentials
 
