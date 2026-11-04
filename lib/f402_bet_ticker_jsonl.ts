@@ -87,6 +87,50 @@ export async function readF402TickerJsonl(
   );
   const prior = options.state;
   const previousWatermark = prior?.watermark ?? 0;
+  if (/\.(zst|gz)$/i.test(path)) {
+    const format = path.toLowerCase().endsWith(".zst") ? "zstd" : "gzip";
+    const stream = Bun.file(path)
+      .stream()
+      .pipeThrough(new DecompressionStream(format as never));
+    let text = "";
+    for await (const chunk of new Response(stream).textStream()) text += chunk;
+    const rows: F402TickerRow[] = [];
+    let skippedLines = 0;
+    let watermark = previousWatermark;
+    for (const line of text.split("\n")) {
+      if (line.trim() === "") continue;
+      let payload: unknown;
+      try {
+        payload = JSON.parse(line);
+      } catch {
+        skippedLines += 1;
+        continue;
+      }
+      const row = parseF402TickerRow(payload);
+      if (row === null) {
+        skippedLines += 1;
+        continue;
+      }
+      const wagerNumber = numericWagerNumber(row);
+      if (
+        options.filterWatermark === true &&
+        wagerNumber !== null &&
+        wagerNumber <= previousWatermark
+      )
+        continue;
+      rows.push(row);
+      if (wagerNumber !== null && wagerNumber > watermark)
+        watermark = wagerNumber;
+    }
+    return {
+      rows,
+      state: { offset: fileSize, watermark, initialized: true },
+      bytesRead: fileSize,
+      skippedLines,
+      reset: "initial",
+      fileSize,
+    };
+  }
 
   let start: number;
   let reset: F402TickerJsonlRead["reset"];

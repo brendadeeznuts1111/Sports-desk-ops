@@ -153,19 +153,13 @@ export async function* streamBetReportBets(
     options.chunkBytes > 0
       ? options.chunkBytes
       : DEFAULT_CHUNK_BYTES;
-  const handle = await open(path, "r");
-  const decoder = new TextDecoder();
+  const reader = new Response(Bun.file(path)).textStream().getReader();
   let buffer = "";
   let found = false;
-  let eof = false;
   const readMore = async (): Promise<boolean> => {
-    const chunk = new Uint8Array(chunkBytes);
-    const { bytesRead } = await handle.read(chunk, 0, chunkBytes, null);
-    if (bytesRead === 0) {
-      eof = true;
-      return false;
-    }
-    buffer += decoder.decode(chunk.subarray(0, bytesRead), { stream: true });
+    const next = await reader.read();
+    if (next.done === true) return false;
+    buffer += next.value;
     return true;
   };
   try {
@@ -180,13 +174,11 @@ export async function* streamBetReportBets(
       if (!(await readMore()))
         throw new Error("streamBetReportBets: no bets array found");
     }
-    buffer += decoder.decode();
     while (true) {
       buffer = buffer.replace(/^[\s,]+/, "");
       while (buffer === "") {
         if (!(await readMore()))
           throw new Error("streamBetReportBets: truncated bets array");
-        buffer = decoder.decode() + buffer;
         buffer = buffer.replace(/^[\s,]+/, "");
       }
       if (buffer.startsWith("]")) return;
@@ -237,7 +229,7 @@ export async function* streamBetReportBets(
       yield parsed as Record<string, unknown>;
     }
   } finally {
-    await handle.close();
+    reader.releaseLock();
   }
 }
 

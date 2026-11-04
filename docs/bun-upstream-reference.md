@@ -434,3 +434,12 @@ BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=Scratch/profiles BUN_CPU_PROFILE_NAME=supe
 ```
 
 Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
+
+## v1.4.0 feed/transport primitives in use
+
+- **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
+- **`Response.textStream()`**: `lib/gslive_tally_rollup.ts::streamBetReportBets` now consumes `new Response(Bun.file(path)).textStream()`, so BOM stripping and multi-byte chunk reassembly are Bun's responsibility (tested with a BOM + `€🌍` split across bytes).
+- **`Bun.Archive`**: contract test round-trips `Bun.Archive.from` → `Bun.Archive.write` → `extract`.
+- **`URLPattern`**: contract test matches `/api/v1/blobs/:key` and rejects `/api/v1/live-bets`.
+- **PQC**: contract tests exercise `crypto.subtle` ML-KEM-768 `encapsulateBits`/`decapsulateBits` and `node:crypto` `ml-dsa-65` sign/verify with JWK `kty: "AKP"`.
+- Contract test: `tests/bun_v140_primitives.test.ts`.
