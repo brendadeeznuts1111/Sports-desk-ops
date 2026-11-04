@@ -279,6 +279,7 @@
     "cytoscape": "3.30.2",
     "cytoscape-elk": "2.3.0",
     "elkjs": "0.12.1",
+    "react": "^19.3.1",
     "zod": "4.6.7"
   }
 }
