@@ -158,6 +158,19 @@ export class ReportingSchedulerService {
       .filter((s) => s.enabled)
       .filter((s) => (only === null ? true : only.has(s.id)))
       .filter((s) => !exclude.has(s.id))
+      .filter((s) => {
+        // SHELL_CAPTURE schedules with unmet `requires` fire into a no-op every tick forever
+        // (see 2026-11-04: sched_agent_tree_hourly skipped 24x/day because F402_BEARER_TOKEN was
+        // absent). Drop them at registration; the fire-time skip in `runShellCaptureDefault`
+        // stays as defense in depth if an env var changes mid-run.
+        if (s.shellJob === undefined) return true;
+        const missing = missingShellJobRequirements(s.shellJob);
+        if (missing.length === 0) return true;
+        console.log(
+          `[Scheduler] ${s.id}: not armed (missing ${missing.join(",")}); restart after the requirement is satisfied`,
+        );
+        return false;
+      })
       .map((s) => {
         const cronExpr = s.scheduleTime.includes(" ")
           ? s.scheduleTime
@@ -530,13 +543,15 @@ const REPO_ROOT = resolve(import.meta.dir, "..");
  * for PATH and the manifest-listed credentials the capture needs (F402/GSID are read from the
  * keychain by the scripts themselves, so no injection is needed here).
  */
-export async function runShellCaptureDefault(
+/**
+ * Which of a shell job's `requires` are not satisfied right now. Pure: reads `Bun.env` and
+ * `existsSync` only. Used by `runShellCaptureDefault` at fire time AND by `start()` at
+ * registration time so a schedule that can never run does not even get armed with `Bun.cron` —
+ * the daemon log stays quiet instead of accumulating one skipped-write per tick forever.
+ */
+export function missingShellJobRequirements(
   spec: ShellJobSpec,
-  logger: {
-    readonly log: (line: string) => void;
-    readonly warn: (line: string) => void;
-  } = console,
-): Promise<ShellCaptureOutcome> {
+): readonly string[] {
   const missing: string[] = [];
   for (const requirement of spec.requires ?? []) {
     if (requirement.startsWith("file:")) {
@@ -549,12 +564,23 @@ export async function runShellCaptureDefault(
       .trim();
     if (value === "") missing.push(requirement);
   }
+  return missing;
+}
+
+export async function runShellCaptureDefault(
+  spec: ShellJobSpec,
+  logger: {
+    readonly log: (line: string) => void;
+    readonly warn: (line: string) => void;
+  } = console,
+): Promise<ShellCaptureOutcome> {
+  const missing = missingShellJobRequirements(spec);
   if (missing.length > 0) {
     // Only names are logged, never values.
     logger.log(
       `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: skipped (missing ${missing.join(",")})`,
     );
-    return { status: "skipped", missing };
+    return { status: "skipped", missing: [...missing] };
   }
 
   // `Bun.nanoseconds()` is monotonic; `Date.now()` can jump backwards on a clock correction and

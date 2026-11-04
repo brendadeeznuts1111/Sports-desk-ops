@@ -37,7 +37,14 @@ export interface F402SessionFileOptions {
   readonly now?: number;
 }
 
-const DEFAULT_TTL_MINUTES = 30;
+/**
+ * 24h: the session refresher (`scripts/f402_session_refresh.ts`, launchd `com.bookdeskops.sportsdesk.session-refresh`)
+ * re-mints every 5 min with a 5-min grace window, so the 30-min default that caused the
+ * 2026-11-04 bridge outage (session minted 06:03 UTC, expired 06:33, every bridge rollup after
+ * that failed for 14+ hours) is no longer a defensible default. Override via
+ * `F402_SESSION_TTL_MIN` if you want the paranoid old behavior.
+ */
+const DEFAULT_TTL_MINUTES = 1440;
 
 export function resolveF402SessionPath(
   env: NodeJS.ProcessEnv = Bun.env,
@@ -47,7 +54,7 @@ export function resolveF402SessionPath(
   return join(homedir(), ".cache", "sportsdesk", "f402-session.json");
 }
 
-/** Session TTL from `F402_SESSION_TTL_MIN` (minutes), falling back to the 30-minute default. */
+/** Session TTL from `F402_SESSION_TTL_MIN` (minutes), falling back to the 24h default. */
 export function f402SessionTtlMinutesFromEnv(
   env: NodeJS.ProcessEnv = Bun.env,
 ): number {

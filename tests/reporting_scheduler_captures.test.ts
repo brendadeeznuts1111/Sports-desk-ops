@@ -147,6 +147,29 @@ describe("shell capture dispatch", () => {
     });
   });
 
+  test("start() does not arm a SHELL_CAPTURE whose requires are unmet (2026-11-04 regression)", async () => {
+    setEnv("F402_BEARER_TOKEN", undefined);
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (line: string): void => {
+      if (typeof line === "string") logs.push(line);
+    };
+    try {
+      const stop = scheduler.start({
+        only: ["sched_agent_tree_hourly"],
+      });
+      stop();
+    } finally {
+      console.log = originalLog;
+    }
+    const notArmed = logs.find(
+      (l) => l.includes("sched_agent_tree_hourly") && l.includes("not armed"),
+    );
+    expect(notArmed).toBeDefined();
+    expect(notArmed).toContain("missing F402_BEARER_TOKEN");
+  });
+
   test("customer-profiles is skipped when the required file is absent (no spawn)", async () => {
     const outcome = await runShellCaptureDefault(
       {
