@@ -112,6 +112,7 @@
     if (security) decorated = apply(security) || decorated;
     var manager = defined["manager/manager"];
     if (manager) decorated = applyManagerGuard(manager) || decorated;
+    if (manager) decorated = applySearchEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -127,6 +128,8 @@
         registryDegraded: registryDegraded,
         managerGuardInstalled: managerGuardInstalled,
         managerGuardFailure: managerGuardFailure,
+        searchEscaperInstalled: searchEscaperInstalled,
+        searchEscaperFailure: searchEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -288,6 +291,9 @@
 
   var managerGuardInstalled = false;
   var managerGuardFailure = null;
+  var searchEscaperInstalled = false;
+  var searchEscaperFailure = null;
+  var searchEscaperApiCache = null;
 
   // Rejections are audit records, not diagnostics. The live client has no
   // `r.security(r.events.MODULE_REJECT, …)` API (verified in language.js and the pinned
@@ -431,6 +437,71 @@
     return true;
   }
 
+  function searchEscaperApi() {
+    if (searchEscaperApiCache === null)
+      searchEscaperApiCache = guardSecurityApi();
+    return searchEscaperApiCache;
+  }
+
+  // Sink migration for manager.searchComponent: the player/all branches interpolate
+  // NameFirst/Login/Password into <li> HTML and inject with .html(). The overlay cannot edit the
+  // pinned bundle, so it escapes the row fields for the duration of the synchronous render and
+  // restores them afterwards; handlers and later calls still see the original data.
+  function applySearchEscaper(Manager) {
+    if (searchEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      searchEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.searchComponent;
+    if (typeof original !== "function") {
+      searchEscaperFailure = "searchComponent-missing";
+      console.error(
+        "[f402-seam] searchComponent escaper cannot install: method missing — the overlay is inert; update it against the current manager.js",
+      );
+      return false;
+    }
+    searchEscaperInstalled = true;
+    Object.defineProperty(proto, "searchComponent", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        if (!api || typeof api.escHtml !== "function") {
+          return original.apply(this, arguments);
+        }
+        var esc = api.escHtml;
+        var restore = [];
+        function sanitize(rows, fields) {
+          if (!Array.isArray(rows)) return;
+          for (var i = 0; i < rows.length; i += 1) {
+            var row = rows[i];
+            if (!row || typeof row !== "object") continue;
+            for (var j = 0; j < fields.length; j += 1) {
+              var field = fields[j];
+              if (typeof row[field] === "string") {
+                restore.push([row, field, row[field]]);
+                row[field] = esc(row[field]);
+              }
+            }
+          }
+        }
+        sanitize(this.agents, ["Login"]);
+        sanitize(this.players, ["Login", "NameFirst", "Password"]);
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          for (var k = 0; k < restore.length; k += 1) {
+            var entry = restore[k];
+            entry[0][entry[1]] = entry[2];
+          }
+        }
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -465,6 +536,7 @@
         map.name === "manager/manager"
       ) {
         applyManagerGuard(defined);
+        applySearchEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

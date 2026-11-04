@@ -37,10 +37,16 @@ actors** in the adversary model. The two highest-authority actors — subordinat
 (actor 2) and the inside operator (actor 6) — have **no detection and no stopping control** in the
 evidence. Continuing to build against the wrong actor spends effort that item 2 may reallocate.
 
-**Paused until item 2 answers:** the WebKit injection path, the external-view canary, further seam or
-pin expansion, and the sink migrations. They resume once item 2 either confirms the Bearer is
-load-bearing (client work matters and resumes with `searchComponent`) or shows the server trusts
-client-supplied identity (client work is cosmetic and the roadmap changes shape).
+**Paused until item 2 answers:** the WebKit injection path, the external-view canary, and further
+seam or pin expansion. WebKit resumes once item 2 confirms the Bearer is load-bearing (client work
+matters) or shows the server trusts client-supplied identity (client work is cosmetic and the
+roadmap changes shape).
+
+**Override 2026-11-04 — sink migrations are unpaused as hygiene work:** escaping `NameFirst`,
+`Login`, `Password`, message bodies and history titles is correct regardless of the Bearer verdict;
+only the _priority_ of the sink work depends on item 2. `searchComponent` (#16) goes first, then
+`getMessageInit`, `getPopUpMessages`, `setCommunicationMessages`, `setHistory` — one PR each, each
+with a sink test.
 
 **Raised instead:** the Bearer verdict (item 2 — six requests, ~2 server-team hours) and the
 financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is

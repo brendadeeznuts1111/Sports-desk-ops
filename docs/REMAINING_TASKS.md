@@ -199,6 +199,10 @@ so an id resolves without guessing which artifact it came from.
     external-view canary is **not** required.
   - **Exit:** a `NameFirst` payload renders as literal text and sends no request; sink tests cover
     the migrated path. **Not blocked by the external-view canary.**
+  - **Unpaused 2026-11-04 as hygiene:** escaping is correct regardless of the Bearer verdict; the
+    overlay now wraps `manager/manager.searchComponent` and escapes `NameFirst`/`Login`/`Password`
+    for the render. Remaining sinks follow in order: `getMessageInit`, `getPopUpMessages`,
+    `setCommunicationMessages`, `setHistory`.
 
 - [ ] **P0.6 Measure the defenses: authz matrix, financial reconciliation, attack exercises**
   - **Ref:** `RT-DEFENSE-MEASURE`

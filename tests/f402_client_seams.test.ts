@@ -472,13 +472,91 @@ describe("security seam preload: module allowlist", () => {
     expect(seams.diag().registryDegraded).toBe(true);
   });
 
-  test("external-view guard anchors exist in the pinned controller and fail on a move", async () => {
+  test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(3);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(4);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
+    const searchMoved = managerJs.replace(
+      "searchComponent:function",
+      "searchComponent: fn",
+    );
+    expect(missingExternalViewGuardAnchors(searchMoved)).toContain(
+      "searchComponent:function",
+    );
+  });
+
+  test("searchComponent render escapes player fields for the sink and restores them", async () => {
+    const source = await preloadSource();
+    const context = runPreload(
+      source,
+      "https://www.fantasy402.com/manager.html",
+    );
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+
+    let seen: Record<string, unknown> | null = null;
+    class Manager {
+      agents = [{ Login: "agent<one" }];
+      players = [
+        {
+          Login: "a&b",
+          NameFirst: '<img src=x onerror="boom">',
+          Password: 'p"w<d',
+        },
+      ];
+      searchComponent(): void {
+        seen = { ...(this.players[0] as Record<string, unknown>) };
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const instance = new Manager();
+    instance.searchComponent();
+
+    expect(seen).not.toBeNull();
+    expect(seen!["NameFirst"]).toContain("&lt;img");
+    expect(seen!["Login"]).toContain("a&amp;b");
+    expect(seen!["Password"]).toContain("p&quot;w&lt;d");
+    // Restored after the synchronous render so later handlers see original data.
+    expect(instance.players[0]!.NameFirst).toBe('<img src=x onerror="boom">');
+    expect(instance.players[0]!.Password).toBe('p"w<d');
+    expect(instance.agents[0]!.Login).toBe("agent<one");
+  });
+
+  test("a manager class without searchComponent installs loudly, not silently", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    class ManagerWithoutSearch {
+      setAccountInfo(): void {}
+    }
+    decorateNamed(
+      context,
+      "manager/manager",
+      ManagerWithoutSearch as unknown as Record<string, unknown>,
+    );
+    const seams = context.window["__F402_SEAMS__"] as {
+      diag: () => {
+        searchEscaperInstalled: boolean;
+        searchEscaperFailure: string | null;
+      };
+    };
+    expect(seams.diag().searchEscaperInstalled).toBe(false);
+    expect(seams.diag().searchEscaperFailure).toBe("searchComponent-missing");
   });
 
   test("a manager class without setAccountInfo installs loudly, not silently", async () => {

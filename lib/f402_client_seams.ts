@@ -55,7 +55,9 @@ export const ALLOWED_MODULES: readonly string[] = [
  * checked against the pinned controller bytes whenever pins move, and the install fails loudly if
  * the method itself is gone.
  *
- * The `"manager/module/"` anchor assumes the vendor concatenates `"manager/module/" + id`. If that
+ * The set covers both manager overlays: the external-view guard (`setAccountInfo`, `"external-view"`,
+ * `"manager/module/"`) and the search sink escaper (`searchComponent`). The `"manager/module/"`
+ * anchor assumes the vendor concatenates `"manager/module/" + id`. If that
  * is refactored to an array join (`["manager", "module", id].join("/")`), the anchor still passes
  * while the concatenation the wrapper intercepts is gone — update the anchor and the wrapper
  * together. The allowlist remains the bypass control either way.
@@ -64,6 +66,7 @@ export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
   "setAccountInfo:function",
   '"external-view"',
   '"manager/module/"',
+  "searchComponent:function",
 ] as const;
 
 /** Anchor substrings missing from a controller bundle. Empty means the wrapper still has a target. */

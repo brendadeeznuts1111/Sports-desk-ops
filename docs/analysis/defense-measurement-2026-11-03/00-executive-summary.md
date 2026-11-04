@@ -29,8 +29,10 @@ controls, two questions must be answered by people outside engineering:
 
 **Recommendation:** pause client-side security work pending the Bearer verdict.
 
-- **What is paused:** WebKit injection path, external-view canary, further seam/pin expansion, sink
-  migrations.
+- **What is paused:** WebKit injection path, external-view canary, further seam/pin expansion.
+- **Override (2026-11-04):** the five sink migrations are **unpaused as hygiene work** — escaping is
+  correct regardless of the Bearer verdict; priority may change when item 2 returns. `searchComponent`
+  lands first.
 - **Cost:** `searchComponent` XSS stays live until the verdict returns.
 - **Accepted by:** desk security owner (operator role).
 - **Expires:** **2026-12-03** (30 days). Tracked on issue
