@@ -48,7 +48,13 @@ describe("Bun v1.4.0 primitives", () => {
 
   test("CompressionStream gzip/zstd/brotli round-trips", async () => {
     const text = "hello gzip zstd brotli";
-    for (const format of ["gzip", "zstd", "brotli"] as const) {
+    for (const format of [
+      "gzip",
+      "deflate",
+      "deflate-raw",
+      "zstd",
+      "brotli",
+    ] as const) {
       const compressed = await new Response(
         new Blob([text])
           .stream()
