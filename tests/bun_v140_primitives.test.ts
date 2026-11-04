@@ -187,6 +187,61 @@ describe("Bun v1.4.0 primitives", () => {
     ).toBe("AKP");
   });
 
+  test("Request.textStream decodes UTF-8 and strips BOM", async () => {
+    const body = new Uint8Array([0xef, 0xbb, 0xbf, 0xe2, 0x82, 0xac]);
+    const request = new Request("http://example.test", {
+      method: "POST",
+      body,
+    });
+    let text = "";
+    for await (const chunk of request.textStream()) text += chunk;
+    expect(text).toBe("\u20ac");
+  });
+
+  test("PQC key export/import round-trips jwk, raw-public, and raw-seed", async () => {
+    const kem = await crypto.subtle.generateKey("ML-KEM-768", true, [
+      "encapsulateBits",
+      "decapsulateBits",
+    ]);
+    const pubJwk = await crypto.subtle.exportKey("jwk", kem.publicKey);
+    expect((pubJwk as { kty: string }).kty).toBe("AKP");
+    expect(
+      (await crypto.subtle.importKey("jwk", pubJwk, "ML-KEM-768", true, []))
+        .type,
+    ).toBe("public");
+    const rawPublic = await crypto.subtle.exportKey(
+      "raw-public",
+      kem.publicKey,
+    );
+    expect(rawPublic.byteLength).toBeGreaterThan(0);
+    expect(
+      (
+        await crypto.subtle.importKey(
+          "raw-public",
+          rawPublic,
+          "ML-KEM-768",
+          true,
+          [],
+        )
+      ).type,
+    ).toBe("public");
+    const rawSeed = await crypto.subtle.exportKey("raw-seed", kem.privateKey);
+    expect(rawSeed.byteLength).toBe(64);
+    expect(
+      (
+        await crypto.subtle.importKey(
+          "raw-seed",
+          rawSeed,
+          "ML-KEM-768",
+          true,
+          [],
+        )
+      ).type,
+    ).toBe("private");
+    const clone = structuredClone(kem.publicKey);
+    expect(clone.type).toBe("public");
+  });
+
   test("crypto.subtle ML-DSA-65 signs/verifies and keys survive structuredClone", async () => {
     const data = new TextEncoder().encode("hello");
     const kp = (await crypto.subtle.generateKey("ML-DSA-65", true, [

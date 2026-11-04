@@ -443,5 +443,5 @@ Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (g
 - **`Bun.stringWidth` / `wrapAnsi` / `sliceAnsi`**: contract tests pin ANSI stripping, cursor/hyperlink sequences, ZWJ/flags/skin-tone/keycap graphemes, zero-width soft hyphen + combining marks, and CJK double width.
 - **`Bun.Archive`**: contract test round-trips `Bun.Archive.from` → `Bun.Archive.write` → `extract`.
 - **`URLPattern`**: contract test matches `/api/v1/blobs/:key` and rejects `/api/v1/live-bets`.
-- **PQC**: contract tests exercise `crypto.subtle` ML-KEM-768 `encapsulateBits`/`decapsulateBits` and `node:crypto` `ml-dsa-65` sign/verify, JWK `kty: "AKP"`, PEM/DER/encrypted PKCS#8, `createPublicKey`/`createPrivateKey` imports, and ML-KEM-768 keypairs.
+- **PQC**: contract tests exercise `crypto.subtle` ML-KEM-768 bits round-trips, JWK/raw-public/raw-seed export-import, structuredClone of PQC CryptoKeys, `node:crypto` `ml-dsa-65` sign/verify, JWK `kty: "AKP"`, PEM/DER/encrypted PKCS#8, `createPublicKey`/`createPrivateKey` imports, and ML-KEM-768 keypairs. Note: `encapsulateKey`/`decapsulateKey` exist but this Bun build rejects the documented two-argument call with "Not enough arguments"; only the bits API is exercised.
 - Contract test: `tests/bun_v140_primitives.test.ts`.
