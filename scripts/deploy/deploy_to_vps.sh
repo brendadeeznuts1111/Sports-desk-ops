@@ -91,6 +91,8 @@ for dir in cli services lib static catalog validation; do
 done
 mkdir -p "${APP_DIR}/docs"
 cp -f "${REPO_ROOT}/docs/graph.html" "${REPO_ROOT}/docs/graph.js" "${APP_DIR}/docs/" 2>/dev/null || true
+mkdir -p "${APP_DIR}/docs/assets"
+cp -R "${REPO_ROOT}/docs/assets/." "${APP_DIR}/docs/assets/" 2>/dev/null || true
 mkdir -p "${APP_DIR}/design"
 cp -R "${REPO_ROOT}/design/." "${APP_DIR}/design/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.json "${APP_DIR}/" 2>/dev/null || true

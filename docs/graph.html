@@ -458,6 +458,69 @@
       .kpi-card .value.value-sm {
         font-size: 1rem;
       }
+      /* live wagers & positions panel (docs/live-ops.js) */
+      .ops-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.85rem 0 0.65rem;
+      }
+      .ops-tabs {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .ops-tabs .btn.active {
+        background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%);
+        color: #070b14;
+      }
+      .ops-toolbar .ops-spacer {
+        flex: 1 1 auto;
+      }
+      .ops-panel[hidden] {
+        display: none;
+      }
+      .live-badge-row {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: center;
+      }
+      #live-feed-age,
+      #live-mode-badge,
+      #live-ws-state {
+        font-variant-numeric: tabular-nums;
+      }
+      table.live-table td,
+      table.live-table th {
+        white-space: nowrap;
+      }
+      table.live-table td.wrap,
+      table.live-table th.wrap {
+        white-space: normal;
+      }
+      .source-LIVE {
+        color: #6ee7b7;
+      }
+      .source-STALE {
+        color: #fcd34d;
+      }
+      .source-FIXTURE {
+        color: #fda4af;
+      }
+      .tape-empty {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        padding: 0.6rem 0;
+      }
+      .ops-totals td {
+        border-top: 1px solid #334155;
+        font-weight: 700;
+      }
+      .ops-kpis .kpi-card .value {
+        font-size: 1.15rem;
+      }
     </style>
   </head>
   <body>
@@ -1452,8 +1515,8 @@
               >
                 Current verified repo metrics. Suite and typecheck counts are
                 the ac5824d verification record (2026-11-04); route, citation
-                and docs-gate counts were re-run on the deployed descendant HEAD
-                8522a04 and are unchanged.
+                and docs-gate counts were re-run on this deployment and are
+                unchanged.
               </caption>
               <thead>
                 <tr>
@@ -1475,7 +1538,8 @@
                   <td>
                     <strong>773</strong> files · 0 errors <br /><span
                       style="color: #94a3b8"
-                      >781 at HEAD 8522a04 (8 .ts files added)</span
+                      >783 at this deployment (+2 test files since
+                      8522a04)</span
                     >
                   </td>
                   <td><code>bun run typecheck</code></td>
@@ -1521,6 +1585,238 @@
             GATE-08 is skipped unless <code>--three-c-rollup</code> is passed,
             and WebLog GATE-WL-01/GATE-WL-04 are constant-pass while GATE-WL-02
             and GATE-WL-03 are real checks.
+          </p>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 1b: LIVE WAGERS & OUR POSITIONS                            -->
+        <!-- ============================================================== -->
+        <section
+          class="section-panel"
+          id="live-ops-panel"
+          aria-label="Live wagers and positions"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>🔴 Live Wagers &amp; Our Positions</h2>
+            <span class="live-badge-row">
+              <span class="pill pill-cyan" id="live-mode-badge"
+                >mode: SNAPSHOT</span
+              >
+              <span class="pill pill-amber" id="live-feed-age"
+                >feed: awaiting</span
+              >
+              <span class="pill pill-cyan" id="live-ws-state">WS: probing</span>
+            </span>
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            Source order: same-origin bridge WebSocket on
+            <code>/api/live-bets</code> (daemon-served pages) → 15s poll of
+            <code>./graph-live-feed.json</code> → the last rendered values. The
+            public Pages edge has no daemon, so there the panel polls the
+            deployed feed and labels the mode POLL/SNAPSHOT — never “WS LIVE”.
+            Polymarket position rows are observed only when the poller runs with
+            <code>--live</code> against Data API v2 (the v1 positions route
+            retired 2026-11-02); every row carries its own LIVE/STALE/FIXTURE
+            provenance, and a failed ingest never looks live. A failed poll
+            leaves the last values on screen.
+          </p>
+          <div class="kpi-strip ops-kpis" aria-label="Live operations totals">
+            <div class="kpi-card live-kpi" data-source="bridge">
+              <div class="label">Desk open exposure</div>
+              <div
+                class="value"
+                style="color: var(--accent-amber)"
+                id="live-desk-exposure"
+              >
+                $0
+              </div>
+              <div class="sub" id="live-desk-sub">awaiting feed</div>
+            </div>
+            <div class="kpi-card live-kpi" data-source="polymarket">
+              <div class="label">Our open PM value</div>
+              <div
+                class="value"
+                style="color: var(--accent-cyan)"
+                id="live-pm-value"
+              >
+                $0
+              </div>
+              <div class="sub" id="live-pm-sub">awaiting feed</div>
+            </div>
+            <div class="kpi-card live-kpi" data-source="polymarket">
+              <div class="label">Open PnL</div>
+              <div
+                class="value"
+                style="color: var(--accent-emerald)"
+                id="live-pm-pnl"
+              >
+                $0
+              </div>
+              <div class="sub" id="live-pm-pnl-sub">mark vs cost</div>
+            </div>
+            <div class="kpi-card live-kpi" data-source="f402">
+              <div class="label">Open legs</div>
+              <div class="value" style="color: #c084fc" id="live-open-legs">
+                0
+              </div>
+              <div class="sub" id="live-legs-sub">
+                PM positions + desk clusters
+              </div>
+            </div>
+          </div>
+
+          <div class="ops-toolbar">
+            <div
+              class="ops-tabs"
+              role="tablist"
+              aria-label="Live operations views"
+            >
+              <button
+                type="button"
+                class="btn active"
+                role="tab"
+                aria-selected="true"
+                data-ops-target="OPS_TAPE"
+              >
+                Wager tape
+              </button>
+              <button
+                type="button"
+                class="btn"
+                role="tab"
+                aria-selected="false"
+                data-ops-target="OPS_POSITIONS"
+              >
+                Our positions (PM)
+              </button>
+              <button
+                type="button"
+                class="btn"
+                role="tab"
+                aria-selected="false"
+                data-ops-target="OPS_DESK"
+              >
+                Desk book (F402)
+              </button>
+            </div>
+            <span class="ops-spacer"></span>
+            <button
+              type="button"
+              class="btn"
+              id="live-pause-btn"
+              aria-pressed="false"
+            >
+              Pause tape
+            </button>
+            <button type="button" class="btn" id="live-clear-btn">
+              Clear tape
+            </button>
+            <button type="button" class="btn" id="live-refresh-btn">
+              Poll now
+            </button>
+          </div>
+
+          <div class="ops-panel" data-ops-panel="OPS_TAPE">
+            <div class="table-wrap">
+              <table class="live-table" aria-label="Live wager and bridge tape">
+                <thead>
+                  <tr>
+                    <th scope="col">Time (UTC)</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Login</th>
+                    <th scope="col">Agent</th>
+                    <th scope="col">Ticket/Wager</th>
+                    <th scope="col" class="wrap">Market / rollup</th>
+                  </tr>
+                </thead>
+                <tbody id="live-tape-tbody">
+                  <tr>
+                    <td colspan="6" class="tape-empty">
+                      Waiting for the first live wager or bridge frame — the
+                      daemon hub streams individual ticks and bridge rollups;
+                      the public edge fills this from the 15s feed.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="ops-panel" data-ops-panel="OPS_POSITIONS" hidden>
+            <div class="table-wrap">
+              <table class="live-table" aria-label="Our Polymarket positions">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Wallet</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Agent</th>
+                    <th scope="col">Legs</th>
+                    <th scope="col">Cost</th>
+                    <th scope="col">Mark</th>
+                    <th scope="col">PnL</th>
+                    <th scope="col">Provenance</th>
+                    <th scope="col" class="wrap">Top open</th>
+                  </tr>
+                </thead>
+                <tbody id="positions-tbody">
+                  <tr>
+                    <td colspan="10" class="tape-empty">
+                      No position rows yet — the poller publishes walletProfiles
+                      into the feed.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="ops-panel" data-ops-panel="OPS_DESK" hidden>
+            <div class="table-wrap">
+              <table class="live-table" aria-label="Desk open book">
+                <thead>
+                  <tr>
+                    <th scope="col">Venue</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Agent</th>
+                    <th scope="col">Market</th>
+                    <th scope="col">Risk</th>
+                    <th scope="col">To win</th>
+                    <th scope="col" class="wrap">Desk verdict</th>
+                    <th scope="col">Placed (UTC)</th>
+                  </tr>
+                </thead>
+                <tbody id="desk-book-tbody">
+                  <tr>
+                    <td colspan="8" class="tape-empty">
+                      No desk clusters yet — pendingBets feeds this table.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p
+            style="
+              margin: 0.7rem 0 0;
+              font-size: 0.72rem;
+              color: var(--text-muted);
+            "
+          >
+            The tape deliberately mixes two things: F402 ticker rows are
+            individual wagers (identity and timing only — no money until units
+            are proven), while bridge frames are rollup events carrying their
+            topic in <code>kind</code>. A row appears only from a feed row or a
+            published WS frame; the source column and the per-row provenance
+            badge say which.
           </p>
         </section>
 

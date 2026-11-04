@@ -23,14 +23,21 @@ describe("graph data plane", () => {
 
   const get = (path: string) => fetch(`${server.url}${path}`);
 
-  test("serves the graph page and its module", async () => {
+  test("serves the graph page and both of its modules", async () => {
     const page = await get("graph");
     expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toContain("text/html");
 
-    const script = await get("graph.js");
-    expect(script.status).toBe(200);
-    expect(script.headers.get("content-type")).toContain("javascript");
+    // graph.js imports two page modules from assets/; a 404 on either kills hydration.
+    for (const path of [
+      "graph.js",
+      "assets/live-ops.js",
+      "assets/gslive-links.js",
+    ]) {
+      const script = await get(path);
+      expect(script.status).toBe(200);
+      expect(script.headers.get("content-type")).toContain("javascript");
+    }
   });
 
   test("serves the live feed at both paths the page documents", async () => {

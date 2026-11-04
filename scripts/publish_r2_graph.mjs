@@ -37,10 +37,16 @@ const filesToPublish = [
     meta: { surface: "graph-controller" },
   },
   {
-    file: "dist/gslive-links.js",
-    key: "gslive-links.js",
+    file: "dist/assets/gslive-links.js",
+    key: "assets/gslive-links.js",
     type: "application/javascript; charset=utf-8",
     meta: { surface: "gslive-link-hydration" },
+  },
+  {
+    file: "dist/assets/live-ops.js",
+    key: "assets/live-ops.js",
+    type: "application/javascript; charset=utf-8",
+    meta: { surface: "live-wagers-and-positions-helpers" },
   },
   {
     file: "dist/graph-live-feed.json",

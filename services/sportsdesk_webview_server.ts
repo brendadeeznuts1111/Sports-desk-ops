@@ -2312,23 +2312,25 @@ export function startBridgeSchedules(): () => void {
   return stop;
 }
 
-if (import.meta.main) {
-  const server = startServer();
-  const stopBridgeCron = startBridgeSchedules();
-  const location = server.url ? server.url.toString() : "unix domain socket";
-  console.log(`[SportsDesk Webview Server] Active on ${location}`);
-  console.log(` • Master Dashboard : ${location}`);
-  console.log(` • Mini App (TMA)   : ${location}miniapp`);
-  console.log(` • Health Probe     : ${location}health`);
-  console.log(` • Watch List API   : ${location}api/watchlist`);
-  const shutdown = (): void => {
-    stopBridgeCron();
-    server.stop(true);
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-}
+if (import.meta.main)
+  queueMicrotask(() => {
+    // defer past module eval
+    const server = startServer();
+    const stopBridgeCron = startBridgeSchedules();
+    const location = server.url ? server.url.toString() : "unix domain socket";
+    console.log(`[SportsDesk Webview Server] Active on ${location}`);
+    console.log(` • Master Dashboard : ${location}`);
+    console.log(` • Mini App (TMA)   : ${location}miniapp`);
+    console.log(` • Health Probe     : ${location}health`);
+    console.log(` • Watch List API   : ${location}api/watchlist`);
+    const shutdown = (): void => {
+      stopBridgeCron();
+      server.stop(true);
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+  });
 
 /**
  * Merge the latest f402-weblog rollup and the last bridge rollup cycle into an aggregate response.

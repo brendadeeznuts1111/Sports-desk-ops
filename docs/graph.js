@@ -9,7 +9,17 @@
  * this file is the only controller and the page carries no inline script.
  */
 
-import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
+import { buildWalletStats, planGsLiveLinks } from "./assets/gslive-links.js";
+import {
+  LIVE_WS_TOPICS,
+  formatAgeMs,
+  mergeTape,
+  normalizeTickerRow,
+  resolveLiveMode,
+  summarizeBridgeFrame,
+  summarizePendingBets,
+  summarizePositions,
+} from "./assets/live-ops.js";
 
 (function () {
   // 1. Tab Switching (Topology vs. Pending Bets vs. 39-Wallet Profile Registry vs. 4-Week Parlay Backtest)
@@ -355,6 +365,504 @@ import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
     });
   }
 
+  // 7f. Live wagers & our positions.
+  // Two transports feed one panel: the same-origin bridge WebSocket (daemon-served pages)
+  // and the 15s `graph-live-feed.json` poll (always available). The public Pages edge has
+  // no daemon, so it polls and labels the mode POLL/SNAPSHOT; it never claims "WS LIVE".
+  const liveOpsPanel = document.getElementById("live-ops-panel");
+  const opsTabBtns = document.querySelectorAll("[data-ops-target]");
+  const opsPanels = document.querySelectorAll("[data-ops-panel]");
+  const liveTapeBody = document.getElementById("live-tape-tbody");
+  const livePositionsBody = document.getElementById("positions-tbody");
+  const liveDeskBookBody = document.getElementById("desk-book-tbody");
+  const liveModeBadge = document.getElementById("live-mode-badge");
+  const liveFeedAgeEl = document.getElementById("live-feed-age");
+  const liveWsStateEl = document.getElementById("live-ws-state");
+  const livePauseBtn = document.getElementById("live-pause-btn");
+  const liveClearBtn = document.getElementById("live-clear-btn");
+  const liveRefreshBtn = document.getElementById("live-refresh-btn");
+  const kpiDeskExposure = document.getElementById("live-desk-exposure");
+  const kpiDeskSub = document.getElementById("live-desk-sub");
+  const kpiPmValue = document.getElementById("live-pm-value");
+  const kpiPmSub = document.getElementById("live-pm-sub");
+  const kpiPmPnl = document.getElementById("live-pm-pnl");
+  const kpiPmPnlSub = document.getElementById("live-pm-pnl-sub");
+  const kpiOpenLegs = document.getElementById("live-open-legs");
+  const kpiLegsSub = document.getElementById("live-legs-sub");
+
+  const TAPE_LIMIT = 80;
+  let liveTapeRows = [];
+  let liveTapePaused = false;
+  let liveFeedEpochMs = null;
+  let liveFeedDataMode = "—";
+  let liveWsState = "offline";
+
+  function fmtInt(value) {
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? Math.round(number).toLocaleString("en-US")
+      : "0";
+  }
+
+  function fmtUsd(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "$0";
+    return (
+      (number < 0 ? "-$" : "$") +
+      Math.abs(Math.round(number)).toLocaleString("en-US")
+    );
+  }
+
+  function setCellText(cell, text) {
+    cell.textContent = text === null || text === undefined ? "—" : String(text);
+  }
+
+  function emptyTapeRow(message) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "tape-empty";
+    cell.textContent = message;
+    row.appendChild(cell);
+    return row;
+  }
+
+  function renderLiveTape() {
+    if (!liveTapeBody) return;
+    if (liveTapeRows.length === 0) {
+      liveTapeBody.replaceChildren(
+        emptyTapeRow(
+          "Waiting for the first live wager or bridge frame — the daemon hub streams individual ticks and bridge rollups; the public edge fills this from the 15s feed.",
+        ),
+      );
+      return;
+    }
+    const rows = liveTapeRows.slice(0, 60).map(function (row) {
+      const tr = document.createElement("tr");
+      const at = String(row.atIso || "")
+        .replace("T", " ")
+        .slice(0, 19);
+      [
+        at || "—",
+        row.label || row.source || "—",
+        row.login || "—",
+        row.agent || "—",
+        row.ticket || "—",
+        row.summary || "—",
+      ].forEach(function (value, index) {
+        const td = document.createElement("td");
+        if (index === 5) td.className = "wrap";
+        setCellText(td, value);
+        tr.appendChild(td);
+      });
+      return tr;
+    });
+    liveTapeBody.replaceChildren.apply(liveTapeBody, rows);
+  }
+
+  function renderLivePositions(summary) {
+    if (!livePositionsBody) return;
+    if (!summary || summary.rows.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 10;
+      cell.className = "tape-empty";
+      cell.textContent =
+        "No position rows yet — the poller publishes walletProfiles into the feed.";
+      row.appendChild(cell);
+      livePositionsBody.replaceChildren(row);
+      return;
+    }
+    const rows = summary.rows.map(function (row) {
+      const tr = document.createElement("tr");
+      const cells = [
+        row.rank || "—",
+        row.shortWallet || row.proxyWallet || "—",
+        row.customerId,
+        row.agentOwner,
+        fmtInt(row.legs),
+        fmtUsd(row.costUsd),
+        fmtUsd(row.valueUsd),
+        fmtUsd(row.pnlUsd),
+        row.source,
+        row.error ? "error: " + row.error : row.summary || "—",
+      ];
+      cells.forEach(function (value, index) {
+        const td = document.createElement("td");
+        if (index === 9) td.className = "wrap";
+        if (index === 8) td.className = "source-" + String(row.source);
+        setCellText(td, value);
+        tr.appendChild(td);
+      });
+      return tr;
+    });
+    const totals = document.createElement("tr");
+    totals.className = "ops-totals";
+    [
+      "Σ",
+      summary.walletCount + " wallets",
+      "",
+      "",
+      fmtInt(summary.openLegs),
+      fmtUsd(summary.openCostUsd),
+      fmtUsd(summary.openValueUsd),
+      fmtUsd(summary.openPnlUsd),
+      summary.liveCount + " live",
+      "sync " +
+        (summary.latestSyncIso
+          ? String(summary.latestSyncIso).slice(0, 19).replace("T", " ")
+          : "—"),
+    ].forEach(function (value, index) {
+      const td = document.createElement("td");
+      if (index === 9) td.className = "wrap";
+      setCellText(td, value);
+      totals.appendChild(td);
+    });
+    livePositionsBody.replaceChildren.apply(livePositionsBody, [
+      ...rows,
+      totals,
+    ]);
+  }
+
+  function renderLiveDeskBook(summary) {
+    if (!liveDeskBookBody) return;
+    if (!summary || summary.rows.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 8;
+      cell.className = "tape-empty";
+      cell.textContent = "No desk clusters yet — pendingBets feeds this table.";
+      row.appendChild(cell);
+      liveDeskBookBody.replaceChildren(row);
+      return;
+    }
+    const rows = summary.rows.map(function (row) {
+      const tr = document.createElement("tr");
+      [
+        row.venue,
+        row.customerId,
+        row.agentOwner,
+        row.market,
+        fmtUsd(row.riskUsd),
+        fmtUsd(row.toWinUsd),
+        row.verdict || "—",
+        row.placedAtUtc || "—",
+      ].forEach(function (value, index) {
+        const td = document.createElement("td");
+        if (index === 3 || index === 6) td.className = "wrap";
+        setCellText(td, value);
+        tr.appendChild(td);
+      });
+      return tr;
+    });
+    const totals = document.createElement("tr");
+    totals.className = "ops-totals";
+    [
+      "Σ",
+      summary.clusterCount + " clusters",
+      "",
+      summary.venues
+        .map(function (v) {
+          return v.venue + " ×" + v.count;
+        })
+        .join(" · "),
+      fmtUsd(summary.riskUsd),
+      fmtUsd(summary.toWinUsd),
+      "",
+      "",
+    ].forEach(function (value, index) {
+      const td = document.createElement("td");
+      if (index === 3) td.className = "wrap";
+      setCellText(td, value);
+      totals.appendChild(td);
+    });
+    liveDeskBookBody.replaceChildren.apply(liveDeskBookBody, [...rows, totals]);
+  }
+
+  function renderLiveKpis(positions, desk) {
+    if (kpiDeskExposure) kpiDeskExposure.textContent = fmtUsd(desk.riskUsd);
+    if (kpiDeskSub) {
+      kpiDeskSub.textContent =
+        desk.clusterCount + " clusters · to-win " + fmtUsd(desk.toWinUsd);
+    }
+    if (kpiPmValue) kpiPmValue.textContent = fmtUsd(positions.openValueUsd);
+    if (kpiPmSub) {
+      kpiPmSub.textContent =
+        positions.walletCount +
+        " wallets · " +
+        positions.liveCount +
+        " live / " +
+        positions.staleCount +
+        " stale / " +
+        positions.fixtureCount +
+        " fixture · cost " +
+        fmtUsd(positions.openCostUsd);
+    }
+    if (kpiPmPnl) kpiPmPnl.textContent = fmtUsd(positions.openPnlUsd);
+    if (kpiPmPnlSub) {
+      kpiPmPnlSub.textContent = positions.latestSyncIso
+        ? "mark vs cost · sync " +
+          String(positions.latestSyncIso).slice(0, 19).replace("T", " ")
+        : "mark vs cost · no observed sync";
+    }
+    if (kpiOpenLegs) kpiOpenLegs.textContent = fmtInt(positions.openLegs);
+    if (kpiLegsSub) {
+      kpiLegsSub.textContent =
+        positions.walletCount +
+        " PM wallets · " +
+        desk.clusterCount +
+        " desk clusters";
+    }
+  }
+
+  function updateLiveBadges() {
+    const mode = resolveLiveMode({
+      wsState: liveWsState,
+      feedAgeMs: liveFeedEpochMs === null ? null : Date.now() - liveFeedEpochMs,
+      feedDataMode: liveFeedDataMode,
+    });
+    if (liveModeBadge) {
+      liveModeBadge.textContent = "mode: " + mode.label;
+      liveModeBadge.className = "pill pill-" + mode.tone;
+      liveModeBadge.title = mode.detail;
+    }
+    if (liveFeedAgeEl) {
+      liveFeedAgeEl.textContent =
+        liveFeedEpochMs === null
+          ? "feed: awaiting"
+          : "feed: " +
+            formatAgeMs(Date.now() - liveFeedEpochMs) +
+            " · " +
+            liveFeedDataMode;
+    }
+    if (liveWsStateEl) {
+      liveWsStateEl.textContent = "WS: " + liveWsState;
+      liveWsStateEl.className =
+        "pill pill-" +
+        (liveWsState === "connected"
+          ? "emerald"
+          : liveWsState === "connecting"
+            ? "cyan"
+            : "amber");
+    }
+  }
+
+  function hydrateLiveOps(data) {
+    if (!liveOpsPanel || !data) return;
+    const positions = summarizePositions(data.walletProfiles);
+    const desk = summarizePendingBets(data.pendingBets);
+    renderLiveKpis(positions, desk);
+    renderLivePositions(positions);
+    renderLiveDeskBook(desk);
+    liveFeedEpochMs = Date.now();
+    liveFeedDataMode = data.dataMode || "—";
+    if (!liveTapePaused) {
+      const ticks = (Array.isArray(data.liveTicks) ? data.liveTicks : [])
+        .map(function (tick, index) {
+          return normalizeTickerRow(tick, index);
+        })
+        .filter(Boolean);
+      if (ticks.length > 0) {
+        liveTapeRows = mergeTape(liveTapeRows, ticks, TAPE_LIMIT);
+        renderLiveTape();
+      }
+    }
+    updateLiveBadges();
+  }
+
+  opsTabBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const target = btn.getAttribute("data-ops-target");
+      opsTabBtns.forEach(function (b) {
+        const active = b.getAttribute("data-ops-target") === target;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      opsPanels.forEach(function (panel) {
+        if (panel.getAttribute("data-ops-panel") === target) {
+          panel.removeAttribute("hidden");
+        } else {
+          panel.setAttribute("hidden", "");
+        }
+      });
+    });
+  });
+
+  if (livePauseBtn) {
+    livePauseBtn.addEventListener("click", function () {
+      liveTapePaused = !liveTapePaused;
+      livePauseBtn.setAttribute(
+        "aria-pressed",
+        liveTapePaused ? "true" : "false",
+      );
+      livePauseBtn.textContent = liveTapePaused ? "Resume tape" : "Pause tape";
+    });
+  }
+
+  if (liveClearBtn) {
+    liveClearBtn.addEventListener("click", function () {
+      liveTapeRows = [];
+      renderLiveTape();
+    });
+  }
+
+  if (liveRefreshBtn) {
+    liveRefreshBtn.addEventListener("click", function () {
+      pollLiveFeed();
+    });
+  }
+
+  function appendLiveTape(entry) {
+    if (!entry || liveTapePaused) return;
+    liveTapeRows = mergeTape(liveTapeRows, [entry], TAPE_LIMIT);
+    renderLiveTape();
+  }
+
+  // The hub upgrades an already-guarded route; a browser cannot set an Authorization
+  // header on a handshake, so the admin token (when the operator puts it in a
+  // `<meta name="sportsdesk-admin-token">`) travels as a `bearer-<token>` subprotocol.
+  // Loopback peers need no token. A static Pages edge has no hub: after bounded
+  // attempts the panel stays on polling and says so.
+  function connectLiveOpsSocket() {
+    if (!liveOpsPanel) return;
+    const nav = globalThis.location;
+    if (!nav || (nav.protocol !== "http:" && nav.protocol !== "https:")) return;
+    const Socket = globalThis.WebSocket;
+    if (typeof Socket !== "function") return;
+
+    const endpoint =
+      (nav.protocol === "https:" ? "wss:" : "ws:") +
+      "//" +
+      nav.host +
+      "/api/live-bets";
+    const protocols = ["sportsdesk.bridge.v1"];
+    let meta = null;
+    if (typeof document.querySelector === "function") {
+      meta = document.querySelector('meta[name="sportsdesk-admin-token"]');
+    }
+    const token =
+      meta && typeof meta.getAttribute === "function"
+        ? String(meta.getAttribute("content") || "").trim()
+        : "";
+    if (token !== "") protocols.push("bearer-" + token);
+    const loopback =
+      nav.hostname === "localhost" ||
+      nav.hostname === "127.0.0.1" ||
+      nav.hostname === "[::1]";
+
+    let socket = null;
+    let pingTimer = null;
+    let reconnectTimer = null;
+    let backoffMs = 1_000;
+    let attempts = 0;
+
+    function setWsState(state) {
+      liveWsState = state;
+      updateLiveBadges();
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer !== null) return;
+      setWsState("polling");
+      if (attempts >= 6) return;
+      connectRetry();
+    }
+
+    function connectRetry() {
+      reconnectTimer = setTimeout(function () {
+        reconnectTimer = null;
+        attempts += 1;
+        connect();
+      }, backoffMs);
+      backoffMs = Math.min(backoffMs * 2, 30_000);
+    }
+
+    function connect() {
+      setWsState("connecting");
+      try {
+        socket = new Socket(endpoint, protocols);
+      } catch {
+        setWsState("polling");
+        return;
+      }
+      socket.addEventListener("open", function () {
+        backoffMs = 1_000;
+        setWsState("connected");
+        LIVE_WS_TOPICS.forEach(function (topic) {
+          try {
+            socket.send(JSON.stringify({ type: "SUBSCRIBE", channel: topic }));
+          } catch {
+            // a closed socket surfaces on `close`
+          }
+        });
+        if (pingTimer !== null) clearInterval(pingTimer);
+        pingTimer = setInterval(function () {
+          try {
+            socket.send(JSON.stringify({ type: "PING" }));
+          } catch {
+            // a closed socket surfaces on `close`
+          }
+        }, 25_000);
+      });
+      socket.addEventListener("message", function (event) {
+        let frame = null;
+        try {
+          frame = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (!frame || typeof frame !== "object") return;
+        if (frame.type === "SUBSCRIBED" || frame.type === "UNSUBSCRIBED") {
+          setWsState("connected");
+          return;
+        }
+        if (frame.type === "PONG" || frame.type === "ERROR") return;
+        const entry = summarizeBridgeFrame(frame, new Date().toISOString());
+        if (!entry) return;
+        setWsState("connected");
+        appendLiveTape(entry);
+      });
+      socket.addEventListener("close", function () {
+        if (pingTimer !== null) {
+          clearInterval(pingTimer);
+          pingTimer = null;
+        }
+        scheduleReconnect();
+      });
+      socket.addEventListener("error", function () {
+        // close follows; scheduleReconnect owns the state
+      });
+    }
+
+    // A browser cannot tell "no hub" from "hub rejected us" until it tries, and every
+    // failed upgrade logs a network error. Probe the daemon's feed route first: it is
+    // same-origin, oks on loopback, and 404s on the static Pages edge, so the public
+    // page never emits a doomed WebSocket attempt. With an operator token we skip the
+    // probe (a non-loopback peer needs the token for both paths anyway).
+    function probeHub() {
+      if (token !== "") return Promise.resolve(true);
+      if (!loopback) return Promise.resolve(false);
+      if (typeof fetch !== "function") return Promise.resolve(false);
+      return fetch("/api/graph-feed", { method: "HEAD", cache: "no-store" })
+        .then(function (res) {
+          return res.ok;
+        })
+        .catch(function () {
+          return false;
+        });
+    }
+
+    probeHub().then(function (reachable) {
+      if (!reachable) {
+        setWsState("polling");
+        return;
+      }
+      connect();
+    });
+  }
+
+  connectLiveOpsSocket();
+
   // 8. Live Poller Sync (`./graph-live-feed.json` / `/api/graph-feed`) + Relative Age Counter
   const lastUpdatedEl = document.getElementById("live-last-updated-ts");
   const lastUpdatedAgeEl = document.getElementById("live-last-updated-age");
@@ -531,6 +1039,7 @@ import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
     });
 
   function updateRelativeAge() {
+    updateLiveBadges();
     if (!lastUpdatedAgeEl) return;
     const sec = Math.max(0, Math.floor((Date.now() - lastPollEpochMs) / 1000));
     lastUpdatedAgeEl.textContent = sec + "s ago";
@@ -675,6 +1184,7 @@ import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
         hydrateGsLiveLinks(data);
         hydrateWalletRows(data);
         hydrateLiveTicks(data);
+        hydrateLiveOps(data);
         updateRelativeAge();
       }
     } catch {

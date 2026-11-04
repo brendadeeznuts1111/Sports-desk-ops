@@ -12,7 +12,7 @@ import {
   planGsLiveLinks,
   setUrlParam,
   withWindow,
-} from "../docs/gslive-links.js";
+} from "../docs/assets/gslive-links.js";
 
 const WALLET = {
   f402CustomerId: "MJ102",
@@ -408,7 +408,7 @@ describe("Portal GSLive link hydration", () => {
       "utf8",
     );
     expect(graphJs).toContain("hydrateGsLiveLinks(data)");
-    expect(graphJs).toContain('from "./gslive-links.js"');
+    expect(graphJs).toContain('from "./assets/gslive-links.js"');
   });
 
   test("buildWalletStats maps feed wallets for registry-row hydration", () => {

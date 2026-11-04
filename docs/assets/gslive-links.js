@@ -1,5 +1,5 @@
 /**
- * @file docs/gslive-links.js
+ * @file docs/assets/gslive-links.js
  * @description Pure GSLive Manager link assembly for the live portal (browser + Bun-testable).
  *
  * The portal no longer stores per-wallet URLs in HTML: each `[data-gslive]` anchor is hydrated
