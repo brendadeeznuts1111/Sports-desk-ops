@@ -43,7 +43,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { readF402Session } from "./f402_session.ts";
+import {
+  readF402Session,
+  refreshF402Session,
+  writeF402Session,
+} from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   GSID_KEYCHAIN_NAME,
@@ -502,7 +506,20 @@ export function keychainCredentialProbe(
 
   return {
     async check(job) {
-      if (job.id === "weblog") return { ok: true, source: "corpus" };
+      if (job.id === "weblog") {
+        const extra: Record<string, string> = {};
+        const envAgent = (envValue(env, "F402_AGENT_ID") ?? "").trim();
+        if (envAgent === "") {
+          const kAgent =
+            (await readSecret(agentIdName).catch(() => null))?.trim() ?? "";
+          if (kAgent !== "") extra.F402_AGENT_ID = kAgent;
+        }
+        return {
+          ok: true,
+          source: "corpus",
+          ...(Object.keys(extra).length > 0 ? { extraEnv: extra } : {}),
+        };
+      }
       if (job.id === "bridge3c") {
         const envNames = [
           "GSLIVE_SESSION_ID",
@@ -533,10 +550,29 @@ export function keychainCredentialProbe(
         if (tokenFilePresent(defaultTokenFilePath(env))) {
           return { ok: true, source: "token-file" };
         }
+        if (readF402Session() !== null) {
+          return { ok: true, source: "session-cache:bearer" };
+        }
+        const kAgent =
+          (
+            await readSecret(F402_KEYCHAIN_NAMES.agentId).catch(() => null)
+          )?.trim() ?? "";
+        const kPass =
+          (
+            await readSecret(F402_KEYCHAIN_NAMES.password).catch(() => null)
+          )?.trim() ?? "";
+        if (kAgent !== "" && kPass !== "") {
+          const extra: Record<string, string> = { F402_AGENT_ID: kAgent };
+          return {
+            ok: true,
+            source: "keychain:agent-password",
+            extraEnv: extra,
+          };
+        }
         return {
           ok: false,
           error:
-            "missing credentials: bearer token (F402_BEARER_TOKEN or F402_TOKEN_FILE); the cookie session is not accepted by the 3b fetch",
+            "missing credentials: bearer token (F402_BEARER_TOKEN or F402_TOKEN_FILE), session cache, or keychain agent id + password",
         };
       }
       // bridge3a
@@ -549,6 +585,18 @@ export function keychainCredentialProbe(
         return { ok: false, error: "missing credentials: F402_AGENT_ID" };
       }
       if (!sessionPresent()) {
+        const kPass =
+          (
+            await readSecret(F402_KEYCHAIN_NAMES.password).catch(() => null)
+          )?.trim() ?? "";
+        const live = (envValue(env, "F402_LIVE_LOGIN") ?? "").trim() === "1";
+        if (live && kPass !== "") {
+          return {
+            ok: true,
+            source: "keychain:agent-session",
+            extraEnv: { F402_AGENT_ID: agentId },
+          };
+        }
         return {
           ok: false,
           error:
@@ -1045,6 +1093,43 @@ export async function runBridgeRollupCycle(
 
   for (const job of selected) {
     const decision = await credentials.check(job);
+    if (
+      decision.ok &&
+      job.id === "bridge3a" &&
+      decision.source === "keychain:agent-session" &&
+      readF402Session() === null
+    ) {
+      const agentId = (
+        (await readSecretCanonicalThenLegacy(F402_KEYCHAIN_NAMES.agentId).catch(
+          () => null,
+        )) ?? ""
+      ).trim();
+      const password = (
+        (await readSecretCanonicalThenLegacy(
+          F402_KEYCHAIN_NAMES.password,
+        ).catch(() => null)) ?? ""
+      ).trim();
+      if (agentId !== "" && password !== "") {
+        try {
+          const session = await refreshF402Session({
+            env: { ...env, F402_LIVE_LOGIN: "1" },
+            credentials: { agentId, password },
+          });
+          writeF402Session(session);
+        } catch {
+          jobs.push({
+            id: job.id,
+            label: job.label,
+            ok: false,
+            durationMs: 0,
+            error:
+              "F402 session refresh failed (run session:login --from-keychain)",
+          });
+          artifactStatus[job.id] = "missing";
+          continue;
+        }
+      }
+    }
     if (!decision.ok) {
       jobs.push({
         id: job.id,

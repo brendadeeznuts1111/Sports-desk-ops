@@ -61,7 +61,7 @@ const fetchRequested =
 let fromPath = (values["from-file"] ?? values.from) as string;
 let sourceKindOverride = values["source-kind"] as string | undefined;
 if (fetchRequested) {
-  const token = resolveF402BearerToken({
+  const token = await resolveF402BearerToken({
     cliToken: values["bearer-token"] as string | undefined,
   });
   const date = defaultPendingDate(

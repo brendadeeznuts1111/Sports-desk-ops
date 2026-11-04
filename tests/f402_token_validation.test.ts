@@ -84,59 +84,71 @@ describe("F402 token validation", () => {
     expect(readF402TokenFile(join(dir, "absent"))).toBeNull();
   });
 
-  test("resolveF402BearerToken uses the validating reader and fails closed", () => {
+  test("resolveF402BearerToken uses the validating reader and fails closed", async () => {
     const opaque = "resolved-token-" + "z".repeat(30);
     const validPath = writeToken(`${opaque}\n`);
     expect(
-      resolveF402BearerToken({
+      await resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: validPath },
+        allowSessionFallback: false,
+        allowKeychainMint: false,
       }),
     ).toBe(opaque);
 
     const shellPath = writeToken("umask 077\n");
-    expect(() =>
+    await expect(
       resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: shellPath },
+        allowSessionFallback: false,
+        allowKeychainMint: false,
       }),
-    ).toThrow(F402PendingFetchError);
+    ).rejects.toThrow(F402PendingFetchError);
 
     const malformedJwtPath = writeToken(jwt(["eyJ", "a".repeat(20)]));
-    expect(() =>
+    await expect(
       resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: malformedJwtPath },
+        allowSessionFallback: false,
+        allowKeychainMint: false,
       }),
-    ).toThrow(/invalid F402 bearer token/);
+    ).rejects.toThrow(/invalid F402 bearer token/);
   });
 
-  test("CLI and env sources still win over the file", () => {
+  test("CLI and env sources still win over the file", async () => {
     const path = writeToken("file-source-" + "f".repeat(30));
     const environment = { F402_TOKEN_FILE: path };
     expect(
-      resolveF402BearerToken({
+      await resolveF402BearerToken({
         cliToken: "cli-source-" + "c".repeat(30),
         environment,
+        allowSessionFallback: false,
+        allowKeychainMint: false,
       }),
     ).toBe("cli-source-" + "c".repeat(30));
     expect(
-      resolveF402BearerToken({
+      await resolveF402BearerToken({
         environment: {
           ...environment,
           F402_BEARER_TOKEN: "env-source-" + "e".repeat(30),
         },
+        allowSessionFallback: false,
+        allowKeychainMint: false,
       }),
     ).toBe("env-source-" + "e".repeat(30));
   });
 
-  test("a present-but-invalid explicit source fails closed", () => {
+  test("a present-but-invalid explicit source fails closed", async () => {
     const readFile = () => "must-not-be-read-" + "f".repeat(30);
     for (const token of ["0", "short", "umask 077"]) {
-      expect(() =>
+      await expect(
         resolveF402BearerToken({
           cliToken: token,
           environment: { F402_TOKEN_FILE: join(dir, "irrelevant") },
           readFile,
+          allowSessionFallback: false,
+          allowKeychainMint: false,
         }),
-      ).toThrow(F402PendingFetchError);
+      ).rejects.toThrow(F402PendingFetchError);
     }
   });
 });

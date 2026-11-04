@@ -41,6 +41,8 @@ declare module "bun" {
     /** Minted Fantasy402 JWT; environment only (see lib/secret_manifest.ts). */
     readonly F402_BEARER_TOKEN?: string;
     readonly F402_WEBVIEW_PROFILE?: string;
+    /** Test-only: require F402_AGENT_ID+F402_PASSWORD in env for session:login (skip keychain). */
+    readonly F402_LOGIN_ENV_ONLY?: string;
     readonly F402_REPLAY_PROXY_URL?: string;
     readonly F402_PORTAL_DRIFT_CRON?: string;
     readonly PRETEST_SKIP?: string;

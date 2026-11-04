@@ -26,6 +26,8 @@ ignorePatterns = [
   "data/agent-tree.json",
   # Same reason, same generator: 2,465 agents, 122 KB compact vs 228 KB pretty.
   "data/agent-index.json",
+  # Machine-generated market registry — keep compact; avoid churn in format gates.
+  "data/market_type_registry.json",
   # Tool-owned: `statechart` writes this report verbatim (it puts no blank line under a
   # heading), so formatting it only makes the next gate run dirty the tree again.
   "verification/gen-tokens-zero-drift-gate/report.md",

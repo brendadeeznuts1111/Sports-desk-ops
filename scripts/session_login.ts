@@ -42,6 +42,7 @@ import {
   LEGACY_SECRETS_SERVICE,
   readSecretCanonicalThenLegacy,
 } from "../lib/secrets.ts";
+import { SECRET_NAMES } from "./capture/f402_login.ts";
 import {
   describeF402Session,
   f402SessionTtlMinutesFromEnv,
@@ -89,8 +90,14 @@ export interface ResolveLoginCredentialsOptions {
  * Pure credential resolution for the two fresh-login paths. Never writes a file, never logs a
  * value, and reads no keychain when the live-login gate is closed.
  *
- * Precedence: `F402_LIVE_LOGIN=1` gate → both env values → both keychain values (canonical then
- * legacy). Env is all-or-nothing: a single env value does not mix with one keychain value.
+ * Precedence: `F402_LIVE_LOGIN=1` gate → both env values → Bun.secrets (canonical service
+ * `com.bookdeskops.sportsdesk` then legacy `sportsdesk-ops`, names {@link SECRET_NAMES}).
+ *
+ * `--from-keychain` fails closed with a detailed message when either secret is missing.
+ * Without the flag, the same keychain read still runs when env is incomplete so
+ * `F402_LIVE_LOGIN=1` alone can use stored credentials.
+ *
+ * Env is all-or-nothing: a single env value does not mix with one keychain value.
  */
 export async function resolveLoginCredentials(
   options: ResolveLoginCredentialsOptions,
@@ -112,7 +119,10 @@ export async function resolveLoginCredentials(
       },
     };
   }
-  if (!options.fromKeychain) {
+
+  /** Test/CI hook: require both env vars; do not read the keychain unless `--from-keychain`. */
+  const envOnly = (env["F402_LOGIN_ENV_ONLY"] ?? "").trim() === "1";
+  if (envOnly && !options.fromKeychain) {
     return { ok: false, reason: "missing-env-credentials" };
   }
 
@@ -121,9 +131,17 @@ export async function resolveLoginCredentials(
   const password =
     (await readSecret(F402_KEYCHAIN_NAMES.password))?.trim() ?? "";
   const missing: string[] = [];
-  if (agentId === "") missing.push(F402_KEYCHAIN_NAMES.agentId);
-  if (password === "") missing.push(F402_KEYCHAIN_NAMES.password);
-  if (missing.length > 0) {
+  if (agentId === "") missing.push(SECRET_NAMES.agentId);
+  if (password === "") missing.push(SECRET_NAMES.password);
+
+  if (missing.length === 0) {
+    return {
+      ok: true,
+      credentials: { agentId, password, source: "keychain" },
+    };
+  }
+
+  if (options.fromKeychain) {
     return {
       ok: false,
       reason: "missing-keychain-credentials",
@@ -135,10 +153,8 @@ export async function resolveLoginCredentials(
         "bun run secrets:f402 set --agent-id <id>",
     };
   }
-  return {
-    ok: true,
-    credentials: { agentId, password, source: "keychain" },
-  };
+
+  return { ok: false, reason: "missing-env-credentials" };
 }
 
 function liveLoginGateMessage(): string {
@@ -310,6 +326,10 @@ async function main(): Promise<void> {
     session = await refreshF402Session({
       env,
       ...(ttlMinutes === undefined ? {} : { ttlMinutes }),
+      credentials: {
+        agentId: resolved.credentials.agentId,
+        password: resolved.credentials.password,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

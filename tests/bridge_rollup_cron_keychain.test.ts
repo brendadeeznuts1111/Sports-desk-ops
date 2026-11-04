@@ -110,18 +110,18 @@ describe("bridge3c: GSID is keychain-first", () => {
   });
 });
 
-describe("bridge3b: a bearer source only (Q2)", () => {
-  test("the stored agent id/password do NOT satisfy the bearer fetch", async () => {
+describe("bridge3b: bearer OR session cache OR keychain agent+password", () => {
+  test("keychain agent id + password satisfy the bearer mint path", async () => {
     const { probe } = keychain({
       [F402_KEYCHAIN_NAMES.agentId]: "agent",
       [F402_KEYCHAIN_NAMES.password]: "password",
     });
     const decision = await probe.check(job("bridge3b"));
-    expect(decision.ok).toBe(false);
-    if (!decision.ok) {
-      expect(decision.error).toContain("bearer");
-      expect(decision.error).toContain("cookie session is not accepted");
-    }
+    expect(decision).toEqual({
+      ok: true,
+      source: "keychain:agent-password",
+      extraEnv: { F402_AGENT_ID: "agent" },
+    });
   });
 
   test("an env bearer token satisfies 3b", async () => {

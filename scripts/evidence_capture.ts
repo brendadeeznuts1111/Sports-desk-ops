@@ -263,6 +263,11 @@ export interface LiveAuthConfig {
   baseUrl: string;
   login: LoginConfig;
   timeoutMs: number;
+  /**
+   * In-memory portal credentials for one WebView login (session:login --from-keychain).
+   * When set, the form is filled from these values instead of `loadF402CredentialsSecure`.
+   */
+  explicitCredentials?: { readonly agentId: string; readonly password: string };
 }
 
 export interface LiveAuthSession {
@@ -353,16 +358,26 @@ export function evaluateLiveGate(env: Env): LiveGate {
 export async function authenticateWithWebView(
   config: LiveAuthConfig,
 ): Promise<LiveAuthSession> {
-  const { loadF402CredentialsSecure } =
-    await import("../lib/f402_credentials_policy.ts");
-  const { agentId: agentID, password } = await loadF402CredentialsSecure(
-    config.env,
-  );
-  void password;
-  if (agentID.length === 0) {
-    throw new Error(
-      "live capture requires keychain (secrets:f402) or TTY credentials",
-    );
+  let agentID: string;
+  let password: string;
+  if (config.explicitCredentials !== undefined) {
+    agentID = config.explicitCredentials.agentId.trim();
+    password = config.explicitCredentials.password;
+    if (agentID.length === 0 || password.length === 0) {
+      throw new Error("F402 login requires agent id and password");
+    }
+  } else {
+    const { loadF402CredentialsSecure } =
+      await import("../lib/f402_credentials_policy.ts");
+    const creds = await loadF402CredentialsSecure(config.env);
+    agentID = creds.agentId;
+    password = creds.password;
+    void password;
+    if (agentID.length === 0) {
+      throw new Error(
+        "live capture requires keychain (secrets:f402) or TTY credentials",
+      );
+    }
   }
   const view = ManagedWebView.launch({
     backend: "chrome",

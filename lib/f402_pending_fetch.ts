@@ -1,6 +1,9 @@
 /** Direct 4C `Manager/getPending` fetch, validation and capture persistence. */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { SECRET_NAMES } from "../scripts/capture/f402_login.ts";
+import { readF402Session, resolveF402SessionPath } from "./f402_session.ts";
+import { readSecretCanonicalThenLegacy } from "./secrets.ts";
 
 export class F402PendingFetchError extends Error {
   constructor(message: string) {
@@ -21,7 +24,7 @@ const CHICAGO_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
 
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
-const INVALID_TOKEN_MESSAGE = `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, or F402_TOKEN_FILE (min ${MIN_TOKEN_LENGTH} chars, raw value only)`;
+const INVALID_TOKEN_MESSAGE = `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, F402_TOKEN_FILE, a valid session file (~/.cache/sportsdesk/f402-session.json), or keychain credentials (min ${MIN_TOKEN_LENGTH} chars, raw value only)`;
 
 /** A headerless JWT is exactly three non-empty base64url segments. */
 function isJwtShaped(token: string): boolean {
@@ -71,18 +74,108 @@ export function readF402TokenFile(
   }
 }
 
-/** Resolve the bearer token read-only: CLI, env, then the token file; fail before network I/O. */
-export function resolveF402BearerToken(
+function bearerFromSessionCache(
+  environment: Readonly<Record<string, string | undefined>>,
+): string | null {
+  const path = resolveF402SessionPath(environment as NodeJS.ProcessEnv);
+  const session = readF402Session({ path, now: Date.now() });
+  const raw = session?.authorizationHeader?.replace(/^Bearer\s+/i, "").trim();
+  return raw !== undefined && raw !== "" ? validateF402Token(raw) : null;
+}
+
+/** Extract token from `authenticateCustomer` JSON (j.code || j.Data?.AccessToken). */
+export function extractTokenFromAuthenticateCustomerBody(
+  body: unknown,
+): string | null {
+  if (body === null || typeof body !== "object" || Array.isArray(body))
+    return null;
+  const record = body as Record<string, unknown>;
+  const code = record["code"];
+  if (typeof code === "string") {
+    const t = validateF402Token(code);
+    if (t !== null) return t;
+  }
+  const data = record["Data"];
+  if (data !== null && typeof data === "object" && !Array.isArray(data)) {
+    const access = (data as Record<string, unknown>)["AccessToken"];
+    if (typeof access === "string") {
+      const t = validateF402Token(access);
+      if (t !== null) return t;
+    }
+  }
+  return null;
+}
+
+export interface MintF402BearerFromPasswordOptions {
+  readonly agentId: string;
+  readonly password: string;
+  readonly baseUrl?: string;
+  readonly fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
+}
+
+export async function mintF402BearerFromPassword(
+  options: MintF402BearerFromPasswordOptions,
+): Promise<string> {
+  const base = (
+    options.baseUrl ??
+    Bun.env.F402_BASE_URL ??
+    "https://fantasy402.com"
+  ).replace(/\/+$/, "");
+  const url = `${base}/cloud/api/System/authenticateCustomer`;
+  const body = new URLSearchParams({
+    customerID: options.agentId,
+    password: options.password,
+  });
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await response.text();
+  if (response.status !== 200) {
+    throw new F402PendingFetchError(
+      `authenticateCustomer returned HTTP ${response.status}`,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new F402PendingFetchError(
+      "authenticateCustomer returned non-JSON content",
+    );
+  }
+  const token = extractTokenFromAuthenticateCustomerBody(parsed);
+  if (token === null) {
+    throw new F402PendingFetchError(
+      "authenticateCustomer response contained no usable bearer token",
+    );
+  }
+  return token;
+}
+
+/**
+ * Resolve the bearer: CLI, env, token file, then session cache (Authorization in f402-session.json),
+ * then keychain agent id + password → POST authenticateCustomer.
+ */
+export async function resolveF402BearerToken(
   options: {
     readonly cliToken?: string | undefined;
     readonly environment?: Readonly<Record<string, string | undefined>>;
     readonly readFile?: (path: string) => string;
+    /** When false, skip session + keychain (tests). Default true in production. */
+    readonly allowSessionFallback?: boolean;
+    readonly allowKeychainMint?: boolean;
   } = {},
-): string {
+): Promise<string> {
   const env =
     options.environment ?? (Bun.env as Record<string, string | undefined>);
   const readFile =
     options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
+  const allowSession = options.allowSessionFallback !== false;
+  const allowMint = options.allowKeychainMint !== false;
 
   // First non-empty source wins, as before: a present-but-invalid source fails closed instead of
   // silently falling through to a stale env/file token.
@@ -107,7 +200,41 @@ export function resolveF402BearerToken(
   const fromFile = readF402TokenFile(path, readFile);
   if (fromFile !== null) return fromFile;
 
-  throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  if (allowSession) {
+    const fromSession = bearerFromSessionCache(env);
+    if (fromSession !== null) return fromSession;
+  }
+
+  if (!allowMint) {
+    throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  }
+
+  const envAgent = (env.F402_AGENT_ID ?? "").trim();
+  const envPass = (env.F402_PASSWORD ?? "").trim();
+
+  let agentId = envAgent;
+  let password = envPass;
+  if (agentId === "" || password === "") {
+    const kAgent = (
+      (await readSecretCanonicalThenLegacy(SECRET_NAMES.agentId)) ?? ""
+    ).trim();
+    const kPass = (
+      (await readSecretCanonicalThenLegacy(SECRET_NAMES.password)) ?? ""
+    ).trim();
+    if (agentId === "") agentId = kAgent;
+    if (password === "") password = kPass;
+  }
+
+  if (agentId === "" || password === "") {
+    throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  }
+
+  const baseUrl = env.F402_BASE_URL?.trim();
+  return await mintF402BearerFromPassword(
+    baseUrl === undefined || baseUrl === ""
+      ? { agentId, password }
+      : { agentId, password, baseUrl },
+  );
 }
 
 /** `deskDate - 6d` in America/Chicago, for the 7-day open book. */

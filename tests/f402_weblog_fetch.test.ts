@@ -99,11 +99,16 @@ describe("f402 weblog fetch", () => {
     }
   });
 
-  test("rejects short/zero tokens", () => {
+  test("rejects short/zero tokens", async () => {
     for (const token of ["", "0", "short"]) {
-      expect(() =>
-        resolveF402BearerToken({ cliToken: token, environment: {} }),
-      ).toThrow();
+      await expect(
+        resolveF402BearerToken({
+          cliToken: token,
+          environment: {},
+          allowSessionFallback: false,
+          allowKeychainMint: false,
+        }),
+      ).rejects.toThrow();
     }
   });
 });

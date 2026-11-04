@@ -196,12 +196,27 @@ describe("resolveLoginCredentials", () => {
     setSecretsProviderForTests(provider);
 
     const resolved = await resolveLoginCredentials({
-      env: GATED_ENV,
+      env: { ...GATED_ENV, F402_LOGIN_ENV_ONLY: "1" },
       fromKeychain: false,
     });
 
     expect(resolved).toEqual({ ok: false, reason: "missing-env-credentials" });
     expect(reads).toEqual([]);
+  });
+
+  test("without --from-keychain, resolves both from the keychain when env is incomplete", async () => {
+    const { provider } = keychain(canonicalEntries);
+    setSecretsProviderForTests(provider);
+
+    const resolved = await resolveLoginCredentials({
+      env: GATED_ENV,
+      fromKeychain: false,
+    });
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.credentials.source).toBe("keychain");
+    expect(resolved.credentials.agentId).toBe("agent-118");
   });
 });
 
@@ -240,6 +255,7 @@ describe("session:login CLI fail-closed paths", () => {
     const sessionPath = join(dir, "missing-session.json");
     const result = run([], {
       F402_LIVE_LOGIN: "1",
+      F402_LOGIN_ENV_ONLY: "1",
       F402_SESSION_FILE: sessionPath,
     });
     expect(result.code).toBe(2);
@@ -253,6 +269,7 @@ describe("session:login CLI fail-closed paths", () => {
     const sessionPath = join(dir, "one-env-session.json");
     const result = run([], {
       F402_LIVE_LOGIN: "1",
+      F402_LOGIN_ENV_ONLY: "1",
       F402_AGENT_ID: "agent-only",
       F402_SESSION_FILE: sessionPath,
     });

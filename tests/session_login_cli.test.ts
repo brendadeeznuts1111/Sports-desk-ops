@@ -109,6 +109,7 @@ describe("session:login", () => {
   test("refuses to start without credentials once the gate is open", () => {
     const result = run([], {
       F402_LIVE_LOGIN: "1",
+      F402_LOGIN_ENV_ONLY: "1",
       F402_SESSION_FILE: join(dir, "absent.json"),
     });
     expect(result.code).toBe(2);

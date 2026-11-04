@@ -140,6 +140,14 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
       "Public https URL of the Mini App served at /miniapp (also used as a deep-link base)",
   },
   {
+    envName: "F402_LOGIN_ENV_ONLY",
+    keychainName: null,
+    groups: ["f402"],
+    inject: false,
+    description:
+      "Test/CLI hook: require F402_AGENT_ID and F402_PASSWORD in env for session:login (skip keychain)",
+  },
+  {
     envName: "F402_AGENT_ID",
     keychainName: "f402-agent-id",
     groups: ["f402"],

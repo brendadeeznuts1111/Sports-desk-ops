@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   defaultPendingDate,
+  extractTokenFromAuthenticateCustomerBody,
   F402PendingFetchError,
   fetchF402Pending,
   fetchAndPersistPending,
@@ -17,18 +18,32 @@ const jsonResponse = (payload: unknown, status = 200): Response =>
   });
 
 describe("F402 getPending fetch", () => {
-  test("rejects missing, zero, and short bearer tokens before I/O", () => {
+  test("rejects missing, zero, and short bearer tokens before I/O", async () => {
     for (const token of [undefined, "", "0", "short-token"]) {
-      expect(() =>
+      await expect(
         resolveF402BearerToken({ cliToken: token, environment: {} }),
-      ).toThrow(F402PendingFetchError);
+      ).rejects.toThrow(F402PendingFetchError);
     }
     expect(
-      resolveF402BearerToken({
+      await resolveF402BearerToken({
         cliToken: "Bearer " + "a".repeat(32),
         environment: {},
       }),
     ).toBe("a".repeat(32));
+  });
+
+  test("extracts token from authenticateCustomer envelopes", () => {
+    expect(
+      extractTokenFromAuthenticateCustomerBody({ code: "t".repeat(24) }),
+    ).toBe("t".repeat(24));
+    expect(
+      extractTokenFromAuthenticateCustomerBody({
+        Data: { AccessToken: "u".repeat(32) },
+      }),
+    ).toBe("u".repeat(32));
+    expect(
+      extractTokenFromAuthenticateCustomerBody({ code: "short" }),
+    ).toBeNull();
   });
 
   test("posts the 10-field body with the Authorization header", async () => {

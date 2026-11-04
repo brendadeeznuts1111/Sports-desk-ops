@@ -200,6 +200,14 @@ export interface RefreshF402SessionOptions {
   readonly timeoutMs?: number;
   /** Session TTL in minutes; defaults to `F402_SESSION_TTL_MIN` then 1440 (24h; see `DEFAULT_TTL_MINUTES` above). */
   readonly ttlMinutes?: number;
+  /**
+   * When set, the WebView login uses these credentials in-memory instead of reading env/keychain.
+   * Never log or persist; callers use this for `--from-keychain` resolution paths.
+   */
+  readonly credentials?: {
+    readonly agentId: string;
+    readonly password: string;
+  };
 }
 
 /**
@@ -226,6 +234,9 @@ export async function refreshF402Session(
     baseUrl,
     login: resolveLoginConfig(env, baseUrl),
     timeoutMs: options?.timeoutMs ?? 60_000,
+    ...(options?.credentials === undefined
+      ? {}
+      : { explicitCredentials: options.credentials }),
   });
   try {
     return sessionFromAuth(auth, {
