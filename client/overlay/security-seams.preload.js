@@ -114,6 +114,7 @@
     if (manager) decorated = applyManagerGuard(manager) || decorated;
     if (manager) decorated = applySearchEscaper(manager) || decorated;
     if (manager) decorated = applySetHistoryEscaper(manager) || decorated;
+    if (manager) decorated = applyMessageInitEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -133,6 +134,8 @@
         searchEscaperFailure: searchEscaperFailure,
         historyEscaperInstalled: historyEscaperInstalled,
         historyEscaperFailure: historyEscaperFailure,
+        messageInitEscaperInstalled: messageInitEscaperInstalled,
+        messageInitEscaperFailure: messageInitEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -462,23 +465,27 @@
   // Tradeoff: the search filter compares the typed term against the escaped field, so searching for
   // a literal "&" or "<" inside a name/password no longer matches. Those are the characters that
   // have to be escaped for the sink to be safe; ordinary names/passwords are unaffected.
-  var searchEscaperRows = typeof WeakSet === "function" ? new WeakSet() : null;
+  var searchEscapedRows = typeof WeakMap === "function" ? new WeakMap() : null;
 
   function escapeSearchRows(rows, fields, esc) {
     if (!Array.isArray(rows)) return;
     for (var i = 0; i < rows.length; i += 1) {
       var row = rows[i];
       if (!row || typeof row !== "object") continue;
-      if (searchEscaperRows && searchEscaperRows.has(row)) continue;
-      var escaped = false;
+      var seen = searchEscapedRows ? searchEscapedRows.get(row) : null;
+      if (searchEscapedRows && !seen) {
+        seen = {};
+        searchEscapedRows.set(row, seen);
+      }
       for (var j = 0; j < fields.length; j += 1) {
         var field = fields[j];
-        if (typeof row[field] === "string") {
-          row[field] = esc(row[field]);
-          escaped = true;
-        }
+        if (typeof row[field] !== "string") continue;
+        // Skip only when the field still holds the value this overlay wrote. A vendor that
+        // reuses the same row object and assigns a new raw value is re-escaped.
+        if (seen && seen[field] === row[field]) continue;
+        row[field] = esc(row[field]);
+        if (seen) seen[field] = row[field];
       }
-      if (escaped && searchEscaperRows) searchEscaperRows.add(row);
     }
   }
 
@@ -582,6 +589,95 @@
     return true;
   }
 
+  // Sink migration for manager.getMessageInit. The AJAX success stores e.INFO.LIST on the module
+  // (emailCount) and renders FromE/Subject from the same rows. Render-copy: hand the success
+  // handler escaped row copies, then restore the stored copy to raw values after the synchronous
+  // render, so the count/dropdown remain correct and later consumers see raw data.
+  var messageInitEscaperInstalled = false;
+  var messageInitEscaperFailure = null;
+
+  function applyMessageInitEscaper(Manager) {
+    if (messageInitEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      messageInitEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.getMessageInit;
+    if (typeof original !== "function") {
+      messageInitEscaperFailure = "getMessageInit-missing";
+      console.error(
+        "[f402-seam] getMessageInit escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    messageInitEscaperInstalled = true;
+    Object.defineProperty(proto, "getMessageInit", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          typeof jq.ajax !== "function"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var baseAjax = jq.ajax;
+        jq.ajax = function (options) {
+          if (
+            options &&
+            options.data &&
+            options.data.operation === "getNewEmailsCount" &&
+            typeof options.success === "function"
+          ) {
+            var rawSuccess = options.success;
+            options.success = function (response) {
+              var list =
+                response && response.INFO && response.INFO.LIST
+                  ? response.INFO.LIST
+                  : null;
+              if (!Array.isArray(list))
+                return rawSuccess.apply(this, arguments);
+              var raw = [];
+              for (var i = 0; i < list.length; i += 1) {
+                var row = list[i];
+                if (!row || typeof row !== "object") continue;
+                for (var f = 0; f < 2; f += 1) {
+                  var field = f === 0 ? "FromE" : "Subject";
+                  if (typeof row[field] === "string")
+                    raw.push([row, field, row[field]]);
+                }
+              }
+              for (var k = 0; k < raw.length; k += 1) {
+                var entry = raw[k];
+                entry[0][entry[1]] = api.escHtml(entry[2]);
+              }
+              try {
+                return rawSuccess.apply(this, arguments);
+              } finally {
+                for (var r = 0; r < raw.length; r += 1) {
+                  var restore = raw[r];
+                  restore[0][restore[1]] = restore[2];
+                }
+              }
+            };
+          }
+          return baseAjax.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.ajax = baseAjax;
+        }
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -618,6 +714,7 @@
         applyManagerGuard(defined);
         applySearchEscaper(defined);
         applySetHistoryEscaper(defined);
+        applyMessageInitEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

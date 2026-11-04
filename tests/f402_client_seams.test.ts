@@ -475,7 +475,7 @@ describe("security seam preload: module allowlist", () => {
   test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(5);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(6);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
@@ -576,6 +576,10 @@ describe("security seam preload: module allowlist", () => {
     instance.searchComponent();
     expect(instance.players[0]!.NameFirst).toBe(once);
     expect(once).toBe("A&amp;B");
+    // Same object reused with a new raw value must be escaped again, not skipped by identity.
+    instance.players[0]!.NameFirst = "<b>y</b>";
+    instance.searchComponent();
+    expect(instance.players[0]!.NameFirst).toContain("&lt;b&gt;");
   });
 
   test("a manager class without searchComponent installs loudly, not silently", async () => {
@@ -597,6 +601,62 @@ describe("security seam preload: module allowlist", () => {
     };
     expect(seams.diag().searchEscaperInstalled).toBe(false);
     expect(seams.diag().searchEscaperFailure).toBe("searchComponent-missing");
+  });
+
+  test("getMessageInit escapes FromE/Subject for the render and restores emailCount raw", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    const rendered: Array<Record<string, unknown>> = [];
+    let emailCount: Array<Record<string, unknown>> | null = null;
+    class Manager {
+      getMessageInit(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "getNewEmailsCount" },
+          success: (response: {
+            INFO: { LIST: Array<Record<string, unknown>> };
+          }) => {
+            emailCount = response.INFO.LIST;
+            rendered.push({ ...response.INFO.LIST[0] });
+          },
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const instance = new Manager();
+    instance.getMessageInit();
+    expect(captured).not.toBeNull();
+    (captured as unknown as { success: (r: unknown) => void }).success({
+      INFO: {
+        LIST: [{ FromE: "eve<one>", Subject: "sub&ject", DateMail: "d" }],
+        COUNT: { total: 1 },
+      },
+    });
+    expect(rendered[0]!["FromE"]).toContain("&lt;one&gt;");
+    expect(rendered[0]!["Subject"]).toContain("sub&amp;ject");
+    expect(emailCount).not.toBeNull();
+    expect(emailCount![0]!["FromE"]).toBe("eve<one>");
+    expect(emailCount![0]!["Subject"]).toBe("sub&ject");
   });
 
   test("setHistory escapes only the title and leaves the getHistory argument raw", async () => {

@@ -72,6 +72,7 @@ export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
   '"manager/module/"',
   "searchComponent:function",
   "setHistory:function",
+  "getMessageInit:function",
 ] as const;
 
 /** Anchor substrings missing from a controller bundle. Empty means the wrapper still has a target. */
