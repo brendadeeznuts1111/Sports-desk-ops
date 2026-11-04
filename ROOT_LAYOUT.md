@@ -18,6 +18,12 @@ The root holds **workspace metadata** and **operator entrypoints**. Code and SSO
 | `tests/`    | Bun test suites                                                                            |
 | `bin/dx`    | Primary operator wrapper                                                                   |
 
+**Harness plugins.** Three removable DeepSeek Harness bundles live at the root, each its own
+package with a `cordis.patch.yml` row so it can be installed, disabled or removed independently:
+`dsh-plugin/` (Host tools), `dsh-plugin-ui/` (composer desk-status row) and `dsh-plugin-sidebar/`
+(left-sidebar SportsDesk desk page). `dsh-plugin-sidebar/verify-load.mjs` structurally verifies the
+bundle; it does not prove the running UI (see its README).
+
 **Deploy & reports**
 
 - `bun run deploy` → `scripts/deploy/deploy_to_vps.sh`

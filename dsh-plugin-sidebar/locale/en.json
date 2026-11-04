@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk desk",
+    "description": "Adds a SportsDesk entry to the left sidebar; it opens a desk panel that reports the local SportsDesk webview service from its /health and /api/status routes."
+  }
+}

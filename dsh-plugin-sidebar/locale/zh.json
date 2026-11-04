@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk 工作台",
+    "description": "在左侧边栏添加 SportsDesk 入口，打开的工作台面板通过本地 webview 服务的 /health 与 /api/status 路由报告其状态。"
+  }
+}

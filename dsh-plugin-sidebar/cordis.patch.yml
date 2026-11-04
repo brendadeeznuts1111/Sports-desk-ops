@@ -1,0 +1,10 @@
+# Bundle layer: inserts the Host row that carries the Client module.
+#
+# The Host half is intentionally empty (see index.js). The sidebar entry and the
+# desk panel are the Client module declared by `dsh.client` in package.json; this
+# patch only gives the bundle a row to enable, disable, and remove on its own,
+# independently of the tools bundle (`dsh-plugin/`) and the composer row
+# (`dsh-plugin-ui/`).
+- insert:
+    - id: sportsdesk-desk-panel
+      name: dsh-plugin-sportsdesk-desk-panel
