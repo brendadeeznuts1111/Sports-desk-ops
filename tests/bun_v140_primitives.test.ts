@@ -46,6 +46,29 @@ describe("Bun v1.4.0 primitives", () => {
     }
   });
 
+  test("ANSI-aware terminal helpers", () => {
+    const sliceAnsi = (
+      Bun as unknown as {
+        sliceAnsi: (
+          input: string,
+          start?: number,
+          end?: number,
+          ellipsis?: string,
+        ) => string;
+      }
+    ).sliceAnsi;
+    expect(sliceAnsi("\x1b[31mhello\x1b[39m", 1, 4)).toBe(
+      "\x1b[31mell\x1b[39m",
+    );
+    expect(sliceAnsi("unicorn", 0, 4, "…")).toBe("uni…");
+    expect(sliceAnsi("unicorn", -4, undefined, "…")).toBe("…orn");
+    expect(Bun.stringWidth("hello")).toBe(5);
+    expect(Bun.stringWidth("\x1b[31mhello\x1b[0m")).toBe(5);
+    expect(Bun.wrapAnsi("The quick brown fox", 10)).toBe(
+      "The quick\nbrown fox",
+    );
+  });
+
   test("CompressionStream gzip/zstd/brotli round-trips", async () => {
     const text = "hello gzip zstd brotli";
     for (const format of [
