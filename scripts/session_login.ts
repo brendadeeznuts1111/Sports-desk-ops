@@ -50,6 +50,10 @@ import {
   writeF402Session,
   type F402Session,
 } from "../lib/f402_session.ts";
+import {
+  chromeFailureAdvice,
+  diagnoseChromeBackend,
+} from "../lib/webview_backend_diagnostics.ts";
 
 export type LoginCredentialSource = "env" | "keychain";
 
@@ -180,6 +184,7 @@ async function main(): Promise<void> {
       out: { type: "string" },
       "from-profile": { type: "string" },
       "from-keychain": { type: "boolean", default: false },
+      diagnose: { type: "boolean", default: false },
     },
   });
 
@@ -217,13 +222,27 @@ async function main(): Promise<void> {
         ? "F402_WEBVIEW_PROFILE is set but the transport does not read it — export it with `bun run session:login --from-profile <dir>`"
         : null,
     };
-    if (values.json) console.log(JSON.stringify(report, null, 2));
+    const chrome = values.diagnose
+      ? await diagnoseChromeBackend({ env })
+      : null;
+    const fullReport = chrome === null ? report : { ...report, chrome };
+    if (values.json) console.log(JSON.stringify(fullReport, null, 2));
     else {
       console.log(`session:status: ${report.session}`);
       console.log(`  file: ${report.sessionPath}`);
       console.log(`  transport would use: ${report.transport}`);
       if (report.profileNote !== null)
         console.log(`  note: ${report.profileNote}`);
+      if (chrome !== null) {
+        console.log(
+          `  chrome: ${chrome.available ? "available" : "UNAVAILABLE"} — ${chrome.reason}`,
+        );
+        if (chrome.binary !== null)
+          console.log(`  chrome binary: ${chrome.binary}`);
+        for (const line of chromeFailureAdvice(chrome)) {
+          console.log(`  fix: ${line}`);
+        }
+      }
     }
     process.exit(session !== null || configured.proxy ? 0 : 1);
   }
@@ -274,10 +293,28 @@ async function main(): Promise<void> {
 
   // Source only — never a value.
   console.log(`credentials: ${resolved.credentials.source}`);
-  const session = await refreshF402Session({
-    env,
-    ...(ttlMinutes === undefined ? {} : { ttlMinutes }),
-  });
+  let session: F402Session;
+  try {
+    session = await refreshF402Session({
+      env,
+      ...(ttlMinutes === undefined ? {} : { ttlMinutes }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`session:login failed: ${message}`);
+    // The capture layer already appends the remediation to a Chrome failure; only add the
+    // structured diagnosis when it did not (other failure modes have no chrome advice to give).
+    if (!message.includes("outside the agent/harness sandbox")) {
+      const diagnosis = await diagnoseChromeBackend({ env });
+      if (!diagnosis.available) {
+        console.error(`  chrome: ${diagnosis.reason}`);
+        for (const line of chromeFailureAdvice(diagnosis)) {
+          console.error(`  fix: ${line}`);
+        }
+      }
+    }
+    process.exit(1);
+  }
   const path = writeF402Session(session, sessionPathOptions);
   console.log(`session:login: ${describeF402Session(session)}`);
   console.log(

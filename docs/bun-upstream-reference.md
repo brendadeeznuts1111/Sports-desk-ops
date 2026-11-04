@@ -557,3 +557,26 @@ useful for one-off inspection, so its measured behavior is recorded rather than 
 - `bun completions` selects the script from **`$SHELL`** (zsh `#compdef`, fish, bash); a positional
   shell argument is ignored on 1.4.4, and an unsupported `$SHELL` errors with a pointer to
   `bun getcompletes` (which prints the completion word list, not a script).
+
+### Chrome/WebView diagnostics (measured 2026-11-04)
+
+Bun's Chrome backend spawns a headless Chrome and talks CDP over `--remote-debugging-pipe`. When
+that browser dies, the first navigation rejects with the opaque
+`navigate-failed: … Chrome process closed the pipe`; the cause exists only on Chrome's stderr. In
+this environment the measured stderr was:
+
+```
+sandbox initialization failed: Operation not permitted
+ERROR: … Crashpad …/Google Chrome/Crashpad/new/….dmp: Operation not permitted (1)
+FATAL: … gpu_data_manager_impl_private.cc:389] GPU process isn't usable. Goodbye.
+```
+
+`lib/webview_backend_diagnostics.ts` runs a minimal headless probe (`--dump-dom about:blank`, an
+isolated `--user-data-dir`, killed after a timeout), classifies that stderr in root-cause order
+(`sandbox-denied` → `gpu-denied` → `crashpad-denied` → `profile-locked` → `not-found`), and maps it to
+remediation. `bun run session:status --diagnose` prints the binary, the class and the fixes;
+`session:login` appends the same advice to a launch/navigate failure. The advice deliberately never
+suggests `--no-sandbox`: disabling the browser's sandbox is not a fix for a credential login. The
+binary search follows Bun's documented order (`BUN_CHROME_PATH`, PATH candidates, macOS install
+paths) and a configured-but-missing `BUN_CHROME_PATH` reports `not-found` instead of silently
+falling back.

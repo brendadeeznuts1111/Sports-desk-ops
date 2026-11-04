@@ -85,6 +85,10 @@ import {
   ManagedWebView,
   WebViewError,
 } from "./capture/webview.ts";
+import {
+  chromeFailureAdvice,
+  diagnoseChromeBackend,
+} from "../lib/webview_backend_diagnostics.ts";
 
 export const CLI_NAME = "evidence_capture";
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -445,6 +449,23 @@ export async function authenticateWithWebView(
         // extracted into memory. Nothing to release.
       },
     };
+  } catch (error) {
+    // Chrome's real death reason only exists on its stderr; classify it before surfacing the
+    // opaque "Chrome process closed the pipe" so the operator gets a fix, not a stack.
+    if (
+      error instanceof WebViewError &&
+      (error.code === "launch-failed" || error.code === "navigate-failed")
+    ) {
+      const diagnosis = await diagnoseChromeBackend({ env: config.env });
+      if (!diagnosis.available) {
+        throw new WebViewError(
+          error.code,
+          `${error.message}\n${chromeFailureAdvice(diagnosis).join("\n")}`,
+          { cause: error },
+        );
+      }
+    }
+    throw error;
   } finally {
     await view.close();
   }

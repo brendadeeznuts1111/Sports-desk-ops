@@ -728,6 +728,13 @@ a directory full of signed-in cookies still sends a cookie-less request. The bri
 bun run session:login --from-profile <dir>
 ```
 
+If a WebView command fails with `Chrome process closed the pipe`, the cause is on Chrome's stderr,
+not in the keychain: run `bun run session:status --diagnose` first. It probes a minimal headless
+page, prints the Chrome binary and the classified failure (`sandbox-denied`, `gpu-denied`,
+`crashpad-denied`, `profile-locked`, `not-found`) plus remediation. A sandbox denial means the
+command is running inside a restrictive agent/CI sandbox — run it in a normal terminal; do **not**
+add `--no-sandbox` to make a credential login pass.
+
 `lib/f402_profile_session.ts` launches that profile in a headless Chrome WebView, navigates to the
 portal origin, reads every cookie over CDP (`Network.getAllCookies`), keeps the ones scoped to the
 portal host, and writes the 0600 session file (`F402_SESSION_FILE`, default
