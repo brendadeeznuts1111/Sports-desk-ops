@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CdpCookie } from "../scripts/capture/cookies.ts";
+import { chromeWebViewAvailable } from "./support/capabilities.ts";
 import {
   acquireProfileLock,
   ProfileInUseError,
@@ -91,7 +92,7 @@ const SESSION_COOKIES: readonly CdpCookie[] = [
   cookie({ name: "stale", value: "v-stale", expires: 1_000_000 }),
 ];
 
-describe("sessionFromWebViewProfile", () => {
+describe.skipIf(!chromeWebViewAvailable)("sessionFromWebViewProfile", () => {
   test("builds a session from the scoped profile cookies only", async () => {
     const dir = profileDir();
     const { view, calls } = fakeView({ cookies: SESSION_COOKIES });
@@ -363,7 +364,7 @@ function runSessionLogin(...args: string[]) {
   });
 }
 
-describe("session:login --from-profile", () => {
+describe.skipIf(!chromeWebViewAvailable)("session:login --from-profile", () => {
   test("skips the credential login gate and names the missing profile", () => {
     const missing = join(root, "cli-absent-profile");
     const proc = runSessionLogin("--from-profile", missing);

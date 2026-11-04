@@ -110,10 +110,13 @@ describe("bridge 3a local smoke", () => {
         }),
       );
       const ack = await subscribed;
-      expect(ack).toEqual({
+      expect(ack).toMatchObject({
         type: "SUBSCRIBED",
         channel: F402_BET_TICKER_LIVE_CHANNEL,
       });
+      expect(Array.isArray((ack as { channels?: unknown }).channels)).toBe(
+        true,
+      );
 
       const received = nextJsonMessage(ws);
       const sink = createF402BetTickerSink({

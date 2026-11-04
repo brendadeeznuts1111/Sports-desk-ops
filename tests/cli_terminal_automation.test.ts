@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { spawnInPty } from "../lib/bun_terminal.ts";
+import { ptyAvailable } from "./support/capabilities.ts";
 
-describe("Bun PTY terminal automation", () => {
+describe.skipIf(!ptyAvailable)("Bun PTY terminal automation", () => {
   test("the child sees a real TTY", async () => {
     const result = await spawnInPty([
       process.execPath,

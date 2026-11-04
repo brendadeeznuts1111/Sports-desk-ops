@@ -206,8 +206,11 @@ describe("Bun v1.4.0 primitives", () => {
     const pubJwk = await crypto.subtle.exportKey("jwk", kem.publicKey);
     expect((pubJwk as { kty: string }).kty).toBe("AKP");
     expect(
-      (await crypto.subtle.importKey("jwk", pubJwk, "ML-KEM-768", true, []))
-        .type,
+      (
+        await crypto.subtle.importKey("jwk", pubJwk, "ML-KEM-768", true, [
+          "encapsulateBits",
+        ])
+      ).type,
     ).toBe("public");
     const rawPublic = await crypto.subtle.exportKey(
       "raw-public",
@@ -221,7 +224,7 @@ describe("Bun v1.4.0 primitives", () => {
           rawPublic,
           "ML-KEM-768",
           true,
-          [],
+          ["encapsulateBits"],
         )
       ).type,
     ).toBe("public");
@@ -229,13 +232,9 @@ describe("Bun v1.4.0 primitives", () => {
     expect(rawSeed.byteLength).toBe(64);
     expect(
       (
-        await crypto.subtle.importKey(
-          "raw-seed",
-          rawSeed,
-          "ML-KEM-768",
-          true,
-          [],
-        )
+        await crypto.subtle.importKey("raw-seed", rawSeed, "ML-KEM-768", true, [
+          "decapsulateBits",
+        ])
       ).type,
     ).toBe("private");
     const clone = structuredClone(kem.publicKey);

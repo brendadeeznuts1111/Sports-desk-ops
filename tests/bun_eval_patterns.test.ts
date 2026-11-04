@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { secretsWritable } from "./support/capabilities.ts";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -221,7 +222,7 @@ describe("bun -e / -p patterns (docs/bun-eval-pitfalls.md)", () => {
 
   // Writes and deletes a uniquely named dummy entry; never reads the dx service. Keychain only:
   // libsecret is absent on headless Linux runners and Windows `persist: "local"` is unverified.
-  test.skipIf(process.platform !== "darwin")(
+  test.skipIf(process.platform !== "darwin" || !secretsWritable)(
     "Bun.secrets: set/get/delete round-trip, null when missing",
     () => {
       const r = probe(

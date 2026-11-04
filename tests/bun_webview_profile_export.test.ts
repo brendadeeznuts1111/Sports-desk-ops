@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { chromeWebViewAvailable } from "./support/capabilities.ts";
 import { join, resolve } from "node:path";
 
 /**
@@ -102,7 +103,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe.skipIf(chromePath === null)(
+describe.skipIf(chromePath === null || !chromeWebViewAvailable)(
   "session:login --from-profile (Chrome dataStore)",
   () => {
     beforeAll(() => {

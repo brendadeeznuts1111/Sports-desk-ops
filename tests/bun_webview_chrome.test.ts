@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ManagedWebView, WebViewError } from "../scripts/capture/webview.ts";
+import { chromeWebViewAvailable } from "./support/capabilities.ts";
 
 /**
  * Chrome backend coverage for `ManagedWebView`.
@@ -160,7 +161,7 @@ describe("chrome detection gate", () => {
   });
 });
 
-describe.skipIf(chromePath === null)(
+describe.skipIf(chromePath === null || !chromeWebViewAvailable)(
   chromePath === null
     ? `ManagedWebView chrome backend (skipped: ${SKIP_REASON})`
     : "ManagedWebView chrome backend (CDP viewport)",
