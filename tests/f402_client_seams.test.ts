@@ -33,6 +33,9 @@ interface RequireJsLike {
   onResourceLoad:
     | ((context: unknown, map: { name?: string }, defined: unknown) => unknown)
     | null;
+  s?: {
+    contexts: { _: { defined: Record<string, unknown> } };
+  };
 }
 
 interface SecurityApi {
@@ -92,6 +95,11 @@ function runPreload(
   const sessionStorage: Record<string, string | number> = {};
   Object.assign(sessionStorage, options.session ?? {});
   const location = { href };
+  const consoleStub = {
+    log: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+  };
   new Function(
     "window",
     "document",
@@ -101,6 +109,7 @@ function runPreload(
     "clearInterval",
     "URL",
     "Date",
+    "console",
     source,
   )(
     window,
@@ -111,14 +120,29 @@ function runPreload(
     () => undefined,
     URL,
     Date,
+    consoleStub,
   );
   return { window, requirejs, sessionStorage, document, location };
 }
 
-function decorate(context: PreloadContext, api: Record<string, unknown>): void {
+function decorateNamed(
+  context: PreloadContext,
+  name: string,
+  api: Record<string, unknown>,
+): void {
   const hook = context.requirejs.onResourceLoad;
   if (hook === null) throw new Error("preload did not install onResourceLoad");
-  hook({}, { name: "system/security" }, api);
+  hook({}, { name }, api);
+}
+
+function decorate(context: PreloadContext, api: Record<string, unknown>): void {
+  decorateNamed(context, "system/security", api);
+}
+
+function withRegistry(context: PreloadContext): Record<string, unknown> {
+  const defined: Record<string, unknown> = {};
+  context.requirejs.s = { contexts: { _: { defined } } };
+  return defined;
 }
 
 function asApi(api: Record<string, unknown>): SecurityApi {
@@ -163,6 +187,26 @@ describe("security seam preload: installation", () => {
     asApi(api).requireAuth(() => "ok")();
     // No sessionStorage.customerID, so requireAuth ends the session via the preserved hook.
     expect(endCalls).toBe(1);
+  });
+
+  test("no-seam wins over external-view-guard (dependency, not policy)", async () => {
+    const source = await preloadSource();
+
+    const both = runPreload(
+      source,
+      "https://x/manager.html?no-seam=1&external-view-guard=1",
+    );
+    // With no-seam the seam is absent, so there is no flags object to read: the latch itself must
+    // be false, which is the property the call-site guard consumes.
+    expect(both.window["__F402_EXTERNAL_VIEW_GUARD__"]).toBe(false);
+
+    const guardOnly = runPreload(
+      source,
+      "https://x/manager.html?external-view-guard=1",
+    );
+    const guardApi: Record<string, unknown> = {};
+    decorate(guardOnly, guardApi);
+    expect(asApi(guardApi).flags.externalViewGuard).toBe(true);
   });
 
   test("decorates a class export by materializing own props on the instance", async () => {
@@ -441,6 +485,118 @@ describe("security seam preload: module allowlist", () => {
       expect(isAllowedModule(leaf)).toBe(true);
       expect(isAllowedModule(`manager/module/${leaf}`)).toBe(true);
     }
+  });
+});
+
+describe("external-view call-site guard (flag-gated, dead by default)", () => {
+  interface GuardFixture {
+    readonly context: PreloadContext;
+    readonly manager: { calls: number; instance: Record<string, unknown> };
+    readonly logOuts: () => number;
+  }
+
+  async function fixture(
+    href: string,
+    options: RunOptions = {},
+  ): Promise<GuardFixture> {
+    const source = await preloadSource();
+    const context = runPreload(source, href, options);
+    const defined = withRegistry(context);
+
+    let logOutCalls = 0;
+    class Security {
+      logOut(): void {
+        logOutCalls += 1;
+      }
+    }
+    defineSecurity(context, defined, Security);
+
+    let calls = 0;
+    class Manager {
+      setAccountInfo(): string {
+        calls += 1;
+        return "original";
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+
+    const instance = new Manager() as unknown as Record<string, unknown>;
+    return {
+      context,
+      manager: {
+        get calls() {
+          return calls;
+        },
+        instance,
+      },
+      logOuts: () => logOutCalls,
+    };
+  }
+
+  function defineSecurity(
+    context: PreloadContext,
+    defined: Record<string, unknown>,
+    Security: new () => unknown,
+  ): void {
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+  }
+
+  test("flag false: the wrapper delegates (zero behavior change on merge)", async () => {
+    const f = await fixture("https://x/manager.html?external-view=active");
+    (f.manager.instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+    expect(f.manager.calls).toBe(1);
+  });
+
+  test("flag true + no session: ends the session and never calls the original", async () => {
+    const f = await fixture(
+      "https://x/manager.html?external-view=active&module=player-info&external-view-guard=1",
+    );
+    (f.manager.instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+    expect(f.manager.calls).toBe(0);
+    expect(f.logOuts()).toBe(1);
+  });
+
+  test("flag true + authenticated: allowed module loads through the original", async () => {
+    const f = await fixture(
+      "https://x/manager.html?external-view=active&module=player-info&external-view-guard=1",
+      { session: { customerID: "C1" } },
+    );
+    (f.manager.instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+    expect(f.manager.calls).toBe(1);
+  });
+
+  test("flag true + traversal module: rejected before the original runs", async () => {
+    const f = await fixture(
+      "https://x/manager.html?external-view=active&module=../../evil&external-view-guard=1",
+      { session: { customerID: "C1" } },
+    );
+    (f.manager.instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+    expect(f.manager.calls).toBe(0);
+  });
+
+  test("guard is inert outside the active external-view branch and installs once", async () => {
+    const f = await fixture(
+      "https://x/manager.html?module=player-info&external-view-guard=1",
+      { session: { customerID: "C1" } },
+    );
+    decorateNamed(
+      f.context,
+      "manager/manager",
+      (f.context.requirejs.s?.contexts._.defined["manager/manager"] ??
+        {}) as unknown as Record<string, unknown>,
+    );
+    (f.manager.instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+    expect(f.manager.calls).toBe(1);
   });
 });
 

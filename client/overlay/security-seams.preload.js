@@ -72,6 +72,9 @@
     );
   }
   if (window.__F402_EXTERNAL_VIEW_GUARD__ === true) externalViewGuard = true;
+  // The guard calls seam members (isAuthenticated/isAllowedModule), so it must never outlive a
+  // disabled seam: no-seam wins over external-view-guard by dependency, not policy.
+  externalViewGuard = !seamDisabled && externalViewGuard;
   window.__F402_EXTERNAL_VIEW_GUARD__ = externalViewGuard;
 
   var loadNames = [];
@@ -103,9 +106,12 @@
     }
     var defined = requirejsRegistry();
     if (!defined) return false;
-    var exported = defined["system/security"];
-    if (!exported) return false;
-    return apply(exported);
+    var decorated = false;
+    var security = defined["system/security"];
+    if (security) decorated = apply(security) || decorated;
+    var manager = defined["manager/manager"];
+    if (manager) decorated = applyManagerGuard(manager) || decorated;
+    return decorated;
   }
 
   window.__F402_SEAMS__ = {
@@ -118,6 +124,8 @@
         sweepCount: sweepCount,
         registry: requirejsRegistry() !== null,
         registryDegraded: registryDegraded,
+        managerGuardInstalled: managerGuardInstalled,
+        externalViewGuard: externalViewGuard,
       };
     },
     isAllowedModule: function (m) {
@@ -272,6 +280,74 @@
     return installed;
   }
 
+  var managerGuardInstalled = false;
+
+  function urlParam(name) {
+    try {
+      return new URL(location.href).searchParams.get(name);
+    } catch {
+      var match = new RegExp("[?&]" + name + "=([^&#]*)").exec(location.href);
+      return match ? match[1] : null;
+    }
+  }
+
+  function guardSecurityApi() {
+    var defined = requirejsRegistry();
+    var Security = defined && defined["system/security"];
+    if (!Security) return null;
+    try {
+      return typeof Security === "function" ? new Security() : Security;
+    } catch {
+      return null;
+    }
+  }
+
+  // The external-view call site is vendor code (`manager.js` setAccountInfo -> require(
+  // "manager/module/" + dataUrl("module"))). The overlay lands the guard as a prototype wrapper so
+  // the call-site PR is a default-false flag flip in behavior, not a vendor redeploy. Dead by
+  // default: with externalViewGuard false the wrapper delegates immediately.
+  function applyManagerGuard(Manager) {
+    if (managerGuardInstalled || !Manager || !Manager.prototype) return false;
+    var proto = Manager.prototype;
+    var original = proto.setAccountInfo;
+    if (typeof original !== "function") return false;
+    managerGuardInstalled = true;
+    Object.defineProperty(proto, "setAccountInfo", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        if (externalViewGuard && !window.__F402_SEAM_DISABLED__) {
+          if (urlParam("external-view") === "active") {
+            var api = guardSecurityApi();
+            if (api) {
+              try {
+                if (!api.isAuthenticated()) {
+                  api.endSession();
+                  return;
+                }
+                var mod = urlParam("module");
+                if (!api.isAllowedModule(mod)) {
+                  console.warn(
+                    "[f402-seam] blocked dynamic module load:",
+                    String(mod),
+                  );
+                  return;
+                }
+              } catch {
+                // Fail closed: a guard that cannot evaluate must not let the branch through.
+                console.warn("[f402-seam] external-view guard failed closed");
+                if (typeof api.endSession === "function") api.endSession();
+                return;
+              }
+            }
+          }
+        }
+        return original.apply(this, arguments);
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -299,6 +375,13 @@
         map.name === "system/security"
       ) {
         if (apply(defined)) appliedCount += 1;
+      }
+      if (
+        !window.__F402_SEAM_DISABLED__ &&
+        map &&
+        map.name === "manager/manager"
+      ) {
+        applyManagerGuard(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

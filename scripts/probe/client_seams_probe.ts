@@ -50,6 +50,7 @@ const { values } = parseArgs({
     waitMs: { type: "string", default: "30000" },
     "no-seam": { type: "boolean" },
     "expect-rendered": { type: "string" },
+    guard: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -65,7 +66,9 @@ if (values.help === true) {
   --no-seam        negative control: skip the preload, expect the probe to fail
   --expect-rendered <css>
                    canary acceptance: this selector must match after the guarded render
-                   (bet ticker example: '[data-wager-number]')
+                   (bet ticker example: '[data-wager-number]'; an empty ticker matches
+                   nothing, so run the canary during active wagering)
+  --guard          append external-view-guard=1 to the probed URL (canary mode)
   --help           this text
 
   Exit: 0 covered+authenticated+clean; 1 structural failure; 2 structural pass, authenticated
@@ -79,9 +82,13 @@ const base = (
   "https://www.fantasy402.com"
 ).replace(/\/$/, "");
 const profile = values.profile?.trim() || resolveF402WebViewProfileDir();
-const targetUrl =
+const requestedUrl =
   values.url?.trim() ||
   `${base}/manager.html?external-view=active&module=bet-ticker`;
+const targetUrl =
+  values.guard === true && !/[?&]external-view-guard=/.test(requestedUrl)
+    ? `${requestedUrl}${requestedUrl.includes("?") ? "&" : "?"}external-view-guard=1`
+    : requestedUrl;
 const bootWaitMs = Number(values.waitMs ?? "30000");
 const waitMs =
   Number.isFinite(bootWaitMs) && bootWaitMs > 0 ? bootWaitMs : 30_000;
@@ -182,6 +189,7 @@ try {
         title: view.title,
         preloadInstalled: installed,
         securityModuleLoaded: booted,
+        canaryGuard: values.guard === true,
         structural: probe.structural,
         authenticated: probe.authenticated === true ? "verified" : "unverified",
         probe,

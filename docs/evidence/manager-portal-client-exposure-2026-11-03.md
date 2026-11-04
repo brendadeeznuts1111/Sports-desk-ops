@@ -181,7 +181,10 @@ Client-side seam (this repository, rolling out):
   The value is latched at preload from `?external-view-guard=1` or an injected
   `window.__F402_EXTERNAL_VIEW_GUARD__ = true`; default is `false`. Enabling is per-session and takes
   effect on the next navigation; rollback is opening the page **without** the parameter — no code
-  change and no redeploy. (The held call-site fix reads `n.flags.externalViewGuard`.)
+  change and no redeploy. **`no-seam` wins over `external-view-guard`** (a latched
+  `externalViewGuard` of `false`): the guard calls seam members, so it cannot run with the seam
+  disabled. This is a dependency, not a policy choice, and it is tested. The call-site guard reads
+  `n.flags.externalViewGuard`.
   The authenticated bet-ticker run is blocked in this environment: the login path has no keychain
   entry (`MissingF402CredentialsError`), and the bootstrapped profile does not settle under
   automation. See the Option B decision below.
@@ -203,18 +206,17 @@ Client-side seam (this repository, rolling out):
   returns `covered: false` there. **On WebKit, both `data-pass` and the bet-ticker bypass remain
   open** — top of the upstream ticket. Scope the WebKit injection path with a real backend census
   (`scripts/capture/*` provenance `startedAt` + `backend`, not file counts), not with this ratio.
-- **Held: the `external-view` call site (phase-1 demonstration, Chrome only).** `manager.js`
-  `setAccountInfo` runs `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no
-  auth check. The four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else
-  unchanged) is specified but not applied. Decision for the hold: **Option B — flag-gated canary.**
-  The guard ships behind `flags.externalViewGuard` (default `false`); acceptance is a probe exit
-  **0** on a logged-in profile on the bet-ticker page **with `--expect-rendered
-'[data-wager-number]'` matching**, then enable on one canary instance by opening it with
-  `?external-view-guard=1`. If the
-  session check misfires on the load-bearing bet-ticker path, flip the flag and revert without a
-  redeploy. This environment cannot authenticate, so "wait for auth" is not a plan; code-review-only
-  sign-off plus a named canary is the bounded path. **The bypass remains open on Chrome until the
-  canary runs, and on WebKit unconditionally.**
+- **`external-view` guard landed, dead by default; the flag flip is the canary's job.**
+  `manager.js` `setAccountInfo` runs `require(["manager/module/" + dataUrl("module")])` on a URL
+  parameter with no auth check. The overlay now wraps that method behind
+  `flags.externalViewGuard` (default `false`): when true it requires `isAuthenticated()`, then
+  `isAllowedModule(module)`; unauthenticated ends the session, a disallowed/traversal id returns
+  without loading, and a guard error fails closed. With the default flag the wrapper delegates
+  unchanged, so merging is behavior-neutral. Enable per session with
+  `?external-view-guard=1`; rollback is opening the page without it (no redeploy). The full
+  procedure and its scope are in
+  [external-view-canary.md](../runbooks/external-view-canary.md). **The bypass remains open on
+  Chrome until the canary runs, and on WebKit unconditionally.**
 
 Limits, stated so nobody relies on a control that does not exist:
 
