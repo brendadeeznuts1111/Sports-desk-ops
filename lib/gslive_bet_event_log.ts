@@ -262,7 +262,31 @@ export function auditEventTimeline(
     anomalies,
   };
 }
-/** Parse GS Manager timestamps: epoch seconds/ms or "YYYY-MM-DD HH:mm:ss(.SSS)" in desk time. */
+/** Parse GS Manager timestamps: epoch seconds/ms or "YYYY-MM-DD HH:mm:ss(.SSS)" in LA time. */
+function losAngelesOffsetMinutes(utcMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+  const wallAsUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second"),
+  );
+  return Math.round((wallAsUtc - utcMs) / 60_000);
+}
+
 export function parseGsliveTimestampMs(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value))
     return value < 1e12 ? value * 1000 : value;
@@ -286,17 +310,16 @@ export function parseGsliveTimestampMs(value: unknown): number | null {
     Number(m[6]),
     Number((m[7] ?? "0").padEnd(3, "0")),
   );
-  const offsetPart =
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Los_Angeles",
-      timeZoneName: "shortOffset",
-    })
-      .formatToParts(new Date(wallUtc))
-      .find((p) => p.type === "timeZoneName")?.value ?? "GMT-6";
-  const om = /GMT([+-])(\d{1,2})/.exec(offsetPart);
-  const offsetMinutes =
-    om === null ? -360 : (om[1] === "-" ? -1 : 1) * Number(om[2]) * 60;
-  return wallUtc - offsetMinutes * 60_000;
+  // Resolve the offset for the actual wall time, then re-check on the candidate instant so the
+  // PDT (-07:00) / PST (-08:00) boundary is honored on both sides of the Nov 1 DST transition.
+  let offset = losAngelesOffsetMinutes(wallUtc);
+  let candidate = wallUtc - offset * 60_000;
+  const confirmed = losAngelesOffsetMinutes(candidate);
+  if (confirmed !== offset) {
+    offset = confirmed;
+    candidate = wallUtc - offset * 60_000;
+  }
+  return candidate;
 }
 export interface BetLogAuditTarget {
   readonly betId: string;

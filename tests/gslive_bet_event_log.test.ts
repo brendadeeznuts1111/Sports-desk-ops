@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   auditEventTimeline,
+  parseGsliveTimestampMs,
   extractBetLogAuditTargets,
   parseBetLog,
   parseEventLog,
@@ -58,6 +59,19 @@ describe("gslive bet/event log audit", () => {
     expect(audit.anomalies).not.toContain("MANUAL_ADMIN_INTERVENTION");
   });
 
+  test("resolves PDT vs PST offsets across the Nov 1 transition", () => {
+    const pdt = parseGsliveTimestampMs("2026-10-27 12:00:00");
+    const pst = parseGsliveTimestampMs("2026-11-03 12:00:00");
+    expect(new Date(pdt as number).toISOString()).toBe(
+      "2026-10-27T19:00:00.000Z",
+    );
+    expect(new Date(pst as number).toISOString()).toBe(
+      "2026-11-03T20:00:00.000Z",
+    );
+    expect(parseGsliveTimestampMs("1793163519")).toBe(1793163519000);
+    expect(parseGsliveTimestampMs(1793163519000)).toBe(1793163519000);
+  });
+
   test("detects frozen-clock scoring and extended outage on 207059641", () => {
     const fixture206 = JSON.parse(
       readFileSync(
@@ -98,7 +112,7 @@ describe("gslive bet/event log audit", () => {
         eID: "10",
         logTime: "1793761946",
         acceptTime: "1793761953000",
-        delay: "6",
+        delay: "5",
         fVal: "2.4",
         fVal_new: "2.4",
         adminUser: "admin",

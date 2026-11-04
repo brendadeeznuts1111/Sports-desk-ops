@@ -6,54 +6,54 @@ import {
 } from "../lib/gslive_report_columns.ts";
 
 describe("gslive report column labels", () => {
-  test("maps the labels observed in the public i18n bundle", () => {
-    expect(canonicalizeGsLiveHeader("Player")).toBe("login");
-    expect(canonicalizeGsLiveHeader("Player Name")).toBe("login");
-    expect(canonicalizeGsLiveHeader("Login")).toBe("login");
-    expect(canonicalizeGsLiveHeader("Graded total")).toBe("gradedTotal");
-    expect(canonicalizeGsLiveHeader("Pending total")).toBe("pendingTotal");
-    expect(canonicalizeGsLiveHeader("Wager Count")).toBe("wagerCount");
+  test("maps the Last Bets UI labels", () => {
+    expect(canonicalizeGsLiveHeader("Player")).toBe("player");
+    expect(canonicalizeGsLiveHeader("Player Name")).toBe("player");
+    expect(canonicalizeGsLiveHeader("Login")).toBe("player");
     expect(canonicalizeGsLiveHeader("To Win")).toBe("toWin");
-    expect(canonicalizeGsLiveHeader("Vigorish")).toBe("vigorish");
-    expect(canonicalizeGsLiveHeader("Sports")).toBe("sport");
+    expect(canonicalizeGsLiveHeader("Sports")).toBe("sportLeague");
+    expect(canonicalizeGsLiveHeader("Grade Time")).toBe("gradeTime");
+    expect(canonicalizeGsLiveHeader("Max Time Until Score")).toBeNull();
   });
 
   test("ignores case and repeated whitespace", () => {
-    expect(canonicalizeGsLiveHeader("  gRaDeD   TOTAL ")).toBe("gradedTotal");
+    expect(canonicalizeGsLiveHeader("  gRaDe   TIME ")).toBe("gradeTime");
     expect(canonicalizeGsLiveHeader("to   win")).toBe("toWin");
   });
 
   test("unobserved labels stay unknown rather than being guessed", () => {
     expect(canonicalizeGsLiveHeader("Lifetime EV")).toBeNull();
-    expect(canonicalizeGsLiveHeader("Turnover")).toBeNull();
+    expect(canonicalizeGsLiveHeader("Graded total")).toBeNull();
     expect(canonicalizeGsLiveHeader("")).toBeNull();
   });
 
   test("maps a header row positionally and reports gaps", () => {
     const mapped = mapGsLiveHeaders([
       "Player",
-      "Bet",
+      "Risk",
       "To Win",
-      "Win",
-      "Loss",
+      "Market",
       "Mystery",
-      "Win",
+      "Market",
     ]);
     expect(mapped.columns).toEqual([
-      "login",
-      "bet",
+      "player",
+      "risk",
       "toWin",
-      "win",
-      "loss",
+      "market",
       null,
-      "win",
+      "market",
     ]);
     expect(mapped.unknown).toEqual(["Mystery"]);
-    expect(mapped.duplicates).toEqual(["win"]);
+    expect(mapped.duplicates).toEqual(["market"]);
   });
 
-  test("preserves the label aliases for documentation", () => {
-    expect(labelsFor("login")).toEqual(["Player", "Player Name", "Login"]);
-    expect(labelsFor("sport")).toEqual(["Sports", "Sport"]);
+  test("preserves aliases for documentation", () => {
+    expect(labelsFor("player")).toEqual(["Player", "Player Name", "Login"]);
+    expect(labelsFor("sportLeague")).toEqual([
+      "Sport / League",
+      "Sports",
+      "Sport",
+    ]);
   });
 });

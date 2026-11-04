@@ -258,6 +258,15 @@ const BY_LABEL: ReadonlyMap<string, GsLiveColumn> = new Map([
     ([label, column]) => [normalizeLabel(label), column] as const,
   ),
 ]);
+export function labelsFor(column: GsLiveColumn): readonly string[] {
+  const labels: string[] = LAST_BETS_COLUMNS.filter(
+    (c) => c.column === column,
+  ).map((c) => c.label);
+  for (const [label, value] of Object.entries(ALIASES))
+    if (value === column && !labels.includes(label)) labels.push(label);
+  return labels;
+}
+
 export function canonicalizeGsLiveHeader(header: string): GsLiveColumn | null {
   return BY_LABEL.get(normalizeLabel(header)) ?? null;
 }
