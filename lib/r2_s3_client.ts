@@ -13,6 +13,7 @@ import type {
   S3ListObjectsResponse,
   S3Stats,
 } from "bun";
+import type { BunSecretSetOptions } from "../types/bun-api.ts";
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
 
@@ -93,13 +94,15 @@ function firstDefined(
   return undefined;
 }
 
-export const R2_SECRETS_SERVICE = "sportsdesk-ops";
+export const R2_SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
+export const R2_SECRETS_LEGACY_SERVICE = "sportsdesk-ops";
 export const R2_SECRET_NAMES = [
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
   "CLOUDFLARE_ACCOUNT_ID",
   "R2_BUCKET_NAME",
   "BLOB_API_TOKEN",
+  "BLOB_TICKET_SECRET",
   "CLOUDFLARE_R2_TOKEN_ID",
   "CLOUDFLARE_R2_API_TOKEN",
 ] as const;
@@ -120,13 +123,61 @@ export async function resolveSecretBackedEnv(
   for (const name of R2_SECRET_NAMES) {
     if (merged[name] !== undefined && merged[name] !== "") continue;
     try {
-      const value = await secrets.get({ service: R2_SECRETS_SERVICE, name });
-      if (value !== null && value !== "") merged[name] = value;
+      const canonical = await secrets.get({
+        service: R2_SECRETS_SERVICE,
+        name,
+      });
+      if (canonical !== null && canonical !== "") {
+        merged[name] = canonical;
+        continue;
+      }
+      const legacy = await secrets.get({
+        service: R2_SECRETS_LEGACY_SERVICE,
+        name,
+      });
+      if (legacy !== null && legacy !== "") merged[name] = legacy;
     } catch {
       // Keychain unavailable/locked: keep the env-only contract.
     }
   }
   return merged;
+}
+
+export const MAX_SECRET_FIELD_CHARS = 255;
+export const MAX_SECRET_VALUE_BYTES = 2048;
+
+/** Bun.secrets service/name guard: non-empty printable ASCII, shorter than 256 chars. */
+export function assertSecretField(value: string, label: string): void {
+  if (
+    value.length === 0 ||
+    value.length > MAX_SECRET_FIELD_CHARS ||
+    !/^[\x20-\x7E]+$/.test(value)
+  ) {
+    throw new Error(
+      `${label} must be 1..${MAX_SECRET_FIELD_CHARS} printable ASCII characters`,
+    );
+  }
+}
+
+export function assertSecretValue(value: string): void {
+  const bytes = new TextEncoder().encode(value).byteLength;
+  if (bytes === 0 || bytes > MAX_SECRET_VALUE_BYTES) {
+    throw new Error(
+      `secret value must be 1..${MAX_SECRET_VALUE_BYTES} UTF-8 bytes`,
+    );
+  }
+}
+
+/** Options for Bun.secrets.set: validates bounds and always persists locally. */
+export function secretSetOptions(
+  service: string,
+  name: string,
+  value: string,
+): BunSecretSetOptions {
+  assertSecretField(service, "service");
+  assertSecretField(name, "name");
+  assertSecretValue(value);
+  return { service, name, value, persist: "local" };
 }
 
 export function sha256Hex(value: string): string {

@@ -4,7 +4,11 @@ import {
   isS3Error,
   isS3ErrorCode,
   R2S3Client,
+  R2_SECRETS_SERVICE,
   resolveR2CredentialsAsync,
+  secretSetOptions,
+  assertSecretField,
+  assertSecretValue,
   type R2S3ClientBackend,
   S3_ERROR_CODES,
   resolveR2S3Options,
@@ -144,6 +148,46 @@ describe("resolveR2S3Options", () => {
     });
     expect(options?.accessKeyId).toBe("token-id");
     expect(options?.secretAccessKey).toBe(sha256Hex("token-value"));
+  });
+
+  test("queries the canonical service and keeps a legacy read fallback", async () => {
+    const seen: string[] = [];
+    const secrets = {
+      async get({ service, name }: { service: string; name: string }) {
+        seen.push(service);
+        if (service === "sportsdesk-ops" && name === "R2_ACCESS_KEY_ID") {
+          return "legacy-access";
+        }
+        if (
+          service === "com.bookdeskops.sportsdesk" &&
+          name === "R2_ACCESS_KEY_ID"
+        ) {
+          return "canonical-access";
+        }
+        if (name === "R2_SECRET_ACCESS_KEY") return "secret";
+        if (name === "R2_BUCKET_NAME") return "bucket";
+        if (name === "CLOUDFLARE_ACCOUNT_ID") return "account";
+        return null;
+      },
+    };
+    const resolved = await resolveR2CredentialsAsync({}, secrets);
+    expect(resolved?.accessKeyId).toBe("canonical-access");
+    expect(seen[0]).toBe(R2_SECRETS_SERVICE);
+    expect(seen).toContain("sportsdesk-ops");
+  });
+
+  test("secret bounds and persist local are enforced", () => {
+    expect(() => assertSecretField("x".repeat(256), "service")).toThrow();
+    expect(() => assertSecretField("bad\u0000name", "name")).toThrow();
+    expect(() => assertSecretValue("x".repeat(2049))).toThrow(/2048/);
+    expect(
+      secretSetOptions("com.bookdeskops.sportsdesk", "name", "value"),
+    ).toEqual({
+      service: "com.bookdeskops.sportsdesk",
+      name: "name",
+      value: "value",
+      persist: "local",
+    });
   });
 
   test("falls back to Bun.secrets after env precedence", async () => {

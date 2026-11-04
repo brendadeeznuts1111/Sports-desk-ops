@@ -12,6 +12,8 @@
 
 import { env } from "bun";
 
+import { resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
+
 export interface ServiceSpec {
   readonly name: string;
   readonly command: readonly string[];
@@ -86,6 +88,14 @@ export function supervisedServices(
   return services;
 }
 
+/** Resolve the BLOB_* tokens from Bun.secrets when the environment has none. */
+export async function supervisedServicesAsync(
+  environment: Readonly<Record<string, string | undefined>> = env,
+  secrets: Parameters<typeof resolveSecretBackedEnv>[1] = Bun.secrets,
+): Promise<readonly ServiceSpec[]> {
+  return supervisedServices(await resolveSecretBackedEnv(environment, secrets));
+}
+
 /** Capped exponential backoff: 1s, 2s, 4s … 30s. */
 export function restartDelayMs(attempt: number): number {
   const exponent = Math.max(0, Math.min(5, attempt));
@@ -121,7 +131,7 @@ interface Child {
 export async function supervise(
   options: SupervisorOptions = {},
 ): Promise<void> {
-  const services = options.services ?? supervisedServices();
+  const services = options.services ?? (await supervisedServicesAsync());
   const log =
     options.log ??
     ((event: Record<string, unknown>) => console.log(JSON.stringify(event)));

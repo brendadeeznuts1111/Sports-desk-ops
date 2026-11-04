@@ -11,7 +11,9 @@
  */
 
 import { parseCliArgs, printHelp, wantsHelp } from "../lib/cli_args.ts";
-import { GSID_SECRET } from "./fetch-bet-tally.ts";
+import type { BunSecretSetOptions } from "../types/bun-api.ts";
+import { secretSetOptions } from "../lib/r2_s3_client.ts";
+import { GSID_SECRET, GSID_SECRET_LEGACY } from "./fetch-bet-tally.ts";
 import { secrets, stdin } from "bun";
 
 const HELP = `
@@ -38,7 +40,7 @@ Examples:
 /** Minimal injectable keychain surface so tests never touch the real OS store. */
 export interface SecretStore {
   get(options: { service: string; name: string }): Promise<string | null>;
-  set(options: { service: string; name: string; value: string }): Promise<void>;
+  set(options: BunSecretSetOptions): Promise<void>;
   delete(options: { service: string; name: string }): Promise<boolean>;
 }
 
@@ -64,7 +66,8 @@ export async function gsliveSecretStatus(
 ): Promise<SecretStatus> {
   let present = false;
   try {
-    const value = await store.get(GSID_SECRET);
+    const value =
+      (await store.get(GSID_SECRET)) ?? (await store.get(GSID_SECRET_LEGACY));
     present = (value ?? "").trim() !== "";
   } catch {
     // A locked/unavailable keychain means "not readable here", not "stored".
@@ -80,7 +83,9 @@ export async function setGsliveSecret(
 ): Promise<"stored" | "empty"> {
   const trimmed = value.trim();
   if (trimmed === "") return "empty";
-  await store.set({ ...GSID_SECRET, value: trimmed });
+  await store.set(
+    secretSetOptions(GSID_SECRET.service, GSID_SECRET.name, trimmed),
+  );
   return "stored";
 }
 

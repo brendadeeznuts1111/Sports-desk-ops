@@ -263,7 +263,7 @@ if (listJson) {
 const resolved = await resolveR2CredentialsAsync(Bun.env);
 if (resolved === null) {
   console.error(
-    "publish_r2_graph: no S3/R2 credentials in env or Bun.secrets service sportsdesk-ops",
+    "publish_r2_graph: no S3/R2 credentials in env or Bun.secrets service com.bookdeskops.sportsdesk",
   );
   process.exit(2);
 }

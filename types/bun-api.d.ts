@@ -38,3 +38,13 @@ export interface BunS3Error extends Error {
   readonly name: "S3Error" | string;
   readonly code?: BunS3ErrorCode;
 }
+
+/** Windows Credential Manager persistence for Bun.secrets.set. */
+export type BunSecretPersist = "local" | "enterprise";
+
+export interface BunSecretSetOptions {
+  readonly service: string;
+  readonly name: string;
+  readonly value: string;
+  readonly persist?: BunSecretPersist;
+}

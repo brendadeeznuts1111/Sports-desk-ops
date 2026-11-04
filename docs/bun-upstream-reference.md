@@ -316,6 +316,22 @@ ordering all match; the **skill resource is stale** ("Don't use Bun for type-che
 even though 1.4 ships `bun check`. The audit reports it as drift; pass `--fail-on-drift` to make
 drift fatal. Transport is covered offline by `scripts/bun_docs_mcp.test.ts` (fake fetch).
 
+## Bun.secrets (R2/BLOB keychain)
+
+Repo rules for [`Bun.secrets`](https://bun.com/docs/runtime/secrets):
+
+- Canonical service: **`com.bookdeskops.sportsdesk`**; the old `sportsdesk-ops` service is read as a
+  migration fallback. `scripts/secrets_r2.ts seed` copies legacy entries and the macOS Keychain
+  values into the canonical service.
+- Every `Bun.secrets.set` passes `persist: "local"` (Windows stays on this machine) and validates the
+  platform bounds first: service/name are 1..255 printable ASCII characters; value is 1..2048 UTF-8
+  bytes.
+- Credentials are read into local variables/maps, never copied into `process.env`; Bun's memory
+  zeroing for the returned string is preserved.
+- `scripts/secrets_r2.ts seed` also generates CSPRNG 32-byte hex values for `BLOB_API_TOKEN` and
+  `BLOB_TICKET_SECRET` when they are absent, so the gateway and supervisor can start from the
+  keychain when `.env` is an unmounted FIFO.
+
 ## Cloudflare R2 (`Bun.S3Client` / `Bun.s3`)
 
 The four upstream patterns this repo's R2 integration is pinned to:

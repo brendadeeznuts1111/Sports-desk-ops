@@ -743,7 +743,7 @@ if (import.meta.main) {
     const resolved = await resolveR2CredentialsAsync();
     if (resolved === null) {
       throw new Error(
-        "R2 credentials are unavailable in env or Bun.secrets service sportsdesk-ops",
+        "R2 credentials are unavailable in env or Bun.secrets service com.bookdeskops.sportsdesk",
       );
     }
     const blobs = createS3BlobStore({
@@ -754,13 +754,14 @@ if (import.meta.main) {
     });
     const secretEnv = await resolveSecretBackedEnv();
     const apiToken = secretEnv.BLOB_API_TOKEN ?? "";
-    if (apiToken.trim() === "") {
-      throw new Error("BLOB_API_TOKEN is required");
+    const ticketSecret = secretEnv.BLOB_TICKET_SECRET ?? "";
+    if (apiToken.trim() === "" || ticketSecret.trim() === "") {
+      throw new Error("BLOB_API_TOKEN and BLOB_TICKET_SECRET are required");
     }
     const { server } = createBlobLiveBetsServer({
       blobs,
       apiToken,
-      ticketSecret: requiredEnv("BLOB_TICKET_SECRET"),
+      ticketSecret,
       port: numberEnv("BLOB_PORT", 4021, 0),
       maxUploadBytes: numberEnv("BLOB_MAX_UPLOAD_BYTES", MAX_UPLOAD_BYTES),
       maxPixels: numberEnv("BLOB_MAX_PIXELS", MAX_PIXELS),

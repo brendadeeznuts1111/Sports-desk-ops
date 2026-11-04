@@ -457,7 +457,7 @@ describe("keychain-first manager session", () => {
     await expect(requireManagerSession({}, reader(null))).rejects.toThrow(
       /No manager session/,
     );
-    expect(GSID_SECRET.service).toBe("sportsdesk-gslive");
+    expect(GSID_SECRET.service).toBe("com.bookdeskops.sportsdesk");
   });
 
   test("blank keychain values are ignored rather than sent as a session", async () => {

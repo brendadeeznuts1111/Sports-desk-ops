@@ -211,6 +211,11 @@ export function cookieHeaderFromEnv(
 
 /** OS-keychain entry (Bun.secrets) the manager session is read from before any env fallback. */
 export const GSID_SECRET = {
+  service: "com.bookdeskops.sportsdesk",
+  name: "GSID",
+} as const;
+/** Legacy keychain entry kept as a read fallback during migration. */
+export const GSID_SECRET_LEGACY = {
   service: "sportsdesk-gslive",
   name: "GSID",
 } as const;
@@ -258,7 +263,10 @@ export async function resolveManagerSession(
 ): Promise<ManagerSession> {
   if (secrets !== null) {
     try {
-      const gsid = (await secrets.get(GSID_SECRET))?.trim() ?? "";
+      const gsid =
+        (await secrets.get(GSID_SECRET))?.trim() ??
+        (await secrets.get(GSID_SECRET_LEGACY))?.trim() ??
+        "";
       if (gsid !== "") {
         return {
           cookieHeader: cookieHeaderFromValue(gsid, environment.GA),
@@ -283,7 +291,7 @@ export async function requireManagerSession(
   if (session.source === "none") {
     throw new Error(
       "No manager session. Provision it in the OS keychain via `bun run secrets:gslive set` " +
-        "(keychain service sportsdesk-gslive, name GSID), or provide GSID through the SSOT " +
+        "(keychain service com.bookdeskops.sportsdesk, name GSID), or provide GSID through the SSOT " +
         "environment. Never paste a live session cookie into chat, a commit, or a script.",
     );
   }

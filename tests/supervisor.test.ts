@@ -5,6 +5,7 @@ import {
   restartDelayMs,
   supervise,
   supervisedServices,
+  supervisedServicesAsync,
 } from "../services/supervisor.ts";
 
 describe("service supervisor", () => {
@@ -29,6 +30,25 @@ describe("service supervisor", () => {
       "run",
       "services/blob_and_live_bets_server.ts",
     ]);
+  });
+
+  test("resolves BLOB tokens from Bun.secrets without env leakage", async () => {
+    const environment = { PORT: "4100" };
+    const secrets = {
+      async get({ service, name }: { service: string; name: string }) {
+        if (service !== "com.bookdeskops.sportsdesk") return null;
+        if (name === "BLOB_API_TOKEN") return "secret-token";
+        if (name === "BLOB_TICKET_SECRET") return "secret-ticket";
+        return null;
+      },
+    };
+    const services = await supervisedServicesAsync(environment, secrets);
+    expect(services.map((service) => service.name)).toEqual([
+      "webview",
+      "blob-live-bets",
+    ]);
+    expect(environment).toEqual({ PORT: "4100" });
+    expect("BLOB_API_TOKEN" in environment).toBe(false);
   });
 
   test("health URL overrides win", () => {

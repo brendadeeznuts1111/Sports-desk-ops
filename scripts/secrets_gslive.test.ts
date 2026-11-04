@@ -22,7 +22,7 @@ function memoryStore(initial: string | null = null): MemoryStore {
       return store.value;
     },
     async set(options) {
-      store.calls.push("set");
+      store.calls.push(`set:${options.persist ?? "none"}`);
       store.value = options.value;
     },
     async delete() {
@@ -45,10 +45,19 @@ describe("secrets:gslive keychain helper", () => {
 
     expect(await setGsliveSecret("  fixture-session  ", store)).toBe("stored");
     expect(store.value).toBe("fixture-session");
+    expect(store.calls).toContain("set:local");
 
     const status = await gsliveSecretStatus(store);
     expect(status.present).toBe(true);
     expect(JSON.stringify(status)).not.toContain("fixture-session");
+  });
+
+  test("an oversized value is refused before the keychain write", async () => {
+    const store = memoryStore("existing");
+    await expect(setGsliveSecret("x".repeat(2049), store)).rejects.toThrow(
+      /2048/,
+    );
+    expect(store.calls).not.toContain("set:local");
   });
 
   test("empty input is refused and never written", async () => {
