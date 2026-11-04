@@ -74,6 +74,19 @@ describe("bridge 3b", () => {
     expect(JSON.stringify(sparse)).not.toContain('"Login"');
     expect(sparse.gates.find((g) => g.gate === 8)?.status).toBe("skipped");
   });
+  test("GATE-08 passes on matching 3c exposure and fails with a variance", async () => {
+    const path = await fixture([row(1), row(2), row(3), row(4), row(5)]);
+    const pass = await buildF402PendingRollup(path, {
+      gate8: { openExposureCents: 10_000_000 },
+    });
+    expect(pass.gates.find((g) => g.gate === 8)?.status).toBe("pass");
+    await expect(
+      buildF402PendingRollup(path, { gate8: { openExposureCents: 9_999_999 } }),
+    ).rejects.toMatchObject({
+      gate: expect.objectContaining({ gate: 8, status: "fail" }),
+    });
+  });
+
   test("fixture artifacts never publish to the live channel; gateway smoke delivers a live one", async () => {
     const server = createBlobLiveBetsServer({
       blobs: new MemoryBlobStore(),

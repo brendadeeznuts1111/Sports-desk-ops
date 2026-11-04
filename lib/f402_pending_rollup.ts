@@ -133,6 +133,11 @@ export interface PendingBuildOptions {
   readonly live?: boolean;
   readonly generatedAt?: string;
   readonly deskDate?: string;
+  /** 3c open exposure for GATE-08; omitted means the gate is skipped. */
+  readonly gate8?: {
+    readonly openExposureCents: number;
+    readonly toleranceCents?: number;
+  };
 }
 export async function buildF402PendingRollup(
   path: string,
@@ -327,13 +332,25 @@ export async function buildF402PendingRollup(
       status: "pass",
       detail: "integer cents only",
     },
-    {
-      gate: 8,
-      name: "TemporalCutoffAndCrossSystemReconciliation",
-      status: "skipped",
-      detail:
-        "3c artifact has no openExposureCents; cross-system identity unavailable",
-    },
+    (() => {
+      if (options.gate8 === undefined) {
+        return {
+          gate: 8,
+          name: "TemporalCutoffAndCrossSystemReconciliation",
+          status: "skipped",
+          detail: "no 3c openExposureCents input",
+        } as PendingGate;
+      }
+      const variance = totalPayout - BigInt(options.gate8.openExposureCents);
+      const tolerance = BigInt(options.gate8.toleranceCents ?? 0);
+      const ok = (variance < 0n ? -variance : variance) <= tolerance;
+      return {
+        gate: 8,
+        name: "TemporalCutoffAndCrossSystemReconciliation",
+        status: ok ? "pass" : "fail",
+        detail: `definedLiability[GSLIVE+GSBUILDER]=${totalPayout} 3c.openExposure=${options.gate8.openExposureCents} varianceCents=${variance}`,
+      } as PendingGate;
+    })(),
   ];
   const acceptedDates = accepted
     .map((r) => String(r.AcceptedDateTime ?? ""))

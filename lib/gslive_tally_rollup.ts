@@ -280,6 +280,7 @@ export interface GsliveTallyRollup {
     readonly holdBps: number | null;
     readonly roiBps: number | null;
     readonly roundingResidualCents: number;
+    readonly openExposureCents: number;
     readonly freePlayTickets: number;
   };
   readonly suppressed: {
@@ -371,6 +372,7 @@ export async function buildGsliveTallyRollup(
     settled: bigint | null;
     resultSum: bigint;
     readonly freePlay: boolean;
+    readonly open: boolean;
     legs: number;
     clvSum: bigint;
     clvEligible: number;
@@ -450,6 +452,7 @@ export async function buildGsliveTallyRollup(
       settled: parentSettled,
       resultSum: legResult,
       freePlay,
+      open: !(state === 1 || state === 2 || state === 3),
       legs: 1,
       clvSum: clvLine ?? 0n,
       clvEligible: clvLine === null ? 0 : 1,
@@ -481,6 +484,7 @@ export async function buildGsliveTallyRollup(
   let freePlayTickets = 0;
   let rawRisk = 0n;
   let rawSettled = 0n;
+  let openExposure = 0n;
   let rawLegs = 0;
   let clvSumTotal = 0n;
   let clvEligibleTotal = 0;
@@ -549,6 +553,7 @@ export async function buildGsliveTallyRollup(
     rawSettled += freePlay ? 0n : settled;
     clvSumTotal += group.clvSum;
     clvEligibleTotal += group.clvEligible;
+    if (group.open) openExposure += freePlay ? 0n : group.risk;
     risks[index] = (risks[index] ?? 0n) + (freePlay ? 0n : group.risk);
     settleds[index] = (settleds[index] ?? 0n) + (freePlay ? 0n : settled);
     clvSums[index] = (clvSums[index] ?? 0n) + group.clvSum;
@@ -748,6 +753,7 @@ export async function buildGsliveTallyRollup(
       holdBps,
       roiBps: roiBps === null ? null : Number(roiBps),
       roundingResidualCents: Number(roundingResidualCents),
+      openExposureCents: Number(openExposure),
       freePlayTickets,
     },
     suppressed: {

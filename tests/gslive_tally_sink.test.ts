@@ -26,6 +26,7 @@ function rollup(): GsliveTallyRollup {
       roiBps: -10000,
       roundingResidualCents: 0,
       freePlayTickets: 0,
+      openExposureCents: 0,
     },
     suppressed: {
       cellCount: 0,

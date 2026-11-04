@@ -9,6 +9,7 @@ const { values } = parseArgs({
     from: { type: "string", default: "tests/f402-pending-wager-sample.json" },
     "source-kind": { type: "string", default: "fixture" },
     live: { type: "boolean", default: false },
+    "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
     "no-r2": { type: "boolean", default: false },
     "no-ws": { type: "boolean", default: false },
@@ -21,9 +22,31 @@ if (values.help) {
   );
   process.exit(0);
 }
+const threeC =
+  values["three-c-rollup"] === undefined
+    ? null
+    : (JSON.parse(
+        await Bun.file(values["three-c-rollup"] as string).text(),
+      ) as { kind?: string; totals?: { openExposureCents?: number } });
+if (
+  threeC !== null &&
+  (threeC.kind !== "gslive-tally" ||
+    typeof threeC.totals?.openExposureCents !== "number")
+) {
+  throw new Error(
+    "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
+  );
+}
 const rollup = await buildF402PendingRollup(values.from as string, {
   sourceKind: values["source-kind"] as string,
   live: values.live,
+  ...(threeC === null
+    ? {}
+    : {
+        gate8: {
+          openExposureCents: threeC.totals?.openExposureCents as number,
+        },
+      }),
 });
 const gates = rollup.gates.map((g) => `GATE-0${g.gate}:${g.status}`).join(" ");
 console.error(
