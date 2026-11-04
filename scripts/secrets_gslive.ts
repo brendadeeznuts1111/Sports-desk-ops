@@ -13,6 +13,7 @@
 import { parseCliArgs, printHelp, wantsHelp } from "../lib/cli_args.ts";
 import type { BunSecretSetOptions } from "../types/bun-api";
 import { secretSetOptions } from "../lib/r2_s3_client.ts";
+import { LEGACY_SECRETS_SERVICE } from "../lib/secrets.ts";
 import { GSID_SECRET, GSID_SECRET_LEGACY } from "./fetch-bet-tally.ts";
 import { secrets, stdin } from "bun";
 
@@ -27,9 +28,14 @@ Usage:
 Options:
   -h, --help        This text
 
-The value is read from stdin, never from argv and never printed. Keychain entry:
+The value is read from stdin, never from argv and never printed. Keychain entries
+(read/delete in this order, first hit wins):
   service ${GSID_SECRET.service}
-  name    ${GSID_SECRET.name}
+  name    ${GSID_SECRET.name}  (canonical)
+  service ${GSID_SECRET_LEGACY.service}
+  name    ${GSID_SECRET_LEGACY.name}  (legacy)
+  service ${LEGACY_SECRETS_SERVICE}
+  name    ${GSID_SECRET.name}  (legacy)
 
 Examples:
   printf '%s' "$GSID" | bun run secrets:gslive set
@@ -55,25 +61,42 @@ export function defaultSecretStore(): SecretStore {
 }
 
 export interface SecretStatus {
+  /** Service the session was found in; canonical when absent. */
   readonly service: string;
   readonly name: string;
   readonly present: boolean;
 }
 
+/**
+ * Every service the GSID has lived under: canonical first, then the two legacy
+ * names. Reads and deletes walk the whole list so a stale copy cannot resurface
+ * (audit Finding 4), and status reports the service it actually found.
+ */
+export const GSID_SERVICES = [
+  GSID_SECRET,
+  GSID_SECRET_LEGACY,
+  { service: LEGACY_SECRETS_SERVICE, name: GSID_SECRET.name },
+] as const;
+
 /** Report whether a session is stored. Never returns or logs the value. */
 export async function gsliveSecretStatus(
   store: SecretStore = defaultSecretStore(),
 ): Promise<SecretStatus> {
-  let present = false;
-  try {
-    const value =
-      (await store.get(GSID_SECRET)) ?? (await store.get(GSID_SECRET_LEGACY));
-    present = (value ?? "").trim() !== "";
-  } catch {
-    // A locked/unavailable keychain means "not readable here", not "stored".
-    present = false;
+  for (const entry of GSID_SERVICES) {
+    try {
+      const value = (await store.get(entry))?.trim() ?? "";
+      if (value !== "") {
+        return { service: entry.service, name: entry.name, present: true };
+      }
+    } catch {
+      // A locked/unavailable keychain means "not readable here"; keep looking.
+    }
   }
-  return { service: GSID_SECRET.service, name: GSID_SECRET.name, present };
+  return {
+    service: GSID_SECRET.service,
+    name: GSID_SECRET.name,
+    present: false,
+  };
 }
 
 /** Store a trimmed session; an empty value is refused, not silently written. */
@@ -89,10 +112,19 @@ export async function setGsliveSecret(
   return "stored";
 }
 
+/** Remove every GSID entry; returns how many services actually held one. */
 export async function deleteGsliveSecret(
   store: SecretStore = defaultSecretStore(),
-): Promise<boolean> {
-  return store.delete(GSID_SECRET);
+): Promise<number> {
+  let removed = 0;
+  for (const entry of GSID_SERVICES) {
+    try {
+      if (await store.delete(entry)) removed += 1;
+    } catch {
+      // A locked/unavailable keychain is not a deletion failure by itself.
+    }
+  }
+  return removed;
 }
 
 /** Read one stdin line; the value is not echoed, stored in shell history, or put on argv. */
@@ -152,9 +184,9 @@ async function main(): Promise<void> {
       break;
     }
     case "delete": {
-      await deleteGsliveSecret();
+      const removed = await deleteGsliveSecret();
       console.error(
-        `secrets:gslive: removed the ${GSID_SECRET.service} session`,
+        `secrets:gslive: removed ${removed} GSLive session entr${removed === 1 ? "y" : "ies"} from ${GSID_SERVICES.map((entry) => entry.service).join(", ")}`,
       );
       break;
     }
