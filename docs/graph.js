@@ -375,6 +375,7 @@ import {
   const liveTapeBody = document.getElementById("live-tape-tbody");
   const livePositionsBody = document.getElementById("positions-tbody");
   const liveDeskBookBody = document.getElementById("desk-book-tbody");
+  const liveDeskSourceEl = document.getElementById("live-desk-source");
   const liveModeBadge = document.getElementById("live-mode-badge");
   const liveFeedAgeEl = document.getElementById("live-feed-age");
   const liveWsStateEl = document.getElementById("live-ws-state");
@@ -654,8 +655,23 @@ import {
     renderLiveKpis(positions, desk);
     renderLivePositions(positions);
     renderLiveDeskBook(desk);
-    liveFeedEpochMs = Date.now();
+    // Age the feed by its own publish time, not by when this page fetched it: a stale
+    // published feed must never render as fresh.
+    const feedEpochMs =
+      typeof data.pollEpochMs === "number" && Number.isFinite(data.pollEpochMs)
+        ? data.pollEpochMs
+        : Date.parse(String(data.lastUpdatedIso ?? ""));
+    liveFeedEpochMs = Number.isFinite(feedEpochMs) ? feedEpochMs : Date.now();
     liveFeedDataMode = data.dataMode || "—";
+    // Desk-book rows come from the pending-bet feed; label that table with its own
+    // source so a fixture book cannot pass as observed desk exposure.
+    if (liveDeskSourceEl) {
+      const f402 = data.provenance && data.provenance.f402;
+      const deskSource = f402 && f402.source === "live" ? "LIVE" : "FIXTURE";
+      liveDeskSourceEl.textContent = "rows: " + deskSource;
+      liveDeskSourceEl.className =
+        "pill pill-" + (deskSource === "LIVE" ? "emerald" : "amber");
+    }
     if (!liveTapePaused) {
       const ticks = (Array.isArray(data.liveTicks) ? data.liveTicks : [])
         .map(function (tick, index) {

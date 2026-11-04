@@ -228,8 +228,25 @@ contains short/placeholder addresses such as `0x9cD44e12A8b7F30192c44d8E11a08B3e
 `0x3af8…0000…1cfa` (synthetic). Result: `dataMode: "PARTIAL"`, 23 wallet rows `LIVE` and 16
 `FIXTURE`; **94 open legs**, **$64,479** current value, **$69,564** cost basis and **−$5,040.45**
 open PnL across the 23 live wallets; `docs/graph-live-feed.json` (and the gitignored
-`dist/graph-live-feed.json`) is **181,630 bytes**. Replace or remove the placeholders before
-treating the totals as complete.
+`dist/graph-live-feed.json`) was **181,630 bytes at that run**. Replace or remove the placeholders
+before treating the totals as complete.
+
+### Observed: feed refresh with the local backtest inputs (2026-11-04T11:44:39Z)
+
+`bun scripts/graph_feed_poller_daemon.ts --once --live --no-backtest-artifact` run from the main
+checkout, which carries the gitignored `enriched_customers_full.json` and
+`sportsdesk_downline_data.json`. Same live shape as the 11:21 poll — **39 requested, 23 ok, 16
+invalid, 0 stale, 0 truncated** in 1,015 ms, `dataMode: "PARTIAL"`, 23 `LIVE` + 16 `FIXTURE` wallet
+rows, **94 open legs**, **$64,139.40** current value, **$69,613** cost basis and **−$5,429.24** open
+PnL across the live wallets; feed **217,518 bytes**.
+
+The difference from 11:21 is the backtest section: that refresh ran where the two inputs were
+absent, so `backtest4Wk.dataBasis` fell back to `{snapshot, sampledTickets: 0}`. Regenerated here it
+is `{downline-meta, sampledTickets: 1100, sampledWindowIso:
+["2026-10-26T10:30:00Z","2026-10-27T21:15:00Z"]}` with 49 leaderboard rows — content-identical to
+`docs/backtest-4wk-cfb-nba.json` apart from `generatedAt*`, which the flag deliberately leaves
+untouched. Do not regenerate the feed outside the main checkout: the fallback silently drops the
+sampled evidence.
 
 ### Observed: fixture mode still works (2026-11-04T11:21:21Z)
 

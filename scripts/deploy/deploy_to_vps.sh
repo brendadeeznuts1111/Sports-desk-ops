@@ -90,7 +90,7 @@ for dir in cli services lib static catalog validation; do
   cp -R "${REPO_ROOT}/${dir}/." "${APP_DIR}/${dir}/" 2>/dev/null || true
 done
 mkdir -p "${APP_DIR}/docs"
-cp -f "${REPO_ROOT}/docs/graph.html" "${REPO_ROOT}/docs/graph.js" "${APP_DIR}/docs/" 2>/dev/null || true
+cp -f "${REPO_ROOT}/docs/graph.html" "${REPO_ROOT}/docs/graph.js" "${REPO_ROOT}/docs/graph-live-feed.json" "${APP_DIR}/docs/" 2>/dev/null || true
 mkdir -p "${APP_DIR}/docs/assets"
 cp -R "${REPO_ROOT}/docs/assets/." "${APP_DIR}/docs/assets/" 2>/dev/null || true
 mkdir -p "${APP_DIR}/design"
