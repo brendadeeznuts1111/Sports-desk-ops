@@ -46,7 +46,7 @@ test. That cannot be satisfied by repository analysis, and this pack does not pr
 - [06-roadmap.md](./06-roadmap.md) — re-prioritized one-pager naming what to pause and what to raise.
 - [07-module-sink-census.md](./07-module-sink-census.md) — module-level `.html()` census and remaining audit surface.
 - [08-pending-customer-count-feasibility.md](./08-pending-customer-count-feasibility.md) — Path B finding: no decision consumer, no join key, no transaction log/reconciliation.
-- [08-pending-source-finding.md](./08-pending-source-finding.md) — artifact verification: named BB55103 files absent, ledger invariant unverified, no aggregate endpoint.
+- [08-pending-source-finding.md](./08-pending-source-finding.md) — BB55103 ledger verified 33/33; no pending TranType; no aggregate endpoint.
 
 ## Headline (provisional until item 2)
 

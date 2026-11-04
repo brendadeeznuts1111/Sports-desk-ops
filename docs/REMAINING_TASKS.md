@@ -255,8 +255,9 @@ so an id resolves without guessing which artifact it came from.
     date; compliance definitions of "active customer"/"open position"/"pending"; reconciliation
     ledger or written confirmation none exists; test environment with known pending wagers;
     settlement and compliance leads (~1 hour each); test account + authorization (issue #23).
-    **Artifact check (2026-11-04):** the three named BB55103 files are absent from disk; the ledger
-    invariant is unverified and no aggregate pending-count endpoint exists in available code/probes
+    **Artifact check (2026-11-04):** BB55103 ledger/INFO artifacts are populated; the 33/33
+    balance invariant, final=CurrentBalance, and Available formula are verified. Pending is not a
+    TranType; no aggregate pending-count endpoint exists in available code/probes
     (`08-pending-source-finding.md`).
   - **Exit:** Path A — 20-customer manual sample matches, settlement confirms end-of-day on a named
     date, compliance confirms definition, negative cases hold; or Path B — written finding linked

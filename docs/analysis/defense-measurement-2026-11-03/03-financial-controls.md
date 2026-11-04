@@ -78,9 +78,10 @@ customer count; and the three observed namespaces (`getPending` `TicketNumber-Wa
 `getHistory` `LOGIN|WAGERNUMBER`, `getTransactionList` `DocumentNumber`/`GradeNum`) share no join key.
 The count is blocked on the authoritative transaction log/reconciliation plus settlement and
 compliance definitions — input to this item, not a replacement for it. Artifact-level verification
-is in [08-pending-source-finding.md](./08-pending-source-finding.md): the three named BB55103
-artifacts are absent from disk, the ledger invariant is unverified, and no aggregate pending-count
-endpoint exists in the available code/probes.
+is in [08-pending-source-finding.md](./08-pending-source-finding.md): the BB55103 33-row ledger
+reconciles 33/33, final balance = `CurrentBalance`, and `AvailableBalance = Current − Pending +
+CreditLimit`; pending is not a TranType; no aggregate pending-count endpoint exists in the available
+code/probes.
 
 ## What the business owner must answer
 

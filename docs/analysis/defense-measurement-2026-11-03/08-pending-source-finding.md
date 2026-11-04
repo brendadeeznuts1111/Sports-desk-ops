@@ -1,124 +1,135 @@
-# Pending-source verification — artifact finding
+# Pending-source verification — BB55103 artifacts
 
-**Status: PARTIAL / PATH B.** The three named artifacts do not exist on disk, so the row-by-row
-ledger check cannot be performed. The available proxy artifacts still answer where pending state
-lives and whether an aggregate count endpoint exists. No count is produced.
+**Status: PARTIAL / PATH B.** The one-customer ledger invariant is **verified**. The
+population-level question — how many customers have pending bets — still cannot be computed from
+these artifacts. No count is produced.
 
-This verifies/updates `08-pending-customer-count-feasibility.md`; it is input to item 3 and item 2.
+Inputs: `Scratch/f402-transactions-BB55103.json` (33 rows), `Scratch/f402-getInfoPlayer-BB55103.json`
+(INFO), `Scratch/f402-network-log.txt` (request fields; no credentials).
 
-## Artifact availability
+## 1. Ledger invariant — PASS (one customer, 33/33 rows)
 
-| Claimed artifact                          | On disk? | Evidence                                                                                                               |
-| ----------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `Scratch/f402-transactions-BB55103.json`  | **no**   | `find`/`grep` returned no file; the document numbers from the observed ledger (e.g. `1068258269`) appear in no capture |
-| `Scratch/f402-getInfoPlayer-BB55103.json` | **no**   | no file; the only `getInfoPlayer` artifact is for a different customer, BILLY666                                       |
-| `Scratch/f402-network-log.txt`            | **no**   | no such file; no equivalent request log under `Scratch/`                                                               |
+Sign convention: `TranCode C` = +, `D` = −. Row 1 starts from balance 0.
 
-Available proxies:
+|   # |   Document | Code | Type | Amount (cents) |  Balance | Expected | Result |
+| --: | ---------: | ---- | ---- | -------------: | -------: | -------: | ------ |
+|   1 | 1068258269 | D    | L    |         200000 |  -200000 |  -200000 | PASS   |
+|   2 | 1068991066 | C    | W    |         200000 |        0 |        0 | PASS   |
+|   3 | 1069032471 | D    | L    |         220000 |  -220000 |  -220000 | PASS   |
+|   4 | 1069311948 | D    | L    |         250000 |  -470000 |  -470000 | PASS   |
+|   5 | 1069338166 | C    | W    |         200000 |  -270000 |  -270000 | PASS   |
+|   6 | 1069367680 | C    | W    |         200000 |   -70000 |   -70000 | PASS   |
+|   7 | 1069427569 | C    | W    |         200000 |   130000 |   130000 | PASS   |
+|   8 | 1069497272 | D    | L    |         210000 |   -80000 |   -80000 | PASS   |
+|   9 | 1069516878 | C    | W    |         200000 |   120000 |   120000 | PASS   |
+|  10 | 1069517701 | D    | L    |         220000 |  -100000 |  -100000 | PASS   |
+|  11 | 1069587407 | D    | L    |         220000 |  -320000 |  -320000 | PASS   |
+|  12 | 1069677422 | D    | L    |         220000 |  -540000 |  -540000 | PASS   |
+|  13 | 1069677436 | D    | L    |         220000 |  -760000 |  -760000 | PASS   |
+|  14 | 1069687961 | D    | L    |         220000 |  -980000 |  -980000 | PASS   |
+|  15 | 1070132862 | C    | W    |         200000 |  -780000 |  -780000 | PASS   |
+|  16 | 1070345181 | D    | L    |         220000 | -1000000 | -1000000 | PASS   |
+|  17 | 1070701556 | C    | E    |        1000000 |        0 |        0 | PASS   |
+|  18 | 1071959816 | C    | W    |         200000 |   200000 |   200000 | PASS   |
+|  19 | 1072061501 | D    | L    |         220000 |   -20000 |   -20000 | PASS   |
+|  20 | 1072069295 | D    | L    |         220000 |  -240000 |  -240000 | PASS   |
+|  21 | 1072329586 | C    | W    |         200000 |   -40000 |   -40000 | PASS   |
+|  22 | 1072380530 | C    | W    |         200000 |   160000 |   160000 | PASS   |
+|  23 | 1072453098 | C    | W    |         560000 |   720000 |   720000 | PASS   |
+|  24 | 1072761955 | C    | W    |         200000 |   920000 |   920000 | PASS   |
+|  25 | 1072769791 | C    | W    |         200000 |  1120000 |  1120000 | PASS   |
+|  26 | 1072791683 | C    | W    |          50000 |  1170000 |  1170000 | PASS   |
+|  27 | 1072822397 | D    | L    |          50000 |  1120000 |  1120000 | PASS   |
+|  28 | 1072824589 | C    | W    |         200000 |  1320000 |  1320000 | PASS   |
+|  29 | 1073036085 | C    | W    |          72500 |  1392500 |  1392500 | PASS   |
+|  30 | 1073167618 | C    | W    |          50000 |  1442500 |  1442500 | PASS   |
+|  31 | 1073384192 | C    | W    |         200000 |  1642500 |  1642500 | PASS   |
+|  32 | 1074088789 | D    | I    |        1642500 |        0 |        0 | PASS   |
+|  33 | 1074393688 | C    | W    |         200000 |   200000 |   200000 | PASS   |
 
-- `Scratch/f402-probes/2026-11-01T04-43-50-859Z/getInfoPlayer.json` — probe metadata plus a
-  **2,000-byte preview** of a 54,577-byte response for BILLY666; the preview contains
-  `PendingWagerCount: 0`, `PendingWagerBalance: 0`, `PendingCredit: 0`, `CurrentBalance: 0`,
-  `CreditLimit: 0`.
-- `Scratch/f402-customer-admin/list.redacted.json` — **2 rows**, fields `CurrentBalance`,
-  `PendingWagerBalance`, `AvailableBalance`; no `PendingWagerCount`/`PendingCredit`/`CreditLimit`.
-- `Scratch/f402-customer-admin/summary.json` — local summary over those 2 rows:
-  `rowCount: 2`, `rowsWithPending: 2`, `totalPendingWagerBalance: 4411500`.
-- `Scratch/f402-probes/*/Pending.json` — per-wager `getPending` probes; one 200 with a Pending array
-  for customer H1716, one 500 for a templated `{customerID}` body.
+**Failures: none.** Final ledger balance **200000** = `INFO.data.CurrentBalance`
+**200000**. Signed sum = **200000**.
 
-## 1. Ledger invariant — NOT VERIFIED
+### Available-balance formula — PASS
 
-The required 33-row ledger is absent, so none of these can be checked:
+INFO carries `INFO.balance.AvailableBalance = 4960000`; `INFO.data` carries
+`CurrentBalance = 200000`, `PendingWagerBalance = 240000`, `CreditLimit = 5000000`.
 
-| Check                                                                   | Required evidence                                  | Result                                                                          |
-| ----------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `Balance[n] = Balance[n-1] + signed(Amount)`                            | 33-row ledger with `TranCode`, `Amount`, `Balance` | **NOT VERIFIED — artifact absent**                                              |
-| final `Balance` = `getInfoPlayer.CurrentBalance`                        | BB55103 ledger + INFO response                     | **NOT VERIFIED — both absent**                                                  |
-| `AvailableBalance = CurrentBalance - PendingWagerBalance + CreditLimit` | INFO fields incl. credit limit                     | **NOT VERIFIED — no BB55103 INFO; proxy INFO is preview-only and for BILLY666** |
-| `PendingWagerBalance` absent from transaction rows                      | BB55103 ledger                                     | **NOT VERIFIED — ledger absent**                                                |
+```
+AvailableBalance = CurrentBalance - PendingWagerBalance + CreditLimit
+                 = 200000 - 240000 + 5000000
+                 = 4960000
+```
 
-The `customer-admin` proxies cannot substitute: they carry `PendingWagerBalance` but not
-`CreditLimit`, so the available-balance formula is underdetermined; the two rows have different
-implied credit amounts. The `getInfoPlayer` proxy is a truncated preview for a different customer
-and cannot verify BB55103's ending balance.
+Formula matches: **True**. This is the first verified customer-level financial invariant in
+the pack.
 
-**This is not the first verified customer-level invariant.** The invariant remains unproven.
+### Pending is not a transaction row
 
-## 2. Lifecycle model — incomplete without the ledger
+`INFO.data.PendingWagerCount = 1` and
+`PendingWagerBalance = 240000`. No ledger row has a pending description, and no row’s `Amount` equals
+the pending balance. Pending is a **separate state/field**, not a cash movement in this ledger.
 
-The absent ledger means there is no complete `TranCode`/`TranType` table for BB55103. What the
-available artifacts show:
+## 2. Lifecycle model from the 33 rows
 
-| Observation                                                                                        | Evidence                                              | Meaning                                                    |
-| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------- |
-| pending wagers are returned by `getPending`, not the transaction list                              | `Pending.json`: Pending array with `WagerStatus: "P"` | pending state is a **per-wager snapshot endpoint**         |
-| `getInfoPlayer` exposes per-customer `PendingWagerCount` / `PendingWagerBalance` / `PendingCredit` | probe preview                                         | per-customer aggregate fields exist                        |
-| `customer-admin` list exposes `PendingWagerBalance` per row, no count                              | 2-row redacted list                                   | a multi-row display list, not an aggregate count           |
-| available deleted-transactions sample has `TranCode`/`TranType` (`C`/`E`) and no `Balance`         | 11-row envelope                                       | ledger vocabulary exists, but it is not the BB55103 ledger |
+| Code / Type | Description         | Rows | GradeNum? | Classification            |
+| ----------- | ------------------- | ---: | --------- | ------------------------- |
+| `C` / `W`   | Wager Won           |   18 | yes       | settlement credit (wager) |
+| `D` / `L`   | Wager Loss          |   13 | yes       | settlement debit (wager)  |
+| `C` / `E`   | Customer Deposit    |    1 | no        | cash movement (non-wager) |
+| `D` / `I`   | Customer Withdrawal |    1 | no        | cash movement (non-wager) |
 
-**Does any TranType represent pending?** The available artifacts cannot answer for the absent
-BB55103 ledger. `getPending` is a separate endpoint, so pending is represented as a **response
-state**, not as a transaction row in the observed sample. The finding is: **pending is not visible in
-the transaction ledger artifact available on disk; that artifact is missing.** A complete TranType
-table requires the ledger.
+**Does any TranType represent a pending wager? No.** There is no pending code/type in the 33 rows.
+Pending lives in `getPending` (per-wager) and `getInfoPlayer` (per-customer count/balance), not in
+this transaction ledger. A complete server `TranType` vocabulary is still unconfirmed; these are the
+four combinations present for this customer.
 
 ## 3. Where pending state lives
 
-| Artifact/module                  | Field                                                                       | Granularity                     | Called when                                |
-| -------------------------------- | --------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------ |
-| `getInfoPlayer` probe (BILLY666) | `PendingWagerCount`, `PendingWagerBalance`, `PendingCredit`                 | **per customer**                | player-info panel / `getInfoPlayer`        |
-| `getPending` probes              | Pending array rows with `WagerStatus: "P"`                                  | **per wager**                   | pending report / `getPending` per customer |
-| `customer-admin` list            | `PendingWagerBalance` only                                                  | **per customer row**            | customer-admin table (multi-row display)   |
-| `customer-admin` summary         | `rowsWithPending`, `totalPendingWagerBalance`                               | **local aggregate over 2 rows** | derived artifact, not a server endpoint    |
-| pinned modules                   | `getPending`, `getInfoPlayer`, `getCustomerAdmin`, `getTotalActiveCustomer` | per-customer/per-wager/list     | existing client calls                      |
+| Artifact/module                                  | Fields                                                                      | Granularity                 | Called when                       |
+| ------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------- | --------------------------------- |
+| `Scratch/f402-getInfoPlayer-BB55103.json`        | `PendingWagerCount`, `PendingWagerBalance`, `PendingCredit`                 | **per customer**            | player-info                       |
+| `Scratch/f402-probes/*/Pending.json`             | Pending array, `WagerStatus "P"`                                            | **per wager**               | `getPending` per customer         |
+| `Scratch/f402-customer-admin/list.redacted.json` | `PendingWagerBalance` only (2 rows)                                         | per customer row            | customer-admin table              |
+| `Scratch/f402-customer-admin/summary.json`       | `rowsWithPending: 2`, total balance                                         | local aggregate over 2 rows | derived artifact, not an endpoint |
+| pinned modules                                   | `getPending`, `getInfoPlayer`, `getCustomerAdmin`, `getTotalActiveCustomer` | per-customer/per-wager/list | existing client calls             |
 
-No artifact contains a **count of all customers with pending wagers**. The closest is
-`PendingWagerCount` per customer (requires one call per customer) and the 2-row local summary.
+No artifact contains a **population count of customers with pending wagers**. The closest is
+`PendingWagerCount` per customer, which requires one `getInfoPlayer` call per customer.
 
 ## 4. Aggregate endpoint — no
 
-Searching the pinned controller/modules and probes for `Pending|Count|Summary|Aggregate|Stats`
-operations found:
+The network log contains only `getTransactionList` (account BB55103, start 2026-10-28) and
+`getInfoPlayer` (same account); it has no `getPending` call and no aggregate call. The pinned
+controller/modules contain no pending-customer aggregate operation. `getCustomerAdmin` returns a
+multi-row list with `PendingWagerBalance` but **no count**; `getTotalActiveCustomer`/`getPlayerCount`
+count active/players, not pending customers; `getConfigWebReportsPending` is display configuration.
 
-- `getPending` — per-customer wager rows.
-- `getInfoPlayer` — per-customer INFO.
-- `getCustomerAdmin` — multi-row customer list with `PendingWagerBalance`, **not a count**, and the
-  observed artifact is only 2 rows.
-- `getTotalActiveCustomer` / `getPlayerCount` / `getAgentAccountingDetailedPlayerCount` — counts of
-  active/players, not pending customers.
-- `getConfigWebReportsPending` — display configuration, not data.
-
-**Answer: no aggregate pending-customer-count endpoint is present in the available code or probes.**
-There is also no network log to prove that no such endpoint exists server-side; the finding is
-“none found in the available evidence,” not “the server has none.”
+**Answer: no aggregate pending-customer-count endpoint in the available evidence.** There is no
+network log of an uncalled one, so “none found,” not “server has none.”
 
 ## Path B finding
 
-The count cannot be computed from artifacts on disk. The specific missing sources are:
+The count cannot be computed from these artifacts. The ledger invariant is verified for **one**
+customer, but that does not scale to 57,763, and a client crawl over `getInfoPlayer` would be a
+display crawl, not a settlement source. The specific missing source is a **population-level
+aggregate of pending customer state** (or the authoritative transaction log/reconciliation plus a
+documented lifecycle definition). Settlement/compliance definitions and item 2’s Bearer verdict
+remain upstream.
 
-1. **The BB55103 ledger and network log themselves** — the named files are absent, so even the
-   one-customer invariant is unverified.
-2. **A population source / aggregate endpoint** — pending state is per-customer (`getInfoPlayer`) or
-   per-wager (`getPending`); no aggregate endpoint exists in the available code, and a 57,763-customer
-   crawl through customer-admin would be a display crawl, not a settlement source.
-3. **Settlement reconciliation and definitions** — the lifecycle/state definition and the
-   transaction-log join remain the domain of item 3 and the settlement/compliance owners.
-
-To unblock: provide the named artifacts (or a redacted equivalent), the authoritative transaction
-log/replica, an aggregate endpoint or documented reconciliation, and the settlement/compliance
-definitions. Link: item 3 (`03-financial-controls.md`), item 2 (Bearer verdict) as upstream blockers.
+To unblock: provide an aggregate endpoint (customer ID → pending count/balance, or a total), or the
+authoritative transaction log/replica with a join key and signed settlement/compliance definitions.
+Then run the 20-customer sample acceptance from the task.
 
 ## What this does not answer
 
 - The actual count.
-- The settlement team's definition of "pending" / end-of-day.
-- The compliance definition of "active customer" / "open position."
+- The settlement team’s definition of pending/end-of-day.
+- The compliance definition of active customer/open position.
 - Whether the server has an uncalled aggregate endpoint (no network log).
 
-## Re-verify
+## Links
 
-```sh
-find Scratch scratch -name 'f402-transactions-BB55103.json' -o -name 'f402-getInfoPlayer-BB55103.json' -o -name 'f402-network-log.txt'
-grep -rl '1068258269\|PendingWagerCount' Scratch scratch
-```
+- Item 3 financial reconciliation: `03-financial-controls.md`
+- Item 2 Bearer verdict: upstream blocker
+- Prior feasibility finding: `08-pending-customer-count-feasibility.md`

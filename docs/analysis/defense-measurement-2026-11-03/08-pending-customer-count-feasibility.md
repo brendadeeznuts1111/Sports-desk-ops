@@ -8,6 +8,12 @@ not a replacement for it.
 `[CODE]` = read from repo code; `[OBSERVED]` = recorded evidence; `[UNVERIFIED]` = not confirmed
 against the server or the owning teams; `[BLOCKED]` = input unavailable here.
 
+> **Update 2026-11-04:** the BB55103 33-row ledger and INFO artifacts are now on disk. The
+> one-customer invariant is verified — 33/33 rows reconcile, final balance = `CurrentBalance`, and
+> `AvailableBalance = CurrentBalance − PendingWagerBalance + CreditLimit`. See
+> [08-pending-source-finding.md](./08-pending-source-finding.md). The population-level gap is
+> unchanged: no aggregate endpoint and no authoritative population log.
+
 ## 1. Decision definition — no consumer found
 
 `[CODE]` The desk KPI reports **wager/ticket** counts and amounts, not customer-level counts:
