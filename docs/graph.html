@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      SportsDesk &amp; Fantasy402 — Phase 6C Surveillance Graph, Pending Bets
-      &amp; 39-Wallet Profile Registry
+      SportsDesk &amp; Fantasy402 — ac5824d Ingestion Data Plane (5 Bridges),
+      Phase 6C Surveillance Graph &amp; 39-Wallet Profile Registry
     </title>
     <meta
       name="description"
-      content="Real-time Cross-Market Surveillance Command Center Graph: Sub-500ms Polymarket CLOB WebSocket Shadow Stream, Pending Bets Explorer with Last Updated Telemetry, and 39 Tracked Syndicate Wallets with Direct Polymarket & Fantasy402 Customer Profile Links."
+      content="ac5824d ingestion data plane and Phase 6C surveillance command center: 5 Fantasy402/GSLive bridges (wagers-by-state, f402-bet-ticker, f402-pending, gslive-tally, f402-weblog Mode 6), Bun.cron bridge rollups on the America/Chicago desk clock, the same-origin guarded WebSocket hub on /api/live-bets, live-bets telemetry, and 39 tracked syndicate wallets with direct Polymarket & Fantasy402 profile links."
     />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#070b14" />
@@ -418,12 +418,55 @@
         background: #f59e0b;
         color: #070b14;
       }
+      /* ac5824d ingestion data plane (bridges → scheduler → gateway/edge) */
+      .data-plane-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 0.5rem;
+        background: rgba(7, 11, 20, 0.65);
+        border: 1px solid #1e293b;
+        margin-bottom: 0.85rem;
+      }
+      .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.65rem;
+      }
+      .filter-label {
+        font-size: 0.71rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
+      .filter-bar .filter-spacer {
+        flex: 1 1 auto;
+      }
+      .bridge-detail td {
+        background: rgba(6, 182, 212, 0.05);
+        font-size: 0.73rem;
+        color: var(--text-muted);
+      }
+      .kpi-card[data-source="bridge"] {
+        border-color: rgba(16, 185, 129, 0.35);
+      }
+      .kpi-card[data-source="repo"] {
+        border-color: rgba(56, 189, 248, 0.35);
+      }
+      .kpi-card .value.value-sm {
+        font-size: 1rem;
+      }
     </style>
   </head>
   <body>
     <header class="topbar" aria-label="SportsDesk Surveillance Navigation">
-      <strong>🕸️ PHASE 6C REAL-TIME SURVEILLANCE GRAPH</strong>
+      <strong
+        >🕸️ ac5824d INGESTION DATA PLANE + PHASE 6C SURVEILLANCE GRAPH</strong
+      >
       <span>•</span>
+      <span class="pill pill-emerald">5 bridges · 4 LIVE / 1 WIRED</span>
       <span class="pill pill-amber"
         >WSS: not ingested · 345ms fixture sample</span
       >
@@ -586,7 +629,10 @@
 
     <main>
       <!-- TOP KPI STRIP -->
-      <section class="kpi-strip" aria-label="Real-Time Telemetry KPIs">
+      <section
+        class="kpi-strip"
+        aria-label="ac5824d Data Plane and Verified Repo KPIs"
+      >
         <div class="kpi-card" data-source="polymarket">
           <div class="label">Tracked Polymarket Wallets</div>
           <div class="value" style="color: var(--accent-cyan)">
@@ -596,31 +642,56 @@
             Direct PM Profile &amp; F402 Customer Links
           </div>
         </div>
-        <div class="kpi-card" data-source="gslive">
-          <div class="label">Today's Matched Parlay Book</div>
+        <div class="kpi-card" data-source="bridge">
+          <div class="label">Bridge 1 · wagers-by-state</div>
           <div class="value" style="color: var(--accent-emerald)">
-            63 Tickets (138 Legs)
+            24,778 Legs · 22,611 Tix
           </div>
-          <div class="sub">$418,200 Matched Cross-Venue Volume</div>
+          <div class="sub">LIVE · deskDate 2026-11-03 · operator run</div>
         </div>
-        <div class="kpi-card" data-source="polymarket">
-          <div class="label">Off-Tracker Shadow Portfolio</div>
-          <div class="value" style="color: var(--accent-amber)">
-            84 Legs in 7 Clusters
+        <div class="kpi-card" data-source="bridge">
+          <div class="label">Bridge 3a · f402-bet-ticker</div>
+          <div class="value" style="color: var(--accent-cyan)">
+            836,848 Wagers
           </div>
-          <div class="sub">$284,500 Unseen PM Volume (6 Alpha / 1 Trap)</div>
+          <div class="sub">
+            115,660 in 7d window · 15s tail (Bun.JSONL.parseChunk)
+          </div>
         </div>
-        <div class="kpi-card" data-source="f402">
-          <div class="label">NBA Period (1Q–4Q) &amp; Alt Book</div>
-          <div class="value" style="color: #c084fc">$657,500 Combined</div>
-          <div class="sub">$509K 1H/2H/1Q–4Q + $148.5K GameNum+5000</div>
+        <div class="kpi-card" data-source="bridge">
+          <div class="label">Bridge 3b · f402-pending</div>
+          <div class="value value-sm" style="color: var(--accent-amber)">
+            WIRED · GATE-08
+          </div>
+          <div class="sub">
+            Ticket-Wager-totalPicks dedupe · GATE-08 needs --three-c-rollup
+          </div>
         </div>
-        <div class="kpi-card" data-source="f402">
-          <div class="label">180s Quarantine Auto-Resolver</div>
+        <div class="kpi-card" data-source="bridge">
+          <div class="label">Bridge 3c · gslive-tally</div>
           <div class="value" style="color: var(--accent-emerald)">
-            7 / 7 Resolved
+            24,778 Legs · 22,611 M.G
           </div>
-          <div class="sub">DEN/PHX Un-Quarantined @ T+112s</div>
+          <div class="sub">
+            LIVE · GATE-01..06 pass on committed fixture · --fetch-open
+          </div>
+        </div>
+        <div class="kpi-card" data-source="bridge">
+          <div class="label">Bridge WebLog · Mode 6</div>
+          <div class="value" style="color: #c084fc">523,632 Rows</div>
+          <div class="sub">
+            52,116 / 62,409 matched (83.5%) · 0/7 negative controls
+          </div>
+        </div>
+        <div class="kpi-card" data-source="repo">
+          <div class="label">Verified Repo Gates</div>
+          <div class="value" style="color: var(--accent-cyan)">
+            2,706 Tests · 0 Fail
+          </div>
+          <div class="sub">
+            773 files typechecked (ac5824d) · 56 daemon routes · 427 citations ·
+            9/9 verify:docs
+          </div>
         </div>
       </section>
 
@@ -692,6 +763,767 @@
       <!-- TAB 1: INTERACTIVE NODE-LINK GRAPH TOPOLOGY & CLUSTER SUMMARY      -->
       <!-- ================================================================== -->
       <div data-tab-panel="TAB_TOPOLOGY">
+        <!-- ============================================================== -->
+        <!-- TAB 1a: ac5824d INGESTION DATA PLANE — 5 BRIDGES → GATEWAY    -->
+        <!-- ============================================================== -->
+        <section
+          class="section-panel"
+          id="data-plane-panel"
+          aria-label="ac5824d Ingestion Data Plane"
+          style="margin-bottom: 1.25rem"
+        >
+          <div class="section-header">
+            <h2>
+              🛠️ ac5824d Ingestion Data Plane — 5 Bridges → Gateway / WS Hub →
+              Dashboard
+            </h2>
+            <span class="pill pill-emerald"
+              >ac5824d architecture · deployed 8522a04</span
+            >
+          </div>
+          <p
+            style="
+              margin: 0 0 0.75rem;
+              font-size: 0.78rem;
+              color: var(--text-muted);
+            "
+          >
+            Operational topology of the ingestion and distribution path. Counts
+            marked <strong>repo</strong> are re-measured by committed gates;
+            counts marked <strong>reported</strong> are the 2026-11-04 operator
+            run over the desk corpus (<code>out/f402/</code>,
+            <code>Scratch/</code>; gitignored) and cannot be reproduced from a
+            clean checkout. Node = one committed artifact or process; edge = one
+            measured write or stream path.
+          </p>
+          <svg
+            class="data-plane-svg"
+            viewBox="0 0 1280 430"
+            role="img"
+            aria-label="ac5824d ingestion data plane: Bridges 1, 3a, 3b, 3c and WebLog feed the Bun.cron rollup scheduler, which publishes to the R2 edge and the dashboard; the same-origin guarded WebSocket hub streams live bets to the dashboard"
+          >
+            <defs>
+              <linearGradient id="dpEdge" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.9" />
+                <stop offset="100%" stop-color="#22c55e" stop-opacity="0.55" />
+              </linearGradient>
+            </defs>
+
+            <g stroke="#1e293b" stroke-width="0.6" opacity="0.5">
+              <line x1="0" y1="110" x2="1280" y2="110" />
+              <line x1="0" y1="220" x2="1280" y2="220" />
+              <line x1="0" y1="330" x2="1280" y2="330" />
+              <line x1="350" y1="0" x2="350" y2="430" />
+              <line x1="650" y1="0" x2="650" y2="430" />
+              <line x1="980" y1="0" x2="980" y2="430" />
+            </g>
+
+            <g
+              fill="#475569"
+              font-size="10"
+              font-weight="700"
+              letter-spacing="1"
+            >
+              <text x="20" y="12">5 SOURCE BRIDGES</text>
+              <text x="390" y="12">SCHEDULER</text>
+              <text x="690" y="12">GATEWAY / EDGE</text>
+              <text x="1010" y="12">CONSUMERS</text>
+            </g>
+
+            <g stroke="url(#dpEdge)" stroke-width="2.2" fill="none">
+              <path d="M 320 49 C 350 49, 360 150, 390 165" />
+              <path d="M 320 121 C 350 121, 360 180, 390 190" />
+              <path d="M 320 193 C 350 193, 365 205, 390 215" />
+              <path d="M 320 265 C 350 265, 365 240, 390 235" />
+              <path d="M 320 337 C 350 337, 360 270, 390 255" />
+            </g>
+            <g stroke="url(#dpEdge)" stroke-width="2.6" fill="none">
+              <path d="M 640 175 C 665 175, 665 90, 690 90" />
+              <path d="M 640 245 C 665 245, 665 255, 690 255" />
+              <path d="M 960 90 C 985 90, 985 160, 1010 160" />
+              <path d="M 960 255 C 985 255, 985 260, 1010 260" />
+            </g>
+
+            <g transform="translate(20, 18)">
+              <rect
+                width="300"
+                height="62"
+                rx="7"
+                fill="#0f172a"
+                stroke="#38bdf8"
+                stroke-width="1.6"
+              />
+              <text
+                x="14"
+                y="19"
+                fill="#7dd3fc"
+                font-size="11.5"
+                font-weight="700"
+              >
+                BRIDGE 1 · wagers-by-state
+              </text>
+              <text x="14" y="36" fill="#e2e8f0" font-size="10">
+                24,778 legs / 22,611 tickets · deskDate 2026-11-03
+              </text>
+              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
+                ● LIVE · reported 2026-11-04
+              </text>
+            </g>
+            <g transform="translate(20, 90)">
+              <rect
+                width="300"
+                height="62"
+                rx="7"
+                fill="#0f172a"
+                stroke="#22c55e"
+                stroke-width="1.6"
+              />
+              <text
+                x="14"
+                y="19"
+                fill="#6ee7b7"
+                font-size="11.5"
+                font-weight="700"
+              >
+                BRIDGE 3a · f402-bet-ticker
+              </text>
+              <text x="14" y="36" fill="#e2e8f0" font-size="10">
+                836,848 archive · 115,660 in 7d window
+              </text>
+              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
+                ● LIVE · 15s tail via Bun.JSONL.parseChunk
+              </text>
+            </g>
+            <g transform="translate(20, 162)">
+              <rect
+                width="300"
+                height="62"
+                rx="7"
+                fill="#0f172a"
+                stroke="#f59e0b"
+                stroke-width="1.6"
+              />
+              <text
+                x="14"
+                y="19"
+                fill="#fcd34d"
+                font-size="11.5"
+                font-weight="700"
+              >
+                BRIDGE 3b · f402-pending
+              </text>
+              <text x="14" y="36" fill="#e2e8f0" font-size="10">
+                fetch + rollup · Ticket-Wager-totalPicks dedupe
+              </text>
+              <text x="14" y="51" fill="#fcd34d" font-size="9.5">
+                ◐ WIRED · GATE-08 skipped (no --three-c-rollup)
+              </text>
+            </g>
+            <g transform="translate(20, 234)">
+              <rect
+                width="300"
+                height="62"
+                rx="7"
+                fill="#0f172a"
+                stroke="#10b981"
+                stroke-width="1.6"
+              />
+              <text
+                x="14"
+                y="19"
+                fill="#6ee7b7"
+                font-size="11.5"
+                font-weight="700"
+              >
+                BRIDGE 3c · gslive-tally
+              </text>
+              <text x="14" y="36" fill="#e2e8f0" font-size="10">
+                24,778 legs / 22,611 M.G&lt;betGroupId&gt; tickets
+              </text>
+              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
+                ● LIVE · GATE-01..06 fixture pass · --fetch-open
+              </text>
+            </g>
+            <g transform="translate(20, 306)">
+              <rect
+                width="300"
+                height="62"
+                rx="7"
+                fill="#0f172a"
+                stroke="#a855f7"
+                stroke-width="1.6"
+              />
+              <text
+                x="14"
+                y="19"
+                fill="#e9d5ff"
+                font-size="11.5"
+                font-weight="700"
+              >
+                BRIDGE WL · f402-weblog (Mode 6)
+              </text>
+              <text x="14" y="36" fill="#e2e8f0" font-size="10">
+                523,632 rows · 52,116 / 62,409 matched (83.5%)
+              </text>
+              <text x="14" y="51" fill="#6ee7b7" font-size="9.5">
+                ● LIVE · GATE-WL-02/03 enforced · 0/7 negative controls
+              </text>
+            </g>
+
+            <g transform="translate(390, 150)">
+              <rect
+                width="250"
+                height="120"
+                rx="8"
+                fill="#132347"
+                stroke="#fbbf24"
+                stroke-width="1.8"
+              />
+              <text
+                x="14"
+                y="22"
+                fill="#fcd34d"
+                font-size="12"
+                font-weight="700"
+              >
+                Bun.cron · bridge_rollup_cron.ts
+              </text>
+              <text x="14" y="42" fill="#e2e8f0" font-size="10">
+                */15 → Bridge 3a · 3b · 3c
+              </text>
+              <text x="14" y="58" fill="#e2e8f0" font-size="10">
+                7 * * * * → WebLog rollup
+              </text>
+              <text x="14" y="74" fill="#94a3b8" font-size="9.5">
+                tz: America/Chicago (desk clock)
+              </text>
+              <text x="14" y="92" fill="#6ee7b7" font-size="9.5">
+                BRIDGE_ROLLUP_DIGEST · on-change only
+              </text>
+              <text x="14" y="108" fill="#94a3b8" font-size="9">
+                sequential · one bridge at a time
+              </text>
+            </g>
+
+            <g transform="translate(690, 40)">
+              <rect
+                width="270"
+                height="100"
+                rx="8"
+                fill="#2a0a18"
+                stroke="#f43f5e"
+                stroke-width="1.8"
+              />
+              <text
+                x="14"
+                y="22"
+                fill="#fda4af"
+                font-size="12"
+                font-weight="700"
+              >
+                WS HUB · /api/live-bets
+              </text>
+              <text x="14" y="42" fill="#e2e8f0" font-size="10">
+                same-origin guarded upgrade
+              </text>
+              <text x="14" y="58" fill="#e2e8f0" font-size="10">
+                Sec-WebSocket-Protocol: bearer-&lt;token&gt;
+              </text>
+              <text x="14" y="74" fill="#e2e8f0" font-size="10">
+                ws.subscriptions = subscription SSOT
+              </text>
+              <text x="14" y="90" fill="#94a3b8" font-size="9.5">
+                server.publish fan-out
+              </text>
+            </g>
+
+            <g transform="translate(690, 200)">
+              <rect
+                width="270"
+                height="110"
+                rx="8"
+                fill="#172554"
+                stroke="#38bdf8"
+                stroke-width="1.8"
+              />
+              <text
+                x="14"
+                y="22"
+                fill="#7dd3fc"
+                font-size="12"
+                font-weight="700"
+              >
+                R2 EDGE MIRROR
+              </text>
+              <text x="14" y="42" fill="#e2e8f0" font-size="10">
+                graph.html · graph.js
+              </text>
+              <text x="14" y="58" fill="#e2e8f0" font-size="10">
+                bridge rollup JSON + rich metadata
+              </text>
+              <text x="14" y="74" fill="#94a3b8" font-size="9.5">
+                publish_r2_graph.mjs · stat-checked writes
+              </text>
+              <text x="14" y="92" fill="#94a3b8" font-size="9.5">
+                public base: pub-d061...r2.dev
+              </text>
+            </g>
+
+            <g transform="translate(1010, 100)">
+              <rect
+                width="250"
+                height="240"
+                rx="8"
+                fill="#06281e"
+                stroke="#10b981"
+                stroke-width="2"
+              />
+              <text
+                x="16"
+                y="26"
+                fill="#6ee7b7"
+                font-size="12"
+                font-weight="700"
+              >
+                DASHBOARD
+              </text>
+              <text x="16" y="50" fill="#e2e8f0" font-size="10.5">
+                Bridge Review Queue
+              </text>
+              <text x="16" y="68" fill="#94a3b8" font-size="9.5">
+                standing OK / FAIL stays visible
+              </text>
+              <text x="16" y="92" fill="#e2e8f0" font-size="10.5">
+                Telegram digest
+              </text>
+              <text x="16" y="110" fill="#94a3b8" font-size="9.5">
+                only on gate / flag / job change
+              </text>
+              <text x="16" y="134" fill="#e2e8f0" font-size="10.5">
+                graph-live-feed.json
+              </text>
+              <text x="16" y="152" fill="#94a3b8" font-size="9.5">
+                polled every 15s · Poll #N
+              </text>
+              <text x="16" y="176" fill="#e2e8f0" font-size="10.5">
+                GSLive deep links
+              </text>
+              <text x="16" y="194" fill="#94a3b8" font-size="9.5">
+                desk-day window hydration
+              </text>
+              <text x="16" y="218" fill="#fcd34d" font-size="9.5">
+                Review Queue is the audit surface;
+              </text>
+              <text x="16" y="232" fill="#fcd34d" font-size="9.5">
+                silence is not evidence of success.
+              </text>
+            </g>
+
+            <text x="20" y="414" fill="#94a3b8" font-size="9.5">
+              Bridge counts: repo-verified where a committed census/citation
+              exists; otherwise the 2026-11-04 operator run. A failed bridge
+              never throws the cycle and never publishes a partial artifact.
+            </text>
+          </svg>
+
+          <div
+            class="filter-bar"
+            role="group"
+            aria-label="Bridge status filter"
+          >
+            <span class="filter-label">Bridge status</span>
+            <button type="button" class="btn active" data-bridge-filter="ALL">
+              All 5
+            </button>
+            <button type="button" class="btn" data-bridge-filter="LIVE">
+              LIVE
+            </button>
+            <button type="button" class="btn" data-bridge-filter="WIRED">
+              WIRED
+            </button>
+            <button
+              type="button"
+              class="btn"
+              id="bridge-evidence-toggle"
+              aria-expanded="false"
+              aria-controls="bridge-table-body"
+            >
+              Show evidence ▸
+            </button>
+            <span class="filter-spacer"></span>
+            <span class="pill pill-cyan" id="data-plane-sync-ts"
+              >edge sync: awaiting live feed</span
+            >
+          </div>
+
+          <div class="table-wrap">
+            <table aria-label="ac5824d source bridges">
+              <caption
+                style="
+                  caption-side: top;
+                  text-align: left;
+                  font-size: 0.72rem;
+                  color: var(--text-muted);
+                  padding-bottom: 0.4rem;
+                "
+              >
+                5 data bridges. Status is the bridge's own evidence state, not
+                the portal feed's
+                <code>dataMode</code
+                >.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Bridge</th>
+                  <th scope="col">Source / implementation</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Measured evidence</th>
+                  <th scope="col">Gates</th>
+                </tr>
+              </thead>
+              <tbody id="bridge-table-body">
+                <tr data-bridge-status="LIVE">
+                  <td>
+                    <strong>Bridge 1</strong><br /><code>wagers-by-state</code>
+                  </td>
+                  <td>
+                    <code>scripts/wagers_by_state_capture.ts</code><br /><code
+                      >lib/wagers_live_sink.ts</code
+                    >
+                  </td>
+                  <td><span class="pill pill-emerald">LIVE</span></td>
+                  <td>
+                    deskDate <strong>2026-11-03</strong> ·
+                    <strong>24,778</strong> legs / <strong>22,611</strong>
+                    tickets
+                  </td>
+                  <td>capture freshness · never-discard artifact</td>
+                </tr>
+                <tr class="bridge-detail" hidden>
+                  <td colspan="5">
+                    <strong>Reported 2026-11-04</strong> (operator run over the
+                    desk corpus; not reproducible from a clean checkout). The
+                    24,778 / 22,611 aggregate is the same GSLive capture as the
+                    committed 3c census; Bridge 1's own operator artifact is not
+                    committed. Runbook:
+                    <code>docs/runbooks/wagers-by-state.md</code>. The capture
+                    is fail-closed: a missing fixture aborts with no partial
+                    write.
+                  </td>
+                </tr>
+
+                <tr data-bridge-status="LIVE">
+                  <td>
+                    <strong>Bridge 3a</strong><br /><code>f402-bet-ticker</code>
+                  </td>
+                  <td>
+                    <code>scripts/f402_bet_ticker_bridge3a.ts</code><br /><code
+                      >lib/f402_bet_ticker_jsonl.ts</code
+                    >
+                  </td>
+                  <td><span class="pill pill-emerald">LIVE</span></td>
+                  <td>
+                    <strong>836,848</strong> archive wagers ·
+                    <strong>115,660</strong> in the 7-day window · 15s tail via
+                    <code>Bun.JSONL.parseChunk</code>
+                  </td>
+                  <td>15s locked poll interval</td>
+                </tr>
+                <tr class="bridge-detail" hidden>
+                  <td colspan="5">
+                    Archive and 7-day counts are the
+                    <strong>reported 2026-11-04</strong> operator run. The
+                    15_000 ms default interval and the byte-offset JSONL tail
+                    are repo-verified in
+                    <code>scripts/f402_bet_ticker_bridge3a.ts</code> and
+                    <code>lib/f402_bet_ticker_jsonl.ts</code>.
+                  </td>
+                </tr>
+
+                <tr data-bridge-status="WIRED">
+                  <td>
+                    <strong>Bridge 3b</strong><br /><code>f402-pending</code>
+                  </td>
+                  <td>
+                    <code>lib/f402_pending_fetch.ts</code><br /><code
+                      >lib/f402_pending_rollup.ts</code
+                    >
+                  </td>
+                  <td><span class="pill pill-amber">WIRED</span></td>
+                  <td>
+                    dedupe key
+                    <code>${TicketNumber}-${WagerNumber}-${totalPicks}</code> ·
+                    GATE-08 needs an explicit 3c rollup
+                  </td>
+                  <td>GATE-08 requires <code>--three-c-rollup</code></td>
+                </tr>
+                <tr class="bridge-detail" hidden>
+                  <td colspan="5">
+                    Wired means the fetch + rollup path and its dedupe key are
+                    implemented and scheduled; the graph does not claim a LIVE
+                    row count for 3b. GATE-08 is <strong>not</strong>
+                    auto-discovery: it needs an explicit
+                    <code>--three-c-rollup &lt;path&gt;</code>, and the cron job
+                    does not pass one, so GATE-08 is recorded as
+                    <code>skipped</code> on every scheduled tick. Pass the 3c
+                    rollup to exercise the cross-system identity gate.
+                  </td>
+                </tr>
+
+                <tr data-bridge-status="LIVE">
+                  <td>
+                    <strong>Bridge 3c</strong><br /><code>gslive-tally</code>
+                  </td>
+                  <td>
+                    <code>lib/gslive_tally_rollup.ts</code><br /><code
+                      >lib/gslive_tally_sink.ts</code
+                    >
+                  </td>
+                  <td><span class="pill pill-emerald">LIVE</span></td>
+                  <td>
+                    <strong>24,778</strong> legs / <strong>22,611</strong>
+                    <code>M.G&lt;betGroupId&gt;</code> tickets ·
+                    <code>--fetch-open</code> wired
+                  </td>
+                  <td>
+                    <span class="pill pill-emerald">GATE-01..06 (fixture)</span>
+                  </td>
+                </tr>
+                <tr class="bridge-detail" hidden>
+                  <td colspan="5">
+                    Repo-verified: row and ticket cardinalities match
+                    <code>docs/design/census/2026-11-04.json</code> (24,778
+                    rows; C_max 22,611 tickets / 22,611 groups). GATE-01..06
+                    pass on the committed synthetic fixture
+                    (<code>tests/gslive_tally_rollup.test.ts</code>); the
+                    24,778-row capture has no committed gate artifact.
+                    <code>--fetch-open</code> is wired into the scheduled
+                    rollup, and dedupe is on the numeric group key, never a
+                    login hash.
+                  </td>
+                </tr>
+
+                <tr data-bridge-status="LIVE">
+                  <td>
+                    <strong>Bridge WebLog</strong><br /><code
+                      >f402-weblog · Mode 6</code
+                    >
+                  </td>
+                  <td>
+                    <code>lib/f402_weblog.ts</code><br /><code
+                      >lib/f402_weblog_fetch.ts</code
+                    >
+                    (Modes A/B/C/I)
+                  </td>
+                  <td><span class="pill pill-emerald">LIVE</span></td>
+                  <td>
+                    <strong>523,632</strong> rows · <strong>52,116</strong> /
+                    <strong>62,409</strong> matched wagers (83.5%) ·
+                    <strong>3,462</strong> executionSnipers ·
+                    <strong>98</strong> sniperTwins ·
+                    <strong>1,069</strong> crossOfficeBeards ·
+                    <strong>144</strong> botRingAccounts ·
+                    <strong>0 / 7</strong> negative-control false positives
+                  </td>
+                  <td>
+                    <span class="pill pill-emerald"
+                      >GATE-WL-02/03 enforced</span
+                    >
+                  </td>
+                </tr>
+                <tr class="bridge-detail" hidden>
+                  <td colspan="5">
+                    523,632 rows is the row/grammar-conservation constant
+                    recorded in
+                    <code>docs/bun-upstream-reference.md</code> and asserted by
+                    GATE-WL-01. The match ratio and flag populations are the
+                    <strong>reported 2026-11-04</strong> operator run. Gate
+                    reality as shipped: GATE-WL-02 (causal wager conservation)
+                    and GATE-WL-03 (negative/positive controls) are real checks;
+                    GATE-WL-01's status expression returns
+                    <code>"pass"</code> on both branches and GATE-WL-04 is a
+                    constant <code>"pass"</code>, so those two cannot fail. 0/7
+                    negative-control false positives is the measured WL-03
+                    control result. Modes A/B/C/I and IPv4 + IPv6 /64
+                    classification are repo-verified.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-wrap" style="margin-top: 0.9rem">
+            <table aria-label="Gateway, WebSocket hub and scheduler">
+              <caption
+                style="
+                  caption-side: top;
+                  text-align: left;
+                  font-size: 0.72rem;
+                  color: var(--text-muted);
+                  padding-bottom: 0.4rem;
+                "
+              >
+                Gateway, WebSocket hub &amp; scheduler nodes.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Node</th>
+                  <th scope="col">Implementation</th>
+                  <th scope="col">Verified behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>WS hub</strong></td>
+                  <td><code>services/sportsdesk_webview_server.ts</code></td>
+                  <td>
+                    Same-origin guarded WebSocket upgrade on
+                    <code>/api/live-bets</code>; token travels as
+                    <code>Sec-WebSocket-Protocol: bearer-&lt;token&gt;</code>;
+                    <code>ws.subscriptions</code> is the subscription SSOT;
+                    fan-out via <code>server.publish</code>. Because the upgrade
+                    reuses an already guarded path, no new unauthenticated route
+                    is introduced.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Cron scheduler</strong></td>
+                  <td>
+                    <code>lib/bridge_rollup_cron.ts</code><br /><code
+                      >services/reporting_scheduler_service.ts</code
+                    >
+                  </td>
+                  <td>
+                    <code>*/15</code> runs Bridge 3a, 3b and 3c;
+                    <code>7 * * * *</code> runs the hourly WebLog rollup; both
+                    in <code>America/Chicago</code>. Sequential by design so two
+                    bridges never drive the same capture at once; overlapping
+                    ticks are skipped and a single failing bridge never throws
+                    the cycle.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Telegram digest</strong></td>
+                  <td><code>BRIDGE_ROLLUP_DIGEST</code></td>
+                  <td>
+                    On-change only: a gate that newly fails is critical, a flag
+                    crossing its threshold is warn, a job flipping to/from
+                    failure is critical/info. The first cycle establishes the
+                    baseline and unchanged runs send nothing, so a standing
+                    failure does not page every 15 minutes.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Dashboard Review Queue</strong></td>
+                  <td>
+                    <code>static/customer-churn-simulation-dashboard.html</code>
+                  </td>
+                  <td>
+                    Renders the current OK/FAIL state of each bridge even when
+                    the digest is suppressed — the audit surface behind the
+                    silence. Manual "Dispatch digest" replays the last recorded
+                    state instead of spawning the CLIs inside the HTTP request.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>R2 edge mirror</strong></td>
+                  <td><code>scripts/publish_r2_graph.mjs</code></td>
+                  <td>
+                    Publishes <code>graph.html</code>, <code>graph.js</code>,
+                    the live feed and the rollup JSON with presigned metadata;
+                    each write is stat-checked against the byte length before
+                    the edge is declared current.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-wrap" style="margin-top: 0.9rem">
+            <table aria-label="Verified repo metrics">
+              <caption
+                style="
+                  caption-side: top;
+                  text-align: left;
+                  font-size: 0.72rem;
+                  color: var(--text-muted);
+                  padding-bottom: 0.4rem;
+                "
+              >
+                Current verified repo metrics. Suite and typecheck counts are
+                the ac5824d verification record (2026-11-04); route, citation
+                and docs-gate counts were re-run on the deployed descendant HEAD
+                8522a04 and are unchanged.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Gate</th>
+                  <th scope="col">Measured value</th>
+                  <th scope="col">Command / source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Test suite</td>
+                  <td>
+                    <strong>2,706</strong> tests · <strong>0</strong> fail
+                  </td>
+                  <td><code>bun test</code> (bare, ac5824d record)</td>
+                </tr>
+                <tr>
+                  <td>Typecheck</td>
+                  <td>
+                    <strong>773</strong> files · 0 errors <br /><span
+                      style="color: #94a3b8"
+                      >781 at HEAD 8522a04 (8 .ts files added)</span
+                    >
+                  </td>
+                  <td><code>bun run typecheck</code></td>
+                </tr>
+                <tr>
+                  <td>Daemon route surface</td>
+                  <td><strong>56</strong> routes</td>
+                  <td>
+                    <code>lib/daemon_routes.ts</code> ·
+                    <code>bun run check:route-surface</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Docs citations</td>
+                  <td>
+                    <strong>427</strong> citations /
+                    <strong>112</strong> anchors
+                  </td>
+                  <td><code>bun run check:spec-citations</code></td>
+                </tr>
+                <tr>
+                  <td>Docs gate</td>
+                  <td><strong>9 / 9</strong> checks pass</td>
+                  <td><code>bun run verify:docs</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p
+            style="
+              margin: 0.6rem 0 0;
+              font-size: 0.72rem;
+              color: var(--text-muted);
+            "
+          >
+            Evidence notes: bare <code>bun test</code> covers
+            <code>tests/</code> plus the colocated tests and is the count the
+            ac5824d commit recorded; the CI gate is
+            <code>bun test tests/</code> (2,026 tests at ac5824d). The deployed
+            HEAD 8522a04 adds 8 <code>.ts</code> files, so
+            <code>bun run typecheck</code> reports 781 files there. Bridge gate
+            labels above state what each gate actually enforces as shipped:
+            GATE-08 is skipped unless <code>--three-c-rollup</code> is passed,
+            and WebLog GATE-WL-01/GATE-WL-04 are constant-pass while GATE-WL-02
+            and GATE-WL-03 are real checks.
+          </p>
+        </section>
+
         <section
           class="graph-container"
           aria-label="Interactive Node-Link Surveillance Graph"

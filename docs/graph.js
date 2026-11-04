@@ -1,10 +1,12 @@
 /**
  * @file graph.js
- * @description Interactive controller for the SportsDesk & Fantasy402 Phase 6C
- * Surveillance Graph, Pending Bets Tab, 39-Wallet Polymarket & Customer Profile Registry,
- * 4-Week Full-Customer CFB & NBA Parlay/Combo Backtest Tab,
+ * @description Interactive controller for the SportsDesk & Fantasy402 ac5824d
+ * ingestion data plane (5 bridges → Bun.cron scheduler → WS hub / R2 edge),
+ * Phase 6C Surveillance Graph, Pending Bets Tab, 39-Wallet Polymarket & Customer
+ * Profile Registry, 4-Week Full-Customer CFB & NBA Parlay/Combo Backtest Tab,
  * and Live Auto-Poller (`./graph-live-feed.json` / `/api/graph-feed`).
- * Externalized to comply with strict Cloudflare Pages CSP (`script-src 'self'`).
+ * Externalized to comply with strict Cloudflare Pages CSP (`script-src 'self'`);
+ * this file is the only controller and the page carries no inline script.
  */
 
 import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
@@ -280,6 +282,78 @@ import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
       });
     });
   });
+
+  // 7e. ac5824d data plane: bridge status filter + gate-evidence toggle.
+  // The bridge rows are static in the HTML because their evidence is an
+  // operator-run artifact, not something the 15s feed carries; the feed only
+  // stamps the edge-sync time so a stale page is visible.
+  const bridgeFilterBtns = document.querySelectorAll("[data-bridge-filter]");
+  const bridgeRows = document.querySelectorAll(
+    "#bridge-table-body tr[data-bridge-status]",
+  );
+  const bridgeDetails = document.querySelectorAll(
+    "#bridge-table-body .bridge-detail",
+  );
+  const bridgeEvidenceToggle = document.getElementById(
+    "bridge-evidence-toggle",
+  );
+  const dataPlaneSyncEl = document.getElementById("data-plane-sync-ts");
+  let activeBridgeFilter = "ALL";
+  let bridgeEvidenceVisible = false;
+
+  function applyBridgeEvidence() {
+    bridgeDetails.forEach(function (row) {
+      if (bridgeEvidenceVisible) row.removeAttribute("hidden");
+      else row.setAttribute("hidden", "");
+    });
+    if (bridgeEvidenceToggle) {
+      bridgeEvidenceToggle.setAttribute(
+        "aria-expanded",
+        bridgeEvidenceVisible ? "true" : "false",
+      );
+      bridgeEvidenceToggle.textContent = bridgeEvidenceVisible
+        ? "Hide evidence ▾"
+        : "Show evidence ▸";
+    }
+  }
+
+  function filterBridgeRows() {
+    bridgeRows.forEach(function (row) {
+      const status = row.getAttribute("data-bridge-status") || "";
+      const visible =
+        activeBridgeFilter === "ALL" || status === activeBridgeFilter;
+      row.style.display = visible ? "" : "none";
+
+      const detail = row.nextElementSibling;
+      if (
+        detail &&
+        detail.classList &&
+        detail.classList.contains("bridge-detail")
+      ) {
+        if (visible && bridgeEvidenceVisible) detail.removeAttribute("hidden");
+        else detail.setAttribute("hidden", "");
+      }
+    });
+  }
+
+  bridgeFilterBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      activeBridgeFilter = btn.getAttribute("data-bridge-filter") || "ALL";
+      bridgeFilterBtns.forEach(function (b) {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+      filterBridgeRows();
+    });
+  });
+
+  if (bridgeEvidenceToggle) {
+    bridgeEvidenceToggle.addEventListener("click", function () {
+      bridgeEvidenceVisible = !bridgeEvidenceVisible;
+      applyBridgeEvidence();
+      filterBridgeRows();
+    });
+  }
 
   // 8. Live Poller Sync (`./graph-live-feed.json` / `/api/graph-feed`) + Relative Age Counter
   const lastUpdatedEl = document.getElementById("live-last-updated-ts");
@@ -595,6 +669,9 @@ import { buildWalletStats, planGsLiveLinks } from "./gslive-links.js";
         cellSyncStamps.forEach(function (el) {
           el.textContent = data.lastUpdatedCdt;
         });
+        if (dataPlaneSyncEl) {
+          dataPlaneSyncEl.textContent = "edge sync: " + data.lastUpdatedCdt;
+        }
         hydrateGsLiveLinks(data);
         hydrateWalletRows(data);
         hydrateLiveTicks(data);
