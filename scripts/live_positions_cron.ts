@@ -55,6 +55,14 @@ import {
   type LiveWager,
 } from "../lib/live_wagers.ts";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
+import {
+  loadDodCustomerLifetimeMap,
+  normalizeCanonicalCustomer,
+  readDod6SpineHeader,
+  type DodCustomerLifetimeMeta,
+} from "../lib/dod6_spine_overlay.ts";
+
+export type { DodCustomerLifetimeMeta };
 
 export const OS_CRON_TITLE = "sportsdesk-live-positions-10m";
 export const DEFAULT_SCHEDULE = "*/10 * * * *";
@@ -123,16 +131,6 @@ export interface LivePositionsWatermark {
   readonly cumulativeToWinCents: number;
   readonly cumulativeVolumeCents: number;
   readonly seenCompositeKeysCount: number;
-}
-
-export interface DodCustomerLifetimeMeta {
-  readonly canonicalCustomer: string;
-  readonly lifetimeBets: number;
-  readonly lifetimeStakedCents: number;
-  readonly settledStakedCents: number;
-  readonly settledNetCents: number;
-  readonly clvLegs: number;
-  readonly avgClvPoints: number;
 }
 
 export interface BucketRollup {
@@ -245,14 +243,6 @@ export interface LivePositionsPulseSummary {
   };
 }
 
-function normalizeCanonicalCustomer(raw: string): string {
-  const s = raw.trim().toUpperCase();
-  if (!s) return "";
-  const noTrailingDots = s.replace(/\.+$/, "");
-  const match = /^([A-Z0-9]+?)_[0-9]+$/.exec(noTrailingDots);
-  return match ? match[1]! : noTrailingDots;
-}
-
 function formatUsdFromCents(cents: number, signed = false): string {
   const abs = Math.abs(cents) / 100;
   const formatted = abs.toLocaleString("en-US", {
@@ -278,82 +268,16 @@ function parseEtInsertTimestampMs(insertDateTime: string): number | null {
 function readDodSpineHeader(
   path: string,
 ): LivePositionsPulseSummary["dodSpine"] {
-  if (!existsSync(path)) return null;
-  const fd = openSync(path, "r");
-  try {
-    const buf = new Uint8Array(64);
-    const bytesRead = readSync(fd, buf, 0, 64, 0);
-    if (bytesRead < 64) return null;
-    const magic = new TextDecoder().decode(buf.subarray(0, 4));
-    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    return {
-      path: "data/sportsdesk_unified_baseline_v54.dodbin",
-      magic,
-      version: dv.getUint32(4, true),
-      sectionCount: dv.getUint32(36, true),
-      customerCount: dv.getUint32(8, true),
-      asOfEpochDays: dv.getUint32(28, true),
-    };
-  } finally {
-    closeSync(fd);
-  }
-}
-
-async function loadDodCustomerLifetimeMap(
-  csvPath: string,
-): Promise<ReadonlyMap<string, DodCustomerLifetimeMeta>> {
-  const map = new Map<string, DodCustomerLifetimeMeta>();
-  if (!existsSync(csvPath)) return map;
-  const text = await Bun.file(csvPath).text();
-  const lines = text.split("\n");
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i]?.trim();
-    if (!line) continue;
-    const cols = line.split(",");
-    if (cols.length < 12) continue;
-    const rawLogin = cols[0] ?? "";
-    const canonical = normalizeCanonicalCustomer(rawLogin);
-    if (!canonical) continue;
-    const lifetimeBets = Number(cols[1]) || 0;
-    const lifetimeStakedCents = Math.round((Number(cols[2]) || 0) * 100);
-    const settledNetCents = Math.round((Number(cols[8]) || 0) * 100);
-    const clvLegs = Number(cols[10]) || 0;
-    const avgClvPoints = Number(cols[11]) || 0;
-    const settledStakedCents =
-      cols.length >= 13 && cols[12]?.trim() !== ""
-        ? Math.round((Number(cols[12]) || 0) * 100)
-        : lifetimeStakedCents;
-
-    const prev = map.get(canonical);
-    if (!prev) {
-      map.set(canonical, {
-        canonicalCustomer: canonical,
-        lifetimeBets,
-        lifetimeStakedCents,
-        settledStakedCents,
-        settledNetCents,
-        clvLegs,
-        avgClvPoints,
-      });
-    } else {
-      const totalClvLegs = prev.clvLegs + clvLegs;
-      const mergedClv =
-        totalClvLegs > 0
-          ? (prev.clvLegs * prev.avgClvPoints + clvLegs * avgClvPoints) /
-            totalClvLegs
-          : 0;
-      map.set(canonical, {
-        canonicalCustomer: canonical,
-        lifetimeBets: prev.lifetimeBets + lifetimeBets,
-        lifetimeStakedCents: prev.lifetimeStakedCents + lifetimeStakedCents,
-        settledStakedCents: prev.settledStakedCents + settledStakedCents,
-        settledNetCents: prev.settledNetCents + settledNetCents,
-        clvLegs: totalClvLegs,
-        avgClvPoints: Number(mergedClv.toFixed(2)),
-      });
-    }
-  }
-  return map;
+  const header = readDod6SpineHeader(path);
+  if (header === null) return null;
+  return {
+    path: header.path,
+    magic: header.magic,
+    version: header.version,
+    sectionCount: header.sectionCount,
+    customerCount: header.customerCount,
+    asOfEpochDays: header.asOfEpochDays,
+  };
 }
 
 function readTailLines(filePath: string, maxBytes = 6 * 1024 * 1024): string[] {

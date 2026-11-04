@@ -1,12 +1,15 @@
 /**
  * Cross-layer diagnostics for weight-tier stream signals (DOD6 columnar + Section 11 + ticker).
  *
- * This module does not call network or read the binary `.dodbin` spine; it derives bounded,
- * replay-safe signals from bet-ticker rows and an optional customer-book JSON overlay.
+ * Replay-safe cross-layer signals from bet-ticker rows plus optional DOD6/GSLive overlays.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import type { Dod6LifetimeLookup } from "./dod6_spine_overlay.ts";
+import type { GsliveSteamHit } from "./gslive_steam_index.ts";
+import { circuitScoreFromMechanisms } from "./weight_tier_circuit_score.ts";
+import type { CircuitScoreBreakdown } from "./weight_tier_circuit_score.ts";
 import type { F402TickerRow } from "./f402_ingest.ts";
 import { parseShortDesc } from "./live_wagers.ts";
 function normalizeCustomerLogin(value: string): string {
@@ -53,9 +56,24 @@ export interface StreamSignalDiagnostics {
     readonly clvBps: number | null;
     readonly sharpScore: number | null;
     readonly lifetimeNetUsd: number | null;
+    readonly clvLegs: number | null;
+    readonly avgClvPoints: number | null;
+    readonly sharpCandidateGatePassed: boolean | null;
+    readonly dod6Source: string | null;
+  } | null;
+  readonly dod6SpineHeader: {
+    readonly customerCount: number;
+    readonly sectionCount: number;
+    readonly asOfEpochDays: number;
+  } | null;
+  readonly gsliveSteam: {
+    readonly timeUntilScoreSec: number;
+    readonly word0SteamMask: number;
+    readonly partnerUserId: string | null;
   } | null;
   readonly slaBudgetMs: { readonly alert: 250; readonly gsLive: 500 };
   readonly routingTag: string | null;
+  readonly section11Circuit: CircuitScoreBreakdown | null;
 }
 
 export interface Dod6CustomerBookOverlay {
@@ -200,24 +218,40 @@ function inferMechanisms(
   twins: readonly PickShapeTwinHit[],
   scout: ScoutPrecursorHit | null,
   steamPriority: "instant" | "normal",
-  dod6: Dod6CustomerBookOverlay | null,
+  gsliveSteam: GsliveSteamHit | null,
+  lifetime: Dod6LifetimeLookup | null,
 ): WeightMechanismHit[] {
   const hits: WeightMechanismHit[] = [];
   const login = normalizeCustomerLogin(row.login);
-  const overlay = dod6?.lookup(login) ?? null;
 
-  if (overlay !== null && overlay.clvBps !== null) {
+  if (lifetime !== null) {
+    const clvSignal =
+      lifetime.clvBps !== null
+        ? `clv_bps=${lifetime.clvBps}`
+        : lifetime.avgClvPoints !== null
+          ? `clv_pts=${lifetime.avgClvPoints}`
+          : `clv_legs=${lifetime.clvLegs}`;
     hits.push({
       id: "sentinel_clv_market_split",
       layer: "Word1_clvDeltaBps16 / 02_LIFETIME_SOA",
-      signal: `book_clv_bps=${overlay.clvBps}`,
-      confidenceHundredths: Math.min(100, Math.max(30, Math.abs(overlay.clvBps))),
+      signal: lifetime.sharpCandidateGatePassed
+        ? `${clvSignal};gate>=${3}_legs`
+        : `${clvSignal};gate_failed`,
+      confidenceHundredths: lifetime.sharpCandidateGatePassed
+        ? Math.min(
+            100,
+            Math.max(
+              40,
+              Math.abs(lifetime.clvBps ?? Math.round((lifetime.avgClvPoints ?? 0) * 100)),
+            ),
+          )
+        : 35,
     });
   } else {
     hits.push({
       id: "sentinel_clv_market_split",
       layer: "Word1_clvDeltaBps16 / 02_LIFETIME_SOA",
-      signal: "tier_login_watchlist (no book overlay)",
+      signal: "tier_login_watchlist (no DOD6 overlay)",
       confidenceHundredths: 55,
     });
   }
@@ -235,7 +269,14 @@ function inferMechanisms(
     });
   }
 
-  if (steamPriority === "instant") {
+  if (gsliveSteam !== null && gsliveSteam.flags.word0SteamMask !== 0) {
+    hits.push({
+      id: "bitwise_score_proximity_steam",
+      layer: "Word0_0x00006E00 / Word2_tusByte / L22.N1402",
+      signal: `tus=${gsliveSteam.entry.timeUntilScoreSec}s;mask=0x${gsliveSteam.flags.word0SteamMask.toString(16)}`,
+      confidenceHundredths: gsliveSteam.flags.within5s ? 95 : 88,
+    });
+  } else if (steamPriority === "instant") {
     hits.push({
       id: "bitwise_score_proximity_steam",
       layer: "Word0_0x00006E00 / Word2_tusByte / L22.N1402",
@@ -263,6 +304,20 @@ function inferMechanisms(
   return hits;
 }
 
+function bookRowToLifetime(
+  row: NonNullable<ReturnType<Dod6CustomerBookOverlay["lookup"]>>,
+): Dod6LifetimeLookup {
+  return {
+    clvBps: row.clvBps,
+    sharpScore: row.sharpScore,
+    lifetimeNetUsd: row.lifetimeNetUsd,
+    clvLegs: 0,
+    avgClvPoints: row.clvBps !== null ? row.clvBps / 100 : null,
+    sharpCandidateGatePassed: false,
+    source: "json_book",
+  };
+}
+
 export function buildStreamSignalDiagnostics(
   row: F402TickerRow,
   options: {
@@ -270,6 +325,9 @@ export function buildStreamSignalDiagnostics(
     readonly pickShapeTwins?: readonly PickShapeTwinHit[];
     readonly scoutPrecursor?: ScoutPrecursorHit | null;
     readonly dod6Book?: Dod6CustomerBookOverlay | null;
+    readonly dod6Lifetime?: Dod6LifetimeLookup | null;
+    readonly dod6SpineHeader?: StreamSignalDiagnostics["dod6SpineHeader"];
+    readonly gsliveSteam?: GsliveSteamHit | null;
     readonly routingTag?: string | null;
   },
 ): StreamSignalDiagnostics {
@@ -278,14 +336,44 @@ export function buildStreamSignalDiagnostics(
   const gsliveChannel = writer === "GSLIVE" || writer === "GSBUILDER";
   const alertTwinChannel = writer === "ALERT";
   const liveLeg = parsed.isLive || parsed.legs.some((leg) => leg.live);
+  const gsliveSteam = options.gsliveSteam ?? null;
   const steamPriority: "instant" | "normal" =
-    (gsliveChannel && liveLeg) || alertTwinChannel ? "instant" : "normal";
+    (gsliveSteam !== null && gsliveSteam.flags.word0SteamMask !== 0) ||
+    (gsliveChannel && liveLeg) ||
+    alertTwinChannel
+      ? "instant"
+      : "normal";
 
   const pickShapeSha256 = pickShapeSha256FromShortDesc(row.shortDesc);
   const rotationKey = rotationKeyFromTickerShortDesc(row.shortDesc);
   const pickShapeTwins = options.pickShapeTwins ?? [];
   const scoutPrecursor = options.scoutPrecursor ?? null;
-  const dod6Overlay = options.dod6Book?.lookup(row.login) ?? null;
+  const bookRow = options.dod6Book?.lookup(row.login) ?? null;
+  const lifetime =
+    options.dod6Lifetime ??
+    (bookRow !== null ? bookRowToLifetime(bookRow) : null);
+
+  const dod6Overlay =
+    lifetime === null
+      ? null
+      : {
+          clvBps: lifetime.clvBps,
+          sharpScore: lifetime.sharpScore,
+          lifetimeNetUsd: lifetime.lifetimeNetUsd,
+          clvLegs: lifetime.clvLegs,
+          avgClvPoints: lifetime.avgClvPoints,
+          sharpCandidateGatePassed: lifetime.sharpCandidateGatePassed,
+          dod6Source: lifetime.source,
+        };
+
+  const mechanisms = inferMechanisms(
+    row,
+    pickShapeTwins,
+    scoutPrecursor,
+    steamPriority,
+    gsliveSteam,
+    lifetime,
+  );
 
   return {
     rotationKey,
@@ -298,14 +386,18 @@ export function buildStreamSignalDiagnostics(
       alertTwinChannel,
       steamPriority,
     },
-    mechanisms: inferMechanisms(
-      row,
-      pickShapeTwins,
-      scoutPrecursor,
-      steamPriority,
-      options.dod6Book ?? null,
-    ),
+    mechanisms,
+    section11Circuit: circuitScoreFromMechanisms(mechanisms),
     dod6Overlay,
+    dod6SpineHeader: options.dod6SpineHeader ?? null,
+    gsliveSteam:
+      gsliveSteam === null
+        ? null
+        : {
+            timeUntilScoreSec: gsliveSteam.entry.timeUntilScoreSec,
+            word0SteamMask: gsliveSteam.flags.word0SteamMask,
+            partnerUserId: gsliveSteam.entry.partnerUserId,
+          },
     slaBudgetMs: { alert: 250, gsLive: 500 },
     routingTag: options.routingTag ?? null,
   };
@@ -352,7 +444,17 @@ export function explainDiagnostics(diagnostics: StreamSignalDiagnostics): string
   }
   if (diagnostics.dod6Overlay !== null) {
     lines.push(
-      `dod6 clv_bps=${diagnostics.dod6Overlay.clvBps ?? "—"} sharp=${diagnostics.dod6Overlay.sharpScore ?? "—"}`,
+      `dod6 clv_bps=${diagnostics.dod6Overlay.clvBps ?? "—"} legs=${diagnostics.dod6Overlay.clvLegs ?? "—"} gate=${diagnostics.dod6Overlay.sharpCandidateGatePassed ?? "—"}`,
+    );
+  }
+  if (diagnostics.gsliveSteam !== null) {
+    lines.push(
+      `gslive tus=${diagnostics.gsliveSteam.timeUntilScoreSec}s mask=0x${diagnostics.gsliveSteam.word0SteamMask.toString(16)}`,
+    );
+  }
+  if (diagnostics.section11Circuit !== null) {
+    lines.push(
+      `circuit_score=${diagnostics.section11Circuit.scoreHundredths} (ind=${diagnostics.section11Circuit.inductionHundredths} steam=${diagnostics.section11Circuit.steamHundredths} clv=${diagnostics.section11Circuit.clvHundredths})`,
     );
   }
   lines.push(
