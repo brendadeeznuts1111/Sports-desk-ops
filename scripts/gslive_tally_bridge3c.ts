@@ -15,6 +15,8 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 
 import { buildGsliveTallyRollup } from "../lib/gslive_tally_rollup.ts";
+import { requireManagerSession } from "./fetch-bet-tally.ts";
+import { fetchBetReportRows } from "./fetch-bet-tally.ts";
 import { publishGsliveTallyRollup } from "../lib/gslive_tally_sink.ts";
 
 const { values } = parseArgs({
@@ -24,6 +26,10 @@ const { values } = parseArgs({
     "desk-date": { type: "string" },
     "chunk-bytes": { type: "string" },
     out: { type: "string" },
+    "fetch-open": { type: "boolean", default: false },
+    "open-from": { type: "string" },
+    "open-to": { type: "string" },
+    "save-capture": { type: "string" },
     "dry-run": { type: "boolean", default: false },
     "no-r2": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
@@ -32,9 +38,56 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--out path] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--dry-run] [--no-r2]",
+    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--fetch-open] [--open-from epoch] [--open-to epoch] [--save-capture path] [--out path] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--dry-run] [--no-r2]",
   );
   process.exit(0);
+}
+
+function isOpenState(value: unknown): boolean {
+  const state = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    state === "" || state === "0" || state === "open" || state === "pending"
+  );
+}
+
+async function fetchOpenCapture(path: string): Promise<void> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const from =
+    values["open-from"] === undefined
+      ? nowSec - 604_800
+      : Number(values["open-from"]);
+  const to =
+    values["open-to"] === undefined ? nowSec : Number(values["open-to"]);
+  if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from >= to) {
+    throw new Error(
+      "--open-from/--open-to must be epoch seconds with from < to",
+    );
+  }
+  const session = await requireManagerSession();
+  const rows = await fetchBetReportRows({
+    fromEpochSec: from,
+    toEpochSec: to,
+    cookieHeader: session.cookieHeader,
+    sessionGate: (Bun.env.GS_SESSION ?? "").trim(),
+  });
+  const open = rows.filter((row) =>
+    row !== null && typeof row === "object" && "state" in row
+      ? isOpenState((row as { state?: unknown }).state)
+      : false,
+  );
+  mkdirSync(dirname(path), { recursive: true });
+  const temp = `${path}.tmp-${process.pid}`;
+  writeFileSync(
+    temp,
+    `${JSON.stringify({ from, to, r: { bets: open } }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  renameSync(temp, path);
+  console.error(
+    `[bridge3c] fetched ${rows.length} rows, kept ${open.length} open -> ${path}`,
+  );
 }
 
 const chunkBytes = (() => {
@@ -46,7 +99,14 @@ const chunkBytes = (() => {
   return parsed;
 })();
 
-const rollup = await buildGsliveTallyRollup(values.from as string, {
+let fromPath = values.from as string;
+if (values["fetch-open"] === true) {
+  fromPath =
+    (values["save-capture"] as string | undefined) ??
+    "Scratch/open-bets-capture.json";
+  await fetchOpenCapture(fromPath);
+}
+const rollup = await buildGsliveTallyRollup(fromPath, {
   ...(values["desk-date"] === undefined
     ? {}
     : { deskDate: values["desk-date"] as string }),
