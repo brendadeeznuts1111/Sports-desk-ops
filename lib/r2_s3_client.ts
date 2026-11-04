@@ -13,7 +13,6 @@ import type {
   S3ListObjectsResponse,
   S3Stats,
 } from "bun";
-import type { BunSecretSetOptions } from "../types/bun-api";
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
 
@@ -143,42 +142,13 @@ export async function resolveSecretBackedEnv(
   return merged;
 }
 
-export const MAX_SECRET_FIELD_CHARS = 255;
-export const MAX_SECRET_VALUE_BYTES = 2048;
-
-/** Bun.secrets service/name guard: non-empty printable ASCII, shorter than 256 chars. */
-export function assertSecretField(value: string, label: string): void {
-  if (
-    value.length === 0 ||
-    value.length > MAX_SECRET_FIELD_CHARS ||
-    !/^[\x20-\x7E]+$/.test(value)
-  ) {
-    throw new Error(
-      `${label} must be 1..${MAX_SECRET_FIELD_CHARS} printable ASCII characters`,
-    );
-  }
-}
-
-export function assertSecretValue(value: string): void {
-  const bytes = new TextEncoder().encode(value).byteLength;
-  if (bytes === 0 || bytes > MAX_SECRET_VALUE_BYTES) {
-    throw new Error(
-      `secret value must be 1..${MAX_SECRET_VALUE_BYTES} UTF-8 bytes`,
-    );
-  }
-}
-
-/** Options for Bun.secrets.set: validates bounds and always persists locally. */
-export function secretSetOptions(
-  service: string,
-  name: string,
-  value: string,
-): BunSecretSetOptions {
-  assertSecretField(service, "service");
-  assertSecretField(name, "name");
-  assertSecretValue(value);
-  return { service, name, value, persist: "local" };
-}
+export {
+  MAX_SECRET_FIELD_CHARS,
+  MAX_SECRET_VALUE_BYTES,
+  assertSecretField,
+  assertSecretValue,
+  secretSetOptions,
+} from "./secrets.ts";
 
 export function sha256Hex(value: string): string {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex");

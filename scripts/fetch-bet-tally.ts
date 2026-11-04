@@ -26,6 +26,15 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { sessionFromGsliveProfile } from "../lib/gslive_session.ts";
+import {
+  GSID_SECRET,
+  GSID_SECRET_LEGACY,
+  GSID_SERVICES,
+  readSecretFrom,
+  type SecretsReader,
+} from "../lib/secrets.ts";
+
+export { GSID_SECRET, GSID_SECRET_LEGACY };
 
 import { z } from "zod";
 import { argv, env, secrets, write } from "bun";
@@ -210,21 +219,8 @@ export function cookieHeaderFromEnv(
   return cookieHeaderFromValue(env.GSID ?? "", env.GA);
 }
 
-/** OS-keychain entry (Bun.secrets) the manager session is read from before any env fallback. */
-export const GSID_SECRET = {
-  service: "com.bookdeskops.sportsdesk",
-  name: "GSID",
-} as const;
-/** Legacy keychain entry kept as a read fallback during migration. */
-export const GSID_SECRET_LEGACY = {
-  service: "sportsdesk-gslive",
-  name: "GSID",
-} as const;
-
 /** Minimal injectable read surface so tests never touch the real keychain. */
-export interface SecretReader {
-  get(options: { service: string; name: string }): Promise<string | null>;
-}
+export type SecretReader = SecretsReader;
 
 export type ManagerSessionSource =
   | "webview-profile"
@@ -303,19 +299,14 @@ export async function resolveManagerSession(
   if (fileCookie !== "")
     return { source: "session-file", cookieHeader: fileCookie };
   if (secrets !== null) {
-    try {
-      const gsid =
-        (await secrets.get(GSID_SECRET))?.trim() ??
-        (await secrets.get(GSID_SECRET_LEGACY))?.trim() ??
-        "";
-      if (gsid !== "") {
-        return {
-          cookieHeader: cookieHeaderFromValue(gsid, environment.GA),
-          source: "keychain",
-        };
-      }
-    } catch {
-      // Fall through to env: a locked/absent keychain is not a hard failure.
+    const gsid =
+      (await readSecretFrom(secrets, GSID_SERVICES, GSID_SECRET.name))?.value ??
+      "";
+    if (gsid !== "") {
+      return {
+        cookieHeader: cookieHeaderFromValue(gsid, environment.GA),
+        source: "keychain",
+      };
     }
   }
   const cookieHeader = cookieHeaderFromEnv(environment);

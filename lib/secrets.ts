@@ -1,13 +1,16 @@
 /**
- * Canonical-first OS keychain reads for the operator credentials.
+ * Secret contract: one place for keychain services, entry names, reads, writes and deletes.
  *
- * The repo migrated its keychain service to `com.bookdeskops.sportsdesk` and kept the older
- * services as read fallbacks (see `resolveSecretBackedEnv` in lib/r2_s3_client.ts). The F402
- * entries were never migrated, so a bare `Bun.secrets.get({ service: SECRETS_SERVICE, ... })`
- * with the legacy constant is the bug that makes a missing credential look like a wrong one.
+ * The repo migrated to `com.bookdeskops.sportsdesk` and kept older services as read fallbacks.
+ * Some entries never moved (F402 is still under `sportsdesk-ops`), so every reader must try the
+ * canonical service first and then the legacy services that entry has lived under. Keeping that
+ * list here — rather than in each caller — is what stops a reader and the writer disagreeing about
+ * where a credential lives.
  *
- * Everything here reads through an injectable provider so tests never touch the real keychain.
+ * Everything reads through an injectable provider so tests never touch the real keychain.
  */
+
+import type { BunSecretSetOptions } from "../types/bun-api";
 
 /** Where new entries are written. */
 export const CANONICAL_SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
@@ -15,13 +18,156 @@ export const CANONICAL_SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
 /** The pre-migration service; read-only fallback for entries that were never moved. */
 export const LEGACY_SECRETS_SERVICE = "sportsdesk-ops";
 
+/** GSID's older legacy home, read by `fetch-bet-tally` before the canonical migration. */
+export const GSLIVE_LEGACY_SECRETS_SERVICE = "sportsdesk-gslive";
+
+/** Read order for the GSID: canonical, then both legacy homes. */
+export const GSID_SERVICES = [
+  CANONICAL_SECRETS_SERVICE,
+  GSLIVE_LEGACY_SECRETS_SERVICE,
+  LEGACY_SECRETS_SERVICE,
+] as const;
+
+/** Legacy-only services checked for the Telegram tokens (no canonical entry). */
+export const TELEGRAM_SECRET_SERVICES = [
+  "bookdeskops.desk",
+  LEGACY_SECRETS_SERVICE,
+  "4c-odds-integration",
+] as const;
+
+/** Names that were previously inlined in scripts; kept here so lib never imports `scripts/`. */
+export const F402_KEYCHAIN_NAMES = {
+  agentId: "f402-agent-id",
+  password: "f402-password",
+} as const;
+
+export const GSID_KEYCHAIN_NAME = "GSID" as const;
+
+export interface SecretEntry {
+  readonly name: string;
+  readonly services: readonly string[];
+}
+
+/**
+ * Every entry the contract knows. `services[0]` is the write target, so writes always land on
+ * canonical while reads walk the full fallback list.
+ */
+export const SECRET_ENTRIES = {
+  f402AgentId: {
+    name: F402_KEYCHAIN_NAMES.agentId,
+    services: [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
+  },
+  f402Password: {
+    name: F402_KEYCHAIN_NAMES.password,
+    services: [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
+  },
+  gsid: { name: GSID_KEYCHAIN_NAME, services: GSID_SERVICES },
+  gsliveUsername: {
+    name: "GSLIVE_USERNAME",
+    services: [CANONICAL_SECRETS_SERVICE],
+  },
+  gslivePassword: {
+    name: "GSLIVE_PASSWORD",
+    services: [CANONICAL_SECRETS_SERVICE],
+  },
+} as const satisfies Record<string, SecretEntry>;
+
+export type SecretEntryId = keyof typeof SECRET_ENTRIES;
+
+/** GSID entries in read order (status/delete walk these). */
+export const GSID_SECRET = {
+  service: CANONICAL_SECRETS_SERVICE,
+  name: GSID_KEYCHAIN_NAME,
+} as const;
+export const GSID_SECRET_LEGACY = {
+  service: GSLIVE_LEGACY_SECRETS_SERVICE,
+  name: GSID_KEYCHAIN_NAME,
+} as const;
+export const GSID_SECRET_LEGACY_BRIDGE = {
+  service: LEGACY_SECRETS_SERVICE,
+  name: GSID_KEYCHAIN_NAME,
+} as const;
+export const GSID_SECRET_ENTRIES = [
+  GSID_SECRET,
+  GSID_SECRET_LEGACY,
+  GSID_SECRET_LEGACY_BRIDGE,
+] as const;
+
+/* ------------------------------------------------------------------------- */
+/* Types shared by the F402 scripts and lib                                    */
+/* ------------------------------------------------------------------------- */
+
+export interface F402Credentials {
+  readonly agentId: string;
+  readonly password: string;
+}
+
+export class MissingF402CredentialsError extends Error {
+  constructor() {
+    super(
+      "F402 login requires keychain (secrets:f402), TTY prompt, or a bootstrapped WebView profile (values are not printed)",
+    );
+    this.name = "MissingF402CredentialsError";
+  }
+}
+
+/** Minimal injectable read surface so tests never touch the real keychain. */
+export interface SecretsReader {
+  get(options: { service: string; name: string }): Promise<string | null>;
+}
+
 /**
  * The read surface taken from Bun's own declaration (`Secrets.get(options: Bun.SecretsOptions)`)
- * instead of re-declared: a hand-written interface is how a cast sneaks in. `set`/`delete` are
- * omitted because this module only reads; writers pass the full `BunSecretSetOptions`
- * (`{service, name, value, persist}`) straight to `Bun.secrets.set`.
+ * instead of re-declared: a hand-written interface is how a cast sneaks in.
  */
 export type SecretsProvider = Pick<typeof Bun.secrets, "get">;
+export type SecretsWriter = Pick<typeof Bun.secrets, "set">;
+export type SecretsDeleter = Pick<typeof Bun.secrets, "delete">;
+
+/* ------------------------------------------------------------------------- */
+/* Validation and write options (moved here from lib/r2_s3_client.ts)          */
+/* ------------------------------------------------------------------------- */
+
+export const MAX_SECRET_FIELD_CHARS = 255;
+export const MAX_SECRET_VALUE_BYTES = 2048;
+
+/** Bun.secrets service/name guard: non-empty printable ASCII, shorter than 256 chars. */
+export function assertSecretField(value: string, label: string): void {
+  if (
+    value.length === 0 ||
+    value.length > MAX_SECRET_FIELD_CHARS ||
+    !/^[\x20-\x7E]+$/.test(value)
+  ) {
+    throw new Error(
+      `${label} must be 1..${MAX_SECRET_FIELD_CHARS} printable ASCII characters`,
+    );
+  }
+}
+
+export function assertSecretValue(value: string): void {
+  const bytes = new TextEncoder().encode(value).byteLength;
+  if (bytes === 0 || bytes > MAX_SECRET_VALUE_BYTES) {
+    throw new Error(
+      `secret value must be 1..${MAX_SECRET_VALUE_BYTES} UTF-8 bytes`,
+    );
+  }
+}
+
+/** Options for Bun.secrets.set: validates bounds and always persists locally. */
+export function secretSetOptions(
+  service: string,
+  name: string,
+  value: string,
+): BunSecretSetOptions {
+  assertSecretField(service, "service");
+  assertSecretField(name, "name");
+  assertSecretValue(value);
+  return { service, name, value, persist: "local" };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Reads                                                                      */
+/* ------------------------------------------------------------------------- */
 
 let provider: SecretsProvider = Bun.secrets;
 
@@ -34,9 +180,10 @@ export function setSecretsProviderForTests(next: SecretsProvider | null): void {
 export async function readSecretOrNull(
   service: string,
   name: string,
+  reader: SecretsReader = provider,
 ): Promise<string | null> {
   try {
-    const value = await provider.get({ service, name });
+    const value = await reader.get({ service, name });
     const trimmed = value?.trim() ?? "";
     return trimmed === "" ? null : trimmed;
   } catch {
@@ -44,35 +191,91 @@ export async function readSecretOrNull(
   }
 }
 
-/**
- * Read one entry canonical-first, then legacy. Returns the service it came from so a status
- * command can say where the credential lives without printing it.
- */
-export async function readSecretWithSource(
+/** Walk `services` in order and return the first non-empty value with its service. */
+export async function readSecretFrom(
+  reader: SecretsReader,
+  services: readonly string[],
   name: string,
 ): Promise<{ readonly value: string; readonly service: string } | null> {
-  for (const service of [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE]) {
-    const value = await readSecretOrNull(service, name);
+  for (const service of services) {
+    const value = await readSecretOrNull(service, name, reader);
     if (value !== null) return { value, service };
   }
   return null;
 }
 
+/** Read one known entry through its full service fallback list. */
+export async function readSecretEntryWithSource(
+  entry: SecretEntry,
+  reader: SecretsReader = provider,
+): Promise<{ readonly value: string; readonly service: string } | null> {
+  return readSecretFrom(reader, entry.services, entry.name);
+}
+
+/** Value-only read for one known entry. */
+export async function readSecretEntry(
+  entry: SecretEntry,
+  reader: SecretsReader = provider,
+): Promise<string | null> {
+  return (await readSecretEntryWithSource(entry, reader))?.value ?? null;
+}
+
+/** Canonical-then-legacy read for the generic F402/R2 entries. */
+export async function readSecretWithSource(
+  name: string,
+  reader: SecretsReader = provider,
+): Promise<{ readonly value: string; readonly service: string } | null> {
+  return readSecretFrom(
+    reader,
+    [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
+    name,
+  );
+}
+
 /** Value-only canonical-then-legacy read. */
 export async function readSecretCanonicalThenLegacy(
   name: string,
+  reader: SecretsReader = provider,
 ): Promise<string | null> {
-  return (await readSecretWithSource(name))?.value ?? null;
+  return (await readSecretWithSource(name, reader))?.value ?? null;
 }
 
-/**
- * Keychain names for the F402/GSID entries. Kept here (not imported from `scripts/`) so the cron
- * probe does not pull the WebView/login modules at daemon startup; a test asserts they match
- * `SECRET_NAMES` in scripts/capture/f402_login.ts and `GSID_SECRET` in scripts/fetch-bet-tally.ts.
- */
-export const F402_KEYCHAIN_NAMES = {
-  agentId: "f402-agent-id",
-  password: "f402-password",
-} as const;
+/** Read the GSID across all three services it has lived under. */
+export async function readGsidSecret(
+  reader: SecretsReader = provider,
+): Promise<string | null> {
+  return readSecretEntry(SECRET_ENTRIES.gsid, reader);
+}
 
-export const GSID_KEYCHAIN_NAME = "GSID" as const;
+/* ------------------------------------------------------------------------- */
+/* Writes and deletes                                                         */
+/* ------------------------------------------------------------------------- */
+
+/** Write one entry to its canonical service with bounds validation and `persist: "local"`. */
+export async function writeSecret(
+  entry: SecretEntry,
+  value: string,
+  writer: SecretsWriter = Bun.secrets,
+): Promise<void> {
+  const service = entry.services[0];
+  if (service === undefined) {
+    throw new Error(`secret entry "${entry.name}" has no service to write to`);
+  }
+  await writer.set(secretSetOptions(service, entry.name, value));
+}
+
+/** Delete one entry from every service it has lived under; returns the removed count. */
+export async function deleteSecret(
+  entry: SecretEntry,
+  deleter: SecretsDeleter = Bun.secrets,
+): Promise<number> {
+  let removed = 0;
+  for (const service of entry.services) {
+    try {
+      if (await deleter.delete({ service, name: entry.name })) removed += 1;
+    } catch {
+      // A locked or unavailable keychain is not a deletion failure by itself.
+    }
+  }
+  return removed;
+}

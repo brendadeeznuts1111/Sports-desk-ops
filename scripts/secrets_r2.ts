@@ -14,13 +14,15 @@
  */
 
 import {
-  assertSecretField,
-  assertSecretValue,
   R2_SECRETS_LEGACY_SERVICE,
   R2_SECRETS_SERVICE,
   R2_SECRET_NAMES,
-  secretSetOptions,
 } from "../lib/r2_s3_client.ts";
+import {
+  assertSecretField,
+  assertSecretValue,
+  secretSetOptions,
+} from "../lib/secrets.ts";
 
 const DEFAULT_ACCOUNT_ID = "7a470541a704caaf91e71efccc78fd36";
 const DEFAULT_BUCKET = "sportsdesk-ops-reports";

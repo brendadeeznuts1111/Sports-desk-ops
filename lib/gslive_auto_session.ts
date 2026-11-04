@@ -1,6 +1,6 @@
 /** Auto-mint the GSLive GSID from keychain credentials; no secret is logged or printed. */
 import { readFileSync, writeFileSync } from "node:fs";
-import { GSID_SECRET } from "../scripts/fetch-bet-tally.ts";
+import { SECRET_ENTRIES, readSecretEntry, writeSecret } from "./secrets.ts";
 
 export const GSLIVE_AJAX =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
@@ -25,20 +25,9 @@ function writeSessionFile(value: string): void {
     /* best effort */
   }
 }
-async function secret(name: string): Promise<string | null> {
-  try {
-    return await Bun.secrets.get({
-      service: "com.bookdeskops.sportsdesk",
-      name,
-    });
-  } catch {
-    return null;
-  }
-}
 export async function getGsid(): Promise<string | null> {
   if (cachedGsid !== null) return cachedGsid;
-  const fromKeychain =
-    (await secret(GSID_SECRET.name)) ?? (await secret("GSID"));
+  const fromKeychain = await readSecretEntry(SECRET_ENTRIES.gsid);
   if (fromKeychain !== null && fromKeychain !== "") return fromKeychain;
   return readSessionFile();
 }
@@ -72,8 +61,8 @@ async function probe(gsid: string, fetchImpl: typeof fetch): Promise<boolean> {
 export async function mintGsid(
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
-  const username = await secret("GSLIVE_USERNAME");
-  const password = await secret("GSLIVE_PASSWORD");
+  const username = await readSecretEntry(SECRET_ENTRIES.gsliveUsername);
+  const password = await readSecretEntry(SECRET_ENTRIES.gslivePassword);
   if (
     username === null ||
     username === "" ||
@@ -121,12 +110,7 @@ export async function mintGsid(
     );
   cachedGsid = gsid;
   try {
-    await Bun.secrets.set({
-      service: "com.bookdeskops.sportsdesk",
-      name: GSID_SECRET.name,
-      value: gsid,
-      persist: "local",
-    } as never);
+    await writeSecret(SECRET_ENTRIES.gsid, gsid);
   } catch {
     // Best effort: keychain writes are denied (ERR_SECRETS_PLATFORM_ERROR) in some sandboxes.
   }

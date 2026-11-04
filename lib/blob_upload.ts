@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 
-import { R2_SECRETS_SERVICE } from "./r2_s3_client.ts";
+import { readSecretWithSource } from "./secrets.ts";
 
 export const DEFAULT_BLOB_GATEWAY_URL = "http://127.0.0.1:4021";
 const IMAGE_CONTENT_TYPES = [
@@ -54,15 +54,7 @@ export async function resolveBlobApiToken(
 ): Promise<string> {
   const configured = env.BLOB_API_TOKEN?.trim();
   if (configured !== undefined && configured !== "") return configured;
-  try {
-    const stored = await Bun.secrets.get({
-      service: R2_SECRETS_SERVICE,
-      name: "BLOB_API_TOKEN",
-    });
-    return stored?.trim() ?? "";
-  } catch {
-    return "";
-  }
+  return (await readSecretWithSource("BLOB_API_TOKEN"))?.value ?? "";
 }
 
 export function resolveBlobGatewayUrl(

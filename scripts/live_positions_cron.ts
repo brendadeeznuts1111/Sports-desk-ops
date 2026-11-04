@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { runGSLiveAllStatesSuspectAudit } from "./gslive_all_states_suspect_cron.ts";
 /**
  * @file scripts/live_positions_cron.ts
  * @description 10-Minute Bun.cron (every 10m) Live Volume & Open Positions Sync + Telegram Pulse Engine.
@@ -20,7 +19,7 @@ import { runGSLiveAllStatesSuspectAudit } from "./gslive_all_states_suspect_cron
 
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   formatCronScheduleLine,
   installOsCronJob,
@@ -44,13 +43,13 @@ import {
   writeCaptureHealth,
   type LiveCaptureRecord,
 } from "../lib/live_capture.ts";
+import { readSecretFrom, TELEGRAM_SECRET_SERVICES } from "../lib/secrets.ts";
 import {
   buildArtifact,
   hierarchyIndexFromTree,
   type PendingRow,
 } from "../lib/live_bets.ts";
 import {
-  BET_TICKER_OPERATION,
   betTickerFile,
   isTickerNoise,
   toLiveWager,
@@ -564,33 +563,23 @@ async function resolveTelegramCredentials(): Promise<{
   let chatId = (Bun.env.TELEGRAM_CHAT_ID ?? "").trim();
 
   if (!botToken || botToken === "SET_BEFORE_PRODUCTION") {
-    for (const service of [
-      "bookdeskops.desk",
-      "sportsdesk-ops",
-      "4c-odds-integration",
-    ]) {
-      const val = await Bun.secrets
-        .get({ service, name: "TELEGRAM_BOT_TOKEN" })
-        .catch(() => null);
-      if (val && val.trim() && val.trim() !== "SET_BEFORE_PRODUCTION") {
-        botToken = val.trim();
-        break;
-      }
+    const found = await readSecretFrom(
+      Bun.secrets,
+      TELEGRAM_SECRET_SERVICES,
+      "TELEGRAM_BOT_TOKEN",
+    );
+    if (found !== null && found.value !== "SET_BEFORE_PRODUCTION") {
+      botToken = found.value;
     }
   }
   if (!chatId || chatId === "SET_BEFORE_PRODUCTION") {
-    for (const service of [
-      "bookdeskops.desk",
-      "sportsdesk-ops",
-      "4c-odds-integration",
-    ]) {
-      const val = await Bun.secrets
-        .get({ service, name: "TELEGRAM_CHAT_ID" })
-        .catch(() => null);
-      if (val && val.trim() && val.trim() !== "SET_BEFORE_PRODUCTION") {
-        chatId = val.trim();
-        break;
-      }
+    const found = await readSecretFrom(
+      Bun.secrets,
+      TELEGRAM_SECRET_SERVICES,
+      "TELEGRAM_CHAT_ID",
+    );
+    if (found !== null && found.value !== "SET_BEFORE_PRODUCTION") {
+      chatId = found.value;
     }
   }
   return { botToken, chatId };

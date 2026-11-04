@@ -47,6 +47,7 @@ import { readF402Session } from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   GSID_KEYCHAIN_NAME,
+  readGsidSecret,
   readSecretCanonicalThenLegacy,
 } from "./secrets.ts";
 
@@ -444,7 +445,7 @@ export function envCredentialProbe(
 
 export interface KeychainCredentialProbeOptions {
   readonly env: Readonly<Record<string, string | undefined>>;
-  /** Canonical-then-legacy keychain read. Default `readSecretCanonicalThenLegacy`. */
+  /** Canonical-then-legacy keychain read; the GSID walks all three services. */
   readonly readSecret?: (name: string) => Promise<string | null>;
   /** Default: `readF402Session() !== null`. */
   readonly sessionPresent?: () => boolean;
@@ -478,7 +479,12 @@ export function keychainCredentialProbe(
   options: KeychainCredentialProbeOptions,
 ): BridgeCredentialProbe {
   const env = options.env;
-  const readSecret = options.readSecret ?? readSecretCanonicalThenLegacy;
+  const readSecret =
+    options.readSecret ??
+    ((name: string) =>
+      name === GSID_KEYCHAIN_NAME
+        ? readGsidSecret()
+        : readSecretCanonicalThenLegacy(name));
   const sessionPresent =
     options.sessionPresent ?? (() => readF402Session() !== null);
   const tokenFilePresent =

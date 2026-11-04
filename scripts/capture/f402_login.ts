@@ -11,12 +11,17 @@
  * to the same path and still be showing the form.
  */
 
+import {
+  F402_KEYCHAIN_NAMES,
+  LEGACY_SECRETS_SERVICE,
+  MissingF402CredentialsError,
+  type F402Credentials,
+  type SecretsReader,
+} from "../../lib/secrets.ts";
 import { resolveLoginConfig, type LoginConfig } from "./ops.ts";
 
-export interface F402Credentials {
-  readonly agentId: string;
-  readonly password: string;
-}
+export { MissingF402CredentialsError };
+export type { F402Credentials, SecretsReader };
 
 export type F402LoginKind = "agent" | "player";
 
@@ -26,30 +31,14 @@ export interface F402LoginIdentity {
   readonly kind: F402LoginKind;
 }
 
-export class MissingF402CredentialsError extends Error {
-  constructor() {
-    super(
-      "F402 login requires keychain (secrets:f402), TTY prompt, or a bootstrapped WebView profile (values are not printed)",
-    );
-    this.name = "MissingF402CredentialsError";
-  }
-}
-
 type Env = Record<string, string | undefined>;
 
 /**
  * @deprecated Legacy-only service name, kept for back-compat. New reads go through
  * `lib/secrets.ts` (canonical first, legacy fallback); nothing writes here.
  */
-export const SECRETS_SERVICE = "sportsdesk-ops";
-export const SECRET_NAMES = {
-  agentId: "f402-agent-id",
-  password: "f402-password",
-} as const;
-
-export interface SecretsReader {
-  get(options: { service: string; name: string }): Promise<string | null>;
-}
+export const SECRETS_SERVICE = LEGACY_SECRETS_SERVICE;
+export const SECRET_NAMES = F402_KEYCHAIN_NAMES;
 
 /** @see loadF402CredentialsSecure in lib/f402_credentials_policy.ts */
 export async function loadF402Credentials(

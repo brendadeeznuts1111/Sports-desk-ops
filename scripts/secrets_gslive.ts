@@ -12,10 +12,18 @@
 
 import { parseCliArgs, printHelp, wantsHelp } from "../lib/cli_args.ts";
 import type { BunSecretSetOptions } from "../types/bun-api";
-import { secretSetOptions } from "../lib/r2_s3_client.ts";
-import { LEGACY_SECRETS_SERVICE } from "../lib/secrets.ts";
-import { GSID_SECRET, GSID_SECRET_LEGACY } from "./fetch-bet-tally.ts";
+import {
+  GSID_SECRET,
+  GSID_SECRET_ENTRIES,
+  GSID_SECRET_LEGACY,
+  GSID_SERVICES,
+  LEGACY_SECRETS_SERVICE,
+  readSecretFrom,
+  secretSetOptions,
+} from "../lib/secrets.ts";
 import { secrets, stdin } from "bun";
+
+export { GSID_SERVICES };
 
 const HELP = `
 secrets:gslive — store the GSLive manager session (GSID) in the OS keychain
@@ -67,30 +75,13 @@ export interface SecretStatus {
   readonly present: boolean;
 }
 
-/**
- * Every service the GSID has lived under: canonical first, then the two legacy
- * names. Reads and deletes walk the whole list so a stale copy cannot resurface
- * (audit Finding 4), and status reports the service it actually found.
- */
-export const GSID_SERVICES = [
-  GSID_SECRET,
-  GSID_SECRET_LEGACY,
-  { service: LEGACY_SECRETS_SERVICE, name: GSID_SECRET.name },
-] as const;
-
 /** Report whether a session is stored. Never returns or logs the value. */
 export async function gsliveSecretStatus(
   store: SecretStore = defaultSecretStore(),
 ): Promise<SecretStatus> {
-  for (const entry of GSID_SERVICES) {
-    try {
-      const value = (await store.get(entry))?.trim() ?? "";
-      if (value !== "") {
-        return { service: entry.service, name: entry.name, present: true };
-      }
-    } catch {
-      // A locked/unavailable keychain means "not readable here"; keep looking.
-    }
+  const found = await readSecretFrom(store, GSID_SERVICES, GSID_SECRET.name);
+  if (found !== null) {
+    return { service: found.service, name: GSID_SECRET.name, present: true };
   }
   return {
     service: GSID_SECRET.service,
@@ -117,7 +108,7 @@ export async function deleteGsliveSecret(
   store: SecretStore = defaultSecretStore(),
 ): Promise<number> {
   let removed = 0;
-  for (const entry of GSID_SERVICES) {
+  for (const entry of GSID_SECRET_ENTRIES) {
     try {
       if (await store.delete(entry)) removed += 1;
     } catch {
@@ -186,7 +177,7 @@ async function main(): Promise<void> {
     case "delete": {
       const removed = await deleteGsliveSecret();
       console.error(
-        `secrets:gslive: removed ${removed} GSLive session entr${removed === 1 ? "y" : "ies"} from ${GSID_SERVICES.map((entry) => entry.service).join(", ")}`,
+        `secrets:gslive: removed ${removed} GSLive session entr${removed === 1 ? "y" : "ies"} from ${GSID_SERVICES.join(", ")}`,
       );
       break;
     }

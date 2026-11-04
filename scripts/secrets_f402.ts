@@ -22,7 +22,10 @@ import {
   CANONICAL_SECRETS_SERVICE,
   F402_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
+  SECRET_ENTRIES,
+  deleteSecret,
   readSecretWithSource,
+  writeSecret,
 } from "../lib/secrets.ts";
 
 /**
@@ -111,38 +114,17 @@ async function store(agentId: string): Promise<void> {
     );
     process.exit(2);
   }
-  await Bun.secrets.set({
-    service: CANONICAL_SECRETS_SERVICE,
-    name: F402_KEYCHAIN_NAMES.agentId,
-    value: agentId,
-    persist: "local",
-  });
-  await Bun.secrets.set({
-    service: CANONICAL_SECRETS_SERVICE,
-    name: F402_KEYCHAIN_NAMES.password,
-    value: password,
-    persist: "local",
-  });
+  await writeSecret(SECRET_ENTRIES.f402AgentId, agentId);
+  await writeSecret(SECRET_ENTRIES.f402Password, password);
   console.error(
     `secrets:f402: stored agent id and password under service ${CANONICAL_SECRETS_SERVICE}`,
   );
 }
 
 async function remove(): Promise<void> {
-  let removed = 0;
-  for (const service of SERVICES) {
-    for (const name of [
-      F402_KEYCHAIN_NAMES.agentId,
-      F402_KEYCHAIN_NAMES.password,
-    ]) {
-      try {
-        const deleted = await Bun.secrets.delete({ service, name });
-        if (deleted) removed += 1;
-      } catch {
-        // A locked or unavailable keychain is not a deletion failure by itself.
-      }
-    }
-  }
+  const removed =
+    (await deleteSecret(SECRET_ENTRIES.f402AgentId)) +
+    (await deleteSecret(SECRET_ENTRIES.f402Password));
   console.error(
     `secrets:f402: removed ${removed} F402 credential entr${removed === 1 ? "y" : "ies"} from ${SERVICES.join(", ")}`,
   );

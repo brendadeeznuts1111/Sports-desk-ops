@@ -1,9 +1,9 @@
 /**
  * F402 login credentials — never from shell env by default (no ps/history inheritance).
  *
- * **Bun 1.4.4 has no OS-keychain API.** `Bun.password` is bcrypt/argon2 *hashing*, not secret
- * storage — do not use it for capture credentials. This module reads the keychain by shelling to
- * the platform tool (macOS `security`) or `Bun.secrets` when injected in tests.
+ * **Bun 1.4.4 exposes `Bun.secrets`.** `Bun.password` is bcrypt/argon2 *hashing*, not secret
+ * storage — do not use it for capture credentials. This module reads through `Bun.secrets`
+ * (canonical-first) and keeps a macOS `security` fallback when no reader is injected.
  *
  * **Child-process rules (the only places a plaintext password crosses a process boundary):**
  * 1. **Keychain read** — canonical service (`com.bookdeskops.sportsdesk`) then the legacy
@@ -23,14 +23,12 @@ import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import {
+  CANONICAL_SECRETS_SERVICE,
+  F402_KEYCHAIN_NAMES,
+  LEGACY_SECRETS_SERVICE,
   MissingF402CredentialsError,
-  SECRET_NAMES,
   type F402Credentials,
   type SecretsReader,
-} from "../scripts/capture/f402_login.ts";
-import {
-  CANONICAL_SECRETS_SERVICE,
-  LEGACY_SECRETS_SERVICE,
 } from "./secrets.ts";
 
 /**
@@ -219,8 +217,8 @@ export async function loadF402CredentialsSecure(
   env: Env = Bun.env,
   secrets: SecretsReader | null = Bun.secrets,
 ): Promise<SecureF402Credentials> {
-  const agentId = await readKeychain(secrets, SECRET_NAMES.agentId);
-  const password = await readKeychain(secrets, SECRET_NAMES.password);
+  const agentId = await readKeychain(secrets, F402_KEYCHAIN_NAMES.agentId);
+  const password = await readKeychain(secrets, F402_KEYCHAIN_NAMES.password);
   if (agentId !== "" && password !== "") {
     return wrapF402Credentials({ agentId, password }, "keychain");
   }
