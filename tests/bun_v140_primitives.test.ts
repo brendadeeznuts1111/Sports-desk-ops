@@ -46,6 +46,24 @@ describe("Bun v1.4.0 primitives", () => {
     }
   });
 
+  test("CompressionStream gzip/zstd/brotli round-trips", async () => {
+    const text = "hello gzip zstd brotli";
+    for (const format of ["gzip", "zstd", "brotli"] as const) {
+      const compressed = await new Response(
+        new Blob([text])
+          .stream()
+          .pipeThrough(new CompressionStream(format as never)),
+      ).arrayBuffer();
+      expect(compressed.byteLength).toBeGreaterThan(0);
+      const out = await new Response(
+        new Blob([compressed])
+          .stream()
+          .pipeThrough(new DecompressionStream(format as never)),
+      ).text();
+      expect(out).toBe(text);
+    }
+  });
+
   test("Bun.Archive round-trips from/write/extract", async () => {
     const dir = await tempDir();
     const path = join(dir, "a.tar.gz");

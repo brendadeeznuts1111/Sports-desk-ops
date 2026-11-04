@@ -438,6 +438,7 @@ Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (g
 ## v1.4.0 feed/transport primitives in use
 
 - **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
+- **Compression streams**: contract test round-trips `CompressionStream("gzip" | "zstd" | "brotli")` through `DecompressionStream` with byte-identical output.
 - **`Response.textStream()`**: `lib/gslive_tally_rollup.ts::streamBetReportBets` now consumes `new Response(Bun.file(path)).textStream()`, so BOM stripping and multi-byte chunk reassembly are Bun's responsibility (tested with a BOM + `€🌍` split across bytes).
 - **`Bun.Archive`**: contract test round-trips `Bun.Archive.from` → `Bun.Archive.write` → `extract`.
 - **`URLPattern`**: contract test matches `/api/v1/blobs/:key` and rejects `/api/v1/live-bets`.
