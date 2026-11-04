@@ -53,7 +53,7 @@ export interface SecretsReader {
 /** @see loadF402CredentialsSecure in lib/f402_credentials_policy.ts */
 export async function loadF402Credentials(
   env: Env = process.env,
-  secrets: SecretsReader | null = Bun.secrets as SecretsReader,
+  secrets: SecretsReader | null = Bun.secrets,
 ): Promise<F402Credentials> {
   const { loadF402CredentialsSecure } =
     await import("../../lib/f402_credentials_policy.ts");
@@ -62,7 +62,7 @@ export async function loadF402Credentials(
 
 export async function loadF402PlayerCredentials(
   env: Env = process.env,
-  secrets: SecretsReader | null = Bun.secrets as SecretsReader,
+  secrets: SecretsReader | null = Bun.secrets,
 ): Promise<F402LoginIdentity> {
   const read = async (name: string): Promise<string> => {
     if (secrets === null) return "";

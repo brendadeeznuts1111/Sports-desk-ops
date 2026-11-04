@@ -15,19 +15,19 @@ export const CANONICAL_SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
 /** The pre-migration service; read-only fallback for entries that were never moved. */
 export const LEGACY_SECRETS_SERVICE = "sportsdesk-ops";
 
-/** The minimal keychain read surface; `Bun.secrets` satisfies it structurally. */
-export interface SecretsProvider {
-  get(options: {
-    readonly service: string;
-    readonly name: string;
-  }): Promise<string | null>;
-}
+/**
+ * The read surface taken from Bun's own declaration (`Secrets.get(options: Bun.SecretsOptions)`)
+ * instead of re-declared: a hand-written interface is how a cast sneaks in. `set`/`delete` are
+ * omitted because this module only reads; writers pass the full `BunSecretSetOptions`
+ * (`{service, name, value, persist}`) straight to `Bun.secrets.set`.
+ */
+export type SecretsProvider = Pick<typeof Bun.secrets, "get">;
 
-let provider: SecretsProvider = Bun.secrets as SecretsProvider;
+let provider: SecretsProvider = Bun.secrets;
 
 /** Swap the provider (tests) or restore the real keychain (`null`). */
 export function setSecretsProviderForTests(next: SecretsProvider | null): void {
-  provider = next ?? (Bun.secrets as SecretsProvider);
+  provider = next ?? Bun.secrets;
 }
 
 /** One service/name read; a locked or unavailable keychain is `null`, never a throw. */

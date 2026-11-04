@@ -217,7 +217,7 @@ export async function promptF402CredentialsTTY(): Promise<SecureF402Credentials>
  */
 export async function loadF402CredentialsSecure(
   env: Env = Bun.env,
-  secrets: SecretsReader | null = Bun.secrets as SecretsReader,
+  secrets: SecretsReader | null = Bun.secrets,
 ): Promise<SecureF402Credentials> {
   const agentId = await readKeychain(secrets, SECRET_NAMES.agentId);
   const password = await readKeychain(secrets, SECRET_NAMES.password);
