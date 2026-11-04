@@ -43,8 +43,10 @@ nothing; `console.log` still prints), `bun repl -p` prints the value through `Bu
 **stdout** (an object is pretty-printed across lines, so pipe it through `JSON.stringify` when
 parsing), and top-level `await` works in both. With piped stdin the REPL reads to EOF and exits 0
 (`printf '1+1\n' | bun repl` prints `2`), so it cannot hang a caller; the
-`~/.bun_repl_history` file is written by the interactive TUI only, and the test sets `HOME` to a
-scratch directory so a probe never touches the operator's real home. The 1.4 `-e`/`-p` flags make
+`~/.bun_repl_history` file is written by **any REPL session that reads stdin** — interactive or
+piped (`printf '6*7\n' | bun repl` creates it, mode 0600) — while `-e`/`-p` one-shots do not.
+Every repl probe in the tests therefore sets `HOME` to the scratch directory, so measuring the
+REPL can never read or append the operator's real history. The 1.4 `-e`/`-p` flags make
 this entrypoint usable in scripts when object-literal semantics matter; the safe pattern for both
 older runtimes remains `({a:1})` with `bun -p`.
 

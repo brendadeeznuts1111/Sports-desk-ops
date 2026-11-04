@@ -530,3 +530,28 @@ enforces that with no undocumented surface.
   index).
 - `ws.publish()` excludes the sender and `publishToSelf` changes that (0.6.3 change; not present in
   the indexed corpus).
+
+### `bun repl` (native since 1.4.0) — verified 2026-11-04
+
+Adoption: **probes only.** No production code or script depends on the REPL; automation keeps
+`bun -e` / `bun -p`, whose patterns are pinned in `tests/bun_eval_patterns.test.ts`. The REPL is
+useful for one-off inspection, so its measured behavior is recorded rather than assumed.
+
+**Confirmed on 1.4.4 (macOS arm64):**
+
+- `-e` evaluates without printing the value; `-p` prints it through `Bun.inspect` to stdout.
+  Top-level `await` works in both. Bare object literals are expressions there, so
+  `bun repl -p '{a:1}'` prints `{ a: 1 }` while `bun -p '{a:1}'` prints the label value `1`.
+- Piped stdin runs a full REPL, not a line sink: `_` (last result) and `_error` (last error) work,
+  `function f() {` … `}` continuation works, `.help` lists keybindings/special variables,
+  `.save <path>` writes the session and `.load <path>` replays it, `.editor` ends on EOF, and the
+  process exits `0` at EOF instead of hanging. Piped stdout also carries the `> ` prompt around
+  each result, so a caller must strip it. `bun repl --help` is not a subcommand: it falls
+  through to `bun run` usage.
+- Dot-command output (`.help`, `.save` notice) carries ANSI escapes even when stdout is a pipe;
+  parse the values, never the console transcript.
+- `~/.bun_repl_history` (mode 0600) is written by interactive **and piped** sessions; `-e`/`-p`
+  one-shots do not write it. Automated probes must set `HOME` to a scratch directory (the tests do).
+- `bun completions` selects the script from **`$SHELL`** (zsh `#compdef`, fish, bash); a positional
+  shell argument is ignored on 1.4.4, and an unsupported `$SHELL` errors with a pointer to
+  `bun getcompletes` (which prints the completion word list, not a script).
