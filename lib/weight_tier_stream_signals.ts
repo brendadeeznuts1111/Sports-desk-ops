@@ -9,6 +9,13 @@
 import type { F402TickerRow } from "./f402_ingest.ts";
 import { padCustomerIdCanonical } from "../design/domain-branded-types.ts";
 import { parseShortDesc } from "./live_wagers.ts";
+import type { Dod6SpineOverlay } from "./dod6_spine_overlay.ts";
+import type { GsliveSteamIndex } from "./gslive_steam_index.ts";
+import {
+  applyMarketResolveToWireDraft,
+  resolveTickerMarketOffline,
+  type TickerMarketResolve,
+} from "./weight_tier_market_resolve.ts";
 import {
   buildStreamSignalDiagnostics,
   kalshiOrderSkeleton,
@@ -32,6 +39,21 @@ export {
   loadDod6BookOverlayFromJson,
   pickShapeSha256FromShortDesc,
 } from "./weight_tier_signal_enrichment.ts";
+export {
+  createDod6SpineOverlay,
+  readDod6SpineHeader,
+  SHARP_CAND_MIN_CLV_LEGS_V54,
+  type Dod6SpineOverlay,
+} from "./dod6_spine_overlay.ts";
+export {
+  loadGsliveSteamIndexFromJson,
+  steamFlagsFromTimeUntilScoreSec,
+  type GsliveSteamIndex,
+} from "./gslive_steam_index.ts";
+export {
+  resolveTickerMarketOffline,
+  type TickerMarketResolve,
+} from "./weight_tier_market_resolve.ts";
 
 export type WeightTierId =
   | "tier1_apex_spread_ml"
@@ -174,6 +196,7 @@ export interface StreamSignalEmission {
   readonly manager: readonly ManagerUpdateByColumnDraft[];
   readonly external: readonly ExternalMarketOrderDraft[];
   readonly diagnostics: StreamSignalDiagnostics;
+  readonly marketResolve: TickerMarketResolve;
 }
 
 export interface StreamSignalPlannerContext {
@@ -181,6 +204,9 @@ export interface StreamSignalPlannerContext {
   readonly pickTwinTracker?: PickShapeTwinTracker;
   readonly scoutTracker?: ScoutApexTracker;
   readonly dod6Book?: Dod6CustomerBookOverlay | null;
+  readonly dod6Spine?: Dod6SpineOverlay | null;
+  readonly gsliveSteamIndex?: GsliveSteamIndex | null;
+  readonly resolveMarkets?: boolean;
 }
 
 export interface SyndicateClusterState {
@@ -324,6 +350,9 @@ export function planStreamSignalForRow(
     readonly pickTwinTracker?: PickShapeTwinTracker;
     readonly scoutTracker?: ScoutApexTracker;
     readonly dod6Book?: Dod6CustomerBookOverlay | null;
+    readonly dod6Spine?: Dod6SpineOverlay | null;
+    readonly gsliveSteamIndex?: GsliveSteamIndex | null;
+    readonly resolveMarkets?: boolean;
   } = {},
 ): StreamSignalEmission | null {
   const tierDef = resolveWeightTierForLogin(row.login);
@@ -637,13 +666,40 @@ export function planStreamSignalForRow(
     return null;
   }
 
+  const gsliveSteam =
+    options.gsliveSteamIndex?.lookup(rotationKey) ?? null;
+  const dod6Lifetime = options.dod6Spine?.lookup(row.login) ?? null;
+  const dod6Header = options.dod6Spine?.header;
   const diagnostics = buildStreamSignalDiagnostics(row, {
     atMs,
     pickShapeTwins,
     scoutPrecursor,
     dod6Book: options.dod6Book ?? null,
+    dod6Lifetime,
+    dod6SpineHeader:
+      dod6Header === null || dod6Header === undefined
+        ? null
+        : {
+            customerCount: dod6Header.customerCount,
+            sectionCount: dod6Header.sectionCount,
+            asOfEpochDays: dod6Header.asOfEpochDays,
+          },
+    gsliveSteam,
     routingTag,
   });
+
+  const marketResolve = resolveTickerMarketOffline(row);
+  const resolveMarkets = options.resolveMarkets === true;
+  const externalResolved = resolveMarkets
+    ? external.map((order) => ({
+        ...order,
+        wireDraft: applyMarketResolveToWireDraft(
+          order.wireDraft,
+          marketResolve,
+          order.venue,
+        ),
+      }))
+    : external;
 
   return {
     schemaVersion: WEIGHT_TIER_SCHEMA_VERSION,
@@ -658,8 +714,9 @@ export function planStreamSignalForRow(
     amountWagered: row.amountWagered,
     internal,
     manager,
-    external,
+    external: externalResolved,
     diagnostics,
+    marketResolve,
   };
 }
 
@@ -672,6 +729,9 @@ export function planStreamSignalsForRows(
     readonly pickTwinTracker?: PickShapeTwinTracker;
     readonly scoutTracker?: ScoutApexTracker;
     readonly dod6Book?: Dod6CustomerBookOverlay | null;
+    readonly dod6Spine?: Dod6SpineOverlay | null;
+    readonly gsliveSteamIndex?: GsliveSteamIndex | null;
+    readonly resolveMarkets?: boolean;
   } = {},
 ): readonly StreamSignalEmission[] {
   const seen = new Set<string>();
@@ -691,6 +751,9 @@ export function planStreamSignalsForRows(
       pickTwinTracker,
       scoutTracker,
       dod6Book: options.dod6Book ?? null,
+      dod6Spine: options.dod6Spine ?? null,
+      gsliveSteamIndex: options.gsliveSteamIndex ?? null,
+      resolveMarkets: options.resolveMarkets ?? false,
     };
     const rowOptions =
       options.emittedAt === undefined

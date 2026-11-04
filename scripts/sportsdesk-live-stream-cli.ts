@@ -39,9 +39,13 @@ import {
   type F402ReplayTransport,
 } from "../lib/f402_replay_transport.ts";
 import { describeF402Session, readF402Session } from "../lib/f402_session.ts";
+import type { Dod6SpineOverlay } from "../lib/dod6_spine_overlay.ts";
+import type { GsliveSteamIndex } from "../lib/gslive_steam_index.ts";
 import {
+  createDod6SpineOverlay,
   explainDiagnostics,
   loadDod6BookOverlayFromJson,
+  loadGsliveSteamIndexFromJson,
   type Dod6CustomerBookOverlay,
   type StreamSignalEmission,
   MiamiSyndicateClusterTracker,
@@ -79,6 +83,10 @@ const HELP = [
   "  --tier <id>            Filter to one tier (repeatable)",
   "  --dry-run              Print tier registry only; no network",
   "  --enrich-book <path>   DOD6/book JSON overlay (customer_id, clv_bps, sharp_score)",
+  "  --dodbin <path>        DOD6 v5.4 spine envelope (64-byte header metadata)",
+  "  --lifetime-csv <path>  Bettor lifetime CSV (CLV legs / avg CLV points gate)",
+  "  --gslive-steam-index <path>  JSON map ROT → timeUntilScoreSec (Partner 118)",
+  "  --resolve-markets      Offline Kalshi series + Gamma hints on wireDraft",
   "  --explain              Human-readable diagnostics on stderr (NDJSON still on stdout)",
   "",
   "Tiers:",
@@ -157,9 +165,18 @@ function emitSignals(
   tierFilter: ReadonlySet<WeightTierId> | null,
   clusterTracker: MiamiSyndicateClusterTracker,
   dod6Book: Dod6CustomerBookOverlay | null,
+  dod6Spine: Dod6SpineOverlay | null,
+  gsliveSteamIndex: GsliveSteamIndex | null,
+  resolveMarkets: boolean,
   explain: boolean,
 ): void {
-  const emissions = planStreamSignalsForRows(rows, { clusterTracker, dod6Book });
+  const emissions = planStreamSignalsForRows(rows, {
+    clusterTracker,
+    dod6Book,
+    dod6Spine,
+    gsliveSteamIndex,
+    resolveMarkets,
+  });
   for (const emission of emissions) {
     if (tierFilter !== null && !tierFilter.has(emission.tier)) continue;
     writeEmission(emission, explain);
@@ -198,6 +215,9 @@ async function runBridgeWakePoll(options: {
   readonly tierFilter: ReadonlySet<WeightTierId> | null;
   readonly clusterTracker: MiamiSyndicateClusterTracker;
   readonly dod6Book: Dod6CustomerBookOverlay | null;
+  readonly dod6Spine: Dod6SpineOverlay | null;
+  readonly gsliveSteamIndex: GsliveSteamIndex | null;
+  readonly resolveMarkets: boolean;
   readonly explain: boolean;
 }): Promise<void> {
   const protocols =
@@ -240,6 +260,9 @@ async function runBridgeWakePoll(options: {
       options.tierFilter,
       options.clusterTracker,
       options.dod6Book,
+      options.dod6Spine,
+      options.gsliveSteamIndex,
+      options.resolveMarkets,
       options.explain,
     );
   };
@@ -298,6 +321,10 @@ async function main(): Promise<number> {
       tier: { type: "string", multiple: true },
       "dry-run": { type: "boolean", default: false },
       "enrich-book": { type: "string" },
+      dodbin: { type: "string" },
+      "lifetime-csv": { type: "string" },
+      "gslive-steam-index": { type: "string" },
+      "resolve-markets": { type: "boolean", default: false },
       explain: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -320,13 +347,53 @@ async function main(): Promise<number> {
   const clusterTracker = new MiamiSyndicateClusterTracker();
   const explain = values.explain === true;
   let dod6Book: Dod6CustomerBookOverlay | null = null;
+  let dod6Spine: Dod6SpineOverlay | null = null;
+  let gsliveSteamIndex: GsliveSteamIndex | null = null;
+  const resolveMarkets = values["resolve-markets"] === true;
   const enrichBook = values["enrich-book"]?.trim();
+  const dodbin = values.dodbin?.trim();
+  const lifetimeCsv =
+    values["lifetime-csv"]?.trim() ??
+    Bun.env.F402_LIFETIME_CSV?.trim() ??
+    "";
+  const gsliveSteamPath = values["gslive-steam-index"]?.trim();
+
   if (enrichBook !== undefined && enrichBook !== "") {
     try {
       dod6Book = loadDod6BookOverlayFromJson(enrichBook);
     } catch (error) {
       console.error(
         `live-stream: --enrich-book failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
+
+  if (
+    (dodbin !== undefined && dodbin !== "") ||
+    lifetimeCsv !== "" ||
+    (enrichBook !== undefined && enrichBook !== "")
+  ) {
+    try {
+      dod6Spine = await createDod6SpineOverlay({
+        dodbinPath: dodbin,
+        lifetimeCsvPath: lifetimeCsv !== "" ? lifetimeCsv : undefined,
+        jsonBookPath: enrichBook,
+      });
+    } catch (error) {
+      console.error(
+        `live-stream: DOD6 spine overlay failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
+
+  if (gsliveSteamPath !== undefined && gsliveSteamPath !== "") {
+    try {
+      gsliveSteamIndex = await loadGsliveSteamIndexFromJson(gsliveSteamPath);
+    } catch (error) {
+      console.error(
+        `live-stream: --gslive-steam-index failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       return 1;
     }
@@ -354,7 +421,16 @@ async function main(): Promise<number> {
 
   if (fromBody !== undefined) {
     const rows = await loadBodyRows(fromBody);
-    emitSignals(rows, tierFilter, clusterTracker, dod6Book, explain);
+    emitSignals(
+      rows,
+      tierFilter,
+      clusterTracker,
+      dod6Book,
+      dod6Spine,
+      gsliveSteamIndex,
+      resolveMarkets,
+      explain,
+    );
     return 0;
   }
 
@@ -371,7 +447,16 @@ async function main(): Promise<number> {
             };
       const read = await readF402TickerJsonl(fromJsonl, readOptions);
       jsonlState = read.state;
-      emitSignals(read.rows, tierFilter, clusterTracker, dod6Book, explain);
+      emitSignals(
+        read.rows,
+        tierFilter,
+        clusterTracker,
+        dod6Book,
+        dod6Spine,
+        gsliveSteamIndex,
+        resolveMarkets,
+        explain,
+      );
     };
     await runPass();
     if (!values.watch) return 0;
@@ -415,6 +500,9 @@ async function main(): Promise<number> {
         tierFilter,
         clusterTracker,
         dod6Book,
+        dod6Spine,
+        gsliveSteamIndex,
+        resolveMarkets,
         explain,
       });
     } catch (error) {
@@ -428,7 +516,16 @@ async function main(): Promise<number> {
 
   const loop = async (): Promise<void> => {
     const rows = await poll();
-    emitSignals(rows, tierFilter, clusterTracker, dod6Book, explain);
+    emitSignals(
+      rows,
+      tierFilter,
+      clusterTracker,
+      dod6Book,
+      dod6Spine,
+      gsliveSteamIndex,
+      resolveMarkets,
+      explain,
+    );
   };
 
   try {
