@@ -318,6 +318,22 @@ still resolves), and `hot` as `undefined` in a normal run and even under `bun --
 script. The two gaps are pinned as tripwires in
 [tests/import_meta_contract.test.ts](../tests/import_meta_contract.test.ts).
 
+**Runtime ahead of the docs — `Bun.file` metadata.** The
+[`file` reference](https://bun.sh/reference/globals/bun#file) says `size` "is not valid until the
+contents of the file are read at least once" and documents `BlobPropertyBag.type` as "Set a
+default 'type'. Not yet implemented." Measured on 1.4.4 (2026-11-04), both statements are stale:
+`.size` stats lazily on the first property access (18 for an 18-byte file before any read; 0 for a
+missing path, which rejects only when read, with `ENOENT`), and
+`Bun.file(path, { type: "text/plain" }).type` returns `text/plain;charset=utf-8`. Inference
+appends `;charset=utf-8` for `.json` (`application/json;charset=utf-8`; the reference example
+shows no charset), while unknown extensions and the `fd` overload report
+`application/octet-stream`. The byte-buffer path overload copies its input (mutating the buffer
+after creation did not change the target); URL and `fd` overloads work. Ten repo call sites
+already read `.size` before any read (e.g. `services/sportsdesk_telegram_bot.ts:1114`'s max-bytes
+guard and `lib/dod6_v54_lifetime_reader.ts`), which is correct on this binary, and no site passes
+`{ type }` today. The pinned `bun-types@1.4.4` still carries the stale "Not yet implemented"
+comment. Pinned by [tests/bun_file_response.test.ts](../tests/bun_file_response.test.ts).
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs

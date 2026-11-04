@@ -1,5 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { closeSync, openSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * `Bun.file()` infers a MIME type, but `new Response(file)` does not put it on the response object.
@@ -52,6 +55,56 @@ describe("Bun.file response semantics", () => {
     } finally {
       await server.stop(true);
     }
+  });
+
+  test("metadata is valid before a read and the type option is implemented on 1.4.4", async () => {
+    const path = `${DIR}/doc.json`;
+    const body = '{"hello":"world"}\n';
+    await Bun.write(path, body);
+
+    const lazy = Bun.file(path);
+    // The reference says size is not valid until a read, and that BlobPropertyBag.type is
+    // "Not yet implemented". Measured on 1.4.4: size stats on first access and the type option
+    // overrides inference (with the charset suffix Bun appends).
+    expect(lazy.size).toBe(body.length);
+    expect(lazy.type).toBe("application/json;charset=utf-8");
+    expect(await lazy.text()).toBe(body);
+
+    const typed = Bun.file(path, { type: "text/plain" });
+    expect(typed.type).toBe("text/plain;charset=utf-8");
+    expect(await typed.text()).toBe(body);
+  });
+
+  test("byte-buffer paths are copied; URL and fd overloads work", async () => {
+    const path = `${DIR}/doc.json`;
+    const body = '{"hello":"world"}\n';
+    await Bun.write(path, body);
+
+    const fromUrl = Bun.file(pathToFileURL(resolve(path)));
+    expect(await fromUrl.text()).toBe(body);
+
+    const pathBytes = new TextEncoder().encode(path);
+    const fromBytes = Bun.file(pathBytes);
+    expect(await fromBytes.text()).toBe(body);
+    pathBytes.fill(0x78); // the reference says the path buffer is copied
+    expect(await fromBytes.text()).toBe(body);
+
+    const fd = openSync(path, "r");
+    try {
+      const fromFd = Bun.file(fd);
+      expect(fromFd.type).toBe("application/octet-stream");
+      expect(fromFd.size).toBe(body.length);
+      expect(await fromFd.text()).toBe(body);
+    } finally {
+      closeSync(fd);
+    }
+  });
+
+  test("a missing path is lazy: its read rejects with ENOENT", async () => {
+    const missing = Bun.file(`${DIR}/nope.json`);
+    expect(missing.size).toBe(0);
+    expect(missing.type).toBe("application/json;charset=utf-8");
+    await expect(missing.text()).rejects.toThrow("ENOENT");
   });
 
   test("base64 inline form inflates the payload", async () => {
