@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /** Bridge 3b CLI: fixture/live pending rows → sanitized rollup → R2 (fixtures never hit the WS channel). */
 import { parseArgs } from "node:util";
+import { readFileSync } from "node:fs";
 import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
 const { values } = parseArgs({

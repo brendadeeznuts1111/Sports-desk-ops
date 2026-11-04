@@ -84,6 +84,8 @@ id that appears on a task but not in this table is a defect, and a test enforces
 | `RT-AUTH-BACKEND-DIFF` | P0.3     | `[OBSERVED]` captures/2026-11-01/run.json | CDP vs WebKit     |
 | `RT-GSLIVE-LINKS`      | P1.6     | `[OBSERVED]` three GSLive surfaces        | three captures    |
 | `RT-ARTIFACT-CADENCE`  | P2.3     | `[CODE]` package.json:76                  | cadence + check   |
+| `RT-SEARCH-ESCAPE`     | P0.5     | `[CODE]` pinned manager.js search render  | sink test         |
+| `RT-DEFENSE-MEASURE`   | P0.6     | `[CODE]`/`[OBSERVED]` defense pack        | measured controls |
 | `RT-RENDER-HTML`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.html    | HTML artifact     |
 | `RT-RENDER-ANSI`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.ansi    | CLI/JS diff       |
 | `RT-RENDER-LISTITEM`   | Renderer | `[OBSERVED]` MCP api:Bun.markdown.render  | checked semantics |
@@ -191,6 +193,10 @@ so an id resolves without guessing which artifact it came from.
     hop from `sessionStorage.credentials.code`.
   - **Fix:** apply the seam escaper to the search render path (overlay or upstream), then migrate
     `getMessageInit`, `getPopUpMessages`, `setCommunicationMessages`, `setHistory` one per PR.
+  - **Done when:** a `NameFirst` payload renders as literal text and sends no request; sink tests
+    cover the migrated path.
+  - **Blocked by:** an approved seam/escaper landing point (overlay or upstream) and the
+    external-view canary is **not** required.
   - **Exit:** a `NameFirst` payload renders as literal text and sends no request; sink tests cover
     the migrated path. **Not blocked by the external-view canary.**
 
@@ -206,6 +212,8 @@ so an id resolves without guessing which artifact it came from.
     to replay tampered authenticated requests; (c) server team's answer "what does authz check?";
     (d) business owner's answer "what reconciles the ledger?". None is available in this
     environment; items 2 and 4 of the pack are explicitly **not executed**.
+  - **Done when:** item 2 Bearer verdict is confirmed by the server team by test; item 3 is either
+    a reconciliation that holds or the written no-reconciliation finding.
   - **Exit:** item 2 Bearer verdict confirmed by the server team by test; item 3 either a
     reconciliation that holds or the written no-reconciliation finding; item 4 three chains measured
     before/after each control; roadmap re-derived from the results.

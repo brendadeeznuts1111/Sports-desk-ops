@@ -171,7 +171,7 @@ export async function buildF402PendingRollup(
   );
   for (const row of accepted) {
     rowCount += 1;
-    const key = `${String(row.Login ?? "")}|${String(row.WagerNumber ?? "")}|${String(row.TicketNumber ?? "")}`;
+    const key = `${String(row.TicketNumber ?? "")}-${String(row.WagerNumber ?? "")}-${String(row.totalPicks ?? "")}`;
     const stake = toCents(row.AmountWagered);
     const payout = toCents(row.ToWinAmount);
     const spread = effectiveLineHundredths(
@@ -338,7 +338,7 @@ export async function buildF402PendingRollup(
           gate: 8,
           name: "TemporalCutoffAndCrossSystemReconciliation",
           status: "skipped",
-          detail: "no 3c openExposureCents input",
+          detail: "skipped_no_live_counterpart: no 3c openExposureCents input",
         } as PendingGate;
       }
       const variance = totalPayout - BigInt(options.gate8.openExposureCents);
