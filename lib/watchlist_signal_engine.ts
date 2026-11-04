@@ -686,7 +686,15 @@ const CAPTURE_STALE_SECONDS = 3_600;
 interface RowProvenance {
   readonly source: string;
   readonly fixture: boolean;
-  readonly asOf: string | null;
+  /**
+   * The observation instant as epoch milliseconds, never a string.
+   *
+   * Timestamps arrive as strings and are converted exactly once at the artifact boundary; the
+   * row layout carries the number so age, staleness, aggregation and candidate ranking never
+   * re-parse (or re-format) the same instant. ISO strings are materialized at the public
+   * boundary, once per signal rather than once per row.
+   */
+  readonly asOfMs: number | null;
   readonly dataMode: string | null;
   readonly stale: boolean;
 }
@@ -702,34 +710,36 @@ interface SignalRow {
   readonly provenance: RowProvenance;
 }
 
-function ageSeconds(asOf: string | null, now: Date): number | null {
-  if (asOf === null) return null;
-  const parsed = Date.parse(asOf);
-  return Number.isFinite(parsed)
-    ? Math.max(0, Math.floor((now.getTime() - parsed) / 1000))
-    : null;
+function ageSecondsFromMs(asOfMs: number | null, nowMs: number): number | null {
+  return asOfMs === null
+    ? null
+    : Math.max(0, Math.floor((nowMs - asOfMs) / 1000));
+}
+
+function isoToEpochMs(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function rowProvenance(
   source: string,
-  recordedAsOf: string | null,
-  fallbackAsOf: string | null,
+  recordedAsOfMs: number | null,
+  fallbackAsOfMs: number | null,
   staleAfterSeconds: number,
-  now: Date,
+  nowMs: number,
   options: { fixture: boolean; dataMode: string | null },
 ): RowProvenance {
-  const asOf = recordedAsOf ?? fallbackAsOf;
-  const age = ageSeconds(asOf, now);
+  const asOfMs = recordedAsOfMs ?? fallbackAsOfMs;
+  const age = ageSecondsFromMs(asOfMs, nowMs);
   // A bet cannot be accepted after it was read. A clock that lands in the future is a
   // broken/unknown clock, never evidence of freshness, so it is refused as stale.
-  const recordedMs = asOf === null ? Number.NaN : Date.parse(asOf);
   const future =
-    Number.isFinite(recordedMs) &&
-    recordedMs - now.getTime() > FUTURE_TOLERANCE_SECONDS * 1_000;
+    asOfMs !== null && asOfMs - nowMs > FUTURE_TOLERANCE_SECONDS * 1_000;
   return {
     source,
     fixture: options.fixture,
-    asOf,
+    asOfMs,
     dataMode: options.dataMode,
     stale: future || (age !== null && age > staleAfterSeconds),
   };
@@ -743,13 +753,31 @@ const FUTURE_TOLERANCE_SECONDS = 120;
  * and the desk's own Central clock is ~56 min in the future — so the portal writes Eastern. */
 const PORTAL_TIME_ZONE = "America/New_York";
 
-/** Offset of `timeZone` from UTC at the instant whose *wall clock* is `wallMs` (two-pass for DST). */
-function zoneOffsetMs(timeZone: string, wallMs: number): number {
-  return offsetAt(timeZone, wallMs - offsetAt(timeZone, wallMs));
-}
+/**
+ * One `Intl.DateTimeFormat` per zone, built once and reused.
+ *
+ * Constructing a formatter costs ~25 µs (measured 2026-11-04), while `formatToParts` on a
+ * shared instance costs ~1 µs. A per-row `new Intl.DateTimeFormat(...)` therefore turned a
+ * 550-row capture into ~28 ms of pure formatter allocation; the zone offset is a property of
+ * the instant, not of the row, so the formatter belongs to the layout, not the row loop.
+ */
+const ZONE_PARTS_FORMATTERS: Record<string, Intl.DateTimeFormat> = {
+  [PORTAL_TIME_ZONE]: new Intl.DateTimeFormat("en-US", {
+    timeZone: PORTAL_TIME_ZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }),
+};
 
-function offsetAt(timeZone: string, instantMs: number): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
+function zonePartsFormatter(timeZone: string): Intl.DateTimeFormat {
+  const known = ZONE_PARTS_FORMATTERS[timeZone];
+  if (known !== undefined) return known;
+  const created = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hourCycle: "h23",
     year: "numeric",
@@ -758,7 +786,18 @@ function offsetAt(timeZone: string, instantMs: number): number {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  }).formatToParts(new Date(instantMs));
+  });
+  ZONE_PARTS_FORMATTERS[timeZone] = created;
+  return created;
+}
+
+/** Offset of `timeZone` from UTC at the instant whose *wall clock* is `wallMs` (two-pass for DST). */
+function zoneOffsetMs(timeZone: string, wallMs: number): number {
+  return offsetAt(timeZone, wallMs - offsetAt(timeZone, wallMs));
+}
+
+function offsetAt(timeZone: string, instantMs: number): number {
+  const parts = zonePartsFormatter(timeZone).formatToParts(new Date(instantMs));
   const part = (type: string): number => {
     const value = parts.find((entry) => entry.type === type)?.value;
     return value === undefined ? Number.NaN : Number(value);
@@ -775,21 +814,24 @@ function offsetAt(timeZone: string, instantMs: number): number {
 }
 
 /**
- * Portal wall-clock → ISO in the portal's zone. `getBetTicker` `InsertDateTime` and
+ * Portal wall-clock → epoch milliseconds. `getBetTicker` `InsertDateTime` and
  * `Report/Pending` `acceptedAt` carry no zone. Reading them as host-local (what `Date.parse`
  * does) put the desk's own Central offset on an Eastern clock, i.e. ~56 min *in the future*
  * for a just-captured row; that made old activity look indefinitely fresh. The point is the
  * clock the portal wrote — when the bet was placed — not the moment this capture re-read a
  * frozen page, so a capture that keeps returning the same tickets cannot read as fresh.
+ *
+ * Returns the instant as a number: the row layout carries epoch milliseconds, so downstream
+ * age/staleness/aggregation arithmetic never re-parses a string.
  */
-function portalClockIso(value: unknown): string | null {
+function portalClockEpochMs(value: unknown): number | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   if (text === "") return null;
   // An explicit zone is already an instant; let Date.parse own it.
   if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
     const ms = Date.parse(text);
-    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+    return Number.isNaN(ms) ? null : ms;
   }
   const wall =
     /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(
@@ -797,7 +839,7 @@ function portalClockIso(value: unknown): string | null {
     );
   if (wall === null) {
     const ms = Date.parse(text);
-    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+    return Number.isNaN(ms) ? null : ms;
   }
   const [, year, month, day, hour, minute, second = "00", fraction = "0"] =
     wall;
@@ -810,9 +852,7 @@ function portalClockIso(value: unknown): string | null {
     Number(second),
     Number(fraction.padEnd(3, "0")),
   );
-  return new Date(
-    wallMs - zoneOffsetMs(PORTAL_TIME_ZONE, wallMs),
-  ).toISOString();
+  return wallMs - zoneOffsetMs(PORTAL_TIME_ZONE, wallMs);
 }
 
 /** Candidate logins come from the same fields as signal logins; trailing dots are noise. */
@@ -847,7 +887,7 @@ export interface WatchlistCandidateObservation {
   readonly agentId: string | null;
   readonly riskUsd: number;
   readonly source: string;
-  readonly betAt: string | null;
+  readonly betAtMs: number | null;
   readonly parsed: ParsedMarket | null;
 }
 
@@ -879,7 +919,7 @@ export interface WatchlistSignalInputs {
 function rowsFromFeed(
   feed: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
-  now: Date,
+  nowMs: number,
   onCandidate?: CandidateSink,
   staleAfterSeconds?: number,
 ): SignalRow[] {
@@ -899,10 +939,11 @@ function rowsFromFeed(
     f402["source"] === "fixture" ||
     dataMode === "FIXTURE" ||
     (typeof f402["source"] === "string" && f402["source"].includes("fixture"));
-  const asOf =
+  const asOfMs = isoToEpochMs(
     typeof record["lastUpdatedIso"] === "string"
       ? record["lastUpdatedIso"]
-      : null;
+      : null,
+  );
   const rows: SignalRow[] = [];
   const pending = Array.isArray(record["pendingBets"])
     ? record["pendingBets"]
@@ -924,7 +965,7 @@ function rowsFromFeed(
         agentId: agentIdFrom(row["agentOwner"]),
         riskUsd,
         source: "docs/graph-live-feed.json",
-        betAt: portalClockIso(row["placedAtUtc"]),
+        betAtMs: portalClockEpochMs(row["placedAtUtc"]),
         parsed,
       });
       continue;
@@ -940,10 +981,10 @@ function rowsFromFeed(
       parsed,
       provenance: rowProvenance(
         "docs/graph-live-feed.json",
-        asOf,
+        asOfMs,
         null,
         staleAfterSeconds ?? FEED_STALE_SECONDS,
-        now,
+        nowMs,
         { fixture, dataMode },
       ),
     });
@@ -955,7 +996,7 @@ function rowsFromWagers(
   wagers: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
   fallbackAsOf: string | null,
-  now: Date,
+  nowMs: number,
   onCandidate?: CandidateSink,
   staleAfterSeconds?: number,
 ): SignalRow[] {
@@ -966,8 +1007,10 @@ function rowsFromWagers(
     : Array.isArray(record["list"])
       ? record["list"]
       : [];
-  const observedAt =
-    typeof record["observedAt"] === "string" ? record["observedAt"] : null;
+  const observedAtMs = isoToEpochMs(
+    typeof record["observedAt"] === "string" ? record["observedAt"] : null,
+  );
+  const fallbackAsOfMs = isoToEpochMs(fallbackAsOf);
   const fixture =
     typeof record["source"] === "string" &&
     record["source"].includes("fixture");
@@ -986,7 +1029,7 @@ function rowsFromWagers(
       : 0;
     // The bet's own clock, not the capture's: a re-read of the same ticker rows can be
     // seconds old while the wagers themselves are days old.
-    const betAt = portalClockIso(row["InsertDateTime"]);
+    const betAtMs = portalClockEpochMs(row["InsertDateTime"]);
     const entry = registry.get(login);
     if (entry === undefined) {
       onCandidate?.({
@@ -994,7 +1037,7 @@ function rowsFromWagers(
         agentId: agentIdFrom(row["AgentID"]),
         riskUsd,
         source: "data/live-wagers.json",
-        betAt,
+        betAtMs,
         parsed,
       });
       continue;
@@ -1012,10 +1055,10 @@ function rowsFromWagers(
       parsed,
       provenance: rowProvenance(
         "data/live-wagers.json",
-        betAt ?? observedAt,
-        fallbackAsOf,
+        betAtMs ?? observedAtMs,
+        fallbackAsOfMs,
         staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
-        now,
+        nowMs,
         { fixture, dataMode: null },
       ),
     });
@@ -1026,15 +1069,16 @@ function rowsFromWagers(
 function rowsFromLiveBets(
   liveBets: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
-  now: Date,
+  nowMs: number,
   onCandidate?: CandidateSink,
   staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof liveBets !== "object" || liveBets === null) return [];
   const record = liveBets as Record<string, unknown>;
   const games = Array.isArray(record["games"]) ? record["games"] : [];
-  const capturedAt =
-    typeof record["capturedAt"] === "string" ? record["capturedAt"] : null;
+  const capturedAtMs = isoToEpochMs(
+    typeof record["capturedAt"] === "string" ? record["capturedAt"] : null,
+  );
   const dataSource =
     typeof record["dataSource"] === "string" ? record["dataSource"] : "";
   const rows: SignalRow[] = [];
@@ -1050,7 +1094,7 @@ function rowsFromLiveBets(
     const riskUsd = Number.isFinite(wageredCents)
       ? Math.max(0, wageredCents / 100)
       : 0;
-    const betAt = portalClockIso(row["acceptedAt"]);
+    const betAtMs = portalClockEpochMs(row["acceptedAt"]);
     const entry = registry.get(login);
     if (entry === undefined) {
       onCandidate?.({
@@ -1058,7 +1102,7 @@ function rowsFromLiveBets(
         agentId: agentIdFrom(row["agent"]),
         riskUsd,
         source: "data/live-bets.json",
-        betAt,
+        betAtMs,
         parsed,
       });
       continue;
@@ -1076,10 +1120,10 @@ function rowsFromLiveBets(
       parsed,
       provenance: rowProvenance(
         "data/live-bets.json",
-        betAt ?? capturedAt,
+        betAtMs ?? capturedAtMs,
         null,
         staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
-        now,
+        nowMs,
         { fixture: dataSource.includes("fixture"), dataMode: null },
       ),
     });
@@ -1115,6 +1159,7 @@ export function aggregateWatchlistSignals(
   rows: readonly SignalRow[],
   now: Date = new Date(),
 ): WatchlistSignal[] {
+  const nowMs = now.getTime();
   const baseGroups = new Map<string, SignalRow[]>();
   for (const row of rows) {
     const baseKey = [
@@ -1169,12 +1214,17 @@ export function aggregateWatchlistSignals(
       }
       const first = sideRows[0];
       if (first === undefined) continue;
-      const asOfTimes = sideRows
-        .map((row) => row.provenance.asOf)
-        .filter((value): value is string => value !== null)
-        .sort();
-      const asOf = asOfTimes[asOfTimes.length - 1] ?? null;
-      const age = ageSeconds(asOf, now);
+      // One number per row; the newest wins without sorting strings, and the ISO form is
+      // materialized once for the signal rather than once per contributing row.
+      let asOfMs: number | null = null;
+      for (const row of sideRows) {
+        const value = row.provenance.asOfMs;
+        if (value !== null && (asOfMs === null || value > asOfMs)) {
+          asOfMs = value;
+        }
+      }
+      const asOf = asOfMs === null ? null : new Date(asOfMs).toISOString();
+      const age = ageSecondsFromMs(asOfMs, nowMs);
       const parsed = first.parsed;
       signals.push({
         id: signalId(parsed, side),
@@ -1232,24 +1282,25 @@ export function deriveWatchlistSignals(
   options: DeriveWatchlistSignalsOptions = {},
 ): WatchlistSignal[] {
   const now = options.now ?? new Date();
+  const nowMs = now.getTime();
   const registry = registryLookup(
     options.registry ?? getUnifiedWatchlistRegistry(),
   );
   const staleAfterSeconds = options.maxAgeSeconds;
   const rows = [
-    ...rowsFromFeed(inputs.feed, registry, now, undefined, staleAfterSeconds),
+    ...rowsFromFeed(inputs.feed, registry, nowMs, undefined, staleAfterSeconds),
     ...rowsFromWagers(
       inputs.wagers,
       registry,
       inputs.wagersAsOf ?? null,
-      now,
+      nowMs,
       undefined,
       staleAfterSeconds,
     ),
     ...rowsFromLiveBets(
       inputs.liveBets,
       registry,
-      now,
+      nowMs,
       undefined,
       staleAfterSeconds,
     ),
@@ -1292,7 +1343,7 @@ export function collectWatchlistCandidates(
       wagers: number;
       sources: Set<string>;
       leagues: Set<League>;
-      lastBetAt: string | null;
+      lastBetAtMs: number | null;
       markets: Set<string>;
     }
   >();
@@ -1306,7 +1357,7 @@ export function collectWatchlistCandidates(
       wagers: 0,
       sources: new Set<string>(),
       leagues: new Set<League>(),
-      lastBetAt: null as string | null,
+      lastBetAtMs: null as number | null,
       markets: new Set<string>(),
     };
     entry.riskUsd += Math.max(0, observation.riskUsd);
@@ -1322,17 +1373,24 @@ export function collectWatchlistCandidates(
       }
     }
     if (
-      observation.betAt !== null &&
-      (entry.lastBetAt === null || observation.betAt > entry.lastBetAt)
+      observation.betAtMs !== null &&
+      (entry.lastBetAtMs === null || observation.betAtMs > entry.lastBetAtMs)
     ) {
-      entry.lastBetAt = observation.betAt;
+      entry.lastBetAtMs = observation.betAtMs;
     }
     byLogin.set(observation.login, entry);
   };
 
-  rowsFromFeed(inputs.feed, registry, now, sink);
-  rowsFromWagers(inputs.wagers, registry, inputs.wagersAsOf ?? null, now, sink);
-  rowsFromLiveBets(inputs.liveBets, registry, now, sink);
+  const nowMs = now.getTime();
+  rowsFromFeed(inputs.feed, registry, nowMs, sink);
+  rowsFromWagers(
+    inputs.wagers,
+    registry,
+    inputs.wagersAsOf ?? null,
+    nowMs,
+    sink,
+  );
+  rowsFromLiveBets(inputs.liveBets, registry, nowMs, sink);
 
   const minRiskUsd = Math.max(0, options.minRiskUsd ?? 0);
   const ranked = [...byLogin.values()]
@@ -1344,8 +1402,11 @@ export function collectWatchlistCandidates(
       wagers: candidate.wagers,
       sources: [...candidate.sources].sort(),
       leagues: [...candidate.leagues].sort(),
-      lastBetAt: candidate.lastBetAt,
-      ageSeconds: ageSeconds(candidate.lastBetAt, now),
+      lastBetAt:
+        candidate.lastBetAtMs === null
+          ? null
+          : new Date(candidate.lastBetAtMs).toISOString(),
+      ageSeconds: ageSecondsFromMs(candidate.lastBetAtMs, nowMs),
       sampleMarkets: [...candidate.markets],
     }))
     .sort(

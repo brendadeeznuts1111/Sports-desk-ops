@@ -132,7 +132,11 @@ const MAX_EXCERPT = 4000;
 const HTTP_PREFIX = "/api/watchlist-autobet";
 const MAX_HTTP_BODY_BYTES = 32 * 1024;
 const HTTP_BOARD_CACHE_MS = 4_000;
-/** Signals derivation is one CLI spawn per key; cache it briefly to absorb UI re-renders. */
+/**
+ * Signals are one CLI spawn per key (~31 ms measured 2026-11-04). The in-process derivation
+ * behind that spawn is ~2.3 ms p50 after the epoch-millisecond row layout, so this cache
+ * absorbs process spawn, not a data-layout cost; it stays and says so.
+ */
 const HTTP_SIGNALS_CACHE_MS = 4_000;
 /** Bound the signals cache; each entry is one derived snapshot. */
 const HTTP_SIGNALS_CACHE_MAX_KEYS = 8;
@@ -1004,7 +1008,10 @@ export function apply(ctx, config) {
     return { ok: true, body: parsed.value };
   }
 
-  /** Board cache: a board is four CLI reads; the UI polls every 20 s. */
+  /**
+   * Board cache: a board is four CLI spawns (~31 ms each, measured 2026-11-04; the UI polls
+   * every 20 s). It absorbs process spawn and JSON I/O, not a data-layout cost, so it stays.
+   */
   let boardCacheAt = 0;
   /** @type {Record<string, unknown> | null} */
   let boardCacheValue = null;

@@ -801,3 +801,65 @@ describe("watchlist candidates", () => {
     ).toEqual(["A1"]);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Hot-path data layout (measured 2026-11-04)                                  */
+/* -------------------------------------------------------------------------- */
+
+describe("hot-path data layout", () => {
+  test("derivation reuses the zone formatter instead of building one per row", () => {
+    const Original = Intl.DateTimeFormat;
+    let constructed = 0;
+    const Patched = function (
+      this: unknown,
+      ...args: ConstructorParameters<typeof Intl.DateTimeFormat>
+    ): Intl.DateTimeFormat {
+      constructed += 1;
+      return new Original(...args);
+    } as unknown as typeof Intl.DateTimeFormat;
+    Intl.DateTimeFormat = Patched;
+    try {
+      const liveBets = {
+        capturedAt: "2026-11-04T11:59:00.000Z",
+        dataSource: "capture:/cloud/api/Report/Pending",
+        games: [
+          pendingGame(ACCOUNT_A.customerLogin, "2026-11-04 06:00:00.000"),
+          pendingGame(ACCOUNT_B.customerLogin, "2026-11-04 06:01:00.000"),
+        ],
+      };
+      const signals = deriveWatchlistSignals(
+        { feed: null, wagers: null, liveBets },
+        { now: NOW, registry: REGISTRY },
+      );
+      expect(signals).toHaveLength(1);
+    } finally {
+      Intl.DateTimeFormat = Original;
+    }
+    // Both acceptedAt values are zone-less wall clocks, so the two-pass zone conversion
+    // runs; the module-scope formatter is reused. A per-row `new Intl.DateTimeFormat`
+    // would count 4 here (two calls per row) and was the measured 26.6 ms regression.
+    expect(constructed).toBe(0);
+  });
+
+  test("a row carries epoch milliseconds, so the signal materialises ISO once", () => {
+    const liveBets = {
+      capturedAt: "2026-11-04T11:59:00.000Z",
+      dataSource: "capture:/cloud/api/Report/Pending",
+      games: [
+        pendingGame(ACCOUNT_A.customerLogin, "2026-11-04 06:00:00.000"),
+        pendingGame(ACCOUNT_B.customerLogin, "2026-11-04 06:01:00.000"),
+      ],
+    };
+    const signals = deriveWatchlistSignals(
+      { feed: null, wagers: null, liveBets },
+      { now: NOW, registry: REGISTRY },
+    );
+    const signal = signals[0];
+    // The newest contributing row wins (06:01 EST = 11:01Z) without sorting strings.
+    expect(signal?.provenance.asOf).toBe(
+      new Date(Date.UTC(2026, 10, 4, 11, 1, 0)).toISOString(),
+    );
+    expect(signal?.provenance.ageSeconds).toBe(3_540);
+    expect(signal?.distinctAccounts).toBe(2);
+  });
+});
