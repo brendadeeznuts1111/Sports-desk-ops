@@ -374,6 +374,46 @@ The daemon is a fresh process with no shell environment, so the gate reads the O
   session file. Only `F402_AGENT_ID` is injected into the child environment; the password is
   never passed on.
 
+### 3b staging and production runs
+
+Staging slice (the curated cohort is a test fixture; expect stale IDs):
+
+```sh
+# 1. slice — the source is at the repo root, not under Scratch/
+bun run customers:export --from ./enriched_customers_full.json \
+  --out ./Scratch/customers-staging.txt --limit 10
+
+# 2. mint the bearer — a customer list is not a fetch trigger by itself
+F402_LIVE_LOGIN=1 F402_TOKEN_FILE=Scratch/f402-token \
+  bun --no-env-file run scripts/session_login.ts --from-keychain --mint-bearer
+
+# 3. dry run (fail-closed by default)
+F402_TOKEN_FILE=Scratch/f402-token \
+F402_PENDING_CUSTOMERS_FILE=Scratch/customers-staging.txt \
+  bun --no-env-file run scripts/f402_pending_bridge3b.ts --dry-run --no-r2 --no-ws
+
+# 4. remove the temporary bearer
+rm -f Scratch/f402-token
+```
+
+> **`HTTP 400 Invalid CustomerID` is data, not a bug.** It means the sampled cohort contains
+> historical or closed accounts. Default is fail-closed: the run aborts rather than publishing a
+> rollup missing part of the book. Re-export from the live book for production; use
+> `--allow-partial` for staging only (it warns loudly and the rollup is incomplete).
+
+Observed 2026-11-04 with the curated cohort: **2 of 10 IDs were live**, 8 returned HTTP 400; the
+default run exited 1, and `--allow-partial` produced a 1-leg rollup with the sole cell suppressed
+(`k=5`). That is the intended behaviour.
+
+Production: normalize the operator's **complete, fresh** export, run the same command with
+`--dry-run` first and **without** `--allow-partial`; only then drop `--dry-run --no-r2 --no-ws` to
+publish. If the upstream rate-limits (`429`/`5xx`), lower `--max-concurrency`.
+
+> **`deskDate` comes from the rows, not the wall clock.** It is derived from the maximum row
+> timestamp; if the upstream serves stale data, the rollup date reflects that staleness. The
+> 2026-11-04 staging run produced `deskDate=2026-09-14` from a 2026-10-29 capture — correct
+> behaviour, but a signal to check upstream freshness before publishing.
+
 Prerequisite: the keychain entry must allow `bun` without prompting. A prompt hangs the tick, and
 a hanging tick blocks the next one — worse than a failure.
 
