@@ -351,6 +351,73 @@ export function resolveLiveMode({ wsState, feedAgeMs, feedDataMode } = {}) {
   };
 }
 
+/**
+ * State for the top banner. It differs from {@link resolveLiveMode} in two ways that matter
+ * for trust: a failed fetch is reported as a failure (the banner used to restamp itself with
+ * the current time, so an outage read as "0s ago"), and "nothing loaded yet" is its own state
+ * instead of a premature "feed not reachable".
+ *
+ * `fetchError` is a short reason string while the latest poll is failing, otherwise null.
+ * `awaiting` is true until the first feed has loaded or failed.
+ */
+export function resolvePollerState({
+  wsState,
+  feedAgeMs,
+  feedDataMode,
+  fetchError = null,
+  awaiting = false,
+} = {}) {
+  const hasAge = typeof feedAgeMs === "number" && Number.isFinite(feedAgeMs);
+  if (fetchError) {
+    const last = hasAge
+      ? `showing the last good feed (${formatAgeMs(Math.max(0, feedAgeMs))} old)`
+      : "no feed has loaded yet";
+    return {
+      label: "FEED FETCH FAILED",
+      tone: "rose",
+      detail: `${fetchError}; ${last}`,
+    };
+  }
+  if (!hasAge && wsState !== "connected" && wsState !== "connecting") {
+    if (awaiting) {
+      return {
+        label: "AWAITING FEED",
+        tone: "cyan",
+        detail: "first load pending",
+      };
+    }
+    return {
+      label: "FEED UNDATED",
+      tone: "amber",
+      detail: "the feed loaded without a publish time, so its age is unknown",
+    };
+  }
+  return resolveLiveMode({ wsState, feedAgeMs, feedDataMode });
+}
+
+/**
+ * WAI-ARIA tablist keyboard model: Left/Right move with wraparound, Home/End jump to the
+ * ends. Returns the new index, or `null` when the key is not a navigation key (so the caller
+ * leaves the event alone).
+ */
+export function nextTabIndex(current, key, count) {
+  if (!Number.isInteger(count) || count < 1) return null;
+  const from =
+    Number.isInteger(current) && current >= 0 && current < count ? current : 0;
+  switch (key) {
+    case "ArrowRight":
+      return (from + 1) % count;
+    case "ArrowLeft":
+      return (from - 1 + count) % count;
+    case "Home":
+      return 0;
+    case "End":
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
 /** True when a wallet row's provenance should be shown as observed rather than fixture. */
 export function isObservedSource(source) {
   return source === "LIVE" || source === "STALE";

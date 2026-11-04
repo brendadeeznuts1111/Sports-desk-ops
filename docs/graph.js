@@ -14,8 +14,10 @@ import {
   LIVE_WS_TOPICS,
   formatAgeMs,
   mergeTape,
+  nextTabIndex,
   normalizeTickerRow,
   resolveLiveMode,
+  resolvePollerState,
   summarizeBridgeFrame,
   summarizePendingBets,
   summarizePositions,
@@ -26,23 +28,65 @@ import {
   const tabBtns = document.querySelectorAll("[data-tab-target]");
   const tabPanels = document.querySelectorAll("[data-tab-panel]");
 
-  tabBtns.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      const target = btn.getAttribute("data-tab-target");
-      tabBtns.forEach(function (b) {
-        const active = b.getAttribute("data-tab-target") === target;
+  /**
+   * One tab implementation for both tab groups. Adds what the markup alone cannot: ids and
+   * `aria-controls` / `aria-labelledby` pairing, a roving tabindex (only the selected tab is
+   * in the Tab order) and the WAI-ARIA arrow/Home/End keyboard model (see `nextTabIndex`).
+   * Every lookup tolerates an empty list, so a page without the group is a no-op.
+   */
+  function wireTabs(buttonList, panelList, buttonAttr, panelAttr) {
+    const btns = Array.from(buttonList);
+    const panels = Array.from(panelList);
+
+    btns.forEach(function (btn) {
+      const key = btn.getAttribute(buttonAttr);
+      const panel = panels.find(function (p) {
+        return p.getAttribute(panelAttr) === key;
+      });
+      if (!btn.id) btn.id = "tab-" + key;
+      if (panel) {
+        if (!panel.id) panel.id = "tabpanel-" + key;
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("aria-labelledby", btn.id);
+        btn.setAttribute("aria-controls", panel.id);
+      }
+      btn.setAttribute(
+        "tabindex",
+        btn.getAttribute("aria-selected") === "true" ? "0" : "-1",
+      );
+    });
+
+    function select(target, moveFocus) {
+      btns.forEach(function (b) {
+        const active = b.getAttribute(buttonAttr) === target;
         b.classList.toggle("active", active);
         b.setAttribute("aria-selected", active ? "true" : "false");
+        b.setAttribute("tabindex", active ? "0" : "-1");
+        if (active && moveFocus && typeof b.focus === "function") b.focus();
       });
-      tabPanels.forEach(function (panel) {
-        if (panel.getAttribute("data-tab-panel") === target) {
+      panels.forEach(function (panel) {
+        if (panel.getAttribute(panelAttr) === target) {
           panel.removeAttribute("hidden");
         } else {
           panel.setAttribute("hidden", "");
         }
       });
+    }
+
+    btns.forEach(function (btn, index) {
+      btn.addEventListener("click", function () {
+        select(btn.getAttribute(buttonAttr), false);
+      });
+      btn.addEventListener("keydown", function (event) {
+        const next = nextTabIndex(index, event.key, btns.length);
+        if (next === null) return;
+        event.preventDefault();
+        select(btns[next].getAttribute(buttonAttr), true);
+      });
     });
-  });
+  }
+
+  wireTabs(tabBtns, tabPanels, "data-tab-target", "data-tab-panel");
 
   // 2. Collapsible 1Q-4Q & Alt Ring Drawer
   const periodDrawerBtn = document.getElementById("toggle-period-drawer");
@@ -377,6 +421,9 @@ import {
   const liveDeskBookBody = document.getElementById("desk-book-tbody");
   const liveDeskSourceEl = document.getElementById("live-desk-source");
   const liveModeBadge = document.getElementById("live-mode-badge");
+  const pollerStateEl = document.getElementById("live-poller-state");
+  const pollerDotEl = document.getElementById("live-poller-dot");
+  const pollerAnnounceEl = document.getElementById("live-status-announce");
   const liveFeedAgeEl = document.getElementById("live-feed-age");
   const liveWsStateEl = document.getElementById("live-ws-state");
   const livePauseBtn = document.getElementById("live-pause-btn");
@@ -397,6 +444,14 @@ import {
   let liveFeedEpochMs = null;
   let liveFeedDataMode = "—";
   let liveWsState = "offline";
+  // The banner's own feed state: the latest poll failure (null while polls succeed), and
+  // whether the first poll has finished yet. `lastPollEpochMs` (section 8) is the feed's
+  // publish time, or null when unknown; it is never set from the page's own clock.
+  let feedFetchError = null;
+  let feedAwaiting = true;
+  let lastAnnouncedPollerLabel = "";
+  let lastPollEpochMs = null;
+  const lastUpdatedAgeEl = document.getElementById("live-last-updated-age");
 
   function fmtInt(value) {
     const number = Number(value);
@@ -616,7 +671,36 @@ import {
     }
   }
 
+  /** Paint the top banner (label, dot, age pill) from one resolved state. */
+  function renderPollerState(state) {
+    if (pollerStateEl) {
+      pollerStateEl.textContent = state.label;
+      pollerStateEl.title = state.detail;
+    }
+    if (pollerDotEl)
+      pollerDotEl.className = "pulse-dot pulse-dot-" + state.tone;
+    if (lastUpdatedAgeEl)
+      lastUpdatedAgeEl.className = "pill pill-" + state.tone;
+    // Announce only when the state changes; the age counter ticks every second and must
+    // never reach a screen reader.
+    if (pollerAnnounceEl && state.label !== lastAnnouncedPollerLabel) {
+      lastAnnouncedPollerLabel = state.label;
+      pollerAnnounceEl.textContent =
+        "Feed status: " + state.label + ". " + state.detail;
+    }
+  }
+
   function updateLiveBadges() {
+    renderPollerState(
+      resolvePollerState({
+        wsState: liveWsState,
+        feedAgeMs:
+          lastPollEpochMs === null ? null : Date.now() - lastPollEpochMs,
+        feedDataMode: liveFeedDataMode,
+        fetchError: feedFetchError,
+        awaiting: feedAwaiting,
+      }),
+    );
     const mode = resolveLiveMode({
       wsState: liveWsState,
       feedAgeMs: liveFeedEpochMs === null ? null : Date.now() - liveFeedEpochMs,
@@ -686,23 +770,7 @@ import {
     updateLiveBadges();
   }
 
-  opsTabBtns.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      const target = btn.getAttribute("data-ops-target");
-      opsTabBtns.forEach(function (b) {
-        const active = b.getAttribute("data-ops-target") === target;
-        b.classList.toggle("active", active);
-        b.setAttribute("aria-selected", active ? "true" : "false");
-      });
-      opsPanels.forEach(function (panel) {
-        if (panel.getAttribute("data-ops-panel") === target) {
-          panel.removeAttribute("hidden");
-        } else {
-          panel.setAttribute("hidden", "");
-        }
-      });
-    });
-  });
+  wireTabs(opsTabBtns, opsPanels, "data-ops-target", "data-ops-panel");
 
   if (livePauseBtn) {
     livePauseBtn.addEventListener("click", function () {
@@ -881,7 +949,6 @@ import {
 
   // 8. Live Poller Sync (`./graph-live-feed.json` / `/api/graph-feed`) + Relative Age Counter
   const lastUpdatedEl = document.getElementById("live-last-updated-ts");
-  const lastUpdatedAgeEl = document.getElementById("live-last-updated-age");
   const pollSeqEl = document.getElementById("live-poll-seq");
   const dataModeEl = document.getElementById("live-data-mode");
   const liveTicksBody = document.getElementById("live-ticks-tbody");
@@ -893,7 +960,6 @@ import {
   const pollNowBtn = document.getElementById("poll-now-btn");
   const cellSyncStamps = document.querySelectorAll(".live-sync-ts");
 
-  let lastPollEpochMs = Date.now();
   let localPollCount = 1;
 
   // 8b. GSLive link hydration: every [data-gslive] anchor is rebuilt from the live feed so the
@@ -1057,8 +1123,13 @@ import {
   function updateRelativeAge() {
     updateLiveBadges();
     if (!lastUpdatedAgeEl) return;
-    const sec = Math.max(0, Math.floor((Date.now() - lastPollEpochMs) / 1000));
-    lastUpdatedAgeEl.textContent = sec + "s ago";
+    // formatAgeMs ("1h", "2d") instead of raw seconds; "—" until the feed's age is known.
+    const text =
+      lastPollEpochMs === null
+        ? "—"
+        : formatAgeMs(Math.max(0, Date.now() - lastPollEpochMs)) + " ago";
+    if (lastUpdatedAgeEl.textContent !== text)
+      lastUpdatedAgeEl.textContent = text;
   }
 
   async function hydrateValueArtifacts() {
@@ -1176,10 +1247,25 @@ import {
       const res = await fetch("./graph-live-feed.json?t=" + Date.now(), {
         cache: "no-store",
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        // Keep the last good timestamp: only the failure is news.
+        feedFetchError = "HTTP " + res.status;
+        feedAwaiting = false;
+        updateRelativeAge();
+        return;
+      }
       const data = await res.json();
       if (data && data.lastUpdatedCdt) {
-        lastPollEpochMs = data.pollEpochMs || Date.now();
+        feedFetchError = null;
+        feedAwaiting = false;
+        // The feed's own publish time, never "now": a feed that cannot say when it was
+        // written must read as undated, not as fresh.
+        const publishedMs =
+          typeof data.pollEpochMs === "number" &&
+          Number.isFinite(data.pollEpochMs)
+            ? data.pollEpochMs
+            : Date.parse(String(data.lastUpdatedIso ?? ""));
+        lastPollEpochMs = Number.isFinite(publishedMs) ? publishedMs : null;
         localPollCount = data.pollSequence || localPollCount;
         if (lastUpdatedEl) {
           lastUpdatedEl.textContent =
@@ -1202,14 +1288,16 @@ import {
         hydrateLiveTicks(data);
         hydrateLiveOps(data);
         updateRelativeAge();
+      } else {
+        feedFetchError = "feed has no lastUpdatedCdt";
+        feedAwaiting = false;
+        updateRelativeAge();
       }
     } catch {
-      const now = new Date();
-      lastPollEpochMs = now.getTime();
-      if (lastUpdatedEl) {
-        lastUpdatedEl.textContent =
-          now.toISOString().replace("T", " ").slice(0, 19) + " UTC";
-      }
+      // This used to restamp "Last Updated" with the page's own clock, so an outage read as
+      // "0s ago". Leave the last good timestamp alone and report the failure instead.
+      feedFetchError = "network error";
+      feedAwaiting = false;
       updateRelativeAge();
     }
   }

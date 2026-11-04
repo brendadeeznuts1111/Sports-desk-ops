@@ -147,4 +147,25 @@ export function resolveLiveMode(input?: {
   feedDataMode?: string | null;
 }): LiveMode;
 
+/**
+ * Top-banner state: like `resolveLiveMode`, but a failed fetch is a failure, an undated feed is
+ * never fresh, and "nothing loaded yet" is its own state.
+ */
+export function resolvePollerState(input?: {
+  wsState?: string;
+  feedAgeMs?: number | null;
+  feedDataMode?: string | null;
+  /** Short reason while the latest poll is failing, otherwise null. */
+  fetchError?: string | null;
+  /** True until the first feed has loaded or failed. */
+  awaiting?: boolean;
+}): LiveMode;
+
+/** WAI-ARIA tablist keys. Returns the new index, or null for a non-navigation key. */
+export function nextTabIndex(
+  current: number,
+  key: string,
+  count: number,
+): number | null;
+
 export function isObservedSource(source: string): boolean;

@@ -14,8 +14,10 @@ import {
   formatAgeMs,
   isObservedSource,
   mergeTape,
+  nextTabIndex,
   normalizeTickerRow,
   resolveLiveMode,
+  resolvePollerState,
   summarizeBridgeFrame,
   summarizePendingBets,
   summarizePositions,
@@ -303,6 +305,89 @@ describe("resolveLiveMode", () => {
     expect(
       resolveLiveMode({ wsState: "connecting", feedAgeMs: 1_000 }),
     ).toMatchObject({ label: "WS CONNECTING", tone: "cyan" });
+  });
+});
+
+describe("resolvePollerState", () => {
+  test("a failed fetch is a failure, and says how old the last good feed is", () => {
+    expect(
+      resolvePollerState({
+        wsState: "polling",
+        feedAgeMs: 4_800_000,
+        fetchError: "network error",
+      }),
+    ).toEqual({
+      label: "FEED FETCH FAILED",
+      tone: "rose",
+      detail: "network error; showing the last good feed (1h old)",
+    });
+    expect(
+      resolvePollerState({
+        wsState: "offline",
+        feedAgeMs: null,
+        fetchError: "HTTP 503",
+      }).detail,
+    ).toBe("HTTP 503; no feed has loaded yet");
+  });
+
+  test("a failure outranks a connected socket's mode: the feed panel is still stale", () => {
+    expect(
+      resolvePollerState({
+        wsState: "connected",
+        feedAgeMs: 10_000,
+        fetchError: "HTTP 500",
+      }).label,
+    ).toBe("FEED FETCH FAILED");
+  });
+
+  test("nothing loaded yet is AWAITING, not 'not reachable'", () => {
+    expect(
+      resolvePollerState({
+        wsState: "offline",
+        feedAgeMs: null,
+        awaiting: true,
+      }),
+    ).toMatchObject({ label: "AWAITING FEED", tone: "cyan" });
+  });
+
+  test("a feed with no publish time is UNDATED, never fresh", () => {
+    expect(
+      resolvePollerState({ wsState: "polling", feedAgeMs: null }),
+    ).toMatchObject({ label: "FEED UNDATED", tone: "amber" });
+  });
+
+  test("an old feed is never a live state; a fresh one polls", () => {
+    expect(
+      resolvePollerState({ wsState: "polling", feedAgeMs: 4_838_000 }).label,
+    ).toBe("SNAPSHOT");
+    expect(
+      resolvePollerState({ wsState: "polling", feedAgeMs: 5_000 }).label,
+    ).toBe("POLL 15s");
+  });
+
+  test("with no arguments it does not throw", () => {
+    expect(resolvePollerState().label).toBe("FEED UNDATED");
+  });
+});
+
+describe("nextTabIndex", () => {
+  test("arrows wrap around, Home and End jump", () => {
+    expect(nextTabIndex(0, "ArrowRight", 6)).toBe(1);
+    expect(nextTabIndex(5, "ArrowRight", 6)).toBe(0);
+    expect(nextTabIndex(0, "ArrowLeft", 6)).toBe(5);
+    expect(nextTabIndex(3, "Home", 6)).toBe(0);
+    expect(nextTabIndex(3, "End", 6)).toBe(5);
+  });
+
+  test("any other key is left alone (null), including with no tabs", () => {
+    expect(nextTabIndex(0, "Enter", 6)).toBeNull();
+    expect(nextTabIndex(0, "Tab", 6)).toBeNull();
+    expect(nextTabIndex(0, "ArrowRight", 0)).toBeNull();
+  });
+
+  test("an out-of-range current index recovers from the first tab", () => {
+    expect(nextTabIndex(99, "ArrowRight", 3)).toBe(1);
+    expect(nextTabIndex(-1, "ArrowLeft", 3)).toBe(2);
   });
 });
 
