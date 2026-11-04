@@ -182,7 +182,7 @@ export function createWagersLiveSink(
       }
       const client =
         options.r2Client === undefined
-          ? R2S3Client.fromEnv()
+          ? await R2S3Client.fromEnvOrSecrets()
           : options.r2Client;
       if (client === null) {
         return { ok: false, error: "R2 credentials are unavailable" };
