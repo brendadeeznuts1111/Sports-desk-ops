@@ -364,27 +364,227 @@ const LIVE_BETS_SPORT_TO_LEAGUE: Readonly<Record<string, League>> = {
   BASEBALL: "MLB",
 };
 
-/** A `data/live-bets.json` game row, best effort; `null` when its market is not readable. */
+/** `team1`/`team2` carry the sport ("Soccer") and the market type ("Market") on some rows. */
+function isPlaceholderTeamName(name: string, sport: string): boolean {
+  const upper = name.trim().toUpperCase();
+  return (
+    upper === "" || upper === "MARKET" || upper === sport.trim().toUpperCase()
+  );
+}
+
+const FRACTION_VALUES: Readonly<Record<string, number>> = {
+  "½": 0.5,
+  "¼": 0.25,
+  "¾": 0.75,
+};
+
+/** A line token: `1`, `1.5`, `1½`, `½` — the capture writes halves as U+00BD. */
+const LINE_TOKEN = String.raw`\d{1,2}(?:\.\d+)?[½¼¾]?|[½¼¾]`;
+
+const SIGNED_LINE_PATTERN = new RegExp(`^([+-]?)\\s*(${LINE_TOKEN})$`);
+/** A signed spread selection: `Arsenal -1½`, `Betis +½,+1`. */
+const SPREAD_SELECTION_PATTERN = new RegExp(
+  `^(.*?)\\s+([+-](?:${LINE_TOKEN})(?:,(?:[+-])?(?:${LINE_TOKEN}))?)$`,
+);
+
+/** `2½` → 2.5, `½` → 0.5, `2.5` → 2.5; `null` when the token is not a line number. */
+function parseLineNumber(token: string): number | null {
+  const trimmed = token.trim();
+  if (trimmed === "") return null;
+  const match = /^(\d+)?\s*([½¼¾])?$/.exec(trimmed);
+  if (match !== null && (match[1] !== undefined || match[2] !== undefined)) {
+    const whole = match[1] === undefined ? 0 : Number(match[1]);
+    const fraction =
+      match[2] === undefined ? 0 : (FRACTION_VALUES[match[2]] ?? 0);
+    return whole + fraction;
+  }
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** A signed line token (`-1½`, `+1`, `½`) → its number; `null` when it is not a line. */
+function parseSignedLine(token: string): number | null {
+  const match = SIGNED_LINE_PATTERN.exec(token.trim());
+  if (match === null) return null;
+  const magnitude = parseLineNumber(match[2] ?? "");
+  if (magnitude === null) return null;
+  return (match[1] === "-" ? -1 : 1) * magnitude;
+}
+
+/** A split line (`2½,3`, `+½,+1`) is one market; its effective line is the midpoint. */
+function parseLineExpression(token: string): number | null {
+  const parts = token.split(",");
+  if (parts.length === 0 || parts.length > 2) return null;
+  const values: number[] = [];
+  for (const part of parts) {
+    const value = parseSignedLine(part);
+    if (value === null) return null;
+    values.push(value);
+  }
+  if (values.length === 1) return values[0] ?? null;
+  return ((values[0] ?? 0) + (values[1] ?? 0)) / 2;
+}
+
+/**
+ * The selection text of one live-bets row.
+ *
+ * `chosenTeam` is the leg's selection (`Arsenal -1½ -120`); `description` may hold every leg of
+ * a parlay, so it is only a fallback and is cut down to its first leg.
+ */
+function liveBetsSelectionText(row: Record<string, unknown>): string {
+  const chosen = String(row["chosenTeam"] ?? "").trim();
+  if (chosen !== "") return chosen;
+  const description = String(row["description"] ?? "");
+  const firstLeg =
+    (description.split("|")[0] ?? "").split(
+      /\s+-\s+For\s+(?:Game|1st Half|2nd Half)/i,
+    )[0] ?? "";
+  return firstLeg.replace(/^[A-Za-z.]*\s*#\d+\s+/, "").trim();
+}
+
+interface LiveBetsSelection {
+  readonly teams: readonly string[];
+  readonly marketKind: "moneyline" | "spread" | "total" | "team_total";
+  readonly sideTeam: string | null;
+  readonly line: number | null;
+  readonly overUnder: OverUnder | null;
+}
+
+/**
+ * Parse a soccer selection label.
+ *
+ * The capture names the pick, not the sides: `Arsenal -380` (moneyline), `Arsenal -1½ -120`
+ * (spread), `Arsenal/Slavia Praha O 2½ -130` (match total), `Como O 1½ -140` (team total),
+ * `Draw ( Betis vs Borussia Dortmund ) +160`, with `½`/`¼`/`¾` fractions and split lines
+ * (`-½,-1`). Returns `null` when the label holds no readable market.
+ */
+function parseSoccerSelection(text: string): LiveBetsSelection | null {
+  let cleaned = text.replace(/\s+/g, " ").trim();
+  // A futures label prefixes the pick with `#`-separated path segments.
+  if (cleaned.startsWith("#")) {
+    const lastSegment = cleaned.lastIndexOf(" - ");
+    if (lastSegment >= 0) cleaned = cleaned.slice(lastSegment + 3);
+    cleaned = cleaned.replace(/#/g, " ").replace(/\s+/g, " ").trim();
+  }
+  cleaned = cleaned.replace(/\s+(?:-\s*)?for\s+game\s*$/i, "").trim();
+  // American odds are the trailing signed 3-5 digit token; a price is never a line.
+  const priceMatch = /\s([+-]\d{3,5})\s*$/.exec(cleaned);
+  const body = (
+    priceMatch === null ? cleaned : cleaned.slice(0, priceMatch.index)
+  ).trim();
+  if (body === "") return null;
+
+  const total = /^(.*?)\s+(Over|Under|O|U)\s+([0-9½¼¾.,+-]+)$/i.exec(body);
+  if (total !== null) {
+    const subject = (total[1] ?? "").trim();
+    const marker = (total[2] ?? "").toUpperCase();
+    const line = parseLineExpression(total[3] ?? "");
+    if (subject === "" || line === null) return null;
+    const overUnder: OverUnder = marker.startsWith("O") ? "over" : "under";
+    const halves = subject
+      .split("/")
+      .map((part) => part.trim())
+      .filter((part) => part !== "");
+    if (halves.length === 2) {
+      return {
+        teams: halves.map((part) => part.toUpperCase()),
+        marketKind: "total",
+        sideTeam: null,
+        line,
+        overUnder,
+      };
+    }
+    return {
+      teams: [subject.toUpperCase()],
+      marketKind: "team_total",
+      sideTeam: subject.toUpperCase(),
+      line,
+      overUnder,
+    };
+  }
+
+  // A spread line is signed and small (`-1½`); a price is three or more digits.
+  const spread = SPREAD_SELECTION_PATTERN.exec(body);
+  if (spread !== null) {
+    const subject = (spread[1] ?? "").trim();
+    const line = parseLineExpression(spread[2] ?? "");
+    if (subject === "" || line === null) return null;
+    const names = subject
+      .split("/")
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    return {
+      teams: names,
+      marketKind: "spread",
+      sideTeam: names[0] ?? null,
+      line,
+      overUnder: null,
+    };
+  }
+
+  const spreadPk = /^(.*?)\s+PK$/i.exec(body);
+  if (spreadPk !== null) {
+    const subject = (spreadPk[1] ?? "").trim();
+    if (subject === "") return null;
+    const names = subject
+      .split("/")
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    return {
+      teams: names,
+      marketKind: "spread",
+      sideTeam: names[0] ?? null,
+      line: 0,
+      overUnder: null,
+    };
+  }
+
+  const draw = /^Draw\s*\(\s*(.+?)\s+vs\.?\s+(.+?)\s*\)$/i.exec(body);
+  if (draw !== null) {
+    const teams = [draw[1] ?? "", draw[2] ?? ""]
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    if (teams.length === 2) {
+      return {
+        teams,
+        marketKind: "moneyline",
+        sideTeam: "DRAW",
+        line: null,
+        overUnder: null,
+      };
+    }
+  }
+
+  const names = body
+    .split("/")
+    .map((part) => part.trim().toUpperCase())
+    .filter((part) => part !== "");
+  if (names.length === 0) return null;
+  return {
+    teams: names,
+    marketKind: "moneyline",
+    sideTeam: names[0] ?? null,
+    line: null,
+    overUnder: null,
+  };
+}
+
+/**
+ * A `data/live-bets.json` game row, best effort; `null` when its market is not readable.
+ *
+ * Soccer rows put the sport and the market type in `team1`/`team2` (`Soccer`/`Market`), so the
+ * sides and the market come from the selection text; every other sport keeps the description
+ * parse, where the captured team names are real.
+ */
 export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
   if (typeof value !== "object" || value === null) return null;
   const row = value as Record<string, unknown>;
   const sport = String(row["sport"] ?? "").toUpperCase();
   const league = LIVE_BETS_SPORT_TO_LEAGUE[sport] ?? "UNKNOWN";
-  const team1 = row["team1"];
-  const team2 = row["team2"];
-  const teams: string[] = [];
-  if (typeof team1 === "object" && team1 !== null) {
-    const name = String(
-      (team1 as Record<string, unknown>)["shortName"] ?? "",
-    ).trim();
-    if (name !== "") teams.push(name.toUpperCase());
-  }
-  if (typeof team2 === "object" && team2 !== null) {
-    const name = String(
-      (team2 as Record<string, unknown>)["shortName"] ?? "",
-    ).trim();
-    if (name !== "") teams.push(name.toUpperCase());
-  }
+  const teamName = (side: unknown): string => {
+    if (typeof side !== "object" || side === null) return "";
+    return String((side as Record<string, unknown>)["shortName"] ?? "").trim();
+  };
   const description = String(row["description"] ?? "");
   const periodText = String(row["period"] ?? "");
   const periodToken = /^1st Quarter/i.test(periodText)
@@ -392,6 +592,34 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
     : /^1st Half/i.test(periodText)
       ? "1h"
       : null;
+  const marketKind = (kind: string): string =>
+    periodToken === null ? kind : `${periodToken}_${kind}`;
+
+  if (sport === "SOCCER") {
+    const selectionText = liveBetsSelectionText(row);
+    const selection = parseSoccerSelection(selectionText);
+    if (selection !== null) {
+      const captured = [teamName(row["team1"]), teamName(row["team2"])]
+        .filter((name) => !isPlaceholderTeamName(name, sport))
+        .map((name) => name.toUpperCase());
+      return {
+        league,
+        marketKind: marketKind(selection.marketKind),
+        teams: captured.length === 2 ? captured : [...selection.teams],
+        sideTeam: selection.sideTeam,
+        line: selection.line,
+        overUnder: selection.overUnder,
+        raw: selectionText === "" ? description : selectionText,
+      };
+    }
+  }
+
+  const teams = [teamName(row["team1"]), teamName(row["team2"])]
+    .filter((name) => name !== "")
+    .map((name) => name.toUpperCase());
+  const chosen = String(row["chosenTeam"] ?? "")
+    .trim()
+    .toUpperCase();
   // A spread line carries a decimal (`-1.5`); a moneyline price is a whole number (`-110`).
   const kind = /total/i.test(description)
     ? "total"
@@ -399,9 +627,6 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
       ? "spread"
       : "moneyline";
   const overMatch = /\b(Over|Under)\s+(\d+(?:\.\d+)?)/i.exec(description);
-  const chosen = String(row["chosenTeam"] ?? "")
-    .trim()
-    .toUpperCase();
   const lineToken = /([+-]\d+(?:\.\d+)?)/.exec(description);
   const line =
     kind === "total"
@@ -413,7 +638,7 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
         : Number(lineToken[1]);
   return {
     league,
-    marketKind: periodToken === null ? kind : `${periodToken}_${kind}`,
+    marketKind: marketKind(kind),
     teams,
     sideTeam: kind === "total" ? null : chosen === "" ? null : chosen,
     line: line !== null && Number.isFinite(line) ? line : null,

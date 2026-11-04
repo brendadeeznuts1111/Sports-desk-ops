@@ -146,6 +146,146 @@ describe("short-desc and live-bets parsing", () => {
   });
 });
 
+function soccerGame(
+  chosenTeam: string,
+  options: {
+    period?: string;
+    login?: string;
+    team1?: string;
+    team2?: string;
+  } = {},
+): Record<string, unknown> {
+  return {
+    customerID: options.login ?? ACCOUNT_A.customerLogin,
+    agent: { id: "AGENT", key: "AGENT" },
+    sport: "Soccer",
+    period: options.period ?? "Game",
+    description: `Soccer #224205 ${chosenTeam} - For Game`,
+    chosenTeam,
+    wagered: 25_000,
+    acceptedAt: "2026-11-04 11:50:00.000",
+    team1: { shortName: options.team1 ?? "Soccer" },
+    team2: { shortName: options.team2 ?? "Market" },
+  };
+}
+
+describe("soccer selection parsing", () => {
+  test("a moneyline names the picked side, not the sport", () => {
+    const parsed = parseLiveBetsGame(soccerGame("Arsenal -380"));
+    expect(parsed?.league).toBe("EPL");
+    expect(parsed?.marketKind).toBe("moneyline");
+    expect(parsed?.teams).toEqual(["ARSENAL"]);
+    expect(parsed?.sideTeam).toBe("ARSENAL");
+    expect(parsed?.line).toBeNull();
+    expect(parsed?.overUnder).toBeNull();
+  });
+
+  test("a spread keeps the line and drops the price", () => {
+    const parsed = parseLiveBetsGame(soccerGame("Arsenal -1½ -120"));
+    expect(parsed?.marketKind).toBe("spread");
+    expect(parsed?.teams).toEqual(["ARSENAL"]);
+    expect(parsed?.sideTeam).toBe("ARSENAL");
+    expect(parsed?.line).toBe(-1.5);
+  });
+
+  test("a split line is recorded as its midpoint", () => {
+    expect(parseLiveBetsGame(soccerGame("Arsenal -½,-1 -105"))?.line).toBe(
+      -0.75,
+    );
+    expect(parseLiveBetsGame(soccerGame("Betis +½,+1 +110"))?.line).toBe(0.75);
+  });
+
+  test("a match total names both sides and no pick", () => {
+    const parsed = parseLiveBetsGame(
+      soccerGame("Arsenal/Slavia Praha O 2½ -130"),
+    );
+    expect(parsed?.marketKind).toBe("total");
+    expect(parsed?.teams).toEqual(["ARSENAL", "SLAVIA PRAHA"]);
+    expect(parsed?.sideTeam).toBeNull();
+    expect(parsed?.line).toBe(2.5);
+    expect(parsed?.overUnder).toBe("over");
+  });
+
+  test("a split total takes the midpoint of its two lines", () => {
+    expect(
+      parseLiveBetsGame(soccerGame("Betis/Borussia Dortmund O 2½,3 -140"))
+        ?.line,
+    ).toBe(2.75);
+  });
+
+  test("a one-team total is a team total", () => {
+    const parsed = parseLiveBetsGame(soccerGame("Como O 1½ -140"));
+    expect(parsed?.marketKind).toBe("team_total");
+    expect(parsed?.teams).toEqual(["COMO"]);
+    expect(parsed?.sideTeam).toBe("COMO");
+    expect(parsed?.overUnder).toBe("over");
+  });
+
+  test("a half bet keeps its period token", () => {
+    const parsed = parseLiveBetsGame(
+      soccerGame("Man. City/RB Leipzig O 1½ -130", { period: "1st Half" }),
+    );
+    expect(parsed?.marketKind).toBe("1h_total");
+    expect(parsed?.line).toBe(1.5);
+  });
+
+  test("a draw names both sides and the pick", () => {
+    const parsed = parseLiveBetsGame(
+      soccerGame("Draw ( Betis vs Borussia Dortmund ) +160"),
+    );
+    expect(parsed?.marketKind).toBe("moneyline");
+    expect(parsed?.teams).toEqual(["BETIS", "BORUSSIA DORTMUND"]);
+    expect(parsed?.sideTeam).toBe("DRAW");
+  });
+
+  test("real captured team names beat the placeholder heuristic", () => {
+    const parsed = parseLiveBetsGame(
+      soccerGame("Rangers U19 -1½ -110", {
+        team1: "Rangers U19",
+        team2: "Fc Dynamo Kyiv U19",
+      }),
+    );
+    expect(parsed?.teams).toEqual(["RANGERS U19", "FC DYNAMO KYIV U19"]);
+    expect(parsed?.line).toBe(-1.5);
+  });
+
+  test("the chosen leg wins over a multi-leg description", () => {
+    const parsed = parseLiveBetsGame({
+      ...soccerGame("Arsenal -380"),
+      description:
+        "P.Soccer #224214 FC Porto +100 - For Game Soccer #224205 Arsenal -380 - For Game",
+    });
+    expect(parsed?.teams).toEqual(["ARSENAL"]);
+    expect(parsed?.sideTeam).toBe("ARSENAL");
+    expect(parsed?.marketKind).toBe("moneyline");
+  });
+
+  test("two watched accounts on one soccer pick aggregate into one signal", () => {
+    const liveBets = {
+      capturedAt: "2026-11-04T11:59:00.000Z",
+      dataSource: "capture:/cloud/api/Report/Pending",
+      games: [
+        soccerGame("Arsenal -1½ -120", { login: ACCOUNT_A.customerLogin }),
+        soccerGame("Arsenal -1½ -120", { login: ACCOUNT_B.customerLogin }),
+      ],
+    };
+    const signals = deriveWatchlistSignals(
+      { feed: null, wagers: null, liveBets },
+      { now: NOW, registry: REGISTRY },
+    );
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toMatchObject({
+      league: "EPL",
+      marketKind: "spread",
+      line: -1.5,
+      sideTeam: "ARSENAL",
+      distinctAccounts: 2,
+    });
+    expect(signals[0]?.teams).toEqual(["ARSENAL"]);
+    expect(signals[0]?.confidence).toBeGreaterThan(0);
+  });
+});
+
 describe("watchlist aggregation", () => {
   test("aggregates same-side rows into one signal with risk, accounts and fair probability", () => {
     const feed = liveFeed({
