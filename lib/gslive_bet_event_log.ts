@@ -310,7 +310,10 @@ function fallbackLosAngelesMs(text: string): number | null {
   return confirmed === first ? candidate : wallUtc - confirmed * 60_000;
 }
 
-export function parseGsliveTimestampMs(value: unknown): number | null {
+export function parseGsliveTimestampMs(
+  value: unknown,
+  referenceEpochMs?: number,
+): number | null {
   if (typeof value === "number" && Number.isFinite(value))
     return value < 1e12 ? value * 1000 : value;
   const text = typeof value === "string" ? value.trim() : "";
@@ -325,7 +328,10 @@ export function parseGsliveTimestampMs(value: unknown): number | null {
       Temporal?: {
         PlainDateTime?: {
           from(input: string): {
-            toZonedDateTime(zone: string): { epochMilliseconds: number };
+            toZonedDateTime(
+              zone: string,
+              options?: { disambiguation: "earlier" | "later" | "compatible" },
+            ): { epochMilliseconds: number };
           };
         };
       };
@@ -333,11 +339,26 @@ export function parseGsliveTimestampMs(value: unknown): number | null {
   ).Temporal;
   if (TemporalApi?.PlainDateTime !== undefined) {
     try {
-      return Number(
-        TemporalApi.PlainDateTime.from(iso).toZonedDateTime(
-          "America/Los_Angeles",
-        ).epochMilliseconds,
+      const dt = TemporalApi.PlainDateTime.from(iso);
+      const earlier = Number(
+        dt.toZonedDateTime("America/Los_Angeles", { disambiguation: "earlier" })
+          .epochMilliseconds,
       );
+      const later = Number(
+        dt.toZonedDateTime("America/Los_Angeles", { disambiguation: "later" })
+          .epochMilliseconds,
+      );
+      if (
+        earlier !== later &&
+        referenceEpochMs !== undefined &&
+        Number.isFinite(referenceEpochMs)
+      ) {
+        return Math.abs(later - referenceEpochMs) <
+          Math.abs(earlier - referenceEpochMs)
+          ? later
+          : earlier;
+      }
+      return earlier;
     } catch {
       /* fall through to Intl */
     }
@@ -378,8 +399,8 @@ export function extractBetLogAuditTargets(
     const reasons: string[] = [];
     if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
       reasons.push("ODDS_DRIFT");
-    const acceptMs = parseGsliveTimestampMs(row.acceptTime);
     const logMs = parseGsliveTimestampMs(row.logTime);
+    const acceptMs = parseGsliveTimestampMs(row.acceptTime, logMs ?? undefined);
     const delaySec = Number(row.delay);
     if (acceptMs !== null && logMs !== null && Number.isFinite(delaySec)) {
       const elapsedSec = classifyDelayElapsedSec(

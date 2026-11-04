@@ -90,6 +90,24 @@ describe("gslive bet/event log audit", () => {
     }
   });
 
+  test("disambiguates both occurrences of the repeated fall-back hour", () => {
+    const first = Date.UTC(2026, 10, 1, 8, 5, 48, 615); // 01:05:48.615 PDT
+    const second = Date.UTC(2026, 10, 1, 9, 5, 48, 615); // 01:05:48.615 PST
+    expect(parseGsliveTimestampMs("2026-11-01 01:05:48.615")).toBe(first);
+    expect(parseGsliveTimestampMs("2026-11-01 01:05:48.615", first)).toBe(
+      first,
+    );
+    expect(parseGsliveTimestampMs("2026-11-01 01:05:48.615", second)).toBe(
+      second,
+    );
+    expect(
+      parseGsliveTimestampMs("2026-11-01 01:05:48.615", first + 1000),
+    ).toBe(first);
+    expect(
+      parseGsliveTimestampMs("2026-11-01 01:05:48.615", second - 1000),
+    ).toBe(second);
+  });
+
   test("detects frozen-clock scoring and extended outage on 207059641", () => {
     const fixture206 = JSON.parse(
       readFileSync(

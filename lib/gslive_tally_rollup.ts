@@ -450,8 +450,8 @@ export async function buildGsliveTallyRollup(
     }
     maxGroupId = Math.max(maxGroupId, Number(gid) || 0);
     maxTicket = Math.max(maxTicket, ticket);
-    const acceptMs = parseGsliveTimestampMs(row.acceptTime);
     const logMs = parseGsliveTimestampMs(row.logTime);
+    const acceptMs = parseGsliveTimestampMs(row.acceptTime, logMs ?? undefined);
     const delaySec = Number(row.delay);
     if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
       anomalyCounts.oddsDrift += 1;
