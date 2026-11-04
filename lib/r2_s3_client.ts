@@ -1,9 +1,9 @@
 /**
  * @file r2_s3_client.ts
- * @description One Bun.S3Client adapter for R2/S3: credential resolution, presigned
- * metadata uploads, and the full object verb set used by the blob gateway and the docs
- * publisher. `Bun.S3Client` supplies upload/download/list/presign; this module only adds
- * the project's env contract and the `x-amz-meta-*` PUT path Bun's writer does not expose.
+ * @description One Bun.S3Client adapter for R2/S3: credential resolution, metadata
+ * uploads, and the full object verb set used by the blob gateway and the docs publisher.
+ * `Bun.S3Client` supplies upload/download/list/presign; this module adds the env
+ * contract and the `x-amz-meta-*` PUT path Bun's writer does not expose.
  */
 
 import type {
@@ -81,7 +81,6 @@ export interface R2S3ClientBackend {
 
 const DEFAULT_PUBLIC_BASE =
   "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
-const PRESIGN_TTL_SEC = 300;
 
 function firstDefined(
   env: R2S3Env,
@@ -167,21 +166,138 @@ export function resolveR2S3Options(env: R2S3Env = Bun.env): R2S3Options | null {
   };
 }
 
-function metadataHeaders(metadata: Readonly<Record<string, string>>): Headers {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(metadata)) {
-    headers.set(
-      `x-amz-meta-${name.toLowerCase()}`,
-      value.replace(/[\r\n]+/g, " ").trim(),
-    );
-  }
-  return headers;
-}
-
 function byteLength(data: Uint8Array | string): number {
   return typeof data === "string"
     ? new TextEncoder().encode(data).byteLength
     : data.byteLength;
+}
+
+type R2S3Auth = Pick<
+  R2S3Options,
+  "endpoint" | "accessKeyId" | "secretAccessKey" | "sessionToken" | "region"
+>;
+
+const textEncoder = new TextEncoder();
+
+function encodeRfc3986(value: string): string {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+async function hmacSha256(
+  key: Uint8Array | string,
+  data: string,
+): Promise<Uint8Array> {
+  const keyBytes = typeof key === "string" ? textEncoder.encode(key) : key;
+  const keyData = Uint8Array.from(keyBytes);
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return new Uint8Array(
+    await crypto.subtle.sign("HMAC", cryptoKey, textEncoder.encode(data)),
+  );
+}
+
+async function signingKey(
+  secretAccessKey: string,
+  dateStamp: string,
+  region: string,
+): Promise<Uint8Array> {
+  const date = await hmacSha256(`AWS4${secretAccessKey}`, dateStamp);
+  const regional = await hmacSha256(date, region);
+  const service = await hmacSha256(regional, "s3");
+  return hmacSha256(service, "aws4_request");
+}
+
+/**
+ * Bun's presign cannot sign arbitrary `x-amz-meta-*` headers, so a metadata PUT
+ * needs SigV4 over the exact header set. This stays in Web Crypto (no node:crypto)
+ * and is used only when metadata is non-empty; plain writes still go through
+ * Bun.S3Client.write and downloads still use its presigner.
+ */
+async function putObjectWithMetadata(
+  auth: R2S3Auth,
+  bucket: string,
+  key: string,
+  payload: Uint8Array,
+  type: string,
+  metadata: Readonly<Record<string, string>>,
+): Promise<void> {
+  const endpoint = new URL(auth.endpoint);
+  const host = endpoint.host;
+  const path = `/${encodeBucket(bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.[0-9]{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const region = auth.region ?? "auto";
+  const payloadHash = new Bun.CryptoHasher("sha256")
+    .update(payload)
+    .digest("hex");
+  const headers: Record<string, string> = {
+    "content-length": String(payload.byteLength),
+    "content-type": type,
+    host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  };
+  if (auth.sessionToken !== undefined) {
+    headers["x-amz-security-token"] = auth.sessionToken;
+  }
+  for (const [name, value] of Object.entries(metadata)) {
+    headers[`x-amz-meta-${name.toLowerCase()}`] = value
+      .replace(/[\r\n]+/g, " ")
+      .trim();
+  }
+  const signedHeaderNames = Object.keys(headers).sort();
+  const canonicalHeaders = signedHeaderNames
+    .map((name) => `${name}:${headers[name]}\n`)
+    .join("");
+  const signedHeaders = signedHeaderNames.join(";");
+  const canonicalRequest = [
+    "PUT",
+    path,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+  const scope = `${dateStamp}/${region}/s3/aws4_request`;
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    scope,
+    new Bun.CryptoHasher("sha256").update(canonicalRequest).digest("hex"),
+  ].join("\n");
+  const signing = await signingKey(auth.secretAccessKey, dateStamp, region);
+  const signature = Buffer.from(
+    await hmacSha256(signing, stringToSign),
+  ).toString("hex");
+  const requestHeaders = new Headers();
+  for (const [name, value] of Object.entries(headers)) {
+    if (name !== "host") requestHeaders.set(name, value);
+  }
+  requestHeaders.set(
+    "authorization",
+    `AWS4-HMAC-SHA256 Credential=${auth.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  );
+  const response = await fetch(`${endpoint.origin}${path}`, {
+    method: "PUT",
+    headers: requestHeaders,
+    body: payload,
+  });
+  if (!response.ok) {
+    throw new Error(`R2 PUT ${key} failed (${response.status})`);
+  }
+}
+
+function encodeBucket(bucket: string): string {
+  return encodeRfc3986(bucket);
 }
 
 export class R2S3Client {
@@ -189,6 +305,7 @@ export class R2S3Client {
     readonly client: R2S3ClientBackend,
     readonly bucket: string,
     readonly publicBase: string,
+    private readonly auth?: R2S3Auth,
   ) {}
 
   static fromOptions(
@@ -206,7 +323,7 @@ export class R2S3Client {
       ...(options.region === undefined ? {} : { region: options.region }),
     };
     const backend = client ?? new Bun.S3Client(credentials);
-    return new R2S3Client(backend, options.bucket, options.publicBase);
+    return new R2S3Client(backend, options.bucket, options.publicBase, options);
   }
 
   static fromEnv(env: R2S3Env = Bun.env): R2S3Client | null {
@@ -234,8 +351,9 @@ export class R2S3Client {
   }
 
   /**
-   * Upload with `x-amz-meta-*` headers. Bun's S3 writer has no metadata option, so
-   * this presigns a PUT, then sends the caller's metadata headers on the upload.
+   * Upload with `x-amz-meta-*` headers. Bun's writer has no metadata option and its
+   * presigner cannot sign custom headers, so this signs the exact metadata PUT with
+   * Web Crypto (SigV4); plain writes still go through `Bun.S3Client.write`.
    */
   async writeWithMetadata(
     key: string,
@@ -250,17 +368,18 @@ export class R2S3Client {
     if (Object.keys(metadata).length === 0) {
       return this.write(key, data, { type });
     }
-    const url = this.client.presign(key, {
-      method: "PUT",
-      expiresIn: PRESIGN_TTL_SEC,
-      type,
-    });
-    const headers = metadataHeaders(metadata);
-    headers.set("content-type", type);
-    const response = await fetch(url, { method: "PUT", headers, body: data });
-    if (!response.ok) {
-      throw new Error(`R2 PUT ${key} failed (${response.status})`);
+    if (this.auth === undefined) {
+      throw new Error("R2S3Client: metadata upload requires auth options");
     }
+    const payload = typeof data === "string" ? textEncoder.encode(data) : data;
+    await putObjectWithMetadata(
+      this.auth,
+      this.bucket,
+      key,
+      payload,
+      type,
+      metadata,
+    );
     return byteLength(data);
   }
 
@@ -285,16 +404,31 @@ export class R2S3Client {
     return new Uint8Array(await sliced.arrayBuffer());
   }
 
-  stat(key: string): Promise<S3Stats> {
-    return this.client.stat(key);
+  /**
+   * Bun's HEAD on R2 metadata objects can omit Content-Length, yielding size 0 even
+   * though a GET returns the body. Keep the stat contract but recover the real size
+   * with a body read when the HEAD says zero.
+   */
+  private async bodySize(key: string): Promise<number> {
+    try {
+      return (await this.client.file(key).arrayBuffer()).byteLength;
+    } catch {
+      return 0;
+    }
+  }
+
+  async stat(key: string): Promise<S3Stats> {
+    const stat = await this.client.stat(key);
+    return stat.size > 0 ? stat : { ...stat, size: await this.bodySize(key) };
   }
 
   exists(key: string): Promise<boolean> {
     return this.client.exists(key);
   }
 
-  size(key: string): Promise<number> {
-    return this.client.size(key);
+  async size(key: string): Promise<number> {
+    const size = await this.client.size(key);
+    return size > 0 ? size : this.bodySize(key);
   }
 
   list(input?: S3ListObjectsOptions | null): Promise<S3ListObjectsResponse> {

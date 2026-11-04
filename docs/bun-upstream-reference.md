@@ -322,7 +322,7 @@ The four upstream patterns this repo's R2 integration is pinned to:
 
 - [Bun.S3Client and the `Bun.s3` global](https://bun.com/docs/runtime/s3#bun-s3client-bun-s3): `lib/r2_s3_client.ts` wraps one `Bun.S3Client`; `Bun.s3` is asserted in `tests/bun_s3client_contract.test.ts`.
 - [Using Bun's S3Client with Cloudflare R2](https://bun.com/docs/runtime/s3#using-bun-s-s3client-with-cloudflare-r2): the adapter builds `new Bun.S3Client({ bucket, accessKeyId, secretAccessKey, endpoint: "https://<account>.r2.cloudflarestorage.com" })`.
-- [`method` in presign options](https://bun.com/docs/runtime/s3#method): `putWithMetadata` presigns `{ method: "PUT", expiresIn: 300, type }`, then forwards `x-amz-meta-*` headers without a local SigV4 signer.
+- [`method` in presign options](https://bun.com/docs/runtime/s3#method): Bun's presigner cannot sign custom headers, so `writeWithMetadata` uses a Web-Crypto SigV4 PUT for `x-amz-meta-*`; plain uploads and downloads still use `Bun.S3Client` write/presign.
 - [`new Response(s3file)`](https://bun.com/docs/runtime/s3#new-response-s3file): `redirectResponse` wraps the lazy `S3File` in a 200 response; the blob gateway serves it for `GET /api/v1/blobs/{key}?download=1`.
 
 The wagers capture pipeline uses the same adapter for its optional `--publish-r2` sink: it writes

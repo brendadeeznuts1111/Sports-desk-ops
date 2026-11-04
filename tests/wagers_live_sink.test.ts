@@ -164,8 +164,17 @@ describe("wagers live sink", () => {
       },
       backend,
     );
-    globalThis.fetch = (async () =>
-      new Response("", { status: 200 })) as unknown as typeof fetch;
+    let captured: { url: string; headers: Headers } | undefined;
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      captured = {
+        url: String(input),
+        headers: new Headers(init?.headers),
+      };
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
     const sink = createWagersLiveSink({
       liveBets: false,
       r2: true,
@@ -175,7 +184,16 @@ describe("wagers live sink", () => {
     const result = await sink.publishR2(OUTCOME);
     expect(result.ok).toBe(true);
     expect(result.url).toBe("https://pub.test/wagers-by-state/latest.json");
-    expect(backend.presigns).toEqual(["wagers-by-state/latest.json"]);
+    expect(backend.presigns).toEqual([]);
+    expect(captured?.url).toBe(
+      "https://r2.test/bucket/wagers-by-state/latest.json",
+    );
+    expect(captured?.headers.get("authorization")).toStartWith(
+      "AWS4-HMAC-SHA256",
+    );
+    expect(captured?.headers.get("x-amz-meta-source")).toBe(
+      "gslive-wagers-capture",
+    );
     const sidecar = (await Bun.file(join(dir, "latest.json")).json()) as {
       kind: string;
     };

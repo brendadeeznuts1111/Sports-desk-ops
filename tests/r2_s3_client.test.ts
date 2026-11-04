@@ -154,7 +154,7 @@ describe("resolveR2S3Options", () => {
 });
 
 describe("R2S3Client uploads", () => {
-  test("writeWithMetadata presigns a PUT and sends x-amz-meta-* headers", async () => {
+  test("writeWithMetadata signs a PUT and sends x-amz-meta-* headers", async () => {
     const backend = new FakeBackend();
     const client = R2S3Client.fromOptions(
       {
@@ -192,12 +192,31 @@ describe("R2S3Client uploads", () => {
     });
 
     expect(written).toBe(3);
-    expect(backend.presigns).toEqual([{ key: "blobs/k.webp", method: "PUT" }]);
+    expect(backend.presigns).toEqual([]);
     expect(captured?.method).toBe("PUT");
-    expect(captured?.url).toContain("blobs/k.webp");
+    expect(captured?.url).toBe("https://r2.test/bucket/blobs/k.webp");
+    expect(captured?.headers.get("authorization")).toStartWith(
+      "AWS4-HMAC-SHA256 Credential=a/",
+    );
     expect(captured?.headers.get("x-amz-meta-surface")).toBe("blob");
     expect(captured?.headers.get("x-amz-meta-author")).toBe("desk");
     expect(captured?.headers.get("content-type")).toBe("image/webp");
+  });
+
+  test("writeWithMetadata without metadata delegates to S3Client.write", async () => {
+    const backend = new FakeBackend();
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    await client.writeWithMetadata("a.txt", "hello", { type: "text/plain" });
+    expect(backend.writes).toEqual([{ key: "a.txt", type: "text/plain" }]);
   });
 
   test("redirectResponse wraps the lazy S3File in a Response", async () => {
@@ -277,6 +296,31 @@ describe("R2S3Client uploads", () => {
       backend,
     );
     expect((await client.stat("x")).size).toBe(42);
+  });
+
+  test("stat recovers the size when R2 HEAD omits Content-Length", async () => {
+    const backend = new FakeBackend();
+    backend.stat = async (): Promise<Bun.S3Stats> => ({
+      size: 0,
+      lastModified: new Date(0),
+      etag: "etag",
+      type: "application/json",
+    });
+    backend.file = (): Bun.S3File =>
+      new Blob(["forty-two-bytes"], {
+        type: "application/json",
+      }) as unknown as Bun.S3File;
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    expect((await client.stat("x")).size).toBe(15);
   });
 
   test("classifies all six ERR_S3_* codes and S3Error", () => {
