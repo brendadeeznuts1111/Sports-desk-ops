@@ -33,109 +33,6 @@ function requireEnv(name) {
   return value;
 }
 
-const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
-const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
-const accountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
-const bucket = process.env.R2_BUCKET_NAME || "sportsdesk-ops-reports";
-const publicBase =
-  process.env.R2_PUBLIC_URL ||
-  "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
-const host = `${accountId}.r2.cloudflarestorage.com`;
-const region = "auto";
-const service = "s3";
-
-function sha256Hex(buf) {
-  return crypto.createHash("sha256").update(buf).digest("hex");
-}
-
-function hmac(key, data) {
-  return crypto.createHmac("sha256", key).update(data).digest();
-}
-
-function getSignatureKey(key, dateStamp, regionName, serviceName) {
-  const kDate = hmac(`AWS4${key}`, dateStamp);
-  const kRegion = hmac(kDate, regionName);
-  const kService = hmac(kRegion, serviceName);
-  return hmac(kService, "aws4_request");
-}
-
-async function putObject(key, bodyBuf, contentType, customMeta = {}) {
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const payloadHash = sha256Hex(bodyBuf);
-  const canonicalUri = `/${bucket}/${key}`;
-
-  const headerMap = {
-    "content-type": contentType,
-    host: host,
-    "x-amz-content-sha256": payloadHash,
-    "x-amz-date": amzDate,
-  };
-  for (const [k, v] of Object.entries(customMeta)) {
-    if (v) {
-      headerMap[`x-amz-meta-${k.toLowerCase()}`] = String(v)
-        .replace(/[\r\n]+/g, " ")
-        .trim();
-    }
-  }
-
-  const sortedHeaderKeys = Object.keys(headerMap).sort();
-  const canonicalHeaders = sortedHeaderKeys
-    .map((k) => `${k}:${headerMap[k]}\n`)
-    .join("");
-  const signedHeaders = sortedHeaderKeys.join(";");
-
-  const canonicalRequest = [
-    "PUT",
-    canonicalUri,
-    "",
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
-
-  const algorithm = "AWS4-HMAC-SHA256";
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = [
-    algorithm,
-    amzDate,
-    credentialScope,
-    sha256Hex(canonicalRequest),
-  ].join("\n");
-
-  const signingKey = getSignatureKey(
-    secretAccessKey,
-    dateStamp,
-    region,
-    service,
-  );
-  const signature = crypto
-    .createHmac("sha256", signingKey)
-    .update(stringToSign)
-    .digest("hex");
-
-  const authorization = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-  const url = `https://${host}${canonicalUri}`;
-  const fetchHeaders = { Authorization: authorization };
-  for (const k of sortedHeaderKeys) {
-    if (k !== "host") fetchHeaders[k] = headerMap[k];
-  }
-
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: fetchHeaders,
-    body: bodyBuf,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`R2 PUT ${key} failed (${res.status}): ${text}`);
-  }
-  return `${publicBase}/${key}`;
-}
-
 const filesToPublish = [
   {
     file: "dist/graph.html",
@@ -346,6 +243,128 @@ const filesToPublish = [
     meta: { artifact: "ARCH-GUIDE-BASELINE", modes: "1,2,3,4,5,6,7,8,9,10" },
   },
 ];
+
+const listJson = process.argv.includes("--list-json");
+if (listJson) {
+  console.log(
+    JSON.stringify({
+      bucket: process.env.R2_BUCKET_NAME || "sportsdesk-ops-reports",
+      publicBase:
+        process.env.R2_PUBLIC_URL ||
+        "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev",
+      files: filesToPublish.map(({ file, key, type, meta }) => ({
+        file,
+        key,
+        type,
+        metadataKeys: meta ? Object.keys(meta) : [],
+      })),
+    }),
+  );
+  process.exit(0);
+}
+
+const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
+const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
+const accountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
+const bucket = process.env.R2_BUCKET_NAME || "sportsdesk-ops-reports";
+const publicBase =
+  process.env.R2_PUBLIC_URL ||
+  "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
+const host = `${accountId}.r2.cloudflarestorage.com`;
+const region = "auto";
+const service = "s3";
+
+function sha256Hex(buf) {
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+function hmac(key, data) {
+  return crypto.createHmac("sha256", key).update(data).digest();
+}
+
+function getSignatureKey(key, dateStamp, regionName, serviceName) {
+  const kDate = hmac(`AWS4${key}`, dateStamp);
+  const kRegion = hmac(kDate, regionName);
+  const kService = hmac(kRegion, serviceName);
+  return hmac(kService, "aws4_request");
+}
+
+async function putObject(key, bodyBuf, contentType, customMeta = {}) {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256Hex(bodyBuf);
+  const canonicalUri = `/${bucket}/${key}`;
+
+  const headerMap = {
+    "content-type": contentType,
+    host: host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  };
+  for (const [k, v] of Object.entries(customMeta)) {
+    if (v) {
+      headerMap[`x-amz-meta-${k.toLowerCase()}`] = String(v)
+        .replace(/[\r\n]+/g, " ")
+        .trim();
+    }
+  }
+
+  const sortedHeaderKeys = Object.keys(headerMap).sort();
+  const canonicalHeaders = sortedHeaderKeys
+    .map((k) => `${k}:${headerMap[k]}\n`)
+    .join("");
+  const signedHeaders = sortedHeaderKeys.join(";");
+
+  const canonicalRequest = [
+    "PUT",
+    canonicalUri,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = [
+    algorithm,
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+
+  const signingKey = getSignatureKey(
+    secretAccessKey,
+    dateStamp,
+    region,
+    service,
+  );
+  const signature = crypto
+    .createHmac("sha256", signingKey)
+    .update(stringToSign)
+    .digest("hex");
+
+  const authorization = `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const url = `https://${host}${canonicalUri}`;
+  const fetchHeaders = { Authorization: authorization };
+  for (const k of sortedHeaderKeys) {
+    if (k !== "host") fetchHeaders[k] = headerMap[k];
+  }
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: fetchHeaders,
+    body: bodyBuf,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`R2 PUT ${key} failed (${res.status}): ${text}`);
+  }
+  return `${publicBase}/${key}`;
+}
 
 console.log(
   "================================================================================",

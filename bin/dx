@@ -361,7 +361,24 @@ VERSION_HELP
   deploy)
     "$0" stage
     cd "$REPO_ROOT"
-    bun run scripts/publish_r2_graph.mjs
+    if [[ -n "${R2_ACCESS_KEY_ID:-}" && -n "${R2_SECRET_ACCESS_KEY:-}" ]]; then
+      bun run scripts/publish_r2_graph.mjs
+    else
+      echo "⚠️  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY unset — uploading via Wrangler OAuth."
+      echo "    x-amz-meta-* object metadata is omitted in this mode (set the S3 keys for full metadata)."
+      manifest=$(mktemp)
+      bun scripts/publish_r2_graph.mjs --list-json > "$manifest"
+      bucket=$(bun -e 'const m=JSON.parse(await Bun.file(process.argv[1]).text()); console.log(m.bucket);' "$manifest")
+      while IFS=$'\t' read -r key file type; do
+        if [[ ! -f "$file" ]]; then
+          echo "  skip missing $file"
+          continue
+        fi
+        echo "  ↑ $bucket/$key"
+        ./wrangler r2 object put "$bucket/$key" --file="$file" --content-type="$type" --remote || exit 1
+      done < <(bun -e 'const m=JSON.parse(await Bun.file(process.argv[1]).text()); for (const f of m.files) console.log([f.key,f.file,f.type].join("\t"));' "$manifest")
+      rm -f "$manifest"
+    fi
     if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
       ./wrangler pages deploy dist --project-name=fantasy402-docs --branch=main "$@"
     fi
