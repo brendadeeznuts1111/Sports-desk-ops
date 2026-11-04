@@ -152,7 +152,10 @@ Client-side seam (this repository, rolling out):
   itself applied zero members to the singleton — the first live probe caught exactly that. The seam
   now adds non-enumerable prototype accessors; the first read on an instance materializes the member
   as a **non-enumerable, non-configurable own** property of that instance. Reading a seam on the
-  prototype itself throws instead of silently converting the accessor into shared value state. No
+  prototype itself throws instead of silently converting the accessor into shared value state.
+  `configurable: false` is intentional: seam removal is via the `?no-seam` kill switch or the
+  `flags.externalViewGuard` gate, not by redefining a live instance's properties. If a future
+  requirement genuinely needs live uninstall, that is a design change, not a flag flip. No
   `__proto__` assignment, no prototype pollution, and the decoration is retroactive for instances
   already created.
 - `bun run probe:client-seams -- --profile <dir> [--login]` runs the probe on the live
@@ -164,11 +167,21 @@ Client-side seam (this repository, rolling out):
   **2**, not 1: the seam is structurally verified, the session path is not.
 - Probe exit contract: **0** covered + authenticated + clean · **1** structural failure · **2**
   structural pass, authenticated unverified · **3** not covered (WebKit) · **4** could not run.
-  The `external-view` fix is accepted only on exit **0**.
+  The `external-view` fix is accepted only on exit **0**, and exit 0 additionally requires the
+  post-fix render target: run
+  `bun run probe:client-seams -- --profile <dir> --login --expect-rendered '[data-wager-number]'`.
+  Exit 0 means seam installed, session authenticated, **and bet-ticker rows present**; exit 2 means
+  the session could not be verified, so the canary does not open. A visual check that rows render is
+  still recommended for the first canary session; the selector is the automated acceptance, not a
+  replacement for seeing the desk ticker populate.
 - Registry degradation is an audit signal, not a page break: if RequireJS drops the private
   `requirejs.s.contexts` API the sweep records `registryDegraded` and the probe reports it in the
   notes; the `onResourceLoad` path still applies.
-- `flags` carries the phase-1 gate for the held fix: `{ unifiedPost: false, externalViewGuard: false }`.
+- `flags` carries the phase-1 canary gate: `{ unifiedPost: false, externalViewGuard: <latched> }`.
+  The value is latched at preload from `?external-view-guard=1` or an injected
+  `window.__F402_EXTERNAL_VIEW_GUARD__ = true`; default is `false`. Enabling is per-session and takes
+  effect on the next navigation; rollback is opening the page **without** the parameter — no code
+  change and no redeploy. (The held call-site fix reads `n.flags.externalViewGuard`.)
   The authenticated bet-ticker run is blocked in this environment: the login path has no keychain
   entry (`MissingF402CredentialsError`), and the bootstrapped profile does not settle under
   automation. See the Option B decision below.
@@ -177,20 +190,27 @@ Client-side seam (this repository, rolling out):
 - `probeSecuritySeams` asserts own properties, every controller leaf, and `isAuthenticated()` on the
   booted page; it **reports `csrf` as dormant and why**, and it returns `covered: false` on WebKit
   instead of passing.
-- **WebKit is not covered, and the gap is live, not theoretical.** Measured 2026-11-03:
-  `git grep -h '"backend"' -- docs data` over tracked provenance files yields **50 `webkit` and
-  3 `chrome`** sessions (the boot HAR itself is Chrome). **Phase 1 (Chrome/CDP) therefore reaches
-  roughly 6% of recorded sessions; the WebKit injection path is the actual fix, not phase 2 in
-  importance.** Bun.WebView has no preload/interception hook and WebKit has no `cdp()`, so those
-  sessions keep the `external-view` bypass after the Chrome fix lands; the probe returns
-  `covered: false` there. **On WebKit, both `data-pass` and the bet-ticker bypass remain open** —
-  that belongs at the top of the upstream ticket, not as a footnote.
+- **WebKit is not covered; the recorded ratio does not measure user distribution.** Measured
+  2026-11-03: 53 provenance records in tracked evidence carry a `backend` field, but they resolve to
+  **two distinct WebKit probe-runs** (`2026-11-01T04:18:16Z` and `04:19:29Z`, `authMode: env-login`)
+  whose per-capture files, edge-store copies and manifests repeat the same field; the only `chrome`
+  entry there is in `cf_ray_ledger.json`, and the boot HAR is Chrome. The earlier "50 webkit : 3
+  chrome" reading was **an artifact count, not a session count** and must not be used as a coverage
+  percentage. Current tooling defaults to Chrome (`scripts/capture/webview.ts`), and there is no
+  telemetry on which browser agents use, so phase-1 reach is **unknown** until a backend census is
+  run. What is certain: Bun.WebView has no preload/interception hook and WebKit has no `cdp()`, so
+  any WebKit session keeps the `external-view` bypass after the Chrome fix lands, and the probe
+  returns `covered: false` there. **On WebKit, both `data-pass` and the bet-ticker bypass remain
+  open** — top of the upstream ticket. Scope the WebKit injection path with a real backend census
+  (`scripts/capture/*` provenance `startedAt` + `backend`, not file counts), not with this ratio.
 - **Held: the `external-view` call site (phase-1 demonstration, Chrome only).** `manager.js`
   `setAccountInfo` runs `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no
   auth check. The four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else
   unchanged) is specified but not applied. Decision for the hold: **Option B — flag-gated canary.**
   The guard ships behind `flags.externalViewGuard` (default `false`); acceptance is a probe exit
-  **0** on a logged-in profile on the bet-ticker page, then enable on one canary instance. If the
+  **0** on a logged-in profile on the bet-ticker page **with `--expect-rendered
+'[data-wager-number]'` matching**, then enable on one canary instance by opening it with
+  `?external-view-guard=1`. If the
   session check misfires on the load-bearing bet-ticker path, flip the flag and revert without a
   redeploy. This environment cannot authenticate, so "wait for auth" is not a plan; code-review-only
   sign-off plus a named canary is the bounded path. **The bypass remains open on Chrome until the
@@ -290,6 +310,18 @@ Migration, in order:
 
 Success checks: the header is present on `manager.html` itself (not only on API responses); an inline
 handler on a test page is blocked; a normal session produces no legitimate violations in the report.
+
+## Merge preconditions
+
+- **CI is red on `main` for an external reason.** `tests/gslive_report_columns.test.ts` imports
+  `labelsFor`, which `lib/gslive_report_columns.ts` no longer exports (introduced by `a102219`).
+  Reproduced on a clean `origin/main` worktree with no local changes: 753 files, that single error.
+  Tracked as issue [#14](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/14), owner
+  **gslive workstream (@bw496915-cmyk)**; task `RT-GSLIVE-TYPECHECK` in `docs/REMAINING_TASKS.md`.
+  The client-seam change is typecheck-clean in a scoped check; merge after #14 closes.
+- **Authenticated bet-ticker probe (exit 0 + render selector).** The canary does not open until a
+  logged-in profile produces exit 0; this environment has no credentials. Merge of the held
+  `external-view` guard is conditioned on that, not on code review alone.
 
 ## What this does not establish
 

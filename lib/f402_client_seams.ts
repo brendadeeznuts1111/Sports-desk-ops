@@ -171,6 +171,13 @@ export function parseSeamProbe(raw: unknown): SeamProbe {
 
 export type ProbeStructural = "pass" | "fail" | "not-covered";
 
+export interface RenderExpectation {
+  readonly selector: string;
+  readonly matched: boolean;
+  readonly count: number;
+  readonly error: string | null;
+}
+
 export interface SeamProbeOutcome {
   readonly covered: boolean;
   /** Structural verdict: own properties, allowlist coverage and installation. */
@@ -189,6 +196,35 @@ function seamDiagnostics(probe: SeamProbe): Record<string, unknown> | null {
     : null;
 }
 
+/** Browser expression: does the expected post-fix render target exist, and how many nodes match? */
+export function buildRenderCheckScript(selector: string): string {
+  const literal = JSON.stringify(selector);
+  return `(function () {
+  try {
+    return JSON.stringify({
+      selector: ${literal},
+      matched: !!document.querySelector(${literal}),
+      count: document.querySelectorAll(${literal}).length,
+      error: null
+    });
+  } catch (error) {
+    return JSON.stringify({ selector: ${literal}, matched: false, count: 0, error: String(error).slice(0, 200) });
+  }
+})()`;
+}
+
+const RenderExpectationSchema = z.object({
+  selector: z.string(),
+  matched: z.boolean(),
+  count: z.number().int().nonnegative(),
+  error: z.string().nullable(),
+});
+
+export function parseRenderCheck(raw: unknown): RenderExpectation {
+  const value = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return RenderExpectationSchema.parse(value);
+}
+
 /**
  * Exit-code contract shared by the probe runner:
  *   0 covered, authenticated and clean
@@ -201,6 +237,21 @@ export function seamProbeExitCode(outcome: SeamProbeOutcome): 0 | 1 | 2 | 3 {
   if (!outcome.covered) return 3;
   if (outcome.structural === "fail") return 1;
   if (outcome.authenticated !== true) return 2;
+  return 0;
+}
+
+/**
+ * Canary acceptance: exit 0 additionally requires the expected render target to exist. A session
+ * that cannot be authenticated stays exit 2 — render cannot be verified without it — so the guard
+ * is never enabled on an unverified run.
+ */
+export function canaryExitCode(
+  outcome: SeamProbeOutcome,
+  rendered: RenderExpectation | null,
+): 0 | 1 | 2 | 3 {
+  const base = seamProbeExitCode(outcome);
+  if (base !== 0) return base;
+  if (rendered !== null && !rendered.matched) return 1;
   return 0;
 }
 

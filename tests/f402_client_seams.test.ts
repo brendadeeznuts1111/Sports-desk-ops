@@ -3,11 +3,14 @@ import { join } from "node:path";
 
 import {
   ALLOWED_MODULES,
+  buildRenderCheckScript,
   buildSeamProbeScript,
+  canaryExitCode,
   evaluateSeamProbe,
   isAllowedModule,
   managerModuleIds,
   managerModuleLeaves,
+  parseRenderCheck,
   parseSeamProbe,
   preloadAllowedLeaves,
   SEAM_OWN_PROPERTIES,
@@ -61,6 +64,7 @@ interface RunOptions {
   readonly meta?: string | null;
   readonly cookie?: string;
   readonly session?: Record<string, string | number>;
+  readonly guard?: boolean;
 }
 
 async function preloadSource(): Promise<string> {
@@ -73,6 +77,7 @@ function runPreload(
   options: RunOptions = {},
 ): PreloadContext {
   const window: Record<string, unknown> = {};
+  if (options.guard === true) window["__F402_EXTERNAL_VIEW_GUARD__"] = true;
   const requirejs: RequireJsLike = { onResourceLoad: null };
   window["requirejs"] = requirejs;
   const meta = options.meta === undefined ? null : options.meta;
@@ -376,15 +381,36 @@ describe("security seam preload: module allowlist", () => {
     expect(seam.isAllowedModule("future-module")).toBe(true);
   });
 
-  test("flags expose the dormant unified transport and the phase-1 external-view gate", async () => {
+  test("flags expose the dormant transport and the latched phase-1 canary gate", async () => {
     const source = await preloadSource();
-    const context = runPreload(source, "https://x/");
-    const api: Record<string, unknown> = {};
-    decorate(context, api);
-    expect(asApi(api).flags).toEqual({
+
+    const byDefault = runPreload(source, "https://x/");
+    const defaultApi: Record<string, unknown> = {};
+    decorate(byDefault, defaultApi);
+    expect(asApi(defaultApi).flags).toEqual({
       unifiedPost: false,
       externalViewGuard: false,
     });
+
+    const byUrl = runPreload(
+      source,
+      "https://x/manager.html?external-view-guard=1",
+    );
+    const urlApi: Record<string, unknown> = {};
+    decorate(byUrl, urlApi);
+    expect(asApi(urlApi).flags.externalViewGuard).toBe(true);
+
+    const byInjection = runPreload(source, "https://x/", { guard: true });
+    const injectedApi: Record<string, unknown> = {};
+    decorate(byInjection, injectedApi);
+    expect(asApi(injectedApi).flags.externalViewGuard).toBe(true);
+
+    // Latched at preload: a later URL rewrite cannot flip the canary on.
+    const latched = runPreload(source, "https://x/manager.html");
+    latched.location.href = "https://x/manager.html?external-view-guard=1";
+    const latchedApi: Record<string, unknown> = {};
+    decorate(latched, latchedApi);
+    expect(asApi(latchedApi).flags.externalViewGuard).toBe(false);
   });
 
   test("registry degradation is an audit signal, not a page break", async () => {
@@ -476,6 +502,43 @@ describe("seam probe and installer", () => {
     probe.diag = { seam: { registryDegraded: true } };
     const notes = evaluateSeamProbe(probe, leaves).notes.join(" ");
     expect(notes).toContain("requirejs registry degraded");
+  });
+
+  test("render expectation parses and gates canary exit 0", () => {
+    const script = buildRenderCheckScript("[data-wager-number]");
+    expect(script).toContain("[data-wager-number]");
+    expect(script).toContain("querySelectorAll");
+
+    const matched = parseRenderCheck(
+      JSON.stringify({
+        selector: "[data-wager-number]",
+        matched: true,
+        count: 3,
+        error: null,
+      }),
+    );
+    expect(matched.count).toBe(3);
+
+    const clean = evaluateSeamProbe(goodProbe(), leaves);
+    expect(canaryExitCode(clean, matched)).toBe(0);
+
+    const missing = parseRenderCheck(
+      JSON.stringify({
+        selector: "[data-wager-number]",
+        matched: false,
+        count: 0,
+        error: null,
+      }),
+    );
+    expect(canaryExitCode(clean, missing)).toBe(1);
+
+    const unauthenticated = goodProbe();
+    unauthenticated.authenticated = false;
+    expect(
+      canaryExitCode(evaluateSeamProbe(unauthenticated, leaves), missing),
+    ).toBe(2);
+
+    expect(canaryExitCode(clean, null)).toBe(0);
   });
 
   test("exit-code contract distinguishes covered/uncovered and completed/could-not-run", () => {

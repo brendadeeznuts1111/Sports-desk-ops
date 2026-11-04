@@ -59,6 +59,21 @@
   }
   window.__F402_SEAM_DISABLED__ = seamDisabled;
 
+  // Canary gate for the held external-view fix. Resolved once, here, from (in order) an injected
+  // global override, then the URL. Enabling a session needs no code change or redeploy; rollback is
+  // "open without the parameter", effective on the next navigation.
+  var externalViewGuard = false;
+  try {
+    externalViewGuard =
+      new URL(location.href).searchParams.get("external-view-guard") === "1";
+  } catch {
+    externalViewGuard = /[?&]external-view-guard=1(?:[&#]|$)/.test(
+      location.href,
+    );
+  }
+  if (window.__F402_EXTERNAL_VIEW_GUARD__ === true) externalViewGuard = true;
+  window.__F402_EXTERNAL_VIEW_GUARD__ = externalViewGuard;
+
   var loadNames = [];
   var appliedCount = 0;
   var hookInstalled = false;
@@ -176,7 +191,7 @@
     if (key === "allowedModules") return new Set(ALLOWED_LEAVES);
     if (key === "flags") {
       return Object.assign(
-        { unifiedPost: false, externalViewGuard: false },
+        { unifiedPost: false, externalViewGuard: externalViewGuard },
         priorFlags || {},
       );
     }

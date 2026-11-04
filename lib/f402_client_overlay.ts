@@ -9,11 +9,16 @@
 import { join } from "node:path";
 
 import {
+  buildRenderCheckScript,
   buildSeamProbeScript,
   evaluateSeamProbe,
+  parseRenderCheck,
   parseSeamProbe,
 } from "./f402_client_seams.ts";
-import type { SeamProbeOutcome } from "./f402_client_seams.ts";
+import type {
+  RenderExpectation,
+  SeamProbeOutcome,
+} from "./f402_client_seams.ts";
 
 export const SECURITY_SEAMS_PRELOAD_PATH = join(
   import.meta.dir,
@@ -101,4 +106,13 @@ export async function probeSecuritySeams(
   const raw = await view.evaluate(buildSeamProbeScript(options.moduleLeaves));
   const probe = parseSeamProbe(raw);
   return evaluateSeamProbe(probe, options.moduleLeaves);
+}
+
+/** Check the post-fix render target on the same page the probe ran against. */
+export async function checkExpectedRendered(
+  view: EvaluateView,
+  selector: string,
+): Promise<RenderExpectation> {
+  const raw = await view.evaluate(buildRenderCheckScript(selector));
+  return parseRenderCheck(raw);
 }

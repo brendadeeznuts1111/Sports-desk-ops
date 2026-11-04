@@ -21,12 +21,13 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import {
+  checkExpectedRendered,
   installSecuritySeamsPreload,
   probeSecuritySeams,
 } from "../../lib/f402_client_overlay.ts";
 import {
+  canaryExitCode,
   managerModuleLeaves,
-  seamProbeExitCode,
 } from "../../lib/f402_client_seams.ts";
 import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { resolveF402WebViewProfileDir } from "../../lib/f402_replay_transport.ts";
@@ -48,6 +49,7 @@ const { values } = parseArgs({
     login: { type: "boolean" },
     waitMs: { type: "string", default: "30000" },
     "no-seam": { type: "boolean" },
+    "expect-rendered": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -61,6 +63,9 @@ if (values.help === true) {
   --login          sign in first via keychain/TTY (scripts/capture/f402_login.ts)
   --waitMs <ms>    boot wait after the probed navigation (default 30000)
   --no-seam        negative control: skip the preload, expect the probe to fail
+  --expect-rendered <css>
+                   canary acceptance: this selector must match after the guarded render
+                   (bet ticker example: '[data-wager-number]')
   --help           this text
 
   Exit: 0 covered+authenticated+clean; 1 structural failure; 2 structural pass, authenticated
@@ -161,6 +166,11 @@ try {
     moduleLeaves,
     backend: "chrome",
   });
+  const expectRendered = values["expect-rendered"]?.trim();
+  const rendered =
+    expectRendered === undefined || expectRendered === ""
+      ? null
+      : await checkExpectedRendered(view, expectRendered);
 
   console.log(
     JSON.stringify(
@@ -181,7 +191,7 @@ try {
     ),
   );
 
-  process.exit(seamProbeExitCode(probe));
+  process.exit(canaryExitCode(probe, rendered));
 } catch (error) {
   console.error(
     JSON.stringify({
