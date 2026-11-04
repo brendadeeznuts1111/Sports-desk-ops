@@ -3,7 +3,7 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
-import { R2S3Client } from "../lib/r2_s3_client.ts";
+import { R2S3Client, resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
 import {
   buildWeblogRollup,
   readBetsWindow,
@@ -65,27 +65,77 @@ if (values["no-r2"] !== true) {
   if (client === null) {
     console.error("[weblog] R2 unavailable; local artifact only");
   } else {
+    const deskDate = new Date(toMs - 1).toISOString().slice(0, 10);
+    const body = new TextEncoder().encode(
+      `${JSON.stringify(rollup, null, 2)}\n`,
+    );
+    const dailyKey = `f402-weblog/${deskDate}/rollup.json`;
+    const metadata = {
+      pii: "none",
+      "schema-version": "1",
+      "desk-date": deskDate,
+      "generated-at": new Date().toISOString(),
+      sha256: rollup.sourceSha256,
+      source: "f402-weblog",
+    };
+    await client.writeWithMetadata(dailyKey, body, {
+      type: "application/json",
+      metadata,
+    });
+    const stat = await client.stat(dailyKey);
+    const pointer = {
+      schemaVersion: 1,
+      deskDate,
+      key: dailyKey,
+      sha256: rollup.sourceSha256,
+      generatedAt: new Date().toISOString(),
+    };
     await client.writeWithMetadata(
       "f402-weblog/latest.json",
-      new TextEncoder().encode(`${JSON.stringify(rollup, null, 2)}\n`),
+      new TextEncoder().encode(`${JSON.stringify(pointer, null, 2)}\n`),
       {
         type: "application/json",
-        metadata: {
-          pii: "none",
-          "schema-version": "1",
-          "desk-date": new Date(fromMs).toISOString().slice(0, 10),
-          "generated-at": new Date().toISOString(),
-          sha256: rollup.sourceSha256,
-          source: "f402-weblog",
-        },
+        metadata: { ...metadata, source: "f402-weblog-pointer" },
       },
     );
-    const stat = await client.stat("f402-weblog/latest.json");
     console.error(
-      `[weblog] published f402-weblog/latest.json bytes=${stat.size}`,
+      `[weblog] published ${dailyKey} bytes=${stat.size} + latest.json`,
     );
+    const publicStatus = await fetch(`${client.publicBase}/${dailyKey}`)
+      .then((r) => r.status)
+      .catch(() => -1);
+    console.error(`[weblog] public ${publicStatus} ${dailyKey}`);
+    const secrets = await resolveSecretBackedEnv().catch(
+      () => ({}) as Record<string, string>,
+    );
+    const token = (
+      Bun.env.BLOB_API_TOKEN ??
+      secrets.BLOB_API_TOKEN ??
+      ""
+    ).trim();
+    if (token !== "") {
+      const gateway = (
+        Bun.env.BLOB_GATEWAY_URL ??
+        `http://127.0.0.1:${Bun.env.BLOB_PORT ?? "4021"}`
+      ).replace(/\/+$/, "");
+      const wsStatus = await fetch(`${gateway}/api/v1/live-bets`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ channel: "f402-weblog", event: rollup }),
+        signal: AbortSignal.timeout(5_000),
+      })
+        .then((r) => r.status)
+        .catch(() => -1);
+      console.error(`[weblog] ws f402-weblog status=${wsStatus}`);
+    } else {
+      console.error("[weblog] ws skipped: no BLOB_API_TOKEN");
+    }
   }
 }
+
 console.log(
   JSON.stringify(
     { out, gates: rollup.gates, join: rollup.join, flags: rollup.flags },

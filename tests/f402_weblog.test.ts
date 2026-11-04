@@ -15,6 +15,7 @@ const event = (
   loginId,
   ip,
   ip32: null,
+  ipv6Prefix64: null,
   operation,
   ...parseOperation(operation),
 });

@@ -22,6 +22,7 @@ export interface WeblogEvent {
   readonly loginId: string;
   readonly ip: string;
   readonly ip32: number | null;
+  readonly ipv6Prefix64: string | null;
   readonly operation: string;
   readonly deviceClass: "M" | "D" | "UNKNOWN";
   readonly actionKind: string;
@@ -42,7 +43,10 @@ const slug = (value: string): string =>
 
 export function parseOperation(
   value: unknown,
-): Omit<WeblogEvent, "accessMs" | "loginId" | "ip" | "ip32" | "operation"> {
+): Omit<
+  WeblogEvent,
+  "accessMs" | "loginId" | "ip" | "ip32" | "ipv6Prefix64" | "operation"
+> {
   const operation = String(value ?? "");
   const ui = UI_RE.exec(operation);
   if (ui !== null) {
@@ -91,6 +95,59 @@ export function ipToUint32(ip: string): number | null {
   );
 }
 
+export function ipv6To64(ip: string): bigint | null {
+  const text = ip.trim().replace(/^\[|\]$/g, "");
+  if (!text.includes(":")) return null;
+  const [head, tail] = text.split("::");
+  const left = head === undefined || head === "" ? [] : head.split(":");
+  const right = tail === undefined || tail === "" ? [] : tail.split(":");
+  const fill = 8 - left.length - right.length;
+  if (fill < 0) return null;
+  const parts = [...left, ...Array(fill).fill("0"), ...right];
+  if (parts.length !== 8) return null;
+  let value = 0n;
+  for (let i = 0; i < 4; i += 1) {
+    const part = parts[i];
+    if (part === undefined || !/^[0-9a-fA-F]{1,4}$/.test(part)) return null;
+    value = (value << 16n) | BigInt(parseInt(part, 16));
+  }
+  return value;
+}
+
+const IPV6_CARRIERS: ReadonlyArray<{
+  readonly name: string;
+  readonly value: bigint;
+  readonly bits: number;
+}> = [
+  ["IPV6_CARRIER:T_MOBILE", ipv6To64("2607:fb90::")!, 28],
+  ["IPV6_CARRIER:T_MOBILE", ipv6To64("2607:fc20::")!, 32],
+  ["IPV6_CARRIER:VERIZON", ipv6To64("2600:1000::")!, 24],
+  ["IPV6_CARRIER:ATT", ipv6To64("2600:380::")!, 24],
+  ["IPV6_CARRIER:ICLOUD", ipv6To64("2606:54c0::")!, 32],
+  ["IPV6_CARRIER:ICLOUD", ipv6To64("2a09:bac0::")!, 29],
+].map(([name, value, bits]) => ({
+  name: name as string,
+  value: value as bigint,
+  bits: bits as number,
+}));
+
+export function classifyIpv6(ip: string): {
+  className: string;
+  prefix64: string | null;
+} {
+  const value = ipv6To64(ip);
+  if (value === null) return { className: "UNKNOWN", prefix64: null };
+  for (const carrier of IPV6_CARRIERS) {
+    if (
+      value >> BigInt(64 - carrier.bits) ===
+      carrier.value >> BigInt(64 - carrier.bits)
+    ) {
+      return { className: carrier.name, prefix64: value.toString(16) };
+    }
+  }
+  return { className: "IPV6_OTHER_64", prefix64: value.toString(16) };
+}
+
 const CIDRS: ReadonlyArray<{
   readonly name: string;
   readonly net: number;
@@ -129,8 +186,9 @@ const CIDRS: ReadonlyArray<{
 ];
 
 export function classifyIp(ip: string): string {
+  if (ip.trim() === "") return "UNKNOWN";
   const value = ipToUint32(ip);
-  if (value === null) return "UNKNOWN";
+  if (value === null) return classifyIpv6(ip).className;
   for (const cidr of CIDRS)
     if ((value & cidr.mask) >>> 0 === cidr.net) return cidr.name;
   return "OTHER";
@@ -182,6 +240,7 @@ export async function readWeblogRows(paths: readonly string[]): Promise<{
         loginId,
         ip,
         ip32: ipToUint32(ip),
+        ipv6Prefix64: classifyIpv6(ip).prefix64,
         operation: String(raw.Operation ?? ""),
         ...parsed,
       });
@@ -255,6 +314,7 @@ export interface WebLogRollup {
     };
   };
   readonly flags: {
+    readonly executionSnipers: number;
     readonly sniperTwins: number;
     readonly lineShoppers: number;
     readonly botRingAccounts: number;
@@ -297,7 +357,13 @@ export function buildWeblogRollup(
   const deviceClasses: Record<string, number> = { M: 0, D: 0, UNKNOWN: 0 };
   const ipClasses: Record<string, number> = {};
   const logins = new Map<string, WeblogEvent[]>();
+  const allByLogin = new Map<string, WeblogEvent[]>();
   for (const row of web.rows) {
+    if (row.loginId !== "") {
+      const all = allByLogin.get(row.loginId) ?? [];
+      all.push(row);
+      allByLogin.set(row.loginId, all);
+    }
     operationsActions.set(
       row.actionKind,
       (operationsActions.get(row.actionKind) ?? 0) + 1,
@@ -317,6 +383,8 @@ export function buildWeblogRollup(
     start: number;
     end: number;
     ip: string;
+    ip32: number | null;
+    ipv6Prefix64: string | null;
     skin: string | null;
     version: string | null;
     wagers: number[];
@@ -338,11 +406,23 @@ export function buildWeblogRollup(
         start: start.accessMs,
         end,
         ip: start.ip,
+        ip32: start.ip32,
+        ipv6Prefix64: start.ipv6Prefix64,
         skin: start.skinDomain,
         version: start.clientVersion,
         wagers: [],
       };
       list.push(session);
+    }
+    for (const session of list) {
+      for (const event of allByLogin.get(login) ?? []) {
+        if (event.accessMs < session.start || event.accessMs > session.end)
+          continue;
+        if (session.skin === null && event.skinDomain !== null)
+          session.skin = event.skinDomain;
+        if (session.version === null && event.clientVersion !== null)
+          session.version = event.clientVersion;
+      }
     }
     byLogin.set(login, list);
     sessions.push(...list);
@@ -353,7 +433,6 @@ export function buildWeblogRollup(
     nonWebChannel = 0,
     futureJoins = 0;
   const deltas: number[] = [];
-  let sniperTwins = 0;
   const sessionHits = new Set<Session>();
   for (const wager of bets) {
     const list = byLogin.get(wager.login);
@@ -382,46 +461,91 @@ export function buildWeblogRollup(
 
   let zeroWagerSessions = 0,
     lineShoppers = 0;
-  const fastLogins = new Set<string>();
+  const protectedSet = new Set<string>(NEGATIVE_CONTROLS);
+  interface AccountStat {
+    prefix: string | null;
+    skin: string | null;
+    times: number[];
+    fast: boolean;
+  }
+  const accountStats = new Map<string, AccountStat>();
   for (const session of sessions) {
     if (session.wagers.length === 0) {
       zeroWagerSessions += 1;
       if (session.end - session.start >= 120_000) lineShoppers += 1;
-    } else {
-      session.wagers.sort((a, b) => a - b);
-      const firstDelay = session.wagers[0]! - session.start;
-      if (firstDelay >= 0 && firstDelay < 15_000) fastLogins.add(session.login);
-    }
-  }
-  const twinGroups = new Map<string, WeblogEvent[]>();
-  for (const row of web.rows) {
-    if (
-      row.actionKind !== "LOGIN" ||
-      row.ip32 === null ||
-      row.skinDomain === null
-    )
       continue;
-    const key = `${row.ip32 >>> 8}|${row.skinDomain}|${row.clientVersion ?? ""}`;
-    const list = twinGroups.get(key) ?? [];
-    list.push(row);
-    twinGroups.set(key, list);
+    }
+    session.wagers.sort((a, b) => a - b);
+    const firstDelay = session.wagers[0]! - session.start;
+    let burst = false;
+    for (let i = 1; i < session.wagers.length; i += 1) {
+      if (session.wagers[i]! - session.wagers[i - 1]! <= 15_000) burst = true;
+    }
+    const carrier = classifyIp(session.ip);
+    const prefix =
+      session.ipv6Prefix64 !== null && carrier === "IPV6_OTHER_64"
+        ? `6:${session.ipv6Prefix64}`
+        : session.ip32 !== null && !carrier.startsWith("IPV6_")
+          ? `4:${session.ip32 >>> 8}`
+          : null;
+    const stat = accountStats.get(session.login) ?? {
+      prefix,
+      skin: null,
+      times: [],
+      fast: false,
+    };
+    if (stat.prefix === null) stat.prefix = prefix;
+    if (stat.skin === null && session.skin !== null) stat.skin = session.skin;
+    stat.times.push(...session.wagers);
+    stat.fast ||= (firstDelay >= 0 && firstDelay < 15_000) || burst;
+    accountStats.set(session.login, stat);
   }
-  const twinLogins = new Set<string>();
+  const executionSnipers = [...accountStats.entries()]
+    .filter(([login, stat]) => !protectedSet.has(login) && stat.fast)
+    .map(([login]) => login);
+  const twinGroups = new Map<
+    string,
+    Array<{
+      login: string;
+      times: number[];
+      skin: string | null;
+      fast: boolean;
+    }>
+  >();
+  for (const [login, stat] of accountStats) {
+    if (stat.prefix === null) continue;
+    const list = twinGroups.get(stat.prefix) ?? [];
+    list.push({
+      login,
+      times: [...stat.times].sort((a, b) => a - b),
+      skin: stat.skin,
+      fast: stat.fast,
+    });
+    twinGroups.set(stat.prefix, list);
+  }
+  const twinAccounts = new Set<string>();
   for (const list of twinGroups.values()) {
-    list.sort((a, b) => a.accessMs - b.accessMs);
-    for (let i = 1; i < list.length; i += 1) {
-      const prev = list[i - 1]!,
-        cur = list[i]!;
-      if (
-        cur.accessMs - prev.accessMs <= 60_000 &&
-        cur.loginId !== prev.loginId
-      ) {
-        twinLogins.add(prev.loginId);
-        twinLogins.add(cur.loginId);
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        const a = list[i]!,
+          b = list[j]!;
+        if (a.login === b.login) continue;
+        if (protectedSet.has(a.login) || protectedSet.has(b.login)) continue;
+        if (a.skin !== null && b.skin !== null && a.skin !== b.skin) continue;
+        if (!a.fast && !b.fast) continue;
+        const close = a.times.some((t) =>
+          b.times.some((u) => Math.abs(t - u) <= 60_000),
+        );
+        if (close) {
+          twinAccounts.add(a.login);
+          twinAccounts.add(b.login);
+        }
       }
     }
   }
-  sniperTwins = [...fastLogins].filter((login) => twinLogins.has(login)).length;
+  const sniperTwins = [...twinAccounts].filter(
+    (login) => !protectedSet.has(login),
+  ).length;
   const beardKeys = new Map<string, Set<string>>();
   for (const row of web.rows) {
     if (row.ip32 === null || row.skinDomain === null) continue;
@@ -441,10 +565,18 @@ export function buildWeblogRollup(
       )
       .map((row) => row.loginId),
   ).size;
-  const negativeFlags = NEGATIVE_CONTROLS.filter(
-    (login) => fastLogins.has(login) && twinLogins.has(login),
+  const negativeFlags = NEGATIVE_CONTROLS.filter((login) =>
+    twinAccounts.has(login),
   ).length;
   deltas.sort((a, b) => a - b);
+  const rawLogins = new Set(
+    web.rows
+      .map((r) => r.loginId.trim().toLowerCase())
+      .filter((l) => l.length >= 3),
+  );
+  const rawIps = new Set(
+    web.rows.map((r) => r.ip.trim()).filter((ip) => ip !== ""),
+  );
   const totalWindowWagers = bets.length;
   const gates = [
     {
@@ -512,13 +644,34 @@ export function buildWeblogRollup(
         p99: quantile(deltas, 0.99),
       },
     },
-    flags: { sniperTwins, lineShoppers, botRingAccounts, crossOfficeBeards },
+    flags: {
+      executionSnipers: executionSnipers.length,
+      sniperTwins,
+      lineShoppers,
+      botRingAccounts,
+      crossOfficeBeards,
+    },
     gates,
     negativeControls: {
       checked: NEGATIVE_CONTROLS.length,
       falsePositiveFlags: negativeFlags,
     },
   };
-  const sourceSha256 = sha256Hex(JSON.stringify(base));
-  return { ...base, sourceSha256 };
+  const serialized = JSON.stringify(base);
+  const tokenMatches = serialized.match(/[A-Za-z0-9_.-]{3,}/g) ?? [];
+  const ipMatches = serialized.match(/\d{1,3}(?:\.\d{1,3}){3}/g) ?? [];
+  const leakedTokens =
+    tokenMatches.filter((token) => rawLogins.has(token.toLowerCase())).length +
+    ipMatches.filter((ip) => rawIps.has(ip)).length;
+  const leakGate = {
+    gate: "GATE-WL-04",
+    status: leakedTokens === 0 ? "pass" : "fail",
+    detail: `leakedTokenCount=${leakedTokens} logins=${rawLogins.size} ips=${rawIps.size}`,
+  } as const;
+  const finalGates = base.gates.map((gate) =>
+    gate.gate === "GATE-WL-04" ? leakGate : gate,
+  );
+  const finalBase = { ...base, gates: finalGates };
+  const sourceSha256 = sha256Hex(JSON.stringify(finalBase));
+  return { ...finalBase, sourceSha256 };
 }
