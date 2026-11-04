@@ -1,0 +1,64 @@
+name: r2-staleness-alert
+
+# Why external: operator supervision on macOS is a bare shell-launched process with no restart,
+# no log rotation and no alert. A silent credential-rotation outage this morning (2026-11-04,
+# 06:05 UTC) froze every public bridge R2 key for 14+ hours and nothing caught it. This workflow
+# is the inverse: GitHub-hosted, no laptop dependency, no R2 credentials, only the two Telegram
+# secrets. If the operator Mac is dead, this still fires.
+#
+# Scheduling caveat: GitHub Actions free-tier cron is not guaranteed on-time; 5-10 min skew is
+# normal at peak. At `*/15 * * * *` cadence with 60 min SLAs that is well within budget. If we
+# ever need tighter guarantees, migrate the runner to a Cloudflare Worker cron trigger (same
+# pure library, swap the runner wrapper).
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Skip the Telegram POST, print the rendered message to the job log."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r2-staleness-alert
+  cancel-in-progress: true
+
+jobs:
+  check-r2-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout (shallow)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Bun 1.4.4
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Install deps (frozen)
+        run: bun install --frozen-lockfile
+
+      - name: Probe R2 and alert on degraded keys
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            bun run scripts/r2_staleness_alerter.ts --dry-run
+          else
+            bun run scripts/r2_staleness_alerter.ts
+          fi
+
+      # Runner exits 2 when any key is degraded. We WANT the workflow to fail in that case —
+      # it gives us a second alert channel (GitHub Actions workflow-failure email) on top of
+      # the Telegram message, defense in depth. Exit 1 (alerter itself broken) also fails.
+      # The `set -euo pipefail` + bash `run` step above propagates the non-zero exit directly.
