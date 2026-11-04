@@ -48,6 +48,15 @@ only the _priority_ of the sink work depends on item 2. Verify `searchComponent`
 `setHistory` first as the pattern confirmer, followed by `getMessageInit`, `getPopUpMessages`,
 `setCommunicationMessages` — one PR each, each with a sink test.
 
+**Sink status (2026-11-04):** `searchComponent` escapes `NameFirst`, `Login`, `Password`,
+`customerID` and `AgentID`; `setHistory` escapes only the title and leaves the `getHistory` argument
+raw. `searchComponent` carries two accepted costs: (1) the search filter compares against escaped
+values, so a literal `&`/`<` in a name/password no longer matches — **accepted by the desk security
+owner (operator role), 2026-11-04**, mitigation search-by-login, escalate if agents report failures;
+(2) the `players`/`agents` arrays hold escaped values after setup — new code must not read those
+fields directly (the pinned `setPlayers()` does, and can show escaped text for special characters).
+Recorded in #16; migrate to a render copy if those arrays become load-bearing for non-render use.
+
 **Fifth sink — `searchCustomer` (fullscreen search):** it is **live in the pinned controller**
 (`searchCustomer:function`, operation `searchCustomerAdmin`, renders `info.Password`, `info.Login`
 and `info.NameFirst`) and is bound at boot to `[data-field="search-customer"]` keyup. The captured

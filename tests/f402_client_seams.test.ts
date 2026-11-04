@@ -475,7 +475,7 @@ describe("security seam preload: module allowlist", () => {
   test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(4);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(5);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
@@ -507,12 +507,13 @@ describe("security seam preload: module allowlist", () => {
 
     const renders: Array<Record<string, unknown>> = [];
     class Manager {
-      agents = [{ Login: "agent<one" }];
+      agents = [{ Login: "agent<one", AgentID: 'a"1' }];
       players = [
         {
           Login: "a&b",
           NameFirst: '<img src=x onerror="boom">',
           Password: 'p"w<d',
+          customerID: 'c"1',
         },
       ];
       searchComponent(): void {
@@ -538,7 +539,9 @@ describe("security seam preload: module allowlist", () => {
       expect(seen["NameFirst"]).toContain("&lt;img");
       expect(seen["Login"]).toContain("a&amp;b");
       expect(seen["Password"]).toContain("p&quot;w&lt;d");
+      expect(seen["customerID"]).toContain("&quot;");
     }
+    expect(instance.agents[0]!.AgentID).toContain("&quot;");
     // Permanent escaping: no restore window for a deferred render to slip through.
     expect(instance.players[0]!.NameFirst).toContain("&lt;img");
   });
@@ -558,7 +561,7 @@ describe("security seam preload: module allowlist", () => {
     );
     class Manager {
       agents: unknown[] = [];
-      players = [{ Login: "a&b", NameFirst: "<b>x</b>", Password: "" }];
+      players = [{ Login: "a&b", NameFirst: "A&B", Password: "" }];
       searchComponent(): void {}
     }
     defined["manager/manager"] = Manager;
@@ -572,7 +575,7 @@ describe("security seam preload: module allowlist", () => {
     const once = instance.players[0]!.NameFirst;
     instance.searchComponent();
     expect(instance.players[0]!.NameFirst).toBe(once);
-    expect(once).toContain("&lt;b&gt;");
+    expect(once).toBe("A&amp;B");
   });
 
   test("a manager class without searchComponent installs loudly, not silently", async () => {
@@ -594,6 +597,59 @@ describe("security seam preload: module allowlist", () => {
     };
     expect(seams.diag().searchEscaperInstalled).toBe(false);
     expect(seams.diag().searchEscaperFailure).toBe("searchComponent-missing");
+  });
+
+  test("setHistory escapes only the title and leaves the getHistory argument raw", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    const titleCalls: string[] = [];
+    context.window["jQuery"] = {
+      fn: {
+        html(value: string): void {
+          titleCalls.push(value);
+        },
+      },
+    };
+    let historyAgent: unknown;
+    class Manager {
+      setHistory(event: { info: { agent: unknown } }): void {
+        // Mirrors the pinned controller: title is built from info.agent, the same value goes
+        // to getHistory().
+        (
+          context.window["jQuery"] as { fn: { html: (v: string) => void } }
+        ).fn.html(
+          "History for " +
+            (event.info.agent as { toString(): string })
+              .toString()
+              .split(".")
+              .join(""),
+        );
+        this.getHistory(event.info.agent);
+      }
+      getHistory(agent: unknown): void {
+        historyAgent = agent;
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    new Manager().setHistory({ info: { agent: '<img src=x onerror="boom">' } });
+    expect(titleCalls).toHaveLength(1);
+    expect(titleCalls[0]).toContain("&lt;img");
+    expect(historyAgent).toBe('<img src=x onerror="boom">');
   });
 
   test("a manager class without setAccountInfo installs loudly, not silently", async () => {

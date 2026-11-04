@@ -113,6 +113,7 @@
     var manager = defined["manager/manager"];
     if (manager) decorated = applyManagerGuard(manager) || decorated;
     if (manager) decorated = applySearchEscaper(manager) || decorated;
+    if (manager) decorated = applySetHistoryEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -130,6 +131,8 @@
         managerGuardFailure: managerGuardFailure,
         searchEscaperInstalled: searchEscaperInstalled,
         searchEscaperFailure: searchEscaperFailure,
+        historyEscaperInstalled: historyEscaperInstalled,
+        historyEscaperFailure: historyEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -451,6 +454,11 @@
   // the browser parses the generated attribute, so data-login/data-pass still carry the real value
   // (obj:true callers keep working); only the raw-string interpolation is neutralised.
   //
+  // Landmine: after setup, players/agents hold escaped values. Do not read NameFirst/Login/
+  // Password/customerID/AgentID directly from those arrays in new code; use the rendered DOM
+  // (attr decodes back to the real value) or a render copy. setPlayers() in the pinned controller
+  // reads Login/customerID directly, so it can display escaped text for special characters.
+  //
   // Tradeoff: the search filter compares the typed term against the escaped field, so searching for
   // a literal "&" or "<" inside a name/password no longer matches. Those are the characters that
   // have to be escaped for the sink to be safe; ordinary names/passwords are unaffected.
@@ -497,10 +505,10 @@
         var api = searchEscaperApi();
         if (api && typeof api.escHtml === "function") {
           try {
-            escapeSearchRows(this.agents, ["Login"], api.escHtml);
+            escapeSearchRows(this.agents, ["Login", "AgentID"], api.escHtml);
             escapeSearchRows(
               this.players,
-              ["Login", "NameFirst", "Password"],
+              ["Login", "NameFirst", "Password", "customerID"],
               api.escHtml,
             );
           } catch (err) {
@@ -508,6 +516,67 @@
           }
         }
         return original.apply(this, arguments);
+      },
+    });
+    return true;
+  }
+
+  // Sink migration for manager.setHistory: it builds an HTML title from e.info.agent and injects
+  // it with .html(). The same argument is passed to getHistory(), so it must stay raw for the
+  // request. Intercept only the synchronous title .html() call and replace its string with an
+  // escaped copy; the request path is untouched.
+  var historyEscaperInstalled = false;
+  var historyEscaperFailure = null;
+
+  function applySetHistoryEscaper(Manager) {
+    if (historyEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      historyEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.setHistory;
+    if (typeof original !== "function") {
+      historyEscaperFailure = "setHistory-missing";
+      console.error(
+        "[f402-seam] setHistory escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    historyEscaperInstalled = true;
+    Object.defineProperty(proto, "setHistory", {
+      configurable: true,
+      writable: true,
+      value: function (event) {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          !jq.fn ||
+          typeof jq.fn.html !== "function" ||
+          !event ||
+          !event.info ||
+          event.info.agent === undefined
+        ) {
+          return original.apply(this, arguments);
+        }
+        var rawTitle =
+          "History for " + event.info.agent.toString().split(".").join("");
+        var escapedTitle =
+          "History for " +
+          api.escHtml(event.info.agent.toString().split(".").join(""));
+        var baseHtml = jq.fn.html;
+        jq.fn.html = function (value) {
+          if (value === rawTitle) return baseHtml.call(this, escapedTitle);
+          return baseHtml.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.fn.html = baseHtml;
+        }
       },
     });
     return true;
@@ -548,6 +617,7 @@
       ) {
         applyManagerGuard(defined);
         applySearchEscaper(defined);
+        applySetHistoryEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);
