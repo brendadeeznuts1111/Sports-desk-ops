@@ -42,7 +42,10 @@ bit7 non-ASCII, bit8 other printable. Because no raw Login exists here, 3d recor
 **Streaming census execution (Phase 1):** the graded HTML fixtures were parsed row-by-row through
 the production parser in memory; rows were immediately folded into counters. No output file, row
 sample, or raw field value was printed. The executable four-harness was run read-only:
-`ALL 4 DOMAIN HARNESSES … PASSED`.
+`ALL 4 DOMAIN HARNESSES … PASSED`. **Reproducible gate (2026-11-04):**
+`bun run census:3d:check` (`scripts/bridge3d_census.ts`) recomputes this block from the four
+fixtures through the production parser and exits non-zero on drift; `bun run census:3d` prints the
+aggregate. It runs in CI.
 
 **Census additions:**
 

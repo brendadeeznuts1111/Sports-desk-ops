@@ -10,7 +10,13 @@
       "CmaxTickets": 2,
       "Bmax": 2,
       "BmaxDimensions": ["rotation", "sport", "period"],
-      "fanout": { "p50": 1, "p95": 1, "p99": 1, "p99_9": 1, "p100": 1 },
+      "fanout": {
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "p99_9": 1,
+        "p100": 1
+      },
       "identifierAlphabetBitmask": 5,
       "identifierMaxBytes": 5,
       "rotationMaxBitWidth": 8,
@@ -23,13 +29,29 @@
       "CmaxGroups": 22611,
       "Bmax": 118,
       "BmaxDimensions": ["channel", "sport", "period", "settlementState"],
-      "fanout": { "p50": 1, "p95": 2, "p99": 3, "p99_9": 6, "p100": 8 },
+      "fanout": {
+        "p50": 1,
+        "p95": 2,
+        "p99": 3,
+        "p99_9": 6,
+        "p100": 8
+      },
       "betGroupIdBits": 29,
       "ticketNumberBits": 31,
-      "clv": { "fPresent": 24778, "fcPresent": 0 },
+      "clv": {
+        "fPresent": 24778,
+        "fcPresent": 0
+      },
       "enumRowCounts": {
-        "state": { "1": 76, "2": 24544, "3": 158 },
-        "type": { "0": 21261, "1": 3517 }
+        "state": {
+          "1": 76,
+          "2": 24544,
+          "3": 158
+        },
+        "type": {
+          "0": 21261,
+          "1": 3517
+        }
       },
       "identifierAlphabetBitmask": 85,
       "identifierMaxBytes": 10
@@ -47,12 +69,19 @@
         "wagerType",
         "settlementState"
       ],
-      "fanout": { "p50": 1, "p95": 1, "p99": 1, "p99_9": 1, "p100": 2 },
+      "fanout": {
+        "p50": 1,
+        "p95": 1,
+        "p99": 1,
+        "p99_9": 1,
+        "p100": 2
+      },
       "fanoutNote": "P100=2 is cross-fixture duplicate; actual max legs=1",
       "ticketNumberBits": 31,
       "wagerSuffixBits": 1,
       "freePlayFieldPresent": false,
-      "loginFieldPresent": false
+      "loginFieldPresent": false,
+      "reproducibleBy": "bun run census:3d:check (scripts/bridge3d_census.ts)"
     }
   },
   "fourHarness": {

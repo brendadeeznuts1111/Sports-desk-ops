@@ -69,6 +69,8 @@
     "test:har-redaction-verifier": "bun test lib/f402_har_redaction_proof_verify.test.ts",
     "verify:manager-oracle-production": "bun run verification/manager-boot-oracle/run-real-fixture-gate.ts",
     "verify:manager-oracle-variance": "bun run verification/manager-boot-oracle/run-variance-gate.ts",
+    "census:3d": "bun run scripts/bridge3d_census.ts",
+    "census:3d:check": "bun run scripts/bridge3d_census.ts --check docs/design/census/2026-11-04.json",
     "verify:manifest-consistency": "bun run verification/manager-boot-oracle/run-manifest-consistency.ts",
     "format": "git ls-files -z | xargs -0 bun fmt --ignore-unknown",
     "format:check": "bun run bin/check-format.ts",

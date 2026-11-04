@@ -28,6 +28,7 @@ bun run gen:tokens:gate
 bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
 CI=true bun run schema:gate
+bun run census:3d:check
 bun test tests/
 SPORTSDESK_KEYCHAIN_TRACE=1 bun test tests/     # CI: fails on any "[keychain] denied" line
 bun --no-env-file test tests/                   # CI: proves the mounted .env is inert for tests

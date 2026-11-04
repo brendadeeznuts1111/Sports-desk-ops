@@ -144,6 +144,9 @@ jobs:
         env:
           CI: "true"
         run: bun run schema:gate
+      - name: Bridge 3d census (Phase 1, no drift)
+        timeout-minutes: 2
+        run: bun run census:3d:check
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
