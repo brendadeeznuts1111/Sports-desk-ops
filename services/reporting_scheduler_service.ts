@@ -27,6 +27,8 @@ import { SportsDeskTelegramService } from "./sportsdesk_telegram_bot.ts";
 import {
   formatBridgeDigestHtml,
   keychainCredentialProbe,
+  parseBridgeRollupState,
+  resolveBridgeRollupStatePath,
   runBridgeRollupCycle,
   type BridgeRollupCycleResult,
   type BridgeRollupJobId,
@@ -74,17 +76,20 @@ const SUMMARY_JSON_PATH = resolve(
   "../reports/live-positions-summary.json",
 );
 
-const BRIDGE_STATE_PATH = resolve(
-  import.meta.dir,
-  "../scratch/bridge-rollup-state.json",
-);
-
 /** The last cycle the scheduler wrote; the digest generator and the dashboard both read it. */
 function readLatestBridgeState(): BridgeRollupCycleResult | null {
-  const path = Bun.env.BRIDGE_ROLLUP_STATE_PATH?.trim() || BRIDGE_STATE_PATH;
+  const path = resolveBridgeRollupStatePath();
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as BridgeRollupCycleResult;
+    const parsed = parseBridgeRollupState(
+      JSON.parse(readFileSync(path, "utf8")) as unknown,
+    );
+    if (parsed === null) return null;
+    return {
+      updatedAt: parsed.updatedAt,
+      jobs: parsed.jobs,
+      alerts: parsed.alerts,
+    };
   } catch {
     return null;
   }
@@ -125,6 +130,7 @@ export class ReportingSchedulerService {
   ): () => void {
     const only = options.only === undefined ? null : new Set(options.only);
     const exclude = new Set(options.exclude ?? []);
+    const started: string[] = [];
     const jobs = this.getSchedules()
       .filter((s) => s.enabled)
       .filter((s) => (only === null ? true : only.has(s.id)))
@@ -136,6 +142,7 @@ export class ReportingSchedulerService {
               const [hour, minute] = s.scheduleTime.split(":").map(Number);
               return `${minute} ${hour} * * *`;
             })();
+        started.push(`${s.scheduleTime} (${s.tz ?? "America/New_York"})`);
         return startInProcessCron(
           cronExpr,
           async () => {
@@ -155,10 +162,7 @@ export class ReportingSchedulerService {
         );
       });
     console.log(
-      `[Reporting Scheduler] ${jobs.length} schedules active (America/New_York): ${this.getSchedules()
-        .filter((s) => s.enabled)
-        .map((s) => s.scheduleTime)
-        .join(", ")}`,
+      `[Reporting Scheduler] ${jobs.length} schedule(s) active: ${started.join(", ")}`,
     );
     return () => {
       for (const job of jobs) job.stop();
@@ -391,14 +395,24 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
   }
 
   /**
-   * Run the bridge cycle (optionally a subset of jobs) and send its change digest. The quiet form
-   * keeps a 15-minute schedule from paging when nothing moved.
+   * Run the bridge cycle (optionally a subset of jobs) and send its change digest. On-change
+   * semantics: when the cycle reports no new alerts (nothing fired — a clean run, or a standing
+   * failure that already paged), the Telegram send is suppressed; the state file and the JSONL
+   * history still record the run, and manual dispatch always delivers. This keeps the 15-minute
+   * schedule from becoming 96 identical pings a day.
    */
   public async dispatchBridgeDigest(
     jobs?: readonly BridgeRollupJobId[],
     chatId?: string,
   ): Promise<boolean> {
     const result = await bridgeCycleRunner(jobs);
+    if (result.alerts.length === 0) {
+      console.log(
+        `[Reporting Scheduler] Bridge digest ${result.updatedAt}: no changes, digest suppressed ` +
+          `(jobs=${result.jobs.map((job) => `${job.id}:${job.ok ? "ok" : "fail"}`).join(",")})`,
+      );
+      return true;
+    }
     const res = await this.telegramService.sendMessage(
       chatId || "",
       formatBridgeDigestHtml(result, { quiet: true }),

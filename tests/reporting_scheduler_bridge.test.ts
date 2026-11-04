@@ -161,7 +161,7 @@ describe("bridge digest dispatch", () => {
     expect(sent).toHaveLength(1);
   });
 
-  test("a quiet cycle still delivers one message and names no alert", async () => {
+  test("a manual dispatch always delivers, even when the last recorded cycle was quiet", async () => {
     const { service, sent } = fakeTelegram();
     setBridgeCycleRunner(async () => ({
       updatedAt: "2026-11-04T06:15:00.000Z",
@@ -174,6 +174,50 @@ describe("bridge digest dispatch", () => {
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.html.length).toBeGreaterThan(0);
+  });
+
+  test("a scheduled cycle with no new alerts suppresses the Telegram send", async () => {
+    const { service, sent } = fakeTelegram();
+    setBridgeCycleRunner(async () => ({
+      updatedAt: "2026-11-04T06:15:00.000Z",
+      jobs: [{ id: "weblog", label: "WebLog", ok: true, durationMs: 900 }],
+      alerts: [],
+    }));
+    const scheduler = new ReportingSchedulerService(service);
+
+    const delivered = await scheduler.dispatchBridgeDigest(
+      ["weblog"],
+      "chat-1",
+    );
+
+    expect(delivered).toBe(true); // nothing to deliver is a successful no-op
+    expect(sent).toHaveLength(0);
+  });
+
+  test("a scheduled cycle with a standing failure but no new change still suppresses", async () => {
+    const { service, sent } = fakeTelegram();
+    setBridgeCycleRunner(async () => ({
+      updatedAt: "2026-11-04T06:15:00.000Z",
+      jobs: [
+        {
+          id: "bridge3b",
+          label: "Pending liability rollup (3b)",
+          ok: false,
+          durationMs: 0,
+          error: "missing credentials: F402_BEARER_TOKEN",
+        },
+      ],
+      alerts: [], // the failure already paged on the transition
+    }));
+    const scheduler = new ReportingSchedulerService(service);
+
+    const delivered = await scheduler.dispatchBridgeDigest(
+      ["bridge3b"],
+      "chat-1",
+    );
+
+    expect(delivered).toBe(true);
+    expect(sent).toHaveLength(0);
   });
 });
 

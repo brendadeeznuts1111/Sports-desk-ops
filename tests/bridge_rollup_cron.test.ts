@@ -595,6 +595,53 @@ describe("bridge rollup cycle", () => {
     expect(byId("weblog").requiredEnv).toEqual([]);
   });
 
+  test("keeps the other schedule's alerts in state across subset cycles", async () => {
+    const root = makeRoot();
+    const artifacts: Artifacts = {
+      bridge3b: pendingArtifact("fail"),
+      weblog: weblogArtifact(),
+    };
+
+    // Hourly weblog schedule first: it establishes the weblog baseline.
+    await cycle(root, artifacts, { jobs: ["weblog"] }, NOW);
+    // 15-minute schedule's first bridge3b run: absent -> fail is a new regression.
+    const firstBridge3b = await cycle(
+      root,
+      artifacts,
+      { jobs: ["bridge3b"] },
+      NOW + 60_000,
+    );
+    expect(firstBridge3b.alerts.map((alert) => alert.id)).toEqual([
+      "gate:bridge3b:GATE-02",
+    ]);
+    const stateAfterFail = readJson(join(root, STATE_REL));
+    expect(
+      (stateAfterFail["alerts"] as { id: string }[]).map((alert) => alert.id),
+    ).toEqual(["gate:bridge3b:GATE-02"]);
+
+    // The hourly weblog tick returns no alerts, but must not erase bridge3b's standing alert.
+    await cycle(root, artifacts, { jobs: ["weblog"] }, NOW + 120_000);
+    const stateAfterWeblog = readJson(join(root, STATE_REL));
+    expect(
+      (stateAfterWeblog["alerts"] as { id: string }[]).map((alert) => alert.id),
+    ).toEqual(["gate:bridge3b:GATE-02"]);
+
+    // bridge3b recovers: the gate goes pass, so the carried alert clears on bridge3b's own tick
+    // without touching anything weblog-owned.
+    const recoveredArtifacts: Artifacts = {
+      bridge3b: pendingArtifact("pass"),
+      weblog: weblogArtifact(),
+    };
+    await cycle(
+      root,
+      recoveredArtifacts,
+      { jobs: ["bridge3b"] },
+      NOW + 180_000,
+    );
+    const stateAfterRecovery = readJson(join(root, STATE_REL));
+    expect(stateAfterRecovery["alerts"]).toEqual([]);
+  });
+
   test("keeps the other schedule's snapshot across subset cycles", async () => {
     const root = makeRoot();
     const artifacts: Artifacts = {

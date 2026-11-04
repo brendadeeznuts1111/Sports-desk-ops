@@ -2350,11 +2350,14 @@ async function withWeblog<T extends Record<string, unknown>>(
   };
 }
 
-/** Last bridge rollup cycle, or an explicit empty state so the panel can say "no cycle yet". */
+/** Last bridge rollup cycle for the panel, verbatim. */
+/* The panel renders defensively, so the payload is not re-validated; the scheduler's digest path does. */
 export async function readBridgeRollupState(): Promise<unknown> {
-  const path =
-    Bun.env.BRIDGE_ROLLUP_STATE_PATH?.trim() ||
-    "scratch/bridge-rollup-state.json";
+  // Dynamic import (same pattern as the WebLog loader): keeps every line above this one
+  // stable, which the docs' file:line citation pins depend on.
+  const { resolveBridgeRollupStatePath } =
+    await import("../lib/bridge_rollup_cron.ts");
+  const path = resolveBridgeRollupStatePath();
   try {
     return JSON.parse(await Bun.file(path).text()) as unknown;
   } catch {

@@ -15,7 +15,8 @@
  * `GATE-0N:status` summary on its stderr log when the artifact itself has none.
  *
  * **Digest.** The state file at `statePath` remembers the previous cycle (public result plus the
- * normalized artifact snapshots). Alerts are emitted ONLY when something changed:
+ * normalized artifact snapshots and each schedule's last alert set). Alerts are emitted ONLY when
+ * something changed:
  * - a gate that was pass/absent/skipped and is now `fail` → critical
  * - a flag crossing its threshold, or moving off zero → warn
  * - a job that was ok and is now failing → critical; a recovered job → info
@@ -368,6 +369,20 @@ function lastLogLine(stderr: string): string | null {
 
 function defaultRoot(): string {
   return resolve(import.meta.dirname, "..");
+}
+
+/**
+ * The one way to resolve the bridge rollup state path: a non-empty `BRIDGE_ROLLUP_STATE_PATH`
+ * wins (absolute, or relative to `root`), otherwise `<root>/scratch/bridge-rollup-state.json`.
+ * The cycle writer, the scheduler's digest generator and the dashboard must all agree on the
+ * same file, so they all call this instead of re-deriving the path.
+ */
+export function resolveBridgeRollupStatePath(
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+  root: string = defaultRoot(),
+): string {
+  const fromEnv = envValue(env, "BRIDGE_ROLLUP_STATE_PATH")?.trim() ?? "";
+  return resolveAgainst(root, fromEnv === "" ? DEFAULT_STATE_PATH : fromEnv);
 }
 
 function resolveAgainst(root: string, path: string): string {
@@ -831,6 +846,11 @@ function parseState(raw: unknown): BridgeCycleState | null {
   return { updatedAt, jobs, alerts, artifacts, artifactStatus };
 }
 
+/** Validate an on-disk cycle snapshot; returns `null` for a missing or wrong-shaped file. */
+export function parseBridgeRollupState(raw: unknown): BridgeCycleState | null {
+  return parseState(raw);
+}
+
 function readState(path: string): BridgeCycleState | null {
   try {
     return parseState(JSON.parse(readFileSync(path, "utf8")) as unknown);
@@ -991,14 +1011,10 @@ export async function runBridgeRollupCycle(
 ): Promise<BridgeRollupCycleResult> {
   const env = options.env ?? Bun.env;
   const root = resolve(options.root ?? defaultRoot());
-  const envStatePath = envValue(env, "BRIDGE_ROLLUP_STATE_PATH");
-  const statePath = resolveAgainst(
-    root,
-    options.statePath ??
-      (envStatePath !== undefined && envStatePath.trim() !== ""
-        ? envStatePath.trim()
-        : DEFAULT_STATE_PATH),
-  );
+  const statePath =
+    options.statePath === undefined
+      ? resolveBridgeRollupStatePath(env, root)
+      : resolveAgainst(root, options.statePath);
   const historyPath = resolveAgainst(
     root,
     options.historyPath ?? DEFAULT_HISTORY_PATH,
@@ -1106,10 +1122,32 @@ export async function runBridgeRollupCycle(
 }
 
 /**
+ * Alert ids are `${kind}:${jobKey}:${rest}` where `jobKey` is a {@link BRIDGE_ALERT_KEYS}
+ * segment (`bridge3a`, `bridge3b`, `bridge3c`, `f402-weblog`). Returns the job key so a subset
+ * cycle can carry the *other* schedule's alerts instead of erasing them.
+ */
+const ALERT_ID_PATTERN = /^(?:gate|flag|job|artifact):([^:]+):/;
+
+function alertJobKey(alertId: string): string | null {
+  return ALERT_ID_PATTERN.exec(alertId)?.[1] ?? null;
+}
+
+function dedupeAlerts(alerts: readonly BridgeAlert[]): readonly BridgeAlert[] {
+  const seen = new Set<string>();
+  const out: BridgeAlert[] = [];
+  for (const alert of alerts) {
+    if (seen.has(alert.id)) continue;
+    seen.add(alert.id);
+    out.push(alert);
+  }
+  return out;
+}
+
+/**
  * Keep the last known outcome for jobs this cycle did not run. The scheduler drives two
  * schedules over one state file (the 15-minute 3a/3b/3c cycle and the hourly weblog cycle), so a
- * subset cycle must not forget the other bridge's artifact/gate status — otherwise every
- * alternating tick would re-alert the same failure as "new".
+ * subset cycle must not forget the other bridge's artifact/gate status or its standing alerts —
+ * otherwise every alternating tick would re-alert the same failure as "new".
  */
 function mergeState(
   previous: BridgeCycleState | null,
@@ -1117,6 +1155,9 @@ function mergeState(
 ): BridgeCycleState {
   if (previous === null) return current;
   const selected = new Set(current.jobs.map((job) => job.id));
+  const selectedKeys = new Set(
+    [...selected].map((id) => BRIDGE_ALERT_KEYS[id]),
+  );
   const currentJobs = new Map(current.jobs.map((job) => [job.id, job]));
   const previousJobs = new Map(previous.jobs.map((job) => [job.id, job]));
   const jobs = JOB_IDS.flatMap((id) => {
@@ -1137,10 +1178,18 @@ function mergeState(
     if (status !== undefined) artifactStatus[id] = status;
     else delete artifactStatus[id];
   }
+  // Alerts are per-schedule state: a subset cycle recomputes its own jobs' alerts, so drop
+  // only those and carry the other schedule's last alerts forward. Without this, the hourly
+  // WebLog tick would erase the 15-minute cycle's standing alerts (and vice versa) from the
+  // state the dashboard and the manual digest read.
+  const carriedAlerts = previous.alerts.filter((alert) => {
+    const key = alertJobKey(alert.id);
+    return key === null || !selectedKeys.has(key);
+  });
   return {
     updatedAt: current.updatedAt,
     jobs,
-    alerts: current.alerts,
+    alerts: dedupeAlerts([...carriedAlerts, ...current.alerts]),
     artifacts,
     artifactStatus,
   };
