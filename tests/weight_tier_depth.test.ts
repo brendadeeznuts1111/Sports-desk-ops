@@ -147,8 +147,13 @@ describe("market resolve + emission", () => {
     };
     const resolved = resolveTickerMarketOffline(row);
     expect(resolved.kalshiSeriesTicker).toBe("KXNFLSPREAD");
+    expect(resolved.registryTeams?.slots.length).toBeGreaterThanOrEqual(2);
+    expect(
+      resolved.registryTeams?.slots.some((s) => s.registryTeamId !== null),
+    ).toBe(true);
     const emission = planStreamSignalForRow(row, { resolveMarkets: true });
     expect(emission?.marketResolve.kalshiSeriesTicker).toBe("KXNFLSPREAD");
+    expect(emission?.marketResolve.registryTeams).not.toBeNull();
     const kalshi = emission?.external.find((o) => o.venue === "kalshi");
     expect(kalshi?.wireDraft._resolve).toBeDefined();
   });

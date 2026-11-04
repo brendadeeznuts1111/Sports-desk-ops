@@ -40,6 +40,19 @@ export interface UnifiedTeamEntity {
   readonly allCodes: ReadonlySet<string>;
 }
 
+export interface RegistryTeamSlot {
+  readonly raw: string;
+  readonly registryTeamId: string | null;
+  readonly canonicalCode: string | null;
+  readonly kalshiCode: string | null;
+}
+
+export interface RegistryTeamSide {
+  readonly slots: readonly RegistryTeamSlot[];
+  readonly sideRegistryTeamId: string | null;
+  readonly sideCanonicalCode: string | null;
+}
+
 const DEFAULT_REGISTRY_PATH = resolve(
   import.meta.dir,
   "../data/unified_team_registry.json",
@@ -154,6 +167,53 @@ export class UnifiedTeamRegistry {
     if (sideTeam === null || sideTeam.trim() === "") return null;
     return this.canonicalCode(league, sideTeam) ?? normalizeToken(sideTeam);
   }
+
+  entityId(league: League, token: string): string | null {
+    return this.resolve(league, token)?.record.id ?? null;
+  }
+
+  resolveTeamSide(
+    league: League,
+    teams: readonly string[],
+    sideTeam: string | null = null,
+  ): RegistryTeamSide {
+    const slots: RegistryTeamSlot[] = teams.map((raw) => {
+      const entity = this.resolve(league, raw);
+      const canonicalCode =
+        entity?.record.code ??
+        (looksLikeAbbreviation(raw) ? raw.trim().toUpperCase() : null);
+      return {
+        raw,
+        registryTeamId: entity?.record.id ?? null,
+        canonicalCode,
+        kalshiCode:
+          entity === null
+            ? null
+            : (entity.record.kalshiCodes?.[0] ?? entity.record.code),
+      };
+    });
+    const sideEntity =
+      sideTeam === null || sideTeam.trim() === ""
+        ? null
+        : this.resolve(league, sideTeam);
+    return {
+      slots,
+      sideRegistryTeamId: sideEntity?.record.id ?? null,
+      sideCanonicalCode:
+        sideEntity?.record.code ??
+        (sideTeam !== null && looksLikeAbbreviation(sideTeam)
+          ? sideTeam.trim().toUpperCase()
+          : null),
+    };
+  }
+}
+
+export function resolveRegistryTeamSide(
+  league: League,
+  teams: readonly string[],
+  sideTeam: string | null = null,
+): RegistryTeamSide {
+  return getUnifiedTeamRegistry().resolveTeamSide(league, teams, sideTeam);
 }
 
 let cached: UnifiedTeamRegistry | null = null;

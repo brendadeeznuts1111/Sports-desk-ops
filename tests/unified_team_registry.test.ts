@@ -25,4 +25,15 @@ describe("unified team registry", () => {
     expect(reg.kalshiCode("NBA", "WSH")).toBe("WAS");
     expect(reg.kalshiCode("NBA", "BKN")).toBe("BKN");
   });
+
+  test("resolveTeamSide returns stable registry ids for F402 names", () => {
+    resetUnifiedTeamRegistryCache();
+    const reg = loadUnifiedTeamRegistry();
+    const side = reg.resolveTeamSide("NBA", [
+      "ATLANTA HAWKS",
+      "WASHINGTON WIZARDS",
+    ]);
+    expect(side.slots[0]?.registryTeamId).toBe("nba:atl");
+    expect(side.slots[1]?.registryTeamId).toBe("nba:was");
+  });
 });
