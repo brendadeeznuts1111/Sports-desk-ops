@@ -134,6 +134,11 @@ and publishes the result.
 
 - Poller: reuse `probeF402BetTicker` with the existing F402 session/replay transport; no cookies in
   argv or logs.
+- Live JSONL ingestion: `--from-jsonl <path>` tails the 4C collector's append-only
+  `probes/out13/f402-bets.jsonl` by byte offset + wager-number watermark (partial trailing line held
+  back), so the bridge can publish without opening a second Fantasy402 login session. Incremental
+  polls publish WS deltas only; `f402-bet-ticker/latest.json` is written by window polls (cold start
+  or `--jsonl-window-snapshot`), so the object always describes the live window, not a delta.
 - WS: `POST /api/v1/live-bets` with bearer, channel `f402-bet-ticker`.
 - R2: `R2S3Client.fromEnvOrSecrets()` + `writeWithMetadata("f402-bet-ticker/latest.json", ..., {
 metadata: { pii: "none", ... } })`; verify with `stat` and presigned GET.
@@ -147,7 +152,8 @@ metadata: { pii: "none", ... } })`; verify with `stat` and presigned GET.
 
 Implemented in `lib/f402_bet_ticker_delta.ts` (pure projection), `lib/f402_bet_ticker_drain.ts`
 (watermark/100-row drain), `lib/f402_bet_ticker_sink.ts` (WS + R2), `lib/f402_bet_ticker_poller.ts`
-(orchestration), and `scripts/f402_bet_ticker_bridge3a.ts` (`bun run bridge3a:poll`). Four points
+(orchestration), `lib/f402_bet_ticker_jsonl.ts` (tail reader), and
+`scripts/f402_bet_ticker_bridge3a.ts` (`bun run bridge3a:poll`). Four points
 where the captured payload settled the wording above:
 
 - The captured ticker row has **no `TicketNumber`** (13 fields; `docs/evidence/captures/2026-10-31/getBetTicker.post.json`).

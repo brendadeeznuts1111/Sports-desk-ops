@@ -9,12 +9,14 @@
  *
  * Auth never appears on argv or in logs: the probe runs through `createF402ReplayTransport()`
  * (proxy, session file, or FetchSession), and the gateway token comes from `BLOB_API_TOKEN`.
- * `--from-body` replays a saved `getBetTicker` body for local smoke runs without a session.
+ * `--from-body` replays a saved `getBetTicker` body; `--from-jsonl` tails the live 4C collector's
+ * append-only JSONL instead of opening a second Fantasy402 session. Both avoid the live API.
  *
  * Usage:
- *   bun run bridge3a:poll                       # one poll (agent from F402_AGENT_ID)
+ *   bun run bridge3a:poll                       # one loop tick (agent from F402_AGENT_ID)
  *   bun run bridge3a:poll --agent BILLY666 --interval-ms 30000
  *   bun run bridge3a:poll --dry-run --from-body scratch/f402-captures/bet-ticker.json
+ *   bun run bridge3a:poll --from-jsonl /Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl --publish-baseline
  *
  * Exit codes: 0 processed (published/baseline/noop), 1 poll failure or fail-closed skip, 2 usage.
  */
@@ -32,6 +34,13 @@ import {
   type F402BetTickerPollState,
 } from "../lib/f402_bet_ticker_poller.ts";
 import { createF402BetTickerSink } from "../lib/f402_bet_ticker_sink.ts";
+import {
+  F402_BET_TICKER_JSONL_WINDOW_BYTES,
+  loadF402TickerJsonlState,
+  readF402TickerJsonl,
+  saveF402TickerJsonlState,
+  type F402TickerJsonlState,
+} from "../lib/f402_bet_ticker_jsonl.ts";
 import {
   parseF402TickerRow,
   probeF402BetTicker,
@@ -57,6 +66,11 @@ const HELP = [
   "  --interval-ms <n>    poll every n ms (default 15000)",
   "  --once               run one poll and exit",
   "  --from-body <path>   replay a saved getBetTicker body (raw body or capture envelope)",
+  "  --from-jsonl <path>  tail the live 4C ticker JSONL (new bytes only; no F402 session)",
+  "  --jsonl-window-bytes <n>  initial tail window for --from-jsonl (default 2000000)",
+  "  --jsonl-state <path>  persisted offset/watermark for --from-jsonl",
+  "                        (default Scratch/f402-bet-ticker/jsonl-state.json)",
+  "  --jsonl-window-snapshot  ignore persisted state; read the window and write R2",
   "  --no-ws              do not publish the gateway delta",
   "  --no-r2              do not write the R2 snapshot",
   "  --publish-baseline   emit the first poll as a delta instead of establishing a silent watermark",
@@ -66,7 +80,7 @@ const HELP = [
   "Gateway: BLOB_API_TOKEN, BLOB_GATEWAY_URL or BLOB_PORT (default http://127.0.0.1:4021).",
   "R2: R2_* / CLOUDFLARE_R2_* env or Bun.secrets, via R2S3Client.fromEnvOrSecrets().",
   "",
-  "Exit codes: 0 processed, 1 fail-closed skip or error, 2 usage.",
+  "Exit codes: 0 processed, 1 fail-closed status (regressed/unsettled/error), 2 usage.",
 ].join("\n");
 
 function usage(message: string): never {
@@ -83,6 +97,10 @@ const { values } = (() => {
         "base-url": { type: "string" },
         "interval-ms": { type: "string" },
         "from-body": { type: "string" },
+        "from-jsonl": { type: "string" },
+        "jsonl-window-bytes": { type: "string" },
+        "jsonl-state": { type: "string" },
+        "jsonl-window-snapshot": { type: "boolean", default: false },
         once: { type: "boolean", default: false },
         "no-ws": { type: "boolean", default: false },
         "no-r2": { type: "boolean", default: false },
@@ -115,7 +133,11 @@ const intervalMs = (() => {
 
 const agentId = (values.agent ?? Bun.env.F402_AGENT_ID ?? "").trim();
 const baseUrl = (values["base-url"] ?? "https://fantasy402.com").trim();
-if (agentId === "" && values["from-body"] === undefined) {
+if (
+  agentId === "" &&
+  values["from-body"] === undefined &&
+  values["from-jsonl"] === undefined
+) {
   usage("no agent: pass --agent <id> or set F402_AGENT_ID");
 }
 
@@ -271,19 +293,91 @@ function logOutcome(outcome: F402BetTickerPollOutcome): number {
 
 async function main(): Promise<number> {
   const fromBody = values["from-body"];
-  const session = fromBody === undefined ? new SessionProbe() : null;
+  const fromJsonl = values["from-jsonl"];
+  if (fromBody !== undefined && fromJsonl !== undefined) {
+    usage("use either --from-body or --from-jsonl, not both");
+  }
   const fixture = fromBody === undefined ? null : fixtureProbe(fromBody);
-  const probe =
-    fixture?.probe ??
-    (session === null
-      ? usage("probe unavailable")
-      : (wagerNumber: string) => session.probe(wagerNumber));
+  const session =
+    fromBody === undefined && fromJsonl === undefined
+      ? new SessionProbe()
+      : null;
+  const jsonlWindowBytes = (() => {
+    const raw = values["jsonl-window-bytes"];
+    if (raw === undefined) return F402_BET_TICKER_JSONL_WINDOW_BYTES;
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed < 1) {
+      usage("--jsonl-window-bytes must be a positive integer");
+    }
+    return parsed;
+  })();
+  const jsonlStatePath =
+    values["jsonl-state"] ?? "Scratch/f402-bet-ticker/jsonl-state.json";
+  const forceWindowSnapshot = values["jsonl-window-snapshot"];
+  let jsonlState: F402TickerJsonlState | undefined =
+    fromJsonl === undefined || forceWindowSnapshot
+      ? undefined
+      : await loadF402TickerJsonlState(jsonlStatePath, fromJsonl);
+  // R2 holds the live-window snapshot. An incremental JSONL read covers only new rows, so writing
+  // it would replace the window with a delta-scoped object; only window polls write R2.
+  const windowSnapshot =
+    fromJsonl === undefined || forceWindowSnapshot || jsonlState === undefined;
 
-  const sink = createF402BetTickerSink({
+  // One poll's probe: read the new tail bytes once, then answer the drain's follow-up pages empty.
+  const jsonlProbeForPoll = (): ((
+    wagerNumber: string,
+  ) => Promise<F402Probe>) => {
+    let served = false;
+    let tailRows: readonly F402TickerRow[] = [];
+    return async () => {
+      if (!served) {
+        const read = await readF402TickerJsonl(fromJsonl ?? "", {
+          ...(jsonlState === undefined ? {} : { state: jsonlState }),
+          windowBytes: jsonlWindowBytes,
+          filterWatermark: jsonlState !== undefined,
+        });
+        jsonlState = read.state;
+        tailRows = read.rows;
+        console.error(
+          `[bridge3a] jsonl rows=${read.rows.length} bytes=${read.bytesRead} ` +
+            `skipped=${read.skippedLines} reset=${read.reset} ` +
+            `offset=${read.state.offset} watermark=${read.state.watermark}`,
+        );
+      }
+      served = true;
+      return {
+        endpoint: `jsonl:${fromJsonl ?? ""}`,
+        httpStatus: 200,
+        rows: tailRows.length,
+        fields: [],
+        ticks: tailRows,
+        durationMs: 0,
+        fetchedAtIso: new Date().toISOString(),
+        error: null,
+      };
+    };
+  };
+
+  const probeForPoll = (): ((wagerNumber: string) => Promise<F402Probe>) => {
+    if (fromJsonl !== undefined) return jsonlProbeForPoll();
+    if (fixture !== null) return fixture.probe;
+    if (session === null) usage("probe unavailable");
+    return (wagerNumber: string) => session.probe(wagerNumber);
+  };
+
+  const baseSink = createF402BetTickerSink({
     liveBets: dryRun ? false : !values["no-ws"],
     r2: dryRun ? false : !values["no-r2"],
     apiToken: Bun.env.BLOB_API_TOKEN ?? "",
   });
+  const sink = {
+    publishLiveBets: (event: Parameters<typeof baseSink.publishLiveBets>[0]) =>
+      baseSink.publishLiveBets(event),
+    publishR2: (snapshot: Parameters<typeof baseSink.publishR2>[0]) =>
+      windowSnapshot
+        ? baseSink.publishR2(snapshot)
+        : Promise.resolve({ ok: true, skipped: true }),
+  };
 
   if (session !== null) {
     console.error(
@@ -292,7 +386,12 @@ async function main(): Promise<number> {
     );
   }
 
-  let state: F402BetTickerPollState = { watermark: 0, previousRows: [] };
+  // A persisted JSONL watermark is the previous poll's processed point, so an incremental run
+  // publishes a delta instead of reporting a false cold-start baseline.
+  let state: F402BetTickerPollState = {
+    watermark: jsonlState?.watermark ?? 0,
+    previousRows: [],
+  };
   let stopping = false;
   const onSignal = (): void => {
     stopping = true;
@@ -303,7 +402,7 @@ async function main(): Promise<number> {
   try {
     do {
       const outcome = await pollF402BetTickerOnce({
-        probe,
+        probe: probeForPoll(),
         sink,
         state,
         now: () => new Date().toISOString(),
@@ -317,6 +416,15 @@ async function main(): Promise<number> {
         outcome.status === "noop"
       ) {
         state = outcome.state;
+      }
+      if (
+        fromJsonl !== undefined &&
+        jsonlState !== undefined &&
+        (outcome.status === "published" ||
+          outcome.status === "baseline" ||
+          outcome.status === "noop")
+      ) {
+        await saveF402TickerJsonlState(jsonlStatePath, fromJsonl, jsonlState);
       }
       if (
         dryRun &&
