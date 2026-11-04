@@ -28,6 +28,7 @@ const { values } = parseArgs({
     customers: { type: "string" },
     "customers-file": { type: "string" },
     "allow-partial": { type: "boolean", default: false },
+    "allow-legacy-manager": { type: "boolean", default: false },
     live: { type: "boolean", default: false },
     "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
@@ -38,7 +39,7 @@ const { values } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--customers id,id | --customers-file path] [--allow-partial] [--live] [--dry-run] [--no-r2] [--no-ws]",
+    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--customers id,id | --customers-file path] [--allow-partial] [--allow-legacy-manager] [--live] [--dry-run] [--no-r2] [--no-ws]",
   );
   process.exit(0);
 }
@@ -88,6 +89,23 @@ const fetchRequested =
   (Bun.env.F402_TOKEN_FILE ?? "").trim() !== "";
 let fromPath = (values["from-file"] ?? values.from) as string;
 let sourceKindOverride = values["source-kind"] as string | undefined;
+if (
+  fetchRequested &&
+  customerIds === null &&
+  values["allow-legacy-manager"] !== true
+) {
+  console.error(
+    "bridge3b: a bearer fetch needs an explicit customer list — Report/Pending is customer-scoped, and Manager/getPending is dead (500 for every captured shape).",
+  );
+  console.error(
+    "  pass --customers id,id / --customers-file <path>, or set F402_PENDING_CUSTOMERS.",
+  );
+  console.error(
+    "  --allow-legacy-manager keeps the old Manager/getPending request for historical reproduction only.",
+  );
+  process.exit(2);
+}
+
 if (fetchRequested) {
   const token = resolveF402BearerToken({
     cliToken: values["bearer-token"] as string | undefined,

@@ -357,8 +357,10 @@ The daemon is a fresh process with no shell environment, so the gate reads the O
   `/cloud/api/Report/Pending` (customer-scoped) — **not** by `/cloud/api/Manager/getPending`,
   which returns 500 for every tested shape. 3b therefore reads `Report/Pending`, per customer.
   It requires an explicit list: `--customers id,id`, `--customers-file <path>`, or
-  `F402_PENDING_CUSTOMERS` (the daemon env is handed to the bridge child). `--allow-partial`
-  downgrades a per-customer failure to a warning; the default fails closed. There is **no**
+  `F402_PENDING_CUSTOMERS` (the daemon env is handed to the bridge child). A bearer fetch without
+  a list exits 2 **before any network I/O**; `--allow-legacy-manager` keeps the dead
+  Manager/getPending request for historical reproduction only. `--allow-partial` downgrades a
+  per-customer failure to a warning; the default fails closed. There is **no**
   agent-wide/wildcard scope on Report/Pending (empty, `0`, `*`, `ALL`, agent login and
   `accountInfo.customerID` all returned 400 `Invalid CustomerID` on 2026-11-04).
 - **bridge3a**: needs an agent id (env `F402_AGENT_ID` or the keychain) **and** a readable
