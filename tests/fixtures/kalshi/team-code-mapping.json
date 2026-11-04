@@ -1,0 +1,24 @@
+{
+  "capturedAtIso": "2026-11-04T13:20:00.000Z",
+  "note": "Real open-event tickers captured 2026-11-04; the signal side uses F402/registry codes, Kalshi uses its own. Alias cases verified against these tickers.",
+  "cases": [
+    {
+      "event_ticker": "KXNBAGAME-26NOV04ATLWAS",
+      "kalshi_codes": ["ATL", "WAS"],
+      "signal_codes": ["ATL", "WSH"],
+      "alias": "WSH|WAS"
+    },
+    {
+      "event_ticker": "KXNBAGAME-26NOV04CHABKN",
+      "kalshi_codes": ["CHA", "BKN"],
+      "signal_codes": ["CHA", "BRK"],
+      "alias": "BKN|BRK"
+    },
+    {
+      "event_ticker": "KXNBAGAME-26NOV04MILBOS",
+      "kalshi_codes": ["MIL", "BOS"],
+      "signal_codes": ["MIL", "BOS"],
+      "alias": null
+    }
+  ]
+}

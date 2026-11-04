@@ -1,0 +1,128 @@
+{
+  "capturedAtIso": "2026-11-04T13:25:00.000Z",
+  "source": "https://api.elections.kalshi.com/trade-api/v2/events?series_ticker=KXNBA1Q&status=open&with_nested_markets=true",
+  "events": [
+    {
+      "event_ticker": "KXNBA1Q-26NOV04ATLWAS",
+      "series_ticker": "KXNBA1Q",
+      "title": "Atlanta vs Washington: 1st Quarter Winner",
+      "category": "Sports",
+      "mutually_exclusive": true,
+      "last_updated_ts": "2026-11-03T00:05:22.220961Z",
+      "markets": [
+        {
+          "ticker": "KXNBA1Q-26NOV04ATLWAS-ATL",
+          "event_ticker": "KXNBA1Q-26NOV04ATLWAS",
+          "title": "Atlanta wins the 1st quarter",
+          "yes_sub_title": "Atlanta",
+          "status": "active",
+          "yes_bid_dollars": "0.4600",
+          "yes_ask_dollars": "0.4700",
+          "yes_bid_size_fp": "75.00",
+          "yes_ask_size_fp": "10.50",
+          "last_price_dollars": "0.3700",
+          "open_interest_fp": "538.53",
+          "volume_24h_fp": "1021.60",
+          "volume_fp": "1038.92",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:00:00Z"
+        },
+        {
+          "ticker": "KXNBA1Q-26NOV04ATLWAS-WAS",
+          "event_ticker": "KXNBA1Q-26NOV04ATLWAS",
+          "title": "Washington wins the 1st quarter",
+          "yes_sub_title": "Washington",
+          "status": "active",
+          "yes_bid_dollars": "0.4200",
+          "yes_ask_dollars": "0.4400",
+          "yes_bid_size_fp": "9.00",
+          "yes_ask_size_fp": "30.00",
+          "last_price_dollars": "0.5000",
+          "open_interest_fp": "585.01",
+          "volume_24h_fp": "1451.60",
+          "volume_fp": "1451.60",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:00:00Z"
+        },
+        {
+          "ticker": "KXNBA1Q-26NOV04ATLWAS-TIE",
+          "event_ticker": "KXNBA1Q-26NOV04ATLWAS",
+          "title": "1st quarter tie",
+          "yes_sub_title": "Tie",
+          "status": "active",
+          "yes_bid_dollars": "0.0300",
+          "yes_ask_dollars": "0.0700",
+          "yes_bid_size_fp": "21.00",
+          "yes_ask_size_fp": "483.00",
+          "last_price_dollars": "0.0700",
+          "open_interest_fp": "415.41",
+          "volume_24h_fp": "364.41",
+          "volume_fp": "415.41",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXNBA1Q-26NOV04MILBOS",
+      "series_ticker": "KXNBA1Q",
+      "title": "Milwaukee vs Boston: 1st Quarter Winner",
+      "category": "Sports",
+      "mutually_exclusive": true,
+      "last_updated_ts": "2026-11-03T00:33:05.877084Z",
+      "markets": [
+        {
+          "ticker": "KXNBA1Q-26NOV04MILBOS-MIL",
+          "event_ticker": "KXNBA1Q-26NOV04MILBOS",
+          "title": "Milwaukee wins the 1st quarter",
+          "yes_sub_title": "Milwaukee",
+          "status": "active",
+          "yes_bid_dollars": "0.2900",
+          "yes_ask_dollars": "0.3400",
+          "yes_bid_size_fp": "12.00",
+          "yes_ask_size_fp": "707.51",
+          "last_price_dollars": "0.3700",
+          "open_interest_fp": "60.63",
+          "volume_24h_fp": "33.18",
+          "volume_fp": "60.63",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:30:00Z"
+        },
+        {
+          "ticker": "KXNBA1Q-26NOV04MILBOS-BOS",
+          "event_ticker": "KXNBA1Q-26NOV04MILBOS",
+          "title": "Boston wins the 1st quarter",
+          "yes_sub_title": "Boston",
+          "status": "active",
+          "yes_bid_dollars": "0.6400",
+          "yes_ask_dollars": "0.6700",
+          "yes_bid_size_fp": "17.00",
+          "yes_ask_size_fp": "877.76",
+          "last_price_dollars": "0.6700",
+          "open_interest_fp": "333.04",
+          "volume_24h_fp": "353.52",
+          "volume_fp": "353.52",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:30:00Z"
+        },
+        {
+          "ticker": "KXNBA1Q-26NOV04MILBOS-TIE",
+          "event_ticker": "KXNBA1Q-26NOV04MILBOS",
+          "title": "1st quarter tie",
+          "yes_sub_title": "Tie",
+          "status": "active",
+          "yes_bid_dollars": "0.0200",
+          "yes_ask_dollars": "0.0600",
+          "yes_bid_size_fp": "75.00",
+          "yes_ask_size_fp": "152.00",
+          "last_price_dollars": "0.0600",
+          "open_interest_fp": "28.50",
+          "volume_24h_fp": "28.50",
+          "volume_fp": "28.50",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:30:00Z"
+        }
+      ]
+    }
+  ]
+}

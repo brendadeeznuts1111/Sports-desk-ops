@@ -53,6 +53,16 @@ import {
   WEIGHT_TIER_DEFINITIONS,
   type WeightTierId,
 } from "../lib/weight_tier_stream_signals.ts";
+import { KalshiClient } from "../lib/kalshi_client.ts";
+import {
+  joinConfigFromEnv,
+  type KalshiJoin,
+} from "../lib/kalshi_signal_join.ts";
+import {
+  joinKalshiForStreamEmissions,
+  withKalshiJoin,
+  type StreamSignalEmissionWithKalshi,
+} from "../lib/weight_tier_kalshi_join.ts";
 
 /** Matches `services/sportsdesk_webview_server.ts` bridge subprotocol. */
 const BRIDGE_WS_PROTOCOL = "sportsdesk.bridge.v1";
@@ -87,6 +97,7 @@ const HELP = [
   "  --lifetime-csv <path>  Bettor lifetime CSV (CLV legs / avg CLV points gate)",
   "  --gslive-steam-index <path>  JSON map ROT → timeUntilScoreSec (Partner 118)",
   "  --resolve-markets      Offline Kalshi series + Gamma hints on wireDraft",
+  "  --kalshi-join          Live read-only Kalshi join (public GET; adds kalshiJoin to NDJSON)",
   "  --explain              Human-readable diagnostics on stderr (NDJSON still on stdout)",
   "",
   "Tiers:",
@@ -160,7 +171,15 @@ async function pollTickerRows(options: {
   return [...probe.ticks];
 }
 
-function emitSignals(
+function rowLookupKey(row: F402TickerRow): string {
+  return `${row.wagerNumber}:${row.login.trim().toUpperCase()}`;
+}
+
+function emissionLookupKey(emission: StreamSignalEmission): string {
+  return `${emission.wagerNumber}:${emission.triggerLogin.trim().toUpperCase()}`;
+}
+
+async function emitSignals(
   rows: readonly F402TickerRow[],
   tierFilter: ReadonlySet<WeightTierId> | null,
   clusterTracker: MiamiSyndicateClusterTracker,
@@ -168,8 +187,9 @@ function emitSignals(
   dod6Spine: Dod6SpineOverlay | null,
   gsliveSteamIndex: GsliveSteamIndex | null,
   resolveMarkets: boolean,
+  kalshiJoin: boolean,
   explain: boolean,
-): void {
+): Promise<void> {
   const emissions = planStreamSignalsForRows(rows, {
     clusterTracker,
     dod6Book,
@@ -177,17 +197,69 @@ function emitSignals(
     gsliveSteamIndex,
     resolveMarkets,
   });
-  for (const emission of emissions) {
-    if (tierFilter !== null && !tierFilter.has(emission.tier)) continue;
-    writeEmission(emission, explain);
+  const rowByKey = new Map(rows.map((row) => [rowLookupKey(row), row]));
+  const visible = emissions.filter(
+    (emission) => tierFilter === null || tierFilter.has(emission.tier),
+  );
+
+  if (!kalshiJoin) {
+    for (const emission of visible) {
+      writeEmission(emission, explain);
+    }
+    return;
+  }
+
+  const pairs = visible
+    .map((emission) => {
+      const row = rowByKey.get(emissionLookupKey(emission));
+      return row === undefined ? null : { emission, row };
+    })
+    .filter((pair): pair is { emission: StreamSignalEmission; row: F402TickerRow } =>
+      pair !== null,
+    );
+
+  const client = new KalshiClient();
+  const joined = await joinKalshiForStreamEmissions(pairs, {
+    client,
+    config: joinConfigFromEnv(),
+  });
+  const joinByKey = new Map(
+    joined.map((entry) => [emissionLookupKey(entry.emission), entry.kalshiJoin]),
+  );
+
+  for (const emission of visible) {
+    const kalshi = joinByKey.get(emissionLookupKey(emission));
+    writeEmission(
+      kalshi !== undefined ? withKalshiJoin(emission, kalshi) : emission,
+      explain,
+      kalshi,
+    );
+  }
+
+  const telemetry = client.telemetry();
+  if (!telemetry.ok) {
+    for (const error of telemetry.errors) {
+      process.stderr.write(
+        `live-stream: kalshi degraded (${error.scope}): ${error.reason}\n`,
+      );
+    }
   }
 }
 
-function writeEmission(emission: StreamSignalEmission, explain: boolean): void {
+function writeEmission(
+  emission: StreamSignalEmission | StreamSignalEmissionWithKalshi,
+  explain: boolean,
+  kalshiJoin?: KalshiJoin,
+): void {
   process.stdout.write(`${JSON.stringify(emission)}\n`);
   if (explain) {
     process.stderr.write(
       `[${emission.triggerLogin} tier=${emission.tier}] ${explainDiagnostics(emission.diagnostics)}\n`,
+    );
+  }
+  if (explain && kalshiJoin !== undefined) {
+    process.stderr.write(
+      `  kalshi verdict=${kalshiJoin.verdict} market=${kalshiJoin.marketTicker ?? "—"} edge_bps=${kalshiJoin.edgeBps ?? "—"}\n`,
     );
   }
 }
@@ -218,6 +290,7 @@ async function runBridgeWakePoll(options: {
   readonly dod6Spine: Dod6SpineOverlay | null;
   readonly gsliveSteamIndex: GsliveSteamIndex | null;
   readonly resolveMarkets: boolean;
+  readonly kalshiJoin: boolean;
   readonly explain: boolean;
 }): Promise<void> {
   const protocols =
@@ -255,7 +328,7 @@ async function runBridgeWakePoll(options: {
 
   const pollAndEmit = async (): Promise<void> => {
     const rows = await options.poll();
-    emitSignals(
+    await emitSignals(
       rows,
       options.tierFilter,
       options.clusterTracker,
@@ -263,6 +336,7 @@ async function runBridgeWakePoll(options: {
       options.dod6Spine,
       options.gsliveSteamIndex,
       options.resolveMarkets,
+      options.kalshiJoin,
       options.explain,
     );
   };
@@ -325,6 +399,7 @@ async function main(): Promise<number> {
       "lifetime-csv": { type: "string" },
       "gslive-steam-index": { type: "string" },
       "resolve-markets": { type: "boolean", default: false },
+      "kalshi-join": { type: "boolean", default: false },
       explain: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -350,6 +425,7 @@ async function main(): Promise<number> {
   let dod6Spine: Dod6SpineOverlay | null = null;
   let gsliveSteamIndex: GsliveSteamIndex | null = null;
   const resolveMarkets = values["resolve-markets"] === true;
+  const kalshiJoin = values["kalshi-join"] === true;
   const enrichBook = values["enrich-book"]?.trim();
   const dodbin = values.dodbin?.trim();
   const lifetimeCsv =
@@ -421,7 +497,7 @@ async function main(): Promise<number> {
 
   if (fromBody !== undefined) {
     const rows = await loadBodyRows(fromBody);
-    emitSignals(
+    await emitSignals(
       rows,
       tierFilter,
       clusterTracker,
@@ -429,6 +505,7 @@ async function main(): Promise<number> {
       dod6Spine,
       gsliveSteamIndex,
       resolveMarkets,
+      kalshiJoin,
       explain,
     );
     return 0;
@@ -447,7 +524,7 @@ async function main(): Promise<number> {
             };
       const read = await readF402TickerJsonl(fromJsonl, readOptions);
       jsonlState = read.state;
-      emitSignals(
+      await emitSignals(
         read.rows,
         tierFilter,
         clusterTracker,
@@ -455,6 +532,7 @@ async function main(): Promise<number> {
         dod6Spine,
         gsliveSteamIndex,
         resolveMarkets,
+        kalshiJoin,
         explain,
       );
     };
@@ -503,6 +581,7 @@ async function main(): Promise<number> {
         dod6Spine,
         gsliveSteamIndex,
         resolveMarkets,
+        kalshiJoin,
         explain,
       });
     } catch (error) {
@@ -516,7 +595,7 @@ async function main(): Promise<number> {
 
   const loop = async (): Promise<void> => {
     const rows = await poll();
-    emitSignals(
+    await emitSignals(
       rows,
       tierFilter,
       clusterTracker,
@@ -524,6 +603,7 @@ async function main(): Promise<number> {
       dod6Spine,
       gsliveSteamIndex,
       resolveMarkets,
+      kalshiJoin,
       explain,
     );
   };

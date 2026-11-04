@@ -1,0 +1,94 @@
+{
+  "capturedAtIso": "2026-11-04T13:20:00.000Z",
+  "source": "https://api.elections.kalshi.com/trade-api/v2/events?series_ticker=KXNBAGAME&status=open&with_nested_markets=true",
+  "events": [
+    {
+      "event_ticker": "KXNBAGAME-26NOV04ATLWAS",
+      "series_ticker": "KXNBAGAME",
+      "title": "Atlanta vs Washington",
+      "category": "Sports",
+      "mutually_exclusive": true,
+      "last_updated_ts": "2026-11-01T00:04:07.638236Z",
+      "markets": [
+        {
+          "ticker": "KXNBAGAME-26NOV04ATLWAS-ATL",
+          "event_ticker": "KXNBAGAME-26NOV04ATLWAS",
+          "title": "Atlanta wins",
+          "yes_sub_title": "Atlanta",
+          "status": "active",
+          "yes_bid_dollars": "0.5500",
+          "yes_ask_dollars": "0.5600",
+          "yes_bid_size_fp": "13281.82",
+          "yes_ask_size_fp": "678.63",
+          "last_price_dollars": "0.5600",
+          "open_interest_fp": "123437.28",
+          "volume_24h_fp": "130059.20",
+          "volume_fp": "134253.39",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:00:00Z"
+        },
+        {
+          "ticker": "KXNBAGAME-26NOV04ATLWAS-WAS",
+          "event_ticker": "KXNBAGAME-26NOV04ATLWAS",
+          "title": "Washington wins",
+          "yes_sub_title": "Washington",
+          "status": "active",
+          "yes_bid_dollars": "0.4300",
+          "yes_ask_dollars": "0.4400",
+          "yes_bid_size_fp": "17366.80",
+          "yes_ask_size_fp": "494866.41",
+          "last_price_dollars": "0.4400",
+          "open_interest_fp": "95404.92",
+          "volume_24h_fp": "109540.01",
+          "volume_fp": "118308.08",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "event_ticker": "KXNBAGAME-26NOV04CHABKN",
+      "series_ticker": "KXNBAGAME",
+      "title": "Charlotte vs Brooklyn",
+      "category": "Sports",
+      "mutually_exclusive": true,
+      "last_updated_ts": "2026-11-01T00:34:57.806433Z",
+      "markets": [
+        {
+          "ticker": "KXNBAGAME-26NOV04CHABKN-CHA",
+          "event_ticker": "KXNBAGAME-26NOV04CHABKN",
+          "title": "Charlotte wins",
+          "yes_sub_title": "Charlotte",
+          "status": "active",
+          "yes_bid_dollars": "0.6000",
+          "yes_ask_dollars": "0.6100",
+          "yes_bid_size_fp": "15464.17",
+          "yes_ask_size_fp": "211913.34",
+          "last_price_dollars": "0.6100",
+          "open_interest_fp": "20124.99",
+          "volume_24h_fp": "17383.28",
+          "volume_fp": "22618.18",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:30:00Z"
+        },
+        {
+          "ticker": "KXNBAGAME-26NOV04CHABKN-BKN",
+          "event_ticker": "KXNBAGAME-26NOV04CHABKN",
+          "title": "Brooklyn wins",
+          "yes_sub_title": "Brooklyn",
+          "status": "active",
+          "yes_bid_dollars": "0.3900",
+          "yes_ask_dollars": "0.4000",
+          "yes_bid_size_fp": "13339.10",
+          "yes_ask_size_fp": "2661.93",
+          "last_price_dollars": "0.4000",
+          "open_interest_fp": "12053.06",
+          "volume_24h_fp": "12515.16",
+          "volume_fp": "14297.82",
+          "strike_type": "structured",
+          "close_time": "2026-11-07T00:30:00Z"
+        }
+      ]
+    }
+  ]
+}
