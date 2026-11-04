@@ -489,6 +489,44 @@ depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touchi
 
 If you migrate one of the six holdouts above, remove its row from this table in the same PR.
 
+## Future: `bun lint --type-check` unification (2026-11-04 audit)
+
+Bun ships `bun check` (type errors) and `bun fmt` as built-ins on 1.4.4; **`bun lint` is not in
+1.4.4** (`bun --help` does not list it; `cd /tmp/empty && bun lint` returns `error: Script not
+found "lint"`). The [`/docs/lint`](https://bun.com/docs/lint) page describes a future feature
+whose relevant surface for this repo is:
+
+- `bun lint --type-aware --type-check` — reports type errors too, the way `bun check` does, in a
+  single pass that also runs the type-aware lint rules.
+- `bun lint --tsconfig <path>` — pins one `tsconfig.json` for the whole run, bypassing per-file
+  auto-discovery. A `tsconfig.json` without `"include"` triggers a `warn: Loaded N files in Ts to
+lint foo.ts` warning because it covers every file below it.
+
+**What the repo already looks like, measured 2026-11-04:**
+
+| Audit                                   | This repo                                                                                                                                     | Future `bun lint` implication                                                                                                                      |
+| :-------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root `tsconfig.json` has `"include"`?   | `"include": ["**/*.ts"]`                                                                                                                      | Won't trigger the "no `include`" warning.                                                                                                          |
+| Monorepo with multiple `tsconfig.json`? | No — one root tsconfig, plus `Scratch/security/tsconfig.scoped.json` (scratch area, ignored by `.oxlintrc.type-aware.json` `ignorePatterns`). | Per-file tsconfig discovery is unambiguous; no `--tsconfig` flag needed.                                                                           |
+| Current lint pass shape                 | `lint:check` runs oxlint twice: regular + `--type-aware -c .oxlintrc.type-aware.json`.                                                        | Could collapse to one `bun lint --type-check --type-aware -c .oxlintrc.type-aware.json` call.                                                      |
+| Current typecheck pass shape            | `typecheck` runs `bun check --no-script -p tsconfig.json` after `ensure:deep-tsconfig`.                                                       | The `bun check` invocation could merge into the single `bun lint --type-check` pass, cutting one full-repo type-check cycle out of the gate chain. |
+
+**When Bun ships `bun lint`, the migration shape is:**
+
+1. Confirm the Bun version in `AGENTS.md` ships `bun lint` built-in (not just the docs page);
+   `bun --help | grep -w lint` must list it.
+2. Rename the `package.json` `"lint"` script to `"oxlint"` (or similar) to clear the shadow —
+   see `/docs/lint`: _"If `package.json` has a `lint` script, `bun lint` runs that script."_
+3. Collapse `lint:check` + `typecheck` into one call:
+   `bun lint --type-check --type-aware -c .oxlintrc.type-aware.json --no-script`
+4. Keep `ensure:deep-tsconfig` — it's a strict-flags gate on the single tsconfig, orthogonal
+   to whichever linter reads it.
+5. Measure: time the before/after, and verify the oxlint `-f github` CI annotation path
+   ([PR #50](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/50)) still works
+   (`bun lint -f github` is documented).
+
+Do not pre-migrate before `bun --help` lists `lint`; the docs have been ahead of the binary.
+
 ## v1.4.0 feed/transport primitives in use
 
 - **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
