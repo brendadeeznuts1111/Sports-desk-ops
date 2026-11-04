@@ -56,8 +56,11 @@ export function getR2ConfigInfo(): void {
   console.log(`  R2 S3 API Endpoint    : ${cfg.endpoint}`);
   console.log(`  Target R2 Bucket      : ${cfg.bucketName}`);
   console.log(`  Public Gateway Base   : ${cfg.publicUrl}`);
-  console.log(`  Access Key ID         : ${cfg.accessKeyId.slice(0, 8)}...`);
-  console.log(`  API Token             : ${cfg.apiToken.slice(0, 10)}...`);
+  // Never print any part of a credential: length says "configured" without leaking bytes.
+  const presence = (value: string): string =>
+    value === "" ? "missing" : `set (${value.length} chars)`;
+  console.log(`  Access Key ID         : ${presence(cfg.accessKeyId)}`);
+  console.log(`  API Token             : ${presence(cfg.apiToken)}`);
   console.log(
     "================================================================================\n",
   );
@@ -92,7 +95,22 @@ export async function verifyR2Connection(
       );
       return true;
     } else {
-      console.log(`[Cloudflare API] Token response:`, json);
+      // The verify response can carry token identifiers; print the verdict and error
+      // messages only, never the raw object.
+      const errors = (json as { errors?: ReadonlyArray<unknown> }).errors;
+      const detail = Array.isArray(errors)
+        ? errors
+            .map((entry) =>
+              typeof entry === "object" && entry !== null && "message" in entry
+                ? String((entry as { message: unknown }).message)
+                : null,
+            )
+            .filter((message): message is string => message !== null)
+            .join("; ")
+        : "";
+      console.log(
+        `[Cloudflare API] Token verification FAILED${detail === "" ? "" : `: ${detail}`}`,
+      );
       return false;
     }
   } catch (err) {
