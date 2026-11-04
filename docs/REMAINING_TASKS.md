@@ -258,7 +258,10 @@ so an id resolves without guessing which artifact it came from.
     **Artifact check (2026-11-04):** BB55103 ledger/INFO artifacts are populated; the 33/33
     balance invariant, final=CurrentBalance, and Available formula are verified. Pending is not a
     TranType; no aggregate pending-count endpoint exists in available code/probes
-    (`08-pending-source-finding.md`). **Next local step:** 3–5 more redacted ledgers/INFO in
+    (`08-pending-source-finding.md`). **Deletion gap:** the deleted-transactions sample is a different
+    customer, has no overlap with BB55103, no `Balance`, and only deposits/withdrawals — the
+    deletion/running-balance question is untestable locally. **Next local step:** 3–5 more redacted
+    ledgers/INFO in
     `Scratch/` for the same 33-row invariant; 3/5 pass moves “one customer” to “ledger model,” any
     fail is a headline finding. No server call.
   - **Exit:** Path A — 20-customer manual sample matches, settlement confirms end-of-day on a named

@@ -97,6 +97,21 @@ four combinations present for this customer.
 No artifact contains a **population count of customers with pending wagers**. The closest is
 `PendingWagerCount` per customer, which requires one `getInfoPlayer` call per customer.
 
+## 3b. Deletion lifecycle — probe inconclusive
+
+The deleted-transactions envelope cannot extend the 33-row lifecycle model yet:
+
+- 0 `DocumentNumber` overlap with the BB55103 ledger.
+- It is a **different customer**; the BB55103 ledger rows carry no per-row `CustomerID` (the file is
+  scoped by account), so the two artifacts cannot be joined.
+- No `Balance` column, no `CoverageDocumentNumber`.
+- Its rows are **9 `C/E` deposits and 2 `D/I` withdrawals** — not wager deletions/reversals.
+
+Therefore the question “when a deposit or wager is deleted, is the main ledger's running balance
+retroactively corrected?” is **untestable from these artifacts**. It needs a same-customer deleted
+transaction plus that customer's full ledger, or a server statement of deletion semantics. The
+lifecycle model has a deletion gap; it is not evidence that the gap is safe or unsafe.
+
 ## 4. Aggregate endpoint — no
 
 The network log contains only `getTransactionList` (account BB55103, start 2026-10-28) and
@@ -107,6 +122,21 @@ count active/players, not pending customers; `getConfigWebReportsPending` is dis
 
 **Answer: no aggregate pending-customer-count endpoint in the available evidence.** There is no
 network log of an uncalled one, so “none found,” not “server has none.”
+
+## Sharpened aggregate ask
+
+The one-customer invariant changes the server ask from “build a reconciliation ledger” to “expose a
+count over state that already exists”:
+
+```text
+input:  { agentID }
+output: [{ customerID, hasPending, pendingTotal }]   // or a total count
+```
+
+`PendingWagerCount`/`PendingWagerBalance` are already in `getInfoPlayer`; the aggregate is a query
+addition over verified per-customer fields, not a new ledger/schema. `hasPending` can be derived as
+`PendingWagerCount > 0` or `PendingWagerBalance > 0` once settlement/compliance pick the definition.
+The three definitions and the Bearer verdict remain upstream.
 
 ## Path B finding
 
