@@ -33,6 +33,40 @@ cache-contiguous Structure-of-Arrays columns sized from the census below.
 Alphabet bitmask convention: bit0 `A-Z`, bit1 `a-z`, bit2 `0-9`, bit3 `_`, bit4 `.`, bit5 `@`,
 bit6 `-`, bit7 non-ASCII, bit8 other printable.
 
+**Streaming census execution (Phase 1):** the 3c `betReport-all.json` pass used a chunked
+`JSONDecoder.raw_decode` over `r.bets`, discarding each row after its aggregates were updated; no
+output file, no row sample, no field value was printed. The 3b/3d census used the committed
+pending skeleton/sample/panel and the graded parser fixtures in memory. The executable four-harness
+was run read-only and reported `ALL 4 DOMAIN HARNESSES … PASSED`.
+
+**B_max and enum cardinalities (3b snapshot):** `B_max=2` from `data/live-bets.json`
+(sport×subSport×period×wagerType×status tuples). Observed enums: WagerType 1; WagerStatus 1;
+period 2; sport 2; sub-sport 2; FreePlayFlag 1; all from the 2-game snapshot, not a full 73-field
+row capture.
+
+**Four-harness oracle extracted from `verification/run_four_harness_verification.py`:**
+
+| Oracle equation / check             | Exact assertion observed in source/run                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `parse_cents_strict("-12,037.64")`  | `-1_203_764`                                                                   |
+| `parse_cents_strict("+$4,719.695")` | `471_970` (half-up on the third decimal)                                       |
+| Overflow                            | `parse_cents_strict("99999999999999999999.99")` raises `OverflowError`         |
+| CRC envelope                        | `zlib.crc32(bytearray(b"DOD6" + b"\x00"*60))` changes when byte 17 is flipped  |
+| Predicate truth table               | `evaluate_event_log_predicates(...)` asserted against the fixed 16-state table |
+| Redaction                           | `scrub_all_secret_encodings` no-secret-leak assertion                          |
+
+The harness contains **no external vendor control total**; GATE-03's named external source for 3b
+must come from `Report/Pending` summary / Mode 9. The committed `Pending.post.json` skeleton exposes
+only the `Pending` array (73 fields) and no summary header field; the secondary intra-endpoint
+header is therefore a **live-capture gap** to close before implementation.
+
+**Upstream header/field observations:** `Pending.post.json` response keys are
+`bodySha256, bodySkeleton, bytes, contentType, status`; the only skeleton field is `Pending` (array).
+`getGrading.post.json` exposes `LIST` as a string; `getDailyFiguresByCustomer.post.json` exposes
+`INFO` as a boolean. No `markets-report`/`users-report` capture exists in
+`docs/evidence/captures/2026-11-01/`; those live headers remain external arbiters, not committed
+fixtures.
+
 ## Section 2 — Census-derived SoA layout, allocation boundary, overflow
 
 - **C_max=2**, but the 73-field wire and panel fixtures justify a fixed table floor. Radix size:
@@ -62,6 +96,19 @@ bit6 `-`, bit7 non-ASCII, bit8 other printable.
 - **Radix table:** 4,096 entries, load factor `C_max / 4096 ≤ 0.25`; a probe hit re-checks the full
   64-bit key (GATE-01/02).
 
+**32→64-bit key escalation rule:** `PackedRollupKey32` allocates the default **6 bits / 64 values**
+per bounded field (`channelCode`, `sportCode`, `periodCode`, `wagerTypeCode`,
+`settlementStateCode`). Section 1 shows 3b's observed fields are ≤2 values, so the 32-bit key
+remains valid. If any future capture exceeds 64 values for a field, escalate the whole key to
+`PackedRollupKey64: BigUint64Array` with explicit per-field widths derived from the census; never
+widen one field by stealing bits from another. The `pack(encode(decode(x))) !== x` round-trip check
+sets `packingRoundTripFailed=true` on `DodGateFailureError`.
+
+**Allocation boundary:** streamed identifier bytes are hashed directly (FNV-1a-64), and the
+identifier alphabet mask (bitmask 5) confirms no allocation-heavy decoding is needed. No
+`Map`/`Set`/`boolean[]` or dynamic arrays on the aggregation path; only the fixed radix table and
+SoA arena.
+
 ## Section 3 — Fixed-point accounting and cross-system reconciliation
 
 Branded integers only: `Cents`, `SettledCents`, `BasisPoints`, `LineHundredths`,
@@ -83,7 +130,40 @@ Branded integers only: `Cents`, `SettledCents`, `BasisPoints`, `LineHundredths`,
   GSLIVE+GSBUILDER slice, after the three divergence buckets: desk-date/UTC boundary,
   widget-rejected/cancelled, unsettled cross-window carry. Residual beyond tolerance fails GATE-08.
 
+**BigInt sentinel and banker's rounding:** CLV is stored/compared only as BigInt:
+`NULL_CLV_SENTINEL_BIGINT = -2147483648n`; no dead-code number variant. 3c's
+`computeSettledRoiBasisPoints(netCents, settledStakedCents)` uses round-half-to-even in BigInt; the
+signed `roundingResidualCents: bigint` is accumulated in `suppressed` and added algebraically to
+the GATE-03 identity so arbitrary bucket counts still tie to the exact cent. 3b's `definedLiability`
+and stake math also use BigInt64 columns only.
+
+**3b GATE-03 roll-forward (external control):**
+`OpeningPending_{t-1}^{vendor} + BetTickerInflow_t - GradedSettledPrincipal_t -
+VoidedCancelledPrincipal_t` is the **left-hand external triangulated control**, compared with
+`ClosingPending_t` from 3b on the **right**. Opening pending comes from the prior period's signed
+vendor report, never from 3b's prior output. Voided/cancelled principal is deducted unless
+getGrading already includes voids at principal stake with `netCents=0`. All terms use the same
+temporal cutoff (UTC; desk-date terms converted explicitly). The intra-endpoint `Report/Pending`
+summary header is a secondary wire tie-out only.
+
+**3c users-report tie:** because `users-report` is keyed per login while 3c rolls up by
+`betGroupId`, GATE-03 requires both a stake-sum tie and a distinct-login cardinality tie against
+the in-process `CustomerPackedKey64` dedupe structure before teardown; logins are never exposed or
+persisted. `markets-report` supplies the corresponding markets-level control totals.
+
+**3d external control:** `sum(visibleCells)+suppressedResidual+roundingResidualCents ≡
+ExternalReportControlTotal` and `sum(dedupedParentTicketsRead) ≡ VendorReportTicketCount` against
+`getDailyFiguresByCustomer` / `getAgentPerformance` / the four-harness oracle header.
+
 ## Section 4 — Complete GATE-01..08 catalog
+
+**Scope:** GATE-01..08 are design obligations that the eventual 3b/3c/3d implementations must
+satisfy. This PR specifies them; it does not implement or run them. SHIP=1 in this PR covers the
+docs only.
+
+**Execution order:** GATE-01..03 run sequentially (fail-fast) pre-serialization; GATE-04/05 run as
+a paired post-serialization block before in-process key-table teardown; GATE-06..08 run
+sequentially. GATE-07 is a merge-blocker on 3d until Finance signs the FreePlay policy.
 
 | Gate                                               | Requirement                                                                                                               | 3b external arbiter / check                    |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -113,6 +193,35 @@ new DodGateFailureError({
 FreePlay is counted (`freePlayLossRows`, `freePlayUnknownRows`) but its money policy is governed by
 GATE-07 and is not enabled here.
 
+**Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES = min(256 KiB,
+max(64 KiB, B_max × 512 bytes + 12 KiB header))`. With B_max=2/167/6 for 3b/3c/3d, the defaults
+are 64 KiB, 95 KiB, and 64 KiB respectively; the 256 KiB hard cap remains. `stripUtf8Bom()` and
+`x-amz-meta-pii: none` are applied before the size check.
+
+**GATE-04 lifetime detail:** `assertNoPersistedHandleKeys()` runs before the radix/key TypedArrays
+are torn down, walking the serialized artifact key-by-key against the live dedupe structure. If
+lifetime forces early release, it falls back to a streaming scan of input row keys against the
+artifact and records that fallback in the gate result.
+
+**Extended `DodGateFailureError` payload (all gates):** `cellsUnpacked: null` unless 3c/3b can
+expose de-identified cell tuples; `packingRoundTripFailed: true` only when GATE-02's
+`pack(encode(decode(x))) !== x`. `cells` may contain bigint handles only until GATE-04 proves they
+are not in the serialized artifact.
+
+```ts
+new DodGateFailureError({
+  gate: 1..8,
+  gateName: string,
+  streamId: "3b-f402-pending",
+  cells: Array<number | bigint>,
+  cellsUnpacked: Array<{channel:string,sport:string,period:string,wagerType:string,settlementState:string}> | null,
+  packingRoundTripFailed?: boolean,
+  varianceCents: bigint,
+  rowCountDelta: number,
+  controlSource: string,
+});
+```
+
 ## Section 5 — Risk, reversal, and falsification matrix
 
 | Trigger                                     | Structural change                                                       | Fail-closed behavior                                          |
@@ -125,3 +234,8 @@ GATE-07 and is not enabled here.
 | Sign-off checklist                          | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03     | required before public R2 enable                              |
 
 Tests must use raw fixtures only through aggregate assertions; no stdout rows or PII values.
+
+**Gaming-audit scope:** GATE-03 is a tie-out to an external vendor report, not independent
+validation. Third-source validation (GL entries, bank settlement, or customer-level statements) is
+out of scope for Bridge 3 and must be performed by Finance/Compliance at the period level before
+these rollups are used for financial reporting.

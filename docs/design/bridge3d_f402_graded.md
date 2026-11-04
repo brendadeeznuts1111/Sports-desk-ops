@@ -39,6 +39,29 @@ Alphabet bitmask: bit0 `A-Z`, bit1 `a-z`, bit2 `0-9`, bit3 `_`, bit4 `.`, bit5 `
 bit7 non-ASCII, bit8 other printable. Because no raw Login exists here, 3d records
 `identifier_fields_present: false` and hashes only after the settlement join.
 
+**Streaming census execution (Phase 1):** the graded HTML fixtures were parsed row-by-row through
+the production parser in memory; rows were immediately folded into counters. No output file, row
+sample, or raw field value was printed. The executable four-harness was run read-only:
+`ALL 4 DOMAIN HARNESSES … PASSED`.
+
+**Census additions:**
+
+| Metric                                                                | 3d value                                                                                                                                 |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `B_max` raw grading buckets (wagerType×status×placedOn×league×market) | **6**                                                                                                                                    |
+| `C_max` distinct ticket                                               | **6**                                                                                                                                    |
+| Status classes                                                        | Win 3; Won 1; Lost 1; Loss 1; Canceled 1                                                                                                 |
+| WagerType cardinality                                                 | **5** (`S 2, E 1, G 2, M 1, T 1`)                                                                                                        |
+| PlacedOn cardinality                                                  | **3** (Internet 5, Mobile 1, Desktop 1)                                                                                                  |
+| Null fields                                                           | team1/team2/line/price/league/market/score/scheduled = 2 each (`G` rows)                                                                 |
+| 4-harness oracle                                                      | `parse_cents_strict("-12,037.64")=-1_203_764`; `"+$4,719.695"=471_970`; overflow raises; CRC32 byte-flip; fixed 16-state predicate table |
+
+**Header/control observations:** the committed `getGrading.post.json` skeleton exposes only
+`LIST` as a string; `getDailyFiguresByCustomer.post.json` exposes `INFO` as a boolean; the graded
+workbook export is metadata only. No vendor summary header is present in the committed captures;
+`getDailyFiguresByCustomer` / `getAgentPerformance` / the four-harness oracle header remain the
+named live external arbiters for GATE-03.
+
 ## Section 2 — Census-derived SoA layout, allocation boundary, overflow
 
 - **C_max=6** ⇒ `4×C_max=24` ⇒ with a fixed table floor, radix **2^12 = 4,096** probes; load
@@ -64,6 +87,18 @@ bit7 non-ASCII, bit8 other printable. Because no raw Login exists here, 3d recor
 - **InlineCapacityList<LegSlot, 8>**: observed P100 actual legs =1, so 8 slots are ample. If a
   future graded ticket exceeds 8 legs, use the bounded 64-slot overflow slab and count
   `overflowTicketCount`; exhausting it fails GATE-05, never drops a leg.
+
+**32→64-bit key escalation:** graded HTML has no channel/sport/period enums, so the bounding
+fields come from the settlement join. `PackedRollupKey32` allocates 6 bits/field; the census
+(`C_max=6`, B_max=6, wagerType 5, status 5) fits. If any joined field exceeds 64 values, escalate
+the whole key to `PackedRollupKey64: BigUint64Array` with explicit widths; never silently widen one
+field. `packingRoundTripFailed=true` on `pack(encode(decode(x))) !== x`.
+
+**BigInt CLV and banker's rounding:** use only
+`NULL_CLV_SENTINEL_BIGINT = -2147483648n` in `BigInt64Array`; no number sentinel.
+`computeSettledRoiBasisPoints(netCents, settledStakedCents)` uses round-half-to-even; signed
+`roundingResidualCents: bigint` is carried in `suppressed` and added algebraically to the GATE-03
+identity. Integer cents only; zero IEEE-754 on the aggregation path.
 
 ## Section 3 — Fixed-point accounting, dedupe, FreePlay matrix, reconciliation
 
@@ -97,6 +132,14 @@ flagged for review.
 
 ## Section 4 — Complete GATE-01..08 catalog
 
+**Scope:** GATE-01..08 are design obligations that the eventual 3b/3c/3d implementations must
+satisfy. This PR specifies them; it does not implement or run them. SHIP=1 in this PR covers the
+docs only.
+
+**Execution order:** GATE-01..03 sequentially (fail-fast) pre-serialization; GATE-04/05 paired
+post-serialization before key-table teardown; GATE-06..08 sequentially. GATE-07 is a hard
+merge-blocker for 3d until Finance/Accounting signs the policy memo.
+
 | Gate                                               | Requirement                                                                                                  | 3d external arbiter                                                              |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | GATE-01 RotationAndDomainBounds                    | rotations 0..1,048,575, no 16-bit masking; full 64-bit key                                                   | graded row census                                                                |
@@ -118,6 +161,41 @@ new DodGateFailureError({
 });
 ```
 
+**GATE-03/GATE-06/GATE-07 division:** GATE-03 is the external vendor tie-out and SDC sign-off;
+GATE-06 enforces arithmetic mechanics (BigInt sentinel, banker's rounding, integer-cent
+conservation); GATE-07 enforces accounting policy and blocks merge until the one-page Finance memo
+explicitly decides FreePlayFlag="Y" WIN/LOSS treatment in `settledNetCents`, `settledStakedCents`,
+and the `holdBps` denominator.
+
+**FreePlay GATE-07 matrix (locked pending sign-off):**
+
+| Flag  | WIN                               | LOSS                                      | PUSH                      |
+| ----- | --------------------------------- | ----------------------------------------- | ------------------------- |
+| **Y** | net payout; principal debit 0     | principal debit 0; `settledNetCents=0`    | net 0; no principal debit |
+| **N** | normal win net; principal debit 0 | principal debit riskCents; net -riskCents | net 0; no principal debit |
+
+**Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES = min(256 KiB,
+max(64 KiB, B_max × 512 bytes + 12 KiB header))`. With B_max=2/167/6 for 3b/3c/3d, the defaults
+are 64 KiB, 95 KiB, and 64 KiB respectively; the 256 KiB hard cap remains. `stripUtf8Bom()` and
+`x-amz-meta-pii: none` are applied before the size check.
+
+**GATE-04 lifetime detail:** `assertNoPersistedHandleKeys()` runs before the radix/key TypedArrays
+are torn down, walking the serialized artifact key-by-key against the live dedupe structure. If
+lifetime forces early release, it falls back to a streaming scan of input row keys against the
+artifact and records that fallback in the gate result.
+
+**Extended `DodGateFailureError`:**
+
+```ts
+new DodGateFailureError({
+  gate: 1..8, gateName: string, streamId: "3d-f402-graded",
+  cells: Array<number | bigint>,
+  cellsUnpacked: Array<{channel:string,sport:string,period:string,wagerType:string,settlementState:string}> | null,
+  packingRoundTripFailed?: boolean,
+  varianceCents: bigint, rowCountDelta: number, controlSource: string,
+});
+```
+
 ## Section 5 — Risk, reversal, and falsification matrix
 
 | Trigger                              | Structural change                                                   | Fail-closed behavior                                          |
@@ -128,3 +206,8 @@ new DodGateFailureError({
 | GATE-03 external totals fail         | no write; variance report                                           | `writeWithMetadata` aborted; existing `latest.json` untouched |
 | Free-play policy unsigned            | 3d code cannot merge; counts-only artifacts                         | merge-blocked                                                 |
 | Sign-off checklist                   | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03 | required before public R2                                     |
+
+**Gaming-audit scope:** GATE-03 is a tie-out to an external vendor report, not independent
+validation. Third-source validation (GL entries, bank settlement, or customer-level statements) is
+out of scope for Bridge 3 and must be performed by Finance/Compliance at the period level before
+these rollups are used for financial reporting.
