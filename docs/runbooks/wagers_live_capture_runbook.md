@@ -39,6 +39,40 @@ bun run wagers:capture --dry-run --payload Scratch/ajax-getBetReport-body.json
 Both writes are atomic (temp file + rename). **A failed read never overwrites the last good
 artifact.** A missing `GSID` fails before any request and journals the failure.
 
+## Live-bets gateway and R2 sinks
+
+Optional sinks publish the same aggregate event that the history line carries; they never add
+ticket ids, customer ids, logins or raw rows.
+
+```sh
+# one capture + gateway push + R2 summary
+GSID=... BLOB_API_TOKEN=... bun run wagers:capture --publish-live-bets --publish-r2
+
+# a long-running watcher using BLOB_GATEWAY_URL/BLOB_PORT and BLOB_API_TOKEN
+GSID=... BLOB_API_TOKEN=... bun run wagers:watch --publish-live-bets --publish-r2
+```
+
+The equivalent TOML section makes the OS-level `scheduled()` worker publish without CLI flags:
+
+```toml
+[publish]
+liveBets = true
+r2 = true
+gatewayUrl = "" # empty -> BLOB_GATEWAY_URL or http://127.0.0.1:$BLOB_PORT
+channel = "gslive-wagers"
+```
+
+- Gateway: `POST /api/v1/live-bets` with `Bearer $BLOB_API_TOKEN` and `{channel, event}`; the
+  channel defaults to the lowercase `gslive-wagers` (the gateway rejects uppercase).
+- R2: `wagers-by-state/latest.json` in `sportsdesk-ops-reports`, written with
+  `lib/r2_s3_client.ts` `writeWithMetadata`; metadata carries schema version, capture time and
+  `source=gslive-wagers-capture`.
+- The sink also writes `Scratch/gslive-wagers/latest.json`. The graph poller reads it and embeds a
+  `gsliveWagers` block in `docs/graph-live-feed.json`; its `--r2` publish carries that block to the
+  deployed feed. This keeps the graph feed single-writer and avoids a capture overwriting topology.
+- A missing gateway, missing `BLOB_API_TOKEN`, missing R2 credentials or a non-2xx response is
+  reported in the CLI output and does not discard the captured artifact or fail the capture.
+
 ## History, ticket deltas, alerts
 
 Every successful capture also updates three files next to the artifact (all atomic, all
@@ -243,8 +277,9 @@ validation instead of being ignored.
 
 The file owns the defaults that used to be hard-coded: retries/backoff/timeout, `dateFilterBy`,
 lookback, cron, journal/history retention, artifact/status/history/tickets/alerts/archive paths,
-alert thresholds (including the churn pair), and the WebView profile path. Secrets are never read
-from it. The older report renderer keeps its own `config/wagers.json`.
+alert thresholds (including the churn pair), the WebView profile path, and the optional
+`[publish]` sink settings (LIVE-bets/R2 toggles, gateway URL, channel). Secrets are never read from
+it. The older report renderer keeps its own `config/wagers.json`.
 
 `Bun.semver` gates the pinned runtime against `package.json` engines in
 `bun run verify:bun-cli`, and every capture bundle's `manifest.json` records

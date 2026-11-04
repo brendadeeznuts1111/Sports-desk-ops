@@ -72,6 +72,35 @@ describe("graph-live-feed contract (schema 3)", () => {
     }
   });
 
+  test("embeds the optional gsliveWagers aggregate without a schema bump", async () => {
+    const { buildGraphLiveFeed } =
+      await import("../scripts/graph_feed_poller_daemon.ts");
+    const event = {
+      schemaVersion: 1 as const,
+      kind: "gslive-wagers" as const,
+      capturedAt: "2026-11-03T18:00:00.000Z",
+      sourceKind: "live-ajax.php" as const,
+      artifactSha256: "a".repeat(64),
+      totals: {
+        legs: 1,
+        wagers: 1,
+        spanning: 0,
+        legRisk: 10,
+        wagerRisk: 10,
+        legToWin: 8,
+        legResult: 0,
+      },
+      states: [],
+      delta: null,
+      qualityFlags: [],
+      alerts: [],
+    };
+    const built = buildGraphLiveFeed(999, { gsliveWagers: event });
+    expect(built.schemaVersion).toBe(3);
+    expect(built.gsliveWagers?.capturedAt).toBe(event.capturedAt);
+    expect(built.gsliveWagers?.totals.legs).toBe(1);
+  });
+
   test("contains no NaN/Infinity numeric leaks", () => {
     const walk = (value: unknown): void => {
       if (typeof value === "number") {

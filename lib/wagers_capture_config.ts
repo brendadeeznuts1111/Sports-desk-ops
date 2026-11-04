@@ -78,6 +78,19 @@ export const wagersCaptureConfigSchema = z
       })
       .strict()
       .prefault({}),
+    publish: z
+      .object({
+        liveBets: z.boolean().default(false),
+        r2: z.boolean().default(false),
+        /** Empty means BLOB_GATEWAY_URL/BLOB_PORT/default loopback. */
+        gatewayUrl: z.string().default(""),
+        channel: z
+          .string()
+          .regex(/^[a-z0-9-]{1,32}$/)
+          .default("gslive-wagers"),
+      })
+      .strict()
+      .prefault({}),
     session: z
       .object({
         /** Chrome --user-data-dir signed in to Manager Tools; empty means keychain/env. */

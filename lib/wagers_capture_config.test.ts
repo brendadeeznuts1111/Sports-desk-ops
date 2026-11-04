@@ -99,6 +99,45 @@ describe("TOML capture config", () => {
     expect(loaded.config.session.webviewProfile).toBe("/tmp/profile");
   });
 
+  test("publish sinks default off and override from [publish]", async () => {
+    const defaults = await loadWagersCaptureConfig(
+      join(await tempDir(), "absent.toml"),
+    );
+    expect(defaults.config.publish).toEqual({
+      liveBets: false,
+      r2: false,
+      gatewayUrl: "",
+      channel: "gslive-wagers",
+    });
+
+    const dir = await tempDir();
+    const path = join(dir, "wagers-capture.toml");
+    await Bun.write(
+      path,
+      [
+        "[publish]",
+        "liveBets = true",
+        "r2 = true",
+        'gatewayUrl = "http://127.0.0.1:4021"',
+        'channel = "gslive-test"',
+        "",
+      ].join("\n"),
+    );
+    const loaded = await loadWagersCaptureConfig(path);
+    expect(loaded.config.publish).toEqual({
+      liveBets: true,
+      r2: true,
+      gatewayUrl: "http://127.0.0.1:4021",
+      channel: "gslive-test",
+    });
+
+    const badChannel = join(dir, "bad-channel.toml");
+    await Bun.write(badChannel, '[publish]\nchannel = "BAD CHANNEL"\n');
+    await expect(loadWagersCaptureConfig(badChannel)).rejects.toThrow(
+      /does not match/,
+    );
+  });
+
   test("malformed TOML and schema violations fail at the boundary", async () => {
     const dir = await tempDir();
     const broken = join(dir, "broken.toml");

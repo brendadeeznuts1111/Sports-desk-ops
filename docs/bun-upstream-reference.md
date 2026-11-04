@@ -325,6 +325,10 @@ The four upstream patterns this repo's R2 integration is pinned to:
 - [`method` in presign options](https://bun.com/docs/runtime/s3#method): `putWithMetadata` presigns `{ method: "PUT", expiresIn: 300, type }`, then forwards `x-amz-meta-*` headers without a local SigV4 signer.
 - [`new Response(s3file)`](https://bun.com/docs/runtime/s3#new-response-s3file): `redirectResponse` wraps the lazy `S3File` in a 200 response; the blob gateway serves it for `GET /api/v1/blobs/{key}?download=1`.
 
+The wagers capture pipeline uses the same adapter for its optional `--publish-r2` sink: it writes
+the aggregate `wagers-by-state/latest.json` with `writeWithMetadata`, and the graph poller embeds
+the local sidecar in `graph-live-feed.json` before publishing.
+
 Environment resolution is documented in `lib/r2_s3_client.ts`: credential precedence is `R2_*` → `CLOUDFLARE_R2_TOKEN_ID` + SHA-256(`CLOUDFLARE_R2_API_TOKEN`) → `S3_*` → `AWS_*`; endpoint precedence is `S3_ENDPOINT` → `AWS_ENDPOINT` → `https://<accountId>.r2.cloudflarestorage.com`. The adapter also exposes `write`, `stat` (never the deprecated `S3File.size`), `size`, `exists`, `sliceBytes`, `list`, `delete`/`unlink`, and classifies the six `ERR_S3_*` codes plus `S3Error` (`isS3Error`). The blob gateway maps those failures to a 502 response carrying the S3 code.
 
 ## Optional git pins (upstream doc PRs only)

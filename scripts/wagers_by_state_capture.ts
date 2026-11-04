@@ -41,11 +41,18 @@ import {
   sessionFromRunningChrome,
 } from "../lib/gslive_session.ts";
 import {
+  createWagersLiveSink,
+  resolveWagersGatewayUrl,
+  type WagersLiveSink,
+  type WagersLiveSinkResult,
+} from "../lib/wagers_live_sink.ts";
+import {
   alertThresholdsFromConfig,
   DEFAULT_CAPTURE_CRON,
   DEFAULT_KEEP_RUNS,
   DEFAULT_WAGERS_CAPTURE_CONFIG_PATH,
   loadWagersCaptureConfig,
+  type WagersCaptureConfig,
 } from "../lib/wagers_capture_config.ts";
 
 import {
@@ -470,6 +477,8 @@ export interface LiveCaptureConfig {
   readonly sessionSource?: Exclude<ManagerSessionSource, "none">;
   /** Optional portable tar bundle (artifact + history + alerts + journal; never tickets/secrets). */
   readonly archivePath?: string;
+  /** Optional live-bets/R2 sinks; failures are reported, never fatal to the capture. */
+  readonly sink?: WagersLiveSink;
 }
 
 interface LiveCaptureOutcomeBase {
@@ -492,6 +501,8 @@ export interface LiveCaptureSuccess extends LiveCaptureOutcomeBase {
   readonly historyLine: WagersHistoryLine;
   readonly artifactSha256: string;
   readonly archivePath: string | null;
+  /** Per-sink outcomes when a live-bets/R2 sink was configured. */
+  readonly sinkResults?: readonly WagersLiveSinkResult[];
 }
 
 export interface LiveCaptureFailure extends LiveCaptureOutcomeBase {
@@ -715,6 +726,25 @@ export async function runLiveCapture(
               report,
             });
 
+      let sinkResults: readonly WagersLiveSinkResult[] | undefined;
+      if (config.sink !== undefined) {
+        const sinkOutcome = { historyLine, artifactSha256 };
+        try {
+          sinkResults = await Promise.all([
+            config.sink.publishLiveBets(sinkOutcome),
+            config.sink.publishR2(sinkOutcome),
+          ]);
+          for (const result of sinkResults) {
+            if (!result.ok) {
+              console.error(`wagers:publish: ${result.error ?? "sink failed"}`);
+            }
+          }
+        } catch (error) {
+          console.error(`wagers:publish: ${sanitizeError(error)}`);
+          sinkResults = [{ ok: false, error: sanitizeError(error) }];
+        }
+      }
+
       return {
         ok: true,
         report,
@@ -729,6 +759,7 @@ export async function runLiveCapture(
         durationMs: durationMs(),
         artifactSha256,
         archivePath,
+        ...(sinkResults === undefined ? {} : { sinkResults }),
       };
     } catch (error) {
       lastError = sanitizeError(error);
@@ -812,6 +843,15 @@ function reportOutcome(outcome: LiveCaptureOutcome): void {
       "token",
     );
     logWrapped(formatAlertLine(outcome.alerts));
+    for (const result of outcome.sinkResults ?? []) {
+      if (result.ok && result.skipped !== true) {
+        console.log(
+          `publish: ok${result.url === undefined ? "" : ` ${result.url}`}`,
+        );
+      } else if (!result.ok) {
+        console.error(`publish: ${result.error ?? "failed"}`);
+      }
+    }
     if (outcome.delta === null) {
       console.log("tickets: baseline capture (delta null)");
     } else {
@@ -889,6 +929,37 @@ function numberFlag(
   return parsed;
 }
 
+/**
+ * Build the optional live-bets/R2 sink from config plus CLI overrides. Disabled sinks
+ * produce no client at all, so a dry-run and a default capture never touch the network.
+ */
+function buildWagersLiveSink(
+  config: WagersCaptureConfig,
+  env: typeof Bun.env,
+  overrides: {
+    readonly liveBets?: boolean;
+    readonly r2?: boolean;
+    readonly gatewayUrl?: string;
+    readonly channel?: string;
+  } = {},
+): WagersLiveSink | undefined {
+  const liveBets = overrides.liveBets === true || config.publish.liveBets;
+  const r2 = overrides.r2 === true || config.publish.r2;
+  if (!liveBets && !r2) return undefined;
+  const gatewayUrl =
+    overrides.gatewayUrl?.trim() ||
+    config.publish.gatewayUrl.trim() ||
+    resolveWagersGatewayUrl(env);
+  const channel = overrides.channel?.trim() || config.publish.channel;
+  return createWagersLiveSink({
+    liveBets,
+    r2,
+    gatewayUrl,
+    channel,
+    apiToken: env.BLOB_API_TOKEN ?? "",
+  });
+}
+
 /** One capture with the default window/paths — the OS-level `scheduled()` worker body. */
 async function runScheduledCapture(
   controller: Bun.CronController,
@@ -904,6 +975,7 @@ async function runScheduledCapture(
     profileDir === ""
       ? await resolveManagerSession(env)
       : await sessionFromGsliveProfile({ profileDir });
+  const sink = buildWagersLiveSink(config, env);
   const outcome = await runLiveCapture({
     cookieHeader: session.cookieHeader,
     ...(session.source === "none" ? {} : { sessionSource: session.source }),
@@ -922,6 +994,7 @@ async function runScheduledCapture(
     retries: config.capture.retries,
     retryBackoffMs: config.capture.retryBackoffMs,
     alertThresholds: alertThresholdsFromConfig(config),
+    ...(sink === undefined ? {} : { sink }),
   });
   console.log(
     JSON.stringify({
@@ -989,6 +1062,10 @@ async function main(args: readonly string[]): Promise<void> {
       "retry-backoff-ms": { type: "string" },
       config: { type: "string" },
       "dry-run": { type: "boolean", default: false },
+      "publish-live-bets": { type: "boolean", default: false },
+      "publish-r2": { type: "boolean", default: false },
+      "publish-gateway": { type: "string" },
+      "publish-channel": { type: "string" },
     },
   });
 
@@ -997,6 +1074,18 @@ async function main(args: readonly string[]): Promise<void> {
     { required: values.config !== undefined },
   );
   const cfg = loadedConfig.config;
+  const publishLiveBets = values["publish-live-bets"] || cfg.publish.liveBets;
+  const publishR2 = values["publish-r2"] || cfg.publish.r2;
+  const sink = buildWagersLiveSink(cfg, env, {
+    ...(publishLiveBets ? { liveBets: true } : {}),
+    ...(publishR2 ? { r2: true } : {}),
+    ...(values["publish-gateway"]?.trim()
+      ? { gatewayUrl: values["publish-gateway"].trim() }
+      : {}),
+    ...(values["publish-channel"]?.trim()
+      ? { channel: values["publish-channel"].trim() }
+      : {}),
+  });
   const cron = values.cron ?? cfg.capture.cron;
   const artifactPath = values.out?.trim() || cfg.paths.artifact;
   const statusPath = values.status?.trim() || cfg.paths.status;
@@ -1209,6 +1298,10 @@ async function main(args: readonly string[]): Promise<void> {
           retries,
           retryBackoffMs,
           failOnAlert,
+          publish: {
+            liveBets: publishLiveBets,
+            r2: publishR2,
+          },
           debugWire: values["debug-wire"],
           verboseFetch: verboseFetch ?? false,
           session: values["attach-chrome"]
@@ -1277,6 +1370,7 @@ async function main(args: readonly string[]): Promise<void> {
       alertsPath,
       keepHistory,
       alertThresholds,
+      ...(sink === undefined ? {} : { sink }),
       ...(suppliedPayload === undefined ? {} : { payload: suppliedPayload }),
       ...(ajaxUrl === "" ? {} : { ajaxUrl }),
     } as const;
@@ -1327,6 +1421,7 @@ async function main(args: readonly string[]): Promise<void> {
       alertsPath,
       keepHistory,
       alertThresholds,
+      ...(sink === undefined ? {} : { sink }),
     });
     reportOutcome(outcome);
     process.exitCode = 1;
@@ -1353,6 +1448,7 @@ async function main(args: readonly string[]): Promise<void> {
     alertsPath,
     keepHistory,
     alertThresholds,
+    ...(sink === undefined ? {} : { sink }),
     retries,
     retryBackoffMs,
     ...(archivePath === undefined ? {} : { archivePath }),

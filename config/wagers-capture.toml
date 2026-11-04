@@ -27,6 +27,13 @@ churnPct = 25
 churnMin = 20
 cadenceMinutes = 30
 
+[publish]
+# Optional runtime sinks for the Blob & Live-Bets gateway / R2.
+liveBets = false # POST normalized events to /api/v1/live-bets
+r2 = false # write aggregate wagers-by-state/latest.json via Bun.S3Client
+gatewayUrl = "" # empty -> BLOB_GATEWAY_URL or http://127.0.0.1:$BLOB_PORT
+channel = "gslive-wagers"
+
 [session]
 # Chrome --user-data-dir signed in to Manager Tools. Empty -> Bun.secrets keychain, then GSID env.
 webviewProfile = ""

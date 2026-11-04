@@ -86,6 +86,8 @@ declare module "bun" {
     readonly BLOB_MAX_UPLOAD_BYTES?: string;
     readonly BLOB_MAX_PIXELS?: string;
     readonly BLOB_PORT?: string;
+    /** Base URL of the blob/live-bets gateway used by the wagers publish sink. */
+    readonly BLOB_GATEWAY_URL?: string;
     readonly BLOB_HEALTH_URL?: string;
     readonly WEBVIEW_HEALTH_URL?: string;
 

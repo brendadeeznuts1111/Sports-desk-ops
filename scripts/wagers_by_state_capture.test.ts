@@ -15,6 +15,7 @@ import {
   sha256PathForArtifact,
   writeCaptureArchive,
 } from "./wagers_by_state_capture.ts";
+import type { WagersLiveSink } from "../lib/wagers_live_sink.ts";
 import { WAGERS_ARTIFACT_PATH } from "./gslive_wagers_by_state.ts";
 import { Archive, CryptoHasher, file, serve, version, write } from "bun";
 
@@ -227,6 +228,76 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
       expect(journal.lastSuccess?.legs).toBe(5);
       expect(journal.lastSuccess?.wagers).toBe(4);
       expect(journal.lastSuccess?.states).toBe(4);
+    } finally {
+      stand.server.stop(true);
+    }
+  });
+
+  test("an enabled sink publishes after the artifact without failing the capture", async () => {
+    const stand = startAjaxStandIn();
+    const paths = await tempPaths();
+    const calls: string[] = [];
+    const sink: WagersLiveSink = {
+      async publishLiveBets() {
+        calls.push("live-bets");
+        return { ok: true, published: 1 };
+      },
+      async publishR2() {
+        calls.push("r2");
+        return {
+          ok: true,
+          url: "https://pub.test/wagers-by-state/latest.json",
+        };
+      },
+    };
+    try {
+      const outcome = await runLiveCapture({
+        cookieHeader: "GSID=fixture-session",
+        payload: PAYLOAD,
+        fromEpochSec: PAYLOAD.from,
+        toEpochSec: PAYLOAD.to,
+        dateFilterBy: "logTime",
+        ajaxUrl: stand.ajaxUrl,
+        artifactPath: paths.artifact,
+        statusPath: paths.status,
+        sink,
+      });
+      expect(outcome.ok).toBe(true);
+      expect(calls).toEqual(["live-bets", "r2"]);
+      expect(outcome.ok && outcome.sinkResults).toEqual([
+        { ok: true, published: 1 },
+        { ok: true, url: "https://pub.test/wagers-by-state/latest.json" },
+      ]);
+    } finally {
+      stand.server.stop(true);
+    }
+  });
+
+  test("a sink failure is reported but leaves the capture ok", async () => {
+    const stand = startAjaxStandIn();
+    const paths = await tempPaths();
+    const sink: WagersLiveSink = {
+      async publishLiveBets() {
+        return { ok: false, error: "gateway down" };
+      },
+      async publishR2() {
+        return { ok: true, skipped: true };
+      },
+    };
+    try {
+      const outcome = await runLiveCapture({
+        cookieHeader: "GSID=fixture-session",
+        payload: PAYLOAD,
+        fromEpochSec: PAYLOAD.from,
+        toEpochSec: PAYLOAD.to,
+        dateFilterBy: "logTime",
+        ajaxUrl: stand.ajaxUrl,
+        artifactPath: paths.artifact,
+        statusPath: paths.status,
+        sink,
+      });
+      expect(outcome.ok).toBe(true);
+      expect(outcome.ok && outcome.sinkResults?.[0]?.ok).toBe(false);
     } finally {
       stand.server.stop(true);
     }

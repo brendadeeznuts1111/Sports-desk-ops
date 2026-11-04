@@ -59,6 +59,11 @@ import {
   type F402TickerRow,
 } from "../lib/f402_ingest.ts";
 import {
+  isWagersLiveEvent,
+  WAGERS_LOCAL_SIDECAR_PATH,
+  type WagersLiveEvent,
+} from "../lib/wagers_live_sink.ts";
+import {
   describeF402Session,
   readF402Session,
   refreshF402Session,
@@ -177,6 +182,8 @@ export interface GraphLiveFeedPayload {
   readonly perOfficeIpTrackerClusters?: readonly OfficeIpClusterSummary[];
   readonly tenModeSnapshot?: TenModeLiveSnapshot;
   readonly backtest4Wk?: FourWeekParlayBacktestReport;
+  /** Aggregate GSLive wagers summary, when a capture sidecar is present. */
+  readonly gsliveWagers?: WagersLiveEvent;
 }
 
 function formatCdtTimestamp(date: Date): string {
@@ -641,6 +648,7 @@ export function buildGraphLiveFeed(
     readonly ingest?: readonly WalletIngestState[] | null;
     readonly snapshot?: PolymarketSnapshot | null;
     readonly f402Probe?: F402Probe | null;
+    readonly gsliveWagers?: WagersLiveEvent | null;
   },
 ): GraphLiveFeedPayload {
   const now = new Date();
@@ -1158,6 +1166,9 @@ export function buildGraphLiveFeed(
     perOfficeIpTrackerClusters: PER_OFFICE_IP_TRACKER_CLUSTERS,
     tenModeSnapshot: buildTenModeLiveSnapshot(),
     backtest4Wk: runFourWeekParlayComboBacktest(repoRoot),
+    ...(options?.gsliveWagers === null || options?.gsliveWagers === undefined
+      ? {}
+      : { gsliveWagers: options.gsliveWagers }),
   };
 }
 
@@ -1188,6 +1199,21 @@ function writePositionCache(filePath: string, cache: PositionCache): void {
   const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(cache)}\n`, "utf8");
   fs.renameSync(tmp, filePath);
+}
+
+async function readGsliveWagersSidecar(): Promise<WagersLiveEvent | null> {
+  try {
+    const raw = await Bun.file(
+      path.join(repoRoot, WAGERS_LOCAL_SIDECAR_PATH),
+    ).json();
+    if (isWagersLiveEvent(raw)) return raw;
+    console.warn(
+      "[GraphPoller] gslive-wagers sidecar is present but not a valid event; ignoring",
+    );
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function writeGraphLiveFeedOnce(
@@ -1273,6 +1299,7 @@ export async function writeGraphLiveFeedOnce(
     ingest,
     snapshot,
     f402Probe,
+    gsliveWagers: await readGsliveWagersSidecar(),
   });
   const docsTarget = path.join(repoRoot, "docs", "graph-live-feed.json");
   const distDir = path.join(repoRoot, "dist");
