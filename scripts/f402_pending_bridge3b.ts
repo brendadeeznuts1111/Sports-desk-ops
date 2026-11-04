@@ -3,6 +3,11 @@
 import { parseArgs } from "node:util";
 import { readFileSync } from "node:fs";
 import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
+import {
+  defaultPendingDate,
+  fetchAndPersistPending,
+  resolveF402BearerToken,
+} from "../lib/f402_pending_fetch.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -15,6 +20,11 @@ const { values } = parseArgs({
     },
     "from-file": { type: "string" },
     "source-kind": { type: "string" },
+    "bearer-token": { type: "string" },
+    date: { type: "string" },
+    "agent-id": { type: "string" },
+    "agent-owner": { type: "string" },
+    "save-capture": { type: "string" },
     live: { type: "boolean", default: false },
     "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
@@ -25,7 +35,7 @@ const { values } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3b:rollup [--from path] [--source-kind fixture|capture] [--live] [--dry-run] [--no-r2] [--no-ws]",
+    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--live] [--dry-run] [--no-r2] [--no-ws]",
   );
   process.exit(0);
 }
@@ -44,9 +54,43 @@ if (
     "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
   );
 }
-const fromPath = (values["from-file"] ?? values.from) as string;
+const fetchRequested =
+  values["bearer-token"] !== undefined ||
+  (Bun.env.F402_BEARER_TOKEN ?? "").trim() !== "" ||
+  (Bun.env.F402_TOKEN_FILE ?? "").trim() !== "";
+let fromPath = (values["from-file"] ?? values.from) as string;
+let sourceKindOverride = values["source-kind"] as string | undefined;
+if (fetchRequested) {
+  const token = resolveF402BearerToken({
+    cliToken: values["bearer-token"] as string | undefined,
+  });
+  const date = defaultPendingDate(
+    new Date(),
+    values.date as string | undefined,
+  );
+  const capturePath =
+    (values["save-capture"] as string | undefined) ??
+    ((Bun.env.F402_PENDING_CAPTURE_PATH ?? "").trim() ||
+      `Scratch/f402-pending/capture-${date}.json`);
+  const fetched = await fetchAndPersistPending({
+    token,
+    date,
+    ...(values["agent-id"] === undefined
+      ? {}
+      : { agentId: values["agent-id"] as string }),
+    ...(values["agent-owner"] === undefined
+      ? {}
+      : { agentOwner: values["agent-owner"] as string }),
+    capturePath,
+  });
+  console.error(
+    `[bridge3b] fetched ${fetched.legs.length} pending legs for ${date} -> ${capturePath}`,
+  );
+  fromPath = capturePath;
+  sourceKindOverride = "capture";
+}
 const sourceKind =
-  (values["source-kind"] as string | undefined) ??
+  sourceKindOverride ??
   (fromPath === "tests/f402-pending-wager-sample.json" ? "fixture" : "capture");
 if (sourceKind === "fixture" && values["dry-run"] !== true) {
   console.error(
