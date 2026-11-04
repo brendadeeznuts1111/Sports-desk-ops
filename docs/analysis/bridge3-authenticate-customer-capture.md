@@ -89,6 +89,29 @@ Replaying the cookie jar to `getPending` returned **401** (`text/html`, 176 char
 `credentials: "include"` with cookies minted by `authenticateCustomer` does not authorize Manager
 calls; only a real browser login session does.
 
+### 5. Follow-up probe — `Report/Pending` **accepts** the bearer
+
+The same JWT was replayed against `POST /cloud/api/Report/Pending` with a customer-scoped body
+(`{customerID, token, operation:"Pending"}`), using customer IDs from the local book at probe time
+(never retained):
+
+| Request                                                         | Result                                                   |
+| --------------------------------------------------------------- | -------------------------------------------------------- |
+| Valid customer, `token:""` in body + `Authorization: Bearer`    | **200** `{"Pending":[... ]}` (1 pending leg)             |
+| Valid customer, `token:<jwt>` in body + `Authorization: Bearer` | **200** (same)                                           |
+| Second valid customer                                           | **200** `{"Pending":[]}`                                 |
+| Non-live customer ID                                            | **400** `{"status":"Failed","msg":"Invalid CustomerID"}` |
+| Valid customer, **no** `Authorization` header                   | **401** `text/html`                                      |
+
+So the `Authorization: Bearer` header is the credential; the body `token` field is not required.
+`Report/Pending` is **customer-scoped** — agent IDs (keychain or `accountInfo.customerID`) return
+`Invalid CustomerID`, but valid book customers return 200.
+
+**Consequence:** 3b's bearer path is viable **through `Report/Pending`**, not `Manager/getPending`.
+The remaining design question is aggregation: 3b currently asks one agent-wide `Manager/getPending`;
+`Report/Pending` needs one call per customer (the local book provides the IDs). `Manager/getPending`
+stays a 500 dead end for request-contract reasons, not authentication.
+
 ## What this changes
 
 | Question from P3                            | Answer                                                                                                                                     |

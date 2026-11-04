@@ -127,7 +127,7 @@ contradiction.
 
 ## P3 — `authenticateCustomer` (the whole auth model rests on it)
 
-**Status 2026-11-04: captured live.** JSON body (not form-urlencoded), 200, `<code>` field is an HS256 JWT with a 1200 s lifetime; `renewToken` accepts it (200). `Manager/getPending` returns 500 empty HTML for every tested shape (not 401/403), so the Manager request contract is still unresolved and no session cookie is issued. Details and the sanitized fixture: [`docs/analysis/bridge3-authenticate-customer-capture.md`](../analysis/bridge3-authenticate-customer-capture.md).
+**Status 2026-11-04: captured live.** JSON body (not form-urlencoded), 200, `<code>` field is an HS256 JWT with a 1200 s lifetime; `renewToken` accepts it (200). `Manager/getPending` returns 500 empty HTML for every tested shape (not 401/403), so the Manager request contract is still unresolved and no session cookie is issued. Follow-up: **`/cloud/api/Report/Pending` accepts the same Bearer** (200, customer-scoped; no bearer → 401), so the viable 3b bearer path is `Report/Pending`, not `Manager/getPending`. Details and the sanitized fixture: [`docs/analysis/bridge3-authenticate-customer-capture.md`](../analysis/bridge3-authenticate-customer-capture.md).
 
 Ledger row: `POST /cloud/api/System/authenticateCustomer` (C). The spec claims a scoped Bearer JWT with a
 ~20–25 minute lifetime; the one observed Manager session is cookie-based and sends no `Authorization`
@@ -758,10 +758,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:1235-1254`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:1244-1263`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:2297-2322`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:2325-2345`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:2312-2337`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:2340-2360`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -769,7 +769,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:2347-2355`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:2362-2370`).
 
 ## P7 — the customer report surface (7 candidates)
 

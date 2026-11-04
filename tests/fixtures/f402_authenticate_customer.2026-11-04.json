@@ -121,6 +121,60 @@
     "bearerAcceptedByManagerGetPending": false,
     "managerGetPendingFailureIsAuthRejection": false,
     "sessionCookieSufficient": false,
-    "note": "authenticateCustomer C->A for the token contract; Manager/getPending still needs a real browser request capture (or /cloud/api/Report/Pending) before 3b can use Bearer"
+    "note": "authenticateCustomer C->A for the token contract; Manager/getPending still needs a real browser request capture (or /cloud/api/Report/Pending) before 3b can use Bearer",
+    "bearerAcceptedByReportPending": true,
+    "reportPendingScope": "customer-scoped; requires a valid customerID per call",
+    "nextStep": "3b can adopt Report/Pending with Bearer per customer, or wait for an agent-wide Manager endpoint; Manager/getPending remains 500 and is not an auth rejection"
+  },
+  "followUpReportPending": {
+    "endpoint": "POST /cloud/api/Report/Pending",
+    "credential": "Authorization: Bearer <authenticateCustomer code>; body token field not required",
+    "observed": [
+      {
+        "requestBody": "customerID=<valid book customer>, token:\"\", operation:\"Pending\"",
+        "status": 200,
+        "contentType": "application/json; charset=utf-8",
+        "shape": {
+          "Pending": {
+            "array": 1
+          }
+        }
+      },
+      {
+        "requestBody": "customerID=<valid book customer>, token:<jwt>, operation:\"Pending\"",
+        "status": 200,
+        "contentType": "application/json; charset=utf-8",
+        "shape": {
+          "Pending": {
+            "array": 1
+          }
+        }
+      },
+      {
+        "requestBody": "customerID=<second valid book customer>, token:\"\", operation:\"Pending\"",
+        "status": 200,
+        "contentType": "application/json; charset=utf-8",
+        "shape": {
+          "Pending": {
+            "array": 0
+          }
+        }
+      },
+      {
+        "requestBody": "customerID=<non-live customer>, operation:\"Pending\"",
+        "status": 400,
+        "body": {
+          "status": "Failed",
+          "msg": "Invalid CustomerID"
+        }
+      },
+      {
+        "requestBody": "valid customer, no Authorization header",
+        "status": 401,
+        "contentType": "text/html"
+      }
+    ],
+    "verdict": "the authenticateCustomer bearer is accepted by Report/Pending; Manager/getPending still 500s, so 3b's viable bearer path is Report/Pending (customer-scoped), not Manager/getPending",
+    "note": "customer IDs are read from the local book at probe time and are not retained; only statuses/shapes are recorded"
   }
 }
