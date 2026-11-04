@@ -118,15 +118,15 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
   defineRoute({
     path: "/combo-uniqueness.json",
     method: "ANY",
-    guard: "none",
-    dataClass: "static",
+    guard: "admin",
+    dataClass: "aggregate",
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
     path: "/cross-domain-bridge.json",
     method: "ANY",
-    guard: "none",
-    dataClass: "static",
+    guard: "admin",
+    dataClass: "aggregate",
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({

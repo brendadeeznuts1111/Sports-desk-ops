@@ -56,12 +56,50 @@ describe("graph data plane", () => {
     }
   });
 
-  test("serves the companion JSON the graph module fetches", async () => {
-    for (const path of ["combo-uniqueness.json", "cross-domain-bridge.json"]) {
-      const res = await get(path);
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("application/json");
-    }
+  describe("companion JSON the graph module fetches", () => {
+    const FILES = ["combo-uniqueness.json", "cross-domain-bridge.json"];
+    const TOKEN = "test-admin-token-not-a-secret";
+    let saved: string | undefined;
+
+    beforeAll(() => {
+      saved = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+    });
+    afterAll(() => {
+      if (saved === undefined)
+        Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
+      else Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", saved);
+    });
+
+    test("is refused without a token, even from loopback", async () => {
+      Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", TOKEN);
+      for (const path of FILES) {
+        const none = await get(path);
+        expect(none.status).toBe(401);
+        const wrong = await fetch(`${server.url}${path}`, {
+          headers: { authorization: "Bearer not-the-token" },
+        });
+        expect(wrong.status).toBe(401);
+        expect(await wrong.text()).not.toContain("customersInBook");
+      }
+    });
+
+    test("is refused (503) when the server has no admin token configured", async () => {
+      Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
+      for (const path of FILES) {
+        expect((await get(path)).status).toBe(503);
+      }
+    });
+
+    test("is served with the admin token", async () => {
+      Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", TOKEN);
+      for (const path of FILES) {
+        const res = await fetch(`${server.url}${path}`, {
+          headers: { authorization: `Bearer ${TOKEN}` },
+        });
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type")).toContain("application/json");
+      }
+    });
   });
 
   test("serves graph assets", async () => {
