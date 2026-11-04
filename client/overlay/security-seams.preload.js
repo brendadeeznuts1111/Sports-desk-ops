@@ -116,6 +116,8 @@
     if (manager) decorated = applySetHistoryEscaper(manager) || decorated;
     if (manager) decorated = applyMessageInitEscaper(manager) || decorated;
     if (manager) decorated = applyPopUpMessagesEscaper(manager) || decorated;
+    if (manager)
+      decorated = applySetCommunicationMessagesEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -139,6 +141,10 @@
         messageInitEscaperFailure: messageInitEscaperFailure,
         popUpMessagesEscaperInstalled: popUpMessagesEscaperInstalled,
         popUpMessagesEscaperFailure: popUpMessagesEscaperFailure,
+        communicationMessagesEscaperInstalled:
+          communicationMessagesEscaperInstalled,
+        communicationMessagesEscaperFailure:
+          communicationMessagesEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -778,6 +784,61 @@
     return true;
   }
 
+  // Sink migration for manager.setCommunicationMessages. It is synchronous inside the getComponent
+  // callback: only data.Message goes through .html(); data.Id goes through .attr("data-id"), which
+  // sets an attribute value directly and is not an HTML sink. Escaping Id would break the later
+  // mail.delete({id}) call, so only Message is escaped (via a shallow copy, leaving the caller's
+  // data object raw for any later consumer).
+  var communicationMessagesEscaperInstalled = false;
+  var communicationMessagesEscaperFailure = null;
+
+  function applySetCommunicationMessagesEscaper(Manager) {
+    if (communicationMessagesEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      communicationMessagesEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.setCommunicationMessages;
+    if (typeof original !== "function") {
+      communicationMessagesEscaperFailure = "setCommunicationMessages-missing";
+      console.error(
+        "[f402-seam] setCommunicationMessages escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    communicationMessagesEscaperInstalled = true;
+    Object.defineProperty(proto, "setCommunicationMessages", {
+      configurable: true,
+      writable: true,
+      value: function (event) {
+        var api = searchEscaperApi();
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !event ||
+          !event.info ||
+          !event.info.data ||
+          typeof event.info.data.Message !== "string"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var info = event.info;
+        var rawData = info.data;
+        var escapedData = Object.assign({}, rawData, {
+          Message: api.escHtml(rawData.Message),
+        });
+        info.data = escapedData;
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          info.data = rawData;
+        }
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -816,6 +877,7 @@
         applySetHistoryEscaper(defined);
         applyMessageInitEscaper(defined);
         applyPopUpMessagesEscaper(defined);
+        applySetCommunicationMessagesEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

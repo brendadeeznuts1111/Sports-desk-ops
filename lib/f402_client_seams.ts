@@ -74,6 +74,7 @@ export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
   "setHistory:function",
   "getMessageInit:function",
   "getPopUpMessages:function",
+  "setCommunicationMessages:function",
 ] as const;
 
 /** Anchor substrings missing from a controller bundle. Empty means the wrapper still has a target. */

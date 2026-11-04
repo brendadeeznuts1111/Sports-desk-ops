@@ -475,7 +475,7 @@ describe("security seam preload: module allowlist", () => {
   test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(7);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(8);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
@@ -722,6 +722,95 @@ describe("security seam preload: module allowlist", () => {
     expect(rendered[0]!.item).toContain("<br>");
     expect(rendered[0]!.item).toContain("&lt;b&gt;");
     expect(rendered[0]!.item).not.toContain("&lt;br&gt;");
+  });
+
+  test("getPopUpMessages does not dereference an empty COMMENT or null fields", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    class Manager {
+      getPopUpMessages(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "getMessage" },
+          success: () => undefined,
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    new Manager().getPopUpMessages();
+    expect(captured).not.toBeNull();
+    const success = (captured as unknown as { success: (r: unknown) => void })
+      .success;
+    // The original guards these; the wrapper must not fire first on absent data.
+    expect(() => success({ COMMENT: [], LIST: [] })).not.toThrow();
+    expect(() =>
+      success({
+        COMMENT: [],
+        LIST: [{ Subject: null, Message: null, Id: null }],
+      }),
+    ).not.toThrow();
+    expect(() => success({})).not.toThrow();
+  });
+
+  test("setCommunicationMessages escapes Message but leaves Id raw for .attr()", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let seen: Record<string, unknown> | null = null;
+    class Manager {
+      setCommunicationMessages(event: {
+        info: { data: Record<string, unknown> };
+      }): void {
+        seen = { ...event.info.data };
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const event = {
+      info: { data: { Message: "</div><script>", Id: "A&B", Subject: "<s>" } },
+    };
+    new Manager().setCommunicationMessages(event);
+    expect(seen).not.toBeNull();
+    expect(seen!["Message"]).toContain("&lt;/div&gt;");
+    expect(seen!["Message"]).toContain("&lt;script&gt;");
+    // .attr("data-id", value) is an attribute setter, not an HTML sink; escaping would break
+    // mail.delete({id}) and the value is returned raw by attr().
+    expect(seen!["Id"]).toBe("A&B");
+    // The caller's data object is restored after the synchronous call.
+    expect(event.info.data.Message).toBe("</div><script>");
   });
 
   test("setHistory escapes only the title and leaves the getHistory argument raw", async () => {
