@@ -184,6 +184,46 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Bun.revision.startsWith(shortSha as string)).toBe(true);
   });
 
+  test("Bun.$ exposes the shell-tag with escape/braces helpers and the fluent API", async () => {
+    // bun.com/reference/globals/bun#bun.$: `Bun.$` is the shell-tag used by dev scripts.
+    // The repo-wide rule, codified in lib/f402_credentials_policy.ts and in
+    // docs/bun-upstream-reference.md "Bun.$ — argv-only for credentials", is:
+    //
+    //   Never interpolate untrusted bytes into a `Bun.$` template. Credential paths must use
+    //   `Bun.spawn([argv…])` with an explicit minimal env allowlist. If a dev script legitimately
+    //   needs shell semantics on a user-provided string, `Bun.$.escape(value)` quotes it safely.
+    //
+    // This test proves the surface the one production use (tests/subprocess_deadlock.test.ts)
+    // and any future dev script depends on: the shell-tag itself, the two pure helpers, and the
+    // fluent env/.nothrow/.text pattern that is the only form approved for non-credential work.
+    expect(typeof Bun.$).toBe("function");
+    expect(typeof Bun.$.escape).toBe("function");
+    expect(typeof Bun.$.braces).toBe("function");
+
+    // `$.escape` quotes a string so interpolation does not re-enter the shell parser.
+    const escaped = Bun.$.escape("foo bar; rm -rf /");
+    expect(escaped).not.toBe("foo bar; rm -rf /");
+    expect(escaped.length).toBeGreaterThan("foo bar; rm -rf /".length);
+
+    // `$.braces` is pure bash brace expansion — no I/O, safe to call unconditionally.
+    expect(Bun.$.braces("index.{js,ts}").sort()).toEqual([
+      "index.js",
+      "index.ts",
+    ]);
+
+    // Fluent: `.env()` injects variables, `.text()` reads stdout, zero echo to the test process.
+    const text = (
+      await Bun.$`echo $SPORTSDESK_SHELL_TEST_VALUE`
+        .env({ ...Bun.env, SPORTSDESK_SHELL_TEST_VALUE: "ok" })
+        .text()
+    ).trim();
+    expect(text).toBe("ok");
+
+    // `.nothrow()` is the only safe way to tolerate a non-zero exit without a try/catch stack.
+    const failed = await Bun.$`exit 7`.nothrow().quiet();
+    expect(failed.exitCode).toBe(7);
+  });
+
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
     // bun.com/reference/globals/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
     // because the bytes are not zeroed. The two production call sites

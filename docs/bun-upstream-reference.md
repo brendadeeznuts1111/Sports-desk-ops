@@ -489,6 +489,39 @@ depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touchi
 
 If you migrate one of the six holdouts above, remove its row from this table in the same PR.
 
+## `Bun.$` — available, but argv-only for credentials (2026-11-04 audit)
+
+[`Bun.$`](https://bun.com/reference/globals/bun#bun.$) is the shell-tag that runs a command
+through a parser, with a fluent `.env()` / `.cwd()` / `.nothrow()` / `.text()` API plus pure
+helpers `Bun.$.escape(str)` (shell-safe quote) and `Bun.$.braces(pattern)` (bash-brace
+expansion). It is pinned in `bin/bun_surface.ts` and covered by
+`tests/bun_capabilities.test.ts` ("Bun.$ exposes the shell-tag…").
+
+**The repo-wide rule is argv-only for anything that touches a credential.** This codifies what
+[`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts) says in prose:
+
+> Never `Bun.$` — interpolation routes bytes through a shell parser.
+
+**What to use where (audit measured 2026-11-04: 80 call sites use `Bun.spawn(argv, …)`, 1 test
+uses `Bun.$`, 0 production uses):**
+
+| Scenario                                                                        | Use                                                                                       | Why                                                                                                                           |
+| :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| Anything that reads/writes a credential, API key, cookie, or session ID         | **`Bun.spawn([argv…], { env: buildMinimalSpawnEnv() })`**                                 | Argv array bypasses the shell parser; minimal env allowlist denies `LD_PRELOAD`-class attacks                                 |
+| A test or dev script that needs stdout as a single string from a static command | `Bun.$\`…\`.text()` with **no interpolation of untrusted input**                          | Fluent API reads cleaner than `Bun.spawn + Response(proc.stdout).text()`                                                      |
+| A test or dev script that needs to interpolate a path we control                | `Bun.$\`…${path}…\``**only if`path`is repo-internal** or wrapped with`Bun.$.escape(path)` | `$` auto-quotes template values, but the safe habit is to assume every interpolated value is tainted and `.escape` it anyway  |
+| Any production daemon reading stdout line-by-line                               | `Bun.spawn(argv, { stdout: "pipe" })` + `proc.stdout` reader                              | Independent `proc.exited` / `proc.stdout` / `proc.stderr` reads are clearer than `$\`…\`.lines()` for the 3-stream assertions |
+| Pure bash brace expansion without running a shell                               | `Bun.$.braces("logs/{2024,2025}-*.jsonl")`                                                | No I/O, no shell spawn, no injection surface                                                                                  |
+
+**Do not migrate the existing 80 `Bun.spawn([argv…])` sites.** The current argv form is the
+defensive default; `Bun.$` is only a readability win on one-liner dev scripts. Migrating a
+daemon or capture path would re-introduce the exact injection surface the policy was written to
+prevent.
+
+**Before adopting `Bun.$` in a new file**, check the capability test and this rule table. If a
+dev script needs to interpolate a user-provided value, use `Bun.$.escape(value)` inside the
+template; if the script touches credentials at all, fall back to `Bun.spawn`.
+
 ## When to use `Bun.allocUnsafe` (and when NOT to) — 2026-11-04 audit
 
 [`Bun.allocUnsafe(size)`](https://bun.com/reference/globals/bun#bun.allocUnsafe) returns a

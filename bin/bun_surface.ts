@@ -71,6 +71,13 @@ const CHECKS: readonly Check[] = [
   { group: "core", name: "file", read: () => Bun.file },
   { group: "core", name: "write", read: () => Bun.write },
   { group: "core", name: "spawn", read: () => Bun.spawn },
+  // `Bun.$` is the shell-tag used by dev scripts; the repo-wide rule is
+  // **argv-only for credential paths** (see lib/f402_credentials_policy.ts and the
+  // "Bun.$" section in docs/bun-upstream-reference.md). The pin exists so a runtime
+  // downgrade cannot drop the primitive out from under the tests/scripts that use it.
+  { group: "core", name: "$", read: () => Bun.$ },
+  { group: "core", name: "$.escape", read: () => Bun.$.escape },
+  { group: "core", name: "$.braces", read: () => Bun.$.braces },
   { group: "core", name: "sleep", read: () => Bun.sleep },
   { group: "core", name: "which", read: () => Bun.which },
   { group: "core", name: "inspect.table", read: () => Bun.inspect.table },
