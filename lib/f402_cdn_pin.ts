@@ -53,7 +53,83 @@ export const EXPLICIT_CDN_ASSETS: readonly string[] = [
   "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js",
 ] as const;
 
-export type CdnAssetSource = "document" | "explicit";
+export type CdnAssetSource = "document" | "explicit" | "app";
+
+/**
+ * `/app/` AMD modules the shell needs before any controller code runs. The controller's own
+ * `require`/`define` lists are discovered from its bytes at pin time, so a module the loader can
+ * reach is either pinned or reported.
+ */
+export const APP_BOOT_MODULES: readonly string[] = [
+  "setting/version",
+  "setting/config-manager",
+  "main-manager",
+  "manager/manager",
+  "system/security",
+  "util/http",
+  "util/util",
+  "util/message",
+  "system/log",
+  "ui/ui",
+  "ui/load",
+  "core/class",
+  "language/language",
+] as const;
+
+/** Absolute URL for one `/app/` AMD module id, no query. */
+export function appModuleUrl(host: string, moduleId: string): string | null {
+  let clean = moduleId.trim();
+  if (clean.startsWith("/app/")) clean = clean.slice("/app/".length);
+  else if (clean.startsWith("/")) return null;
+  clean = clean.replace(/\.js$/, "");
+  if (!/^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/.test(clean)) return null;
+  const base = host.startsWith("http") ? host : `https://${host}`;
+  return `${base.replace(/\/$/, "")}/app/${clean}.js`;
+}
+
+/** AMD module ids from `define([...])` / `require([...])` arrays; plugin resources are skipped. */
+export function extractAmdModuleIds(js: string): string[] {
+  const ids = new Set<string>();
+  for (const match of js.matchAll(/(?:define|require)\s*\(\s*\[([^\]]*)\]/g)) {
+    for (const quoted of (match[1] ?? "").matchAll(/["']([^"']+)["']/g)) {
+      const id = quoted[1];
+      if (id === undefined) continue;
+      // Skip plugin resources and concatenated ids such as `"manager/module/" + name`:
+      // only a fully spelled module path can be resolved to a file.
+      if (!/^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/.test(id)) continue;
+      ids.add(id);
+    }
+  }
+  return [...ids].sort();
+}
+
+/** `/app/` module URLs the controller requires that the manifest does not pin. */
+export function appModuleCoverage(
+  managerJs: string,
+  manifest: CdnManifest,
+): string[] {
+  const missing: string[] = [];
+  const seen = new Set<string>();
+  for (const id of [...APP_BOOT_MODULES, ...extractAmdModuleIds(managerJs)]) {
+    const url = appModuleUrl(manifest.host, id);
+    if (url === null || seen.has(url)) continue;
+    seen.add(url);
+    if (manifest.assets[url]?.source !== "app") missing.push(url);
+  }
+  return missing.sort();
+}
+
+/** Fetch URL for a pin: `/app/` modules carry the AMD loader's `?bust=<version>` value. */
+export function pinnedAssetFetchUrl(
+  url: string,
+  pin: CdnAssetPin,
+  vendorVersion: string,
+): string {
+  if (!pin.sameOrigin) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set("bust", vendorVersion);
+  return parsed.toString();
+}
 
 export interface CdnAssetPin {
   readonly sha256: string;
@@ -61,6 +137,8 @@ export interface CdnAssetPin {
   readonly sri: string;
   /** False when the origin sends no `Access-Control-Allow-Origin`; `integrity=` would block it. */
   readonly sriEnforceable: boolean;
+  /** True for `/app/` AMD modules: same-origin, fetched with the AMD loader's `?bust=` value. */
+  readonly sameOrigin: boolean;
   readonly bytes: number;
   readonly role: AssetRole;
   readonly source: CdnAssetSource;
@@ -168,6 +246,7 @@ export async function buildPin(
     bytes: outcome.bytes.length,
     role,
     source,
+    sameOrigin: source === "app",
     externalReferences,
     etag: outcome.etag,
     lastModified: outcome.lastModified,
@@ -206,7 +285,8 @@ const CdnAssetPinSchema = z.object({
   sriEnforceable: z.boolean(),
   bytes: z.number().int().nonnegative(),
   role: z.enum(["portal-js", "portal-css", "telegram-web-app"]),
-  source: z.enum(["document", "explicit"]),
+  source: z.enum(["document", "explicit", "app"]),
+  sameOrigin: z.boolean(),
   externalReferences: z.array(z.string()),
   etag: z.string().nullable(),
   lastModified: z.string().nullable(),
@@ -370,9 +450,34 @@ export async function collectLiveCdnAssetDrift(options?: {
     async ([url, pin]) => ({
       url,
       pin,
-      outcome: await fetchAssetOutcome(url),
+      outcome: await fetchAssetOutcome(
+        pinnedAssetFetchUrl(url, pin, manifest.vendorVersion),
+      ),
     }),
   );
+
+  const managerUrl = appModuleUrl(manifest.host, "manager/manager");
+  const managerPin =
+    managerUrl === null ? undefined : manifest.assets[managerUrl];
+  if (managerUrl !== null && managerPin !== undefined) {
+    const managerOutcome = await fetchAssetOutcome(
+      pinnedAssetFetchUrl(managerUrl, managerPin, manifest.vendorVersion),
+    );
+    if (managerOutcome.kind === "ok") {
+      for (const missing of appModuleCoverage(
+        new TextDecoder().decode(managerOutcome.bytes),
+        manifest,
+      )) {
+        details.push(
+          `cdn_app_module_unpinned ${missing}: required but not pinned`,
+        );
+      }
+    } else {
+      details.push(
+        `cdn_app_manager_unreachable ${managerUrl}: ${describeOutcome(managerOutcome)}`,
+      );
+    }
+  }
 
   for (const { url, pin, outcome } of rows) {
     if (outcome.kind === "ok") {

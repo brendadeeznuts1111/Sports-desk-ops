@@ -6,8 +6,10 @@ vendor's bytes — the version in the commit message is the human assertion that
 
 ## When an update is allowed
 
-1. **A vendor version bump you can name.** The portal bundle version is `app/setting/version.js`
-   (currently `1.0.280`); record the new one and the release notes URL in the commit.
+1. **A vendor version bump you can name.** The shell version is `app/setting/version.js` (currently
+   `1.0.281`); the AMD loader uses it as `?bust=`, and `--vendor-version` must match it. Record the
+   new version and the release notes URL in the commit. A `version.js`-only bump with unchanged
+   bundles is still recorded here and in `pinned/manifest.json` (oracle pin).
 2. **A vendor security fix**, with the advisory or release note as evidence.
 3. **A removal or 404 the vendor confirms** (a dependency retired, an asset moved).
 4. **A confirmed same-version incident** — only with `--force`, an incident reference in the commit,

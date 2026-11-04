@@ -6,8 +6,12 @@ import {
   normalizeAssetUrl,
 } from "../lib/f402_cdn_assets.ts";
 import {
+  appModuleCoverage,
+  appModuleUrl,
+  extractAmdModuleIds,
   loadCdnManifest,
   parseCdnManifest,
+  pinnedAssetFetchUrl,
   sriFor,
 } from "../lib/f402_cdn_pin.ts";
 import type { CdnAssetPin, CdnManifest } from "../lib/f402_cdn_pin.ts";
@@ -25,6 +29,7 @@ function pin(overrides: Partial<CdnAssetPin> = {}): CdnAssetPin {
     bytes: 0,
     role: "portal-js",
     source: "document",
+    sameOrigin: false,
     externalReferences: [],
     etag: null,
     lastModified: null,
@@ -193,6 +198,72 @@ describe("applySriToHtml", () => {
     const result = applySriToHtml(html, manifest({ [script]: pin() }));
     expect(result.html.match(/integrity=/g)).toHaveLength(1);
     expect(result.html).not.toContain("sha384-stale");
+  });
+});
+
+describe("app module graph", () => {
+  test("extracts AMD module ids from define and require arrays, skipping plugin resources", () => {
+    const js =
+      'define(["core/class","ui/ui"],function(a,b){});' +
+      'require(["manager/module/bet-ticker","text!x.html"],function(c,d){});';
+    expect(extractAmdModuleIds(js)).toEqual([
+      "core/class",
+      "manager/module/bet-ticker",
+      "ui/ui",
+    ]);
+  });
+
+  test("resolves app module URLs and rejects traversal or foreign paths", () => {
+    expect(appModuleUrl("www.fantasy402.com", "manager/manager")).toBe(
+      "https://www.fantasy402.com/app/manager/manager.js",
+    );
+    expect(appModuleUrl("www.fantasy402.com", "/app/setting/version.js")).toBe(
+      "https://www.fantasy402.com/app/setting/version.js",
+    );
+    expect(appModuleUrl("www.fantasy402.com", "../evil")).toBeNull();
+    expect(appModuleUrl("www.fantasy402.com", "/elsewhere.js")).toBeNull();
+  });
+
+  test("flags app modules the controller requires but the manifest does not pin", () => {
+    const host = "www.fantasy402.com";
+    const managerJs = 'require(["manager/module/bet-ticker"]);';
+    const pinnedManager = appModuleUrl(host, "manager/manager");
+    expect(pinnedManager).not.toBeNull();
+    const base = manifest({});
+    if (pinnedManager === null) return;
+    const checkerUrl = appModuleUrl(host, "manager/module/bet-ticker");
+    expect(checkerUrl).not.toBeNull();
+    expect(appModuleCoverage(managerJs, base)).toContain(checkerUrl ?? "");
+    expect(appModuleCoverage(managerJs, base)).toContain(pinnedManager);
+
+    const covered = manifest({
+      [pinnedManager]: pin({ source: "app", sameOrigin: true }),
+      [appModuleUrl(host, "manager/module/bet-ticker") ?? ""]: pin({
+        source: "app",
+        sameOrigin: true,
+      }),
+    });
+    // Boot modules remain unpinned in this minimal fixture; the two required files are covered.
+    expect(
+      appModuleCoverage(managerJs, covered).filter(
+        (url) => url === pinnedManager || url.endsWith("bet-ticker.js"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("only same-origin app pins get the AMD bust query", () => {
+    const cdn = pin();
+    const app = pin({ source: "app", sameOrigin: true });
+    expect(
+      pinnedAssetFetchUrl("https://cdn.example/x.js", cdn, "1.0.281"),
+    ).toBe("https://cdn.example/x.js");
+    expect(
+      pinnedAssetFetchUrl(
+        "https://www.fantasy402.com/app/manager/manager.js",
+        app,
+        "1.0.281",
+      ),
+    ).toBe("https://www.fantasy402.com/app/manager/manager.js?bust=1.0.281");
   });
 });
 

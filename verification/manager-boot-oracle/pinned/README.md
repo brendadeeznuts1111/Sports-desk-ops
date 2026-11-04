@@ -31,8 +31,11 @@ Always-on drift: `bun run portal:drift:cron --watch` (spawned checks use pinned 
 
 The portal document loads 86 assets from `cdn.fastassets.io`, `cdnjs.cloudflare.com`,
 `fonts.googleapis.com` and `maps.googleapis.com`; this repository's pages add four explicit ones
-(`setting.less` x2, `telegram-web-app.js`, the pinned Scalar bundle). `cdn-manifest.json` pins their
-origin bytes (sha256 + sha384 SRI) and, for stylesheets, the `url()`/`@import` targets they pull in.
+(`setting.less` x2, `telegram-web-app.js`, the pinned Scalar bundle); and the shell loads 45
+same-origin `/app/` AMD modules. `cdn-manifest.json` pins their origin bytes (sha256 + sha384 SRI),
+the `url()`/`@import` targets stylesheets pull in, and the `/app/` module graph discovered from the
+controller's `require([...])` lists. The oracle bundles in `manifest.json` remain the extraction
+source; this manifest is the client-surface gate.
 
 ```bash
 bun run pin:cdn                                    # check: exit 1 drift, 2 unreachable

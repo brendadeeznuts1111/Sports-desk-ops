@@ -20,6 +20,9 @@ import { parseArgs } from "node:util";
 
 import { extractExternalAssets } from "../lib/f402_cdn_assets.ts";
 import {
+  appModuleCoverage,
+  appModuleUrl,
+  APP_BOOT_MODULES,
   buildPin,
   CDN_MANIFEST_PATH,
   checkDocumentCoverage,
@@ -27,8 +30,10 @@ import {
   describeOutcome,
   EXPLICIT_CDN_ASSETS,
   fetchAssetOutcome,
+  extractAmdModuleIds,
   loadCdnManifest,
   mapConcurrent,
+  pinnedAssetFetchUrl,
   PORTAL_DOCUMENT_URL,
   serializeCdnManifest,
   sha256Hex,
@@ -139,18 +144,53 @@ async function update(): Promise<void> {
     process.exit(2);
   }
 
+  const host = new URL(PORTAL_DOCUMENT_URL).host;
   const html = await fetchDocumentHtml();
   const documentUrls = [
     ...new Set(extractExternalAssets(html).map((asset) => asset.normalizedUrl)),
   ].sort();
-  const allUrls = [...new Set([...documentUrls, ...EXPLICIT_CDN_ASSETS])];
 
+  // Phase 1: the controller, fetched the way the AMD loader would fetch it, so its require list
+  // can be discovered from the bytes that are live for this vendor version.
+  const managerUrl = appModuleUrl(host, "manager/manager");
+  if (managerUrl === null)
+    throw new Error("manager/manager is not a valid app module");
+  const managerOutcome = await fetchAssetOutcome(
+    `${managerUrl}?bust=${encodeURIComponent(vendorVersion)}`,
+  );
+  if (managerOutcome.kind !== "ok") {
+    throw new Error(`manager/manager: ${describeOutcome(managerOutcome)}`);
+  }
+  const managerJs = new TextDecoder().decode(managerOutcome.bytes);
+
+  const appUrls = [
+    ...new Set(
+      [...APP_BOOT_MODULES, ...extractAmdModuleIds(managerJs)]
+        .map((id) => appModuleUrl(host, id))
+        .filter((url): url is string => url !== null),
+    ),
+  ].sort();
+  const appUrlSet = new Set(appUrls);
+
+  // Phase 2: pin everything. Each asset records whether it came from the document, the explicit
+  // list, or the same-origin AMD graph.
+  const allUrls = [
+    ...new Set([...documentUrls, ...EXPLICIT_CDN_ASSETS, ...appUrls]),
+  ];
   const fetched = await mapConcurrent(allUrls, CONCURRENCY, async (url) => {
-    const outcome = await fetchAssetOutcome(url);
+    const isApp = appUrlSet.has(url);
+    const fetchUrl = isApp
+      ? `${url}?bust=${encodeURIComponent(vendorVersion)}`
+      : url;
+    const outcome = await fetchAssetOutcome(fetchUrl);
     if (outcome.kind !== "ok") {
       throw new Error(`${url}: ${describeOutcome(outcome)}`);
     }
-    const source = documentUrls.includes(url) ? "document" : "explicit";
+    const source = isApp
+      ? "app"
+      : documentUrls.includes(url)
+        ? "document"
+        : "explicit";
     return { url, pin: await buildPin(url, outcome, source) };
   });
 
@@ -159,7 +199,7 @@ async function update(): Promise<void> {
 
   const next: CdnManifest = {
     schemaVersion: 1,
-    host: new URL(PORTAL_DOCUMENT_URL).host,
+    host,
     documentUrl: PORTAL_DOCUMENT_URL,
     pinnedAt: new Date().toISOString(),
     vendorVersion,
@@ -210,7 +250,7 @@ async function update(): Promise<void> {
     `pin:cdn: pinned ${fetched.length} asset(s) at vendor ${vendorVersion} → ${CDN_MANIFEST_PATH}`,
   );
   console.log(
-    `  ${documentUrls.length} loaded by ${PORTAL_DOCUMENT_URL}, ${EXPLICIT_CDN_ASSETS.length} explicit`,
+    `  ${documentUrls.length} from the document, ${EXPLICIT_CDN_ASSETS.length} explicit, ${appUrls.length} app module(s)`,
   );
   if (previous !== null && previous.vendorVersion !== vendorVersion) {
     console.log(
@@ -244,9 +284,23 @@ async function check(): Promise<void> {
     async ([url, pin]) => ({
       url,
       pin,
-      outcome: await fetchAssetOutcome(url),
+      outcome: await fetchAssetOutcome(
+        pinnedAssetFetchUrl(url, pin, manifest.vendorVersion),
+      ),
     }),
   );
+
+  let managerRow: (typeof rows)[number] | undefined;
+  const managerUrl = appModuleUrl(manifest.host, "manager/manager");
+  if (managerUrl !== null) {
+    managerRow = rows.find((row) => row.url === managerUrl);
+    if (managerRow === undefined) {
+      driftCount += 1;
+      details.push(
+        `unpinned ${managerUrl}: controller module not in the manifest`,
+      );
+    }
+  }
 
   for (const { url, pin, outcome } of rows) {
     if (outcome.kind === "ok") {
@@ -276,6 +330,18 @@ async function check(): Promise<void> {
     }
     infrastructureCount += 1;
     details.push(`${outcome.kind} ${url}: ${describeOutcome(outcome)}`);
+  }
+
+  if (managerUrl !== null && managerRow?.outcome.kind === "ok") {
+    for (const missing of appModuleCoverage(
+      new TextDecoder().decode(managerRow.outcome.bytes),
+      manifest,
+    )) {
+      driftCount += 1;
+      details.push(
+        `app_module_unpinned ${missing}: required by the controller but not pinned`,
+      );
+    }
   }
 
   if (details.length > 0) {

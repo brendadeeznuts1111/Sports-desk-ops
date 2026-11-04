@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "host": "https://www.fantasy402.com",
-  "pinnedAt": "2026-11-01",
+  "pinnedAt": "2026-11-03",
   "runtime": {
     "bunVersion": "1.4.4",
     "bunRevision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
@@ -10,20 +10,20 @@
   },
   "artifacts": {
     "app/setting/version.js": {
-      "sha256": "81230819032c493d7f24c7972d2da294872634724895a99a71e45afb10a0c97f",
-      "note": "define({version:\"1.0.280\",use_dinamic:!1})"
+      "sha256": "7d026b6af39a067eb5324893f17909a96ca14969955faca938b40906ea62f9b9",
+      "note": "define({version:\"1.0.281\",use_dinamic:!1})"
     },
     "app/manager/manager.js": {
-      "bustQuery": "1.0.280",
+      "bustQuery": "1.0.281",
       "sha256": "82c3d4ec9b5d0531b06219761f0b40db20bf07f4f4250eacdabf527e90e01937",
       "bytes": 100121
     },
     "app/util/util.js": {
-      "bustQuery": "1.0.280",
+      "bustQuery": "1.0.281",
       "sha256": "fba79858f48951d827b4fbb6db27531bb15cc519ae55d47e29848e066adf2ec0"
     },
     "app/system/security.js": {
-      "bustQuery": "1.0.280",
+      "bustQuery": "1.0.281",
       "sha256": "056c0fc2bc075017ed93ba7a3cd9d301c8144f3dee9d56347673d098d6f84e1b"
     },
     "extracted/baseHeriarchy.body.min.js": {
@@ -48,7 +48,7 @@
     "ownerRole": "operator",
     "harPath": "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
     "proofPath": "docs/evidence/captures/har/manager-boot-pipeline-proven.redaction-proof.json",
-    "requires": "Once: capture:f402-har → commit HAR + proof → verify:manager-har-redaction-proof → set status ready only via verify:manifest-consistency (derived, not hand-flip)."
+    "requires": "Once: capture:f402-har \u2192 commit HAR + proof \u2192 verify:manager-har-redaction-proof \u2192 set status ready only via verify:manifest-consistency (derived, not hand-flip)."
   },
   "productionOracleGate": {
     "status": "ready",
@@ -56,13 +56,13 @@
     "captureActor": "Desk engagement owner (Fantasy402 manager-boot authenticated capture)",
     "generalFixture": "tests/fixtures/f402-general-oracle-production.json",
     "nestedSnapshotSha256": "1e88babb5e9be02c1a613d4379a714015e7c3e083cc28e0a3839b56076abe8a6",
-    "requires": "proof-verified HAR → extract:f402-oracle-fixture (--proof) → pin nestedSnapshotSha256 → verify:manifest-consistency (derived status)."
+    "requires": "proof-verified HAR \u2192 extract:f402-oracle-fixture (--proof) \u2192 pin nestedSnapshotSha256 \u2192 verify:manifest-consistency (derived status)."
   },
   "varianceGate": {
     "status": "ready",
     "ownerRole": "operator",
     "minimumCaptures": 3,
     "indexPath": "docs/evidence/captures/har/manager-boot-variance-index.json",
-    "requires": "N≥3 redacted manager-boot HARs indexed; characterize variance before parser hardening (manager-boot-variance-gate.md)."
+    "requires": "N\u22653 redacted manager-boot HARs indexed; characterize variance before parser hardening (manager-boot-variance-gate.md)."
   }
 }

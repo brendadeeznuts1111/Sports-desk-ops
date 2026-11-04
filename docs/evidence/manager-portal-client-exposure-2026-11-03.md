@@ -7,10 +7,12 @@ loads. **All observations below are read-only.** No credential was used, no requ
 and no exploit was fired.
 
 Measured 2026-11-03 between 20:30 and 20:50 America/Chicago by fetching the public document and
-its assets with an unauthenticated client. The bundle is the one this repo already pins:
+its assets with an unauthenticated client. The controller bundle is the one this repo already pins:
 `verification/manager-boot-oracle/pinned/manager.js`, sha256
-`82c3d4ec9b5d0531b06219761f0b40db20bf07f4f4250eacdabf527e90e01937`, `1.0.280`, 100,121 bytes —
-re-fetched live during this measurement and byte-identical to the pin.
+`82c3d4ec9b5d0531b06219761f0b40db20bf07f4f4250eacdabf527e90e01937`, 100,121 bytes — re-fetched live
+during this measurement and byte-identical to the pin. The vendor moved the shell to **1.0.281**
+during the measurement (`setting/version.js` changed; `manager.js`, `util.js`, `security.js` did not),
+and the oracle pin records that delta.
 
 ## 1. Path #1 — stored XSS in the hierarchy search (player → agent browser)
 
@@ -98,10 +100,14 @@ observed leak.
 
 Detection for path #3, in the existing pin pattern:
 
-- `verification/manager-boot-oracle/pinned/cdn-manifest.json` — 90 assets (86 discovered from the
-  live document, 4 explicit), each with sha256, `sha384-…` SRI, byte count and provenance. The asset
-  set is discovered from the live document, so a **new** script is unpinned until reviewed and a
-  **removed** one is reported stale.
+- `verification/manager-boot-oracle/pinned/cdn-manifest.json` — 135 assets at vendor `1.0.281`:
+  86 discovered from the live document, 4 explicit, and 45 same-origin `/app/` AMD modules. Each
+  carries sha256, `sha384-…` SRI, byte count and provenance. The document set is discovered, so a
+  **new** script is unpinned until reviewed and a **removed** one is reported stale.
+- Same-origin `/app/` modules are pinned too (`sameOrigin: true`, fetched with the AMD loader's
+  `?bust=<vendor version>`). The controller's `define`/`require` list is parsed from its pinned
+  bytes, so a module the loader can reach is either pinned or reported as `app_module_unpinned` —
+  the same gate logic on a different origin.
 - `bun run pin:cdn` — fetch live bytes and compare; exit 1 on drift, 2 on an unreachable origin.
   `bun run pin:cdn:update --vendor-version <version>` — recompute and review the diff (human action,
   never CI). It refuses a byte change without a version bump; the review procedure is
@@ -135,6 +141,10 @@ Limits, stated so nobody relies on a control that does not exist:
   changes it; the durable alternative is to self-host a reviewed copy. This trade-off is deliberate
   and reversible.
 - Pinning is detection. It does not stop a bad asset from being served; it makes the swap visible.
+- `/app/` module pinning follows the controller's static `require([...])` lists. A module loaded
+  only through string concatenation (for example the `external-view` path's
+  `require(["manager/module/" + name])`) cannot be enumerated from bytes; it is covered by the
+  module-allowlist seam, not by the pin gate.
 - CSS-internal targets are recorded and diffed, not pinned byte-for-byte. A new font/image host is
   visible at the next check, not blocked by it.
 
