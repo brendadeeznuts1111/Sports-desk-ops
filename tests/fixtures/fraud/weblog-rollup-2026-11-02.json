@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "kind": "f402-weblog",
+  "window": {
+    "fromMs": 1793491200400,
+    "toMs": 1793663999661
+  },
+  "rows": {
+    "total": 1000,
+    "parsed": 998,
+    "malformed": 2,
+    "distinctTemplates": 11,
+    "unrecognized": 0
+  },
+  "operations": {
+    "deviceClasses": {
+      "M": 600,
+      "D": 0,
+      "UNKNOWN": 398
+    },
+    "actions": {
+      "LOGIN": 500
+    }
+  },
+  "ipClasses": {
+    "OTHER": 700,
+    "ICLOUD_RELAY": 200,
+    "BOT_RING_140_248": 98,
+    "UNKNOWN": 2
+  },
+  "sessions": {
+    "logins": 40,
+    "sessions": 500,
+    "sessionsWithWagers": 60,
+    "zeroWagerSessions": 440
+  },
+  "join": {
+    "totalWindowWagers": 80,
+    "matched": 70,
+    "persistentUnmatched": 5,
+    "nonWebChannel": 5,
+    "futureJoins": 0,
+    "deltaQuantilesMs": {
+      "p01": 1000,
+      "p05": 2000,
+      "p50": 60000,
+      "p95": 900000,
+      "p99": 1200000
+    }
+  },
+  "flags": {
+    "executionSnipers": 12,
+    "sniperTwins": 3,
+    "lineShoppers": 440,
+    "botRingAccounts": 7,
+    "crossOfficeBeards": 4
+  },
+  "gates": [
+    {
+      "gate": "GATE-WL-01",
+      "status": "pass",
+      "detail": "parsed=998 malformed=2 total=1000"
+    },
+    {
+      "gate": "GATE-WL-02",
+      "status": "fail",
+      "detail": "matched=70 persistent=5 nonWeb=5 total=80"
+    },
+    {
+      "gate": "GATE-WL-03",
+      "status": "pass",
+      "detail": "negativeControlsChecked=7 falsePositiveFlags=0"
+    },
+    {
+      "gate": "GATE-WL-04",
+      "status": "pass",
+      "detail": "rollup carries counts/hashes only"
+    }
+  ],
+  "negativeControls": {
+    "checked": 7,
+    "falsePositiveFlags": 0
+  },
+  "sourceSha256": "fixture"
+}

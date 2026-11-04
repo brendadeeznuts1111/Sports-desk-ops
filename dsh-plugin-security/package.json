@@ -1,0 +1,42 @@
+{
+  "name": "dsh-plugin-sportsdesk-security",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SportsDesk security/fraud console: eight read-only Host tools over GSLive getBetReport logs, F402 live ticket captures, F402 weblog rollups and GSLive activity artifacts — source provenance, IP-network clusters, named sportsbook-fraud detectors, a transparent weak-label risk model (fit/score), account dossiers and a prior-art research catalog — plus a Web UI operator page. Read-only; no live betting, no order path.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "verify-load.mjs",
+    "README.md",
+    "RESEARCH.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

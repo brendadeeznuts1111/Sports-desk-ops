@@ -7,56 +7,106 @@
  * already holds Plugins and Schedules) plus the main-column page that entry
  * selects (`main`, keyed by the same id — the sidebar owns the button, its
  * hover tooltip, and the selected state; the plugin owns the glyph and the
- * page).
+ * page). The glyph also carries a small status dot, so the desk's health is
+ * visible from the sidebar without opening the page. The dot tracks the
+ * service phase only; the overview cards never move it.
  *
- * The page reports the local SportsDesk webview service on
- * http://127.0.0.1:4020 from its own routes, never from an assumed state:
+ * ONE MEASURED SNAPSHOT, FIVE SOURCES
  *
- *   /health     the service's health document (status, uptimeSeconds, runtime)
- *   /api/status a route the CURRENT checkout defines (services/sportsdesk_webview_server.ts)
+ * A single module-level store probes five read-only desk routes on every tick
+ * and keeps each source's own measured state:
  *
- * The classification is the same one the `sportsdesk_status` Host tool and the
- * composer desk-status row use:
+ *   health    /health              status, uptimeSeconds, runtime, ingress, nodeEnv
+ *   status    /api/status          checks, memory/pid, Telegram mode, report schedules
+ *   graph     /api/graph/summary   market feed, repo head/branch/routes, evidence ages
+ *   kpis      /api/kpis            agents, pending, ticker, customer book (+ provenance)
+ *   execution /api/execution/plan  paper mode, kill switch, live policy, risk, venues,
+ *                                  decisions and blocked reasons
+ *
+ * Every source is probed independently and the snapshot keeps, per source:
+ * `{ status: "ok"|"error"|"missing", httpStatus, body, latencyMs, url, transport,
+ * error, receivedAt, checkedAt }`. A failed source keeps the last good payload it
+ * received (labelled with `receivedAt`) and never blanks another source's card.
+ * A source that previously loaded therefore stays visible, marked stale, instead
+ * of collapsing to a zero. A source that never answered renders its explicit
+ * state and reason — never a fake 0 or "—" as if measured.
+ *
+ * CLASSIFICATION (unchanged from v1)
  *
  *   fetch rejected / non-2xx /health        -> "service down"
  *   /health ok AND (/api/status 404 OR the
  *   /health body has no `ingress` field)    -> "stale build"
- *   /health ok AND /api/status answers      -> "current"
- *   /health ok AND /api/status probe failed -> "status probe failed" (unknown)
+ *   /health ok AND /api/status answers 2xx  -> "current"
+ *   /health ok AND the /api/status probe
+ *   rejected or answered non-2xx (not 404)  -> "status probe failed" (unknown)
  *
  * The /api/status probe and the `ingress` field check exist because the running
  * service can answer /health while predating the checkout: measured on
  * 2026-11-02, /health answered with uptimeSeconds 457596 and no `ingress`, and
  * /api/status returned 404 — a naive health check says "healthy"; this page
- * says "stale build".
+ * says "stale build". When it is stale or down, the page names what is missing
+ * and the exact command that restarts the service from the checkout.
  *
- * CORS: the service grants cross-origin reads only for origins listed in
- * `SPORTSDESK_ALLOWED_ORIGINS` (`services/sportsdesk_webview_server.ts:691-722`;
- * the blanket `*` grant was removed on 2026-11-01). Measured 2026-11-03 with
- * that variable set to the GUI origin: /health and /api/status answer
- * `Access-Control-Allow-Origin: https://dsh.bookdeskops.com` and carry
- * `Vary: Origin`, while an unlisted origin gets no grant. So the page can read
- * the service only when the operator's env lists the origin the Harness Web UI
- * is served from. A browser cannot distinguish a CORS refusal from a network
- * failure; if the fetch rejects, the page says "service down" rather than
- * inventing a healthy state.
+ * THE OVERVIEW (read-only, measured)
+ *
+ * Three overview cards render the desk: **Market feed** (feed status/data mode/
+ * WSS/poll sequence/last updated/age/stale + counts + repo head/branch/routes
+ * and evidence ages), **Book** (agents, pending, ticker, customer book, each with
+ * its provenance age/stale) and **Paper execution** (mode, kill switch, live
+ * policy, risk vs caps with a meter, venues' liveReady + reason, decisions
+ * blocked/not blocked, blocked reasons, plan provenance). An attention banner
+ * above the cards names only conditions the payloads actually measured: service
+ * phase, market-feed staleness/WSS/status, kill switch, non-paper mode, live
+ * execution enabled, and a failed/missing overview source. Each card carries a
+ * `live`/`stale`/`error`/`missing` chip plus its measurement time and age.
+ *
+ * EVIDENCE (measured 2026-11-04 18:13 UTC on the desk host, the captured
+ * payloads in Scratch/plugin-v2/desk-panel/):
+ *   /health            200, uptimeSeconds 1038, runtime "Bun v1.4.4 (arm64-darwin)",
+ *                      ingress {"proxied":false,"trustProxy":false}, nodeEnv "development"
+ *   /api/status        200, {"ok":true,"status":"serving","checks":{"telegram":"ok"},
+ *                      "telegram":{"status":{"mode":"simulation",...},"schedules":[6 rows]}}
+ *   /api/graph/summary 200 (~12.7 KB), feed.status "measured", dataMode "PARTIAL",
+ *                      wssIngestion "not_ingested", ageSeconds 23339, stale true,
+ *                      repo.head "d3a10ed", repo.branch "main", repo.routes.served 63
+ *   /api/kpis          200 (~4.2 KB), agents 2276/1679/596, pending 2/2,
+ *                      ticker 16 wagers, customer book 220 customers / 1100 tickets
+ *   /api/execution/plan 200 (~10 KB), mode "paper", killSwitch false,
+ *                      policy.liveEnabled false, both venues liveReady false,
+ *                      13 decisions all blocked (no_book, maker_edge_below_min)
+ *
+ * TRANSPORT / CORS
+ *
+ * The Harness Web UI is tunnel-served (`--public-url`, Cloudflare Access), so
+ * the browser's `127.0.0.1` is the VIEWER's machine, not the desk host. Every
+ * source therefore probes the same-origin proxy first —
+ * `/api/sportsdesk-desk/{health,status,graph,kpis,execution}`, which the Host
+ * half (`index.js`) forwards to the loopback service — and falls back to the
+ * direct loopback URL (a Harness without the Host half, or a browser on the
+ * desk host). A 404 carrying the Host half's `x-sportsdesk-desk-proxy` marker is
+ * authoritative ("the desk service itself answered", so the source is missing
+ * from this build); an unmarked 404 is the generic Harness 404 and may fall
+ * back. Each card shows which transport answered and the raw URL, so a transport
+ * problem is visible instead of looking like a dead service.
  *
  * RULES FOLLOWED
  *
- * - The factory is side-effect free: it only builds components and constants.
- *   The locale dictionary and the slot registrations are owned effects created
- *   in `apply`.
- * - Probing is mount-scoped: the page measures when it opens and on Refresh,
- *   cancels the in-flight request and its timeout on unmount, and never
- *   publishes a result after disposal. It does not poll in the background.
+ * - The factory is side-effect free: it only builds components, the store and
+ *   constants. Probing starts from a component mount and its disposal is an
+ *   owned effect created in `apply`.
+ * - The poll loop is owned by `apply`'s effect: disposal clears the timer,
+ *   removes the visibility listener, aborts the in-flight probe (and every
+ *   request it started), and forbids any later publish. A superseded request
+ *   (manual Refresh) never publishes.
  * - Visible copy goes through the Client locale service (`ctx.locale.register`
- *   plus the `locale:` registration option, which supplies `t`), with a
- *   dictionary fallback so a missing seat renders English instead of a key.
+ *   plus the `locale:` registration option, which supplies `t`), in both
+ *   built-in locales, with a dictionary fallback so a missing seat renders
+ *   English instead of a key.
  * - Chrome uses only host `--dsw-alias-*` color tokens; the sidebar glyph uses
- *   `currentColor`, so the host owns its color in every theme.
+ *   `currentColor`, so the host owns its color in every theme. No literal
+ *   colors, no `innerHTML`, no app-root or page-body writes.
  * - React comes from the browser module table. No Harness Client package is
- *   imported, the app root is not touched, and no DOM outside the slot entry is
- *   written.
+ *   imported and no DOM outside the slot entries is read or written.
  */
 
 window.__ModuleLoader__.load({
@@ -71,10 +121,33 @@ window.__ModuleLoader__.load({
     const PANEL_ID = "sportsdesk";
     /** The local webview service the desk runs with `bun run serve`. */
     const SERVICE_URL = "http://127.0.0.1:4020";
-    const HEALTH_URL = `${SERVICE_URL}/health`;
-    const STATUS_URL = `${SERVICE_URL}/api/status`;
-    /** Per-request bound; the service answers /health in a few milliseconds when up. */
+    /** Same-origin proxy routes registered by the Host half (`index.js`). */
+    const PROXY_BASE = "/api/sportsdesk-desk";
+    /**
+     * The Harness Web UI is tunnel-served (`--public-url`), so `127.0.0.1` in the
+     * browser is the VIEWER's machine, not the desk host. Probe the same-origin
+     * proxy first — the Harness server runs on the desk host — and fall back to the
+     * loopback URL for a browser that is on the desk host itself.
+     */
+    const HEALTH_URLS = [`${PROXY_BASE}/health`, `${SERVICE_URL}/health`];
+    const STATUS_URLS = [`${PROXY_BASE}/status`, `${SERVICE_URL}/api/status`];
+    const GRAPH_URLS = [
+      `${PROXY_BASE}/graph`,
+      `${SERVICE_URL}/api/graph/summary`,
+    ];
+    const KPIS_URLS = [`${PROXY_BASE}/kpis`, `${SERVICE_URL}/api/kpis`];
+    const EXECUTION_URLS = [
+      `${PROXY_BASE}/execution`,
+      `${SERVICE_URL}/api/execution/plan`,
+    ];
+    /** Per-request bound; the service answers in a few milliseconds when up. */
     const PROBE_TIMEOUT_MS = 4_000;
+    /** Live cadence while the tab is visible. Hidden tabs stop probing. */
+    const POLL_MS = 15_000;
+    /** The exact restart the stale-build callout asks for. */
+    const RESTART_COMMAND = "PORT=4020 bun run serve";
+    /** Bound the rendered schedule list; the service currently reports six. */
+    const MAX_SCHEDULES = 12;
 
     /**
      * Visible copy. Both built-in locales are supplied because the locale
@@ -86,9 +159,11 @@ window.__ModuleLoader__.load({
         panel: "SportsDesk",
         title: "SportsDesk desk",
         description:
-          "The local SportsDesk webview service the desk runs with bun run serve.",
+          "Read-only overview of the local SportsDesk webview service and its desk: service phase, market feed, book KPIs and the paper execution plan, measured from its own read-only routes.",
         refresh: "Refresh",
         open: "Open desk",
+        retry: "Retry",
+        lastMeasured: "Last measured",
         checking: "checking…",
         current: "current",
         stale: "stale build (uptime {uptime})",
@@ -100,17 +175,129 @@ window.__ModuleLoader__.load({
         uptime: "Uptime",
         checked: "Checked",
         never: "—",
+        justNow: "just now",
+        agoSeconds: "{seconds}s ago",
+        agoMinutes: "{minutes}m ago",
+        agoHours: "{hours}h ago",
+        source: "Source",
+        sourceProxy: "Harness proxy",
+        sourceDirect: "direct loopback",
+        service: "Service",
+        runtime: "Runtime",
+        memory: "Memory",
+        pid: "PID",
+        environment: "Environment",
+        telegram: "Telegram",
+        checks: "Checks",
+        probes: "Probes",
+        reports: "Scheduled reports",
+        enabledCount: "{enabled} of {total} enabled",
+        off: "off",
+        on: "on",
         what: "What this checks",
         explain:
-          "/health answers first. /api/status is a route the current checkout defines, so a 404 there — or a /health body without an ingress field — means the running service predates this checkout, and the page shows “stale build” rather than “healthy”.",
+          "/health answers first. /api/status is a route the current checkout defines, so a 404 there — or a /health body without an ingress field — means the running service predates this checkout, and the page shows “stale build” rather than “healthy”. Each overview card measures its own source, so one failed source never blanks the others.",
+        liveNote:
+          "The sidebar dot and this page share one probe loop: five read-only routes every {seconds}s while the browser tab is visible, and immediately when it becomes visible again. Refresh measures now.",
+        staleFixTitle: "Stale build",
+        staleFixLead: "The running service predates this checkout. Missing:",
+        missingStatus: "/api/status route (HTTP 404)",
+        missingIngress: "ingress field on /health",
+        restartHint:
+          "Restart it from the checkout so it serves the current routes:",
+        startHint: "Start it from the checkout:",
+        downHint: "The Harness host could not reach the desk service at {url}.",
+        probeFailedHint:
+          "The service answered /health, but the /api/status probe did not answer with a usable status, so the running build cannot be confirmed.",
+        rawHealth: "Raw /health",
+        rawStatus: "Raw /api/status",
+        dotTitle: "SportsDesk desk: {status}",
+        marketFeed: "Market feed",
+        book: "Book",
+        executionCard: "Paper execution",
+        stateLive: "live",
+        stateStale: "stale",
+        stateError: "error",
+        stateMissing: "missing",
+        stateChecking: "checking",
+        measuredAt: "measured {time} · {age}",
+        attemptedAt: "last attempt {time} · {age}",
+        lastGood: "Showing the last good measurement from {time}",
+        feedMissing: "feed section missing",
+        feedStatus: "Feed status",
+        dataMode: "Data mode",
+        wssIngestion: "WSS ingestion",
+        pollSequence: "Poll sequence",
+        updated: "Updated",
+        age: "Age",
+        counts: "Counts",
+        activeWallets: "Active wallets",
+        openLegs: "Open legs",
+        openExposure: "Open exposure",
+        pendingBets: "Pending bets",
+        ipClusters: "IP clusters",
+        repo: "Repo",
+        branch: "Branch",
+        head: "HEAD",
+        routesServed: "Routes served",
+        citations: "Citations",
+        citationSummary: "{checked} citations · {age}",
+        tests: "Tests",
+        testsSummary: "{tests} tests · {age}",
+        agentsBlock: "Agents",
+        total: "Total",
+        agentsField: "Agents",
+        masters: "Masters",
+        pendingBlock: "Pending",
+        wagers: "Wagers",
+        tickets: "Tickets",
+        wagered: "Wagered",
+        toWin: "To win",
+        tickerBlock: "Ticker",
+        liveField: "Live",
+        risk: "Risk",
+        volume: "Volume",
+        customerBook: "Customer book",
+        customers: "Customers",
+        customerNet: "Customer net",
+        provenance: "provenance",
+        partial: "partial",
+        mode: "Mode",
+        killSwitch: "Kill switch",
+        liveExecution: "Live execution",
+        dailyPlanned: "Daily planned",
+        openIntents: "Open intents",
+        marketExposure: "Market exposure",
+        none: "none",
+        venues: "Venues",
+        liveReady: "live-ready",
+        notLiveReady: "not live-ready",
+        decisions: "Decisions",
+        blocked: "Blocked",
+        notBlocked: "Not blocked",
+        decisionsUnknown: "Unknown — the payload has no decisions array.",
+        blockedReasons: "Blocked reasons",
+        planStale: "The plan was computed from stale market data",
+        rawJson: "Raw JSON",
+        attentionTitle: "Attention",
+        attentionItem: "{source}: {detail}",
+        attentionJoin: "; ",
+        attentionFeedStale: "stale ({age})",
+        attentionWss: "WSS not ingested ({value})",
+        attentionFeedStatus: "status is {status}",
+        attentionKill: "kill switch is on",
+        attentionMode: "mode is {mode}",
+        attentionLive: "live execution is enabled",
       },
       zh: {
         panel: "SportsDesk",
         title: "SportsDesk 工作台",
         description:
-          "本地 SportsDesk webview 服务（工作台以 bun run serve 启动）。",
+          "本地 SportsDesk webview 服务及其工作台的只读概览：服务状态、市场行情、账目指标与模拟执行计划，均来自其自身的只读路由。",
         refresh: "刷新",
         open: "打开工作台",
+        retry: "重试",
+        lastMeasured: "最近测量",
         checking: "检测中…",
         current: "已是最新",
         stale: "旧构建（已运行 {uptime}）",
@@ -122,20 +309,547 @@ window.__ModuleLoader__.load({
         uptime: "运行时长",
         checked: "检查时间",
         never: "—",
+        justNow: "刚刚",
+        agoSeconds: "{seconds} 秒前",
+        agoMinutes: "{minutes} 分钟前",
+        agoHours: "{hours} 小时前",
+        source: "数据来源",
+        sourceProxy: "Harness 代理",
+        sourceDirect: "直接回环",
+        service: "服务",
+        runtime: "运行时",
+        memory: "内存",
+        pid: "进程号",
+        environment: "环境",
+        telegram: "Telegram",
+        checks: "检查项",
+        probes: "探测耗时",
+        reports: "定时报告",
+        enabledCount: "已启用 {enabled}/{total}",
+        off: "停用",
+        on: "启用",
         what: "检测内容",
         explain:
-          "先检查 /health；/api/status 是当前代码定义的路由。该路由返回 404，或 /health 响应缺少 ingress 字段，说明运行中的服务早于此代码版本，因此显示“旧构建”而不是“正常”。",
+          "先检查 /health；/api/status 是当前代码定义的路由。该路由返回 404，或 /health 响应缺少 ingress 字段，说明运行中的服务早于此代码版本，因此显示“旧构建”而不是“正常”。概览中的每张卡片各自测量自己的数据源，单个源失败不会清空其他卡片。",
+        liveNote:
+          "左侧状态点与本页共用同一探测循环：浏览器标签页可见时每 {seconds} 秒探测五个只读路由，重新可见时立刻补测。点击“刷新”立即探测。",
+        staleFixTitle: "旧构建",
+        staleFixLead: "运行中的服务早于当前代码版本，缺少：",
+        missingStatus: "/api/status 路由（HTTP 404）",
+        missingIngress: "/health 响应中的 ingress 字段",
+        restartHint: "请在当前代码目录中重启服务，使其提供最新路由：",
+        startHint: "请在当前代码目录中启动服务：",
+        downHint: "Harness 主机无法连接位于 {url} 的 desk 服务。",
+        probeFailedHint:
+          "服务已响应 /health，但 /api/status 探测没有得到可用的状态，因此无法确认运行中的构建版本。",
+        rawHealth: "原始 /health",
+        rawStatus: "原始 /api/status",
+        dotTitle: "SportsDesk 工作台：{status}",
+        marketFeed: "市场行情",
+        book: "账目",
+        executionCard: "模拟执行",
+        stateLive: "实时",
+        stateStale: "过期",
+        stateError: "错误",
+        stateMissing: "缺失",
+        stateChecking: "检测中",
+        measuredAt: "测量于 {time} · {age}",
+        attemptedAt: "最近尝试 {time} · {age}",
+        lastGood: "显示 {time} 收到的上一次有效测量",
+        feedMissing: "缺少 feed 段",
+        feedStatus: "行情状态",
+        dataMode: "数据模式",
+        wssIngestion: "WSS 接入",
+        pollSequence: "轮询序号",
+        updated: "更新时间",
+        age: "数据年龄",
+        counts: "计数",
+        activeWallets: "活跃钱包",
+        openLegs: "未平仓腿",
+        openExposure: "未平敞口",
+        pendingBets: "待处理投注",
+        ipClusters: "IP 簇",
+        repo: "代码仓库",
+        branch: "分支",
+        head: "HEAD",
+        routesServed: "已提供路由",
+        citations: "引用",
+        citationSummary: "{checked} 条引用 · {age}",
+        tests: "测试",
+        testsSummary: "{tests} 项测试 · {age}",
+        agentsBlock: "代理",
+        total: "总计",
+        agentsField: "代理",
+        masters: "主代理",
+        pendingBlock: "待处理",
+        wagers: "注单",
+        tickets: "票数",
+        wagered: "投注额",
+        toWin: "可赢",
+        tickerBlock: "行情",
+        liveField: "进行中",
+        risk: "风险",
+        volume: "成交量",
+        customerBook: "客户账本",
+        customers: "客户数",
+        customerNet: "客户净额",
+        provenance: "来源",
+        partial: "部分",
+        mode: "模式",
+        killSwitch: "紧急开关",
+        liveExecution: "实盘执行",
+        dailyPlanned: "每日计划",
+        openIntents: "未结意图",
+        marketExposure: "市场敞口",
+        none: "无",
+        venues: "场所",
+        liveReady: "可实盘",
+        notLiveReady: "不可实盘",
+        decisions: "决策",
+        blocked: "已阻断",
+        notBlocked: "未阻断",
+        decisionsUnknown: "未知 — 响应中没有 decisions 数组。",
+        blockedReasons: "阻断原因",
+        planStale: "该计划基于过期的市场数据计算",
+        rawJson: "原始 JSON",
+        attentionTitle: "注意",
+        attentionItem: "{source}：{detail}",
+        attentionJoin: "；",
+        attentionFeedStale: "过期（{age}）",
+        attentionWss: "WSS 未接入（{value}）",
+        attentionFeedStatus: "状态为 {status}",
+        attentionKill: "紧急开关已开启",
+        attentionMode: "模式为 {mode}",
+        attentionLive: "已启用实盘执行",
       },
     };
 
-    /** Initial state is "checking", never "healthy": nothing has been measured yet. */
+    /**
+     * Initial state is "checking", never "healthy": nothing has been measured
+     * yet. Every measured field is null until a probe fills it, so the page can
+     * render only what the service actually answered. `sources` stays null per
+     * source until that source has been probed at least once.
+     */
     const INITIAL = Object.freeze({
       phase: "checking",
       uptimeSeconds: null,
       httpStatus: null,
       checkedAt: null,
       error: null,
+      source: null,
+      healthLatencyMs: null,
+      statusLatencyMs: null,
+      healthUrl: null,
+      statusUrl: null,
+      runtime: null,
+      pid: null,
+      memoryRss: null,
+      nodeEnv: null,
+      telegramMode: null,
+      telegramReason: null,
+      checks: null,
+      schedules: null,
+      missing: [],
+      sources: Object.freeze({
+        health: null,
+        status: null,
+        graph: null,
+        kpis: null,
+        execution: null,
+      }),
     });
+
+    /** Empty sources map for a probe that threw before any source settled. */
+    function emptySources() {
+      return {
+        health: null,
+        status: null,
+        graph: null,
+        kpis: null,
+        execution: null,
+      };
+    }
+
+    /* --- small boundary readers: never invent data ----------------------- */
+
+    /** @param {unknown} value @returns {value is Record<string, unknown>} */
+    function isRecord(value) {
+      return (
+        typeof value === "object" && value !== null && !Array.isArray(value)
+      );
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {number | null}
+     */
+    function readNumber(value) {
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {boolean | null} the boolean, or null when the field is absent/other
+     */
+    function readBoolean(value) {
+      return typeof value === "boolean" ? value : null;
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {string | null}
+     */
+    function readText(value) {
+      return typeof value === "string" && value.length > 0 ? value : null;
+    }
+
+    /**
+     * Read `/api/status.checks` into display rows; anything that is not a plain
+     * string/number/boolean value is ignored rather than rendered as "[object]".
+     * @param {unknown} value
+     * @returns {{ name: string, value: string }[] | null}
+     */
+    function readChecks(value) {
+      if (!isRecord(value)) return null;
+      const rows = [];
+      for (const [name, raw] of Object.entries(value)) {
+        if (
+          typeof raw === "string" ||
+          typeof raw === "number" ||
+          typeof raw === "boolean"
+        ) {
+          rows.push({ name, value: String(raw) });
+        }
+      }
+      return rows.length > 0 ? rows : null;
+    }
+
+    /**
+     * Read `/api/status.telegram.schedules` into display rows plus the enabled
+     * count. Rows without a usable name/time are skipped; the rendered list is
+     * bounded, while `enabled`/`total` still describe the full array.
+     * @param {unknown} value
+     * @returns {{ rows: { id: string, name: string, when: string, enabled: boolean }[], enabled: number, total: number } | null}
+     */
+    function readSchedules(value) {
+      if (!Array.isArray(value)) return null;
+      const rows = [];
+      let enabled = 0;
+      for (const item of value) {
+        if (!isRecord(item)) continue;
+        const name = readText(item.name);
+        const when = readText(item.scheduleTime);
+        if (name === null || when === null) continue;
+        const isEnabled = item.enabled === true;
+        if (isEnabled) enabled += 1;
+        rows.push({
+          id: readText(item.id) ?? `schedule-${rows.length}`,
+          name,
+          when,
+          enabled: isEnabled,
+        });
+      }
+      if (rows.length === 0) return null;
+      return {
+        rows: rows.slice(0, MAX_SCHEDULES),
+        enabled,
+        total: rows.length,
+      };
+    }
+
+    /**
+     * Read a `provenance` block (the kpis and execution payload carry one per
+     * measurement). Returns null when the block carries nothing usable, so the
+     * page omits the row instead of printing "unknown age".
+     * @param {unknown} value
+     * @returns {{ ageSeconds: number | null, stale: boolean | null, partial: boolean | null, asOf: string | null, source: string | null } | null}
+     */
+    function readProvenance(value) {
+      if (!isRecord(value)) return null;
+      const ageSeconds = readNumber(value.ageSeconds);
+      const stale = readBoolean(value.stale);
+      const partial = readBoolean(value.partial);
+      const asOf = readText(value.asOf);
+      const source = readText(value.source);
+      if (
+        ageSeconds === null &&
+        stale === null &&
+        partial === null &&
+        asOf === null &&
+        source === null
+      ) {
+        return null;
+      }
+      return { ageSeconds, stale, partial, asOf, source };
+    }
+
+    /**
+     * Read one `kpis.<block>`: the numeric fields the card renders plus the
+     * provenance. Null when the block is absent or measures nothing, so a card
+     * never invents an empty block.
+     * @param {unknown} value
+     * @param {readonly string[]} fields
+     */
+    function readKpiBlock(value, fields) {
+      if (!isRecord(value)) return null;
+      /** @type {Record<string, number | null>} */
+      const values = {};
+      let measured = false;
+      for (const field of fields) {
+        const number = readNumber(value[field]);
+        values[field] = number;
+        if (number !== null) measured = true;
+      }
+      const provenance = readProvenance(value.provenance);
+      if (!measured && provenance === null) return null;
+      return { values, provenance };
+    }
+
+    /**
+     * Read `/api/graph/summary` into the card's measured view. Every field is
+     * independently optional: a payload with only a feed (or only a repo) is a
+     * partial measurement, not a malformed one.
+     * @param {unknown} body
+     */
+    function readGraphPayload(body) {
+      if (!isRecord(body)) return null;
+      const feedRaw = isRecord(body.feed) ? body.feed : null;
+      const feed =
+        feedRaw === null
+          ? null
+          : {
+              status: readText(feedRaw.status),
+              dataMode: readText(feedRaw.dataMode),
+              wssIngestion: readText(feedRaw.wssIngestion),
+              pollSequence: readNumber(feedRaw.pollSequence),
+              lastUpdatedIso:
+                readText(feedRaw.lastUpdatedIso) ?? readText(feedRaw.asOf),
+              ageSeconds: readNumber(feedRaw.ageSeconds),
+              stale: readBoolean(feedRaw.stale),
+              counts: readFeedCounts(feedRaw.counts),
+            };
+      const repoRaw = isRecord(body.repo) ? body.repo : null;
+      const repo = repoRaw === null ? null : readRepo(repoRaw);
+      if (feed === null && repo === null) return null;
+      return { feed, repo };
+    }
+
+    /**
+     * @param {unknown} value
+     */
+    function readFeedCounts(value) {
+      if (!isRecord(value)) return null;
+      const counts = {
+        activeWallets: readNumber(value.activeWallets),
+        openLegs: readNumber(value.openLegs),
+        openExposureUsd: readNumber(value.openExposureUsd),
+        pendingBets: readNumber(value.pendingBets),
+        ipClusters: readNumber(value.ipClusters),
+      };
+      for (const number of Object.values(counts)) {
+        if (number !== null) return counts;
+      }
+      return null;
+    }
+
+    /**
+     * @param {Record<string, unknown>} raw
+     */
+    function readRepo(raw) {
+      const routes = isRecord(raw.routes) ? raw.routes : null;
+      const citationsRaw = isRecord(raw.citations) ? raw.citations : null;
+      const citations =
+        citationsRaw === null
+          ? null
+          : {
+              checked: readNumber(citationsRaw.checked),
+              ageSeconds: readNumber(citationsRaw.ageSeconds),
+              stale: readBoolean(citationsRaw.stale),
+              asOf: readText(citationsRaw.asOf),
+            };
+      const checks = isRecord(raw.checks) ? raw.checks : null;
+      const testsRaw = checks && isRecord(checks.tests) ? checks.tests : null;
+      const tests =
+        testsRaw === null
+          ? null
+          : {
+              tests: readNumber(testsRaw.tests),
+              failures: readNumber(testsRaw.failures),
+              ageSeconds: readNumber(testsRaw.ageSeconds),
+            };
+      const repo = {
+        branch: readText(raw.branch),
+        head: readText(raw.head),
+        routesServed: routes === null ? null : readNumber(routes.served),
+        citations,
+        tests,
+      };
+      if (
+        repo.branch === null &&
+        repo.head === null &&
+        repo.routesServed === null &&
+        repo.citations === null &&
+        repo.tests === null
+      ) {
+        return null;
+      }
+      return repo;
+    }
+
+    /**
+     * Read `/api/kpis` into the four measured blocks. Each block is rendered from
+     * its own fields and provenance; a missing block is omitted, never zeroed.
+     * @param {unknown} body
+     */
+    function readKpisPayload(body) {
+      if (!isRecord(body)) return null;
+      const raw = isRecord(body.kpis) ? body.kpis : null;
+      if (raw === null) return null;
+      const payload = {
+        agents: readKpiBlock(raw.agents, ["total", "agents", "masters"]),
+        pending: readKpiBlock(raw.pending, [
+          "wagers",
+          "tickets",
+          "wageredCents",
+          "toWinCents",
+        ]),
+        ticker: readKpiBlock(raw.ticker, [
+          "wagers",
+          "live",
+          "riskCents",
+          "volumeCents",
+        ]),
+        customerBook: readKpiBlock(raw.customerBook, [
+          "customers",
+          "tickets",
+          "customerNetCents",
+        ]),
+      };
+      if (
+        payload.agents === null &&
+        payload.pending === null &&
+        payload.ticker === null &&
+        payload.customerBook === null
+      ) {
+        return null;
+      }
+      return payload;
+    }
+
+    /**
+     * Read `risk.marketExposureUsd`. A present empty object is a measured
+     * "no entries" (an empty array here); null means the field was absent.
+     * @param {unknown} value
+     * @returns {{ market: string, amount: number }[] | null}
+     */
+    function readExposure(value) {
+      if (!isRecord(value)) return null;
+      const entries = [];
+      for (const [market, raw] of Object.entries(value)) {
+        const amount = readNumber(raw);
+        if (amount !== null) entries.push({ market, amount });
+      }
+      return entries;
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {{ id: string, liveReady: boolean | null, reason: string | null }[] | null}
+     */
+    function readVenues(value) {
+      if (!isRecord(value)) return null;
+      const venues = [];
+      for (const [id, raw] of Object.entries(value)) {
+        if (!isRecord(raw)) continue;
+        venues.push({
+          id,
+          liveReady: readBoolean(raw.liveReady),
+          reason: readText(raw.reason),
+        });
+      }
+      return venues;
+    }
+
+    /**
+     * Count `decisions[].blocked`. Null when the payload has no decisions array
+     * — the card renders that as "unknown", never as "0 blocked".
+     * @param {unknown} value
+     * @returns {{ total: number, blocked: number, notBlocked: number, known: number } | null}
+     */
+    function readDecisions(value) {
+      if (!Array.isArray(value)) return null;
+      let blocked = 0;
+      let notBlocked = 0;
+      for (const item of value) {
+        if (!isRecord(item)) continue;
+        if (item.blocked === true) blocked += 1;
+        else if (item.blocked === false) notBlocked += 1;
+      }
+      return {
+        total: value.length,
+        blocked,
+        notBlocked,
+        known: blocked + notBlocked,
+      };
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {{ reason: string, count: number }[] | null}
+     */
+    function readBlockedReasons(value) {
+      if (!isRecord(value)) return null;
+      const rows = [];
+      for (const [reason, raw] of Object.entries(value)) {
+        const count = readNumber(raw);
+        if (count !== null && count > 0) rows.push({ reason, count });
+      }
+      return rows.length > 0 ? rows : null;
+    }
+
+    /**
+     * Read `/api/execution/plan`. Every field is optional: a plan with only a
+     * mode, or only venues, still renders the measured part.
+     * @param {unknown} body
+     */
+    function readExecutionPayload(body) {
+      if (!isRecord(body)) return null;
+      const policyRaw = isRecord(body.policy) ? body.policy : null;
+      const riskRaw = isRecord(body.risk) ? body.risk : null;
+      const payload = {
+        mode: readText(body.mode),
+        killSwitch: readBoolean(body.killSwitch),
+        liveEnabled:
+          policyRaw === null ? null : readBoolean(policyRaw.liveEnabled),
+        maxOpenIntents:
+          policyRaw === null ? null : readNumber(policyRaw.maxOpenIntents),
+        risk:
+          riskRaw === null
+            ? null
+            : {
+                dailyPlannedUsd: readNumber(riskRaw.dailyPlannedUsd),
+                dailyCapUsd: readNumber(riskRaw.dailyCapUsd),
+                openIntents: readNumber(riskRaw.openIntents),
+                marketExposureUsd: readExposure(riskRaw.marketExposureUsd),
+              },
+        venues: readVenues(body.venues),
+        decisions: readDecisions(body.decisions),
+        blockedReasons: readBlockedReasons(body.blockedReasons),
+        provenance: readProvenance(body.provenance),
+      };
+      if (
+        payload.mode === null &&
+        payload.killSwitch === null &&
+        payload.liveEnabled === null &&
+        payload.risk === null &&
+        payload.venues === null &&
+        payload.decisions === null &&
+        payload.provenance === null
+      ) {
+        return null;
+      }
+      return payload;
+    }
 
     /**
      * English fallback used only if the slot hands the component no `t` seat.
@@ -151,90 +865,480 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /* --- transport: measure, never assume -------------------------------- */
+
     /**
-     * GET one URL and keep its HTTP status; a non-JSON body is null, not an
-     * invented healthy payload.
+     * GET one URL with a per-request bound and keep its HTTP status; a non-JSON
+     * body is null, not an invented healthy payload. The request aborts when
+     * either its own bound expires or the outer probe signal aborts (disposal or
+     * a superseded manual Refresh).
      * @param {string} url
-     * @param {AbortSignal} signal
+     * @param {AbortSignal | null | undefined} signal
      */
     async function getJson(url, signal) {
-      const response = await fetch(url, {
-        signal,
-        headers: { accept: "application/json" },
-      });
-      let body = null;
-      try {
-        body = await response.json();
-      } catch {
-        body = null;
+      const startedAt = Date.now();
+      const controller = new AbortController();
+      const forwardAbort = () => controller.abort();
+      if (signal !== undefined && signal !== null) {
+        if (signal.aborted) controller.abort();
+        else signal.addEventListener("abort", forwardAbort, { once: true });
       }
-      return { status: response.status, ok: response.ok, body };
+      const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: { accept: "application/json" },
+        });
+        const latencyMs = Math.max(0, Math.round(Date.now() - startedAt));
+        const proxied =
+          typeof response.headers?.get === "function" &&
+          response.headers.get("x-sportsdesk-desk-proxy") !== null;
+        let body = null;
+        try {
+          body = await response.json();
+        } catch {
+          body = null;
+        }
+        return {
+          status: response.status,
+          body,
+          url,
+          latencyMs,
+          proxied,
+        };
+      } finally {
+        clearTimeout(timer);
+        if (
+          signal !== undefined &&
+          signal !== null &&
+          typeof signal.removeEventListener === "function"
+        ) {
+          signal.removeEventListener("abort", forwardAbort);
+        }
+      }
     }
 
     /**
-     * Measure the service once and classify it. Every rejection is caught here,
-     * so nothing throws to the caller's render path.
-     * @param {AbortSignal} signal
-     * @returns {Promise<typeof INITIAL>} the measured state.
+     * One per-source measured state. `body` is only set for a 2xx JSON object;
+     * every failure carries its reason so the card never renders a bare state.
+     * @param {"error" | "missing"} status
+     * @param {number | null} httpStatus
+     * @param {string} error
+     * @param {string} url
+     * @param {"proxy" | "direct" | null} transport
+     * @param {number | null} latencyMs
      */
-    async function measure(signal) {
-      const checkedAt = Date.now();
-      let health;
-      try {
-        health = await getJson(HEALTH_URL, signal);
-      } catch (error) {
-        return {
-          phase: "down",
-          uptimeSeconds: null,
-          httpStatus: null,
-          checkedAt,
-          error: String((error && error.message) || error),
-        };
-      }
-      if (!health.ok) {
-        return {
-          phase: "down",
-          uptimeSeconds: null,
-          httpStatus: health.status,
-          checkedAt,
-          error: `HTTP ${health.status}`,
-        };
-      }
-
-      const body = health.body;
-      const uptimeSeconds =
-        body && typeof body.uptimeSeconds === "number"
-          ? body.uptimeSeconds
-          : null;
-      const hasIngress =
-        body !== null && typeof body === "object"
-          ? Object.hasOwn(body, "ingress")
-          : false;
-
-      let status = null;
-      try {
-        status = await getJson(STATUS_URL, signal);
-      } catch {
-        status = null;
-      }
-      if (status === null) {
-        return {
-          phase: "unknown",
-          uptimeSeconds,
-          httpStatus: null,
-          checkedAt,
-          error: "status probe failed",
-        };
-      }
-      const stale = status.status === 404 || hasIngress === false;
+    function failedSource(
+      status,
+      httpStatus,
+      error,
+      url,
+      transport,
+      latencyMs,
+    ) {
       return {
-        phase: stale ? "stale" : "current",
-        uptimeSeconds,
-        httpStatus: status.status,
-        checkedAt,
-        error: null,
+        status,
+        httpStatus,
+        body: null,
+        latencyMs,
+        url,
+        transport,
+        error,
+        receivedAt: null,
+        checkedAt: Date.now(),
       };
     }
+
+    /**
+     * `HTTP 500 · upstream detail` style reason, so a card names the status the
+     * proxy forwarded (and the proxy's own error token when it sent one).
+     * @param {{ status: number, body: unknown }} result
+     */
+    function errorReason(result) {
+      const detail = isRecord(result.body) ? readText(result.body.error) : null;
+      const base = `HTTP ${result.status}`;
+      return detail === null ? base : `${base} · ${detail}`;
+    }
+
+    /**
+     * GET the first working URL in order. The proxy URL is tried first; an
+     * UNMARKED proxy 404 means "this Harness did not register the route", so the
+     * loopback URL is tried next. A 404 carrying the Host half's proxy marker is
+     * authoritative: the desk service itself answered, so the source is
+     * `missing` ("not in this build"), not down. The same holds for a 404 from a
+     * proxy known to be present (the health probe already answered through it;
+     * the Host half registers all five routes together).
+     * @param {readonly string[]} urls
+     * @param {AbortSignal | null | undefined} signal
+     * @param {boolean} proxyKnownPresent
+     */
+    async function probeSource(urls, signal, proxyKnownPresent) {
+      let lastError = null;
+      let lastHttpStatus = null;
+      let lastUrl = urls[urls.length - 1];
+      let lastTransport = null;
+      let lastLatencyMs = null;
+      for (let index = 0; index < urls.length; index += 1) {
+        const url = urls[index];
+        const transport = index === 0 ? "proxy" : "direct";
+        let result;
+        try {
+          result = await getJson(url, signal);
+        } catch (error) {
+          lastError = error;
+          lastUrl = url;
+          lastTransport = transport;
+          continue;
+        }
+        lastUrl = url;
+        lastTransport = transport;
+        lastLatencyMs = result.latencyMs;
+        lastHttpStatus = result.status;
+        if (result.status >= 200 && result.status < 300) {
+          if (!isRecord(result.body)) {
+            return failedSource(
+              "error",
+              result.status,
+              "non-JSON body",
+              url,
+              transport,
+              result.latencyMs,
+            );
+          }
+          return {
+            status: "ok",
+            httpStatus: result.status,
+            body: result.body,
+            latencyMs: result.latencyMs,
+            url,
+            transport,
+            error: null,
+            receivedAt: Date.now(),
+            checkedAt: Date.now(),
+          };
+        }
+        const proxy404 = transport === "proxy" && result.status === 404;
+        const authoritative =
+          !proxy404 ||
+          result.proxied === true ||
+          proxyKnownPresent ||
+          index === urls.length - 1;
+        if (!authoritative) {
+          // The generic Harness 404: this Host half may predate the route. The
+          // loopback fallback can only work on a browser on the desk host.
+          lastError = new Error(`HTTP ${result.status}`);
+          continue;
+        }
+        if (result.status === 404) {
+          return failedSource(
+            "missing",
+            result.status,
+            "HTTP 404",
+            url,
+            transport,
+            result.latencyMs,
+          );
+        }
+        return failedSource(
+          "error",
+          result.status,
+          errorReason(result),
+          url,
+          transport,
+          result.latencyMs,
+        );
+      }
+      const message = String(
+        (lastError && lastError.message) || lastError || "probe failed",
+      );
+      return failedSource(
+        "error",
+        lastHttpStatus,
+        message,
+        lastUrl,
+        lastTransport,
+        lastLatencyMs,
+      );
+    }
+
+    /**
+     * Keep the last good payload of a source that failed later: the card shows
+     * it labelled stale with the time it was received. Only a payload that was
+     * actually measured is carried forward.
+     * @param {object | null | undefined} previous
+     * @param {object} measured
+     */
+    function withLastGood(previous, measured) {
+      if (measured.status === "ok") return measured;
+      if (previous === null || previous === undefined) return measured;
+      if (!isRecord(previous.body)) return measured;
+      return {
+        ...measured,
+        body: previous.body,
+        receivedAt:
+          typeof previous.receivedAt === "number" ? previous.receivedAt : null,
+      };
+    }
+
+    /**
+     * Measure all five sources once. Every probe catches its own failure, so one
+     * slow or failed source cannot blank the others; the returned snapshot
+     * carries the per-source states plus the service-phase fields v1 classified.
+     * @param {AbortSignal} signal
+     * @param {typeof INITIAL} previous - the last published snapshot, used to
+     *   keep last-good payloads when a source fails.
+     * @returns {Promise<typeof INITIAL>}
+     */
+    async function measure(signal, previous) {
+      const previousSources = previous?.sources ?? null;
+      const healthState = await probeSource(HEALTH_URLS, signal, false);
+      const proxyKnownPresent =
+        healthState.status === "ok" && healthState.transport === "proxy";
+      const statusState = await probeSource(
+        STATUS_URLS,
+        signal,
+        proxyKnownPresent,
+      );
+      const graphState = await probeSource(
+        GRAPH_URLS,
+        signal,
+        proxyKnownPresent,
+      );
+      const kpisState = await probeSource(KPIS_URLS, signal, proxyKnownPresent);
+      const executionState = await probeSource(
+        EXECUTION_URLS,
+        signal,
+        proxyKnownPresent,
+      );
+      /** @type {Record<string, object | null>} */
+      const sources = {
+        health: healthState,
+        status: statusState,
+        graph: withLastGood(previousSources?.graph, graphState),
+        kpis: withLastGood(previousSources?.kpis, kpisState),
+        execution: withLastGood(previousSources?.execution, executionState),
+      };
+      const checkedAt = Date.now();
+      const healthBody =
+        healthState.status === "ok" && isRecord(healthState.body)
+          ? healthState.body
+          : null;
+
+      // /health is the gate: nothing about the running build can be confirmed
+      // when it did not answer with a JSON object.
+      if (healthState.status !== "ok" || healthBody === null) {
+        return {
+          ...INITIAL,
+          phase: "down",
+          checkedAt,
+          httpStatus: healthState.httpStatus,
+          error:
+            healthState.error ??
+            (healthState.httpStatus === null
+              ? "health probe failed"
+              : `HTTP ${healthState.httpStatus}`),
+          healthUrl: healthState.url,
+          healthLatencyMs: healthState.latencyMs,
+          source: healthState.transport,
+          sources,
+        };
+      }
+
+      const uptimeSeconds = readNumber(healthBody.uptimeSeconds);
+      const runtime = readText(healthBody.runtime);
+      const nodeEnv = readText(healthBody.nodeEnv);
+      const hasIngress = Object.hasOwn(healthBody, "ingress");
+      const statusBody =
+        statusState.status === "ok" && isRecord(statusState.body)
+          ? statusState.body
+          : null;
+
+      /** @type {string[]} */
+      const missing = [];
+      let phase;
+      let statusError = null;
+      if (statusState.status === "error") {
+        // The service answered /health but /api/status could not be read, so
+        // the running build cannot be confirmed — unknown, never "current".
+        phase = "unknown";
+        statusError = statusState.error;
+      } else if (statusState.status === "missing") {
+        phase = "stale";
+        missing.push("status");
+      } else {
+        phase = "current";
+      }
+      if (!hasIngress) missing.push("ingress");
+      if (missing.length > 0) phase = "stale";
+
+      const healthData =
+        statusBody !== null && isRecord(statusBody.health)
+          ? statusBody.health
+          : null;
+      const memory =
+        healthData !== null && isRecord(healthData.memory)
+          ? healthData.memory
+          : null;
+      const telegram =
+        statusBody !== null && isRecord(statusBody.telegram)
+          ? statusBody.telegram
+          : null;
+      const telegramStatus =
+        telegram !== null && isRecord(telegram.status) ? telegram.status : null;
+      const statusHttp =
+        statusState.httpStatus === null ? null : statusState.httpStatus;
+
+      return {
+        ...INITIAL,
+        phase,
+        uptimeSeconds,
+        httpStatus: statusHttp,
+        checkedAt,
+        error: statusError,
+        source: healthState.transport,
+        healthLatencyMs: healthState.latencyMs,
+        statusLatencyMs: statusState.latencyMs,
+        healthUrl: healthState.url,
+        statusUrl: statusState.url,
+        runtime: runtime ?? readText(healthData && healthData.runtime),
+        pid: readNumber(healthData && healthData.pid),
+        memoryRss: readNumber(memory && memory.rss),
+        nodeEnv,
+        telegramMode: readText(telegramStatus && telegramStatus.mode),
+        telegramReason: readText(telegramStatus && telegramStatus.modeReason),
+        checks: readChecks(statusBody && statusBody.checks),
+        schedules: readSchedules(telegram && telegram.schedules),
+        missing,
+        sources,
+      };
+    }
+
+    /* --- shared live store ----------------------------------------------- */
+
+    /** Last measured snapshot; replaced only when a probe publishes. */
+    let snapshot = INITIAL;
+    const listeners = new Set();
+    let disposed = false;
+    let polling = false;
+    let pollTimer = null;
+    let inFlight = null;
+    let visibilityListening = false;
+
+    /** @param {typeof INITIAL} next */
+    function publish(next) {
+      snapshot = next;
+      for (const listener of listeners) listener();
+    }
+
+    function subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
+
+    function getSnapshot() {
+      return snapshot;
+    }
+
+    /** Subscribe a component to the one measured snapshot. */
+    function useStatus() {
+      return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    }
+
+    function isHidden() {
+      return (
+        typeof document !== "undefined" && document.visibilityState === "hidden"
+      );
+    }
+
+    /**
+     * Probe once. A superseded probe is aborted and never publishes; a probe
+     * that finishes after disposal never publishes either. `showChecking`
+     * resets the visible state only for a manual Refresh (poll ticks keep the
+     * last measurement on screen instead of flashing "checking…"); the last good
+     * per-source payloads survive the reset so a failed Refresh cannot blank a
+     * card that previously measured.
+     * @param {boolean} showChecking
+     */
+    async function runProbe(showChecking) {
+      if (disposed) return;
+      const previous = inFlight;
+      if (previous !== null) previous.abort();
+      const controller = new AbortController();
+      inFlight = controller;
+      const previousSnapshot = snapshot;
+      if (showChecking) publish({ ...INITIAL });
+      let next;
+      try {
+        next = await measure(controller.signal, previousSnapshot);
+      } catch (error) {
+        next = {
+          ...INITIAL,
+          phase: "down",
+          checkedAt: Date.now(),
+          error: String((error && error.message) || error),
+          sources: emptySources(),
+        };
+      }
+      if (disposed || inFlight !== controller) return;
+      inFlight = null;
+      publish(next);
+    }
+
+    /**
+     * Start the single poll loop. Called from a component effect; idempotent
+     * while running. Disposal is owned by `apply`'s effect.
+     */
+    function startPolling() {
+      if (polling || disposed) return;
+      polling = true;
+      if (
+        !visibilityListening &&
+        typeof document !== "undefined" &&
+        typeof document.addEventListener === "function"
+      ) {
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        visibilityListening = true;
+      }
+      void runProbe(false).finally(scheduleNext);
+    }
+
+    function scheduleNext() {
+      if (!polling || disposed) return;
+      // A visibility catch-up can start a second probe while the superseded one
+      // is still settling; both `.finally` paths land here, so keep exactly one
+      // pending tick instead of allowing a duplicate poll timer.
+      if (pollTimer !== null) clearTimeout(pollTimer);
+      pollTimer = setTimeout(() => {
+        pollTimer = null;
+        if (!polling || disposed) return;
+        if (isHidden()) {
+          scheduleNext();
+          return;
+        }
+        void runProbe(false).finally(scheduleNext);
+      }, POLL_MS);
+    }
+
+    /** A hidden tab stops probing; becoming visible probes immediately. */
+    function onVisibilityChange() {
+      if (!polling || disposed) return;
+      if (isHidden()) {
+        if (pollTimer !== null) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+        return;
+      }
+      if (pollTimer !== null) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      void runProbe(false).finally(scheduleNext);
+    }
+
+    /* --- formatting ------------------------------------------------------ */
 
     /**
      * Compact uptime for the status line: 5d, 7h, 42m.
@@ -268,6 +1372,165 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Byte count for the memory row. RSS values are the ones a desk operator
+     * reads, so keep them in MiB unless the process grows into GiB.
+     * @param {number | null} bytes
+     * @returns {string | null}
+     */
+    function formatBytes(bytes) {
+      if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) {
+        return null;
+      }
+      const mib = bytes / (1024 * 1024);
+      if (mib >= 1024) return `${(mib / 1024).toFixed(1)} GiB`;
+      return `${mib >= 100 ? Math.round(mib) : mib.toFixed(1)} MiB`;
+    }
+
+    /**
+     * A count with thousands separators ("2,276"), or null when unmeasured.
+     * @param {number | null} value
+     * @returns {string | null}
+     */
+    function formatCount(value) {
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      return Math.round(value).toLocaleString("en-US");
+    }
+
+    /**
+     * Cents to a dollar string ("$224,065.00", "-$1,181,208.94"). The payload
+     * stores money in cents; rendering the raw number would be a 100x error.
+     * @param {number | null} cents
+     * @returns {string | null}
+     */
+    function formatUsdFromCents(cents) {
+      if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
+      const negative = cents < 0;
+      const dollars = Math.abs(cents) / 100;
+      const text = dollars.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      return `${negative ? "-" : ""}$${text}`;
+    }
+
+    /**
+     * A USD amount already expressed in dollars ("$5,000", "$64,139").
+     * @param {number | null} value
+     * @returns {string | null}
+     */
+    function formatUsd(value) {
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      const negative = value < 0;
+      const text = Math.abs(value).toLocaleString("en-US", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+      return `${negative ? "-" : ""}$${text}`;
+    }
+
+    /**
+     * An ISO timestamp as a short UTC wall clock: "2026-11-04 11:44:39 UTC".
+     * The feed's own "asOf" values are UTC instants; printing them in the
+     * viewer's local zone would silently shift the evidence.
+     * @param {string | null} iso
+     * @returns {string | null}
+     */
+    function formatIsoUtc(iso) {
+      if (typeof iso !== "string" || iso.length === 0) return null;
+      const ms = Date.parse(iso);
+      if (!Number.isFinite(ms)) return iso;
+      const text = new Date(ms).toISOString();
+      return `${text.slice(0, 10)} ${text.slice(11, 19)} UTC`;
+    }
+
+    /**
+     * An age in seconds as a relative label ("just now", "12s ago", "6h ago").
+     * @param {(key: string, params?: object) => string} t
+     * @param {number | null} seconds
+     * @returns {string | null}
+     */
+    function formatAgeSeconds(t, seconds) {
+      if (typeof seconds !== "number" || !Number.isFinite(seconds)) {
+        return null;
+      }
+      const value = Math.max(0, Math.round(seconds));
+      if (value <= 2) return t("justNow");
+      if (value < 60) return t("agoSeconds", { seconds: value });
+      const minutes = Math.floor(value / 60);
+      if (minutes < 60) return t("agoMinutes", { minutes });
+      return t("agoHours", { hours: Math.floor(minutes / 60) });
+    }
+
+    /**
+     * Relative age for the live "Checked" cell.
+     * @param {(key: string, params?: object) => string} t
+     * @param {number | null} checkedAt
+     * @param {number} now
+     * @returns {string}
+     */
+    function formatAgo(t, checkedAt, now) {
+      if (checkedAt === null) return t("never");
+      return (
+        formatAgeSeconds(t, Math.max(0, (now - checkedAt) / 1_000)) ??
+        t("never")
+      );
+    }
+
+    /**
+     * A wall-clock time from a millisecond timestamp.
+     * @param {number | null} ms
+     * @returns {string | null}
+     */
+    function formatClock(ms) {
+      if (typeof ms !== "number" || !Number.isFinite(ms)) return null;
+      return new Date(ms).toLocaleTimeString();
+    }
+
+    /**
+     * A short git revision: the feed reports an already-short head, but a full
+     * SHA must stay readable in a card.
+     * @param {string | null} head
+     * @returns {string | null}
+     */
+    function shortHead(head) {
+      if (typeof head !== "string" || head.length === 0) return null;
+      return head.length > 10 ? head.slice(0, 7) : head;
+    }
+
+    /**
+     * The feed's effective age: its own `ageSeconds` when measured, otherwise
+     * derived from `lastUpdatedIso`. Null when neither is available.
+     * @param {{ ageSeconds: number | null, lastUpdatedIso: string | null }} feed
+     * @param {number} now
+     * @returns {number | null}
+     */
+    function feedAgeSeconds(feed, now) {
+      if (feed.ageSeconds !== null) return feed.ageSeconds;
+      if (feed.lastUpdatedIso === null) return null;
+      const ms = Date.parse(feed.lastUpdatedIso);
+      if (!Number.isFinite(ms)) return null;
+      return Math.max(0, (now - ms) / 1_000);
+    }
+
+    /**
+     * A provenance block's age, preferring its measured `ageSeconds` and falling
+     * back to its `asOf` timestamp.
+     * @param {(key: string, params?: object) => string} t
+     * @param {{ ageSeconds: number | null, asOf: string | null }} provenance
+     * @param {number} now
+     * @returns {string | null}
+     */
+    function provenanceAge(t, provenance, now) {
+      if (provenance.ageSeconds !== null) {
+        return formatAgeSeconds(t, provenance.ageSeconds);
+      }
+      if (provenance.asOf === null) return null;
+      const ms = Date.parse(provenance.asOf);
+      if (!Number.isFinite(ms)) return null;
+      return formatAgeSeconds(t, Math.max(0, (now - ms) / 1_000));
+    }
+
+    /**
      * Readable status text for one measured state.
      * @param {(key: string, params?: object) => string} t
      * @param {typeof INITIAL} state
@@ -291,64 +1554,1319 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Mount-scoped probe state. Opening the page measures once; Refresh
-     * measures again. The in-flight request and its timeout are cancelled on
-     * unmount, and a superseded request never publishes.
-     * @returns {[typeof INITIAL, () => Promise<void>]}
+     * @param {(key: string, params?: object) => string} t
+     * @param {"proxy" | "direct" | null} source
+     * @returns {string}
      */
-    function useDeskStatus() {
-      const [state, setState] = React.useState(INITIAL);
-      const alive = React.useRef(true);
-      const inFlight = React.useRef(null);
-
-      const refresh = React.useCallback(async () => {
-        const previous = inFlight.current;
-        if (previous !== null) previous.abort();
-        const controller = new AbortController();
-        inFlight.current = controller;
-        if (alive.current) setState(INITIAL);
-
-        const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-        let next;
-        try {
-          next = await measure(controller.signal);
-        } catch (error) {
-          next = {
-            phase: "down",
-            uptimeSeconds: null,
-            httpStatus: null,
-            checkedAt: Date.now(),
-            error: String((error && error.message) || error),
-          };
-        } finally {
-          clearTimeout(timer);
-        }
-        if (!alive.current || inFlight.current !== controller) return;
-        inFlight.current = null;
-        setState(next);
-      }, []);
-
-      React.useEffect(() => {
-        alive.current = true;
-        void refresh();
-        return () => {
-          alive.current = false;
-          const pending = inFlight.current;
-          inFlight.current = null;
-          if (pending !== null) pending.abort();
-        };
-      }, [refresh]);
-
-      return [state, refresh];
+    function sourceText(t, source) {
+      if (source === "proxy") return t("sourceProxy");
+      if (source === "direct") return t("sourceDirect");
+      return t("never");
     }
 
-    /** One metadata cell in the status card. */
-    function metaRow(label, value) {
+    /** A seconds clock used only by relative age cells. */
+    function useNow(intervalMs) {
+      const [now, setNow] = React.useState(() => Date.now());
+      React.useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), intervalMs);
+        return () => clearInterval(timer);
+      }, [intervalMs]);
+      return now;
+    }
+
+    /* --- shared rendering ------------------------------------------------ */
+
+    /** One metadata cell in the status/detail card. */
+    function metaRow(label, value, key) {
       return h(
         "div",
-        { className: "spsd-meta-item", key: label },
+        { className: "spsd-meta-item", key: key ?? label },
         h("dt", null, label),
         h("dd", null, value),
+      );
+    }
+
+    /** One label/value cell in an overview card. */
+    function kvRow(label, value, key, tone) {
+      return h(
+        "div",
+        { className: "spsd-kv-item", key: key ?? label },
+        h("dt", { className: "spsd-kv-label" }, label),
+        h(
+          "dd",
+          {
+            className: "spsd-kv-value",
+            "data-tone": tone === undefined ? undefined : tone,
+          },
+          value,
+        ),
+      );
+    }
+
+    /**
+     * @param {(object | null)[]} rows
+     * @param {string} key
+     */
+    function kvList(rows, key) {
+      if (rows.length === 0) return null;
+      return h("dl", { className: "spsd-kv", key }, rows);
+    }
+
+    /**
+     * A card sub-section (Counts, Repo, Agents, …).
+     * @param {string | null} title
+     * @param {(object | null)[]} children
+     * @param {string} key
+     */
+    function subSection(title, children, key) {
+      return h(
+        "div",
+        { className: "spsd-block", key },
+        title === null ? null : h("h3", { className: "spsd-h3" }, title),
+        children,
+      );
+    }
+
+    /** A small tone-tagged chip ("stale", "not live-ready", …). */
+    function chip(text, tone, key) {
+      return h(
+        "span",
+        {
+          className: "spsd-chip",
+          key: key ?? text,
+          "data-tone": tone === undefined ? undefined : tone,
+        },
+        text,
+      );
+    }
+
+    /** A one-line note inside a card; the tone only changes the text color. */
+    function noteLine(text, tone, key) {
+      return h(
+        "p",
+        {
+          className: "spsd-note-line",
+          key: key ?? text,
+          "data-tone": tone === undefined ? undefined : tone,
+        },
+        text,
+      );
+    }
+
+    /**
+     * Links to the exact URLs that answered, so the raw documents are one click
+     * away when a classification needs evidence.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof INITIAL} state
+     */
+    function rawLinks(t, state) {
+      const links = [];
+      if (state.healthUrl !== null) {
+        links.push(
+          h(
+            "a",
+            {
+              key: "health",
+              className: "spsd-link",
+              href: state.healthUrl,
+              target: "_blank",
+              rel: "noreferrer",
+            },
+            t("rawHealth"),
+          ),
+        );
+      }
+      if (state.statusUrl !== null) {
+        links.push(
+          h(
+            "a",
+            {
+              key: "status",
+              className: "spsd-link",
+              href: state.statusUrl,
+              target: "_blank",
+              rel: "noreferrer",
+            },
+            t("rawStatus"),
+          ),
+        );
+      }
+      if (links.length === 0) return null;
+      return h("div", { className: "spsd-links" }, links);
+    }
+
+    /**
+     * The recovery callout: what the running service is missing and the exact
+     * command that fixes it. Rendered only for stale/down/unknown states, so a
+     * healthy page stays quiet.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof INITIAL} state
+     */
+    function recoveryCallout(t, state) {
+      if (
+        state.phase !== "stale" &&
+        state.phase !== "down" &&
+        state.phase !== "unknown"
+      ) {
+        return null;
+      }
+      const content = [];
+      if (state.phase === "stale") {
+        content.push(
+          h("h2", { key: "heading" }, t("staleFixTitle")),
+          h("p", { key: "lead" }, t("staleFixLead")),
+          h(
+            "ul",
+            { key: "missing" },
+            state.missing.map((kind) =>
+              h(
+                "li",
+                { key: kind },
+                kind === "status" ? t("missingStatus") : t("missingIngress"),
+              ),
+            ),
+          ),
+          h(
+            "p",
+            { key: "fix", className: "spsd-callout-fix" },
+            t("restartHint"),
+          ),
+          h(
+            "code",
+            { key: "command", className: "spsd-command" },
+            RESTART_COMMAND,
+          ),
+        );
+      } else if (state.phase === "down") {
+        content.push(
+          h("h2", { key: "heading" }, t("down")),
+          h("p", { key: "lead" }, t("downHint", { url: SERVICE_URL })),
+          state.error === null
+            ? null
+            : h("p", { key: "error", className: "spsd-error" }, state.error),
+          h("p", { key: "fix", className: "spsd-callout-fix" }, t("startHint")),
+          h(
+            "code",
+            { key: "command", className: "spsd-command" },
+            RESTART_COMMAND,
+          ),
+        );
+      } else {
+        content.push(
+          h("h2", { key: "heading" }, t("unknown")),
+          h("p", { key: "lead" }, t("probeFailedHint")),
+          state.error === null
+            ? null
+            : h("p", { key: "error", className: "spsd-error" }, state.error),
+        );
+      }
+      const links = rawLinks(t, state);
+      if (links !== null) content.push(links);
+      return h(
+        "section",
+        {
+          className: "spsd-callout",
+          "data-phase": state.phase,
+          key: "recovery",
+        },
+        content,
+      );
+    }
+
+    /**
+     * The Service card: the /api/status fields, rendered only when the service
+     * actually answered them.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof INITIAL} state
+     */
+    function serviceCard(t, state) {
+      const rows = [];
+      if (state.runtime !== null)
+        rows.push(metaRow(t("runtime"), state.runtime));
+      if (state.pid !== null) rows.push(metaRow(t("pid"), String(state.pid)));
+      if (state.memoryRss !== null) {
+        rows.push(
+          metaRow(t("memory"), formatBytes(state.memoryRss) ?? t("never")),
+        );
+      }
+      if (state.nodeEnv !== null) {
+        rows.push(metaRow(t("environment"), state.nodeEnv));
+      }
+      if (state.telegramMode !== null) {
+        rows.push(
+          metaRow(
+            t("telegram"),
+            h(
+              "span",
+              { title: state.telegramReason ?? undefined },
+              state.telegramMode,
+            ),
+          ),
+        );
+      }
+      if (state.checks !== null) {
+        rows.push(
+          metaRow(
+            t("checks"),
+            state.checks
+              .map((check) => `${check.name} ${check.value}`)
+              .join(" · "),
+          ),
+        );
+      }
+      const probeBits = [];
+      if (state.healthLatencyMs !== null) {
+        probeBits.push(`/health ${state.healthLatencyMs} ms`);
+      }
+      if (state.statusLatencyMs !== null) {
+        probeBits.push(`/api/status ${state.statusLatencyMs} ms`);
+      }
+      if (probeBits.length === 1) {
+        rows.push(metaRow(t("probes"), probeBits[0]));
+      } else if (probeBits.length > 1) {
+        // Two latency lines read better than one wrapped cell at narrow widths.
+        rows.push(
+          metaRow(
+            t("probes"),
+            h(
+              "span",
+              null,
+              probeBits.map((bit) =>
+                h("span", { key: bit, style: { display: "block" } }, bit),
+              ),
+            ),
+          ),
+        );
+      }
+      if (rows.length === 0) return null;
+
+      const blocks = [
+        h("h2", { key: "heading", className: "spsd-h2" }, t("service")),
+        h("dl", { key: "meta", className: "spsd-meta spsd-meta-flat" }, rows),
+      ];
+      if (state.schedules !== null) {
+        blocks.push(
+          h(
+            "div",
+            { key: "schedules", className: "spsd-list" },
+            h(
+              "h3",
+              null,
+              t("reports"),
+              " ",
+              h(
+                "span",
+                { className: "spsd-list-count" },
+                t("enabledCount", {
+                  enabled: state.schedules.enabled,
+                  total: state.schedules.total,
+                }),
+              ),
+            ),
+            h(
+              "ul",
+              null,
+              state.schedules.rows.map((row) =>
+                h(
+                  "li",
+                  { key: row.id },
+                  h("span", { className: "spsd-list-name" }, row.name),
+                  h(
+                    "span",
+                    { className: "spsd-when" },
+                    row.enabled ? row.when : `${row.when} · ${t("off")}`,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      return h(
+        "section",
+        { className: "spsd-card spsd-section", key: "service" },
+        blocks,
+      );
+    }
+
+    /* --- overview: per-source state and cards ---------------------------- */
+
+    /** @param {object | null} source */
+    function isSourceOk(source) {
+      return source !== null && source.status === "ok";
+    }
+
+    /**
+     * A card state derived from the measured source only: the transport state
+     * first, then the payload's own staleness flags.
+     * @param {object | null} source
+     * @param {boolean} stale
+     * @returns {"checking" | "ok" | "stale" | "error" | "missing"}
+     */
+    function cardState(source, stale) {
+      if (source === null) return "checking";
+      if (source.status === "error") return "error";
+      if (source.status === "missing") return "missing";
+      return stale ? "stale" : "ok";
+    }
+
+    /**
+     * @param {(key: string, params?: object) => string} t
+     * @param {"checking" | "ok" | "stale" | "error" | "missing"} state
+     */
+    function cardStateText(t, state) {
+      switch (state) {
+        case "ok":
+          return t("stateLive");
+        case "stale":
+          return t("stateStale");
+        case "error":
+          return t("stateError");
+        case "missing":
+          return t("stateMissing");
+        default:
+          return t("stateChecking");
+      }
+    }
+
+    /**
+     * The market feed's own freshness: its stale flag, a not-"measured" status,
+     * or WSS not ingested. Only measured flags count — absent fields are not
+     * invented into staleness.
+     * @param {ReturnType<typeof readGraphPayload>} payload
+     */
+    function isGraphStale(payload) {
+      if (payload === null || payload.feed === null) return false;
+      const feed = payload.feed;
+      if (feed.stale === true) return true;
+      if (feed.status !== null && feed.status !== "measured") return true;
+      if (feed.wssIngestion !== null && feed.wssIngestion !== "ingested") {
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Any KPI block's provenance stale flag makes the book card stale.
+     * @param {ReturnType<typeof readKpisPayload>} payload
+     */
+    function isKpisStale(payload) {
+      if (payload === null) return false;
+      const blocks = [
+        payload.agents,
+        payload.pending,
+        payload.ticker,
+        payload.customerBook,
+      ];
+      return blocks.some(
+        (block) =>
+          block !== null &&
+          block.provenance !== null &&
+          block.provenance.stale === true,
+      );
+    }
+
+    /**
+     * @param {ReturnType<typeof readExecutionPayload>} payload
+     */
+    function isExecutionStale(payload) {
+      return (
+        payload !== null &&
+        payload.provenance !== null &&
+        payload.provenance.stale === true
+      );
+    }
+
+    /**
+     * The measured-at line for one card: the received payload's wall clock and
+     * age when the card shows data, the last probe attempt when it does not.
+     * @param {(key: string, params?: object) => string} t
+     * @param {object | null} source
+     * @param {number} now
+     * @param {"checking" | "ok" | "stale" | "error" | "missing"} state
+     * @returns {string | null}
+     */
+    function cardMetaText(t, source, now, state) {
+      if (source === null) return null;
+      const received =
+        (state === "ok" || state === "stale") && source.receivedAt !== null
+          ? source.receivedAt
+          : null;
+      if (received !== null) {
+        const time = formatClock(received) ?? t("never");
+        const age = formatAgeSeconds(t, (now - received) / 1_000) ?? t("never");
+        return t("measuredAt", { time, age });
+      }
+      const attempted =
+        typeof source.checkedAt === "number" ? source.checkedAt : null;
+      if (attempted === null) return null;
+      const time = formatClock(attempted) ?? t("never");
+      const age = formatAgeSeconds(t, (now - attempted) / 1_000) ?? t("never");
+      return t("attemptedAt", { time, age });
+    }
+
+    /**
+     * One overview card shell: title, state chip, measured-at line, the card
+     * body, and — on error/missing — the reason plus a whole-snapshot Retry.
+     * When a previous payload exists it stays visible under the failure, marked
+     * with the time it was received.
+     * @param {object} spec
+     */
+    function overviewCard(spec) {
+      const { t, source, title, state, bodyBlocks, now, hasData, retry, key } =
+        spec;
+      const rows = [
+        h(
+          "div",
+          { className: "spsd-ovhead", key: "head" },
+          h("h2", { className: "spsd-ovtitle" }, title),
+          h(
+            "span",
+            {
+              className: "spsd-chip-state",
+              "data-state": state,
+            },
+            cardStateText(t, state),
+          ),
+        ),
+      ];
+      const meta = cardMetaText(t, source, now, state);
+      if (meta !== null) {
+        rows.push(h("p", { className: "spsd-ovmeta", key: "meta" }, meta));
+      }
+      if (state === "error" || state === "missing") {
+        rows.push(
+          h(
+            "p",
+            { className: "spsd-source-error", key: "reason" },
+            source.error ??
+              (source.httpStatus === null
+                ? t("never")
+                : `HTTP ${source.httpStatus}`),
+          ),
+        );
+        if (hasData) {
+          const received = formatClock(source.receivedAt) ?? t("never");
+          rows.push(
+            h(
+              "p",
+              { className: "spsd-lastgood", key: "last-good" },
+              t("lastGood", { time: received }),
+            ),
+          );
+        }
+        rows.push(...bodyBlocks);
+        rows.push(
+          h(
+            "button",
+            {
+              key: "retry",
+              type: "button",
+              className: "spsd-btn spsd-retry",
+              onClick: retry,
+            },
+            t("retry"),
+          ),
+        );
+      } else {
+        rows.push(...bodyBlocks);
+      }
+      if (source !== null && source.url !== null) {
+        rows.push(
+          h(
+            "div",
+            { className: "spsd-ovfoot", key: "foot" },
+            h(
+              "a",
+              {
+                className: "spsd-link",
+                href: source.url,
+                target: "_blank",
+                rel: "noreferrer",
+              },
+              t("rawJson"),
+            ),
+            source.transport === null
+              ? null
+              : h(
+                  "span",
+                  { className: "spsd-ovtransport" },
+                  sourceText(t, source.transport),
+                ),
+          ),
+        );
+      }
+      return h(
+        "section",
+        {
+          className: "spsd-card spsd-overview",
+          key,
+          "data-source": spec.sourceId,
+          "data-state": state,
+        },
+        rows,
+      );
+    }
+
+    /**
+     * The Market feed card body: feed freshness, counts, and the repo/evidence
+     * block. A payload without `feed` says so instead of rendering zeros.
+     * @param {(key: string, params?: object) => string} t
+     * @param {ReturnType<typeof readGraphPayload>} payload
+     * @param {number} now
+     */
+    function graphCardBody(t, payload, now) {
+      const blocks = [];
+      if (payload === null) return blocks;
+      const feed = payload.feed;
+      if (feed === null) {
+        blocks.push(noteLine(t("feedMissing"), "warn", "feed-missing"));
+      } else {
+        const rows = [];
+        if (feed.status !== null) {
+          rows.push(
+            kvRow(
+              t("feedStatus"),
+              feed.status,
+              "feed-status",
+              feed.status === "measured" ? undefined : "warn",
+            ),
+          );
+        }
+        if (feed.dataMode !== null) {
+          rows.push(
+            kvRow(
+              t("dataMode"),
+              feed.dataMode,
+              "data-mode",
+              feed.dataMode === "FULL" ? undefined : "warn",
+            ),
+          );
+        }
+        if (feed.wssIngestion !== null) {
+          rows.push(
+            kvRow(
+              t("wssIngestion"),
+              feed.wssIngestion,
+              "wss",
+              feed.wssIngestion === "ingested" ? undefined : "warn",
+            ),
+          );
+        }
+        if (feed.pollSequence !== null) {
+          rows.push(
+            kvRow(
+              t("pollSequence"),
+              formatCount(feed.pollSequence) ?? t("never"),
+              "poll-sequence",
+            ),
+          );
+        }
+        const updated =
+          feed.lastUpdatedIso === null
+            ? null
+            : formatIsoUtc(feed.lastUpdatedIso);
+        if (updated !== null) {
+          rows.push(kvRow(t("updated"), updated, "updated"));
+        }
+        const age = feedAgeSeconds(feed, now);
+        if (age !== null) {
+          rows.push(
+            kvRow(
+              t("age"),
+              h(
+                "span",
+                null,
+                formatAgeSeconds(t, age) ?? t("never"),
+                feed.stale === true
+                  ? h(
+                      "span",
+                      {
+                        className: "spsd-chip",
+                        "data-tone": "warn",
+                        style: { marginLeft: 6 },
+                      },
+                      t("stateStale"),
+                    )
+                  : null,
+              ),
+              "age",
+            ),
+          );
+        }
+        if (rows.length > 0) blocks.push(kvList(rows, "feed"));
+        if (feed.counts !== null) {
+          const counts = feed.counts;
+          const countRows = [];
+          if (counts.activeWallets !== null) {
+            countRows.push(
+              kvRow(
+                t("activeWallets"),
+                formatCount(counts.activeWallets) ?? t("never"),
+                "active-wallets",
+              ),
+            );
+          }
+          if (counts.openLegs !== null) {
+            countRows.push(
+              kvRow(
+                t("openLegs"),
+                formatCount(counts.openLegs) ?? t("never"),
+                "open-legs",
+              ),
+            );
+          }
+          if (counts.openExposureUsd !== null) {
+            countRows.push(
+              kvRow(
+                t("openExposure"),
+                formatUsd(counts.openExposureUsd) ?? t("never"),
+                "open-exposure",
+              ),
+            );
+          }
+          if (counts.pendingBets !== null) {
+            countRows.push(
+              kvRow(
+                t("pendingBets"),
+                formatCount(counts.pendingBets) ?? t("never"),
+                "pending-bets",
+              ),
+            );
+          }
+          if (counts.ipClusters !== null) {
+            countRows.push(
+              kvRow(
+                t("ipClusters"),
+                formatCount(counts.ipClusters) ?? t("never"),
+                "ip-clusters",
+              ),
+            );
+          }
+          if (countRows.length > 0) {
+            blocks.push(
+              subSection(t("counts"), [kvList(countRows, "counts")], "counts"),
+            );
+          }
+        }
+      }
+      if (payload.repo !== null) {
+        const repo = payload.repo;
+        const rows = [];
+        if (repo.branch !== null) {
+          rows.push(kvRow(t("branch"), repo.branch, "branch"));
+        }
+        const head = shortHead(repo.head);
+        if (head !== null) rows.push(kvRow(t("head"), head, "head"));
+        if (repo.routesServed !== null) {
+          rows.push(
+            kvRow(
+              t("routesServed"),
+              formatCount(repo.routesServed) ?? t("never"),
+              "routes",
+            ),
+          );
+        }
+        if (repo.citations !== null) {
+          const citations = repo.citations;
+          const age = formatAgeSeconds(t, citations.ageSeconds);
+          const checked =
+            citations.checked === null ? null : formatCount(citations.checked);
+          const text =
+            checked !== null && age !== null
+              ? t("citationSummary", { checked, age })
+              : (age ?? checked ?? t("never"));
+          rows.push(
+            kvRow(
+              t("citations"),
+              h(
+                "span",
+                null,
+                text,
+                citations.stale === true
+                  ? h(
+                      "span",
+                      {
+                        className: "spsd-chip",
+                        "data-tone": "warn",
+                        style: { marginLeft: 6 },
+                      },
+                      t("stateStale"),
+                    )
+                  : null,
+              ),
+              "citations",
+            ),
+          );
+        }
+        if (repo.tests !== null) {
+          const tests = repo.tests;
+          const age = formatAgeSeconds(t, tests.ageSeconds);
+          const count = tests.tests === null ? null : formatCount(tests.tests);
+          const text =
+            count !== null && age !== null
+              ? t("testsSummary", { tests: count, age })
+              : (age ?? count ?? t("never"));
+          rows.push(kvRow(t("tests"), text, "tests"));
+        }
+        if (rows.length > 0) {
+          blocks.push(subSection(t("repo"), [kvList(rows, "repo")], "repo"));
+        }
+      }
+      return blocks;
+    }
+
+    /**
+     * The Book card body: the four KPI blocks, each with its own provenance.
+     * @param {(key: string, params?: object) => string} t
+     * @param {ReturnType<typeof readKpisPayload>} payload
+     * @param {number} now
+     */
+    function kpisCardBody(t, payload, now) {
+      const blocks = [];
+      if (payload === null) return blocks;
+      if (payload.agents !== null) {
+        const block = payload.agents;
+        const rows = [];
+        if (block.values.total !== null) {
+          rows.push(
+            kvRow(
+              t("total"),
+              formatCount(block.values.total) ?? t("never"),
+              "total",
+            ),
+          );
+        }
+        if (block.values.agents !== null) {
+          rows.push(
+            kvRow(
+              t("agentsField"),
+              formatCount(block.values.agents) ?? t("never"),
+              "agents",
+            ),
+          );
+        }
+        if (block.values.masters !== null) {
+          rows.push(
+            kvRow(
+              t("masters"),
+              formatCount(block.values.masters) ?? t("never"),
+              "masters",
+            ),
+          );
+        }
+        blocks.push(
+          subSection(
+            t("agentsBlock"),
+            [
+              kvList(rows, "agents-kv"),
+              provenanceLine(t, block.provenance, now, "agents-prov"),
+            ],
+            "agents-block",
+          ),
+        );
+      }
+      if (payload.pending !== null) {
+        const block = payload.pending;
+        const rows = [];
+        if (block.values.wagers !== null) {
+          rows.push(
+            kvRow(
+              t("wagers"),
+              formatCount(block.values.wagers) ?? t("never"),
+              "wagers",
+            ),
+          );
+        }
+        if (block.values.tickets !== null) {
+          rows.push(
+            kvRow(
+              t("tickets"),
+              formatCount(block.values.tickets) ?? t("never"),
+              "tickets",
+            ),
+          );
+        }
+        if (block.values.wageredCents !== null) {
+          rows.push(
+            kvRow(
+              t("wagered"),
+              formatUsdFromCents(block.values.wageredCents) ?? t("never"),
+              "wagered",
+            ),
+          );
+        }
+        if (block.values.toWinCents !== null) {
+          rows.push(
+            kvRow(
+              t("toWin"),
+              formatUsdFromCents(block.values.toWinCents) ?? t("never"),
+              "to-win",
+            ),
+          );
+        }
+        blocks.push(
+          subSection(
+            t("pendingBlock"),
+            [
+              kvList(rows, "pending-kv"),
+              provenanceLine(t, block.provenance, now, "pending-prov"),
+            ],
+            "pending-block",
+          ),
+        );
+      }
+      if (payload.ticker !== null) {
+        const block = payload.ticker;
+        const rows = [];
+        if (block.values.wagers !== null) {
+          rows.push(
+            kvRow(
+              t("wagers"),
+              formatCount(block.values.wagers) ?? t("never"),
+              "ticker-wagers",
+            ),
+          );
+        }
+        if (block.values.live !== null) {
+          rows.push(
+            kvRow(
+              t("liveField"),
+              formatCount(block.values.live) ?? t("never"),
+              "ticker-live",
+            ),
+          );
+        }
+        if (block.values.riskCents !== null) {
+          rows.push(
+            kvRow(
+              t("risk"),
+              formatUsdFromCents(block.values.riskCents) ?? t("never"),
+              "ticker-risk",
+            ),
+          );
+        }
+        if (block.values.volumeCents !== null) {
+          rows.push(
+            kvRow(
+              t("volume"),
+              formatUsdFromCents(block.values.volumeCents) ?? t("never"),
+              "ticker-volume",
+            ),
+          );
+        }
+        blocks.push(
+          subSection(
+            t("tickerBlock"),
+            [
+              kvList(rows, "ticker-kv"),
+              provenanceLine(t, block.provenance, now, "ticker-prov"),
+            ],
+            "ticker-block",
+          ),
+        );
+      }
+      if (payload.customerBook !== null) {
+        const block = payload.customerBook;
+        const rows = [];
+        if (block.values.customers !== null) {
+          rows.push(
+            kvRow(
+              t("customers"),
+              formatCount(block.values.customers) ?? t("never"),
+              "customers",
+            ),
+          );
+        }
+        if (block.values.tickets !== null) {
+          rows.push(
+            kvRow(
+              t("tickets"),
+              formatCount(block.values.tickets) ?? t("never"),
+              "book-tickets",
+            ),
+          );
+        }
+        if (block.values.customerNetCents !== null) {
+          rows.push(
+            kvRow(
+              t("customerNet"),
+              formatUsdFromCents(block.values.customerNetCents) ?? t("never"),
+              "customer-net",
+            ),
+          );
+        }
+        blocks.push(
+          subSection(
+            t("customerBook"),
+            [
+              kvList(rows, "book-kv"),
+              provenanceLine(t, block.provenance, now, "book-prov"),
+            ],
+            "customer-book-block",
+          ),
+        );
+      }
+      return blocks;
+    }
+
+    /**
+     * One KPI block's provenance age + stale/partial chips. A block without a
+     * provenance renders no line at all (never "unknown age").
+     * @param {(key: string, params?: object) => string} t
+     * @param {ReturnType<typeof readProvenance>} provenance
+     * @param {number} now
+     * @param {string} key
+     */
+    function provenanceLine(t, provenance, now, key) {
+      if (provenance === null) return null;
+      const age = provenanceAge(t, provenance, now);
+      const chips = [];
+      if (provenance.stale === true) {
+        chips.push(chip(t("stateStale"), "warn", "prov-stale"));
+      }
+      if (provenance.partial === true) {
+        chips.push(chip(t("partial"), "warn", "prov-partial"));
+      }
+      return h(
+        "p",
+        {
+          className: "spsd-provenance",
+          key,
+          title: provenance.source ?? undefined,
+        },
+        t("provenance"),
+        " ",
+        age ?? t("never"),
+        chips.length > 0 ? " " : null,
+        ...chips,
+      );
+    }
+
+    /**
+     * A risk meter (planned vs cap) drawn only with theme tokens.
+     * @param {number} planned
+     * @param {number} cap
+     */
+    function riskMeter(planned, cap) {
+      if (cap <= 0) return null;
+      const ratio = Math.min(1, Math.max(0, planned / cap));
+      return h(
+        "span",
+        { className: "spsd-meter", "aria-hidden": true },
+        h("span", { style: { width: `${Math.round(ratio * 100)}%` } }),
+      );
+    }
+
+    /**
+     * The Paper execution card body: mode/kill switch/live policy, risk vs caps,
+     * venues, decisions and the plan's own provenance.
+     * @param {(key: string, params?: object) => string} t
+     * @param {ReturnType<typeof readExecutionPayload>} payload
+     * @param {number} now
+     */
+    function executionCardBody(t, payload, now) {
+      const blocks = [];
+      if (payload === null) return blocks;
+      const summary = [];
+      if (payload.mode !== null) {
+        summary.push(
+          kvRow(
+            t("mode"),
+            payload.mode,
+            "mode",
+            payload.mode === "paper" ? undefined : "error",
+          ),
+        );
+      }
+      if (payload.killSwitch !== null) {
+        summary.push(
+          kvRow(
+            t("killSwitch"),
+            payload.killSwitch ? t("on") : t("off"),
+            "kill-switch",
+            payload.killSwitch ? "error" : undefined,
+          ),
+        );
+      }
+      if (payload.liveEnabled !== null) {
+        summary.push(
+          kvRow(
+            t("liveExecution"),
+            payload.liveEnabled ? t("on") : t("off"),
+            "live-enabled",
+            payload.liveEnabled ? "error" : undefined,
+          ),
+        );
+      }
+      if (summary.length > 0) blocks.push(kvList(summary, "execution-summary"));
+      if (payload.risk !== null) {
+        const risk = payload.risk;
+        const rows = [];
+        if (risk.dailyPlannedUsd !== null || risk.dailyCapUsd !== null) {
+          const planned =
+            risk.dailyPlannedUsd === null
+              ? t("never")
+              : (formatUsd(risk.dailyPlannedUsd) ?? t("never"));
+          const cap =
+            risk.dailyCapUsd === null
+              ? t("never")
+              : (formatUsd(risk.dailyCapUsd) ?? t("never"));
+          const meter =
+            risk.dailyPlannedUsd !== null && risk.dailyCapUsd !== null
+              ? riskMeter(risk.dailyPlannedUsd, risk.dailyCapUsd)
+              : null;
+          rows.push(
+            kvRow(
+              t("dailyPlanned"),
+              h("span", null, `${planned} / ${cap}`, meter),
+              "daily-planned",
+            ),
+          );
+        }
+        if (risk.openIntents !== null) {
+          const cap =
+            payload.maxOpenIntents === null
+              ? null
+              : formatCount(payload.maxOpenIntents);
+          rows.push(
+            kvRow(
+              t("openIntents"),
+              cap === null
+                ? (formatCount(risk.openIntents) ?? t("never"))
+                : `${formatCount(risk.openIntents) ?? t("never")} / ${cap}`,
+              "open-intents",
+            ),
+          );
+        }
+        if (risk.marketExposureUsd !== null) {
+          const entries = risk.marketExposureUsd;
+          const text =
+            entries.length === 0
+              ? t("none")
+              : entries
+                  .map(
+                    (entry) =>
+                      `${entry.market} ${formatUsd(entry.amount) ?? t("never")}`,
+                  )
+                  .join(", ");
+          rows.push(kvRow(t("marketExposure"), text, "market-exposure"));
+        }
+        if (rows.length > 0) {
+          blocks.push(subSection(t("risk"), [kvList(rows, "risk-kv")], "risk"));
+        }
+      }
+      if (payload.venues !== null && payload.venues.length > 0) {
+        blocks.push(
+          subSection(
+            t("venues"),
+            [
+              h(
+                "ul",
+                { className: "spsd-venue-list", key: "venues" },
+                payload.venues.map((venue) =>
+                  h(
+                    "li",
+                    { key: venue.id, className: "spsd-venue" },
+                    h("span", { className: "spsd-venue-name" }, venue.id),
+                    chip(
+                      venue.liveReady === true
+                        ? t("liveReady")
+                        : venue.liveReady === false
+                          ? t("notLiveReady")
+                          : t("never"),
+                      venue.liveReady === false ? "warn" : undefined,
+                      "live-ready",
+                    ),
+                    venue.reason === null
+                      ? null
+                      : h(
+                          "span",
+                          { className: "spsd-venue-reason" },
+                          venue.reason,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+            "venues",
+          ),
+        );
+      }
+      if (payload.decisions === null) {
+        blocks.push(
+          noteLine(t("decisionsUnknown"), "warn", "decisions-unknown"),
+        );
+      } else {
+        const rows = [
+          kvRow(
+            t("blocked"),
+            formatCount(payload.decisions.blocked) ?? "0",
+            "blocked",
+            payload.decisions.blocked > 0 ? "warn" : undefined,
+          ),
+          kvRow(
+            t("notBlocked"),
+            formatCount(payload.decisions.notBlocked) ?? "0",
+            "not-blocked",
+          ),
+        ];
+        if (payload.blockedReasons !== null) {
+          rows.push(
+            kvRow(
+              t("blockedReasons"),
+              payload.blockedReasons
+                .map(
+                  (row) =>
+                    `${row.reason} ${formatCount(row.count) ?? t("never")}`,
+                )
+                .join(", "),
+              "blocked-reasons",
+            ),
+          );
+        }
+        blocks.push(
+          subSection(
+            t("decisions"),
+            [kvList(rows, "decisions-kv")],
+            "decisions",
+          ),
+        );
+      }
+      if (payload.provenance !== null && payload.provenance.stale === true) {
+        const age = provenanceAge(t, payload.provenance, now);
+        blocks.push(
+          noteLine(
+            age === null ? t("planStale") : `${t("planStale")} · ${age}`,
+            "warn",
+            "plan-stale",
+          ),
+        );
+      }
+      return blocks;
+    }
+
+    /**
+     * The attention banner, derived only from measured states. Each item names
+     * its source; absent data is rendered as unknown by the card, never as an
+     * alert. The feed produces one combined item (stale / not measured / WSS),
+     * and each failed overview source produces one item.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof INITIAL} state
+     * @param {ReturnType<typeof readGraphPayload>} graphPayload
+     * @param {ReturnType<typeof readExecutionPayload>} executionPayload
+     */
+    function attentionBanner(t, state, graphPayload, executionPayload) {
+      const items = [];
+      if (
+        state.phase === "down" ||
+        state.phase === "stale" ||
+        state.phase === "unknown"
+      ) {
+        items.push({
+          key: "service",
+          source: t("service"),
+          detail: statusText(t, state),
+        });
+      }
+      const graphSource = state.sources.graph;
+      if (isSourceOk(graphSource) && graphPayload !== null) {
+        const feed = graphPayload.feed;
+        if (feed !== null) {
+          const reasons = [];
+          if (feed.stale === true) {
+            const age =
+              feed.ageSeconds === null
+                ? null
+                : formatAgeSeconds(t, feed.ageSeconds);
+            reasons.push(
+              age === null ? t("stateStale") : t("attentionFeedStale", { age }),
+            );
+          }
+          if (feed.status !== null && feed.status !== "measured") {
+            reasons.push(t("attentionFeedStatus", { status: feed.status }));
+          }
+          if (feed.wssIngestion !== null && feed.wssIngestion !== "ingested") {
+            reasons.push(t("attentionWss", { value: feed.wssIngestion }));
+          }
+          if (reasons.length > 0) {
+            items.push({
+              key: "feed",
+              source: t("marketFeed"),
+              detail: reasons.join(t("attentionJoin")),
+            });
+          }
+        }
+      }
+      const executionSource = state.sources.execution;
+      if (isSourceOk(executionSource) && executionPayload !== null) {
+        if (executionPayload.killSwitch === true) {
+          items.push({
+            key: "kill-switch",
+            source: t("executionCard"),
+            detail: t("attentionKill"),
+          });
+        }
+        if (
+          executionPayload.mode !== null &&
+          executionPayload.mode !== "paper"
+        ) {
+          items.push({
+            key: "mode",
+            source: t("executionCard"),
+            detail: t("attentionMode", { mode: executionPayload.mode }),
+          });
+        }
+        if (executionPayload.liveEnabled === true) {
+          items.push({
+            key: "live-enabled",
+            source: t("executionCard"),
+            detail: t("attentionLive"),
+          });
+        }
+      }
+      for (const entry of [
+        ["graph", "marketFeed"],
+        ["kpis", "book"],
+        ["execution", "executionCard"],
+      ]) {
+        const source = state.sources[entry[0]];
+        if (source === null || source.status === "ok") continue;
+        const reason =
+          source.error ??
+          (source.httpStatus === null
+            ? t("stateError")
+            : `HTTP ${source.httpStatus}`);
+        items.push({
+          key: `source-${entry[0]}`,
+          source: t(entry[1]),
+          detail: reason,
+        });
+      }
+      if (items.length === 0) return null;
+      return h(
+        "section",
+        {
+          className: "spsd-attention",
+          key: "attention",
+          "data-count": String(items.length),
+          role: "status",
+        },
+        h("h2", { className: "spsd-attention-title" }, t("attentionTitle")),
+        h(
+          "ul",
+          { className: "spsd-attention-list" },
+          items.map((item) =>
+            h(
+              "li",
+              { key: item.key, className: "spsd-attention-item" },
+              t("attentionItem", {
+                source: item.source,
+                detail: item.detail,
+              }),
+            ),
+          ),
+        ),
       );
     }
 
@@ -356,36 +2874,99 @@ window.__ModuleLoader__.load({
     const CSS = `
 .spsd-page { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.6; }
 .spsd-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
-.spsd-content { max-width: 960px; margin: 0 auto; padding: 0 clamp(24px, 4vw, 48px) 48px; }
-.spsd-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; padding-top: 28px; margin-bottom: 24px; }
+.spsd-content { max-width: 1100px; margin: 0 auto; padding: 0 clamp(24px, 4vw, 48px) 48px; }
+.spsd-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; padding-top: 28px; margin-bottom: 8px; }
 .spsd-heading { flex: 1 1 320px; min-width: 0; }
 .spsd-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; }
-.spsd-sub { margin: 6px 0 0; max-width: 64ch; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.spsd-sub { margin: 6px 0 0; max-width: 70ch; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
 .spsd-actions { display: flex; flex: none; gap: 8px; }
 .spsd-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 28px; padding: 0 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm, 6px); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; white-space: nowrap; text-decoration: none; cursor: pointer; }
 .spsd-btn:hover { background: var(--dsw-alias-bg-layer-2); }
 .spsd-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .spsd-btn:disabled { cursor: progress; opacity: 0.6; }
 .spsd-btn-strong { border-color: var(--dsw-alias-brand-primary); background: var(--dsw-alias-bg-layer-2); font-weight: 500; }
+.spsd-lastmeasured { margin: 0 0 16px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .spsd-card { border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); padding: 20px; }
+.spsd-section { margin-top: 16px; }
 .spsd-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .spsd-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-state-idle-primary); }
 .spsd-card[data-phase='current'] .spsd-dot { background: var(--dsw-alias-state-success-primary); }
 .spsd-card[data-phase='stale'] .spsd-dot, .spsd-card[data-phase='unknown'] .spsd-dot { background: var(--dsw-alias-state-warn-primary); }
 .spsd-card[data-phase='down'] .spsd-dot { background: var(--dsw-alias-state-error-primary); }
 .spsd-status-text { font-size: 14px; font-weight: 500; }
-.spsd-chip { margin-left: auto; padding: 1px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; color: var(--dsw-alias-label-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; }
+.spsd-status .spsd-chip { margin-left: auto; }
+.spsd-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; color: var(--dsw-alias-label-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; }
+.spsd-chip[data-tone='warn'] { border-color: var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-primary); }
+.spsd-chip[data-tone='error'] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
 .spsd-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin: 20px 0 0; padding: 16px 0 0; border-top: 1px solid var(--dsw-alias-border-l1); }
+.spsd-meta-flat { margin-top: 0; padding-top: 0; border-top: 0; }
 .spsd-meta dt { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; }
 .spsd-meta dd { margin: 2px 0 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 .spsd-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.spsd-h2 { margin: 0 0 12px; font-size: 14px; line-height: 20px; font-weight: 500; }
+.spsd-callout { margin-top: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); padding: 16px 20px; }
+.spsd-callout h2 { margin: 0 0 6px; font-size: 14px; line-height: 20px; font-weight: 500; }
+.spsd-callout p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.spsd-callout ul { margin: 8px 0 0; padding-left: 18px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.spsd-callout-fix { margin-top: 12px; }
+.spsd-error { margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.spsd-command { display: inline-block; margin-top: 8px; padding: 4px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm, 6px); background: var(--dsw-alias-bg-base); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; }
+.spsd-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.spsd-link { color: var(--dsw-alias-brand-primary); font-size: 12px; text-decoration: none; }
+.spsd-link:hover { text-decoration: underline; }
+.spsd-link:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.spsd-list { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.spsd-list h3 { margin: 0 0 10px; font-size: 13px; line-height: 18px; font-weight: 500; }
+.spsd-list-count { color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.spsd-list ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.spsd-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.spsd-list-name { color: var(--dsw-alias-label-primary); }
+.spsd-when { flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.spsd-attention { margin-top: 16px; padding: 12px 16px; border: 1px solid var(--dsw-alias-state-warn-primary); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); }
+.spsd-attention-title { margin: 0 0 8px; font-size: 13px; line-height: 18px; font-weight: 500; }
+.spsd-attention-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.spsd-attention-item { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.spsd-overview-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (min-width: 900px) { .spsd-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.spsd-overview { display: flex; flex-direction: column; gap: 10px; }
+.spsd-ovhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.spsd-ovtitle { margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; }
+.spsd-ovmeta { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+.spsd-chip-state { display: inline-flex; flex: none; align-items: center; padding: 1px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 18px; }
+.spsd-chip-state[data-state='ok'] { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
+.spsd-chip-state[data-state='stale'] { border-color: var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-primary); }
+.spsd-chip-state[data-state='error'], .spsd-chip-state[data-state='missing'] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+.spsd-chip-state[data-state='checking'] { border-color: var(--dsw-alias-state-idle-primary); color: var(--dsw-alias-state-idle-primary); }
+.spsd-block { padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.spsd-h3 { margin: 0 0 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.spsd-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 14px; margin: 0; }
+.spsd-kv-item { min-width: 0; }
+.spsd-kv-label { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+.spsd-kv-value { margin: 1px 0 0; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
+.spsd-kv-value[data-tone='warn'] { color: var(--dsw-alias-state-warn-primary); }
+.spsd-kv-value[data-tone='error'] { color: var(--dsw-alias-state-error-primary); }
+.spsd-provenance { margin: 8px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; overflow-wrap: anywhere; }
+.spsd-note-line { margin: 8px 0 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.spsd-note-line[data-tone='warn'] { color: var(--dsw-alias-state-warn-primary); }
+.spsd-source-error { margin: 0; color: var(--dsw-alias-state-error-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.spsd-lastgood { margin: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-state-warn-primary); border-radius: var(--dsw-radius-sm, 6px); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+.spsd-ovfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.spsd-ovtransport { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+.spsd-retry { align-self: flex-start; }
+.spsd-meter { display: block; width: 100%; height: 5px; margin-top: 5px; border-radius: 999px; background: var(--dsw-alias-bg-layer-2); overflow: hidden; }
+.spsd-meter > span { display: block; height: 100%; background: var(--dsw-alias-brand-primary); }
+.spsd-venue-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.spsd-venue { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; line-height: 18px; }
+.spsd-venue-name { font-weight: 500; }
+.spsd-venue-reason { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .spsd-note { margin-top: 32px; max-width: 72ch; }
 .spsd-note h2 { margin: 0 0 6px; font-size: 14px; line-height: 20px; font-weight: 500; }
 .spsd-note p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.spsd-note .spsd-note-sub { margin-top: 8px; }
 `;
 
     /** Decorative sidebar glyph; the host owns the entry's color and label. */
-    function DeskIcon({ size }) {
+    function DeskIconSvg({ size }) {
       return h(
         "svg",
         {
@@ -422,18 +3003,158 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** Dot color per measured phase; theme tokens, owned by the host. */
+    const DOT_COLOR = {
+      current: "var(--dsw-alias-state-success-primary)",
+      stale: "var(--dsw-alias-state-warn-primary)",
+      unknown: "var(--dsw-alias-state-warn-primary)",
+      down: "var(--dsw-alias-state-error-primary)",
+      checking: "var(--dsw-alias-state-idle-primary)",
+    };
+
     /**
-     * The main-column desk page. Its only data source is the measured service
-     * state, so an unmeasured page never shows a green "healthy" line.
+     * The sidebar entry. It starts the one poll loop (the glyph is mounted even
+     * when the page is closed) and renders the measured phase as a corner dot,
+     * so desk health is visible from the sidebar. The dot stays on the service
+     * phase — a stale market feed does not turn it amber.
+     */
+    const DeskIcon = React.memo(function DeskIcon(props) {
+      const t = typeof props.t === "function" ? props.t : fallbackT;
+      const state = useStatus();
+      React.useEffect(() => {
+        startPolling();
+      }, []);
+      const size =
+        typeof props.size === "number" && props.size > 0 ? props.size : 20;
+      return h(
+        "span",
+        {
+          style: {
+            position: "relative",
+            display: "inline-flex",
+            lineHeight: 0,
+            color: "inherit",
+          },
+        },
+        h(DeskIconSvg, { size }),
+        h("span", {
+          "aria-hidden": true,
+          title: t("dotTitle", { status: statusText(t, state) }),
+          style: {
+            position: "absolute",
+            right: -1,
+            bottom: -1,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: DOT_COLOR[state.phase] ?? DOT_COLOR.checking,
+            boxShadow: "0 0 0 1.5px var(--dsw-alias-bg-base)",
+          },
+        }),
+      );
+    });
+
+    /**
+     * The main-column desk page. Its only data source is the measured snapshot,
+     * so an unmeasured page never shows a green "healthy" line and a failed
+     * source card never turns into a zero.
      */
     const DeskPanel = React.memo(function DeskPanel(props) {
       const t = typeof props.t === "function" ? props.t : fallbackT;
-      const [state, refresh] = useDeskStatus();
+      const state = useStatus();
+      React.useEffect(() => {
+        startPolling();
+      }, []);
+      const now = useNow(1_000);
+      const sources = state.sources;
+      const graphPayload = readGraphPayload(
+        sources.graph && sources.graph.body ? sources.graph.body : null,
+      );
+      const kpisPayload = readKpisPayload(
+        sources.kpis && sources.kpis.body ? sources.kpis.body : null,
+      );
+      const executionPayload = readExecutionPayload(
+        sources.execution && sources.execution.body
+          ? sources.execution.body
+          : null,
+      );
+      const retry = () => {
+        void runProbe(true);
+      };
       const checked =
         state.checkedAt === null
           ? t("never")
-          : new Date(state.checkedAt).toLocaleTimeString();
+          : `${new Date(state.checkedAt).toLocaleTimeString()} · ${formatAgo(t, state.checkedAt, now)}`;
       const uptime = formatDuration(state.uptimeSeconds) ?? t("never");
+      const source =
+        state.source === null
+          ? t("never")
+          : state.healthLatencyMs === null
+            ? sourceText(t, state.source)
+            : `${sourceText(t, state.source)} · ${state.healthLatencyMs} ms`;
+      const recovery = recoveryCallout(t, state);
+      const attention = attentionBanner(
+        t,
+        state,
+        graphPayload,
+        executionPayload,
+      );
+      const service = serviceCard(t, state);
+      const lastMeasured =
+        state.checkedAt === null
+          ? t("checking")
+          : `${t("lastMeasured")} ${formatClock(state.checkedAt) ?? t("never")} · ${formatAgo(t, state.checkedAt, now)}`;
+
+      const graphSource = sources.graph;
+      const graphState = cardState(graphSource, isGraphStale(graphPayload));
+      const kpisSource = sources.kpis;
+      const kpisState = cardState(kpisSource, isKpisStale(kpisPayload));
+      const executionSource = sources.execution;
+      const executionState = cardState(
+        executionSource,
+        isExecutionStale(executionPayload),
+      );
+
+      const overview = h(
+        "div",
+        { className: "spsd-overview-grid", key: "overview" },
+        overviewCard({
+          t,
+          source: graphSource,
+          sourceId: "graph",
+          title: t("marketFeed"),
+          state: graphState,
+          bodyBlocks: graphCardBody(t, graphPayload, now),
+          now,
+          hasData: graphPayload !== null,
+          retry,
+          key: "graph-card",
+        }),
+        overviewCard({
+          t,
+          source: kpisSource,
+          sourceId: "kpis",
+          title: t("book"),
+          state: kpisState,
+          bodyBlocks: kpisCardBody(t, kpisPayload, now),
+          now,
+          hasData: kpisPayload !== null,
+          retry,
+          key: "kpis-card",
+        }),
+        overviewCard({
+          t,
+          source: executionSource,
+          sourceId: "execution",
+          title: t("executionCard"),
+          state: executionState,
+          bodyBlocks: executionCardBody(t, executionPayload, now),
+          now,
+          hasData: executionPayload !== null,
+          retry,
+          key: "execution-card",
+        }),
+      );
 
       return h(
         "div",
@@ -463,9 +3184,7 @@ window.__ModuleLoader__.load({
                     type: "button",
                     className: "spsd-btn",
                     disabled: state.phase === "checking",
-                    onClick: () => {
-                      void refresh();
-                    },
+                    onClick: retry,
                   },
                   t("refresh"),
                 ),
@@ -482,9 +3201,15 @@ window.__ModuleLoader__.load({
               ),
             ),
             h(
+              "p",
+              { className: "spsd-lastmeasured", key: "last-measured" },
+              lastMeasured,
+            ),
+            h(
               "section",
               {
                 className: "spsd-card",
+                key: "status",
                 "data-phase": state.phase,
                 role: "status",
                 "aria-live": "polite",
@@ -520,13 +3245,24 @@ window.__ModuleLoader__.load({
                 ),
                 metaRow(t("uptime"), uptime),
                 metaRow(t("checked"), checked),
+                metaRow(t("source"), source),
               ),
+              rawLinks(t, state),
             ),
+            recovery,
+            attention,
+            overview,
+            service,
             h(
               "section",
-              { className: "spsd-note" },
+              { className: "spsd-note", key: "note" },
               h("h2", null, t("what")),
               h("p", null, t("explain")),
+              h(
+                "p",
+                { className: "spsd-note-sub" },
+                t("liveNote", { seconds: Math.round(POLL_MS / 1_000) }),
+              ),
             ),
           ),
         ),
@@ -536,6 +3272,34 @@ window.__ModuleLoader__.load({
     return {
       inject: ["slots", "locale"],
       apply(ctx) {
+        // Owns the live loop's lifetime: disposal clears the timer, removes the
+        // visibility listener, aborts the in-flight probe and forbids publishes.
+        ctx.effect(() => {
+          disposed = false;
+          return () => {
+            disposed = true;
+            polling = false;
+            if (pollTimer !== null) {
+              clearTimeout(pollTimer);
+              pollTimer = null;
+            }
+            if (
+              visibilityListening &&
+              typeof document !== "undefined" &&
+              typeof document.removeEventListener === "function"
+            ) {
+              document.removeEventListener(
+                "visibilitychange",
+                onVisibilityChange,
+              );
+            }
+            visibilityListening = false;
+            const pending = inFlight;
+            inFlight = null;
+            if (pending !== null) pending.abort();
+          };
+        }, "sportsdesk desk panel: live status polling");
+
         ctx.effect(
           () => ctx.locale.register(NS, DICTS),
           "sportsdesk desk panel: locale dictionaries",

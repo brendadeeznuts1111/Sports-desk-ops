@@ -1368,7 +1368,10 @@ function filterBy(rows, key, wanted) {
  * DIFFERENT screen (it does not document the ticker); `M` has no documented meaning in the ticker
  * (docs/evidence/capture-requests.md — "carried as a raw code rather than guessed"); the panel's
  * `Straight` betType is the comma set `S,M,L,E,C` and `I` is if-bets/action reverses. The ticker
- * codes observed in the artifacts are M, L, S, P, I, T, G, A, C, N.
+ * codes observed in the artifacts are M, L, S, P, I, T, G, A, C, N and E. `E` was measured on the
+ * 2026-11-04 ticker capture (5 rows, all Over/Under totals: "E.Soccer #224210 Viking O 2½ +100");
+ * the panel's `Straight` enum also contains an `E`, on a DIFFERENT screen, so the two are not
+ * joined across screens any more than `M` is.
  */
 const TICKER_WAGER_TYPES = new Set([
   "M",
@@ -1381,13 +1384,15 @@ const TICKER_WAGER_TYPES = new Set([
   "A",
   "C",
   "N",
+  "E",
 ]);
 
 const TICKER_WAGER_TYPE_FACTS =
-  "The ticker WagerType is a raw code set (observed: M, L, S, P, I, T, G, A, C, N), distinct " +
+  "The ticker WagerType is a raw code set (observed: M, L, S, P, I, T, G, A, C, N, E), distinct " +
   "from the grading panel's bet-type enum (Straight = S,M,L,E,C; I = if-bets/action reverses). " +
   "M has no documented meaning in the ticker; the panel's betType:M is 'Money Line' on a " +
-  "different screen, so these codes must not be joined across screens.";
+  "different screen, so these codes must not be joined across screens. E appears on ticker " +
+  "Over/Under total rows in the 2026-11-04 capture; the panel's Straight E is a different screen.";
 
 /**
  * Structurally split a ticker ShortDesc into its wager-type code, optional game id and sport. The
@@ -5485,13 +5490,47 @@ export function apply(ctx, config) {
           const agentList = Array.isArray(data.agents?.agents)
             ? data.agents.agents
             : [];
+          // The clipboard ticker shares ticket ids with this feed when both captures are
+          // contemporaneous (measured 221/250 on the 2026-11-04 capture). The relationship is
+          // MEASURED per capture, not asserted: a stale or missing ticker is its own state, and
+          // the note never claims disjointness the two files do not show.
+          const tickerAbsolute = `${repoPath}/data/live-wagers.json`;
+          const tickerParsed = parseJson(readText(tickerAbsolute));
+          const tickerList =
+            tickerParsed.ok && Array.isArray(tickerParsed.value?.LIST)
+              ? tickerParsed.value.LIST
+              : [];
+          const tickerKeys = new Set(
+            tickerList
+              .map((wager) => String(wager?.WagerNumber ?? ""))
+              .filter((key) => key !== ""),
+          );
+          const gameKeys = games
+            .map((game) => String(game?.ticketNumber ?? ""))
+            .filter((key) => key !== "");
+          const tickerOverlapKeys = gameKeys.filter((key) =>
+            tickerKeys.has(key),
+          ).length;
+          const tickerOverlapShare =
+            gameKeys.length === 0 ? null : tickerOverlapKeys / gameKeys.length;
+          const scopeNote =
+            tickerKeys.size === 0
+              ? "Agent /Report/Pending snapshot; the clipboard ticker capture is missing or empty, so ticket overlap cannot be measured. That is not a measured zero."
+              : tickerOverlapKeys === 0
+                ? `Agent /Report/Pending snapshot; measured 0 of ${gameKeys.length} pending ticket ids in the current clipboard ticker (${tickerKeys.size} rows). The feeds are disjoint in this capture.`
+                : `Agent /Report/Pending snapshot; measured ${tickerOverlapKeys} of ${gameKeys.length} pending ticket ids also appear in the current clipboard ticker (${tickerKeys.size} rows). The feeds describe the same wager stream from two screens; the pending report is agent-scoped and the ticker is a sample, so totals need not agree.`;
           return {
             available: true,
             ok: true,
             report: request.report,
             scope: "agent-pending-report",
-            scopeNote:
-              "Agent /Report/Pending snapshot; DISJOINT from the clipboard ticker (data/live-wagers.json).",
+            scopeNote,
+            tickerOverlap: {
+              keys: tickerOverlapKeys,
+              shareOfPending: tickerOverlapShare,
+              tickerRows: tickerList.length,
+              measured: tickerKeys.size > 0,
+            },
             capturedAt: data.capturedAt ?? null,
             ageMinutes: stats.ageMinutes,
             source: {
@@ -5567,16 +5606,29 @@ export function apply(ctx, config) {
           for (const key of pendingKeys) {
             if (key !== "" && wagerKeys.has(key)) overlap += 1;
           }
+          const pendingKeysCount = [...pendingKeys].filter(
+            (key) => key !== "",
+          ).length;
+          const overlapShare =
+            pendingKeysCount === 0 ? null : overlap / pendingKeysCount;
+          const measuredBothSides =
+            pStats.exists && wStats.exists && pendingKeysCount > 0;
+          const scope = overlap > 0 ? "overlapping" : "disjoint";
+          const note =
+            overlap > 0
+              ? `The two feeds are NOT disjoint in this capture: measured ${overlap} of ${pendingKeysCount} pending ticket ids also appear as ticker WagerNumbers. They describe the same wager stream from two screens (pending is agent-scoped, the ticker is a sample), so ticket ids may be matched while totals need not agree.`
+              : measuredBothSides
+                ? `Measured 0 of ${pendingKeysCount} pending ticket ids as ticker WagerNumbers in this capture: the feeds are disjoint here. A later contemporaneous capture may measure overlap; the scope is re-derived per capture.`
+                : "At least one capture is missing, so overlap cannot be measured. That is not a measured zero; do not treat the feeds as disjoint until both files are present.";
           return {
             available: true,
             ok: true,
             report: request.report,
-            scope: "disjoint",
-            verdict: "disjoint",
-            note:
-              "The two feeds are DISJOINT sources: pending is the agent /Report/Pending snapshot " +
-              "and wagers is a clipboard paste sample, with different keyspaces (ticketNumber vs " +
-              "WagerNumber) and a large magnitude gap in wagered. Do not join them.",
+            scope,
+            verdict: scope,
+            note,
+            overlapShare,
+            measured: measuredBothSides,
             pending: {
               capturedAt: pParsed.ok
                 ? (pParsed.value?.capturedAt ?? null)
@@ -5627,7 +5679,10 @@ export function apply(ctx, config) {
         const wantedAgent = filter(request.agentId);
         const wantedSport = filter(request.sport);
         let parseWarnings = 0;
+        let emptyShortDesc = 0;
         const withSport = list.map((wager) => {
+          const desc = String(wager?.ShortDesc ?? "").trim();
+          if (desc === "") emptyShortDesc += 1;
           const parsed = tokenizeShortDesc(wager?.ShortDesc);
           if (parsed.unknown) parseWarnings += 1;
           return { ...wager, ...parsed };
@@ -5644,16 +5699,56 @@ export function apply(ctx, config) {
             const value = Number(wager?.[key]);
             return total + (Number.isFinite(value) ? value : 0);
           }, 0);
+        // Overlap with the pending capture is measured, never asserted (see the reconcile
+        // report): contemporaneous captures share ticket ids on the 2026-11-04 data.
+        const pendingParsed = parseJson(
+          readText(`${repoPath}/data/live-bets.json`),
+        );
+        const pendingGames =
+          pendingParsed.ok && Array.isArray(pendingParsed.value?.games)
+            ? pendingParsed.value.games
+            : [];
+        const pendingTicketKeys = new Set(
+          pendingGames
+            .map((game) => String(game?.ticketNumber ?? ""))
+            .filter((key) => key !== ""),
+        );
+        const wagerKeys = list
+          .map((wager) => String(wager?.WagerNumber ?? ""))
+          .filter((key) => key !== "");
+        const pendingOverlapKeys = wagerKeys.filter((key) =>
+          pendingTicketKeys.has(key),
+        ).length;
+        const pendingOverlapShare =
+          wagerKeys.length === 0 ? null : pendingOverlapKeys / wagerKeys.length;
+        const scopeNote =
+          pendingTicketKeys.size === 0
+            ? "Clipboard paste sample; the agent /Report/Pending capture is missing or empty, so ticket overlap cannot be measured. That is not a measured zero."
+            : pendingOverlapKeys === 0
+              ? `Clipboard paste sample; measured 0 of ${wagerKeys.length} ticker wager ids in the current pending capture (${pendingTicketKeys.size} tickets). Disjoint in this capture.`
+              : `Clipboard paste sample; measured ${pendingOverlapKeys} of ${wagerKeys.length} ticker wager ids in the current pending capture (${pendingTicketKeys.size} tickets). The feeds describe the same wager stream from two screens; the ticker is a sample and the pending report is agent-scoped, so totals need not agree.`;
         return {
           available: true,
           ok: true,
           report: request.report,
           scope: "clipboard-ticker-sample",
-          scopeNote:
-            "Clipboard paste sample; DISJOINT from the agent /Report/Pending snapshot (data/live-bets.json).",
+          scopeNote,
+          pendingOverlap: {
+            keys: pendingOverlapKeys,
+            shareOfTicker: pendingOverlapShare,
+            pendingTickets: pendingGames.length,
+            measured: pendingTicketKeys.size > 0,
+          },
           observedAt: data.observedAt ?? null,
           ageMinutes: stats.ageMinutes,
           parseWarnings,
+          // A warning is either a MISSING description (empty ShortDesc — a data gap, not a
+          // type gap) or an unknown wager-type prefix. Keeping the split makes "12 rows have
+          // no description" distinguishable from "a new type code appeared".
+          parseWarningKinds: {
+            emptyShortDesc,
+            unknownWagerType: parseWarnings - emptyShortDesc,
+          },
           wagerTypeLegend: TICKER_WAGER_TYPE_FACTS,
           source: {
             path: "data/live-wagers.json",

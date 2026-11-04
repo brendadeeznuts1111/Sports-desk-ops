@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "mode": "live",
+  "capturedAt": "2026-10-31T00:19:51.204Z",
+  "operation": {
+    "path": "/cloud/api/Manager/getWebLog",
+    "method": "POST"
+  },
+  "request": {
+    "url": "https://example.invalid/getWebLog",
+    "method": "POST",
+    "headers": {},
+    "bodySha256": "fixture",
+    "bodySkeleton": {
+      "type": "object",
+      "fields": {}
+    }
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodySha256": "fixture",
+    "bodySkeleton": {
+      "type": "object",
+      "fields": {
+        "INFO": {
+          "type": "string"
+        },
+        "LIST": {
+          "type": "array",
+          "items": null
+        }
+      }
+    },
+    "bytes": 21
+  },
+  "redaction": {
+    "policyVersion": 1,
+    "clean": true,
+    "fieldsRedacted": ["request.headers.cookie"],
+    "piiRedacted": ["ip"]
+  },
+  "provenance": {
+    "note": "fixture shape sample"
+  },
+  "samples": []
+}

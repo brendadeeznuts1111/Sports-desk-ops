@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "source": "fixture",
+  "agentCount": 4,
+  "roots": ["ROOT"],
+  "collisions": [],
+  "nodes": {
+    "AG1": {
+      "l": 5,
+      "p": "ROOT",
+      "t": "A"
+    },
+    "AG2": {
+      "l": 6,
+      "p": "AG1",
+      "t": "M"
+    },
+    "ROOT": {
+      "l": 1,
+      "p": null,
+      "t": "M"
+    }
+  }
+}
