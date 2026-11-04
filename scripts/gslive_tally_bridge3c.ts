@@ -10,6 +10,8 @@
  *   bun run bridge3c:rollup --from Scratch/betReport-all.json
  */
 
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 
 import { buildGsliveTallyRollup } from "../lib/gslive_tally_rollup.ts";
@@ -21,6 +23,7 @@ const { values } = parseArgs({
     from: { type: "string", default: "Scratch/betReport-all.json" },
     "desk-date": { type: "string" },
     "chunk-bytes": { type: "string" },
+    out: { type: "string" },
     "dry-run": { type: "boolean", default: false },
     "no-r2": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
@@ -29,7 +32,7 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--dry-run] [--no-r2]",
+    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--out path] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--dry-run] [--no-r2]",
   );
   process.exit(0);
 }
@@ -58,6 +61,14 @@ console.error(
     `deskDate=${rollup.deskDate} ${gateSummary}`,
 );
 
+if (values.out !== undefined) {
+  const out = values.out as string;
+  mkdirSync(dirname(out), { recursive: true });
+  const temp = `${out}.tmp-${process.pid}`;
+  writeFileSync(temp, `${JSON.stringify(rollup, null, 2)}\n`);
+  renameSync(temp, out);
+  console.error(`[bridge3c] wrote ${out}`);
+}
 if (values["dry-run"]) {
   console.log(JSON.stringify(rollup, null, 2));
   process.exit(0);
