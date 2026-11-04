@@ -304,7 +304,7 @@ export interface ServerOptions {
   readonly port?: number;
   readonly hostname?: string;
   readonly unix?: string;
-  readonly development?: boolean;
+  readonly development?: boolean | { readonly hmr?: boolean };
   /** Where `bet-ticker.json` and `live-wagers.json` live; defaults to the repo's `data/`. */
   readonly wagerListDir?: string;
   /** Kalshi fetch, injectable so the API tests stay offline (defaults to global `fetch`). */
@@ -1020,7 +1020,7 @@ export function startServer(options?: ServerOptions) {
   }
 
   const serveConfig = {
-    development: isDevelopment,
+    development: isDevelopment ? { hmr: false } : false,
     // Bodies here are small JSON documents and one 1 MiB form probe. Without a cap a chunked
     // request is buffered in full by `req.json()` / `arrayBuffer()` (measured: a 6 MiB POST to
     // /api/telegram/alert was accepted), which is a memory DoS on an unauthenticated port.
