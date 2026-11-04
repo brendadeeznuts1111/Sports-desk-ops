@@ -365,6 +365,27 @@ guard and `lib/dod6_v54_lifetime_reader.ts`), which is correct on this binary, a
 `{ type }` today. The pinned `bun-types@1.4.4` still carries the stale "Not yet implemented"
 comment. Pinned by [tests/bun_file_response.test.ts](../tests/bun_file_response.test.ts).
 
+**`SharedArrayBuffer`, measured 1.4.4 (2026-11-04).** Growable SABs work:
+`new SharedArrayBuffer(16, { maxByteLength: 64 })` reports `growable: true` / `maxByteLength: 64`,
+and `grow(32)` grows in place (byteLength 16→32, an existing `Uint8Array` view's length follows to
+32, new bytes zeroed, old bytes preserved). Growing past `maxByteLength` and any shrink throw
+`RangeError`; a fixed SAB reports `growable: false` and `grow()` throws `TypeError:
+SharedArrayBuffer is not growable`. `slice()` returns a copied, non-growable `SharedArrayBuffer`
+(subclass species is respected). One reference mismatch: the page's second overload
+`grow(size): SharedArrayBuffer` returns **`undefined`** at runtime — matching the first
+`grow(newByteLength?): void` overload and TypeScript's `lib.es2024.sharedmemory.d.ts` — so do not
+chain the call. The repo's only SAB use is the `Atomics.wait` sleep in
+[lib/f402_profile_lock.ts:145](../lib/f402_profile_lock.ts), measured working.
+
+Byte streams measured **`ArrayBuffer`-backed, not SAB-backed**, across `Bun.file().stream()`,
+`DecompressionStream` output, `Response` bodies (including one built from a SAB view), request
+bodies, `fetch` bodies, `spawn` stdout and TCP `Bun.listen`/`Bun.connect` data. The
+`Uint8Array<ArrayBufferLike>` annotations in [lib/f402_weblog.ts](../lib/f402_weblog.ts) and
+[lib/jsonl_stream_replay.ts](../lib/jsonl_stream_replay.ts) are therefore conservative rather than
+observed; keep the types (a stream source may change) but the "may sit on a SharedArrayBuffer"
+comment is not reproducible on this binary. `Bun.JSONL.parse` over a SAB-backed view, `Bun.write(
+path, sabView)` and `Bun.file(sabPathBytes)` all work.
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
