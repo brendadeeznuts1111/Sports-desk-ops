@@ -9,6 +9,7 @@
 
 import {
   parsePolymarketPosition,
+  parsePositionsEnvelope,
   type PolymarketPosition,
 } from "./polymarket_ingest.ts";
 
@@ -234,24 +235,44 @@ export async function fetchPnlSnapshot(
   };
 }
 
-/** Positions paginated by offset; 500/page, 3 pages max. */
+/**
+ * Positions from Data API v2, cursor paginated: 500 first-page rows, 3 pages max.
+ *
+ * The retired v1 route returned a bare array with `offset`; this requests `/v2/positions` and
+ * follows `pagination.next_cursor`. A bare array is still tolerated here only so captured
+ * fixtures replay — every live request is v2.
+ */
 export async function fetchProfilePositions(
   address: string,
   options?: ProfileFetchOptions,
 ): Promise<PolymarketPosition[]> {
   const base = (options?.dataBase ?? DATA_API).replace(/\/$/, "");
   const positions: PolymarketPosition[] = [];
+  let cursor: string | null = null;
   for (let page = 0; page < 3; page += 1) {
-    const rows: unknown = await requestJson(
-      `${base}/positions?user=${address}&sizeThreshold=0&limit=500&offset=${page * 500}`,
+    const params = new URLSearchParams({ user: address });
+    // `limit` applies to the first page only; the cursor binds the page size thereafter.
+    if (cursor === null) params.set("limit", "500");
+    else params.set("cursor", cursor);
+    const body: unknown = await requestJson(
+      `${base}/v2/positions?${params.toString()}`,
       options,
     );
-    if (!Array.isArray(rows)) break;
+    const envelope = parsePositionsEnvelope(body);
+    const rows =
+      envelope !== null ? envelope.rows : Array.isArray(body) ? body : [];
     for (const row of rows) {
       const parsed = parsePolymarketPosition(row);
       if (parsed !== null) positions.push(parsed);
     }
-    if (rows.length < 500) break;
+    if (
+      envelope === null ||
+      !envelope.hasMore ||
+      envelope.nextCursor === null
+    ) {
+      break;
+    }
+    cursor = envelope.nextCursor;
   }
   return positions;
 }
