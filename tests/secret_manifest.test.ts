@@ -65,6 +65,29 @@ describe("secret manifest invariants", () => {
       ...new Set(SECRET_MANIFEST.flatMap((secret) => secret.groups)),
     ]);
   });
+
+  test("telegram holds every variable the bot reads so seeding is one `--with` call", () => {
+    const telegram = getSecretsForGroup("telegram").map(
+      (secret) => secret.envName,
+    );
+    expect(new Set(telegram)).toEqual(
+      new Set([
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_WEBHOOK_SECRET",
+        "TELEGRAM_CHAT_ID",
+        "TELEGRAM_WEBHOOK_URL",
+        "TELEGRAM_MINIAPP_URL",
+      ]),
+    );
+    for (const secret of getSecretsForGroup("telegram")) {
+      expect(secret.inject).toBe(true);
+      expect(secret.keychainName).toBe(String(secret.envName));
+    }
+  });
+
+  test("TELEGRAM_CHAT_ID moved out of NON_SECRET_ALLOWLIST once it joined the manifest", () => {
+    expect(Object.keys(NON_SECRET_ALLOWLIST)).not.toContain("TELEGRAM_CHAT_ID");
+  });
 });
 
 describe("classifyName", () => {

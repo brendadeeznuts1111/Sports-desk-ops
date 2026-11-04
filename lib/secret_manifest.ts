@@ -116,6 +116,30 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     description: "Secret the Telegram webhook must present",
   },
   {
+    envName: "TELEGRAM_CHAT_ID",
+    keychainName: "TELEGRAM_CHAT_ID",
+    groups: ["telegram"],
+    inject: true,
+    description:
+      "Numeric destination chat the bot defaults to (also the first entry of TELEGRAM_ADMIN_CHAT_IDS)",
+  },
+  {
+    envName: "TELEGRAM_WEBHOOK_URL",
+    keychainName: "TELEGRAM_WEBHOOK_URL",
+    groups: ["telegram"],
+    inject: true,
+    description:
+      "Public https URL Telegram POSTs updates to; setWebhook refuses without a secret",
+  },
+  {
+    envName: "TELEGRAM_MINIAPP_URL",
+    keychainName: "TELEGRAM_MINIAPP_URL",
+    groups: ["telegram"],
+    inject: true,
+    description:
+      "Public https URL of the Mini App served at /miniapp (also used as a deep-link base)",
+  },
+  {
     envName: "F402_AGENT_ID",
     keychainName: "f402-agent-id",
     groups: ["f402"],
@@ -204,5 +228,4 @@ export const NON_SECRET_ALLOWLIST: Readonly<Record<string, string>> = {
     "master node id of the agent tree (defaults to MASTER1), a query parameter",
   SPORTSDESK_INGESTION_R2_KEY:
     "R2 object key (a path, default ingestion-audit.jsonl)",
-  TELEGRAM_CHAT_ID: "numeric destination chat, not a credential",
 };

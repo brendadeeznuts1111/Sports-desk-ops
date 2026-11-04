@@ -34,10 +34,16 @@ import {
   type BridgeRollupJobId,
 } from "../lib/bridge_rollup_cron.ts";
 
-/** The bridge schedules; the webview daemon owns them and the bot daemon must not duplicate them. */
+/**
+ * Schedules the long-lived webview daemon owns. The bot daemon excludes them
+ * (`startBotDaemon()` passes `exclude: BRIDGE_SCHEDULE_IDS`) so running both processes never
+ * double-fires. Add new daemon-owned schedules here, not to the bot's `only` list.
+ */
 export const BRIDGE_SCHEDULE_IDS = [
   "sched_bridge_rollup_15m",
   "sched_bridge_weblog_hourly",
+  "sched_agent_tree_hourly",
+  "sched_customer_profiles_6h",
 ] as const;
 
 export type ReportType =
@@ -46,7 +52,22 @@ export type ReportType =
   | "EVENING_SETTLEMENT"
   | "TEN_MINUTE_POSITIONS_PULSE"
   | "BRIDGE_ROLLUP_DIGEST"
-  | "CUSTOM_HOURLY_PULSE";
+  | "CUSTOM_HOURLY_PULSE"
+  | "SHELL_CAPTURE";
+
+/**
+ * One capture job the scheduler can run in-process. The `requires` list is checked before spawning:
+ * an entry that looks like an env var (`FOO_BAR`) must be set and non-blank; an entry prefixed
+ * `file:` must exist at `repoRoot/<path>`. A failed gate records "skipped" and does NOT spawn the
+ * CLI, so cron cannot hammer a tool that would exit 2 for missing credentials.
+ */
+export interface ShellJobSpec {
+  readonly bin: string;
+  readonly args: readonly string[];
+  readonly requires?: readonly string[];
+  /** Hard ceiling on wall-clock runtime; the scheduler aborts over this. Default 10 minutes. */
+  readonly timeoutSeconds?: number;
+}
 
 export interface ScheduleDefinition {
   readonly id: string;
@@ -59,6 +80,8 @@ export interface ScheduleDefinition {
   readonly tz?: string;
   /** Rollup jobs a bridge schedule runs; omitted means the whole cycle. */
   readonly bridgeJobs?: readonly BridgeRollupJobId[];
+  /** For `SHELL_CAPTURE` schedules only: the CLI to run when requires pass. */
+  readonly shellJob?: ShellJobSpec;
   enabled: boolean;
   lastTriggeredAt?: string;
 }
@@ -154,6 +177,14 @@ export class ReportingSchedulerService {
               });
             } else if (s.reportType === "BRIDGE_ROLLUP_DIGEST") {
               await this.dispatchBridgeDigest(s.bridgeJobs, s.targetChatId);
+            } else if (s.reportType === "SHELL_CAPTURE") {
+              if (s.shellJob === undefined) {
+                console.warn(
+                  `[Reporting Scheduler] ${s.id}: SHELL_CAPTURE without shellJob is a no-op`,
+                );
+              } else {
+                await shellCaptureRunner(s.shellJob);
+              }
             } else {
               await this.dispatchReportNow(s.reportType, s.targetChatId);
             }
@@ -232,6 +263,36 @@ export class ReportingSchedulerService {
           "Runs the WebLog corpus rollup hourly at minute 7 and sends an on-change Mode 6 digest. Overlaps are skipped.",
         tz: "America/Chicago",
         bridgeJobs: ["weblog"],
+        enabled: true,
+      },
+      {
+        id: "sched_agent_tree_hourly",
+        name: "Agent Tree Rebuild (hourly)",
+        scheduleTime: "11 * * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Runs `bun run build:agent-tree` once per hour so data/agent-tree.json tracks the F402 downline. Skipped when F402_BEARER_TOKEN is unset (cron cannot re-authenticate).",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: ["run", "build:agent-tree"],
+          requires: ["F402_BEARER_TOKEN"],
+        },
+        enabled: true,
+      },
+      {
+        id: "sched_customer_profiles_6h",
+        name: "Customer Book Rebuild (every 6h)",
+        scheduleTime: "27 */6 * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Runs `bun run customers:profiles` four times a day so data/customer-profiles.json is fresh. Skipped when the gitignored enriched_customers_full.json fixture is absent.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: ["run", "customers:profiles"],
+          requires: ["file:enriched_customers_full.json"],
+        },
         enabled: true,
       },
     ];
@@ -444,6 +505,130 @@ export function setBridgeCycleRunner(
   ) => Promise<BridgeRollupCycleResult>,
 ): void {
   bridgeCycleRunner = runner;
+}
+
+export type ShellCaptureOutcome =
+  | {
+      readonly status: "ok";
+      readonly exitCode: number;
+      readonly durationMs: number;
+    }
+  | { readonly status: "skipped"; readonly missing: readonly string[] }
+  | {
+      readonly status: "failed";
+      readonly exitCode: number;
+      readonly durationMs: number;
+      readonly reason: string;
+    };
+
+/** Repo root; `file:` requires resolve relative to it. */
+const REPO_ROOT = resolve(import.meta.dir, "..");
+
+/**
+ * Check the requires list and spawn the capture CLI. Never prints env values, never passes the
+ * parent environment with `inherit` — the spawned child inherits the daemon's env explicitly only
+ * for PATH and the manifest-listed credentials the capture needs (F402/GSID are read from the
+ * keychain by the scripts themselves, so no injection is needed here).
+ */
+export async function runShellCaptureDefault(
+  spec: ShellJobSpec,
+  logger: {
+    readonly log: (line: string) => void;
+    readonly warn: (line: string) => void;
+  } = console,
+): Promise<ShellCaptureOutcome> {
+  const missing: string[] = [];
+  for (const requirement of spec.requires ?? []) {
+    if (requirement.startsWith("file:")) {
+      const relative = requirement.slice("file:".length);
+      if (!existsSync(resolve(REPO_ROOT, relative))) missing.push(requirement);
+      continue;
+    }
+    const value = (Bun.env[requirement as keyof typeof Bun.env] ?? "")
+      .toString()
+      .trim();
+    if (value === "") missing.push(requirement);
+  }
+  if (missing.length > 0) {
+    // Only names are logged, never values.
+    logger.log(
+      `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: skipped (missing ${missing.join(",")})`,
+    );
+    return { status: "skipped", missing };
+  }
+
+  // `Bun.nanoseconds()` is monotonic; `Date.now()` can jump backwards on a clock correction and
+  // would fail the policy ratchet (`perf-now-timing`).
+  const started = Bun.nanoseconds();
+  const elapsedMs = () => Math.round((Bun.nanoseconds() - started) / 1e6);
+  const timeoutSeconds = spec.timeoutSeconds ?? 600;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutSeconds * 1_000);
+  try {
+    const child = Bun.spawn([spec.bin, ...spec.args], {
+      cwd: REPO_ROOT,
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
+      signal: abort.signal,
+    });
+    const exitCode = await child.exited;
+    const durationMs = elapsedMs();
+    if (abort.signal.aborted) {
+      logger.warn(
+        `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: aborted after ${timeoutSeconds}s`,
+      );
+      return {
+        status: "failed",
+        exitCode,
+        durationMs,
+        reason: `timed out after ${timeoutSeconds}s`,
+      };
+    }
+    if (exitCode === 0) {
+      logger.log(
+        `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: ok in ${durationMs}ms`,
+      );
+      return { status: "ok", exitCode, durationMs };
+    }
+    logger.warn(
+      `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: exit ${exitCode} after ${durationMs}ms`,
+    );
+    return {
+      status: "failed",
+      exitCode,
+      durationMs,
+      reason: `exit ${exitCode}`,
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: ${reason}`,
+    );
+    return {
+      status: "failed",
+      exitCode: -1,
+      durationMs: elapsedMs(),
+      reason,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+let shellCaptureRunner: (spec: ShellJobSpec) => Promise<ShellCaptureOutcome> =
+  runShellCaptureDefault;
+
+/** Replace the capture runner; tests only. */
+export function setShellCaptureRunner(
+  runner: (spec: ShellJobSpec) => Promise<ShellCaptureOutcome>,
+): void {
+  shellCaptureRunner = runner;
+}
+
+/** Reset to the default spawning runner; tests use this in `afterEach`. */
+export function resetShellCaptureRunner(): void {
+  shellCaptureRunner = runShellCaptureDefault;
 }
 
 /** Scheduled reports plus inbound commands; polls only when no webhook is registered. */

@@ -96,6 +96,11 @@ import {
 } from "../lib/desk_kpis.ts";
 import { ReportingSchedulerService } from "./reporting_scheduler_service.ts";
 import {
+  describeSource,
+  resolveSecretEnv,
+  SECRET_ENV_GROUPS,
+} from "../lib/secret_env.ts";
+import {
   REPORT_TYPES,
   SportsDeskTelegramService,
   isReportType,
@@ -3068,12 +3073,24 @@ export function startServer(options?: ServerOptions) {
         pathname === "/api/telegram/status" &&
         (req.method === "GET" || req.method === "HEAD")
       ) {
+        // Names and sources only; never values. The route is already admin-gated above, so this
+        // is safe to return; the dashboard reads it to name any variable the operator still needs
+        // to seed with `bun run secrets:env set <NAME>`.
+        const { report: seedingReport } = await resolveSecretEnv(
+          SECRET_ENV_GROUPS["telegram"] ?? [],
+        );
+        const seeding = seedingReport.map((row) => ({
+          name: row.name,
+          source: describeSource(row.source),
+          kind: row.source.kind,
+        }));
         return Response.json(
           {
             success: true,
             status: await telegramService.getStatus(),
             schedules: scheduler.getSchedules(),
             reportTypes: REPORT_TYPES,
+            seeding,
           },
           { headers: cors },
         );
@@ -3269,7 +3286,7 @@ export function startBridgeSchedules(): () => void {
   const scheduler = new ReportingSchedulerService();
   const stop = scheduler.startBridgeSchedules();
   console.log(
-    "[Bridge Cron] bridge schedules active (America/Chicago): 3a/3b/3c every 15m, weblog hourly at :07",
+    "[Bridge Cron] schedules active (America/Chicago): 3a/3b/3c every 15m, weblog hourly at :07, agent-tree hourly at :11 (requires F402_BEARER_TOKEN), customer-profiles every 6h at :27 (requires enriched_customers_full.json)",
   );
   return stop;
 }

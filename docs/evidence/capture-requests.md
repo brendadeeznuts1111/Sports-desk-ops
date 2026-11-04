@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:1471-1490`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:1476-1495`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3134-3159`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3162-3182`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3151-3176`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3179-3199`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3214-3222`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3231-3239`).
 
 ## P7 — the customer report surface (7 candidates)
 
