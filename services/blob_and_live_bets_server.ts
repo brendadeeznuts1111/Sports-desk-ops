@@ -730,24 +730,14 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
     }
     if (level === "critical") pendingTickets.clear();
   };
-  const processEvents = process as unknown as {
-    on?(
-      event: "memoryPressure",
-      listener: (level: "warning" | "critical") => void,
-    ): void;
-    removeListener?(
-      event: "memoryPressure",
-      listener: (level: "warning" | "critical") => void,
-    ): void;
-  };
-  processEvents.on?.("memoryPressure", memoryPressure);
+  process.on("memoryPressure", memoryPressure);
   let closed = false;
   return {
     server,
     close: (force = true) => {
       if (closed) return;
       closed = true;
-      processEvents.removeListener?.("memoryPressure", memoryPressure);
+      process.removeListener("memoryPressure", memoryPressure);
       server.stop(force);
     },
     publish(channel: string, event: unknown): number {

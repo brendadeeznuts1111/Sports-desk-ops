@@ -81,3 +81,23 @@ declare global {
     ): Promise<CryptoKey>;
   }
 }
+
+/** Bun 1.4 process memory-pressure event (not yet in @types/node). */
+declare global {
+  namespace NodeJS {
+    interface Process {
+      on(
+        event: "memoryPressure",
+        listener: (level: "warning" | "critical") => void,
+      ): this;
+      off(
+        event: "memoryPressure",
+        listener: (level: "warning" | "critical") => void,
+      ): this;
+      removeListener(
+        event: "memoryPressure",
+        listener: (level: "warning" | "critical") => void,
+      ): this;
+    }
+  }
+}
