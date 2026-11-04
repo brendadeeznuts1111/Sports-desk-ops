@@ -6,7 +6,7 @@
  *   bun run schema:dump-lag -- tests/fixtures/prod-schema.json
  */
 
-import { execSync } from "node:child_process";
+import { $ } from "bun";
 import { resolve } from "node:path";
 import { parseProdSchemaDump } from "../lib/schema_prod_dump.ts";
 
@@ -19,9 +19,9 @@ async function main(): Promise<number> {
   const dump = parseProdSchemaDump(await Bun.file(dumpPath).json());
   let commitIso: string;
   try {
-    commitIso = execSync(`git log -1 --format=%aI -- "${dumpPath}"`, {
-      encoding: "utf8",
-    }).trim();
+    // Bun Shell quotes the interpolated path, so a fixture name containing quotes or `$()`
+    // cannot become a second command; .text() captures quietly and rejects on a non-zero exit.
+    commitIso = (await $`git log -1 --format=%aI -- ${dumpPath}`.text()).trim();
   } catch {
     console.error(`schema:dump-lag: no git history for ${dumpPath}`);
     return 1;

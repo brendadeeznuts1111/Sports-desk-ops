@@ -5,15 +5,18 @@
  * the async iterator (the promise itself is not iterable); an output method implicitly quiets,
  * while a bare await echoes to the parent stdout; `ShellError` carries Buffer stdout/stderr.
  *
- * Production source must not use the tag at all: interpolation routes bytes through a shell
- * parser (see lib/f402_credentials_policy.ts). Subprocess work uses Bun.spawn with an argv array.
+ * Policy: the tag is tooling-only (`scripts/`, `bin/`) and every use captures its output or
+ * calls `.quiet()`. Library and daemon code (`lib/`, `services/`, `cli/`) uses Bun.spawn with an
+ * argv array, and credentials/TTY reads never use a shell (lib/f402_credentials_policy.ts).
  */
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const ROOT = join(import.meta.dir, "..");
-const PRODUCTION_ROOTS = ["lib", "scripts", "services", "bin", "cli"];
+const LIBRARY_ROOTS = ["lib", "services", "cli"];
+const TOOLING_ROOTS = ["scripts", "bin"];
+const ALL_ROOTS = [...LIBRARY_ROOTS, ...TOOLING_ROOTS];
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 
 /** Comments and string/template literals are not call sites (`Bun.${name}` is not `Bun.$`). */
@@ -120,9 +123,9 @@ describe("Bun Shell contract", () => {
     expect(bare).toContain("DONE");
   });
 
-  test("production source does not use the shell tag", async () => {
+  test("the tag is tooling-only and always captures or quiets", async () => {
     const listed = Bun.spawnSync({
-      cmd: ["git", "ls-files", ...PRODUCTION_ROOTS],
+      cmd: ["git", "ls-files", ...ALL_ROOTS],
       cwd: ROOT,
       stdout: "pipe",
       stderr: "pipe",

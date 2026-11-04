@@ -281,9 +281,13 @@ and present after it.
   `Buffer`s; the stderr bytes are available even though the promise rejected.
 - **Do not copy the `T[P<P>]` generic signatures** from the reference page; they are malformed.
 
-The repo does not use `Bun.$` in production: interpolation routes bytes through a shell parser
-(`lib/f402_credentials_policy.ts`), so subprocess work uses `Bun.spawn` with an argv array.
-`tests/bun_shell_contract.test.ts` pins the semantics above and the production-source ban.
+**Where it may be used:** tooling only (`scripts/`, `bin/`), and every command must capture its
+output (`.text()`/`.bytes()`/`.lines()`/…) or call `.quiet()` — a bare await would echo. The tag
+quotes interpolations, which is safer than building an `sh -c` string: `scripts/compute_dump_lag.ts`
+now passes a fixture path through the tag instead of `execSync("… \"${dumpPath}\"")`. Library and
+daemon code (`lib/`, `services/`, `cli/`) uses `Bun.spawn` with an argv array, and credentials/TTY
+reads never use a shell (`lib/f402_credentials_policy.ts`). `tests/bun_shell_contract.test.ts`
+enforces that split and the capture rule.
 
 ## Live docs and reference (check behavior on 1.4.4)
 
