@@ -460,18 +460,67 @@ Test classification detail lives in the four workstream reports; the core set is
 This section is intentionally outside the snapshot: the audit body describes `8522a04`, and the
 fixes below landed on `feat/secrets-keychain-hardening` afterwards.
 
-| Finding                            | Status                                                                                                                                                                                                | Commit    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 5 — write CLIs execute on import   | **Fixed**: `import.meta.main` guards on `secrets_f402`, `secrets_gslive`, `secrets_r2`, `capture:f402-har`                                                                                            | `f7f1673` |
-| 15 — `../types/bun-api.ts`         | **Fixed**: extensionless import resolves to the only file, `bun-api.d.ts`                                                                                                                             | `f7f1673` |
-| 2 — F402 readers legacy-only       | **Fixed**: `resolveAgentId` routes through `lib/secrets.readSecretCanonicalThenLegacy`; player credentials are env-only because nothing writes `f402-player-*`                                        | `d24b866` |
-| 4 — GSLive status/delete asymmetry | **Fixed**: status reports the service it actually found; delete removes canonical + `sportsdesk-gslive` + `sportsdesk-ops`                                                                            | `97bcfe3` |
-| 1 — three GSID fallbacks           | **Fixed**: one contract owns canonical + `sportsdesk-gslive` + `sportsdesk-ops`, and every GSID reader (`fetch-bet-tally`, `gslive_auto_session`, bridge probe, `secrets:gslive`) walks the same list | `7f0353f` |
-| 9 — stale “no keychain API” header | **Fixed**: the module header now says Bun 1.4.4 exposes `Bun.secrets`                                                                                                                                 | `7f0353f` |
-| 10 — validation bypassed on writes | **Partial**: every write now goes through `secretSetOptions` (bounds + `persist: "local"`); `secrets:f402 set` still writes agent-id before password                                                  | `7f0353f` |
-| 11 — empty-string semantics        | **Partial**: contract reads treat blank/whitespace as absent; supervisor’s empty BLOB gate and the ticker token cache remain                                                                          | `7f0353f` |
-| 12 — hardcoded service literals    | **Partial**: F402/GSID/Telegram names centralized; R2 constants still live in `lib/r2_s3_client.ts` behind the contract re-export                                                                     | `7f0353f` |
-| 3, 6, 7, 8, 13, 14                 | **Open** (see §7)                                                                                                                                                                                     | —         |
+| Finding                            | Status                                                                                                                                                                                                | Commit      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 5 — write CLIs execute on import   | **Fixed**: `import.meta.main` guards on `secrets_f402`, `secrets_gslive`, `secrets_r2`, `capture:f402-har`                                                                                            | `f7f1673`   |
+| 15 — `../types/bun-api.ts`         | **Fixed**: extensionless import resolves to the only file, `bun-api.d.ts`                                                                                                                             | `f7f1673`   |
+| 2 — F402 readers legacy-only       | **Fixed**: `resolveAgentId` routes through `lib/secrets.readSecretCanonicalThenLegacy`; player credentials are env-only because nothing writes `f402-player-*`                                        | `d24b866`   |
+| 4 — GSLive status/delete asymmetry | **Fixed**: status reports the service it actually found; delete removes canonical + `sportsdesk-gslive` + `sportsdesk-ops`                                                                            | `97bcfe3`   |
+| 1 — three GSID fallbacks           | **Fixed**: one contract owns canonical + `sportsdesk-gslive` + `sportsdesk-ops`, and every GSID reader (`fetch-bet-tally`, `gslive_auto_session`, bridge probe, `secrets:gslive`) walks the same list | `7f0353f`   |
+| 9 — stale “no keychain API” header | **Fixed**: the module header now says Bun 1.4.4 exposes `Bun.secrets`                                                                                                                                 | `7f0353f`   |
+| 10 — validation bypassed on writes | **Partial**: every write now goes through `secretSetOptions` (bounds + `persist: "local"`); `secrets:f402 set` still writes agent-id before password                                                  | `7f0353f`   |
+| 11 — empty-string semantics        | **Partial**: contract reads treat blank/whitespace as absent; supervisor’s empty BLOB gate and the ticker token cache remain                                                                          | `7f0353f`   |
+| 12 — hardcoded service literals    | **Partial**: F402/GSID/Telegram names centralized; R2 constants still live in `lib/r2_s3_client.ts` behind the contract re-export                                                                     | `7f0353f`   |
+| 6 — tests hit the real keychain    | **Fixed**: import-time probe removed (lazy, two-key opt-in); `lib/keychain_access.ts` denies every test process; `security` fallbacks gated; static + dynamic gate (see §13)                          | this branch |
+| 3, 7, 8, 13, 14                    | **Open** (see §7)                                                                                                                                                                                     | —           |
 
 Consequence for the runbook: `docs/bun-upstream-reference.md` now says write canonical, verify with
 `secrets:f402 status`, then delete legacy — not the other way round.
+
+---
+
+## 13. Keychain boundary (2026-11-04, `feat/secrets-keychain-hardening`)
+
+Finding 6 is fixed by a single boundary module instead of per-test discipline:
+
+- **`lib/keychain_access.ts`** is the only module that calls `Bun.secrets.get/set/delete`.
+  `keychainAccessDecision()` denies when `NODE_ENV=test` (set by `bun test`), when `Bun.main` is a
+  `.test.ts`/`tests/` entrypoint (this still denies if a `.env` overwrites `NODE_ENV`), or when
+  `SPORTSDESK_KEYCHAIN_ACCESS=deny`. `guardedSecrets` is the drop-in default for every
+  reader/writer: denied reads return `null`, denied writes throw `KeychainAccessDeniedError`.
+  `platformKeychainAllowed()` gates the two `security` CLI spawns
+  (`lib/f402_credentials_policy.ts`, `scripts/secrets_r2.ts`).
+- **`tests/support/capabilities.ts`** no longer writes at import time. The `Bun.secrets` round trip
+  runs only under an explicit two-part opt-in: the module top level checks
+  `SPORTSDESK_KEYCHAIN_PROBE=1` before awaiting the probe, and the probe itself requires
+  `keychainAccessDecision()` to allow (`SPORTSDESK_KEYCHAIN_ACCESS=allow` in a test process). A
+  normal `bun test` (even one importing the file) touches no keychain item.
+- **Every default reader/writer** now defaults to `guardedSecrets`, not `Bun.secrets`:
+  `lib/secrets.ts`, `lib/r2_s3_client.ts`, `lib/f402_credentials_policy.ts`,
+  `scripts/capture/f402_login.ts`, `scripts/live_positions_cron.ts`, `scripts/secrets_r2.ts`,
+  `services/supervisor.ts`.
+- **`tests/keychain_boundary.test.ts`** pins both halves: runtime decision/behaviour (including that
+  production/staging/unset `NODE_ENV` stay **allowed** — deny is only for provable test signals),
+  and a static scan that fails if any live-tree non-test `.ts/.tsx/.mts/.cts/.js/.jsx/.mjs/.cjs`
+  file calls `Bun.secrets` (dot/bracket/destructured/bare), binds the raw `secrets` export from
+  `bun`, or spawns `security` without `platformKeychainAllowed()`. `node_modules/`, `.worktrees/`
+  and `.agents/` are excluded from pass/fail; stale copies there are counted and printed.
+- **CI enforces the trace**, so the invariant survives the next contributor: one step runs
+  `SPORTSDESK_KEYCHAIN_TRACE=1 bun test tests/` and fails on any `[keychain] denied` line whose call
+  site is not `tests/keychain_boundary.test.ts`; a second step runs `bun --no-env-file test tests/`
+  to prove the 1Password-mounted `.env` FIFO is inert for tests.
+
+Measured 2026-11-04: `SPORTSDESK_KEYCHAIN_TRACE=1 bun test` over the full suite → **0
+`[keychain] denied` lines** across **2,817 tests / 320 files (2,768 pass, 49 skip, 0 fail)**. The
+boundary gate silences its own trace while asserting the denied path, so the suite-wide invariant
+needs no file exclusion. The CI-made `.env`-off run (`bun --no-env-file test tests/ --parallel`)
+also passes (2,121 tests, 0 fail), which required marking `Bun.s3` members volatile in
+`lib/bun_shapes.ts` — its prototype surface depends on whether S3/R2 credentials were present at
+startup. Before this change, importing
+`capabilities.ts` ran the `dx-probe` set/get/delete during module init in every worker that loaded
+one of the 8 importing test files, which is the keychain pressure Finding 6 recorded (with
+`--parallel`, up to one probe per worker; serial, one per run).
+
+The boundary is runtime, not only convention: `NODE_ENV=test` is set by `bun test`, and `Bun.main`
+identifies the test entrypoint even if a caller overwrites `NODE_ENV`. `bun run <script>` (no test
+context) is still allowed to read the keychain, which is what the CLIs and daemons need.
