@@ -13,14 +13,14 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
 
 const SECRET = "csrf-test-secret-0123456789";
 
-/** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
+/** `Bun.env` properties are typed readonly; mutate through Reflect. */
 function setEnv(key: string, value: string | undefined): void {
-  if (value === undefined) Reflect.deleteProperty(process.env, key);
-  else Reflect.set(process.env, key, value);
+  if (value === undefined) Reflect.deleteProperty(Bun.env, key);
+  else Reflect.set(Bun.env, key, value);
 }
 
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
-const savedSecret = process.env["SPORTSDESK_CSRF_SECRET"];
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+const savedSecret = Bun.env["SPORTSDESK_CSRF_SECRET"];
 const ADMIN = "csrf-test-admin-token";
 // The telegram/watchlist gate is deliberately unconditional (unlike the PII guard, loopback
 // is not exempt), so mutations must carry both the bearer and the CSRF pair — the dashboard does.
@@ -200,9 +200,12 @@ describe("mutating routes require the session-bound token", () => {
 
   test("POST with a tampered token is 403", async () => {
     const { session, token } = await issueToken();
-    const tampered = token.endsWith("A")
-      ? `${token.slice(0, -1)}B`
-      : `${token.slice(0, -1)}A`;
+    // Flip a payload byte, not the final base64 character: the last character can carry only
+    // padding bits, so changing it may decode to the same bytes and still verify.
+    const at = 5;
+    const flipped = token[at] === "A" ? "B" : "A";
+    const tampered = `${token.slice(0, at)}${flipped}${token.slice(at + 1)}`;
+    expect(tampered).not.toBe(token);
     const res = await fetch(`${base}/api/watchlist`, {
       method: "POST",
       headers: {
