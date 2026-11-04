@@ -67,16 +67,16 @@ needs a merge/rebase from `main` before it is merged, not a split PR.
 
 ### Explicit scope: this is NOT "audit §7 done"
 
-| Audit §7 item | Status in this PR |
-|---|---|
-| Single contract module | **Done earlier (`7f0353f`, verified)**: `lib/secrets.ts` owns services/entries/reads/writes/deletes; this PR consumes it |
-| Break `lib → scripts` imports | **Not done** — still present (e.g. `lib/blob_ingest.ts:28`, `lib/gslive_session.ts:20`) |
-| GSID legacy contract | **Done earlier (`7f0353f`, verified)**: one `GSID_SERVICES` walk; audit §12 Finding 1 |
-| One bounded writer | **Partial** — `secretSetOptions` bounds + `persist: "local"`; partial-pair write is still possible (Finding 10) |
-| Entry guards | **Done earlier (`f7f1673`, verified)**: `import.meta.main` on all four CLIs, pinned by `tests/secrets_cli_import_guards.test.ts` |
-| Test seam | **Done — this PR** |
-| Child env (`buildMinimalSpawnEnv`) | **Not done** — Finding 7 |
-| Docs | **Partial** — AGENTS, Bun reference, audit updated; runbooks and `lib/onepassword_session_bridge.ts` header still stale (Finding 8) |
+| Audit §7 item                      | Status in this PR                                                                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Single contract module             | **Done earlier (`7f0353f`, verified)**: `lib/secrets.ts` owns services/entries/reads/writes/deletes; this PR consumes it            |
+| Break `lib → scripts` imports      | **Not done** — still present (e.g. `lib/blob_ingest.ts:28`, `lib/gslive_session.ts:20`)                                             |
+| GSID legacy contract               | **Done earlier (`7f0353f`, verified)**: one `GSID_SERVICES` walk; audit §12 Finding 1                                               |
+| One bounded writer                 | **Partial** — `secretSetOptions` bounds + `persist: "local"`; partial-pair write is still possible (Finding 10)                     |
+| Entry guards                       | **Done earlier (`f7f1673`, verified)**: `import.meta.main` on all four CLIs, pinned by `tests/secrets_cli_import_guards.test.ts`    |
+| Test seam                          | **Done — this PR**                                                                                                                  |
+| Child env (`buildMinimalSpawnEnv`) | **Not done** — Finding 7                                                                                                            |
+| Docs                               | **Partial** — AGENTS, Bun reference, audit updated; runbooks and `lib/onepassword_session_bridge.ts` header still stale (Finding 8) |
 
 ### Note on `data/STALE.md`
 
