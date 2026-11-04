@@ -120,6 +120,10 @@ import {
   resizeLogo,
   type LogoMetadata,
 } from "../lib/logo_image.ts";
+import {
+  sendFrameOrClose,
+  WS_BACKPRESSURE_OPTIONS,
+} from "../lib/ws_backpressure.ts";
 
 /** `null` when the request comes from the same machine; otherwise the admin gate applies. */
 export function isLoopbackAddress(address: string | null | undefined): boolean {
@@ -2403,6 +2407,7 @@ type BridgeSocket = {
   subscribe: (channel: string) => void;
   unsubscribe: (channel: string) => void;
   send: (frame: string) => number;
+  close: (code?: number, reason?: string) => void;
 };
 
 type BridgeProtocols = {
@@ -2497,7 +2502,7 @@ export function withBridgeUpgrade(
 }
 
 function bridgeSend(socket: BridgeSocket, payload: unknown): void {
-  socket.send(JSON.stringify(payload));
+  sendFrameOrClose(socket, JSON.stringify(payload));
 }
 
 /**
@@ -2506,6 +2511,9 @@ function bridgeSend(socket: BridgeSocket, payload: unknown): void {
  * `channels` and `subscriptions` both come from uWebSockets' own topic table.
  */
 export const bridgeWebsocket = {
+  // Relayed rollups go out through `bridgeHub.publish`, which drops frames for a stalled tab
+  // while the socket stays open; the cap closes it so the page reconnects and resubscribes.
+  ...WS_BACKPRESSURE_OPTIONS,
   open(): void {
     startBridgeRelay();
   },
@@ -2606,7 +2614,14 @@ async function connectBridgeRelay(): Promise<void> {
       }
     });
     socket.addEventListener("message", (event) => {
-      const raw = typeof event.data === "string" ? event.data : "";
+      if (typeof event.data !== "string") {
+        // The gateway only sends text frames; a binary one is a protocol change worth seeing.
+        console.warn(
+          "[bridge] relay dropped a non-text frame from the gateway",
+        );
+        return;
+      }
+      const raw = event.data;
       if (raw === "" || bridgeHub === null) return;
       let kind: unknown;
       try {

@@ -22,6 +22,11 @@ import {
   resolveR2CredentialsAsync,
   resolveSecretBackedEnv,
 } from "../lib/r2_s3_client.ts";
+import {
+  sendFrameOrClose,
+  WS_BACKPRESSURE_OPTIONS,
+  type WsFrameSocket,
+} from "../lib/ws_backpressure.ts";
 
 export interface BlobStat {
   readonly size: number;
@@ -652,6 +657,9 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
     },
     fetch: () => jsonError(404, "not_found", "Not Found"),
     websocket: {
+      // Published frames bypass sendFrame, so the cap closes a stalled subscriber rather than
+      // letting server.publish drop its frames while the socket stays open.
+      ...WS_BACKPRESSURE_OPTIONS,
       open(ws) {
         // Bun auto-corks open/message; this stays synchronous on purpose.
         ws.subscribe("live-bets");
@@ -717,20 +725,12 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
   });
 
   /**
-   * Frame writer. Bun's `ws.send` returns bytes sent, `0` when dropped and `-1` when the
-   * socket's send buffer is full, so backpressure closes instead of losing frames silently.
+   * Frame writer. Bun's `ws.send` returns bytes sent, `0` when dropped and `-1` on backpressure;
+   * `sendFrameOrClose` closes on both so frames are never lost silently.
    * Declared as a hoisted function: it is only called from the handlers above.
    */
-  function sendFrame(
-    socket: {
-      send: (frame: string) => number;
-      close: (code: number, reason: string) => void;
-    },
-    payload: unknown,
-  ): void {
-    if (socket.send(JSON.stringify(payload)) === -1) {
-      socket.close(1011, "backpressure");
-    }
+  function sendFrame(socket: WsFrameSocket, payload: unknown): void {
+    sendFrameOrClose(socket, JSON.stringify(payload));
   }
 
   const memoryPressure = (level: "warning" | "critical"): void => {
