@@ -320,13 +320,7 @@ async function readBounded(
   } finally {
     reader.releaseLock();
   }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
+  return Bun.concatArrayBuffers(chunks, total, true);
 }
 
 async function transcodeToWebp(

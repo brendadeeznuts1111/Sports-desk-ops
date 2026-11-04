@@ -25,10 +25,11 @@ export function mergeUint8JsonlChunks(
 ): JsonlByteBuffer {
   if (chunk.length === 0) return buffer;
   if (buffer.length === 0) return chunk;
-  const merged = new Uint8Array(buffer.length + chunk.length);
-  merged.set(buffer);
-  merged.set(chunk, buffer.length);
-  return merged;
+  return Bun.concatArrayBuffers(
+    [buffer, chunk],
+    buffer.length + chunk.length,
+    true,
+  );
 }
 
 export function carryForwardJsonlBuffer(
