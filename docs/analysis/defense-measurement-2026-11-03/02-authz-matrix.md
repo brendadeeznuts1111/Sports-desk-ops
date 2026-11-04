@@ -2,9 +2,14 @@
 
 **Status: NOT EXECUTED — BLOCKED.** No authenticated test was run: this environment has no
 low-privilege test account, no written authorization to send tampered authenticated requests to the
-vendor, and no server-team answer. The matrix below is the test that must run; the only live
-observations included are the unauthenticated, read-only probes already recorded in
+vendor, and no server-team answer. The only live observations included are the unauthenticated,
+read-only probes already recorded in
 `docs/evidence/manager-portal-client-exposure-2026-11-03.md`.
+
+**The deliverable is one paragraph:** _does the server authorize on the Bearer's claims, or on
+client-supplied `customerID`/`agentID`/`agentOwner`/`MASTER_ID`/`RRO`?_ The matrix and tamper log
+below are the evidence that produces that answer — not the product. The full matrix is optional
+until the answer is known.
 
 ## The question that reorders the roadmap
 
@@ -17,6 +22,24 @@ Three outcomes, each with a different consequence:
 | **Claim-derived** | Server re-derives the caller and permitted targets from the Bearer/session; body `agentID`/`agentOwner` are ignored or validated | Subordinate tampering confirmed blocked; client XSS remains the main path to authority              |
 | **Body-trusting** | Server uses `agentID`/`agentOwner`/`customerID` from the body as the target/caller identity                                      | Any subordinate agent can act as a peer/superior; this outranks every client-side control in flight |
 | **Hybrid**        | Some endpoints validate, others do not                                                                                           | The matrix is the deliverable; per-endpoint allowlists required                                     |
+
+## Minimum viable test — the actual ask is five requests, not a full matrix
+
+One low-privilege subordinate-agent session and a proxy are enough to answer the question with
+**four read-only requests**, plus one mutation only if the test tenant and authorization explicitly
+allow disposable money data:
+
+| #   | Request                        | Tamper                                      | Answer signal                                                                                           |
+| --- | ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1   | `Manager/getMasterSheet`       | `agentID = peer`                            | peer's accounting rows returned → body-trusting                                                         |
+| 2   | `Manager/getListAgenstByAgent` | `MASTER_ID` in sessionStorage → peer master | peer's downline returned → body/`MASTER_ID`-trusting                                                    |
+| 3   | `Manager/searchCustomerAdmin`  | `agentID`/`customerID` = peer's player      | player's PII returned → body-trusting                                                                   |
+| 4   | `Manager/getTransactions`      | `customerID` = peer's customer              | peer's transactions returned → body-trusting                                                            |
+| 5   | `Manager/updateDistribution`   | `agentID = peer`, value below parent        | **only with explicit mutation authorization**: 200 + no ledger artifact → financial gap plus body-trust |
+
+If any read returns another principal's rows, the verdict is **client-supplied identity**; if all
+four return 403/empty, the verdict is **claim-derived**. The full matrix refines per-endpoint gaps
+afterwards. Server-team ask: roughly **two hours** with a test account, not a multi-day matrix.
 
 ## What the client sends (measured from pinned code and captures)
 

@@ -43,12 +43,17 @@ test. That cannot be satisfied by repository analysis, and this pack does not pr
 
 ## Headline (provisional until item 2)
 
-1. **No financial reconciliation invariant exists in this repository, and the financial mutation
-   endpoints have no captured wire evidence.** That outranks every client XSS fix in flight
-   ([03](./03-financial-controls.md)).
+1. **The client's financial audit is a claim, not a ledger.** The client repo contains no
+   reconciliation invariant, and the only audit path — `Log/write` after AJAX success — is
+   non-atomic, forgeable and omittable: a malicious client skips it, a crashed tab loses it, a retry
+   double-writes it. Whether the **server** reconciles is unknown; that is the business owner's and
+   server team's question sitting beside item 2. What is measured: _the client cannot tell whether
+   the server is reconciling, and cannot prove a mutation happened._ That outranks every client XSS
+   fix in flight ([03](./03-financial-controls.md)).
 2. **The client is not an authorization boundary.** It actively rewrites `agentID`/`agentOwner` from
    `MASTER_ID` and allows callers to survive a second rewrite — but nothing in this repo proves the
-   server re-derives identity from Bearer claims ([02](./02-authz-matrix.md)).
+   server re-derives identity from Bearer claims. The Bearer verdict is item 2's actual deliverable;
+   the matrix is only its evidence ([02](./02-authz-matrix.md)).
 3. **What the client controls can claim:** they raise the cost of stored XSS on one Chromium path
    and make asset drift visible. They cannot stop authorization tampering, financial manipulation,
    insider action, or account takeover. The roadmap must not present them as a fix for those.

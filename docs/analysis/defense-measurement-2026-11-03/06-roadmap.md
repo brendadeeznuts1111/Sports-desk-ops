@@ -30,17 +30,41 @@ could not be measured here. Items 1, 3 and 5 are enough to move two workstreams,
 | 7   | **WebKit injection path**                                                                       | scoped by census; not started                               | Depends on item 2 and a real backend census; premature before authz/financial work                                                                               | **Pause** — re-scope after items 1–2                                   |
 | 8   | **Detection layer** (reject-rate, session lifecycle, financial alerts, agent-tree canary)       | design only                                                 | Directly addresses actors 2/3/5/6; needs server/vendor cooperation                                                                                               | **Raise with items 1–2**, not as client-only work                      |
 
-## Explicit pause / raise
+## Recommendation: pause client-side security work pending item 2's Bearer verdict
 
-- **Pause:** WebKit injection path, the external-view canary, and any further client-side seam member
-  or pin expansion. The measurement pack says these are not load-bearing until the server-trust
-  question and the financial gap are addressed.
-- **Pause:** sink migrations (explicit non-goal until the Bearer verdict), except holding the
-  already-landed escaper.
-- **Raise:** the authz matrix (item 2) and the financial invariant/reconciliation work (item 3) above
-  every client control. If item 2 returns body-trusting, subordinate-to-master is a live escalation
-  and no client control in flight matters as much; if item 3 confirms no reconciliation, insider and
-  tampered financial changes are invisible by construction.
+This is one decision, not six. The seam, guard, pin gate and SRI work address **one of the six
+actors** in the adversary model. The two highest-authority actors — subordinate-agent tampering
+(actor 2) and the inside operator (actor 6) — have **no detection and no stopping control** in the
+evidence. Continuing to build against the wrong actor spends effort that item 2 may reallocate.
+
+**Paused until item 2 answers:** the WebKit injection path, the external-view canary, further seam or
+pin expansion, and the sink migrations. They resume once item 2 either confirms the Bearer is
+load-bearing (client work matters and resumes with `searchComponent`) or shows the server trusts
+client-supplied identity (client work is cosmetic and the roadmap changes shape).
+
+**Raised instead:** the Bearer verdict (item 2 — five requests, ~2 server-team hours) and the
+financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is
+maintained, not expanded.
+
+**Cost, named:** `searchComponent` XSS remains live until item 2 returns. That is a live exposure
+accepted against the possibility that item 2 shows the XSS is not the crown-jewel path. The
+acceptance is owned by the **desk security owner (operator role)** and **expires when item 2 returns,
+whichever way it goes**. If item 2 is not funded, this acceptance has no expiry and must be
+re-opened rather than silently extended.
+
+## Unblock, by owner
+
+The unblock is three decisions, not "waiting on access":
+
+1. **Business owner** — provision a low-privilege test account and name the tenant/data that may be
+   touched.
+2. **Compliance/legal + operator** — signed scope for tamper testing (the server team saying OK is
+   not the same approval).
+3. **Server team lead** — ~2 hours to answer the Bearer question by test (five requests against one
+   account). This is the entire technical ask for item 2.
+
+Item 3's server-side half needs the same business owner to name the ledger, and the server team to
+confirm or deny its existence.
 
 ## What the current controls credibly claim (for the PR/roadmap text)
 

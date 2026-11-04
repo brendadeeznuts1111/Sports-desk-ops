@@ -46,16 +46,21 @@ Attempted reconciliation from evidence available in this repo:
    tampered request can skip it. **Not a ledger** `[CODE]`.
 
 **Finding (this is the deliverable, per the task's own rule that it outranks every XSS in flight):**
-_No financial reconciliation invariant exists in this repository, and the financial mutation
-endpoints have no captured wire evidence. From the evidence available, the system's only audit path
-for `updateDistribution` is a client-issued `Log/write` after success — non-atomic, forgeable and
-omittable. An inside operator (actor 6) or a tampered subordinate request (actor 2) can move
-distribution or delete a wager with no artifact in this repo that would contradict it._
 
-This is `[UNVERIFIED]` as a statement about the server (the vendor may have an internal ledger). It
-is **confirmed as a statement about this repository's evidence**: there is nothing here to reconcile,
-so any claim that a reconciliation holds would be fabricated. Closing it requires the business
-owner's ledger definition and server access, not client code.
+> The **client repo** contains no reconciliation invariant for `updateDistribution`, `deleteWager`,
+> `getSettledFigure` or `adjustBalance`, and no captured wire evidence for the financial mutations.
+> Whether the **system/server** reconciles is **unknown** — that is the business owner's and server
+> team's question sitting beside item 2. Until they answer, the measured finding is narrower and
+> stronger: **the client cannot tell whether the server is reconciling, and the client's own audit
+> path is a claim, not a ledger entry.** `Log/write` fires _after_ AJAX success, from the client: a
+> malicious client omits it, a crashed tab loses it, and a retry double-writes it. It is
+> non-atomic, forgeable and omittable by construction — a property of the pattern, not of this
+> repository's coverage.
+
+This does not claim the vendor has no ledger; it claims the repo cannot see one, and the only audit
+the client can produce is not evidence of a mutation. Item 3's acceptance is therefore: **the server
+team confirms a server-side ledger/invariant exists (with its definition), or produces a written
+finding that none does.** That cannot be satisfied by client code.
 
 ## What the business owner must answer
 

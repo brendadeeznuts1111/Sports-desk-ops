@@ -205,9 +205,12 @@ so an id resolves without guessing which artifact it came from.
   - **Owner:** security/operator (needs vendor + server team + business owner)
   - **Issue:** [#17](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/17)
   - **Basis:** `[CODE]`/`[OBSERVED]` the pack at
-    `docs/analysis/defense-measurement-2026-11-03/`: adversary model (6 actors), authz matrix design,
-    financial-controls audit (no reconciliation found), attack-chain protocol, detection gaps,
-    provisional roadmap.
+    `docs/analysis/defense-measurement-2026-11-03/`: adversary model (6 actors); authz _deliverable_
+    is one paragraph — Bearer claims vs client-supplied identity — with a five-request minimum test;
+    financial-controls audit finds the client audit non-atomic/forgeable and the server-side ledger
+    unknown (money ops tiered confirmed/suspected/unknown); attack-chain protocol; detection gaps;
+    provisional roadmap. Paused client work is one decision with a named cost owner
+    (`searchComponent` XSS live until item 2 returns).
   - **Blocked by:** (a) a provisioned low-privilege test account; (b) written authorization + proxy
     to replay tampered authenticated requests; (c) server team's answer "what does authz check?";
     (d) business owner's answer "what reconciles the ledger?". None is available in this
