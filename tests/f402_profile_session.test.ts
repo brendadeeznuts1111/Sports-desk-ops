@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CdpCookie } from "../scripts/capture/cookies.ts";
-import { chromeWebViewAvailable } from "./support/capabilities.ts";
+import { hasCdp, hasChromeProfile } from "./support/capabilities.ts";
 import {
   acquireProfileLock,
   ProfileInUseError,
@@ -92,7 +92,7 @@ const SESSION_COOKIES: readonly CdpCookie[] = [
   cookie({ name: "stale", value: "v-stale", expires: 1_000_000 }),
 ];
 
-describe.skipIf(!chromeWebViewAvailable)("sessionFromWebViewProfile", () => {
+describe.skipIf(!hasCdp)("sessionFromWebViewProfile", () => {
   test("builds a session from the scoped profile cookies only", async () => {
     const dir = profileDir();
     const { view, calls } = fakeView({ cookies: SESSION_COOKIES });
@@ -364,17 +364,20 @@ function runSessionLogin(...args: string[]) {
   });
 }
 
-describe.skipIf(!chromeWebViewAvailable)("session:login --from-profile", () => {
-  test("skips the credential login gate and names the missing profile", () => {
-    const missing = join(root, "cli-absent-profile");
-    const proc = runSessionLogin("--from-profile", missing);
+describe.skipIf(!hasChromeProfile || process.env.DSH_SESSION_ID !== undefined)(
+  "session:login --from-profile",
+  () => {
+    test("skips the credential login gate and names the missing profile", () => {
+      const missing = join(root, "cli-absent-profile");
+      const proc = runSessionLogin("--from-profile", missing);
 
-    expect(proc.exitCode).toBe(1);
-    const stderr = proc.stderr.toString();
-    expect(stderr).toContain(missing);
-    expect(stderr).not.toContain("F402_LIVE_LOGIN=1 to allow");
-  });
-});
+      expect(proc.exitCode).toBe(1);
+      const stderr = proc.stderr.toString();
+      expect(stderr).toContain(missing);
+      expect(stderr).not.toContain("F402_LIVE_LOGIN=1 to allow");
+    });
+  },
+);
 
 describe("session:login --ttl-min", () => {
   test("rejects a non-numeric ttl on the profile path with exit 2", () => {
