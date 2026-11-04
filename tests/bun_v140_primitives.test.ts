@@ -67,6 +67,9 @@ describe("Bun v1.4.0 primitives", () => {
     expect(Bun.wrapAnsi("The quick brown fox", 10)).toBe(
       "The quick\nbrown fox",
     );
+    expect(Bun.wrapAnsi("\x1b[31mThe quick brown fox\x1b[39m", 10)).toBe(
+      "\x1b[31mThe quick\x1b[39m\n\x1b[31mbrown fox\x1b[39m",
+    );
   });
 
   test("CompressionStream gzip/zstd/brotli round-trips", async () => {
