@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  auditBunSurfaceDocs,
   auditPinnedBunFacts,
   BunDocsMcp,
+  checkBunShapeDocsBaseline,
+  diffBunShapeDocs,
   MCP_TOOL_NAMES,
   probeBunDocsMcp,
+  serializeBunShapeDocsBaseline,
+  type BunShapeDocsBaseline,
 } from "./bun_docs_mcp.ts";
 
 interface RpcRequest {
@@ -166,5 +171,109 @@ describe("MCP tool-error and audit semantics", () => {
       "flags-before-run-documented",
       "skill-typechecking-line",
     ]);
+  });
+});
+
+describe("Bun surface docs audit", () => {
+  function searchClient(pages: Record<string, string>): BunDocsMcp {
+    return fakeClient((request) => {
+      if (request.method !== "tools/call") throw new Error(request.method);
+      const params = request.params as {
+        name: string;
+        arguments?: { query?: string };
+      };
+      const query = params.arguments?.query ?? "";
+      const text = pages[query] ?? "No matching sections found.";
+      return { content: [{ type: "text", text }] };
+    });
+  }
+
+  const hit = (url: string) =>
+    `Title: a page\nLink: ${url}\nPage: /docs/runtime/x (X)\nContent: docs`;
+
+  test("classifies documented vs undocumented and keeps the first link", async () => {
+    const client = searchClient({
+      "Bun.Image": hit("https://bun.com/docs/runtime/image"),
+      "Bun.$": hit("https://bun.com/docs/runtime/shell"),
+    });
+    const audit = await auditBunSurfaceDocs(client, {
+      shapes: [{ name: "Image" }, { name: "$" }, { name: "NotADocsShape" }],
+    });
+    expect(audit.total).toBe(3);
+    expect(audit.documented).toBe(2);
+    expect(audit.undocumented).toEqual(["NotADocsShape"]);
+    expect(audit.entries.find((e) => e.name === "Image")?.link).toBe(
+      "https://bun.com/docs/runtime/image",
+    );
+    expect(audit.entries.find((e) => e.name === "NotADocsShape")).toEqual({
+      name: "NotADocsShape",
+      documented: false,
+      link: null,
+    });
+  });
+
+  test("drift reports newly undocumented and shapes missing from the baseline", async () => {
+    const baseline: BunShapeDocsBaseline = {
+      schemaVersion: 1,
+      generatedAt: "2026-11-04T00:00:00.000Z",
+      runtime: "Bun 1.4.4",
+      shapes: {
+        Image: { documented: true, link: "https://bun.com/docs/runtime/image" },
+        Archive: {
+          documented: true,
+          link: "https://bun.com/docs/runtime/archive",
+        },
+        Removed: { documented: false, link: null },
+      },
+    };
+    const audit = await auditBunSurfaceDocs(
+      searchClient({ "Bun.Image": hit("https://bun.com/docs/runtime/image") }),
+      {
+        shapes: [{ name: "Image" }, { name: "Archive" }, { name: "NewShape" }],
+      },
+    );
+    expect(diffBunShapeDocs(baseline, audit)).toEqual({
+      missingFromBaseline: ["NewShape"],
+      newlyUndocumented: ["Archive"],
+      newlyDocumented: [],
+    });
+    expect(baseline.shapes.Removed).toBeDefined(); // removed catalog entries are a check concern
+  });
+
+  test("the offline check fails for missing and stale entries without the network", () => {
+    const baseline: BunShapeDocsBaseline = {
+      schemaVersion: 1,
+      generatedAt: "2026-11-04T00:00:00.000Z",
+      runtime: "Bun 1.4.4",
+      shapes: {
+        Image: { documented: true, link: "https://bun.com/docs/runtime/image" },
+        Gone: { documented: true, link: "https://bun.com/docs/gone" },
+      },
+    };
+    expect(
+      checkBunShapeDocsBaseline(baseline, [{ name: "Image" }, { name: "New" }]),
+    ).toEqual(["missing-from-baseline: New", "stale-baseline-entry: Gone"]);
+    expect(checkBunShapeDocsBaseline(baseline, [{ name: "Image" }])).toEqual([
+      "stale-baseline-entry: Gone",
+    ]);
+  });
+
+  test("the serialized baseline is sorted and stable", async () => {
+    const audit = await auditBunSurfaceDocs(
+      searchClient({ "Bun.Image": hit("https://bun.com/docs/runtime/image") }),
+      { shapes: [{ name: "Image" }, { name: "Archive" }] },
+    );
+    const a = serializeBunShapeDocsBaseline(audit, {
+      generatedAt: "2026-11-04T00:00:00.000Z",
+      runtime: "Bun 1.4.4",
+    });
+    const b = serializeBunShapeDocsBaseline(audit, {
+      generatedAt: "2026-11-04T00:00:00.000Z",
+      runtime: "Bun 1.4.4",
+    });
+    expect(a).toBe(b);
+    expect(Object.keys((JSON.parse(a) as BunShapeDocsBaseline).shapes)).toEqual(
+      ["Archive", "Image"],
+    );
   });
 });

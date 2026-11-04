@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-04T08:17:26.418Z",
+  "runtime": "Bun 1.4.4",
+  "shapes": {
+    "$": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.2.11#typescript-improvements-for-bun"
+    },
+    "Archive": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/archive"
+    },
+    "argv": {
+      "documented": true,
+      "link": "https://bun.com/guides/process/argv"
+    },
+    "ArrayBufferSink": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/streams#bun-arraybuffersink"
+    },
+    "color": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/color#format-colors-as-css"
+    },
+    "concatArrayBuffers": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/bun-apis"
+    },
+    "connect": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/networking/tcp#create-a-connection-bun-connect"
+    },
+    "Cookie": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/cookies#cookie-class"
+    },
+    "CookieMap": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/cookies#cookiemap-class"
+    },
+    "cron": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/cron#bun-cron-remove"
+    },
+    "CronController": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/cron#the-scheduled-handler"
+    },
+    "CryptoHasher": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#hmac-in-bun-cryptohasher"
+    },
+    "CSRF": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/csrf"
+    },
+    "deepEquals": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-deepequals"
+    },
+    "dns": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/networking/dns#choosing-a-resolver-backend"
+    },
+    "enableANSIColors": {
+      "documented": false,
+      "link": null
+    },
+    "env": {
+      "documented": true,
+      "link": "https://bun.com/docs/lint/rules/eslint/no-process-env"
+    },
+    "Env": {
+      "documented": true,
+      "link": "https://bun.com/docs/lint/rules/eslint/no-process-env"
+    },
+    "escapeHTML": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-escapehtml"
+    },
+    "fetch": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/networking/fetch"
+    },
+    "FetchProxyOption": {
+      "documented": false,
+      "link": null
+    },
+    "FetchSession": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.4.3#bun-fetchsession"
+    },
+    "file": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/http/tls"
+    },
+    "FileSink": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/file-io#incremental-writing-with-filesink"
+    },
+    "fileURLToPath": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/file-url-to-path"
+    },
+    "gc": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.1.43#expose-gc-flag-adds-globalthis-gc"
+    },
+    "Glob": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/archive#filtering-with-glob-patterns"
+    },
+    "gunzipSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-gunzipsync"
+    },
+    "gzipSync": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/gzip"
+    },
+    "hash": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#bun-hash"
+    },
+    "Image": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/image"
+    },
+    "ImportKind": {
+      "documented": true,
+      "link": "https://bun.com/docs/bundler#logs-and-errors"
+    },
+    "inspect": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-inspect"
+    },
+    "isStandaloneExecutable": {
+      "documented": true,
+      "link": "https://bun.com/docs/compiler/executables#detecting-standalone-mode-at-runtime"
+    },
+    "JSON5": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/json5"
+    },
+    "JSONC": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.3.6#bun-jsonc-api-for-parsing-json-with-comments"
+    },
+    "JSONL": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/jsonl#bun-jsonl-parse"
+    },
+    "listen": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/networking/tcp#start-a-server-bun-listen"
+    },
+    "main": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-main"
+    },
+    "markdown": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/markdown"
+    },
+    "nanoseconds": {
+      "documented": true,
+      "link": "https://bun.com/guides/process/nanoseconds"
+    },
+    "openInEditor": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-openineditor"
+    },
+    "randomUUIDv7": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-randomuuidv7"
+    },
+    "RedisClient": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.2.13#bun-redisclient-getbuffer-method"
+    },
+    "resolveSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-resolvesync"
+    },
+    "revision": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/version"
+    },
+    "s3": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/s3#bun-s3client-bun-s3"
+    },
+    "S3Client": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/s3#bun-s3client-bun-s3"
+    },
+    "S3File": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/s3#s3file"
+    },
+    "S3Options": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/s3#s3file"
+    },
+    "S3Stats": {
+      "documented": false,
+      "link": null
+    },
+    "secrets": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/secrets#bun-secrets-get-options"
+    },
+    "semver": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/semver"
+    },
+    "serve": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/http/tls"
+    },
+    "Server": {
+      "documented": true,
+      "link": "https://bun.com/docs/test/writing-tests#fixtures"
+    },
+    "sleep": {
+      "documented": true,
+      "link": "https://bun.com/docs/lint/rules/bun/prefer-builtin-sleep"
+    },
+    "sleepSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-sleepsync"
+    },
+    "sliceAnsi": {
+      "documented": true,
+      "link": "https://bun.com/blog/bun-v1.3.11#bun-sliceansi-ansi-grapheme-aware-string-slicing"
+    },
+    "spawn": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process"
+    },
+    "spawnSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#blocking-api-bun-spawnsync"
+    },
+    "SQL": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/sql#runtime-preconnection"
+    },
+    "stdin": {
+      "documented": true,
+      "link": "https://bun.com/guides/process/stdin"
+    },
+    "stdout": {
+      "documented": true,
+      "link": "https://bun.com/guides/write-file/stdout"
+    },
+    "stringWidth": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-stringwidth"
+    },
+    "Terminal": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/child-process#reusable-terminal"
+    },
+    "TOML": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/toml"
+    },
+    "udpSocket": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/networking/udp#bind-a-udp-socket-bun-udpsocket"
+    },
+    "version": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/version"
+    },
+    "version_with_sha": {
+      "documented": false,
+      "link": null
+    },
+    "WebView": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/webview"
+    },
+    "which": {
+      "documented": true,
+      "link": "https://bun.com/guides/util/which-path-to-executable-bin"
+    },
+    "wrapAnsi": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-wrapansi"
+    },
+    "write": {
+      "documented": true,
+      "link": "https://bun.com/guides/write-file/basic"
+    },
+    "XML": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/xml"
+    },
+    "YAML": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/yaml#bun-yaml-parse"
+    },
+    "zstdCompress": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-zstdcompress-bun-zstdcompresssync"
+    },
+    "zstdCompressSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-zstdcompress-bun-zstdcompresssync"
+    },
+    "zstdDecompressSync": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-zstddecompress-bun-zstddecompresssync"
+    }
+  }
+}

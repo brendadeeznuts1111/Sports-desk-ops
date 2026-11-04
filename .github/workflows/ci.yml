@@ -115,6 +115,9 @@ jobs:
       - name: "No credentials in tracked files"
         timeout-minutes: 2
         run: bun run check:secrets
+      - name: "Bun docs coverage baseline (catalog vs bun-docs MCP audit, offline)"
+        timeout-minutes: 2
+        run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json
       - name: "Bun-native policy ratchet (platform baseline at PLATFORM_SHA)"
         timeout-minutes: 3
         run: bun run policy:check

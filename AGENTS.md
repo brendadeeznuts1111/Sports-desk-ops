@@ -20,6 +20,7 @@ bun run test:docs
 bun run verify:docs
 bun run check:route-surface
 bun run check:secrets
+bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json
 bun run audit:ops
 bun run artifacts:lock
 bun run tasks:render --no-color --columns 0 >/dev/null && bun run docs:render

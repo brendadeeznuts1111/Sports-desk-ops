@@ -479,7 +479,9 @@ WS channel `f402-weblog` when the live-bets gateway is running.
 
 Probe method: `https://bun.com/docs/mcp` speaks JSON-RPC 2.0 (protocol `2025-06-18`) and exposes
 `search_bun`, `read_bun_page`, `list_bun_pages`, `grep_bun`. It matches the shape recorded in
-[`bun-mcp.md`](./bun-mcp.md). Note that `/reference/**` is not indexed, and in the DSH session this
+[`bun-mcp.md`](./bun-mcp.md). The repo-native client (`bun run bun:docs-mcp`) now owns this probe: `surfaces` audits every
+catalog shape against the docs and `surfaces --check` is an offline CI gate on the committed
+baseline (`tests/bun_docs_surface_baseline.json`). Note that `/reference/**` is not indexed, and in the DSH session this
 server is not registered (only `chrome` is), so the probe spoke JSON-RPC directly over HTTP.
 
 **Usage census:** 77 distinct `Bun.*` surfaces are used in non-test source; all 77 are declared and

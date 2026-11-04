@@ -15,8 +15,9 @@
 
 import { env } from "bun";
 import { z } from "zod";
+import { BUN_SHAPES, type BunShape } from "../lib/bun_shapes.ts";
 
-export const DEFAULT_BUN_DOCS_MCP_URL = "https://bun.sh/docs/mcp";
+export const DEFAULT_BUN_DOCS_MCP_URL = "https://bun.com/docs/mcp";
 const PROTOCOL_VERSION = "2025-06-18";
 
 export const MCP_TOOL_NAMES = [
@@ -282,6 +283,144 @@ export async function auditPinnedBunFacts(
   };
 }
 
+/**
+ * One entry per `Bun.*` surface in lib/bun_shapes.ts: whether the published docs mention it, and the
+ * first link if they do. "Documented" here means the MCP corpus has a page for the exact API name —
+ * it is a coverage signal, not a contract check.
+ */
+export interface BunShapeDocsEntry {
+  readonly name: string;
+  readonly documented: boolean;
+  readonly link: string | null;
+}
+
+export interface BunShapeDocsAudit {
+  readonly total: number;
+  readonly documented: number;
+  readonly undocumented: readonly string[];
+  readonly entries: readonly BunShapeDocsEntry[];
+}
+
+/** Committed baseline: which surfaces the docs covered on the day it was taken. */
+export interface BunShapeDocsBaseline {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly runtime: string;
+  readonly shapes: Record<
+    string,
+    { readonly documented: boolean; readonly link: string | null }
+  >;
+}
+
+export interface BunShapeDocsDrift {
+  readonly missingFromBaseline: readonly string[];
+  readonly newlyUndocumented: readonly string[];
+  readonly newlyDocumented: readonly string[];
+}
+
+function firstDocLink(text: string): string | null {
+  for (const line of text.split("\n")) {
+    const match = /^Link: (https:\/\/\S+)$/.exec(line.trim());
+    if (match?.[1] !== undefined) return match[1];
+  }
+  return null;
+}
+
+/** Ask the docs MCP about every catalog surface, one search per shape. */
+export async function auditBunSurfaceDocs(
+  client: BunDocsMcp = new BunDocsMcp(),
+  options: {
+    readonly shapes?: readonly Pick<BunShape, "name">[];
+    readonly limit?: number;
+  } = {},
+): Promise<BunShapeDocsAudit> {
+  const shapes = options.shapes ?? BUN_SHAPES;
+  const entries: BunShapeDocsEntry[] = [];
+  for (const shape of shapes) {
+    let text = "";
+    try {
+      text = await client.callTool("search_bun", {
+        query: `Bun.${shape.name}`,
+        limit: options.limit ?? 5,
+      });
+    } catch {
+      text = "";
+    }
+    const link = firstDocLink(text);
+    entries.push({ name: shape.name, documented: link !== null, link });
+  }
+  return {
+    total: entries.length,
+    documented: entries.filter((entry) => entry.documented).length,
+    undocumented: entries
+      .filter((entry) => !entry.documented)
+      .map((entry) => entry.name),
+    entries,
+  };
+}
+
+/** Compare a fresh audit with the committed baseline. */
+export function diffBunShapeDocs(
+  baseline: BunShapeDocsBaseline,
+  audit: BunShapeDocsAudit,
+): BunShapeDocsDrift {
+  const current = new Map(audit.entries.map((entry) => [entry.name, entry]));
+  const missingFromBaseline = audit.entries
+    .filter((entry) => baseline.shapes[entry.name] === undefined)
+    .map((entry) => entry.name);
+  const newlyUndocumented: string[] = [];
+  const newlyDocumented: string[] = [];
+  for (const [name, before] of Object.entries(baseline.shapes)) {
+    const now = current.get(name);
+    if (now === undefined) continue;
+    if (before.documented && !now.documented) newlyUndocumented.push(name);
+    if (!before.documented && now.documented) newlyDocumented.push(name);
+  }
+  return { missingFromBaseline, newlyUndocumented, newlyDocumented };
+}
+
+/**
+ * Offline gate: the baseline must cover exactly the catalog. A new `Bun.*` surface fails CI until
+ * someone runs the online audit (`surfaces --update`) and reviews the result.
+ */
+export function checkBunShapeDocsBaseline(
+  baseline: BunShapeDocsBaseline,
+  shapes: readonly Pick<BunShape, "name">[] = BUN_SHAPES,
+): readonly string[] {
+  const catalog = new Set(shapes.map((shape) => shape.name));
+  const problems: string[] = [];
+  for (const name of catalog) {
+    if (baseline.shapes[name] === undefined) {
+      problems.push(`missing-from-baseline: ${name}`);
+    }
+  }
+  for (const name of Object.keys(baseline.shapes)) {
+    if (!catalog.has(name)) problems.push(`stale-baseline-entry: ${name}`);
+  }
+  return problems;
+}
+
+/** Stable JSON for the committed baseline (entries sorted by name). */
+export function serializeBunShapeDocsBaseline(
+  audit: BunShapeDocsAudit,
+  options: { readonly generatedAt: string; readonly runtime: string },
+): string {
+  const shapes: Record<string, { documented: boolean; link: string | null }> =
+    {};
+  for (const entry of [...audit.entries].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )) {
+    shapes[entry.name] = { documented: entry.documented, link: entry.link };
+  }
+  const baseline: BunShapeDocsBaseline = {
+    schemaVersion: 1,
+    generatedAt: options.generatedAt,
+    runtime: options.runtime,
+    shapes,
+  };
+  return `${JSON.stringify(baseline, null, 2)}\n`;
+}
+
 function print(text: string): void {
   console.log(text);
 }
@@ -340,6 +479,64 @@ async function main(args: readonly string[]): Promise<void> {
     case "skill":
       print(await client.readResource("bun://skill"));
       return;
+    case "surfaces": {
+      const baselinePath = flagValue(rest, "--check");
+      if (baselinePath !== undefined) {
+        // Offline: no network, only catalog coverage of the committed baseline.
+        const baseline = JSON.parse(
+          await Bun.file(baselinePath).text(),
+        ) as BunShapeDocsBaseline;
+        const problems = checkBunShapeDocsBaseline(baseline);
+        print(JSON.stringify({ baselinePath, problems }, null, 2));
+        if (problems.length > 0) {
+          throw new Error(
+            `Bun surface docs baseline is stale: ${problems.join(", ")}`,
+          );
+        }
+        return;
+      }
+      const audit = await auditBunSurfaceDocs(client);
+      const updatePath = flagValue(rest, "--update");
+      const baselineFile =
+        flagValue(rest, "--baseline") ?? "tests/bun_docs_surface_baseline.json";
+      if (updatePath !== undefined) {
+        const serialized = serializeBunShapeDocsBaseline(audit, {
+          generatedAt: new Date().toISOString(),
+          runtime: `Bun ${Bun.version}`,
+        });
+        await Bun.write(updatePath, serialized);
+        print(
+          JSON.stringify(
+            {
+              updated: updatePath,
+              documented: audit.documented,
+              total: audit.total,
+              undocumented: audit.undocumented,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      const baseline = (await Bun.file(baselineFile).exists())
+        ? ((await Bun.file(baselineFile).json()) as BunShapeDocsBaseline)
+        : null;
+      const drift =
+        baseline === null ? null : diffBunShapeDocs(baseline, audit);
+      print(JSON.stringify({ audit, drift }, null, 2));
+      if (
+        rest.includes("--fail-on-drift") &&
+        drift !== null &&
+        (drift.newlyUndocumented.length > 0 ||
+          drift.missingFromBaseline.length > 0)
+      ) {
+        throw new Error(
+          `Bun surface docs drift: ${[...drift.missingFromBaseline, ...drift.newlyUndocumented].join(", ")}`,
+        );
+      }
+      return;
+    }
     case "audit": {
       const audit = await auditPinnedBunFacts(client);
       print(JSON.stringify(audit, null, 2));
@@ -350,7 +547,7 @@ async function main(args: readonly string[]): Promise<void> {
     }
     default:
       throw new Error(
-        `unknown command ${command}; expected probe|search|read|list|grep|skill|audit`,
+        `unknown command ${command}; expected probe|search|read|list|grep|skill|audit|surfaces`,
       );
   }
 }

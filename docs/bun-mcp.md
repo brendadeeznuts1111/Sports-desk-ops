@@ -158,3 +158,26 @@ why the global entry fails.
 It stays in the dotfiles repository rather than being deleted here; removing it from
 `~/.config/opencode/opencode.jsonc` is a separate change to global config, and `bun-reference` /
 `bun-dev` continue to come from there.
+
+## Surface audit (repo gate)
+
+`bun run bun:docs-mcp surfaces` searches bun.com for every `Bun.*` surface declared in
+`lib/bun_shapes.ts`, classifies each as documented when the MCP returns a page with a `Link:`, and
+diffs the result against the committed baseline.
+
+```sh
+bun run bun:docs-mcp surfaces                       # online audit + drift vs the baseline
+bun run bun:docs-mcp surfaces --fail-on-drift       # exit 1 on a new undocumented surface
+bun run bun:docs-mcp surfaces --update tests/bun_docs_surface_baseline.json   # refresh (network)
+bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json    # offline CI gate
+```
+
+The offline `--check` makes no network call: it fails when the catalog and the baseline disagree in
+either direction — a new `Bun.*` surface that was never audited, or a baseline entry whose shape was
+removed from the catalog. That forces a human to run the online audit and review the diff whenever
+the surface set changes.
+
+Baseline captured 2026-11-04 on Bun 1.4.4: **74 of 78 surfaces documented**. The four without a
+page (`enableANSIColors`, `S3Stats`, `FetchProxyOption`, `version_with_sha`) are a coverage signal,
+not a contract failure — they are declared and probed elsewhere. The default endpoint is
+`https://bun.com/docs/mcp`; `bun.sh` is an alias of the same deployment.
