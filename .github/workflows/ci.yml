@@ -48,7 +48,7 @@ concurrency:
 
 env:
   # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
-  PLATFORM_SHA: 30e7ad7d4ab023eaa1bce59ace2fb93154736dc3
+  PLATFORM_SHA: 01f76a16aab84f6807e634401d064ca4ea6f179d
 
 jobs:
   verify:
@@ -73,6 +73,11 @@ jobs:
           repository: brendadeeznuts1111/platform
           ref: ${{ env.PLATFORM_SHA }}
           path: platform
+          # platform is private and owned by another account, so the job's GITHUB_TOKEN cannot read
+          # it (the checkout failed with "repository not found"). A read-only deploy key on that one
+          # repo is the narrowest credential that works; rotate it by replacing the key on platform
+          # and this secret together.
+          ssh-key: ${{ secrets.PLATFORM_DEPLOY_KEY }}
       - name: Move platform out of the workspace and install it
         timeout-minutes: 3
         # ci:local replays every run step, so this no-ops outside Actions and ~/platform is used.
