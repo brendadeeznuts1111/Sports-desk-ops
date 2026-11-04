@@ -406,3 +406,29 @@ Pinned/used by this repo (Bun 1.4.4):
 | `--no-orphans` / `--no-env-file` (#29930, #24767)                                                                                | `services/supervisor.ts` spawns children with `--no-orphans`; `--no-env-file` is added when `SUPERVISOR_NO_ENV_FILE=1` or `noEnvFile: true`, so an unmounted `.env` FIFO cannot block startup when secrets come from `Bun.secrets`.                                                                       |
 | `Bun.S3Client` `contentDisposition`/`contentEncoding`/`slice().stream()` (#25363, #25999)                                        | Not yet used; `lib/gslive_tally_sink.ts`/R2 readers remain Range-capable through `R2S3Client`.                                                                                                                                                                                                            |
 | Shape catalog (`Bun.JSON5`, `JSONC`, `XML`, `Archive`, `CSRF`, `isStandaloneExecutable`, `sliceAnsi`, `wrapAnsi`, `stringWidth`) | `Bun.JSONL`, `JSON5`, `JSONC`, `XML`, `Archive`, `wrapAnsi`, `stringWidth` are in `lib/bun_shapes.ts`; `Bun.CSRF`, `Bun.isStandaloneExecutable`, `Bun.sliceAnsi`, and `Bun.JSONL.parseChunk` are runtime-verified in `bin/bun_surface.ts`. Type declarations for the runtime-only trio are still pending. |
+
+## Native TOML adoption
+
+There is no hand-rolled TOML parser in this repo. `lib/toml_parse.ts` is a 4-line wrapper over `Bun.TOML.parse` (Bun 1.4.0 passes 708/708 TOML v1.1 cases), and `tests/toml_native.test.ts` pins the project `bunfig.toml` and `config/wagers-capture.toml` to it. `Bun.TOML.stringify` is available for future config writers; do not reintroduce a JS parser for either direction.
+
+## CPU / heap profiling
+
+Bun ships the profilers; no npm package is involved.
+
+```sh
+# CPU profile (Chrome DevTools / VS Code), Markdown summary for bugs or review
+bun --cpu-prof --cpu-prof-dir Scratch/profiles --cpu-prof-name bridge3a.cpuprofile scripts/f402_bet_ticker_bridge3a.ts --once
+bun --cpu-prof-md --cpu-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+
+# V8-compatible heap snapshot + Markdown report
+bun --heap-prof --heap-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+bun --heap-prof-md --heap-prof-dir Scratch/profiles scripts/f402_bet_ticker_bridge3a.ts --once
+```
+
+For processes the supervisor starts, set the environment instead of editing argv:
+
+```sh
+BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=Scratch/profiles BUN_CPU_PROFILE_NAME=supervisor bun run services/supervisor.ts
+```
+
+Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
