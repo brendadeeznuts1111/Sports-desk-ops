@@ -13,7 +13,7 @@
  *   3. Summarizes open positions by Sport, Market/WagerType, Channel (`GSLIVE`, `GSBUILDER`, `Internet`), Top Sub-Agents,
  *      and Top Active Accounts cross-referenced against the 14,534-customer DOD6 v5.4 spine.
  *   4. Sends a formatted HTML summary message every 10 minutes via `SportsDeskTelegramService` (checking both `Bun.env`
- *      and `Bun.secrets` keychain `bookdeskops.desk`) and logs every run to `scratch/live-positions-cron.jsonl`
+ *      and the guarded `bookdeskops.desk` keychain) and logs every run to `scratch/live-positions-cron.jsonl`
  *      and `reports/live-positions-summary.json`.
  */
 
@@ -44,6 +44,7 @@ import {
   type LiveCaptureRecord,
 } from "../lib/live_capture.ts";
 import { readSecretFrom, TELEGRAM_SECRET_SERVICES } from "../lib/secrets.ts";
+import { guardedSecrets } from "../lib/keychain_access.ts";
 import {
   buildArtifact,
   hierarchyIndexFromTree,
@@ -564,7 +565,7 @@ async function resolveTelegramCredentials(): Promise<{
 
   if (!botToken || botToken === "SET_BEFORE_PRODUCTION") {
     const found = await readSecretFrom(
-      Bun.secrets,
+      guardedSecrets,
       TELEGRAM_SECRET_SERVICES,
       "TELEGRAM_BOT_TOKEN",
     );
@@ -574,7 +575,7 @@ async function resolveTelegramCredentials(): Promise<{
   }
   if (!chatId || chatId === "SET_BEFORE_PRODUCTION") {
     const found = await readSecretFrom(
-      Bun.secrets,
+      guardedSecrets,
       TELEGRAM_SECRET_SERVICES,
       "TELEGRAM_CHAT_ID",
     );

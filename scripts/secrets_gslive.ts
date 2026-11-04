@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-/** Store/read/delete the GSLive manager session in the OS keychain via `Bun.secrets`.
+/** Store/read/delete the GSLive manager session in the OS keychain via the guarded boundary
+ *  (`lib/keychain_access.ts`), so a test or denied process never reaches the operator's store.
  *
  *  This retires the old "plaintext GSID in .env only" default: the capture and report CLIs
  *  resolve the session keychain-first (see `resolveManagerSession` in `fetch-bet-tally.ts`) and
@@ -21,7 +22,8 @@ import {
   readSecretFrom,
   secretSetOptions,
 } from "../lib/secrets.ts";
-import { secrets, stdin } from "bun";
+import { stdin } from "bun";
+import { guardedSecrets } from "../lib/keychain_access.ts";
 
 export { GSID_SERVICES };
 
@@ -60,11 +62,11 @@ export interface SecretStore {
 
 export function defaultSecretStore(): SecretStore {
   return {
-    get: (options) => secrets.get(options),
+    get: (options) => guardedSecrets.get(options),
     set: async (options) => {
-      await secrets.set(options);
+      await guardedSecrets.set(options);
     },
-    delete: (options) => secrets.delete(options),
+    delete: (options) => guardedSecrets.delete(options),
   };
 }
 

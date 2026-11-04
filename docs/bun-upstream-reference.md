@@ -335,12 +335,36 @@ Repo rules for [`Bun.secrets`](https://bun.com/docs/runtime/secrets):
 
 - Every `Bun.secrets.set` passes `persist: "local"` (Windows stays on this machine) and validates the
   platform bounds first: service/name are 1..255 printable ASCII characters; value is 1..2048 UTF-8
-  bytes.
+  bytes. The test-only capability probe writes a throwaway `dx-probe` entry without `persist` and
+  deletes it in `finally`; that is the single exception.
 - Credentials are read into local variables/maps, never copied into `process.env`; Bun's memory
   zeroing for the returned string is preserved.
 - `scripts/secrets_r2.ts seed` also generates CSPRNG 32-byte hex values for `BLOB_API_TOKEN` and
   `BLOB_TICKET_SECRET` when they are absent, so the gateway and supervisor can start from the
   keychain when `.env` is an unmounted FIFO.
+
+- **One boundary; no direct calls.** `lib/keychain_access.ts` is the only module that calls
+  `Bun.secrets.get/set/delete`. The two macOS `security find-generic-password` spawns
+  (`lib/f402_credentials_policy.ts`, `scripts/secrets_r2.ts`) are gated by its
+  `platformKeychainAllowed()` immediately before the spawn. The boundary denies the OS store when
+  `NODE_ENV=test` (set by `bun test`) or when `Bun.main` is a `.test.ts`/`tests/` entrypoint — the
+  `Bun.main` check still fires if a `.env` overwrites `NODE_ENV` — and in any process with
+  `SPORTSDESK_KEYCHAIN_ACCESS=deny`. An ordinary script or daemon is allowed. The one override that
+  re-opens the store in a test process is `SPORTSDESK_KEYCHAIN_ACCESS=allow`; the capability probe
+  additionally requires `SPORTSDESK_KEYCHAIN_PROBE=1` before it runs at all. Denied reads return
+  `null`; denied writes throw `KeychainAccessDeniedError`.
+- **Verifying the boundary.** `SPORTSDESK_KEYCHAIN_TRACE=1` logs one
+  `[keychain] allowed|denied …` line per distinct call site, so a trace-instrumented `bun test`
+  must print **no** `denied` line (the boundary gate silences its own denial traces). `allowed`
+  lines make a production "credential missing" debuggable. On 2026-11-04 the full traced suite
+  printed zero denied lines. CI enforces the same invariant as its own step (plus a
+  `bun --no-env-file test tests/` run, which proves the mounted `.env` is inert for tests).
+- **Gate scope.** `tests/keychain_boundary.test.ts` fails if any non-test `.ts/.tsx/.mts/.cts/.js/.jsx/.mjs/.cjs`
+  file in the live tree calls `Bun.secrets` (dot/bracket/destructured/bare references), binds the raw
+  `secrets` export from `bun`, or spawns the `security` CLI without `platformKeychainAllowed()`.
+  `node_modules/`, `.worktrees/` and `.agents/` are excluded from pass/fail; stale copies there are
+  counted and printed for visibility, not failed. The suite also pins that production, staging, and
+  an unset `NODE_ENV` are **allowed**, so denying only ever happens on a provable test signal.
 
 ## Cloudflare R2 (`Bun.S3Client` / `Bun.s3`)
 

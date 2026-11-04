@@ -147,6 +147,22 @@ jobs:
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
+      - name: Keychain boundary (no keychain access from tests)
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          SPORTSDESK_KEYCHAIN_TRACE=1 bun test tests/ --parallel > /tmp/keychain-trace.log 2>&1 || {
+            cat /tmp/keychain-trace.log
+            exit 1
+          }
+          if grep -q '\[keychain\] denied' /tmp/keychain-trace.log; then
+            echo "::error::keychain access attempted during the test suite"
+            grep '\[keychain\] denied' /tmp/keychain-trace.log
+            exit 1
+          fi
+      - name: Test suite with .env disabled (mounted FIFO inertness)
+        timeout-minutes: 5
+        run: bun --no-env-file test tests/ --parallel
       - name: Colocated capture tests
         timeout-minutes: 2
         run: bun test scripts/capture/webview.test.ts scripts/capture/cookies.test.ts

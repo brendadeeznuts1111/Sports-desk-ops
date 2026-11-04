@@ -18,6 +18,7 @@ import {
   type F402Credentials,
   type SecretsReader,
 } from "../../lib/secrets.ts";
+import { guardedSecrets } from "../../lib/keychain_access.ts";
 import { resolveLoginConfig, type LoginConfig } from "./ops.ts";
 
 export { MissingF402CredentialsError };
@@ -43,7 +44,7 @@ export const SECRET_NAMES = F402_KEYCHAIN_NAMES;
 /** @see loadF402CredentialsSecure in lib/f402_credentials_policy.ts */
 export async function loadF402Credentials(
   env: Env = process.env,
-  secrets: SecretsReader | null = Bun.secrets,
+  secrets: SecretsReader | null = guardedSecrets,
 ): Promise<F402Credentials> {
   const { loadF402CredentialsSecure } =
     await import("../../lib/f402_credentials_policy.ts");

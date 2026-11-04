@@ -30,6 +30,7 @@ import {
   type F402Credentials,
   type SecretsReader,
 } from "./secrets.ts";
+import { guardedSecrets, platformKeychainAllowed } from "./keychain_access.ts";
 
 /**
  * @deprecated Legacy-only service name, kept for back-compat. Reads now go canonical-first
@@ -142,6 +143,8 @@ async function readMacOsKeychainValue(
 /** macOS fallback: try the canonical service, then the legacy one. */
 async function readKeychainViaPlatform(account: string): Promise<string> {
   if (process.platform !== "darwin") return "";
+  // Test/sandbox processes must not spawn `security` (it can block on a consent dialog).
+  if (!platformKeychainAllowed()) return "";
   for (const service of KEYCHAIN_SERVICES) {
     const value = await readMacOsKeychainValue(service, account);
     if (value !== "") return value;
@@ -215,7 +218,7 @@ export async function promptF402CredentialsTTY(): Promise<SecureF402Credentials>
  */
 export async function loadF402CredentialsSecure(
   env: Env = Bun.env,
-  secrets: SecretsReader | null = Bun.secrets,
+  secrets: SecretsReader | null = guardedSecrets,
 ): Promise<SecureF402Credentials> {
   const agentId = await readKeychain(secrets, F402_KEYCHAIN_NAMES.agentId);
   const password = await readKeychain(secrets, F402_KEYCHAIN_NAMES.password);

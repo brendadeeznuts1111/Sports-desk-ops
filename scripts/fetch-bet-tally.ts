@@ -37,7 +37,8 @@ import {
 export { GSID_SECRET, GSID_SECRET_LEGACY };
 
 import { z } from "zod";
-import { argv, env, secrets, write } from "bun";
+import { argv, env, write } from "bun";
+import { guardedSecrets } from "../lib/keychain_access.ts";
 
 export const AJAX_URL =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
@@ -244,15 +245,13 @@ export interface NoManagerSession {
 
 export type ManagerSession = ActiveManagerSession | NoManagerSession;
 
+/**
+ * The default reader is the guarded boundary, not the raw `secrets` export: a test or
+ * denied process reads as absent instead of touching the operator's keychain.
+ * A caller that deliberately wants the env-only path can still pass `null`.
+ */
 function defaultSecretReader(): SecretReader | null {
-  try {
-    if (secrets !== undefined && typeof secrets.get === "function") {
-      return { get: (options) => secrets.get(options) };
-    }
-  } catch {
-    // Bun.secrets is unavailable in some runtimes; the env fallback still works.
-  }
-  return null;
+  return { get: (options) => guardedSecrets.get(options) };
 }
 
 /** `GSID_COOKIE` wins: a full `GSID=…` header, or a bare id. */
@@ -285,7 +284,8 @@ function cookieHeaderFromSessionFile(
 
 /**
  * Resolve the manager session file/env-first so a host-exported cookie works without keychain
- * mutation, then keychain (Bun.secrets), then `GSID` in the environment. Read-only: this function
+ * mutation, then keychain (via the guarded `lib/keychain_access.ts` boundary), then `GSID` in the
+ * environment. Read-only: this function
  * never writes the session anywhere.
  */
 export async function resolveManagerSession(

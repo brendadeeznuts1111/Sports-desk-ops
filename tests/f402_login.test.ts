@@ -242,6 +242,12 @@ describe("F402 credential sources", () => {
       return store.get(`${service}/${name}`) ?? null;
     },
   };
+  // Empty fake store, never `null`: `null` makes the loader spawn the real `security` CLI.
+  const emptyStore = {
+    async get() {
+      return null;
+    },
+  };
 
   test("keychain wins over env without ALLOW flag", async () => {
     const credentials = await loadF402Credentials(
@@ -262,7 +268,7 @@ describe("F402 credential sources", () => {
         F402_AGENT_ID: "from-env",
         F402_PASSWORD: "env-secret",
       },
-      null,
+      emptyStore,
     );
     expect(credentials.agentId).toBe("from-env");
     expect(credentials.password).toBe("env-secret");
@@ -280,7 +286,7 @@ describe("F402 credential sources", () => {
       ),
     ).rejects.toBeInstanceOf(MissingF402CredentialsError);
 
-    await expect(loadF402Credentials({}, null)).rejects.toBeInstanceOf(
+    await expect(loadF402Credentials({}, emptyStore)).rejects.toBeInstanceOf(
       MissingF402CredentialsError,
     );
   });

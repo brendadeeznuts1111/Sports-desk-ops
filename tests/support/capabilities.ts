@@ -3,6 +3,10 @@ import { closeSync, constants, existsSync, openSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ManagedWebView } from "../../scripts/capture/webview.ts";
+import {
+  guardedSecrets,
+  keychainAccessDecision,
+} from "../../lib/keychain_access.ts";
 
 export interface CapabilityDiagnostics {
   readonly cdp: { readonly available: boolean; readonly reason: string };
@@ -145,7 +149,14 @@ async function probePty(): Promise<CapabilityDiagnostics["pty"]> {
   }
 }
 
-async function probeSecretsWrite(): Promise<
+/**
+ * Real keychain round-trip probe. This must NEVER run as an import side effect: each
+ * `Bun.secrets.set` can raise an interactive consent dialog, which is exactly the keychain
+ * pressure this helper used to create for every test file that imported it. Opt in with
+ * `SPORTSDESK_KEYCHAIN_PROBE=1` and `SPORTSDESK_KEYCHAIN_ACCESS=allow`; otherwise report why
+ * instead of touching the store. The probe itself goes through the guarded surface too.
+ */
+export async function probeSecretsWrite(): Promise<
   CapabilityDiagnostics["secretsWrite"]
 > {
   if (process.platform !== "darwin") {
@@ -154,11 +165,18 @@ async function probeSecretsWrite(): Promise<
       reason: "Bun.secrets keychain probe is darwin-only",
     };
   }
+  const decision = keychainAccessDecision();
+  if (!decision.allowed) {
+    return {
+      available: false,
+      reason: `keychain access denied (${decision.reason}); set SPORTSDESK_KEYCHAIN_ACCESS=allow to probe`,
+    };
+  }
   const service = "dx-probe";
   const name = Bun.randomUUIDv7();
   try {
-    await Bun.secrets.set({ service, name, value: "v" });
-    const got = await Bun.secrets.get({ service, name });
+    await guardedSecrets.set({ service, name, value: "v" });
+    const got = await guardedSecrets.get({ service, name });
     return got === "v"
       ? { available: true, reason: "Bun.secrets set/get round-trip succeeded" }
       : { available: false, reason: "Bun.secrets get returned no value" };
@@ -168,7 +186,7 @@ async function probeSecretsWrite(): Promise<
       reason: `Bun.secrets write denied: ${String(error).slice(0, 120)}`,
     };
   } finally {
-    await Bun.secrets.delete({ service, name }).catch(() => undefined);
+    await guardedSecrets.delete({ service, name }).catch(() => undefined);
   }
 }
 
@@ -217,7 +235,16 @@ function probeChromeProfile(): CapabilityDiagnostics["chromeProfile"] {
 
 const cdp = await probeCdp();
 const pty = await probePty();
-const secretsWrite = await probeSecretsWrite();
+// Import-time keychain access is banned: this probe only runs behind an explicit two-key
+// opt-in. A normal `bun test` (even one that imports this file) touches no keychain item.
+const secretsWrite: CapabilityDiagnostics["secretsWrite"] =
+  Bun.env.SPORTSDESK_KEYCHAIN_PROBE === "1"
+    ? await probeSecretsWrite()
+    : {
+        available: false,
+        reason:
+          "not probed; opt in with SPORTSDESK_KEYCHAIN_PROBE=1 and SPORTSDESK_KEYCHAIN_ACCESS=allow",
+      };
 const chromeProfile = probeChromeProfile();
 
 export const capabilityDiagnostics: CapabilityDiagnostics = {

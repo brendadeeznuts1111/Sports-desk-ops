@@ -6,6 +6,7 @@
  * contract and the `x-amz-meta-*` PUT path Bun's writer does not expose.
  */
 
+import { guardedSecrets } from "./keychain_access.ts";
 import type {
   S3File,
   S3FilePresignOptions,
@@ -115,7 +116,7 @@ export interface BunSecretsReader {
 
 export async function resolveSecretBackedEnv(
   env: R2S3Env = Bun.env,
-  secrets: BunSecretsReader | null = Bun.secrets,
+  secrets: BunSecretsReader | null = guardedSecrets,
 ): Promise<R2S3Env> {
   const merged: Record<string, string | undefined> = { ...env };
   if (secrets === null) return merged;
@@ -156,7 +157,7 @@ export function sha256Hex(value: string): string {
 
 export async function resolveR2CredentialsAsync(
   env: R2S3Env = Bun.env,
-  secrets: BunSecretsReader | null = Bun.secrets,
+  secrets: BunSecretsReader | null = guardedSecrets,
 ): Promise<R2S3Options | null> {
   return resolveR2S3Options(await resolveSecretBackedEnv(env, secrets));
 }
@@ -398,7 +399,7 @@ export class R2S3Client {
   /** Env precedence first, then Bun.secrets fallback for the missing names. */
   static async fromEnvOrSecrets(
     env: R2S3Env = Bun.env,
-    secrets: BunSecretsReader | null = Bun.secrets,
+    secrets: BunSecretsReader | null = guardedSecrets,
   ): Promise<R2S3Client | null> {
     const resolved = await resolveSecretBackedEnv(env, secrets);
     const options = resolveR2S3Options(resolved);

@@ -13,6 +13,7 @@
 import { env } from "bun";
 
 import { resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
+import { guardedSecrets } from "../lib/keychain_access.ts";
 
 export interface ServiceSpec {
   readonly name: string;
@@ -89,10 +90,10 @@ export function supervisedServices(
   return services;
 }
 
-/** Resolve the BLOB_* tokens from Bun.secrets when the environment has none. */
+/** Resolve the BLOB_* tokens from the guarded keychain when the environment has none. */
 export async function supervisedServicesAsync(
   environment: Readonly<Record<string, string | undefined>> = env,
-  secrets: Parameters<typeof resolveSecretBackedEnv>[1] = Bun.secrets,
+  secrets: Parameters<typeof resolveSecretBackedEnv>[1] = guardedSecrets,
 ): Promise<readonly ServiceSpec[]> {
   return supervisedServices(await resolveSecretBackedEnv(environment, secrets));
 }

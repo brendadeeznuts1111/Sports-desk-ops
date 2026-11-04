@@ -26,7 +26,12 @@ describe("F402 credentials inspect safety", () => {
         F402_AGENT_ID: "a1",
         F402_PASSWORD: SENTINEL_PASSWORD,
       },
-      null,
+      // An empty fake store, not `null`: `null` would spawn the real `security` CLI.
+      {
+        async get() {
+          return null;
+        },
+      },
     );
     expect(Bun.inspect(creds)).not.toContain(SENTINEL_PASSWORD);
     expect(creds.credentialSource).toBe("deprecated-env");

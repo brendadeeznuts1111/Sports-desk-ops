@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * @file secrets_r2.ts
- * @description Seed/inspect the canonical `com.bookdeskops.sportsdesk` Bun.secrets
+ * @description Seed/inspect the canonical `com.bookdeskops.sportsdesk` OS-keychain
  * service used as the R2/BLOB fallback when `.env` is an unmounted FIFO.
  *
  *   bun scripts/secrets_r2.ts seed        # migrate sportsdesk-ops + Keychain, generate gateway tokens
@@ -23,6 +23,10 @@ import {
   assertSecretValue,
   secretSetOptions,
 } from "../lib/secrets.ts";
+import {
+  guardedSecrets,
+  platformKeychainAllowed,
+} from "../lib/keychain_access.ts";
 
 const DEFAULT_ACCOUNT_ID = "7a470541a704caaf91e71efccc78fd36";
 const DEFAULT_BUCKET = "sportsdesk-ops-reports";
@@ -35,6 +39,8 @@ function usage(): never {
 }
 
 async function keychainValue(name: string): Promise<string | null> {
+  // Denied processes never spawn `security` (it can block on consent).
+  if (!platformKeychainAllowed()) return null;
   const proc = Bun.spawn(
     ["security", "find-generic-password", "-a", name, "-w"],
     { stdout: "pipe", stderr: "ignore" },
@@ -49,7 +55,7 @@ async function readService(
 ): Promise<string | null> {
   assertSecretField(service, "service");
   assertSecretField(name, "name");
-  const value = await Bun.secrets.get({ service, name });
+  const value = await guardedSecrets.get({ service, name });
   assertSecretValue(value ?? "x");
   return value;
 }
@@ -93,18 +99,18 @@ async function seed(): Promise<void> {
       console.error(`secrets_r2: ${name} not found (skipped)`);
       continue;
     }
-    await Bun.secrets.set(secretSetOptions(R2_SECRETS_SERVICE, name, value));
+    await guardedSecrets.set(secretSetOptions(R2_SECRETS_SERVICE, name, value));
     console.log(`secrets_r2: stored ${name} in ${R2_SECRETS_SERVICE}`);
   }
 }
 
 async function status(): Promise<void> {
   for (const name of R2_SECRET_NAMES) {
-    const canonical = await Bun.secrets.get({
+    const canonical = await guardedSecrets.get({
       service: R2_SECRETS_SERVICE,
       name,
     });
-    const legacy = await Bun.secrets.get({
+    const legacy = await guardedSecrets.get({
       service: R2_SECRETS_LEGACY_SERVICE,
       name,
     });
@@ -116,7 +122,7 @@ async function status(): Promise<void> {
 
 async function remove(): Promise<void> {
   for (const name of R2_SECRET_NAMES) {
-    const deleted = await Bun.secrets.delete({
+    const deleted = await guardedSecrets.delete({
       service: R2_SECRETS_SERVICE,
       name,
     });

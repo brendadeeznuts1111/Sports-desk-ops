@@ -8,9 +8,13 @@
  * where a credential lives.
  *
  * Everything reads through an injectable provider so tests never touch the real keychain.
+ * The default provider is `guardedSecrets` from `lib/keychain_access.ts` — the single boundary
+ * that denies the OS store in a test process. Do not call `Bun.secrets` directly; a static gate
+ * (`tests/keychain_boundary.test.ts`) fails if a new call site bypasses the guard.
  */
 
 import type { BunSecretSetOptions } from "../types/bun-api";
+import { guardedSecrets } from "./keychain_access.ts";
 
 /** Where new entries are written. */
 export const CANONICAL_SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
@@ -169,11 +173,11 @@ export function secretSetOptions(
 /* Reads                                                                      */
 /* ------------------------------------------------------------------------- */
 
-let provider: SecretsProvider = Bun.secrets;
+let provider: SecretsProvider = guardedSecrets;
 
-/** Swap the provider (tests) or restore the real keychain (`null`). */
+/** Swap the provider (tests) or restore the guarded default (`null`). */
 export function setSecretsProviderForTests(next: SecretsProvider | null): void {
-  provider = next ?? Bun.secrets;
+  provider = next ?? guardedSecrets;
 }
 
 /** One service/name read; a locked or unavailable keychain is `null`, never a throw. */
@@ -255,7 +259,7 @@ export async function readGsidSecret(
 export async function writeSecret(
   entry: SecretEntry,
   value: string,
-  writer: SecretsWriter = Bun.secrets,
+  writer: SecretsWriter = guardedSecrets,
 ): Promise<void> {
   const service = entry.services[0];
   if (service === undefined) {
@@ -267,7 +271,7 @@ export async function writeSecret(
 /** Delete one entry from every service it has lived under; returns the removed count. */
 export async function deleteSecret(
   entry: SecretEntry,
-  deleter: SecretsDeleter = Bun.secrets,
+  deleter: SecretsDeleter = guardedSecrets,
 ): Promise<number> {
   let removed = 0;
   for (const service of entry.services) {

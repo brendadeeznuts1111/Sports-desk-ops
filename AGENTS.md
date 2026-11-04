@@ -29,6 +29,8 @@ bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
 CI=true bun run schema:gate
 bun test tests/
+SPORTSDESK_KEYCHAIN_TRACE=1 bun test tests/     # CI: fails on any "[keychain] denied" line
+bun --no-env-file test tests/                   # CI: proves the mounted .env is inert for tests
 bun test                                        # not in CI: also runs the colocated tests
 ```
 
@@ -60,6 +62,13 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
   wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
   `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
   repo.
+- **Keychain boundary:** `lib/keychain_access.ts` is the only module allowed to call
+  `Bun.secrets.*`. The two `security find-generic-password` spawns (`lib/f402_credentials_policy.ts`,
+  `scripts/secrets_r2.ts`) must call its `platformKeychainAllowed()` first. Never read the OS
+  keychain from a test or an import side effect — tests inject a fake reader; the boundary denies
+  test processes via `NODE_ENV=test` and `Bun.main`. `SPORTSDESK_KEYCHAIN_TRACE=1 bun test` must
+  print no `[keychain] denied` line at all (the gate silences its own trace), and
+  `tests/keychain_boundary.test.ts` fails on a direct call outside the boundary.
 - `gs-manager-cli.zip` (31 KB) is untracked junk — do not commit it.
 - `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
   it `policy`-based scripts fail. Say so instead of disabling them.
