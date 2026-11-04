@@ -445,3 +445,27 @@ Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (g
 - **`URLPattern`**: contract test matches `/api/v1/blobs/:key` and rejects `/api/v1/live-bets`.
 - **PQC**: contract tests exercise `crypto.subtle` ML-KEM-768 bits round-trips, JWK/raw-public/raw-seed export-import, structuredClone of PQC CryptoKeys, `node:crypto` `ml-dsa-65` sign/verify, JWK `kty: "AKP"`, PEM/DER/encrypted PKCS#8, `createPublicKey`/`createPrivateKey` imports, and ML-KEM-768 keypairs. `encapsulateKey` and `decapsulateKey` take 5/6 arguments respectively (`algorithm, key, sharedKeyAlgorithm, extractable, keyUsages` + ciphertext for decapsulation); the contract test derives matching AES-GCM-256 shared keys and compares their raw exports.
 - Contract test: `tests/bun_v140_primitives.test.ts`.
+
+## F402 WebLog + Mode 6 overlap bridge
+
+`lib/f402_weblog_fetch.ts` fetches `Manager/getWebLog` directly in four modes:
+
+| Mode | Wire shape                                      | Date         |
+| ---- | ----------------------------------------------- | ------------ |
+| A    | `type:"A"`, `customerID:<loginId>`              | `MM/DD/YYYY` |
+| B    | `type:"B"`, `customerID:<officeAgentId \| "0">` | `MM/DD/YYYY` |
+| C    | `type:"C"`, `customerID:<loginId>`              | `YYYY-MM-DD` |
+| I    | `type:"I"`, `customerID:"0"`, `ip:<ip>`         | as supplied  |
+
+All carry `operation:"getWebLog"`, `RRO:1`, `agentID`, `agentOwner`. Token resolution is read-only
+(`--bearer-token` → `F402_BEARER_TOKEN` → `F402_TOKEN_FILE`, else
+`$XDG_CONFIG_HOME/sportsdesk/f402-token`), rejecting empty/`"0"`/`<24`-char tokens before I/O.
+Responses pass a Class A guard (200, JSON, not HTML) and are atomically persisted 0600 as JSONL.
+
+CLI: `bun run weblog:rollup --fetch-mode A|B|C|I --date YYYY-MM-DD [--customer-id id] [--ip addr]
+[--save-capture path]`; without `--fetch-mode` it reads the on-disk 11-01/11-02 corpus.
+
+The rollup is gated by GATE-WL-01 (row/grammar conservation, 523,632 rows), GATE-WL-02 (causal
+wager conservation), GATE-WL-03 (negative/positive controls), and GATE-WL-04 (byte-level raw
+LoginID/IP leak scan). Publications: `f402-weblog/<desk-date>/rollup.json` + `f402-weblog/latest.json`;
+WS channel `f402-weblog` when the live-bets gateway is running.
