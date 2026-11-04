@@ -1,6 +1,8 @@
 # DOD6 v5.4 binary spine — performance audit (2026-11-04)
 
-Runtime: **Bun 1.4.4+38afee6c8** (macOS, 10 logical cores).
+Runtime: **Bun 1.4.4+38afee6c8** (`Bun.version_with_sha` = `v1.4.4 (38afee6c8)`;
+`Bun.revision` = `38afee6c84fcf48c0edb2466aa4b27d287a59c30`; `bun --revision` prints
+`1.4.4+38afee6c8`) on macOS, 10 logical cores. The DOD6 benchmark emits all three fields.
 
 Workload: `createDod6V54LifetimeReader()` + `lookup()`/`lookupInto()` over
 `data/sportsdesk_unified_baseline_v54.dodbin` (88,198,656 bytes, 14,534 rows).

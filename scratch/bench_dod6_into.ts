@@ -94,6 +94,9 @@ const steadyB = snapHeap();
 
 console.log(
   JSON.stringify({
+    bunVersion: Bun.version,
+    bunVersionWithSha: Bun.version_with_sha,
+    bunRevision: Bun.revision,
     hits: hits.length,
     nsPerOp: Number((ns / N).toFixed(1)),
     opsPerSec: Math.round(N / (ns / 1e9)),
