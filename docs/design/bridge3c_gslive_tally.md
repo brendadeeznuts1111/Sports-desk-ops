@@ -53,23 +53,26 @@ file, no row sample, and no raw field value was printed. The executable four-har
 
 **Census additions:**
 
-| Metric                                                              | 3c value                                                                                                                                           |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `B_max` distinct bounded buckets (type×sID×period×state×marketType) | **167** (118 without marketType)                                                                                                                   |
-| Enum cardinalities                                                  | channel/type **2**, sport **14**, period **14**, marketType **5**, settlementState **3**                                                           |
-| Dedup ticket counts by state                                        | win 72; lose 22,384; push 158                                                                                                                      |
-| Dedup ticket counts by type                                         | `0` 21,261; `1` 1,350 (multi-leg groups)                                                                                                           |
-| Dedup ticket counts by top sport                                    | 3:9,301; 2:4,682; 8:3,042; 5:2,847                                                                                                                 |
-| Dedup ticket counts by period                                       | `m` 18,146; `h1` 1,924; `s1` 954; `h2` 222                                                                                                         |
-| 4-harness oracle                                                    | `parse_cents_strict("-12,037.64") = -1_203_764`; `"+$4,719.695" = 471_970`; overflow raises; CRC32 byte-flip check; fixed 16-state predicate table |
+| Metric                                                                                  | 3c value                                                                                                                                           |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `B_max` distinct bounded buckets, natural dims `(channel,sport,period,settlementState)` | **118** (167 only if marketType is added; not the 3c key)                                                                                          |
+| Enum cardinalities                                                                      | channel/type **2**, sport **14**, period **14**, marketType **5**, settlementState **3**                                                           |
+| Dedup ticket counts by state                                                            | win 72; lose 22,384; push 158                                                                                                                      |
+| Dedup ticket counts by type                                                             | `0` 21,261; `1` 1,350 (multi-leg groups)                                                                                                           |
+| Dedup ticket counts by top sport                                                        | 3:9,301; 2:4,682; 8:3,042; 5:2,847                                                                                                                 |
+| Dedup ticket counts by period                                                           | `m` 18,146; `h1` 1,924; `s1` 954; `h2` 222                                                                                                         |
+| 4-harness oracle                                                                        | `parse_cents_strict("-12,037.64") = -1_203_764`; `"+$4,719.695" = 471_970`; overflow raises; CRC32 byte-flip check; fixed 16-state predicate table |
 
 **Header/control observations:** the committed `Pending.post.json` skeleton exposes only the
 `Pending` array; `getGrading.post.json` exposes `LIST` as a string;
 `getDailyFiguresByCustomer.post.json` exposes `INFO` as a boolean. No `markets-report` /
 `users-report` capture exists in `docs/evidence/captures/2026-11-01/`, so their live header totals
-remain named external arbiters rather than committed fixtures. GATE-03 for 3c requires a live
-`markets-report` stake-sum tie and a `users-report` distinct-login cardinality tie against the
-in-process `CustomerPackedKey64` structure.
+remain named external arbiters rather than committed fixtures.
+
+**Census record and failure policy:** the aggregate census is committed at
+[`census/2026-11-04.json`](./census/2026-11-04.json). The Phase 1 runner emits stdout only; the JSON
+is the transcribed aggregate record (no rows/identifiers). Missing fixture, non-zero harness, or an
+unparseable row aborts the census with no partial design numbers.
 
 **Observed wire field names (69):**
 
@@ -111,11 +114,22 @@ team1, team2, teaserName, ticketNumber, type, userGroupId, userID
   overflow slab, increment `overflowTicketCount`; exhausting it fails GATE-05, never drops a leg.
 - **Radix probe hit re-checks the full 64-bit key**; keys are packed unsigned, never signed.
 
-**32→64-bit key escalation:** `PackedRollupKey32` uses 6 bits / 64 values per bounded field. The
-census maximum is 14 (sport/period), 5 (marketType), 3 (state), 2 (channel), so the 32-bit key
-remains valid; `B_max=167` fits a UInt32 key. If any field exceeds 64 values, escalate the entire
-key to `PackedRollupKey64: BigUint64Array` with explicit widths, never borrowing bits from another
-field. A failed pack/decode round-trip sets `packingRoundTripFailed=true`.
+**Per-stream key: `PackedTallyKey32`.** 3c has four natural dimensions:
+`(channel, sport, period, settlementState)` with census-derived widths
+`channel:6 | sport:6 | period:6 | settlementState:6 = 24` (8 spare bits). `wagerType` is **not** a
+3c key field. If any field exceeds 64 values, escalate to `PackedTallyKey64: BigUint64Array` with
+explicit widths; never borrow bits. A failed pack/decode round-trip sets
+`packingRoundTripFailed=true`.
+
+**Collision budget:** 3c dedupes on numeric `M.G<betGroupId>` (29 bits, exact), not a login hash;
+`sourceSha256` is integrity only. Any future hashed identity uses FNV-1a-64 with accepted collision
+probability ≤`10⁻⁷` per period and a secondary disambiguation pass/128-bit widening on observed
+collision.
+
+**`marketKey` decision:** `marketKey` is deliberately **dropped from the published 3c schema**;
+market context survives only as the bounded `marketTypeCategory`/wager-type labels. This is a
+cardinality/identifiability decision, not a regression; it is recorded here so the earlier design
+does not silently reappear.
 
 **BigInt CLV and banker's rounding:** `NULL_CLV_SENTINEL_BIGINT = -2147483648n` is the only missing
 sentinel (no dead-code number variant). `computeSettledRoiBasisPoints(netCents,
@@ -183,18 +197,21 @@ new DodGateFailureError({
 });
 ```
 
-**GATE-03 external control details:** the external control is owned by Partner 118 Manager
-Reporting, not recomputed from the projection loop. `markets-report` supplies the market-level
-count/stake total; `users-report` supplies a per-login distinct count and stake sum. Because 3c
-rolls up by `betGroupId`, reconcile both `Σ stake` and `distinct login count` against the in-process
-`CustomerPackedKey64` dedupe set before teardown; never persist a login. The intra-endpoint
-`Report/Pending` header is only a secondary tie-out. The complementary suppression algorithm
-(k=5 + sibling suppression) is named and requires Compliance/SDC Reviewer sign-off before public
-writes.
+**GATE-03 external control details (relaxed tie-out, no `CustomerPackedKey64`):** the external
+control is owned by Partner 118 Manager Reporting, not recomputed from the projection loop.
+`markets-report` supplies the market-level stake total; `users-report` supplies a per-login stake
+sum. Because 3c dedupes by `M.G<betGroupId>` and has no login-key structure, GATE-03 ties **stake
+sum only** against `users-report` and compares **login cardinality at the coarser markets-report
+group count**, not a 3c login-key dedupe. No parallel login path is added to 3c. If a future
+requirement needs exact login cardinality, it requires a separately reviewed parallel
+`Uint64Array` login path and memory budget. The intra-endpoint `Report/Pending` header is only a
+secondary tie-out. The complementary suppression algorithm (k=5 + sibling suppression) requires
+Compliance/SDC Reviewer sign-off before public writes.
 
 **Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES = min(256 KiB,
-max(64 KiB, B_max × 512 bytes + 12 KiB header))`. With B_max=2/167/6 for 3b/3c/3d, the defaults
-are 64 KiB, 95 KiB, and 64 KiB respectively; the 256 KiB hard cap remains. `stripUtf8Bom()` and
+max(64 KiB, ceil(B_max × 512 bytes × 1.25) + 12 KiB header))`. The 1.25 safety factor is reviewed
+dimension-label headroom; with B_max=2/118/6 for 3b/3c/3d the defaults are 64 KiB, 86 KiB, and
+64 KiB; the 256 KiB hard cap remains. `stripUtf8Bom()` and
 `x-amz-meta-pii: none` are applied before the size check.
 
 **GATE-04 lifetime detail:** `assertNoPersistedHandleKeys()` runs before the radix/key TypedArrays
@@ -208,7 +225,7 @@ artifact and records that fallback in the gate result.
 new DodGateFailureError({
   gate: 1..8, gateName: string, streamId: "3c-gslive-tally",
   cells: Array<number | bigint>,
-  cellsUnpacked: Array<{channel:string,sport:string,period:string,wagerType:string,settlementState:string}> | null,
+  cellsUnpacked: Array<Record<string, string>> | null, // keys: channel,sport,period,settlementState
   packingRoundTripFailed?: boolean,
   varianceCents: bigint, rowCountDelta: number, controlSource: string,
 });
@@ -219,14 +236,16 @@ new DodGateFailureError({
 
 ## Section 5 — Risk, reversal, and falsification matrix
 
-| Trigger                      | Structural change                                                            | Fail-closed behavior             |
-| ---------------------------- | ---------------------------------------------------------------------------- | -------------------------------- |
-| P100 >8 legs                 | overflow slab; >64 ⇒ reviewed N/arena increase                               | GATE-05 abort                    |
-| C_max >32,768                | next `2^k ≥ 4×C_max` (2^18+)                                                 | GATE-02 load-factor abort        |
-| `fc` becomes populated       | CLV denominator/eligibility recalculated; null sentinel retained for missing | GATE-06 checks                   |
-| GATE-03 external totals fail | no write; variance report                                                    | existing `latest.json` untouched |
-| GATE-07 unsigned             | free-play money effects disabled; counts only                                | merge-blocked                    |
-| Sign-off                     | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03          | required before public R2        |
+| Trigger                      | Structural change                                                                          | Fail-closed behavior             |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------- |
+| P100 >8 legs                 | overflow slab; **P100 >32 ⇒ wire-anomaly investigation before arena resize**               | GATE-05 abort                    |
+| Public R2 boundary           | bucket-internal writes allowed pre-SDC; `pub-d061…` public domain blocked until sign-off   | no public object before GATE-03  |
+| Exact login cardinality      | relaxed to stake-sum + markets-report group count; parallel login path requires new review | no 3c login key                  |
+| C_max >32,768                | next `2^k ≥ 4×C_max` (2^18+)                                                               | GATE-02 load-factor abort        |
+| `fc` becomes populated       | CLV denominator/eligibility recalculated; null sentinel retained for missing               | GATE-06 checks                   |
+| GATE-03 external totals fail | no write; variance report                                                                  | existing `latest.json` untouched |
+| GATE-07 unsigned             | free-play money effects disabled; counts only                                              | merge-blocked                    |
+| Sign-off                     | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03                        | required before public R2        |
 
 **Gaming-audit scope:** GATE-03 is a tie-out to an external vendor report, not independent
 validation. Third-source validation (GL entries, bank settlement, or customer-level statements) is

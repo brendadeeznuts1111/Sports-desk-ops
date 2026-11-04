@@ -56,6 +56,11 @@ sample, or raw field value was printed. The executable four-harness was run read
 | Null fields                                                           | team1/team2/line/price/league/market/score/scheduled = 2 each (`G` rows)                                                                 |
 | 4-harness oracle                                                      | `parse_cents_strict("-12,037.64")=-1_203_764`; `"+$4,719.695"=471_970`; overflow raises; CRC32 byte-flip; fixed 16-state predicate table |
 
+**Census record and failure policy:** the aggregate census is committed at
+[`census/2026-11-04.json`](./census/2026-11-04.json); the Phase 1 runner emits stdout only and this
+JSON is the transcribed aggregate record (no rows/identifiers). Missing fixture, non-zero harness, or
+an unparseable row aborts the census with no partial design numbers.
+
 **Header/control observations:** the committed `getGrading.post.json` skeleton exposes only
 `LIST` as a string; `getDailyFiguresByCustomer.post.json` exposes `INFO` as a boolean; the graded
 workbook export is metadata only. No vendor summary header is present in the committed captures;
@@ -88,11 +93,18 @@ named live external arbiters for GATE-03.
   future graded ticket exceeds 8 legs, use the bounded 64-slot overflow slab and count
   `overflowTicketCount`; exhausting it fails GATE-05, never drops a leg.
 
-**32→64-bit key escalation:** graded HTML has no channel/sport/period enums, so the bounding
-fields come from the settlement join. `PackedRollupKey32` allocates 6 bits/field; the census
-(`C_max=6`, B_max=6, wagerType 5, status 5) fits. If any joined field exceeds 64 values, escalate
-the whole key to `PackedRollupKey64: BigUint64Array` with explicit widths; never silently widen one
-field. `packingRoundTripFailed=true` on `pack(encode(decode(x))) !== x`.
+**Per-stream key: `PackedGradedKey32`.** 3d's natural dimensions are
+`(channelCode, sport, period, wagerType, settlementState)` with census-derived widths
+`channel:6 | sport:6 | period:6 | wagerType:6 | settlementState:6 = 30` (2 spare). Graded HTML
+supplies `wagerType`/status but channel/sport/period come from the reviewed settlement join. If a
+joined field exceeds 64 values, escalate to `PackedGradedKey64: BigUint64Array` with explicit
+widths; never silently widen one field. `packingRoundTripFailed=true` on
+`pack(encode(decode(x))) !== x`.
+
+**Collision budget:** the `TicketPackedKey64` identity is numeric (ticket/wager/suffix) and exact;
+a hashed fallback uses FNV-1a-64 with accepted collision probability ≤`10⁻⁷` per period and a
+secondary disambiguation/128-bit widening on an observed collision. Any login-derived value in the
+join is hashed only as a byte span and never persisted.
 
 **BigInt CLV and banker's rounding:** use only
 `NULL_CLV_SENTINEL_BIGINT = -2147483648n` in `BigInt64Array`; no number sentinel.
@@ -175,8 +187,9 @@ and the `holdBps` denominator.
 | **N** | normal win net; principal debit 0 | principal debit riskCents; net -riskCents | net 0; no principal debit |
 
 **Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES = min(256 KiB,
-max(64 KiB, B_max × 512 bytes + 12 KiB header))`. With B_max=2/167/6 for 3b/3c/3d, the defaults
-are 64 KiB, 95 KiB, and 64 KiB respectively; the 256 KiB hard cap remains. `stripUtf8Bom()` and
+max(64 KiB, ceil(B_max × 512 bytes × 1.25) + 12 KiB header))`. The 1.25 safety factor is reviewed
+dimension-label headroom; with B_max=2/118/6 for 3b/3c/3d the defaults are 64 KiB, 86 KiB, and
+64 KiB; the 256 KiB hard cap remains. `stripUtf8Bom()` and
 `x-amz-meta-pii: none` are applied before the size check.
 
 **GATE-04 lifetime detail:** `assertNoPersistedHandleKeys()` runs before the radix/key TypedArrays
@@ -190,7 +203,7 @@ artifact and records that fallback in the gate result.
 new DodGateFailureError({
   gate: 1..8, gateName: string, streamId: "3d-f402-graded",
   cells: Array<number | bigint>,
-  cellsUnpacked: Array<{channel:string,sport:string,period:string,wagerType:string,settlementState:string}> | null,
+  cellsUnpacked: Array<Record<string, string>> | null, // keys: channel,sport,period,wagerType,settlementState
   packingRoundTripFailed?: boolean,
   varianceCents: bigint, rowCountDelta: number, controlSource: string,
 });
@@ -198,14 +211,16 @@ new DodGateFailureError({
 
 ## Section 5 — Risk, reversal, and falsification matrix
 
-| Trigger                              | Structural change                                                   | Fail-closed behavior                                          |
-| ------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| P100 legs >8                         | overflow slab; >64 ⇒ reviewed N/arena                               | GATE-05 abort                                                 |
-| C_max >1,024                         | next `2^k ≥4×C_max`                                                 | GATE-02 load abort                                            |
-| FreePlayFlag unavailable in raw HTML | requires settlement join; no inference                              | GATE-07 blocks money effects                                  |
-| GATE-03 external totals fail         | no write; variance report                                           | `writeWithMetadata` aborted; existing `latest.json` untouched |
-| Free-play policy unsigned            | 3d code cannot merge; counts-only artifacts                         | merge-blocked                                                 |
-| Sign-off checklist                   | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03 | required before public R2                                     |
+| Trigger                              | Structural change                                                                        | Fail-closed behavior                                          |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| P100 legs >8                         | overflow slab; **P100 >32 ⇒ wire-anomaly investigation before arena resize**             | GATE-05 abort                                                 |
+| Public R2 boundary                   | bucket-internal writes allowed pre-SDC; `pub-d061…` public domain blocked until sign-off | no public object before GATE-03                               |
+| Hashed-identity collision            | accepted ≤`10⁻⁷`/period; secondary pass/128-bit widening on observed collision           | GATE-04 count mismatch                                        |
+| C_max >1,024                         | next `2^k ≥4×C_max`                                                                      | GATE-02 load abort                                            |
+| FreePlayFlag unavailable in raw HTML | requires settlement join; no inference                                                   | GATE-07 blocks money effects                                  |
+| GATE-03 external totals fail         | no write; variance report                                                                | `writeWithMetadata` aborted; existing `latest.json` untouched |
+| Free-play policy unsigned            | 3d code cannot merge; counts-only artifacts                                              | merge-blocked                                                 |
+| Sign-off checklist                   | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03                      | required before public R2                                     |
 
 **Gaming-audit scope:** GATE-03 is a tie-out to an external vendor report, not independent
 validation. Third-source validation (GL entries, bank settlement, or customer-level statements) is

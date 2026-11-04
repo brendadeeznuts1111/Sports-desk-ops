@@ -1,0 +1,69 @@
+{
+  "censusDate": "2026-11-04",
+  "method": "streaming raw_decode over r.bets; rows discarded; HTML parser in memory; no stdout values",
+  "failurePolicy": "abort on missing fixture, non-zero harness, or unparseable row; no partial design numbers",
+  "streams": {
+    "3b-f402-pending": {
+      "wireFields": 73,
+      "nullableFields": 21,
+      "requiredFields": 52,
+      "CmaxTickets": 2,
+      "Bmax": 2,
+      "BmaxDimensions": ["rotation", "sport", "period"],
+      "fanout": { "p50": 1, "p95": 1, "p99": 1, "p99_9": 1, "p100": 1 },
+      "identifierAlphabetBitmask": 5,
+      "identifierMaxBytes": 5,
+      "rotationMaxBitWidth": 8,
+      "rotationAltObserved": 0
+    },
+    "3c-gslive-tally": {
+      "rows": 24778,
+      "wireFields": 69,
+      "CmaxTickets": 22611,
+      "CmaxGroups": 22611,
+      "Bmax": 118,
+      "BmaxDimensions": ["channel", "sport", "period", "settlementState"],
+      "fanout": { "p50": 1, "p95": 2, "p99": 3, "p99_9": 6, "p100": 8 },
+      "betGroupIdBits": 29,
+      "ticketNumberBits": 31,
+      "clv": { "fPresent": 24778, "fcPresent": 0 },
+      "enumRowCounts": {
+        "state": { "1": 76, "2": 24544, "3": 158 },
+        "type": { "0": 21261, "1": 3517 }
+      },
+      "identifierAlphabetBitmask": 85,
+      "identifierMaxBytes": 10
+    },
+    "3d-f402-graded": {
+      "files": 4,
+      "rows": 7,
+      "wireFields": 22,
+      "CmaxTickets": 6,
+      "Bmax": 6,
+      "BmaxDimensions": [
+        "channel",
+        "sport",
+        "period",
+        "wagerType",
+        "settlementState"
+      ],
+      "fanout": { "p50": 1, "p95": 1, "p99": 1, "p99_9": 1, "p100": 2 },
+      "fanoutNote": "P100=2 is cross-fixture duplicate; actual max legs=1",
+      "ticketNumberBits": 31,
+      "wagerSuffixBits": 1,
+      "freePlayFieldPresent": false,
+      "loginFieldPresent": false
+    }
+  },
+  "fourHarness": {
+    "status": "PASS",
+    "oracles": [
+      "parse_cents_strict(-12,037.64) = -1203764",
+      "parse_cents_strict(+$4,719.695) = 471970",
+      "overflow raises OverflowError",
+      "CRC32 byte-flip changes checksum",
+      "fixed 16-state predicate truth table"
+    ],
+    "externalControlTotals": "not present in harness; external vendor reports remain GATE-03 arbiters"
+  }
+}

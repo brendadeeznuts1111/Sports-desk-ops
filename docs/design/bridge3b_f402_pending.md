@@ -39,10 +39,16 @@ output file, no row sample, no field value was printed. The 3b/3d census used th
 pending skeleton/sample/panel and the graded parser fixtures in memory. The executable four-harness
 was run read-only and reported `ALL 4 DOMAIN HARNESSES … PASSED`.
 
-**B_max and enum cardinalities (3b snapshot):** `B_max=2` from `data/live-bets.json`
-(sport×subSport×period×wagerType×status tuples). Observed enums: WagerType 1; WagerStatus 1;
-period 2; sport 2; sub-sport 2; FreePlayFlag 1; all from the 2-game snapshot, not a full 73-field
-row capture.
+**B_max and enum cardinalities (3b snapshot):** the 3b **natural dimension set** is
+`(rotation, sport, period)`; on the 2-game snapshot `B_max=2`. Observed enums: WagerType 1;
+WagerStatus 1; period 2; sport 2; sub-sport 2; FreePlayFlag 1; all from the 2-game snapshot, not a
+full 73-field row capture. `B_max` is always tied to this dimension set, never a generic count.
+
+**Census record and failure policy:** the aggregate census is committed at
+[`census/2026-11-04.json`](./census/2026-11-04.json). The Phase 1 runner emits stdout only; this JSON
+is the transcribed aggregate record, containing no rows or identifiers. Missing fixture, non-zero
+harness, or an unparseable row aborts the census — no partial design numbers. Missing optional live
+headers are recorded as gaps, not silently substituted.
 
 **Four-harness oracle extracted from `verification/run_four_harness_verification.py`:**
 
@@ -96,13 +102,20 @@ fixtures.
 - **Radix table:** 4,096 entries, load factor `C_max / 4096 ≤ 0.25`; a probe hit re-checks the full
   64-bit key (GATE-01/02).
 
-**32→64-bit key escalation rule:** `PackedRollupKey32` allocates the default **6 bits / 64 values**
-per bounded field (`channelCode`, `sportCode`, `periodCode`, `wagerTypeCode`,
-`settlementStateCode`). Section 1 shows 3b's observed fields are ≤2 values, so the 32-bit key
-remains valid. If any future capture exceeds 64 values for a field, escalate the whole key to
-`PackedRollupKey64: BigUint64Array` with explicit per-field widths derived from the census; never
-widen one field by stealing bits from another. The `pack(encode(decode(x))) !== x` round-trip check
-sets `packingRoundTripFailed=true` on `DodGateFailureError`.
+**Per-stream key: `PackedPendingKey32`.** 3b has exactly three natural dimensions:
+`(rotation, sport, period)` with census-derived widths `rotation:20 | sport:6 | period:6 = 32`.
+There is no `wagerType` or `settlementState` in the 3b bucket (Pending is open by definition); they
+are **not zero-filled placeholders in a five-field superset**. If any field exceeds 64 values or
+the rotation exceeds 20 bits, escalate to `PackedPendingKey64: BigUint64Array` with explicit widths
+derived from the new census; never widen one field by borrowing another's bits. The
+`pack(encode(decode(x))) !== x` round-trip check sets `packingRoundTripFailed=true` on
+`DodGateFailureError`.
+
+**Collision budget:** FNV-1a-64 at `C_max ≈ 64K` has expected collisions ≤ `6×10⁻⁸` per period;
+that is accepted (≤`10⁻⁷`). The deduped ticket identity additionally keeps a full secondary key
+(`TicketNumber/WagerNumber`) and a second pass disambiguates any observed collision before
+GATE-03 counts are published. Count-only identity structures use 128-bit keys if a second
+collision is observed.
 
 **Allocation boundary:** streamed identifier bytes are hashed directly (FNV-1a-64), and the
 identifier alphabet mask (bitmask 5) confirms no allocation-heavy decoding is needed. No
@@ -137,19 +150,20 @@ signed `roundingResidualCents: bigint` is accumulated in `suppressed` and added 
 the GATE-03 identity so arbitrary bucket counts still tie to the exact cent. 3b's `definedLiability`
 and stake math also use BigInt64 columns only.
 
-**3b GATE-03 roll-forward (external control):**
+**3b GATE-03 roll-forward (principal-only):**
 `OpeningPending_{t-1}^{vendor} + BetTickerInflow_t - GradedSettledPrincipal_t -
 VoidedCancelledPrincipal_t` is the **left-hand external triangulated control**, compared with
-`ClosingPending_t` from 3b on the **right**. Opening pending comes from the prior period's signed
-vendor report, never from 3b's prior output. Voided/cancelled principal is deducted unless
-getGrading already includes voids at principal stake with `netCents=0`. All terms use the same
-temporal cutoff (UTC; desk-date terms converted explicitly). The intra-endpoint `Report/Pending`
-summary header is a secondary wire tie-out only.
+**`ClosingPending_t = totalStakeCents`** from 3b. The identity is stated in **principal (stake)
+cents**: `definedLiabilityCents` and `potentialPayoutCents` are **not** terms in this roll-forward.
+Opening pending comes from the prior period's signed vendor report, never from 3b's prior output.
+Voided/cancelled principal is deducted unless getGrading already includes voids at principal stake
+with `netCents=0`. All terms use the same temporal cutoff (UTC; desk-date terms converted
+explicitly). The intra-endpoint `Report/Pending` summary header is a secondary wire tie-out only.
 
-**3c users-report tie:** because `users-report` is keyed per login while 3c rolls up by
-`betGroupId`, GATE-03 requires both a stake-sum tie and a distinct-login cardinality tie against
-the in-process `CustomerPackedKey64` dedupe structure before teardown; logins are never exposed or
-persisted. `markets-report` supplies the corresponding markets-level control totals.
+**Separate liability bound (not the roll-forward):**
+`definedLiabilityCents <= min(potentialPayoutCents, capCents × distinctTicketCount)`; a capped
+ticket example ($1,000 risk / $10,000 toWin / $5,000 cap) must satisfy
+`100000 <= min(1000000, 500000)` without perturbing the principal roll-forward.
 
 **3d external control:** `sum(visibleCells)+suppressedResidual+roundingResidualCents ≡
 ExternalReportControlTotal` and `sum(dedupedParentTicketsRead) ≡ VendorReportTicketCount` against
@@ -193,10 +207,11 @@ new DodGateFailureError({
 FreePlay is counted (`freePlayLossRows`, `freePlayUnknownRows`) but its money policy is governed by
 GATE-07 and is not enabled here.
 
-**Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES = min(256 KiB,
-max(64 KiB, B_max × 512 bytes + 12 KiB header))`. With B_max=2/167/6 for 3b/3c/3d, the defaults
-are 64 KiB, 95 KiB, and 64 KiB respectively; the 256 KiB hard cap remains. `stripUtf8Bom()` and
-`x-amz-meta-pii: none` are applied before the size check.
+**Artifact ceiling derivation (GATE-05):** `ROLLUP_MAX_ARTIFACT_BYTES =
+min(256 KiB, max(64 KiB, ceil(B_max × 512 bytes × 1.25) + 12 KiB header))`. The 1.25 safety factor
+is the reviewed headroom for dimension-label growth between censuses; with B_max=2/118/6 for
+3b/3c/3d the defaults are 64 KiB, 86 KiB, and 64 KiB. `stripUtf8Bom()` and `x-amz-meta-pii: none`
+are applied before the size check.
 
 **GATE-04 lifetime detail:** `assertNoPersistedHandleKeys()` runs before the radix/key TypedArrays
 are torn down, walking the serialized artifact key-by-key against the live dedupe structure. If
@@ -214,7 +229,7 @@ new DodGateFailureError({
   gateName: string,
   streamId: "3b-f402-pending",
   cells: Array<number | bigint>,
-  cellsUnpacked: Array<{channel:string,sport:string,period:string,wagerType:string,settlementState:string}> | null,
+  cellsUnpacked: Array<Record<string, string>> | null, // stream-specific keys: rotation,sport,period
   packingRoundTripFailed?: boolean,
   varianceCents: bigint,
   rowCountDelta: number,
@@ -224,14 +239,15 @@ new DodGateFailureError({
 
 ## Section 5 — Risk, reversal, and falsification matrix
 
-| Trigger                                     | Structural change                                                       | Fail-closed behavior                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
-| P100 > 8 legs                               | overflow slab used; if >64, increase N/arena only via reviewed design   | GATE-05 abort, no R2 write                                    |
-| C_max > 4,096                               | resize radix to next `2^k ≥ 4×C_max`                                    | GATE-02 load-factor abort before write                        |
-| Identifier alphabet gains `_ . @`/non-ASCII | hashing remains byte-span FNV-1a-64; revisit only if >2,048-byte values | GATE-05 value bound                                           |
-| GATE-03 external totals fail                | report variance, do not write                                           | `writeWithMetadata` aborted; existing `latest.json` untouched |
-| Gate-07 unsigned                            | 3d blocked; 3b may publish counts only                                  | merge-blocked                                                 |
-| Sign-off checklist                          | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03     | required before public R2 enable                              |
+| Trigger                                     | Structural change                                                                           | Fail-closed behavior                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| P100 > 8 legs                               | overflow slab used; **P100 > 32 is a wire-anomaly investigation**, not an arena resize      | GATE-05 abort, no R2 write                                    |
+| Public R2 boundary                          | bucket-internal R2 writes allowed pre-SDC; `pub-d061…` public domain blocked until sign-off | no public object before GATE-03 sign-off                      |
+| C_max > 4,096                               | resize radix to next `2^k ≥ 4×C_max`                                                        | GATE-02 load-factor abort before write                        |
+| Identifier alphabet gains `_ . @`/non-ASCII | hashing remains byte-span FNV-1a-64; revisit only if >2,048-byte values                     | GATE-05 value bound                                           |
+| GATE-03 external totals fail                | report variance, do not write                                                               | `writeWithMetadata` aborted; existing `latest.json` untouched |
+| Gate-07 unsigned                            | 3d blocked; 3b may publish counts only                                                      | merge-blocked                                                 |
+| Sign-off checklist                          | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03                         | required before public R2 enable                              |
 
 Tests must use raw fixtures only through aggregate assertions; no stdout rows or PII values.
 
