@@ -9,8 +9,29 @@
 import type { F402TickerRow } from "./f402_ingest.ts";
 import { padCustomerIdCanonical } from "../design/domain-branded-types.ts";
 import { parseShortDesc } from "./live_wagers.ts";
+import {
+  buildStreamSignalDiagnostics,
+  kalshiOrderSkeleton,
+  polymarketClobOrderSkeleton,
+  PickShapeTwinTracker,
+  rotationKeyFromTickerShortDesc,
+  ScoutApexTracker,
+  type Dod6CustomerBookOverlay,
+  type ScoutPrecursorHit,
+  type StreamSignalDiagnostics,
+} from "./weight_tier_signal_enrichment.ts";
 
-export const WEIGHT_TIER_SCHEMA_VERSION = 1 as const;
+export const WEIGHT_TIER_SCHEMA_VERSION = 2 as const;
+
+export type { StreamSignalDiagnostics, Dod6CustomerBookOverlay };
+export {
+  PickShapeTwinTracker,
+  ScoutApexTracker,
+  buildStreamSignalDiagnostics,
+  explainDiagnostics,
+  loadDod6BookOverlayFromJson,
+  pickShapeSha256FromShortDesc,
+} from "./weight_tier_signal_enrichment.ts";
 
 export type WeightTierId =
   | "tier1_apex_spread_ml"
@@ -134,6 +155,8 @@ export interface ExternalMarketOrderDraft {
   readonly signatureStatus: "unsigned_draft";
   readonly signingHintEnv: readonly string[];
   readonly note: string;
+  /** Venue-native POST body skeleton; token/ticker resolved downstream. */
+  readonly wireDraft: Record<string, unknown>;
 }
 
 export interface StreamSignalEmission {
@@ -150,6 +173,14 @@ export interface StreamSignalEmission {
   readonly internal: readonly InternalLineStepCommand[];
   readonly manager: readonly ManagerUpdateByColumnDraft[];
   readonly external: readonly ExternalMarketOrderDraft[];
+  readonly diagnostics: StreamSignalDiagnostics;
+}
+
+export interface StreamSignalPlannerContext {
+  readonly clusterTracker?: MiamiSyndicateClusterTracker;
+  readonly pickTwinTracker?: PickShapeTwinTracker;
+  readonly scoutTracker?: ScoutApexTracker;
+  readonly dod6Book?: Dod6CustomerBookOverlay | null;
 }
 
 export interface SyndicateClusterState {
@@ -162,13 +193,20 @@ export interface SyndicateClusterState {
 /** Tracks tier-5 same-rotation hits within a sliding window (default 120s). */
 export class MiamiSyndicateClusterTracker {
   private readonly windowMs: number;
-  private readonly hits = new Map<string, { logins: Set<string>; firstMs: number; lastMs: number }>();
+  private readonly hits = new Map<
+    string,
+    { logins: Set<string>; firstMs: number; lastMs: number }
+  >();
 
   constructor(windowMs = 120_000) {
     this.windowMs = windowMs;
   }
 
-  record(login: string, rotationKey: string, atMs: number): SyndicateClusterState | null {
+  record(
+    login: string,
+    rotationKey: string,
+    atMs: number,
+  ): SyndicateClusterState | null {
     const normalized = normalizeCustomerLogin(login);
     const key = rotationKey.trim() === "" ? "unknown" : rotationKey.trim();
     const existing = this.hits.get(key);
@@ -183,7 +221,10 @@ export class MiamiSyndicateClusterTracker {
     existing.logins.add(normalized);
     existing.lastMs = atMs;
     this.prune(atMs);
-    if (existing.logins.size >= 2 && existing.lastMs - existing.firstMs <= this.windowMs) {
+    if (
+      existing.logins.size >= 2 &&
+      existing.lastMs - existing.firstMs <= this.windowMs
+    ) {
       return {
         rotationKey: key,
         logins: [...existing.logins],
@@ -199,15 +240,6 @@ export class MiamiSyndicateClusterTracker {
       if (nowMs - bucket.lastMs > this.windowMs) this.hits.delete(key);
     }
   }
-}
-
-function rotationKeyFromShortDesc(shortDesc: string): string {
-  const parsed = parseShortDesc(shortDesc);
-  if (parsed.legs.length === 0) return "unknown";
-  const first = parsed.legs[0]!;
-  if (first.gameNumber !== null) return `ROT ${first.gameNumber}`;
-  const hash = first.game.match(/\d{3,5}/);
-  return hash !== null ? `ROT ${hash[0]}` : first.game.slice(0, 48);
 }
 
 function isProbeStake(amountWagered: number | null): boolean {
@@ -252,7 +284,26 @@ function baseExternalDraft(
     signatureStatus: "unsigned_draft",
     signingHintEnv,
     note,
+    wireDraft:
+      venue === "polymarket"
+        ? polymarketClobOrderSkeleton(role)
+        : kalshiOrderSkeleton(role),
   };
+}
+
+function routingTagForTier(
+  tierId: WeightTierId,
+  wagerType: string,
+  scoutPrecursor: ScoutPrecursorHit | null,
+): string | null {
+  if (tierId === "tier1_apex_spread_ml" && wagerType !== "L") {
+    return scoutPrecursor !== null ? "ANOM-01_SCOUT_CONFIRMED" : "ANOM-01";
+  }
+  if (tierId === "tier2_blindspot_clv_whales") return "SILO3_SHADOW_MIRROR";
+  if (tierId === "tier3_probe_hammer_syndicate") return "PROBE_HAMMER_2STAGE";
+  if (tierId === "tier5_miami_syndicate") return "MIAMI_SYNDICATE_CLUSTER";
+  if (tierId === "tier7_correlated_parlay_extractors") return "PROBIT_SGP_PENALTY";
+  return null;
 }
 
 function lineStep(
@@ -270,23 +321,40 @@ export function planStreamSignalForRow(
   options: {
     readonly emittedAt?: string;
     readonly clusterTracker?: MiamiSyndicateClusterTracker;
+    readonly pickTwinTracker?: PickShapeTwinTracker;
+    readonly scoutTracker?: ScoutApexTracker;
+    readonly dod6Book?: Dod6CustomerBookOverlay | null;
   } = {},
 ): StreamSignalEmission | null {
   const tierDef = resolveWeightTierForLogin(row.login);
   if (tierDef === null) return null;
 
   const emittedAt = options.emittedAt ?? new Date().toISOString();
+  const insertedMs = Date.parse(row.insertedAt);
+  const atMs = Number.isFinite(insertedMs)
+    ? insertedMs
+    : Number.isFinite(Date.parse(emittedAt))
+      ? Date.parse(emittedAt)
+      : Date.now();
+  const pickShapeTwins = options.pickTwinTracker?.record(row, atMs) ?? [];
+  const scoutPrecursor = options.scoutTracker?.record(row, atMs) ?? null;
   const wagerType = row.wagerType.trim().toUpperCase();
-  const rotationKey = rotationKeyFromShortDesc(row.shortDesc);
+  const rotationKey = rotationKeyFromTickerShortDesc(row.shortDesc);
   const parsed = parseShortDesc(row.shortDesc);
   const legCount = parsed.legs.length;
+  const routingTag = routingTagForTier(tierDef.id, wagerType, scoutPrecursor);
+  const steamInstant =
+    (row.ticketWriter.toUpperCase() === "GSLIVE" && parsed.isLive) ||
+    row.ticketWriter.toUpperCase() === "ALERT";
+  const slaTargetOverride = steamInstant ? 250 : 500;
 
   const internal: InternalLineStepCommand[] = [];
   const manager: ManagerUpdateByColumnDraft[] = [];
   const external: ExternalMarketOrderDraft[] = [];
 
   const paddedCustomer = padCustomerIdCanonical(row.login);
-  const agent = row.agentId.trim() === "" ? row.agentLogin.trim() : row.agentId.trim();
+  const agent =
+    row.agentId.trim() === "" ? row.agentLogin.trim() : row.agentId.trim();
 
   switch (tierDef.id) {
     case "tier1_apex_spread_ml": {
@@ -300,7 +368,7 @@ export function planStreamSignalForRow(
             blockKeyCrossing: false,
             wagerType,
             shortDescLegCount: legCount,
-            slaTargetMs: 250,
+            slaTargetMs: slaTargetOverride,
             note: "Scout pre-shade NFL/NBA spread −10c before GX195 apex hit",
           }),
         );
@@ -386,7 +454,10 @@ export function planStreamSignalForRow(
       break;
     }
     case "tier3_probe_hammer_syndicate": {
-      if (row.login.toUpperCase() === "AT811" && isProbeStake(row.amountWagered)) {
+      if (
+        row.login.toUpperCase() === "AT811" &&
+        isProbeStake(row.amountWagered)
+      ) {
         internal.push(
           lineStep({
             layerId: "L22.N1402",
@@ -475,7 +546,11 @@ export function planStreamSignalForRow(
           note: "Block Key-3/7 crossings; step live 2H/3Q spread 0.5 pt",
         }),
       );
-      const cluster = options.clusterTracker?.record(row.login, rotationKey, Date.parse(emittedAt));
+      const cluster = options.clusterTracker?.record(
+        row.login,
+        rotationKey,
+        atMs,
+      );
       const multiplier = cluster !== null && cluster !== undefined ? 3 : 1;
       external.push(
         baseExternalDraft(
@@ -562,6 +637,14 @@ export function planStreamSignalForRow(
     return null;
   }
 
+  const diagnostics = buildStreamSignalDiagnostics(row, {
+    atMs,
+    pickShapeTwins,
+    scoutPrecursor,
+    dod6Book: options.dod6Book ?? null,
+    routingTag,
+  });
+
   return {
     schemaVersion: WEIGHT_TIER_SCHEMA_VERSION,
     emittedAt,
@@ -576,6 +659,7 @@ export function planStreamSignalForRow(
     internal,
     manager,
     external,
+    diagnostics,
   };
 }
 
@@ -585,21 +669,33 @@ export function planStreamSignalsForRows(
   options: {
     readonly emittedAt?: string;
     readonly clusterTracker?: MiamiSyndicateClusterTracker;
+    readonly pickTwinTracker?: PickShapeTwinTracker;
+    readonly scoutTracker?: ScoutApexTracker;
+    readonly dod6Book?: Dod6CustomerBookOverlay | null;
   } = {},
 ): readonly StreamSignalEmission[] {
   const seen = new Set<string>();
   const out: StreamSignalEmission[] = [];
   const tracker = options.clusterTracker ?? new MiamiSyndicateClusterTracker();
+  const pickTwinTracker =
+    options.pickTwinTracker ?? new PickShapeTwinTracker();
+  const scoutTracker = options.scoutTracker ?? new ScoutApexTracker();
   for (const row of rows) {
     const key =
       row.wagerNumber.trim() === ""
         ? `${row.login}|${row.insertedAt}|${row.shortDesc.slice(0, 32)}`
         : row.wagerNumber;
     if (seen.has(key)) continue;
+    const base = {
+      clusterTracker: tracker,
+      pickTwinTracker,
+      scoutTracker,
+      dod6Book: options.dod6Book ?? null,
+    };
     const rowOptions =
       options.emittedAt === undefined
-        ? { clusterTracker: tracker }
-        : { emittedAt: options.emittedAt, clusterTracker: tracker };
+        ? base
+        : { ...base, emittedAt: options.emittedAt };
     const emission = planStreamSignalForRow(row, rowOptions);
     if (emission === null) continue;
     seen.add(key);

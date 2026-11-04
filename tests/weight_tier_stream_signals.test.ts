@@ -7,7 +7,9 @@ import {
   resolveWeightTierForLogin,
 } from "../lib/weight_tier_stream_signals.ts";
 
-function row(partial: Partial<F402TickerRow> & Pick<F402TickerRow, "login">): F402TickerRow {
+function row(
+  partial: Partial<F402TickerRow> & Pick<F402TickerRow, "login">,
+): F402TickerRow {
   return {
     customerId: partial.login,
     agentId: partial.agentId ?? "GOLD22",
@@ -52,11 +54,14 @@ describe("tier 1 apex originators", () => {
     const emission = planStreamSignalForRow(
       row({ login: "GX195", wagerType: "S" }),
     );
+    expect(emission?.schemaVersion).toBe(2);
     expect(emission?.internal[0]?.stepPoints).toBe(1);
     expect(emission?.external.map((order) => order.venue).sort()).toEqual([
       "kalshi",
       "polymarket",
     ]);
+    expect(emission?.external[0]?.wireDraft.orderType).toBe("FOK");
+    expect(emission?.diagnostics.mechanisms.length).toBeGreaterThan(0);
   });
 
   test("GX195 totals are internal-hold only", () => {

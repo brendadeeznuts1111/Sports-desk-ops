@@ -40,6 +40,9 @@ import {
 } from "../lib/f402_replay_transport.ts";
 import { describeF402Session, readF402Session } from "../lib/f402_session.ts";
 import {
+  explainDiagnostics,
+  loadDod6BookOverlayFromJson,
+  type Dod6CustomerBookOverlay,
   type StreamSignalEmission,
   MiamiSyndicateClusterTracker,
   planStreamSignalsForRows,
@@ -75,6 +78,8 @@ const HELP = [
   "  --json                 One NDJSON emission per stdout line (default)",
   "  --tier <id>            Filter to one tier (repeatable)",
   "  --dry-run              Print tier registry only; no network",
+  "  --enrich-book <path>   DOD6/book JSON overlay (customer_id, clv_bps, sharp_score)",
+  "  --explain              Human-readable diagnostics on stderr (NDJSON still on stdout)",
   "",
   "Tiers:",
   ...WEIGHT_TIER_DEFINITIONS.map((tier) => `    ${tier.id}`),
@@ -151,19 +156,28 @@ function emitSignals(
   rows: readonly F402TickerRow[],
   tierFilter: ReadonlySet<WeightTierId> | null,
   clusterTracker: MiamiSyndicateClusterTracker,
+  dod6Book: Dod6CustomerBookOverlay | null,
+  explain: boolean,
 ): void {
-  const emissions = planStreamSignalsForRows(rows, { clusterTracker });
+  const emissions = planStreamSignalsForRows(rows, { clusterTracker, dod6Book });
   for (const emission of emissions) {
     if (tierFilter !== null && !tierFilter.has(emission.tier)) continue;
-    writeEmission(emission);
+    writeEmission(emission, explain);
   }
 }
 
-function writeEmission(emission: StreamSignalEmission): void {
+function writeEmission(emission: StreamSignalEmission, explain: boolean): void {
   process.stdout.write(`${JSON.stringify(emission)}\n`);
+  if (explain) {
+    process.stderr.write(
+      `[${emission.triggerLogin} tier=${emission.tier}] ${explainDiagnostics(emission.diagnostics)}\n`,
+    );
+  }
 }
 
-function parseTierFilter(values: readonly string[]): ReadonlySet<WeightTierId> | null {
+function parseTierFilter(
+  values: readonly string[],
+): ReadonlySet<WeightTierId> | null {
   if (values.length === 0) return null;
   const allowed = new Set(WEIGHT_TIER_DEFINITIONS.map((tier) => tier.id));
   const chosen = new Set<WeightTierId>();
@@ -183,6 +197,8 @@ async function runBridgeWakePoll(options: {
   readonly once: boolean;
   readonly tierFilter: ReadonlySet<WeightTierId> | null;
   readonly clusterTracker: MiamiSyndicateClusterTracker;
+  readonly dod6Book: Dod6CustomerBookOverlay | null;
+  readonly explain: boolean;
 }): Promise<void> {
   const protocols =
     options.bridgeToken === null
@@ -190,7 +206,10 @@ async function runBridgeWakePoll(options: {
       : [BRIDGE_WS_PROTOCOL, `bearer-${options.bridgeToken}`];
   const socket = new WebSocket(options.bridgeUrl, protocols);
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("bridge ws open timeout")), 8_000);
+    const timer = setTimeout(
+      () => reject(new Error("bridge ws open timeout")),
+      8_000,
+    );
     socket.addEventListener("open", () => {
       clearTimeout(timer);
       resolve();
@@ -201,7 +220,10 @@ async function runBridgeWakePoll(options: {
     });
   });
   socket.send(
-    JSON.stringify({ type: "SUBSCRIBE", channel: F402_BET_TICKER_LIVE_CHANNEL }),
+    JSON.stringify({
+      type: "SUBSCRIBE",
+      channel: F402_BET_TICKER_LIVE_CHANNEL,
+    }),
   );
 
   let stopping = false;
@@ -213,7 +235,13 @@ async function runBridgeWakePoll(options: {
 
   const pollAndEmit = async (): Promise<void> => {
     const rows = await options.poll();
-    emitSignals(rows, options.tierFilter, options.clusterTracker);
+    emitSignals(
+      rows,
+      options.tierFilter,
+      options.clusterTracker,
+      options.dod6Book,
+      options.explain,
+    );
   };
 
   await new Promise<void>((resolve, reject) => {
@@ -269,12 +297,18 @@ async function main(): Promise<number> {
       json: { type: "boolean", default: true },
       tier: { type: "string", multiple: true },
       "dry-run": { type: "boolean", default: false },
+      "enrich-book": { type: "string" },
+      explain: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
 
-  if (values.help || positionals[0] === undefined || positionals[0] === "help") {
+  if (
+    values.help ||
+    positionals[0] === undefined ||
+    positionals[0] === "help"
+  ) {
     console.log(HELP);
     return 0;
   }
@@ -284,6 +318,19 @@ async function main(): Promise<number> {
 
   const tierFilter = parseTierFilter(values.tier ?? []);
   const clusterTracker = new MiamiSyndicateClusterTracker();
+  const explain = values.explain === true;
+  let dod6Book: Dod6CustomerBookOverlay | null = null;
+  const enrichBook = values["enrich-book"]?.trim();
+  if (enrichBook !== undefined && enrichBook !== "") {
+    try {
+      dod6Book = loadDod6BookOverlayFromJson(enrichBook);
+    } catch (error) {
+      console.error(
+        `live-stream: --enrich-book failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
 
   if (values["dry-run"]) {
     process.stdout.write(
@@ -298,7 +345,8 @@ async function main(): Promise<number> {
 
   const fromBody = values["from-body"];
   const fromJsonl = values["from-jsonl"];
-  const usePoll = values.poll || (fromBody === undefined && fromJsonl === undefined);
+  const usePoll =
+    values.poll || (fromBody === undefined && fromJsonl === undefined);
   const intervalMs = Number(values["interval-ms"]);
   if (!Number.isFinite(intervalMs) || intervalMs < 1000) {
     usage("--interval-ms must be >= 1000");
@@ -306,7 +354,7 @@ async function main(): Promise<number> {
 
   if (fromBody !== undefined) {
     const rows = await loadBodyRows(fromBody);
-    emitSignals(rows, tierFilter, clusterTracker);
+    emitSignals(rows, tierFilter, clusterTracker, dod6Book, explain);
     return 0;
   }
 
@@ -323,7 +371,7 @@ async function main(): Promise<number> {
             };
       const read = await readF402TickerJsonl(fromJsonl, readOptions);
       jsonlState = read.state;
-      emitSignals(read.rows, tierFilter, clusterTracker);
+      emitSignals(read.rows, tierFilter, clusterTracker, dod6Book, explain);
     };
     await runPass();
     if (!values.watch) return 0;
@@ -336,7 +384,10 @@ async function main(): Promise<number> {
   const agentId = (values.agent ?? Bun.env.F402_AGENT_ID ?? "").trim();
   if (agentId === "") usage("--agent or F402_AGENT_ID required for --poll");
 
-  const baseUrl = (values["base-url"] ?? "https://fantasy402.com").replace(/\/$/, "");
+  const baseUrl = (values["base-url"] ?? "https://fantasy402.com").replace(
+    /\/$/,
+    "",
+  );
   const session = readF402Session();
   if (session === null) {
     console.error(
@@ -363,6 +414,8 @@ async function main(): Promise<number> {
         once: values.once ?? false,
         tierFilter,
         clusterTracker,
+        dod6Book,
+        explain,
       });
     } catch (error) {
       console.error(
@@ -375,7 +428,7 @@ async function main(): Promise<number> {
 
   const loop = async (): Promise<void> => {
     const rows = await poll();
-    emitSignals(rows, tierFilter, clusterTracker);
+    emitSignals(rows, tierFilter, clusterTracker, dod6Book, explain);
   };
 
   try {
