@@ -117,6 +117,7 @@ export interface BlobLiveBetsOptions {
   readonly ticketTtlSec?: number;
   /** Hard cap on consumed-but-unexpired ticket nonces. Default 4096. */
   readonly maxActiveTickets?: number;
+  readonly maxWsSubscriptions?: number;
   readonly presignTtlSec?: number;
   /** Injectable clock (seconds) for ticket tests. */
   readonly nowSec?: () => number;
@@ -409,6 +410,13 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
   const nowSec = options.nowSec ?? (() => Math.floor(Date.now() / 1000));
   const pendingTickets = new Map<string, number>();
   const maxActiveTickets = options.maxActiveTickets ?? MAX_ACTIVE_TICKETS;
+  const maxWsSubscriptions = options.maxWsSubscriptions ?? 32;
+  const subscriptionsOf = (
+    socket: Bun.ServerWebSocket<SocketData>,
+  ): readonly string[] =>
+    (socket as unknown as { subscriptions?: string[] }).subscriptions ?? [
+      ...socket.data.channels,
+    ];
   // Resized bytes differ between platforms unless the Bun backend is pinned (AGENTS.md).
   Bun.Image.backend = "bun";
 
@@ -682,24 +690,68 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
           return;
         }
         if (msg.type === "SUBSCRIBE") {
+          const current = subscriptionsOf(ws);
+          if (
+            !current.includes(msg.channel) &&
+            current.length >= maxWsSubscriptions
+          ) {
+            ws.send(JSON.stringify({ type: "ERROR", code: "channel_limit" }));
+            return;
+          }
           ws.subscribe(msg.channel);
           ws.data.channels.add(msg.channel);
-          ws.send(JSON.stringify({ type: "SUBSCRIBED", channel: msg.channel }));
+          ws.send(
+            JSON.stringify({
+              type: "SUBSCRIBED",
+              channel: msg.channel,
+              channels: subscriptionsOf(ws),
+            }),
+          );
           return;
         }
         ws.unsubscribe(msg.channel);
         ws.data.channels.delete(msg.channel);
-        ws.send(JSON.stringify({ type: "UNSUBSCRIBED", channel: msg.channel }));
+        ws.send(
+          JSON.stringify({
+            type: "UNSUBSCRIBED",
+            channel: msg.channel,
+            channels: subscriptionsOf(ws),
+          }),
+        );
       },
       close(ws) {
-        for (const channel of ws.data.channels) ws.unsubscribe(channel);
+        for (const channel of subscriptionsOf(ws)) ws.unsubscribe(channel);
       },
     },
   });
 
+  const memoryPressure = (level: "warning" | "critical"): void => {
+    const now = nowSec();
+    for (const [nonce, expiresAt] of pendingTickets) {
+      if (expiresAt <= now) pendingTickets.delete(nonce);
+    }
+    if (level === "critical") pendingTickets.clear();
+  };
+  const processEvents = process as unknown as {
+    on?(
+      event: "memoryPressure",
+      listener: (level: "warning" | "critical") => void,
+    ): void;
+    removeListener?(
+      event: "memoryPressure",
+      listener: (level: "warning" | "critical") => void,
+    ): void;
+  };
+  processEvents.on?.("memoryPressure", memoryPressure);
+  let closed = false;
   return {
     server,
-    close: (force = true) => server.stop(force),
+    close: (force = true) => {
+      if (closed) return;
+      closed = true;
+      processEvents.removeListener?.("memoryPressure", memoryPressure);
+      server.stop(force);
+    },
     publish(channel: string, event: unknown): number {
       if (!CHANNEL_PATTERN.test(channel)) {
         throw new Error("invalid channel");

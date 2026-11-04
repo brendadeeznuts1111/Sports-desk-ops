@@ -156,33 +156,25 @@ export async function readF402TickerJsonl(
       };
     }
 
-    const complete = new TextDecoder().decode(
-      view.subarray(0, lastNewline + 1),
-    );
-    let lines = complete.split("\n");
     // The initial window can begin mid-line; drop that fragment (checked against the previous byte).
+    let skip = 0;
     if ((reset === "initial" || reset === "shrunk") && start > 0) {
       const previous = new Uint8Array(1);
       await handle.read(previous, 0, 1, start - 1);
-      if (previous[0] !== 0x0a) lines = lines.slice(1);
+      if (previous[0] !== 0x0a) {
+        const firstNewline = view.indexOf(0x0a);
+        skip = firstNewline === -1 ? view.length : firstNewline + 1;
+      }
     }
 
     const rows: F402TickerRow[] = [];
     let skippedLines = 0;
     let watermark = previousWatermark;
-    for (const line of lines) {
-      if (line.trim() === "") continue;
-      let payload: unknown;
-      try {
-        payload = JSON.parse(line);
-      } catch {
-        skippedLines += 1;
-        continue;
-      }
+    const accept = (payload: unknown): void => {
       const row = parseF402TickerRow(payload);
       if (row === null) {
         skippedLines += 1;
-        continue;
+        return;
       }
       const wagerNumber = numericWagerNumber(row);
       if (
@@ -190,18 +182,57 @@ export async function readF402TickerJsonl(
         wagerNumber !== null &&
         wagerNumber <= previousWatermark
       ) {
-        continue;
+        return;
       }
       rows.push(row);
       if (wagerNumber !== null && wagerNumber > watermark) {
         watermark = wagerNumber;
       }
+    };
+
+    const completeEnd = lastNewline + 1;
+    const parseChunk = Bun.JSONL?.parseChunk;
+    let consumed = skip;
+    if (typeof parseChunk === "function") {
+      const chunk = parseChunk(view.subarray(skip, completeEnd));
+      if (chunk.error === null || chunk.error === undefined) {
+        for (const payload of chunk.values) accept(payload);
+        consumed = skip + chunk.read;
+      } else {
+        // Malformed line mid-chunk: fall back to per-line parsing of complete lines so valid
+        // records before/after the bad one are still consumed deterministically.
+        const lines = new TextDecoder()
+          .decode(view.subarray(skip, completeEnd))
+          .split("\n");
+        for (const line of lines) {
+          if (line.trim() === "") continue;
+          try {
+            accept(JSON.parse(line));
+          } catch {
+            skippedLines += 1;
+          }
+        }
+        consumed = completeEnd;
+      }
+    } else {
+      const lines = new TextDecoder()
+        .decode(view.subarray(skip, completeEnd))
+        .split("\n");
+      for (const line of lines) {
+        if (line.trim() === "") continue;
+        try {
+          accept(JSON.parse(line));
+        } catch {
+          skippedLines += 1;
+        }
+      }
+      consumed = completeEnd;
     }
 
     return {
       rows,
       state: {
-        offset: start + lastNewline + 1,
+        offset: start + consumed,
         watermark,
         initialized: true,
       },

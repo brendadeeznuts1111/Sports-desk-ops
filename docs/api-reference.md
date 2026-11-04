@@ -1234,7 +1234,7 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:512-595` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:520-603` · response not captured
 
 **Presigned download URL for one blob**
 
@@ -1280,7 +1280,7 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:512-595` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:520-603` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
@@ -1350,7 +1350,7 @@ No declared fields.
 
 ### `DELETE /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:596-614` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:604-622` · response not captured
 
 **Delete one stored blob**
 
@@ -1395,7 +1395,7 @@ Bearer-auth DELETE validates the key, returns 404 when the blob is absent, remov
 
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:452-498` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:460-506` · response not captured
 
 **Publish a live-bets event to subscribers**
 
@@ -1447,7 +1447,7 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:427-451` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:435-459` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
@@ -1582,7 +1582,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:615-644` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:623-652` · response not captured
 
 **Live-bets WebSocket upgrade**
 

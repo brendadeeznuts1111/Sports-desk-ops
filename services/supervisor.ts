@@ -34,6 +34,7 @@ export interface SupervisorOptions {
   readonly unhealthyThreshold?: number;
   readonly fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
   readonly spawnImpl?: (command: readonly string[]) => SupervisorProcess;
+  readonly noEnvFile?: boolean;
   readonly log?: (event: Record<string, unknown>) => void;
   readonly sleep?: (ms: number) => Promise<void>;
   /** Test/daemon hook: aborting stops children and resolves `supervise`. */
@@ -139,10 +140,22 @@ export async function supervise(
   const threshold = options.unhealthyThreshold ?? UNHEALTHY_THRESHOLD;
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
+  const noEnvFile = options.noEnvFile ?? Bun.env.SUPERVISOR_NO_ENV_FILE === "1";
   const spawnImpl =
     options.spawnImpl ??
-    ((command: readonly string[]): SupervisorProcess =>
-      Bun.spawn([...command], { stdout: "inherit", stderr: "inherit" }));
+    ((command: readonly string[]): SupervisorProcess => {
+      const [bin, ...rest] = command;
+      const args =
+        bin === undefined
+          ? [...command]
+          : [
+              bin,
+              "--no-orphans",
+              ...(noEnvFile ? ["--no-env-file"] : []),
+              ...rest,
+            ];
+      return Bun.spawn(args, { stdout: "inherit", stderr: "inherit" });
+    });
 
   let stopping = false;
   let resolveFinished: () => void = () => {};
