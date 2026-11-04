@@ -21,6 +21,7 @@ import {
   isSriIneligibleUrl,
   type AssetRole,
 } from "./f402_cdn_assets.ts";
+import { missingExternalViewGuardAnchors } from "./f402_client_seams.ts";
 import { PROBE_HOST } from "./f402_hierarchy_config.ts";
 
 export const CDN_MANIFEST_PATH = join(
@@ -464,12 +465,15 @@ export async function collectLiveCdnAssetDrift(options?: {
       pinnedAssetFetchUrl(managerUrl, managerPin, manifest.vendorVersion),
     );
     if (managerOutcome.kind === "ok") {
-      for (const missing of appModuleCoverage(
-        new TextDecoder().decode(managerOutcome.bytes),
-        manifest,
-      )) {
+      const managerJs = new TextDecoder().decode(managerOutcome.bytes);
+      for (const missing of appModuleCoverage(managerJs, manifest)) {
         details.push(
           `cdn_app_module_unpinned ${missing}: required but not pinned`,
+        );
+      }
+      for (const anchor of missingExternalViewGuardAnchors(managerJs)) {
+        details.push(
+          `cdn_guard_anchor_missing ${anchor}: manager.js no longer contains the external-view target`,
         );
       }
     } else {

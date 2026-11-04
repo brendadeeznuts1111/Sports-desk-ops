@@ -63,6 +63,13 @@ that the data path is healthy.
   the parameter likewise loses the flag. Re-pass the parameter per navigation. If popup coverage is
   needed, persist the latch in `sessionStorage` on first read as a follow-up, with its own review.
 
+## If a vendor update moves the branch
+
+`pin:cdn` reports `guard_anchor_missing`, `pin:cdn:update` refuses to pin, and the preload logs
+`external-view guard cannot install: setAccountInfo missing`. Do not open the canary: update the
+overlay against the new `manager.js`, re-run its tests, then re-pin. A green probe with the flag on
+is not sufficient if `managerGuardInstalled` is false — the structural gate already fails there.
+
 ## Rollback
 
 Open the page without `?external-view-guard=1` (next navigation loses the latch) or with

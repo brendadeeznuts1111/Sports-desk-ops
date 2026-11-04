@@ -216,7 +216,12 @@ Client-side seam (this repository, rolling out):
   `?external-view-guard=1`; rollback is opening the page without it (no redeploy). The full
   procedure and its scope are in
   [external-view-canary.md](../runbooks/external-view-canary.md). **The bypass remains open on
-  Chrome until the canary runs, and on WebKit unconditionally.**
+  Chrome until the canary runs, and on WebKit unconditionally.
+- **Silent-inert guard is closed three ways.** The wrapper's targets are pinned-bytes anchors
+  (`setAccountInfo:function`, `"external-view"`, `"manager/module/"`): `pin:cdn` reports
+  `guard_anchor_missing` and `pin:cdn:update` refuses to pin when they move; the install logs and
+  records `managerGuardFailure` if `setAccountInfo` is gone; and with the flag on, the probe treats
+  an uninstalled wrapper as a structural failure, so the canary cannot pass on an inert guard.
 
 Limits, stated so nobody relies on a control that does not exist:
 

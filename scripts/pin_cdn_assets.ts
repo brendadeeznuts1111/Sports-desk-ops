@@ -19,6 +19,7 @@
 import { parseArgs } from "node:util";
 
 import { extractExternalAssets } from "../lib/f402_cdn_assets.ts";
+import { missingExternalViewGuardAnchors } from "../lib/f402_client_seams.ts";
 import {
   appModuleCoverage,
   appModuleUrl,
@@ -162,6 +163,13 @@ async function update(): Promise<void> {
     throw new Error(`manager/manager: ${describeOutcome(managerOutcome)}`);
   }
   const managerJs = new TextDecoder().decode(managerOutcome.bytes);
+  const missingAnchors = missingExternalViewGuardAnchors(managerJs);
+  if (missingAnchors.length > 0) {
+    console.error(
+      `pin:cdn:update refuses to pin manager/manager.js — the external-view guard anchors moved: ${missingAnchors.join(", ")}. Update the client overlay and its tests first, then re-run.`,
+    );
+    process.exit(2);
+  }
 
   const appUrls = [
     ...new Set(
@@ -333,13 +341,17 @@ async function check(): Promise<void> {
   }
 
   if (managerUrl !== null && managerRow?.outcome.kind === "ok") {
-    for (const missing of appModuleCoverage(
-      new TextDecoder().decode(managerRow.outcome.bytes),
-      manifest,
-    )) {
+    const managerJs = new TextDecoder().decode(managerRow.outcome.bytes);
+    for (const missing of appModuleCoverage(managerJs, manifest)) {
       driftCount += 1;
       details.push(
         `app_module_unpinned ${missing}: required by the controller but not pinned`,
+      );
+    }
+    for (const anchor of missingExternalViewGuardAnchors(managerJs)) {
+      driftCount += 1;
+      details.push(
+        `guard_anchor_missing ${anchor}: manager.js no longer contains the external-view target; the wrapper is inert`,
       );
     }
   }

@@ -125,6 +125,7 @@
         registry: requirejsRegistry() !== null,
         registryDegraded: registryDegraded,
         managerGuardInstalled: managerGuardInstalled,
+        managerGuardFailure: managerGuardFailure,
         externalViewGuard: externalViewGuard,
       };
     },
@@ -281,6 +282,7 @@
   }
 
   var managerGuardInstalled = false;
+  var managerGuardFailure = null;
 
   function urlParam(name) {
     try {
@@ -307,10 +309,22 @@
   // the call-site PR is a default-false flag flip in behavior, not a vendor redeploy. Dead by
   // default: with externalViewGuard false the wrapper delegates immediately.
   function applyManagerGuard(Manager) {
-    if (managerGuardInstalled || !Manager || !Manager.prototype) return false;
+    if (managerGuardInstalled || !Manager || !Manager.prototype) {
+      if (Manager && !Manager.prototype)
+        managerGuardFailure = "manager-module-invalid";
+      return false;
+    }
     var proto = Manager.prototype;
     var original = proto.setAccountInfo;
-    if (typeof original !== "function") return false;
+    if (typeof original !== "function") {
+      // Loud: the wrapper exists but has no target. Every gate can stay green while the guard is
+      // inert, so make it visible in the console and in the probe diagnostics.
+      managerGuardFailure = "setAccountInfo-missing";
+      console.error(
+        "[f402-seam] external-view guard cannot install: setAccountInfo missing — the overlay is inert; update it against the current manager.js",
+      );
+      return false;
+    }
     managerGuardInstalled = true;
     Object.defineProperty(proto, "setAccountInfo", {
       configurable: true,

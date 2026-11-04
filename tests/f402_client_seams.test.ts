@@ -4,11 +4,13 @@ import { join } from "node:path";
 import {
   ALLOWED_MODULES,
   buildRenderCheckScript,
+  EXTERNAL_VIEW_GUARD_ANCHORS,
   buildSeamProbeScript,
   canaryExitCode,
   evaluateSeamProbe,
   isAllowedModule,
   managerModuleIds,
+  missingExternalViewGuardAnchors,
   managerModuleLeaves,
   parseRenderCheck,
   parseSeamProbe,
@@ -470,6 +472,37 @@ describe("security seam preload: module allowlist", () => {
     expect(seams.diag().registryDegraded).toBe(true);
   });
 
+  test("external-view guard anchors exist in the pinned controller and fail on a move", async () => {
+    const managerJs = await Bun.file(PINNED_MANAGER).text();
+    expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(3);
+
+    const moved = managerJs.replace('"external-view"', '"external"');
+    expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
+  });
+
+  test("a manager class without setAccountInfo installs loudly, not silently", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    class ManagerWithoutTarget {
+      // no setAccountInfo
+    }
+    decorateNamed(
+      context,
+      "manager/manager",
+      ManagerWithoutTarget as unknown as Record<string, unknown>,
+    );
+    const seams = context.window["__F402_SEAMS__"] as {
+      diag: () => {
+        managerGuardInstalled: boolean;
+        managerGuardFailure: string | null;
+      };
+    };
+    const diag = seams.diag();
+    expect(diag.managerGuardInstalled).toBe(false);
+    expect(diag.managerGuardFailure).toBe("setAccountInfo-missing");
+  });
+
   test("the preload list, the gate list and the pinned controller agree", async () => {
     const source = await preloadSource();
     expect(preloadAllowedLeaves(source).sort()).toEqual(
@@ -695,6 +728,30 @@ describe("seam probe and installer", () => {
     ).toBe(2);
 
     expect(canaryExitCode(clean, null)).toBe(0);
+  });
+
+  test("flag on without the manager wrapper is a structural failure; install failure is noted", () => {
+    const probe = goodProbe();
+    probe.diag = {
+      seam: { externalViewGuard: true, managerGuardInstalled: false },
+    };
+    const outcome = evaluateSeamProbe(probe, leaves);
+    expect(outcome.structural).toBe("fail");
+    expect(outcome.issues.join(" ")).toContain("wrapper is not installed");
+    expect(seamProbeExitCode(outcome)).toBe(1);
+
+    const withFailure = goodProbe();
+    withFailure.diag = {
+      seam: {
+        externalViewGuard: true,
+        managerGuardInstalled: true,
+        managerGuardFailure: "setAccountInfo-missing",
+      },
+    };
+    expect(evaluateSeamProbe(withFailure, leaves).issues).toEqual([]);
+    expect(evaluateSeamProbe(withFailure, leaves).notes.join(" ")).toContain(
+      "wrapper install failure",
+    );
   });
 
   test("exit-code contract distinguishes covered/uncovered and completed/could-not-run", () => {

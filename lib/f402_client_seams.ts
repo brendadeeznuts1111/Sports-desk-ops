@@ -49,6 +49,25 @@ export const ALLOWED_MODULES: readonly string[] = [
   "weekly-figure-thin",
 ] as const;
 
+/**
+ * The wrapper intercepts `manager.js` `setAccountInfo`'s external-view branch. If a vendor update
+ * moves that branch, the wrapper installs, looks healthy, and does nothing. These substrings are
+ * checked against the pinned controller bytes whenever pins move, and the install fails loudly if
+ * the method itself is gone.
+ */
+export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
+  "setAccountInfo:function",
+  '"external-view"',
+  '"manager/module/"',
+] as const;
+
+/** Anchor substrings missing from a controller bundle. Empty means the wrapper still has a target. */
+export function missingExternalViewGuardAnchors(managerJs: string): string[] {
+  return EXTERNAL_VIEW_GUARD_ANCHORS.filter(
+    (anchor) => !managerJs.includes(anchor),
+  );
+}
+
 /** Own properties the probe requires on the `system/security` singleton. */
 export const SEAM_OWN_PROPERTIES: readonly string[] = [
   "escHtml",
@@ -283,6 +302,18 @@ export function evaluateSeamProbe(
   if (seam?.["registryDegraded"] === true) {
     notes.push(
       "requirejs registry degraded: requirejs.s.contexts is unavailable, so the watchdog could not verify the loaded security module; the onResourceLoad path still applies",
+    );
+  }
+  if (seam?.["externalViewGuard"] === true) {
+    if (seam["managerGuardInstalled"] !== true) {
+      issues.push(
+        "external-view guard flag is on but the manager/manager wrapper is not installed (setAccountInfo moved?)",
+      );
+    }
+  }
+  if (typeof seam?.["managerGuardFailure"] === "string") {
+    notes.push(
+      `external-view wrapper install failure: ${seam["managerGuardFailure"]}`,
     );
   }
   if (probe.csrf === "") {

@@ -72,6 +72,25 @@ bun run pin:cdn                 # 1. see what drifted: unpinned/removed/byte/sri
 - Prefer a PR for manifest changes so the diff is reviewable and the same-version guard's `--force`
   gets a second pair of eyes.
 
+## Vendor update that moves the external-view branch
+
+The client overlay wraps `manager/manager` `setAccountInfo` to guard the `external-view` module
+load. If a vendor release moves that branch out of `setAccountInfo`, the wrapper still installs,
+still looks healthy, and does nothing. Three controls make that loud:
+
+1. **Pin update refuses.** `bun run pin:cdn:update --vendor-version <v>` checks the fetched
+   `manager/manager.js` bytes for the wrapper's anchors (`setAccountInfo:function`,
+   `"external-view"`, `"manager/module/"`) and exits 2 **without writing the manifest** if any are
+   missing. Update the overlay and its tests against the new code first, then re-run the pin update.
+2. **Install fails loudly.** If the manager module loads without `setAccountInfo`, the preload logs
+   `external-view guard cannot install: setAccountInfo missing` and records
+   `managerGuardFailure` in its diagnostics.
+3. **Probe fails structurally.** With `externalViewGuard` on, a probe run reports a structural
+   failure if the wrapper is not installed, so the canary cannot pass on an inert guard.
+
+`bun run pin:cdn` (check mode) also reports `guard_anchor_missing <anchor>` as drift, so the
+always-on cron sees a moved branch even before anyone runs an update.
+
 ## If the guard fires (same version, changed bytes)
 
 Assume compromise until disproved. Do not run `--force` to make the gate green. Check the vendor's
