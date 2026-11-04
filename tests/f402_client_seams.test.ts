@@ -488,7 +488,7 @@ describe("security seam preload: module allowlist", () => {
     );
   });
 
-  test("searchComponent render escapes player fields for the sink and restores them", async () => {
+  test("searchComponent escapes rows once and every later keyup render stays escaped", async () => {
     const source = await preloadSource();
     const context = runPreload(
       source,
@@ -505,7 +505,7 @@ describe("security seam preload: module allowlist", () => {
       Security as unknown as Record<string, unknown>,
     );
 
-    let seen: Record<string, unknown> | null = null;
+    const renders: Array<Record<string, unknown>> = [];
     class Manager {
       agents = [{ Login: "agent<one" }];
       players = [
@@ -516,7 +516,10 @@ describe("security seam preload: module allowlist", () => {
         },
       ];
       searchComponent(): void {
-        seen = { ...(this.players[0] as Record<string, unknown>) };
+        // The real method only binds this handler; the render runs later, per keystroke.
+        (this as unknown as { render: () => void }).render = () => {
+          renders.push({ ...(this.players[0] as Record<string, unknown>) });
+        };
       }
     }
     defined["manager/manager"] = Manager;
@@ -527,15 +530,49 @@ describe("security seam preload: module allowlist", () => {
     );
     const instance = new Manager();
     instance.searchComponent();
+    (instance as unknown as { render: () => void }).render();
+    (instance as unknown as { render: () => void }).render();
 
-    expect(seen).not.toBeNull();
-    expect(seen!["NameFirst"]).toContain("&lt;img");
-    expect(seen!["Login"]).toContain("a&amp;b");
-    expect(seen!["Password"]).toContain("p&quot;w&lt;d");
-    // Restored after the synchronous render so later handlers see original data.
-    expect(instance.players[0]!.NameFirst).toBe('<img src=x onerror="boom">');
-    expect(instance.players[0]!.Password).toBe('p"w<d');
-    expect(instance.agents[0]!.Login).toBe("agent<one");
+    expect(renders).toHaveLength(2);
+    for (const seen of renders) {
+      expect(seen["NameFirst"]).toContain("&lt;img");
+      expect(seen["Login"]).toContain("a&amp;b");
+      expect(seen["Password"]).toContain("p&quot;w&lt;d");
+    }
+    // Permanent escaping: no restore window for a deferred render to slip through.
+    expect(instance.players[0]!.NameFirst).toContain("&lt;img");
+  });
+
+  test("searchComponent escaping is idempotent across repeated setup calls", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    class Manager {
+      agents: unknown[] = [];
+      players = [{ Login: "a&b", NameFirst: "<b>x</b>", Password: "" }];
+      searchComponent(): void {}
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const instance = new Manager();
+    instance.searchComponent();
+    const once = instance.players[0]!.NameFirst;
+    instance.searchComponent();
+    expect(instance.players[0]!.NameFirst).toBe(once);
+    expect(once).toContain("&lt;b&gt;");
   });
 
   test("a manager class without searchComponent installs loudly, not silently", async () => {

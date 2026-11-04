@@ -48,6 +48,13 @@ only the _priority_ of the sink work depends on item 2. `searchComponent` (#16) 
 `getMessageInit`, `getPopUpMessages`, `setCommunicationMessages`, `setHistory` — one PR each, each
 with a sink test.
 
+**Fifth sink — `searchCustomer` (fullscreen search):** it is **live in the pinned controller**
+(`searchCustomer:function`, operation `searchCustomerAdmin`, renders `info.Password`, `info.Login`
+and `info.NameFirst`) and is bound at boot to `[data-field="search-customer"]` keyup. The captured
+DOM's fullscreen-search panel is commented out, so _reachability is unresolved_ rather than dead.
+It is scheduled, not omitted: migrate it after `searchComponent` verification and before
+`setHistory`.
+
 **Raised instead:** the Bearer verdict (item 2 — six requests, ~2 server-team hours) and the
 financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is
 maintained, not expanded.

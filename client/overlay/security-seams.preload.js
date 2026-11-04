@@ -444,9 +444,36 @@
   }
 
   // Sink migration for manager.searchComponent: the player/all branches interpolate
-  // NameFirst/Login/Password into <li> HTML and inject with .html(). The overlay cannot edit the
-  // pinned bundle, so it escapes the row fields for the duration of the synchronous render and
-  // restores them afterwards; handlers and later calls still see the original data.
+  // NameFirst/Login/Password into <li> HTML and inject with .html(). searchComponent itself only
+  // binds the keyup handler; the render runs later, per keystroke. Escaping for the duration of the
+  // searchComponent call would therefore be inert. Instead the row fields are escaped once, in
+  // place, when the component is set up. HTML entities decode back to the original characters when
+  // the browser parses the generated attribute, so data-login/data-pass still carry the real value
+  // (obj:true callers keep working); only the raw-string interpolation is neutralised.
+  //
+  // Tradeoff: the search filter compares the typed term against the escaped field, so searching for
+  // a literal "&" or "<" inside a name/password no longer matches. Those are the characters that
+  // have to be escaped for the sink to be safe; ordinary names/passwords are unaffected.
+  var searchEscaperRows = typeof WeakSet === "function" ? new WeakSet() : null;
+
+  function escapeSearchRows(rows, fields, esc) {
+    if (!Array.isArray(rows)) return;
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i];
+      if (!row || typeof row !== "object") continue;
+      if (searchEscaperRows && searchEscaperRows.has(row)) continue;
+      var escaped = false;
+      for (var j = 0; j < fields.length; j += 1) {
+        var field = fields[j];
+        if (typeof row[field] === "string") {
+          row[field] = esc(row[field]);
+          escaped = true;
+        }
+      }
+      if (escaped && searchEscaperRows) searchEscaperRows.add(row);
+    }
+  }
+
   function applySearchEscaper(Manager) {
     if (searchEscaperInstalled) return false;
     if (!Manager || !Manager.prototype) {
@@ -468,35 +495,19 @@
       writable: true,
       value: function () {
         var api = searchEscaperApi();
-        if (!api || typeof api.escHtml !== "function") {
-          return original.apply(this, arguments);
-        }
-        var esc = api.escHtml;
-        var restore = [];
-        function sanitize(rows, fields) {
-          if (!Array.isArray(rows)) return;
-          for (var i = 0; i < rows.length; i += 1) {
-            var row = rows[i];
-            if (!row || typeof row !== "object") continue;
-            for (var j = 0; j < fields.length; j += 1) {
-              var field = fields[j];
-              if (typeof row[field] === "string") {
-                restore.push([row, field, row[field]]);
-                row[field] = esc(row[field]);
-              }
-            }
+        if (api && typeof api.escHtml === "function") {
+          try {
+            escapeSearchRows(this.agents, ["Login"], api.escHtml);
+            escapeSearchRows(
+              this.players,
+              ["Login", "NameFirst", "Password"],
+              api.escHtml,
+            );
+          } catch (err) {
+            console.error("[f402-seam] searchComponent escaping failed:", err);
           }
         }
-        sanitize(this.agents, ["Login"]);
-        sanitize(this.players, ["Login", "NameFirst", "Password"]);
-        try {
-          return original.apply(this, arguments);
-        } finally {
-          for (var k = 0; k < restore.length; k += 1) {
-            var entry = restore[k];
-            entry[0][entry[1]] = entry[2];
-          }
-        }
+        return original.apply(this, arguments);
       },
     });
     return true;

@@ -57,7 +57,11 @@ export const ALLOWED_MODULES: readonly string[] = [
  *
  * The set covers both manager overlays: the external-view guard (`setAccountInfo`, `"external-view"`,
  * `"manager/module/"`) and the search sink escaper (`searchComponent`). The `"manager/module/"`
- * anchor assumes the vendor concatenates `"manager/module/" + id`. If that
+ * anchor assumes the vendor concatenates `"manager/module/" + id`. The searchComponent anchor only
+ * catches a rename; it does not catch a change from synchronous to deferred rendering. The overlay
+ * escapes the row data permanently (not for the duration of the call), so a deferred render still
+ * reads escaped rows — but a vendor that copies the raw fields before calling searchComponent would
+ * bypass it. Assert escaped `[data-pass]` values in the DOM immediately after the call returns. If that
  * is refactored to an array join (`["manager", "module", id].join("/")`), the anchor still passes
  * while the concatenation the wrapper intercepts is gone — update the anchor and the wrapper
  * together. The allowlist remains the bypass control either way.
