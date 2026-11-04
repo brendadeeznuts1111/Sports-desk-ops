@@ -475,7 +475,7 @@ describe("security seam preload: module allowlist", () => {
   test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(6);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(7);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
@@ -657,6 +657,71 @@ describe("security seam preload: module allowlist", () => {
     expect(emailCount).not.toBeNull();
     expect(emailCount![0]!["FromE"]).toBe("eve<one>");
     expect(emailCount![0]!["Subject"]).toBe("sub&ject");
+  });
+
+  test("getPopUpMessages escapes before the newline-to-<br> replacement", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    const rendered: Array<{ comment: string; item: string }> = [];
+    class Manager {
+      getPopUpMessages(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "getMessage" },
+          success: (response: {
+            COMMENT: Array<{ CommentsForAgent: string }>;
+            LIST: Array<{ Subject: string; Message: string; Id: string }>;
+          }) => {
+            const br = (v: string): string =>
+              v.replace(/(?:\r\n|\r|\n)/g, "<br>");
+            const comment =
+              "<p>" + br(response.COMMENT[0]!.CommentsForAgent) + "</p>";
+            const template =
+              '<h4>{SUBJECT}</h4><p>{MESSAGE}</p><div data-index="{INDEX}"></div>';
+            const item = template
+              .replace("{SUBJECT}", response.LIST[0]!.Subject)
+              .replace("{MESSAGE}", br(response.LIST[0]!.Message))
+              .replace("{INDEX}", response.LIST[0]!.Id);
+            rendered.push({ comment, item });
+          },
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    new Manager().getPopUpMessages();
+    expect(captured).not.toBeNull();
+    (captured as unknown as { success: (r: unknown) => void }).success({
+      COMMENT: [{ CommentsForAgent: "line1\nline2<b>" }],
+      LIST: [{ Subject: "<subject>", Message: "line1\nline2<b>", Id: '1"2' }],
+    });
+    expect(rendered).toHaveLength(1);
+    expect(rendered[0]!.comment).toContain("<br>");
+    expect(rendered[0]!.comment).toContain("&lt;b&gt;");
+    expect(rendered[0]!.comment).not.toContain("&lt;br&gt;");
+    expect(rendered[0]!.item).toContain("&lt;subject&gt;");
+    expect(rendered[0]!.item).toContain("<br>");
+    expect(rendered[0]!.item).toContain("&lt;b&gt;");
+    expect(rendered[0]!.item).not.toContain("&lt;br&gt;");
   });
 
   test("setHistory escapes only the title and leaves the getHistory argument raw", async () => {

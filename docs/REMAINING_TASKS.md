@@ -201,8 +201,9 @@ so an id resolves without guessing which artifact it came from.
     the migrated path. **Not blocked by the external-view canary.**
   - **Unpaused 2026-11-04 as hygiene:** escaping is correct regardless of the Bearer verdict; the
     overlay now escapes `NameFirst`/`Login`/`Password` on `manager/manager.searchComponent` rows.
-    Order: `searchComponent`, `setHistory` and `getMessageInit` landed; next `getPopUpMessages`,
-    `setCommunicationMessages` (template splicing), then `searchCustomer` when reachable. `searchCustomer` (fullscreen) is the fifth sink,
+    Order: `searchComponent`, `setHistory`, `getMessageInit` and `getPopUpMessages` landed; next
+    `setCommunicationMessages` (template splicing, escape each interpolated field before the
+    template is injected), then `searchCustomer` when reachable. `searchCustomer` (fullscreen) is the fifth sink,
     scheduled once reachability is confirmed: live in the pinned controller, trigger markup
     absent/commented.
 

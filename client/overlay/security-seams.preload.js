@@ -115,6 +115,7 @@
     if (manager) decorated = applySearchEscaper(manager) || decorated;
     if (manager) decorated = applySetHistoryEscaper(manager) || decorated;
     if (manager) decorated = applyMessageInitEscaper(manager) || decorated;
+    if (manager) decorated = applyPopUpMessagesEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -136,6 +137,8 @@
         historyEscaperFailure: historyEscaperFailure,
         messageInitEscaperInstalled: messageInitEscaperInstalled,
         messageInitEscaperFailure: messageInitEscaperFailure,
+        popUpMessagesEscaperInstalled: popUpMessagesEscaperInstalled,
+        popUpMessagesEscaperFailure: popUpMessagesEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -686,6 +689,95 @@
     return true;
   }
 
+  // Sink migration for manager.getPopUpMessages. The getMessage success builds two templates:
+  // a comment popup from COMMENT[0].CommentsForAgent and list items with {SUBJECT}/{MESSAGE}/
+  // {INDEX}, then replaces newlines with <br>. Escaping the response fields BEFORE the handler runs
+  // means the later newline replacement inserts <br> as markup while raw <b> etc. stay text. The
+  // response object is local to the callback (nothing is stored), so in-place escaping is safe.
+  var popUpMessagesEscaperInstalled = false;
+  var popUpMessagesEscaperFailure = null;
+
+  function applyPopUpMessagesEscaper(Manager) {
+    if (popUpMessagesEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      popUpMessagesEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.getPopUpMessages;
+    if (typeof original !== "function") {
+      popUpMessagesEscaperFailure = "getPopUpMessages-missing";
+      console.error(
+        "[f402-seam] getPopUpMessages escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    popUpMessagesEscaperInstalled = true;
+    Object.defineProperty(proto, "getPopUpMessages", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          typeof jq.ajax !== "function"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var baseAjax = jq.ajax;
+        jq.ajax = function (options) {
+          if (
+            options &&
+            options.data &&
+            options.data.operation === "getMessage" &&
+            typeof options.success === "function"
+          ) {
+            var rawSuccess = options.success;
+            options.success = function (response) {
+              if (response) {
+                if (
+                  response.COMMENT &&
+                  response.COMMENT[0] &&
+                  typeof response.COMMENT[0].CommentsForAgent === "string"
+                ) {
+                  response.COMMENT[0].CommentsForAgent = api.escHtml(
+                    response.COMMENT[0].CommentsForAgent,
+                  );
+                }
+                if (Array.isArray(response.LIST)) {
+                  for (var i = 0; i < response.LIST.length; i += 1) {
+                    var row = response.LIST[i];
+                    if (!row || typeof row !== "object") continue;
+                    if (typeof row.Subject === "string") {
+                      row.Subject = api.escHtml(row.Subject);
+                    }
+                    if (typeof row.Message === "string") {
+                      row.Message = api.escHtml(row.Message);
+                    }
+                    if (typeof row.Id === "string") {
+                      row.Id = api.escHtml(row.Id);
+                    }
+                  }
+                }
+              }
+              return rawSuccess.apply(this, arguments);
+            };
+          }
+          return baseAjax.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.ajax = baseAjax;
+        }
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -723,6 +815,7 @@
         applySearchEscaper(defined);
         applySetHistoryEscaper(defined);
         applyMessageInitEscaper(defined);
+        applyPopUpMessagesEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

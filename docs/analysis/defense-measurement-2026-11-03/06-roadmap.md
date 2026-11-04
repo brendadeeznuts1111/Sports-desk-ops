@@ -51,7 +51,9 @@ only the _priority_ of the sink work depends on item 2. Verify `searchComponent`
 **Sink status (2026-11-04):** `searchComponent` escapes `NameFirst`, `Login`, `Password`,
 `customerID` and `AgentID`; `setHistory` escapes only the title and leaves the `getHistory` argument
 raw; `getMessageInit` uses the **render-copy** pattern (escaped copies for the dropdown render,
-`emailCount` restored raw after the synchronous success handler). `searchComponent` carries two accepted costs: (1) the search filter compares against escaped
+`emailCount` restored raw after the synchronous success handler); `getPopUpMessages` escapes the
+`getMessage` response fields **before** the original newline-to-`<br>` replacement, so `<br>` stays
+markup and raw `<b>`/Subject/Id become text. `searchComponent` carries two accepted costs: (1) the search filter compares against escaped
 values, so a literal `&`/`<` in a name/password no longer matches — **accepted by the desk security
 owner (operator role), 2026-11-04**, mitigation search-by-login, escalate if agents report failures;
 (2) the `players`/`agents` arrays hold escaped values after setup — new code must not read those
