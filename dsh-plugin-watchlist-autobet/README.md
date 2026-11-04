@@ -167,6 +167,9 @@ before the measurement instant only when read as **America/New_York** (UTC is ~5
 desk's Central clock ~56 min in the future), so the engine reads it in the portal's Eastern zone.
 A timestamp that still lands in the future (> 120 s) is treated as a broken clock and refused as
 stale, never as freshness.
+The window itself is `config.maxSignalAgeSeconds`, supplied once by the CLI: the source chip,
+`status`, the engine's per-row `stale` flag and the `freshness` gate all use it, so the inspector
+cannot say "sources fresh" while the gate says "engine marked this signal's provenance stale".
 
 ## Configuration
 

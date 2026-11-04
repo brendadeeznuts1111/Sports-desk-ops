@@ -616,7 +616,13 @@ export async function loadAutobetSignals(
   now: Date,
 ): Promise<AutobetSignalSnapshot> {
   const inputs = await loadWatchlistSignalInputs(root);
-  const signals = deriveWatchlistSignals(inputs, { now });
+  // One window for every layer: the same config value feeds the source chips above and the
+  // engine's per-row `stale` flag, so the inspector cannot show "sources fresh" while the
+  // freshness gate refuses on "engine marked this signal's provenance stale".
+  const signals = deriveWatchlistSignals(inputs, {
+    now,
+    maxAgeSeconds: config.maxSignalAgeSeconds,
+  });
   const sources = await describeSignalSources(
     root,
     config.maxSignalAgeSeconds,

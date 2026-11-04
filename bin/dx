@@ -197,6 +197,52 @@ unknown_command() {
 cmd="${1:-status}"
 shift || true
 
+# --- graph feed poller helpers -------------------------------------------------
+# `dx poll --help` must never poll: probing a CLI with --help is a normal agent move,
+# and the poller writes docs/graph-live-feed.json (in FIXTURE mode when --live is absent).
+dx_wants_help() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in -h|--help) return 0 ;; esac
+  done
+  return 1
+}
+
+dx_poller_usage() {
+  cat <<'USAGE'
+dx poll / dx watch — graph feed poller (Polymarket positions + F402 pending)
+
+Usage:
+  dx poll [--once] [--live] [--live-f402] [--no-backtest-artifact] [--r2]
+  dx watch [--live] [--live-f402] [--no-backtest-artifact]   # --cron loop, 60s cadence
+  dx poll --help                                             # prints this; never polls
+
+Modes:
+  --once                 one poll cycle, then exit (default when --cron/--r2 are absent)
+  --cron                 in-process 60s loop
+  --r2                   publish docs/graph-live-feed.json + graph.html to the R2 edge
+  --live                 live Polymarket ingest   (same as SPORTSDESK_LIVE_INGEST=1)
+  --live-f402            live F402 probe          (same as SPORTSDESK_LIVE_F402=1)
+  --no-backtest-artifact do not rewrite the committed 4-week backtest artifact
+
+Fixture trap:
+  Without --live the poller writes dataMode FIXTURE — placeholder rows, not desk data —
+  and overwrites docs/graph-live-feed.json. A live refresh is:
+    SPORTSDESK_LIVE_INGEST=1 ./bin/dx poll --once --no-backtest-artifact
+USAGE
+}
+
+dx_poller_warn_fixture() {
+  local arg
+  for arg in "$@"; do
+    [[ "$arg" == "--live" ]] && return 0
+  done
+  [[ "${SPORTSDESK_LIVE_INGEST:-}" == "1" ]] && return 0
+  printf '%s\n' \
+    "[dx] WARNING: graph poller running WITHOUT --live — it will write dataMode FIXTURE (placeholder rows) over docs/graph-live-feed.json." \
+    "[dx]          Live refresh: SPORTSDESK_LIVE_INGEST=1 ./bin/dx poll --once --no-backtest-artifact" >&2
+}
+
 case "$cmd" in
   help|--help|-h)
     cat <<'EOF'
@@ -465,10 +511,20 @@ VERSION_HELP
     exec bun run scripts/run_4wk_parlay_combo_backtest.ts "$@"
     ;;
   poll)
+    if dx_wants_help "$@"; then
+      dx_poller_usage
+      exit 0
+    fi
+    dx_poller_warn_fixture "$@"
     cd "$REPO_ROOT"
     exec bun run scripts/graph_feed_poller_daemon.ts "$@"
     ;;
   watch)
+    if dx_wants_help "$@"; then
+      dx_poller_usage
+      exit 0
+    fi
+    dx_poller_warn_fixture "$@"
     cd "$REPO_ROOT"
     exec bun --watch run scripts/graph_feed_poller_daemon.ts --cron "$@"
     ;;

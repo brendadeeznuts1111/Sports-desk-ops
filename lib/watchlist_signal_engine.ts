@@ -454,6 +454,9 @@ function registryLookup(
 
 const FEED_STALE_SECONDS = 180;
 const CAPTURE_STALE_SECONDS = 3_600;
+// Both are defaults only: a caller that supplies a window (the CLI passes
+// config.maxSignalAgeSeconds) overrides them, so status, the board chip, the engine's
+// `provenance.stale` and the freshness gate all measure the same thing.
 
 interface RowProvenance {
   readonly source: string;
@@ -653,6 +656,7 @@ function rowsFromFeed(
   registry: Map<string, WatchlistUnifiedEntry>,
   now: Date,
   onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof feed !== "object" || feed === null) return [];
   const record = feed as Record<string, unknown>;
@@ -713,7 +717,7 @@ function rowsFromFeed(
         "docs/graph-live-feed.json",
         asOf,
         null,
-        FEED_STALE_SECONDS,
+        staleAfterSeconds ?? FEED_STALE_SECONDS,
         now,
         { fixture, dataMode },
       ),
@@ -728,6 +732,7 @@ function rowsFromWagers(
   fallbackAsOf: string | null,
   now: Date,
   onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof wagers !== "object" || wagers === null) return [];
   const record = wagers as Record<string, unknown>;
@@ -784,7 +789,7 @@ function rowsFromWagers(
         "data/live-wagers.json",
         betAt ?? observedAt,
         fallbackAsOf,
-        CAPTURE_STALE_SECONDS,
+        staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
         now,
         { fixture, dataMode: null },
       ),
@@ -798,6 +803,7 @@ function rowsFromLiveBets(
   registry: Map<string, WatchlistUnifiedEntry>,
   now: Date,
   onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof liveBets !== "object" || liveBets === null) return [];
   const record = liveBets as Record<string, unknown>;
@@ -847,7 +853,7 @@ function rowsFromLiveBets(
         "data/live-bets.json",
         betAt ?? capturedAt,
         null,
-        CAPTURE_STALE_SECONDS,
+        staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
         now,
         { fixture: dataSource.includes("fixture"), dataMode: null },
       ),
@@ -987,6 +993,12 @@ export function aggregateWatchlistSignals(
 export interface DeriveWatchlistSignalsOptions {
   readonly now?: Date;
   readonly registry?: readonly WatchlistUnifiedEntry[];
+  /**
+   * Single freshness window applied to every source (`row.provenance.stale`). Omitted,
+   * each source keeps its cadence default; the CLI supplies `config.maxSignalAgeSeconds`
+   * so the inspector's stale chip and the freshness gate cannot disagree.
+   */
+  readonly maxAgeSeconds?: number;
 }
 
 /** Pure derivation: parsed inputs in, signals out. */
@@ -998,10 +1010,24 @@ export function deriveWatchlistSignals(
   const registry = registryLookup(
     options.registry ?? getUnifiedWatchlistRegistry(),
   );
+  const staleAfterSeconds = options.maxAgeSeconds;
   const rows = [
-    ...rowsFromFeed(inputs.feed, registry, now),
-    ...rowsFromWagers(inputs.wagers, registry, inputs.wagersAsOf ?? null, now),
-    ...rowsFromLiveBets(inputs.liveBets, registry, now),
+    ...rowsFromFeed(inputs.feed, registry, now, undefined, staleAfterSeconds),
+    ...rowsFromWagers(
+      inputs.wagers,
+      registry,
+      inputs.wagersAsOf ?? null,
+      now,
+      undefined,
+      staleAfterSeconds,
+    ),
+    ...rowsFromLiveBets(
+      inputs.liveBets,
+      registry,
+      now,
+      undefined,
+      staleAfterSeconds,
+    ),
   ];
   return aggregateWatchlistSignals(rows, now);
 }

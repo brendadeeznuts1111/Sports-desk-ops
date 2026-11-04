@@ -510,6 +510,39 @@ describe("bet-time freshness", () => {
     expect(signals[0]?.provenance.asOf).toBe("2026-11-04T13:00:00.000Z");
     expect(signals[0]?.provenance.stale).toBe(true);
   });
+
+  test("an explicit window overrides the per-source default", () => {
+    // The feed's own cadence default is 180 s; the CLI passes config.maxSignalAgeSeconds.
+    const inputs = {
+      feed: liveFeed({
+        dataMode: "LIVE",
+        f402Source: "live",
+        lastUpdatedIso: "2026-11-04T11:50:00.000Z",
+        pendingBets: [
+          feedRow(
+            ACCOUNT_A.customerLogin,
+            "NBA_LAL_BOS_1Q_TOTAL_OVER_55.5",
+            1_000,
+            "+115",
+          ),
+        ],
+      }),
+      wagers: null,
+      liveBets: null,
+    };
+    const byDefault = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+    });
+    const withWindow = deriveWatchlistSignals(inputs, {
+      now: NOW,
+      registry: REGISTRY,
+      maxAgeSeconds: 900,
+    });
+    expect(byDefault[0]?.provenance.ageSeconds).toBe(600);
+    expect(byDefault[0]?.provenance.stale).toBe(true);
+    expect(withWindow[0]?.provenance.stale).toBe(false);
+  });
 });
 
 /* -------------------------------------------------------------------------- */

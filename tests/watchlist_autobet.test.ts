@@ -6,6 +6,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   // ast-grep-ignore: node-fs-read-write-file -- sync CLI fixtures; the CLI under test is sync.
   writeFileSync,
 } from "node:fs";
@@ -2260,5 +2261,64 @@ describe("candidates discovery", () => {
       "candidates [--limit N] [--min-risk-usd 0..]",
     );
     expect(help.stdout).toContain("--min-risk-usd");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Freshness window: one truth across status and the gate                      */
+/* -------------------------------------------------------------------------- */
+
+function freshnessCheckOf(result: CliResult): Record<string, unknown> | null {
+  const first = recordValue(arrayValue(result.body["signals"])[0]);
+  const checks = arrayValue(recordValue(first["gate"])["checks"]);
+  const found = checks.find(
+    (check) => stringValue(recordValue(check)["check"]) === "freshness",
+  );
+  return found === undefined ? null : recordValue(found);
+}
+
+function feedSourceOf(result: CliResult): Record<string, unknown> | null {
+  const found = arrayValue(result.body["sources"]).find(
+    (source) =>
+      stringValue(recordValue(source)["path"]) === "docs/graph-live-feed.json",
+  );
+  return found === undefined ? null : recordValue(found);
+}
+
+describe("freshness window", () => {
+  test("config.maxSignalAgeSeconds governs the source chip and the gate alike", () => {
+    const observedAt = "2026-11-04T11:50:00.000Z";
+
+    const wide = makeTemporaryRoot();
+    writeAutobetConfig(wide, validConfigRaw({ maxSignalAgeSeconds: 900 }));
+    writeSignalArtifacts(wide, { observedAt });
+    const wideMtime = new Date(NOW.getTime() - 600_000);
+    utimesSync(join(wide, "docs/graph-live-feed.json"), wideMtime, wideMtime);
+
+    const wideSignals = runCli(wide, ["signals", "--include-rejected"]);
+    expect(wideSignals.code).toBe(0);
+    const wideFreshness = freshnessCheckOf(wideSignals);
+    expect(booleanValue(wideFreshness?.["ok"])).toBe(true);
+    const wideStatus = runCli(wide, ["status"]);
+    expect(booleanValue(feedSourceOf(wideStatus)?.["stale"])).toBe(false);
+
+    // Tighten the one window below the signal's age: chip and gate flip together.
+    const tight = makeTemporaryRoot();
+    writeAutobetConfig(tight, validConfigRaw({ maxSignalAgeSeconds: 300 }));
+    writeSignalArtifacts(tight, { observedAt });
+    const tightMtime = new Date(NOW.getTime() - 600_000);
+    utimesSync(
+      join(tight, "docs/graph-live-feed.json"),
+      tightMtime,
+      tightMtime,
+    );
+
+    const tightSignals = runCli(tight, ["signals", "--include-rejected"]);
+    expect(tightSignals.code).toBe(0);
+    const tightFreshness = freshnessCheckOf(tightSignals);
+    expect(booleanValue(tightFreshness?.["ok"])).toBe(false);
+    expect(recordValue(tightFreshness?.["actual"])["ageSeconds"]).toBe(600);
+    const tightStatus = runCli(tight, ["status"]);
+    expect(booleanValue(feedSourceOf(tightStatus)?.["stale"])).toBe(true);
   });
 });
