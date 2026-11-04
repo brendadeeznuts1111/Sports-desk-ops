@@ -33,7 +33,6 @@ import {
 } from "../lib/secrets.ts";
 
 import { z } from "zod";
-import { argv, env, secrets, write } from "bun";
 
 export const AJAX_URL =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
@@ -260,8 +259,8 @@ export type ManagerSession = ActiveManagerSession | NoManagerSession;
 
 function defaultSecretReader(): SecretReader | null {
   try {
-    if (secrets !== undefined && typeof secrets.get === "function") {
-      return { get: (options) => secrets.get(options) };
+    if (Bun.secrets !== undefined && typeof Bun.secrets.get === "function") {
+      return { get: (options) => Bun.secrets.get(options) };
     }
   } catch {
     // Bun.secrets is unavailable in some runtimes; the env fallback still works.
@@ -303,7 +302,7 @@ function cookieHeaderFromSessionFile(
  * never writes the session anywhere.
  */
 export async function resolveManagerSession(
-  environment: Readonly<Record<string, string | undefined>> = env,
+  environment: Readonly<Record<string, string | undefined>> = Bun.env,
   secrets: SecretReader | null = defaultSecretReader(),
 ): Promise<ManagerSession> {
   const envCookie = cookieHeaderFromGsidCookie(environment);
@@ -336,7 +335,7 @@ export async function resolveManagerSession(
 
 /** Resolve, or fail closed with the provisioning path. Never echoes a cookie value. */
 export async function requireManagerSession(
-  environment: Readonly<Record<string, string | undefined>> = env,
+  environment: Readonly<Record<string, string | undefined>> = Bun.env,
   secrets: SecretReader | null = defaultSecretReader(),
 ): Promise<ActiveManagerSession> {
   const session = await resolveManagerSession(environment, secrets);
@@ -804,13 +803,13 @@ async function main(args: readonly string[]): Promise<void> {
 
   const webviewProfile =
     values["webview-profile"]?.trim() ??
-    (env.GSLIVE_WEBVIEW_PROFILE ?? "").trim();
+    (Bun.env.GSLIVE_WEBVIEW_PROFILE ?? "").trim();
   const session =
     webviewProfile === ""
-      ? await requireManagerSession(env)
+      ? await requireManagerSession(Bun.env)
       : await sessionFromGsliveProfile({ profileDir: webviewProfile });
   const cookieHeader = session.cookieHeader;
-  let sessionGate = sessionGateFromEnv(env);
+  let sessionGate = sessionGateFromEnv(Bun.env);
   if (values["bootstrap-session"] && sessionGate === "") {
     sessionGate = await bootstrapGanchrowSession({ cookieHeader });
   }
@@ -838,14 +837,14 @@ async function main(args: readonly string[]): Promise<void> {
 
   const out = values.out;
   if (out !== "-") {
-    await write(out, JSON.stringify(result, null, 2));
+    await Bun.write(out, JSON.stringify(result, null, 2));
     console.log(`wrote ${out}`);
   }
 }
 
 if (import.meta.main) {
   try {
-    await main(argv.slice(2));
+    await main(Bun.argv.slice(2));
   } catch (error) {
     console.error(
       `bet-tally: ${error instanceof Error ? error.message : String(error)}`,

@@ -2,7 +2,6 @@
  * Bun-native binary helpers for schema snapshots and JSON column payloads.
  */
 
-import { deepEquals } from "bun";
 import { sha256FromDigest, type Sha256Hex } from "./brand.ts";
 import type { SqliteSchemaReport } from "./schema_report.ts";
 import type { SqliteStorageKind } from "./sqlite_schema_registry.ts";
@@ -284,7 +283,7 @@ export function assertManifestRoundTrip(
 ): void {
   const decoded = decodeManifest(bytes);
   const expected = decodedManifestFromReport(report);
-  if (!deepEquals(decoded, expected, true)) {
+  if (!Bun.deepEquals(decoded, expected, true)) {
     throw new Error("manifest round-trip mismatch");
   }
 }

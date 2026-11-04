@@ -10,8 +10,6 @@
  * checkout that has not provisioned R2 credentials still runs the daemon alone.
  */
 
-import { env } from "bun";
-
 import { resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
 
 export interface ServiceSpec {
@@ -58,7 +56,7 @@ function portFrom(
 
 /** Service roster; the blob gateway appears only when its credentials are provisioned. */
 export function supervisedServices(
-  environment: Readonly<Record<string, string | undefined>> = env,
+  environment: Readonly<Record<string, string | undefined>> = Bun.env,
 ): readonly ServiceSpec[] {
   const webviewPort = portFrom(
     environment,
@@ -91,7 +89,7 @@ export function supervisedServices(
 
 /** Resolve the BLOB_* tokens from Bun.secrets when the environment has none. */
 export async function supervisedServicesAsync(
-  environment: Readonly<Record<string, string | undefined>> = env,
+  environment: Readonly<Record<string, string | undefined>> = Bun.env,
   secrets: Parameters<typeof resolveSecretBackedEnv>[1] = Bun.secrets,
 ): Promise<readonly ServiceSpec[]> {
   return supervisedServices(await resolveSecretBackedEnv(environment, secrets));
