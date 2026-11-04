@@ -63,13 +63,27 @@ channel = "gslive-wagers"
 ```
 
 - Gateway: `POST /api/v1/live-bets` with `Bearer $BLOB_API_TOKEN` and `{channel, event}`; the
-  channel defaults to the lowercase `gslive-wagers` (the gateway rejects uppercase).
+  channel defaults to the lowercase `gslive-wagers` (the gateway's channel regex rejects
+  uppercase). There is no in-repo live consumer yet; a subscriber must send
+  `{"type":"SUBSCRIBE","channel":"gslive-wagers"}` with exactly that casing.
+- `--publish-gateway` only overrides the gateway URL; it does not enable the HTTP sink.
+  `--publish-live-bets` enables the gateway sink and `--publish-r2` enables the R2 sidecar/summary;
+  there is no umbrella flag.
 - R2: `wagers-by-state/latest.json` in `sportsdesk-ops-reports`, written with
   `lib/r2_s3_client.ts` `writeWithMetadata`; metadata carries schema version, capture time and
   `source=gslive-wagers-capture`.
 - The sink also writes `Scratch/gslive-wagers/latest.json`. The graph poller reads it and embeds a
   `gsliveWagers` block in `docs/graph-live-feed.json`; its `--r2` publish carries that block to the
   deployed feed. This keeps the graph feed single-writer and avoids a capture overwriting topology.
+- Cadence: capture defaults to `*/15` and the graph poller defaults to 60s. The feed can lag the
+  latest capture by up to one poller tick; the R2 graph feed only updates when the poller runs with
+  `--r2`. Keep the poller cadence at or below the capture cadence (do not poll every 5s against a
+  5-minute capture and expect freshness). A capture faster than the poller is coalesced by the
+  poller's next read.
+- PII: the event carries totals, per-state counts, timestamps, quality flags, `artifactSha256`, and
+  alert text built from counts plus row-derived **state labels** (bounded to 200 chars). It never
+  carries ticket ids, customer ids, logins, cookies, or raw rows. `artifactSha256` is a one-way
+  digest of the local aggregate artifact, not the artifact itself.
 - A missing gateway, missing `BLOB_API_TOKEN`, missing R2 credentials or a non-2xx response is
   reported in the CLI output and does not discard the captured artifact or fail the capture.
 
