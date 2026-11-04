@@ -3,20 +3,27 @@
  * Pin, or verify, the external assets a portal document loads.
  *
  *   bun run pin:cdn            # fetch live bytes; exit 1 on drift, 2 on an unreachable origin
- *   bun run pin:cdn:update     # recompute the manifest (human action; review the diff)
+ *   bun run pin:cdn:update --vendor-version <version> [--force]
  *
  * The asset set is discovered from the live document, not a hand-written list: a new `<script>`
  * on the portal is unpinned until someone reviews it, and a removed one is reported as stale.
  * Only the bytes are trusted; `ETag`/`Last-Modified` come from a mutable origin and a heuristically
  * cached copy can outlive a fix.
+ *
+ * `update` is a human action, never CI. It prints the per-asset diff, requires the vendor release
+ * the pins belong to, and refuses to bless a byte change that does not come with a version bump —
+ * a silent swap and a release look identical to a hash, so the version is the human's assertion
+ * that the change matches the vendor's changelog. See `docs/runbooks/cdn-pin-update.md`.
  */
 
 import { parseArgs } from "node:util";
 
+import { extractExternalAssets } from "../lib/f402_cdn_assets.ts";
 import {
   buildPin,
   CDN_MANIFEST_PATH,
   checkDocumentCoverage,
+  cssReferenceDrift,
   describeOutcome,
   EXPLICIT_CDN_ASSETS,
   fetchAssetOutcome,
@@ -28,15 +35,89 @@ import {
   sriFor,
 } from "../lib/f402_cdn_pin.ts";
 import type { CdnAssetPin, CdnManifest } from "../lib/f402_cdn_pin.ts";
-import { extractExternalAssets } from "../lib/f402_cdn_assets.ts";
 
 const CONCURRENCY = 8;
-const { positionals } = parseArgs({ allowPositionals: true, strict: false });
+
+const { positionals, values } = parseArgs({
+  allowPositionals: true,
+  strict: false,
+  options: {
+    "vendor-version": { type: "string" },
+    force: { type: "boolean", default: false },
+  },
+});
+
 const mode = positionals[0] ?? "check";
+const vendorVersion =
+  typeof values["vendor-version"] === "string"
+    ? values["vendor-version"].trim()
+    : "";
+const force = values.force === true;
 
 if (mode !== "check" && mode !== "update") {
-  console.error("usage: bun scripts/pin_cdn_assets.ts check|update");
+  console.error(
+    "usage: bun scripts/pin_cdn_assets.ts check|update [--vendor-version <v>] [--force]",
+  );
   process.exit(2);
+}
+
+interface AssetChange {
+  readonly kind: "added" | "removed" | "changed";
+  readonly url: string;
+  readonly detail: string;
+}
+
+function diffManifests(
+  previous: CdnManifest | null,
+  next: CdnManifest,
+): AssetChange[] {
+  const changes: AssetChange[] = [];
+  const previousAssets = previous?.assets ?? {};
+
+  for (const url of Object.keys(next.assets)) {
+    const before = previousAssets[url];
+    const after = next.assets[url];
+    if (after === undefined) continue;
+    if (before === undefined) {
+      changes.push({ kind: "added", url, detail: `${after.bytes}B` });
+      continue;
+    }
+    if (before.sha256 !== after.sha256) {
+      changes.push({
+        kind: "changed",
+        url,
+        detail: `sha256 ${before.sha256.slice(0, 12)}… -> ${after.sha256.slice(0, 12)}… (${after.bytes}B)`,
+      });
+      continue;
+    }
+    if (
+      before.externalReferences.join("\n") !==
+      after.externalReferences.join("\n")
+    ) {
+      changes.push({
+        kind: "changed",
+        url,
+        detail: "stylesheet url()/@import references moved",
+      });
+    }
+  }
+
+  for (const url of Object.keys(previousAssets)) {
+    if (next.assets[url] === undefined) {
+      changes.push({ kind: "removed", url, detail: "" });
+    }
+  }
+
+  return changes;
+}
+
+function printChanges(changes: readonly AssetChange[]): void {
+  for (const change of changes) {
+    const marker =
+      change.kind === "added" ? "+" : change.kind === "removed" ? "-" : "~";
+    const detail = change.detail === "" ? "" : ` (${change.detail})`;
+    console.log(`  ${marker} ${change.url}${detail}`);
+  }
 }
 
 async function fetchDocumentHtml(): Promise<string> {
@@ -51,6 +132,13 @@ async function fetchDocumentHtml(): Promise<string> {
 }
 
 async function update(): Promise<void> {
+  if (vendorVersion === "") {
+    console.error(
+      "pin:cdn:update requires --vendor-version <version> — the vendor release these pins belong to",
+    );
+    process.exit(2);
+  }
+
   const html = await fetchDocumentHtml();
   const documentUrls = [
     ...new Set(extractExternalAssets(html).map((asset) => asset.normalizedUrl)),
@@ -69,24 +157,66 @@ async function update(): Promise<void> {
   const assets: Record<string, CdnAssetPin> = {};
   for (const { url, pin } of fetched) assets[url] = pin;
 
-  const manifest: CdnManifest = {
+  const next: CdnManifest = {
     schemaVersion: 1,
     host: new URL(PORTAL_DOCUMENT_URL).host,
     documentUrl: PORTAL_DOCUMENT_URL,
     pinnedAt: new Date().toISOString(),
+    vendorVersion,
     assets,
   };
 
-  await Bun.write(CDN_MANIFEST_PATH, serializeCdnManifest(manifest));
+  let previous: CdnManifest | null = null;
+  try {
+    previous = await loadCdnManifest();
+  } catch {
+    previous = null;
+  }
+
+  const changes = diffManifests(previous, next);
+  if (changes.length > 0) {
+    console.log(
+      `pin:cdn:update ${previous?.vendorVersion ?? "(none)"} -> ${vendorVersion}`,
+    );
+    printChanges(changes);
+  }
+
+  if (
+    previous !== null &&
+    previous.vendorVersion === vendorVersion &&
+    changes.length > 0 &&
+    !force
+  ) {
+    console.error(
+      "pin:cdn: asset bytes changed without a vendor version bump — treat as an incident, not a pin update.",
+    );
+    console.error(
+      "  Verify the change against the vendor's release notes. If confirmed, rerun with --force and say so in the commit message.",
+    );
+    process.exit(1);
+  }
+
+  if (
+    previous !== null &&
+    changes.length === 0 &&
+    previous.vendorVersion === vendorVersion
+  ) {
+    console.log("pin:cdn: no asset changes; manifest unchanged");
+    return;
+  }
+
+  await Bun.write(CDN_MANIFEST_PATH, serializeCdnManifest(next));
   console.log(
-    `pin:cdn: pinned ${fetched.length} asset(s) → ${CDN_MANIFEST_PATH}`,
+    `pin:cdn: pinned ${fetched.length} asset(s) at vendor ${vendorVersion} → ${CDN_MANIFEST_PATH}`,
   );
   console.log(
     `  ${documentUrls.length} loaded by ${PORTAL_DOCUMENT_URL}, ${EXPLICIT_CDN_ASSETS.length} explicit`,
   );
-  console.log(
-    "  review the diff; a changed hash without a vendor version bump is an incident",
-  );
+  if (previous !== null && previous.vendorVersion !== vendorVersion) {
+    console.log(
+      `  vendor version ${previous.vendorVersion} -> ${vendorVersion}: record this delta in the commit message`,
+    );
+  }
 }
 
 async function check(): Promise<void> {
@@ -133,6 +263,14 @@ async function check(): Promise<void> {
         details.push(
           `sri_mismatch ${url}: manifest sri is not the sri of the pinned bytes`,
         );
+        continue;
+      }
+      const referenceDrift = cssReferenceDrift(pin, outcome.bytes, url);
+      if (referenceDrift.length > 0) {
+        driftCount += 1;
+        details.push(
+          `css_reference_drift ${url}: ${referenceDrift.join(", ")}`,
+        );
       }
       continue;
     }
@@ -145,6 +283,7 @@ async function check(): Promise<void> {
       JSON.stringify({
         signal: "CDN_ASSET_DRIFT",
         documentUrl: manifest.documentUrl,
+        vendorVersion: manifest.vendorVersion,
         details,
       }),
     );
@@ -153,7 +292,7 @@ async function check(): Promise<void> {
   }
 
   console.log(
-    `pin:cdn: ok — ${Object.keys(manifest.assets).length} asset(s) match ${CDN_MANIFEST_PATH}`,
+    `pin:cdn: ok — ${Object.keys(manifest.assets).length} asset(s) match ${CDN_MANIFEST_PATH} (vendor ${manifest.vendorVersion})`,
   );
 }
 

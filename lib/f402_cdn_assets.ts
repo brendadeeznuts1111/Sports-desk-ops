@@ -140,3 +140,55 @@ export function isSriIneligibleUrl(url: string): boolean {
     return false;
   }
 }
+
+/** Caps a pathological stylesheet from turning the manifest into a URL dump. */
+const MAX_CSS_REFERENCES = 500;
+
+const CSS_URL_RE = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)/gi;
+const CSS_IMPORT_RE =
+  /@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^)';]+))/gi;
+
+/**
+ * Absolute resources a stylesheet pulls in: `url(...)` targets and `@import` chains, resolved
+ * against the stylesheet URL. `data:`/`blob:`/`#fragment`/`javascript:` are not network fetches and
+ * are skipped. Sorted and deduped so a byte-identical stylesheet yields an identical list.
+ *
+ * The manifest can only see `<script>`/`<link>` tags; a compromised stylesheet could swap a font or
+ * background without changing the CSS bytes the page names. Recording these references makes that
+ * swap visible at the next check.
+ */
+export function extractCssReferences(
+  cssText: string,
+  baseUrl: string,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  const add = (raw: string): void => {
+    const value = raw.trim();
+    if (value === "" || value.length > 2048) return;
+    if (/^(?:data:|blob:|about:|javascript:|mailto:|#)/i.test(value)) return;
+    let resolved: URL;
+    try {
+      resolved = new URL(value, baseUrl);
+    } catch {
+      return;
+    }
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+      return;
+    }
+    const normalized = normalizeAssetUrl(resolved.toString());
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    if (out.length < MAX_CSS_REFERENCES) out.push(normalized);
+  };
+
+  for (const match of cssText.matchAll(CSS_URL_RE)) {
+    add(match[1] ?? match[2] ?? match[3] ?? "");
+  }
+  for (const match of cssText.matchAll(CSS_IMPORT_RE)) {
+    add(match[1] ?? match[2] ?? match[3] ?? "");
+  }
+
+  return out.sort();
+}

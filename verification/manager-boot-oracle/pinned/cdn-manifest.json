@@ -2,7 +2,8 @@
   "schemaVersion": 1,
   "host": "www.fantasy402.com",
   "documentUrl": "https://www.fantasy402.com/manager.html",
-  "pinnedAt": "2026-11-04T02:46:50.452Z",
+  "pinnedAt": "2026-11-04T02:54:43.708Z",
+  "vendorVersion": "1.0.280",
   "assets": {
     "https://cdn.fastassets.io/assets/css/app.css": {
       "sha256": "6d3398e84dc117021b5b2a596bfbe5f889d9129c44375934fb427445e017d13c",
@@ -11,9 +12,23 @@
       "bytes": 123938,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/app-assets/images/backgrounds/bg-2.jpg",
+        "https://cdn.fastassets.io/app-assets/images/icons/img.png",
+        "https://cdn.fastassets.io/assets/css/menu-types/horizontal-menu",
+        "https://cdn.fastassets.io/assets/css/menu-types/horizontal-top-icon-menu",
+        "https://cdn.fastassets.io/assets/css/menu-types/vertical-compact-menu",
+        "https://cdn.fastassets.io/assets/css/menu-types/vertical-content-menu",
+        "https://cdn.fastassets.io/assets/css/menu-types/vertical-menu",
+        "https://cdn.fastassets.io/assets/css/menu-types/vertical-mmenu",
+        "https://cdn.fastassets.io/assets/css/menu-types/vertical-overlay-menu",
+        "https://cdn.fastassets.io/assets/images/datatables/resources/details_close.png",
+        "https://cdn.fastassets.io/assets/images/datatables/resources/details_open.png",
+        "https://cdn.fastassets.io/assets/images/svg/magnifier.svg"
+      ],
       "etag": "\"69b0f3c1-1e422\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.878Z"
+      "fetchedAt": "2026-11-04T02:54:42.084Z"
     },
     "https://cdn.fastassets.io/assets/css/bootstrap-extended.css": {
       "sha256": "dab60a7d31e53fefb7437c388d5ba4e71c273dcd3a6449deb39bd6a6db4dc5ef",
@@ -22,9 +37,10 @@
       "bytes": 59872,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c2-e9e0\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.927Z"
+      "fetchedAt": "2026-11-04T02:54:42.035Z"
     },
     "https://cdn.fastassets.io/assets/css/bootstrap.css": {
       "sha256": "5e2e71336fd98518b40564aa6178d0466e70d9d17f80ec10aed9a98f5eb4624b",
@@ -33,9 +49,10 @@
       "bytes": 128756,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c1-1f6f4\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.879Z"
+      "fetchedAt": "2026-11-04T02:54:42.063Z"
     },
     "https://cdn.fastassets.io/assets/css/colors.css": {
       "sha256": "468c25ffecf8beb03820bf8bab996e37b74f89888ee2501e472ee0459b4c47fd",
@@ -44,9 +61,10 @@
       "bytes": 546798,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c2-857ee\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.976Z"
+      "fetchedAt": "2026-11-04T02:54:42.307Z"
     },
     "https://cdn.fastassets.io/assets/css/core/colors/palette-tooltip.css": {
       "sha256": "e0d943261ba5ca3c89cbe837954ae974e71a30fd4a2cb9d7e0d347cc98f27ebc",
@@ -55,9 +73,10 @@
       "bytes": 5624,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c1-15f8\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.789Z"
+      "fetchedAt": "2026-11-04T02:54:42.032Z"
     },
     "https://cdn.fastassets.io/assets/css/core/menu/menu-types/vertical-menu.css": {
       "sha256": "dc64ce44b4526ec927293505e041ac1c94a38bf1d9d62b3dcca5aa673a6c2e4d",
@@ -66,9 +85,10 @@
       "bytes": 10419,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c1-28b3\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.976Z"
+      "fetchedAt": "2026-11-04T02:54:42.202Z"
     },
     "https://cdn.fastassets.io/assets/css/core/menu/menu-types/vertical-overlay-menu.css": {
       "sha256": "197cbb5113f220230d8c89bbe55b8901bf5fab1ea5f66f6c0ae222413d2e3791",
@@ -77,9 +97,10 @@
       "bytes": 2843,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c1-b1b\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.878Z"
+      "fetchedAt": "2026-11-04T02:54:42.055Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/forms/selectivity/selectivity.css": {
       "sha256": "cbde91d63d676ca1d900c662caa7df68d32c70f9fa9d4c1952519b20728b9592",
@@ -88,9 +109,10 @@
       "bytes": 2612,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c2-a34\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.878Z"
+      "fetchedAt": "2026-11-04T02:54:42.084Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/forms/switch.css": {
       "sha256": "92025c777bbd73a8d3a64c3496a0a70cee7606716cee789478f8bc0f8c10b7b9",
@@ -99,9 +121,10 @@
       "bytes": 2627,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c2-a43\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.920Z"
+      "fetchedAt": "2026-11-04T02:54:42.118Z"
     },
     "https://cdn.fastassets.io/assets/css/plugins/pickers/daterange/daterange.css": {
       "sha256": "a3f1b85f460300d9b35888a03fc65b7c73bc55cac7a18e2a408baa68761f4a6d",
@@ -110,9 +133,10 @@
       "bytes": 278,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3c2-116\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:58 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.948Z"
+      "fetchedAt": "2026-11-04T02:54:42.095Z"
     },
     "https://cdn.fastassets.io/assets/css/table.css": {
       "sha256": "239037316bcad155a97d39a49d97209a5d6c8369c7bcf1b230d89a61bc981308",
@@ -121,9 +145,13 @@
       "bytes": 13600,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/static/cloud/img/sort_asc.png",
+        "https://cdn.fastassets.io/static/cloud/img/sort_desc.png"
+      ],
       "etag": "\"69b0f3c1-3520\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:57 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.940Z"
+      "fetchedAt": "2026-11-04T02:54:42.106Z"
     },
     "https://cdn.fastassets.io/assets/fonts/flag-icon-css/css/flag-icon.min.css": {
       "sha256": "c791da09b2c361a32959d06fa0e7db96a0f0f645189cc81c335d2c6f425f0cb4",
@@ -132,9 +160,511 @@
       "bytes": 33205,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ad.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ae.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/af.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ag.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ai.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/al.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/am.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ao.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/aq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ar.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/as.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/at.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/au.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/aw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ax.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/az.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ba.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/be.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/br.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/by.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/bz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ca.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ch.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ci.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ck.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/co.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/cz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/de.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/dj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/dk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/dm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/do.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/dz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ec.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ee.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/eg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/eh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/er.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/es.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/et.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/eu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/fr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ga.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ge.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/gy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/hk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/hm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/hn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/hr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ht.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/hu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/id.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ie.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/il.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/im.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/in.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/io.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/iq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ir.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/is.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/it.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/je.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/jm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/jo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/jp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ke.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ki.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/km.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ky.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/kz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/la.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/li.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ls.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/lv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ly.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ma.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/md.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/me.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ml.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ms.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/my.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/mz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/na.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ne.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ng.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ni.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/no.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/np.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/nz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/om.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pe.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ph.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ps.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/pw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/py.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/qa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/re.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ro.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/rs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ru.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/rw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/se.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/si.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/so.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ss.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/st.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/sz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/td.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/th.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/to.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/tz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ua.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ug.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/um.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/us.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/uy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/uz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/va.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/vc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ve.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/vg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/vi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/vn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/vu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/wf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ws.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/ye.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/yt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/za.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/zm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/1x1/zw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ad.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ae.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/af.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ag.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ai.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/al.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/am.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ao.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/aq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ar.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/as.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/at.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/au.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/aw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ax.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/az.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ba.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/be.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/br.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/by.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/bz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ca.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ch.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ci.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ck.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/co.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/cz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/de.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/dj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/dk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/dm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/do.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/dz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ec.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ee.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/eg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/eh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/er.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/es.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/et.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/eu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/fr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ga.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ge.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/gy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/hk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/hm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/hn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/hr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ht.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/hu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/id.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ie.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/il.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/im.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/in.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/io.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/iq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ir.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/is.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/it.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/je.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/jm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/jo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/jp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ke.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ki.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/km.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ky.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/kz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/la.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/li.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ls.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/lv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ly.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ma.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/md.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/me.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ml.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mo.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mp.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mq.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ms.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/my.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/mz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/na.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ne.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ng.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ni.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/no.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/np.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/nz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/om.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pe.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ph.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ps.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/pw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/py.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/qa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/re.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ro.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/rs.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ru.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/rw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sa.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sb.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sd.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/se.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sh.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/si.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/so.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ss.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/st.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sx.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/sz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/td.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/th.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tj.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tk.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tl.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/to.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tr.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tv.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tw.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/tz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ua.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ug.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/um.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/us.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/uy.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/uz.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/va.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/vc.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ve.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/vg.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/vi.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/vn.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/vu.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/wf.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ws.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/ye.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/yt.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/za.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/zm.svg",
+        "https://cdn.fastassets.io/assets/fonts/flag-icon-css/flags/4x3/zw.svg"
+      ],
       "etag": "\"69b0f3be-81b5\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:54 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.948Z"
+      "fetchedAt": "2026-11-04T02:54:42.112Z"
     },
     "https://cdn.fastassets.io/assets/fonts/icomoon.css": {
       "sha256": "d4b85de8b11f7a222f28e36801ac1bd058a210d428f0ed6c8a4bdf07960d8663",
@@ -143,9 +673,16 @@
       "bytes": 134182,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/assets/fonts/icomoon/icomoon.eot?1ki0q8",
+        "https://cdn.fastassets.io/assets/fonts/icomoon/icomoon.eot?1ki0q8#iefix",
+        "https://cdn.fastassets.io/assets/fonts/icomoon/icomoon.svg?1ki0q8#icomoon",
+        "https://cdn.fastassets.io/assets/fonts/icomoon/icomoon.ttf?1ki0q8",
+        "https://cdn.fastassets.io/assets/fonts/icomoon/icomoon.woff?1ki0q8"
+      ],
       "etag": "\"69b0f3be-20c26\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:54 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.909Z"
+      "fetchedAt": "2026-11-04T02:54:42.149Z"
     },
     "https://cdn.fastassets.io/assets/js/scripts/extensions/tree-view.js": {
       "sha256": "90867fab1a90d394c6a086f4b076487dbbb510efa9ce537b37283568a80f9bb5",
@@ -154,9 +691,10 @@
       "bytes": 10750,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3bb-29fe\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:51 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.934Z"
+      "fetchedAt": "2026-11-04T02:54:42.212Z"
     },
     "https://cdn.fastassets.io/assets/js/scripts/ui/fullscreenSearch.js?v=100": {
       "sha256": "973cf69b2bd8c384fe94aeb8e4d63a1fc2096113816ab815be49477148b57438",
@@ -165,9 +703,10 @@
       "bytes": 3241,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3bb-ca9\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:51 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.007Z"
+      "fetchedAt": "2026-11-04T02:54:42.306Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/extensions/pace.css": {
       "sha256": "3fc58eff597699668799b9b8eac36490e8a103a26d48bcf15e466690600461cc",
@@ -176,9 +715,10 @@
       "bytes": 340,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3ca-154\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.976Z"
+      "fetchedAt": "2026-11-04T02:54:42.157Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/extensions/timedropper.min.css": {
       "sha256": "0875b0c19a8047133d9960d3540a56cc4825418a92957523cf7f1a1645b38196",
@@ -187,9 +727,10 @@
       "bytes": 6322,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3ca-18b2\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.959Z"
+      "fetchedAt": "2026-11-04T02:54:42.136Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/icheck.css": {
       "sha256": "4ea5542fd2deaa66b48f5f11273a0a5c24406aeee5a637d77eb6394046117327",
@@ -198,9 +739,57 @@
       "bytes": 1628,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/_all.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/aero.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/blue.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/flat.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/green.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/grey.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/orange.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/pink.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/purple.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/red.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/flat/yellow.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/futurico/futurico.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/_all.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/aero.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/blue.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/green.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/grey.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/line.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/orange.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/pink.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/purple.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/red.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/line/yellow.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/_all.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/aero.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/blue.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/green.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/grey.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/minimal.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/orange.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/pink.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/purple.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/red.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/minimal/yellow.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/polaris/polaris.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/_all.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/aero.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/blue.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/green.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/grey.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/orange.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/pink.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/purple.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/red.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/square.css",
+        "https://cdn.fastassets.io/assets/vendors/css/forms/icheck/square/yellow.css"
+      ],
       "etag": "\"69b0f3cb-65c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:48.982Z"
+      "fetchedAt": "2026-11-04T02:54:42.162Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/selects/select2.min.css": {
       "sha256": "ea237985427db5573da7d02e2ce688fe2337a308f9a08dbd73697430f6bc0aed",
@@ -209,9 +798,10 @@
       "bytes": 15197,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3ca-3b5d\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.007Z"
+      "fetchedAt": "2026-11-04T02:54:42.189Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/selects/selectivity-full.min.css": {
       "sha256": "70d9275a5a19d0bf2bf304b39c9dc40d3005e7ed9d4bf76c3f66def98210d4ab",
@@ -220,9 +810,10 @@
       "bytes": 3436,
       "role": "portal-css",
       "source": "document",
-      "etag": "W/\"69b0f3ca-d6c\"",
+      "externalReferences": [],
+      "etag": "\"69b0f3ca-d6c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.007Z"
+      "fetchedAt": "2026-11-04T02:54:42.199Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/toggle/bootstrap-switch.min.css": {
       "sha256": "c9d1c1b537049608e885e5f6b1d303954f5e24e0b6b71484e0d58755db46d442",
@@ -231,9 +822,10 @@
       "bytes": 6276,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3cb-1884\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.019Z"
+      "fetchedAt": "2026-11-04T02:54:42.204Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/forms/toggle/switchery.min.css": {
       "sha256": "da426bd59d02d72e73d239e1aff982bb8e89dd1e94b9dfaa0901c0dfd8b5798a",
@@ -242,9 +834,10 @@
       "bytes": 682,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3cb-2aa\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.056Z"
+      "fetchedAt": "2026-11-04T02:54:42.203Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/daterange/daterangepicker.css": {
       "sha256": "802ddca8b98e4dddd63ab75ff69002eabac5e23ddab4ef5874e187a1d05d8450",
@@ -253,9 +846,10 @@
       "bytes": 8402,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3cb-20d2\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.030Z"
+      "fetchedAt": "2026-11-04T02:54:42.212Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/datetime/bootstrap-datetimepicker.css": {
       "sha256": "db7645bcb0b6ad8b0c04b7c7b26f754b3778ce5c22f58c08d5f6db35102a8e08",
@@ -264,9 +858,10 @@
       "bytes": 8381,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3cb-20bd\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.025Z"
+      "fetchedAt": "2026-11-04T02:54:42.306Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/miniColors/jquery.minicolors.css": {
       "sha256": "5505ec8cebc93a20ec7b6c05b046b5d557970c434a05013c77e4ad4cc7eddbee",
@@ -275,9 +870,12 @@
       "bytes": 98287,
       "role": "portal-css",
       "source": "document",
-      "etag": "\"69b0f3cb-17fef\"",
+      "externalReferences": [
+        "https://cdn.fastassets.io/assets/vendors/css/pickers/miniColors/jquery.minicolors.png"
+      ],
+      "etag": "W/\"69b0f3cb-17fef\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.079Z"
+      "fetchedAt": "2026-11-04T02:54:42.410Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/pickadate/pickadate.css": {
       "sha256": "5c95cbfbf29704dff38d5daaed10b1c32763420c1b8cbd64404463b817aeadeb",
@@ -286,9 +884,10 @@
       "bytes": 6738,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3cb-1a52\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.063Z"
+      "fetchedAt": "2026-11-04T02:54:42.471Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/pickers/spectrum/spectrum.css": {
       "sha256": "42c767643a9a494b213db4f2b03df0d42fa42e4616abae51ccf39670d3d0cb9f",
@@ -297,9 +896,10 @@
       "bytes": 15428,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "\"69b0f3cb-3c44\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.056Z"
+      "fetchedAt": "2026-11-04T02:54:42.306Z"
     },
     "https://cdn.fastassets.io/assets/vendors/css/sliders/slick/slick.css": {
       "sha256": "51833fd9bdec7c501239cec40939564b8c6d925b7bd0815528dec7ea0abded43",
@@ -308,9 +908,10 @@
       "bytes": 1885,
       "role": "portal-css",
       "source": "document",
-      "etag": "\"69b0f3cb-75d\"",
+      "externalReferences": [],
+      "etag": "W/\"69b0f3cb-75d\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:07 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.050Z"
+      "fetchedAt": "2026-11-04T02:54:42.306Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/bootstrap-treeview.min.js": {
       "sha256": "686d83e940384de9e8dc12b778d55d64bced02b1fdb249b71ad9dd35b8ca714c",
@@ -319,9 +920,10 @@
       "bytes": 16793,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-4199\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.044Z"
+      "fetchedAt": "2026-11-04T02:54:42.306Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/datedropper.min.js": {
       "sha256": "dceab70a6ef2ad0ba612d5ddbf7a00bcc4c73fcf4c0b75ad2f32312808e302e2",
@@ -330,9 +932,10 @@
       "bytes": 16671,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-411f\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.148Z"
+      "fetchedAt": "2026-11-04T02:54:42.330Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/dragula.min.js": {
       "sha256": "a3217c8f49e4a22d60bea8759e61818869974be360a2db359044e8aa29c1bbfc",
@@ -341,9 +944,10 @@
       "bytes": 11393,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-2c81\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.224Z"
+      "fetchedAt": "2026-11-04T02:54:42.330Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/pace.min.js": {
       "sha256": "5b5cc718704634518901a47d9748b628f5f4dc21b850175938cf11a1fb046759",
@@ -352,9 +956,10 @@
       "bytes": 12364,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-304c\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.075Z"
+      "fetchedAt": "2026-11-04T02:54:42.342Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/extensions/timedropper.min.js": {
       "sha256": "7f7dd15f639bf8d8c774fc4732d3e2bf729d013960081b7df87465516ff4d0e4",
@@ -363,9 +968,10 @@
       "bytes": 7058,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-1b92\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.284Z"
+      "fetchedAt": "2026-11-04T02:54:42.423Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/icheck/icheck.min.js": {
       "sha256": "8252527fc362f31388aa28daa93af4592403082dc04f7b2e51226366c688113b",
@@ -374,9 +980,10 @@
       "bytes": 4942,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-134e\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.233Z"
+      "fetchedAt": "2026-11-04T02:54:42.425Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/select/select2.full.min.js": {
       "sha256": "9b8c0a1953e5ea4dfddeb1dbd04bf03da2bf66b0542fba29bb642ecc2b9768d1",
@@ -385,9 +992,10 @@
       "bytes": 75007,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-124ff\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.404Z"
+      "fetchedAt": "2026-11-04T02:54:42.593Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/select/selectivity-full.min.js": {
       "sha256": "f2ca1c60914c06bcbb76f8487b8fce3c8c9665b539f8f433fb8f83561ee3071b",
@@ -396,9 +1004,10 @@
       "bytes": 47518,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-b99e\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.094Z"
+      "fetchedAt": "2026-11-04T02:54:42.360Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/toggle/bootstrap-switch.min.js": {
       "sha256": "d160cc3d13c4170ceeb8cfa6f257ae95b04897014ba0ae971aaa8b9d62e06712",
@@ -407,9 +1016,10 @@
       "bytes": 15745,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-3d81\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.101Z"
+      "fetchedAt": "2026-11-04T02:54:42.357Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/forms/toggle/switchery.min.js": {
       "sha256": "07fe3a3658e5426fb3a6535cd5e8d81dfb12ba0130fb01fc0dcd5b9136f13e46",
@@ -418,9 +1028,10 @@
       "bytes": 24437,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-5f75\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.207Z"
+      "fetchedAt": "2026-11-04T02:54:42.477Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/menu/jquery.mmenu.all.min.js": {
       "sha256": "04ad97143856af48b5142e71756ac001d7631629393d9daa70a90f2d1135811e",
@@ -429,9 +1040,10 @@
       "bytes": 47741,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3c3-ba7d\"",
       "lastModified": "Wed, 11 Mar 2026 04:46:59 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.123Z"
+      "fetchedAt": "2026-11-04T02:54:42.382Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/dateTime/bootstrap-datetimepicker.min.js": {
       "sha256": "e3bd7d6040eb6ca4c792633658948585ba624da8af17ae15d6563f7d1f117986",
@@ -440,9 +1052,10 @@
       "bytes": 37831,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-93c7\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.233Z"
+      "fetchedAt": "2026-11-04T02:54:42.487Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/dateTime/moment-with-locales.min.js": {
       "sha256": "57f934c21e672db11ea94ccbeaafe261b401f559080795f7ea2837a8a5dc366a",
@@ -451,9 +1064,10 @@
       "bytes": 207059,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-328d3\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.403Z"
+      "fetchedAt": "2026-11-04T02:54:42.612Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/daterange/daterangepicker.js": {
       "sha256": "39b5e9653ed9cfdaab0c2ec169e90fd6a84b813b7f92a9a1efa77fb01a66949f",
@@ -462,9 +1076,10 @@
       "bytes": 68025,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-109b9\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.276Z"
+      "fetchedAt": "2026-11-04T02:54:42.590Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/miniColors/jquery.minicolors.min.js": {
       "sha256": "e6ab51b709cb10306c78f7eaca073469fb57f09d7fe73184e794a406166cf03f",
@@ -473,9 +1088,10 @@
       "bytes": 15456,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-3c60\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.300Z"
+      "fetchedAt": "2026-11-04T02:54:42.543Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/legacy.js": {
       "sha256": "2f306230f9b1c1619e0f4827d761cd23b8d3a6d94ab99021d07eae0a2bc3dbc2",
@@ -484,9 +1100,10 @@
       "bytes": 1902,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-76e\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.404Z"
+      "fetchedAt": "2026-11-04T02:54:42.541Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.date.js": {
       "sha256": "202786f9431b359a0ffdd47ae4096cd4e3934476beb43c1844620e8389c42210",
@@ -495,9 +1112,10 @@
       "bytes": 12791,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-31f7\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.403Z"
+      "fetchedAt": "2026-11-04T02:54:42.598Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.js": {
       "sha256": "641b78776494fd834c01f6f02a0429faa3ec6279b3d9d73bb66cd951fe7c3973",
@@ -506,9 +1124,10 @@
       "bytes": 38434,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-9622\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.260Z"
+      "fetchedAt": "2026-11-04T02:54:42.503Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/pickadate/picker.time.js": {
       "sha256": "01bc35c873db1dfbbd2e9840805ec7589bbdf905595fc6e798223bf39c19bc7b",
@@ -517,9 +1136,10 @@
       "bytes": 9063,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-2367\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.404Z"
+      "fetchedAt": "2026-11-04T02:54:42.601Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/pickers/spectrum/spectrum.js": {
       "sha256": "e5d5b2cc80088a9af35daaaed680f831ca095d7a707e0f851fa97a202c29c4c2",
@@ -528,9 +1148,10 @@
       "bytes": 81593,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-13eb9\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.414Z"
+      "fetchedAt": "2026-11-04T02:54:42.714Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/perfect-scrollbar.jquery.min.js": {
       "sha256": "f2c29f67e6537b08b371d95b28ca322e5c1046422c198bbeb7a4bf62b5ead66c",
@@ -539,9 +1160,10 @@
       "bytes": 25809,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-64d1\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.490Z"
+      "fetchedAt": "2026-11-04T02:54:42.663Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/screenfull.min.js": {
       "sha256": "05aa6856ea794eae2b1014c55f68fa2e979eee2983730844d33761cc2e1d4972",
@@ -550,9 +1172,10 @@
       "bytes": 1727,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-6bf\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.414Z"
+      "fetchedAt": "2026-11-04T02:54:42.661Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/tether.min.js": {
       "sha256": "96ac9d7f178af8a3e505f2b04214528961706ce3b1331e53ac51f23c55a3a9ad",
@@ -561,9 +1184,10 @@
       "bytes": 23337,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-5b29\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.591Z"
+      "fetchedAt": "2026-11-04T02:54:42.664Z"
     },
     "https://cdn.fastassets.io/assets/vendors/js/ui/unison.min.js": {
       "sha256": "bffd4a8bd0af39e524339c3497f9abfd590810e93b3d9eb4f8b86bd88522b9a2",
@@ -572,9 +1196,10 @@
       "bytes": 1268,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3ca-4f4\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:06 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.527Z"
+      "fetchedAt": "2026-11-04T02:54:42.833Z"
     },
     "https://cdn.fastassets.io/css/datedropper.min.css": {
       "sha256": "21aeb7f2cc0458a4cfdbff419f4609c3f1b48bb3ab4cceb1ccfeeac3c72ffb19",
@@ -583,9 +1208,16 @@
       "bytes": 7923,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/css/dd-icon/dd-icon.eot",
+        "https://cdn.fastassets.io/css/dd-icon/dd-icon.eot?#iefix",
+        "https://cdn.fastassets.io/css/dd-icon/dd-icon.svg#dd-icon",
+        "https://cdn.fastassets.io/css/dd-icon/dd-icon.ttf",
+        "https://cdn.fastassets.io/css/dd-icon/dd-icon.woff"
+      ],
       "etag": "\"69b0f3d2-1ef3\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.450Z"
+      "fetchedAt": "2026-11-04T02:54:42.664Z"
     },
     "https://cdn.fastassets.io/css/font-awesome.min.css": {
       "sha256": "eb45c2510bf6e715c2a9b401a67428dc57ece2b758ccfa50b35bb37471de42f3",
@@ -594,9 +1226,17 @@
       "bytes": 27472,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.eot?#iefix&v=4.5.0",
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.eot?v=4.5.0",
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.svg?v=4.5.0#fontawesomeregular",
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.ttf?v=4.5.0",
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.woff2?v=4.5.0",
+        "https://cdn.fastassets.io/fonts/fontawesome-webfont.woff?v=4.5.0"
+      ],
       "etag": "\"69b0f3d2-6b50\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.498Z"
+      "fetchedAt": "2026-11-04T02:54:42.654Z"
     },
     "https://cdn.fastassets.io/css/glyphter.css?v=100": {
       "sha256": "5310d74b6385b094b005a3e52e0e6e85c2c9144b6ecb54a09c3f9000efabbc9a",
@@ -605,9 +1245,16 @@
       "bytes": 2213,
       "role": "portal-css",
       "source": "document",
-      "etag": "\"69b0f3d2-8a5\"",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/Glyphter.eot",
+        "https://cdn.fastassets.io/fonts/Glyphter.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/Glyphter.svg#Glyphter",
+        "https://cdn.fastassets.io/fonts/Glyphter.ttf",
+        "https://cdn.fastassets.io/fonts/Glyphter.woff"
+      ],
+      "etag": "W/\"69b0f3d2-8a5\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.453Z"
+      "fetchedAt": "2026-11-04T02:54:42.634Z"
     },
     "https://cdn.fastassets.io/css/lobibox.css?v=100": {
       "sha256": "78ad7568cc1a2619f3b109e5ab03e0d4372b05d923e84460496dea781b14bb80",
@@ -616,9 +1263,12 @@
       "bytes": 30252,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://fonts.googleapis.com/css?family=Open+Sans:600,700,400,300"
+      ],
       "etag": "\"69b0f3d4-762c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.461Z"
+      "fetchedAt": "2026-11-04T02:54:42.676Z"
     },
     "https://cdn.fastassets.io/css/manager-test.less?v=109": {
       "sha256": "4344633d6b9935a2cb7c21b33cb50d7d8ee7e2745cf9760c609a47051d190c89",
@@ -627,9 +1277,17 @@
       "bytes": 302941,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/css/images/black-asc.gif",
+        "https://cdn.fastassets.io/css/images/black-desc.gif",
+        "https://cdn.fastassets.io/css/images/black-unsorted.gif",
+        "https://cdn.fastassets.io/css/images/loading.gif",
+        "https://cdn.fastassets.io/css/setting.less?v=15216662642435",
+        "https://cdn.fastassets.io/css/svg/bitcoin.svg"
+      ],
       "etag": "\"6ac6645b-49f5d\"",
       "lastModified": "Wed, 07 Oct 2026 15:25:15 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.724Z"
+      "fetchedAt": "2026-11-04T02:54:43.034Z"
     },
     "https://cdn.fastassets.io/css/manager.less?v=103": {
       "sha256": "11ed57c4d74428f56736a83cff162d0874eceac119ac27299175b82a5de249bb",
@@ -638,9 +1296,12 @@
       "bytes": 48658,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/css/setting.less?v=1521666264242"
+      ],
       "etag": "\"69b0f3d2-be12\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.712Z"
+      "fetchedAt": "2026-11-04T02:54:42.919Z"
     },
     "https://cdn.fastassets.io/css/material.min.css?v=100": {
       "sha256": "cb13b3eee6f1d0eed12bc6d378a5b0ff344627c3283a78c30807cf9c3b33e654",
@@ -649,9 +1310,10 @@
       "bytes": 52588,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f3d4-cd6c\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.498Z"
+      "fetchedAt": "2026-11-04T02:54:42.715Z"
     },
     "https://cdn.fastassets.io/css/scores.less?v=100": {
       "sha256": "8d9a9809cc2e3243ab4a99b3fa6df3decff0752ea0b08192059e0c75c8db82ae",
@@ -660,9 +1322,16 @@
       "bytes": 6756,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/css/setting.less?v=1521666264242",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff2",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff2"
+      ],
       "etag": "\"69b0f3d4-1a64\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.589Z"
+      "fetchedAt": "2026-11-04T02:54:42.831Z"
     },
     "https://cdn.fastassets.io/css/setting.less?v=1521666264242": {
       "sha256": "a9796b86d8befc604eca549cd82ad99964d95d38dd37a58623128548bab79d50",
@@ -671,9 +1340,49 @@
       "bytes": 129332,
       "role": "portal-css",
       "source": "explicit",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/first.ttf",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.eot",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.svg#oswaldregular",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.ttf",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.svg#proxima_nova_ltbold",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.svg#proxima_nova_rgregular",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.svg#proxima_nova_ltsemibold",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.woff",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.eot",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.svg#proxima_nova_cn_rgbold",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.woff",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.eot",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.svg#proxima_nova_cn_ltsemibold",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff2",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff2",
+        "https://cdn.fastassets.io/images/bg.jpg",
+        "https://fonts.gstatic.com/s/quantico/v5/EVhTOTBlAHgKHA6KCxbw4Y4P5ICox8Kq3LLUNMylGO4.woff2",
+        "https://fonts.gstatic.com/s/quantico/v5/HeCYRcZbdRso3ZUu01ELbYWiMMZ7xLd792ULpGE4W_Y.woff2"
+      ],
       "etag": "\"69b0f3d4-1f934\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.935Z"
+      "fetchedAt": "2026-11-04T02:54:43.390Z"
     },
     "https://cdn.fastassets.io/css/setting.less?v=15216662642435": {
       "sha256": "a9796b86d8befc604eca549cd82ad99964d95d38dd37a58623128548bab79d50",
@@ -682,9 +1391,49 @@
       "bytes": 129332,
       "role": "portal-css",
       "source": "explicit",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/first.ttf",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.eot",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.svg#oswaldregular",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.ttf",
+        "https://cdn.fastassets.io/fonts/oswald-regular-webfont.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.svg#proxima_nova_ltbold",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-bold.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.svg#proxima_nova_rgregular",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-reg.woff",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.eot",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.svg#proxima_nova_ltsemibold",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanova-sbold.woff",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.eot",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.svg#proxima_nova_cn_rgbold",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanovacond-bold.woff",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.eot",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.eot?#iefix",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.svg#proxima_nova_cn_ltsemibold",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.ttf",
+        "https://cdn.fastassets.io/fonts/proximanovacond-sbold.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Bold-webfont.woff2",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff",
+        "https://cdn.fastassets.io/fonts/sports/Industry-Medium-webfont.woff2",
+        "https://cdn.fastassets.io/images/bg.jpg",
+        "https://fonts.gstatic.com/s/quantico/v5/EVhTOTBlAHgKHA6KCxbw4Y4P5ICox8Kq3LLUNMylGO4.woff2",
+        "https://fonts.gstatic.com/s/quantico/v5/HeCYRcZbdRso3ZUu01ELbYWiMMZ7xLd792ULpGE4W_Y.woff2"
+      ],
       "etag": "\"69b0f3d4-1f934\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:50.134Z"
+      "fetchedAt": "2026-11-04T02:54:43.357Z"
     },
     "https://cdn.fastassets.io/css/special-icons-manager.css?v=100": {
       "sha256": "02c9b715aeeaabb55b0d6246d7862d5b450e2203a4e3ded2cdec43399814690a",
@@ -693,9 +1442,12 @@
       "bytes": 7294,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/special-icon.ttf?v=104"
+      ],
       "etag": "\"69b0f3d2-1c7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.532Z"
+      "fetchedAt": "2026-11-04T02:54:42.833Z"
     },
     "https://cdn.fastassets.io/css/special-icons.css?v=104": {
       "sha256": "5971ff4f5c799ee7cd494bac73c9fec8fbeeb39e23a01694476c695cc9d5f2ad",
@@ -704,9 +1456,12 @@
       "bytes": 7871,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/special-icon.ttf?v=104"
+      ],
       "etag": "\"69b0f3d4-1ebf\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:16 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.589Z"
+      "fetchedAt": "2026-11-04T02:54:42.717Z"
     },
     "https://cdn.fastassets.io/css/sports/sports-fonts.css": {
       "sha256": "580df37277b41db127f79c5b30835256de0539eeaee8f5705a82fa46c3949444",
@@ -715,9 +1470,15 @@
       "bytes": 2148,
       "role": "portal-css",
       "source": "document",
+      "externalReferences": [
+        "https://cdn.fastassets.io/fonts/sports/sports.eot?v=23",
+        "https://cdn.fastassets.io/fonts/sports/sports.svg?v=23",
+        "https://cdn.fastassets.io/fonts/sports/sports.ttf?v=23",
+        "https://cdn.fastassets.io/fonts/sports/sports.woff?v=23"
+      ],
       "etag": "\"69b0f3d2-864\"",
       "lastModified": "Wed, 11 Mar 2026 04:47:14 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.549Z"
+      "fetchedAt": "2026-11-04T02:54:42.876Z"
     },
     "https://cdn.fastassets.io/js/bootstrap.min.js": {
       "sha256": "5d1858ff2daeb8e684a0d270c84b1eec67335eb0d5f2152fd77b91657f4b5981",
@@ -726,9 +1487,10 @@
       "bytes": 55255,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2af-d7d7\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.701Z"
+      "fetchedAt": "2026-11-04T02:54:42.835Z"
     },
     "https://cdn.fastassets.io/js/datatables.min.js": {
       "sha256": "5c9d60e7c068d85af10e419f7971b850d6081420cb9dbda68dc48047aada7c90",
@@ -737,9 +1499,10 @@
       "bytes": 144493,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-2346d\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.580Z"
+      "fetchedAt": "2026-11-04T02:54:42.832Z"
     },
     "https://cdn.fastassets.io/js/date-format.js": {
       "sha256": "4a336b3ec3bfcc0e59675cf720a65c6dc09e5c42c01f3073b10b3890db52bba9",
@@ -748,9 +1511,10 @@
       "bytes": 16604,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-40dc\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.589Z"
+      "fetchedAt": "2026-11-04T02:54:42.856Z"
     },
     "https://cdn.fastassets.io/js/excel/FileSaver.js": {
       "sha256": "761af4d42d467e89a5983a3be26edb5fc53e3b90030d44521f32616b6e389279",
@@ -759,9 +1523,10 @@
       "bytes": 9081,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-2379\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.736Z"
+      "fetchedAt": "2026-11-04T02:54:42.988Z"
     },
     "https://cdn.fastassets.io/js/excel/jhxlsx.js": {
       "sha256": "7391d773003f2be83553d8456f7dba76e51e6fa3f1c9dd613233c1e3a599144c",
@@ -770,9 +1535,10 @@
       "bytes": 6319,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-18af\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.707Z"
+      "fetchedAt": "2026-11-04T02:54:42.985Z"
     },
     "https://cdn.fastassets.io/js/excel/xlsx.core.min.js": {
       "sha256": "a60800a22bf9c3d38a6086ddd5daa534cc9093ed3d1a8789a07d57b09ae9dab7",
@@ -781,9 +1547,10 @@
       "bytes": 466814,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-71f7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.970Z"
+      "fetchedAt": "2026-11-04T02:54:43.201Z"
     },
     "https://cdn.fastassets.io/js/jquery.js": {
       "sha256": "746e54e89161118a67bd59103c4ab55e3060735cc85c1d047c2cf04d4b12043d",
@@ -792,9 +1559,10 @@
       "bytes": 96385,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-17881\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.698Z"
+      "fetchedAt": "2026-11-04T02:54:42.893Z"
     },
     "https://cdn.fastassets.io/js/jquery.numeric.min.js": {
       "sha256": "bdc6aa35aca29fe9ff33090831175c057f29b5500248be94e31e3192e5e5a9bb",
@@ -803,9 +1571,10 @@
       "bytes": 5417,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-1529\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.616Z"
+      "fetchedAt": "2026-11-04T02:54:42.879Z"
     },
     "https://cdn.fastassets.io/js/less.js?v=100": {
       "sha256": "777175dac8e33e97cd0320553bff4e7d849de633ad78c649109af7cdb8f6547a",
@@ -814,9 +1583,10 @@
       "bytes": 146122,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-23aca\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.650Z"
+      "fetchedAt": "2026-11-04T02:54:42.924Z"
     },
     "https://cdn.fastassets.io/js/lobibox.js?v=432434dad": {
       "sha256": "d2795e2883bf6e24676ebd09d2c03faf2c9fd20d88ffad08874a81e4a055b672",
@@ -825,9 +1595,10 @@
       "bytes": 22414,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2af-578e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.726Z"
+      "fetchedAt": "2026-11-04T02:54:42.963Z"
     },
     "https://cdn.fastassets.io/js/lodash.js": {
       "sha256": "d8d535d5b90ff89bb2131bc98ce528cbaca017a313c43fefd0119367b221c8ef",
@@ -836,9 +1607,10 @@
       "bytes": 115022,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-1c14e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.787Z"
+      "fetchedAt": "2026-11-04T02:54:43.084Z"
     },
     "https://cdn.fastassets.io/js/main.js": {
       "sha256": "24be9f447812f7ef3c8d76a97a4d826d1a32c044c0af65e44a4270944f2dfb5f",
@@ -847,9 +1619,10 @@
       "bytes": 60297,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2af-eb89\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.802Z"
+      "fetchedAt": "2026-11-04T02:54:43.042Z"
     },
     "https://cdn.fastassets.io/js/mask.min.js": {
       "sha256": "48f63ae0de79a91aa04ab2a67c6b6c51d59f7277225bc6a9ee22734d83f0f310",
@@ -858,9 +1631,10 @@
       "bytes": 13545,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-34e9\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.826Z"
+      "fetchedAt": "2026-11-04T02:54:43.096Z"
     },
     "https://cdn.fastassets.io/js/moment.js": {
       "sha256": "7cc1955e0e670c944ae93cfc7f666d0c5e80441462d123db24e9d20cbf300b70",
@@ -869,9 +1643,10 @@
       "bytes": 404606,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-62c7e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.760Z"
+      "fetchedAt": "2026-11-04T02:54:43.020Z"
     },
     "https://cdn.fastassets.io/js/print.js": {
       "sha256": "dc37f384499846b04e40c06e30cfdace9b5598ded003791e0d2da9da15042631",
@@ -880,9 +1655,10 @@
       "bytes": 9723,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-25fb\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.824Z"
+      "fetchedAt": "2026-11-04T02:54:43.209Z"
     },
     "https://cdn.fastassets.io/js/require.js": {
       "sha256": "897398f4d179045469ff6e54a17c9f8e6bf31cf8dc19f825858f886a3c8e6d70",
@@ -891,9 +1667,10 @@
       "bytes": 15268,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2af-3ba4\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.750Z"
+      "fetchedAt": "2026-11-04T02:54:43.013Z"
     },
     "https://cdn.fastassets.io/js/spliter.min.js": {
       "sha256": "72077a7861f1ba56630807c18b4e2276f8bc1bb24dc26fed0c77cf98ac548bc5",
@@ -902,9 +1679,10 @@
       "bytes": 5411,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2af-1523\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:23 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.927Z"
+      "fetchedAt": "2026-11-04T02:54:43.215Z"
     },
     "https://cdn.fastassets.io/js/table-sort.js": {
       "sha256": "b90279154254e108748dc80dd226eab336e2c320e4a40569952b46dc5d785536",
@@ -913,9 +1691,10 @@
       "bytes": 16532,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-4094\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.928Z"
+      "fetchedAt": "2026-11-04T02:54:43.130Z"
     },
     "https://cdn.fastassets.io/js/timer.js": {
       "sha256": "da322da1312fa541cde8dad6b1773791ae7d6ae660d90462e245474dd457ed80",
@@ -924,9 +1703,10 @@
       "bytes": 11166,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "W/\"69b0f2ad-2b9e\"",
       "lastModified": "Wed, 11 Mar 2026 04:42:21 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.783Z"
+      "fetchedAt": "2026-11-04T02:54:43.061Z"
     },
     "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js": {
       "sha256": "93951f1794b0463b87ab58d0557a6610075af79a9f94c2a3f261c993bc7f3913",
@@ -935,9 +1715,10 @@
       "bytes": 4912231,
       "role": "portal-js",
       "source": "explicit",
+      "externalReferences": [],
       "etag": "W/\"4af467-e5c50b3f01002f1c\"",
       "lastModified": null,
-      "fetchedAt": "2026-11-04T02:46:50.094Z"
+      "fetchedAt": "2026-11-04T02:54:43.465Z"
     },
     "https://cdnjs.cloudflare.com/ajax/libs/jquery-scrollTo/2.1.2/jquery.scrollTo.min.js": {
       "sha256": "ed04b5707b07ef987720582b14ab1d8662871e95aa17cdac6fff6f34ba9caacd",
@@ -946,9 +1727,10 @@
       "bytes": 2447,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": null,
       "lastModified": "Mon, 04 May 2020 16:11:46 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.928Z"
+      "fetchedAt": "2026-11-04T02:54:43.130Z"
     },
     "https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/jquery.tablesorter.min.js": {
       "sha256": "76d187d57700c8aa2932e8b9c76d0a9cfc6e1ae4b1f51b3aa62241ff83aabba2",
@@ -957,9 +1739,10 @@
       "bytes": 44365,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": null,
       "lastModified": "Sat, 06 Jan 2024 20:21:52 GMT",
-      "fetchedAt": "2026-11-04T02:46:49.931Z"
+      "fetchedAt": "2026-11-04T02:54:43.126Z"
     },
     "https://fonts.googleapis.com/icon?family=Material+Icons": {
       "sha256": "07bd90fa08501eef587462beb0d267aef595c95292e002a30c5cd5a20b4af211",
@@ -968,9 +1751,10 @@
       "bytes": 475,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": null,
       "lastModified": null,
-      "fetchedAt": "2026-11-04T02:46:49.975Z"
+      "fetchedAt": "2026-11-04T02:54:43.166Z"
     },
     "https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=geometry&sensor=false&key=%3Credacted%3E": {
       "sha256": "9c3c83bbc6be25e10b91771e35d32d42b11f577293f7ac18c81a1958a98ed9df",
@@ -979,9 +1763,10 @@
       "bytes": 330110,
       "role": "portal-js",
       "source": "document",
+      "externalReferences": [],
       "etag": "6a5f23b1",
       "lastModified": null,
-      "fetchedAt": "2026-11-04T02:46:50.065Z"
+      "fetchedAt": "2026-11-04T02:54:43.356Z"
     },
     "https://telegram.org/js/telegram-web-app.js": {
       "sha256": "124bdff7ba3fe86c8ba5143467afec21e020405e74abdb92cfdda6c0ee3b5908",
@@ -990,9 +1775,10 @@
       "bytes": 119731,
       "role": "telegram-web-app",
       "source": "explicit",
+      "externalReferences": [],
       "etag": "W/\"6ac4bef5-1d3b3\"",
       "lastModified": "Tue, 06 Oct 2026 09:27:17 GMT",
-      "fetchedAt": "2026-11-04T02:46:50.452Z"
+      "fetchedAt": "2026-11-04T02:54:43.708Z"
     }
   }
 }

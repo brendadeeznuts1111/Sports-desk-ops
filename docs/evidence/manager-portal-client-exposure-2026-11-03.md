@@ -103,7 +103,13 @@ Detection for path #3, in the existing pin pattern:
   set is discovered from the live document, so a **new** script is unpinned until reviewed and a
   **removed** one is reported stale.
 - `bun run pin:cdn` — fetch live bytes and compare; exit 1 on drift, 2 on an unreachable origin.
-  `bun run pin:cdn:update` — recompute and review the diff (human action, never CI).
+  `bun run pin:cdn:update --vendor-version <version>` — recompute and review the diff (human action,
+  never CI). It refuses a byte change without a version bump; the review procedure is
+  [cdn-pin-update.md](../runbooks/cdn-pin-update.md).
+- Stylesheet-internal resources are compared, not just the tags: each `portal-css` pin records its
+  resolved `url(...)`/`@import` targets, and the check reports `css_reference_drift`, so a swapped
+  font or background that leaves the CSS bytes unchanged is visible. The offline gate cannot
+  recompute these (no bytes); the live check does.
 - `lib/f402_portal_drift_signal.ts` now includes the CDN assets, so `portal:drift:cron` /
   `portal:drift:cron --run-once` alerts on them; CI runs `pin:cdn` on the daily schedule, not on
   every PR, so vendor uptime cannot red ordinary builds.
@@ -129,18 +135,85 @@ Limits, stated so nobody relies on a control that does not exist:
   changes it; the durable alternative is to self-host a reviewed copy. This trade-off is deliberate
   and reversible.
 - Pinning is detection. It does not stop a bad asset from being served; it makes the swap visible.
+- CSS-internal targets are recorded and diffed, not pinned byte-for-byte. A new font/image host is
+  visible at the next check, not blocked by it.
 
 ## 5. Upstream actions (not this repository's to deploy)
 
-| Pri | Action                                                                                                                   | Why                                             |
-| --- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| P0  | Remove `data-pass` and plaintext `Password` from the API response and the DOM; escape `NameFirst` at render              | Root cause of path #1; pinning does not fix it  |
-| P0  | Add `integrity=` + `crossorigin="anonymous"` to every CDN script/stylesheet in `manager.html` (manifest-provided)        | Prevention for path #3, where ACAO allows it    |
-| P0  | Delete `manager-test.less` from the production bucket and page                                                           | 302 KB test artifact in the critical path       |
-| P1  | Precompile the three `.less` files to `.css` and drop `less.js`                                                          | Only way to get SRI on the stylesheets          |
-| P1  | Add a document CSP (`script-src` with hashes/hosts, `frame-ancestors 'none'`), `X-Content-Type-Options`, `Cache-Control` | The document currently has none                 |
-| P1  | Upgrade jQuery 1.11.0; restrict/rotate the Maps browser key; move the JWT out of `sessionStorage`                        | EOL library, exposed key, script-readable token |
-| P2  | Self-host `telegram-web-app.js` instead of SRI-pinning a moving URL                                                      | Removes a third-party load from the Mini App    |
+Two of these are a different kind of control from §4. Removing `data-pass` fixes the exposure; a
+document CSP decides whether an injected script can run at all. Pin + SRI answers "did the asset
+change" and "should the browser execute it" — neither stops an inline payload, an inline handler or a
+`javascript:` URL from executing. CSP is complementary to SRI, not part of the supply-chain section.
+
+| Pri | Action                                                                                                            | Why                                                           |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| P0  | **A.** Remove `Password` from the API response and `data-pass`/the password span from the DOM; escape `NameFirst` | Root cause of path #1; pinning does not fix it                |
+| P0  | **B.** Add the CSP header below to `manager.html`                                                                 | The missing half: decides whether injected script runs at all |
+| P0  | Add `integrity=` + `crossorigin="anonymous"` to every CDN script/stylesheet (manifest-provided)                   | Prevention for path #3, where ACAO allows it                  |
+| P0  | Delete `manager-test.less` from the production bucket and page                                                    | 302 KB test artifact in the critical path                     |
+| P1  | Precompile the three `.less` files to `.css` and drop `less.js`                                                   | Only way to get SRI on the stylesheets                        |
+| P1  | Upgrade jQuery 1.11.0; restrict/rotate the Maps browser key; move the JWT out of `sessionStorage`                 | EOL library, exposed key, script-readable token               |
+| P2  | Self-host `telegram-web-app.js` instead of SRI-pinning a moving URL                                               | Removes a third-party load from the Mini App                  |
+
+### P0-A — remove the credential from the response, not only the sink
+
+The server and client changes are separate; doing only the second leaves the credential exposed.
+
+**Server** (response builder for `searchCustomerAdmin` / `getListAgenstByAgent` — names are the
+vendor's): drop `Password` from every `PLAYERS` row before serialization, or return a `HasPassword`
+boolean if the UI needs the affordance. `NameFirst` is a display field and may stay, but it is
+rendered client-side and must be escaped there.
+
+**Client** (`manager.js`, `searchComponent`, player/all branches at bytes 79957–80222): delete the
+`data-pass="…"` attribute and the `(password)` span from the result `<li>`, and render `NameFirst`
+with `$("<span>").text(nameFirst)` or `textContent` instead of the string concatenation. Replace
+`n.html(e.join(""))` (byte 82730) with DOM construction (`createElement` / `textContent` / `append`).
+
+Why both: escaping `NameFirst` stops path #1 but leaves plaintext player passwords in transit and in
+the DOM, visible to every agent and exfiltratable by a stylesheet (§3). Only removing them from the
+response fixes the exposure. Escaping stays required for every field that remains.
+
+Verification: a `NameFirst` of `<img src=x onerror=…>` renders as literal text and produces no
+request; the response body contains no `Password`; the dropdown has no `data-pass`.
+
+### P0-B — the CSP header `manager.html` currently lacks
+
+The document sends no `Content-Security-Policy` header and no `<meta>` equivalent, so path #1's
+payload — and any inline handler or `javascript:` URL — executes with no violation to report. The
+target header, shaped by the assets the page loads today:
+
+```http
+Content-Security-Policy: default-src 'self';
+  script-src 'self' https://cdn.fastassets.io https://cdnjs.cloudflare.com
+             https://maps.googleapis.com 'sha256-<inline-script>';
+  style-src 'self' 'unsafe-inline' https://cdn.fastassets.io
+            https://fonts.googleapis.com;
+  font-src 'self' data: https://cdn.fastassets.io https://fonts.gstatic.com;
+  img-src 'self' data: https://cdn.fastassets.io;
+  connect-src 'self' https://cdn.fastassets.io https://maps.googleapis.com;
+  frame-ancestors 'none';
+  base-uri 'self';
+  object-src 'none';
+  form-action 'self';
+  report-to csp-endpoint
+```
+
+Migration, in order:
+
+1. Deploy as `Content-Security-Policy-Report-Only` with a reporting endpoint; fix what it reports.
+2. Hash each inline `<script>` block into `script-src`. Hashes cover script blocks only.
+3. Inline event handlers (`onclick=…`) and `javascript:` URLs cannot be hashed. Convert them to
+   `addEventListener`/delegated listeners before dropping `'unsafe-inline'` from `script-src`; if the
+   backlog is large, `'unsafe-hashes'` with per-handler hashes is the interim — not `'unsafe-inline'`.
+   `'unsafe-inline'` in `style-src` is accepted for now: the `<style>` blocks and inline style
+   attributes need a separate refactor.
+4. `frame-ancestors 'none'` matters on its own: the document has no `X-Frame-Options` either, so it
+   can currently be framed.
+5. Keep SRI after CSP lands. CSP stops injected inline script; SRI stops a swapped asset. Neither
+   substitutes for the other.
+
+Success checks: the header is present on `manager.html` itself (not only on API responses); an inline
+handler on a test page is blocked; a normal session produces no legitimate violations in the report.
 
 ## What this does not establish
 

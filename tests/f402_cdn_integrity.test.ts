@@ -25,6 +25,7 @@ function pin(overrides: Partial<CdnAssetPin> = {}): CdnAssetPin {
     bytes: 0,
     role: "portal-js",
     source: "document",
+    externalReferences: [],
     etag: null,
     lastModified: null,
     fetchedAt: "2026-11-03T00:00:00.000Z",
@@ -38,6 +39,7 @@ function manifest(assets: Record<string, CdnAssetPin>): CdnManifest {
     host: "www.fantasy402.com",
     documentUrl: "https://www.fantasy402.com/manager.html",
     pinnedAt: "2026-11-03T00:00:00.000Z",
+    vendorVersion: "1.0.280",
     assets,
   };
 }

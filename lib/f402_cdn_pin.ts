@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import {
   assetRole,
+  extractCssReferences,
   extractExternalAssets,
   isSriIneligibleUrl,
   type AssetRole,
@@ -63,6 +64,8 @@ export interface CdnAssetPin {
   readonly bytes: number;
   readonly role: AssetRole;
   readonly source: CdnAssetSource;
+  /** `url(...)`/`@import` targets resolved out of a stylesheet; empty for scripts. */
+  readonly externalReferences: readonly string[];
   readonly etag: string | null;
   readonly lastModified: string | null;
   readonly fetchedAt: string;
@@ -73,6 +76,8 @@ export interface CdnManifest {
   readonly host: string;
   readonly documentUrl: string;
   readonly pinnedAt: string;
+  /** Vendor release the pins belong to; a hash change must move this or be forced. */
+  readonly vendorVersion: string;
   /** Keyed by normalized URL (see `normalizeAssetUrl`). */
   readonly assets: Readonly<Record<string, CdnAssetPin>>;
 }
@@ -151,13 +156,19 @@ export async function buildPin(
     sha256Hex(outcome.bytes),
     sriFor(outcome.bytes),
   ]);
+  const role = assetRole(url);
+  const externalReferences =
+    role === "portal-css"
+      ? extractCssReferences(new TextDecoder().decode(outcome.bytes), url)
+      : [];
   return {
     sha256,
     sri,
     sriEnforceable: !isSriIneligibleUrl(url),
     bytes: outcome.bytes.length,
-    role: assetRole(url),
+    role,
     source,
+    externalReferences,
     etag: outcome.etag,
     lastModified: outcome.lastModified,
     fetchedAt: now,
@@ -196,6 +207,7 @@ const CdnAssetPinSchema = z.object({
   bytes: z.number().int().nonnegative(),
   role: z.enum(["portal-js", "portal-css", "telegram-web-app"]),
   source: z.enum(["document", "explicit"]),
+  externalReferences: z.array(z.string()),
   etag: z.string().nullable(),
   lastModified: z.string().nullable(),
   fetchedAt: z.string().min(1),
@@ -206,6 +218,7 @@ const CdnManifestSchema = z.object({
   host: z.string().min(1),
   documentUrl: z.string().min(1),
   pinnedAt: z.string().min(1),
+  vendorVersion: z.string().min(1),
   assets: z.record(z.string(), CdnAssetPinSchema),
 });
 
@@ -224,6 +237,7 @@ export function parseCdnManifest(value: unknown, source: string): CdnManifest {
     host: parsed.data.host,
     documentUrl: parsed.data.documentUrl,
     pinnedAt: parsed.data.pinnedAt,
+    vendorVersion: parsed.data.vendorVersion,
     assets: parsed.data.assets,
   };
 }
@@ -260,6 +274,24 @@ export function classifyCdnDrift(
   if (outcome.kind === "tls_trust") return "tls_trust";
   if (outcome.kind === "http_error") return "http_error";
   return "unreachable";
+}
+
+/**
+ * Stylesheet-internal resources that moved: a font/background swap changes neither the CSS bytes
+ * the page names nor the tag list, so it is compared separately.
+ */
+export function cssReferenceDrift(
+  pin: CdnAssetPin,
+  bytes: Uint8Array,
+  url: string,
+): string[] {
+  if (pin.role !== "portal-css") return [];
+  const live = extractCssReferences(new TextDecoder().decode(bytes), url);
+  const pinned = pin.externalReferences;
+  return [
+    ...live.filter((ref) => !pinned.includes(ref)).map((ref) => `+${ref}`),
+    ...pinned.filter((ref) => !live.includes(ref)).map((ref) => `-${ref}`),
+  ];
 }
 
 export interface CdnCoverageReport {
