@@ -49,6 +49,20 @@ therefore deliver `.env`-style values explicitly — one fetch at process start,
   present by default, `null` under `bun --no-env-file run`, and present again with
   `--env-file=<(printf …)`.
 
+**Failure propagation is a separate guarantee from read-once.** Process substitution is lazy: if
+`op read` fails (locked 1Password, expired session, missing item), the FIFO is empty and `bun`
+still starts — the script sees an empty environment and fails later as "credentials missing"
+instead of failing at startup. Fetch and validate before starting Bun:
+
+```sh
+env_vars=$(op read "op://<vault>/<item>/env") || { echo "op read failed" >&2; exit 1; }
+[ -n "$env_vars" ] || { echo "op read returned empty" >&2; exit 1; }
+printf '%s\n' "$env_vars" | bun --env-file=/dev/stdin run <script>
+```
+
+`set -o pipefail` alone is not enough: the script has already run by the time the pipeline status
+is checked.
+
 ## 2. Token Verification & Cloudflare Edge Services
 
 ### 2.1. Instant Verification (Bun, no curl)

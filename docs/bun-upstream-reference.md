@@ -554,6 +554,11 @@ but got 2`. Repo code therefore uses the object form exclusively, and `lib/secre
   https://bun.com/docs/runtime/child-process#reusable-terminal
 - `--no-env-file` disables automatic `.env` loading —
   https://bun.com/docs/runtime/environment-variables#disabling-automatic-env-loading
+- Dotenv values are applied to Bun's `process.env` before user code, but an external command
+  spawned through `bun run` still reports only the pre-dotenv shell env. Probe with
+  `bun -e 'console.log(process.env.X)'` or a script that prints the variable; `bun run env` /
+  `printenv` are the wrong probe (measured on 1.4.4: 63 variables and no `BUN_CHROME_PATH` in
+  both the default and `--no-env-file` modes, while in-process reads differed correctly).
 - `--no-orphans` exits when the parent dies (bunfig equivalent `run.noOrphans`) —
   https://bun.com/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies and
   https://bun.com/docs/runtime/bunfig#run-noorphans-don-t-leave-orphan-processes-behind

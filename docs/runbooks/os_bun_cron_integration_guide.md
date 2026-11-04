@@ -329,6 +329,9 @@ Every bridge child runs as `bun --no-orphans --no-env-file run <cli>`:
   under `bun --no-env-file run <script>`). Cron/daemon entrypoints that do not need `.env` must
   pass it; `--from-keychain` always runs with `--no-env-file` because it reads the Keychain, and
   the FIFO has to be inert so the credential source is unambiguous.
+- **`--from-keychain` opt-in**: `F402_LIVE_LOGIN=1` must be in the invoking shell env or the
+  launchd plist, never in `.env`. `--no-env-file` makes `.env` inert, so a `.env`-sourced opt-in
+  is not seen and the command reports "not opted in" even though `--from-keychain` is correct.
 - Production `.env`-style delivery should prefer a one-shot `--env-file=<(op read "op://…")`
   over the persistent 1Password FIFO: it is fetched fresh at process start, cannot go stale, and
   leaves exactly one credential mechanism in play (1Password at fetch time, macOS Keychain only
