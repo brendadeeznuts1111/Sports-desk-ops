@@ -1586,8 +1586,10 @@ export function apply(ctx, config) {
         "list of risk/provenance checks (enabled, league allowlist, fixture provenance, " +
         "freshness, confidence, distinct accounts, one-sided share, reference price, stake and " +
         "desk-day caps, duplicate intent). Default hides ineligible signals; set " +
-        "includeRejected=true to see them with their failed-check reasons. Signals are advice, " +
-        "not orders: nothing is queued or executed.",
+        "includeRejected=true to see them with their failed-check reasons. The payload also " +
+        "carries the advisory candidates array (logins the captures saw that the watchlist " +
+        "does not cover, with counts.candidates); candidates never enter derivation or a gate. " +
+        "Signals are advice, not orders: nothing is queued or executed.",
       parameters: {
         type: "object",
         properties: {
