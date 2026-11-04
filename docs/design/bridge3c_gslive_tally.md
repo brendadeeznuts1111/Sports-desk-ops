@@ -71,6 +71,21 @@ remain named external arbiters rather than committed fixtures. GATE-03 for 3c re
 `markets-report` stake-sum tie and a `users-report` distinct-login cardinality tie against the
 in-process `CustomerPackedKey64` structure.
 
+**Observed wire field names (69):**
+
+```text
+accept, acceptTime, adminUser, agent, balanceId, balanceName, bet, betDetails,
+betGroupFinalOdds, betGroupId, betGroupPremiumAwarded, betGroupResult, betGroupToWin,
+calcTime, currency, delay, disclaimer, displayExchangeRate, displaySportId, eID, ev,
+evRisk, eventResult, eventStartTime, exchangeRate, fVal, fVal_new, featuredBetDetails,
+finalUncorrelatedOdds, fixedParlayDetails, fixedParlayName, freeBetDetails, gradeTime, id,
+ifBet, ipAddress, isFreePlay, isSuspectedBot, isWin, lID, logTime, manualLogExists,
+marketTypeCategory, openParlay, openSpots, partnerID, partnerUserID, period, pitcher1,
+pitcher2, playerId, premium, profile, result, resultTime, reversedCredit,
+reversedCreditTime, rrSizeMap, sID, sequenceNumber, state, supplementalConfirmation,
+team1, team2, teaserName, ticketNumber, type, userGroupId, userID
+```
+
 ## Section 2 — Census-derived SoA layout, allocation boundary, overflow
 
 - **C_max=22,611** ⇒ `4×C_max=90,444` ⇒ radix **2^17 = 131,072**; load factor 0.172 ≤ 0.25.
