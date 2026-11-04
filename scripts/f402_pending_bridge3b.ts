@@ -5,6 +5,7 @@ import { buildF402PendingRollup } from "../lib/f402_pending_rollup.ts";
 import {
   defaultPendingDate,
   fetchAndPersistPending,
+  fetchAndPersistReportPending,
   resolveF402BearerToken,
 } from "../lib/f402_pending_fetch.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
@@ -24,6 +25,9 @@ const { values } = parseArgs({
     "agent-id": { type: "string" },
     "agent-owner": { type: "string" },
     "save-capture": { type: "string" },
+    customers: { type: "string" },
+    "customers-file": { type: "string" },
+    "allow-partial": { type: "boolean", default: false },
     live: { type: "boolean", default: false },
     "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
@@ -34,7 +38,7 @@ const { values } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--live] [--dry-run] [--no-r2] [--no-ws]",
+    "Usage: bun run bridge3b:rollup [--from path] [--from-file path] [--source-kind fixture|capture] [--bearer-token token] [--date YYYY-MM-DD] [--save-capture path] [--customers id,id | --customers-file path] [--allow-partial] [--live] [--dry-run] [--no-r2] [--no-ws]",
   );
   process.exit(0);
 }
@@ -53,6 +57,31 @@ if (
     "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
   );
 }
+/** Explicit customer list for the verified Report/Pending bearer path (no enumeration). */
+async function resolveCustomerIds(): Promise<string[] | null> {
+  const split = (text: string): string[] =>
+    text
+      .split(/[,\n\r]+/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== "");
+  const cli = (values.customers ?? "").trim();
+  if (cli !== "") return split(cli);
+  const file =
+    (values["customers-file"] ?? "").trim() ||
+    (Bun.env.F402_PENDING_CUSTOMERS_FILE ?? "").trim();
+  if (file !== "") {
+    const text = await Bun.file(file).text();
+    const ids = split(text);
+    if (ids.length === 0) {
+      throw new Error(`--customers-file ${file} contains no customer ids`);
+    }
+    return ids;
+  }
+  const envList = (Bun.env.F402_PENDING_CUSTOMERS ?? "").trim();
+  return envList === "" ? null : split(envList);
+}
+
+const customerIds = await resolveCustomerIds();
 const fetchRequested =
   values["bearer-token"] !== undefined ||
   (Bun.env.F402_BEARER_TOKEN ?? "").trim() !== "" ||
@@ -71,20 +100,37 @@ if (fetchRequested) {
     (values["save-capture"] as string | undefined) ??
     ((Bun.env.F402_PENDING_CAPTURE_PATH ?? "").trim() ||
       `Scratch/f402-pending/capture-${date}.json`);
-  const fetched = await fetchAndPersistPending({
-    token,
-    date,
-    ...(values["agent-id"] === undefined
-      ? {}
-      : { agentId: values["agent-id"] as string }),
-    ...(values["agent-owner"] === undefined
-      ? {}
-      : { agentOwner: values["agent-owner"] as string }),
-    capturePath,
-  });
-  console.error(
-    `[bridge3b] fetched ${fetched.legs.length} pending legs for ${date} -> ${capturePath}`,
-  );
+  if (customerIds !== null) {
+    const fetched = await fetchAndPersistReportPending({
+      token,
+      customerIds,
+      capturePath,
+      onCustomerFailure: values["allow-partial"] ? "skip" : "throw",
+    });
+    console.error(
+      `[bridge3b] Report/Pending: ${fetched.rows.length} legs across ${fetched.okCount}/${customerIds.length} customer(s) for ${date} -> ${capturePath}`,
+    );
+    if (fetched.failedCount > 0) {
+      console.error(
+        `[bridge3b] WARNING: ${fetched.failedCount} customer request(s) failed (--allow-partial); the rollup is incomplete`,
+      );
+    }
+  } else {
+    const fetched = await fetchAndPersistPending({
+      token,
+      date,
+      ...(values["agent-id"] === undefined
+        ? {}
+        : { agentId: values["agent-id"] as string }),
+      ...(values["agent-owner"] === undefined
+        ? {}
+        : { agentOwner: values["agent-owner"] as string }),
+      capturePath,
+    });
+    console.error(
+      `[bridge3b] fetched ${fetched.legs.length} pending legs for ${date} -> ${capturePath}`,
+    );
+  }
   fromPath = capturePath;
   sourceKindOverride = "capture";
 }

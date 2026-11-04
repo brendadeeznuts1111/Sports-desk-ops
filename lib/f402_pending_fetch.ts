@@ -266,3 +266,216 @@ export async function fetchAndPersistPending(
   persistPendingCapture(options.capturePath, result.legs);
   return result;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Report/Pending (customer-scoped) — the bearer path that actually works     */
+/* ------------------------------------------------------------------------- */
+
+/** The verified bearer endpoint. `Manager/getPending` returns 500 and is not used here. */
+export const REPORT_PENDING_PATH = "/cloud/api/Report/Pending";
+
+export interface ReportPendingBatchOptions {
+  /** Validated F402 bearer (e.g. from `session:login --mint-bearer`). Never logged. */
+  readonly token: string;
+  readonly customerIds: readonly string[];
+  readonly baseUrl?: string;
+  readonly fetchImpl?: (input: string, init: RequestInit) => Promise<Response>;
+  /** Parallel requests; default 6. */
+  readonly concurrency?: number;
+  readonly timeoutMs?: number;
+  /** `throw` (default) fails the whole batch on any customer; `skip` records the failure. */
+  readonly onCustomerFailure?: "throw" | "skip";
+}
+
+export interface ReportPendingCustomerResult {
+  readonly customerIdChars: number;
+  readonly ok: boolean;
+  readonly status: number | null;
+  readonly legs: number;
+  /** Short server message / class; never a token. */
+  readonly error: string | null;
+}
+
+export interface ReportPendingBatchResult {
+  readonly rows: readonly Record<string, unknown>[];
+  readonly perCustomer: readonly ReportPendingCustomerResult[];
+  readonly okCount: number;
+  readonly failedCount: number;
+  readonly url: string;
+}
+
+function shortServerMessage(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const text = value.trim();
+  if (text === "" || text.length > 80) return "";
+  return /^[\x20-\x7E]+$/.test(text) ? text : "";
+}
+
+/** Parse one Report/Pending response into rows; throws `F402PendingFetchError` with a class. */
+function reportPendingRows(
+  status: number,
+  contentType: string,
+  text: string,
+): readonly Record<string, unknown>[] {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new F402PendingFetchError(
+      `Report/Pending returned non-JSON content (HTTP ${status})`,
+    );
+  }
+  if (isRecord(payload) && Array.isArray(payload.Pending)) {
+    const rows = payload.Pending.filter(isRecord);
+    if (rows.length !== payload.Pending.length) {
+      throw new F402PendingFetchError(
+        "Report/Pending Pending array contains non-object rows",
+      );
+    }
+    return rows;
+  }
+  if (Array.isArray(payload)) return payload.filter(isRecord);
+  if (status !== 200) {
+    const msg = isRecord(payload) ? shortServerMessage(payload.msg) : "";
+    throw new F402PendingFetchError(
+      `Report/Pending returned HTTP ${status}${msg === "" ? "" : `: ${msg}`}`,
+    );
+  }
+  throw new F402PendingFetchError(
+    "Report/Pending response has no Pending array",
+  );
+}
+
+/**
+ * Fetch pending rows for an explicit customer list over the verified bearer path.
+ *
+ * `Manager/getPending` is not used: it returns 500 for every captured request shape. Report/Pending
+ * is strictly customer-scoped (no wildcard/agent scope was accepted on 2026-11-04), so the caller
+ * must supply the list — this function never invents or enumerates customers.
+ */
+export async function fetchF402ReportPendingBatch(
+  options: ReportPendingBatchOptions,
+): Promise<ReportPendingBatchResult> {
+  const token = validateF402Token(options.token);
+  if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  const baseUrl = (
+    options.baseUrl ??
+    ((Bun.env.F402_BASE_URL ?? "").trim() || "https://www.fantasy402.com")
+  ).replace(/\/+$/, "");
+  const url = `${baseUrl}${REPORT_PENDING_PATH}`;
+  const customerIds = [
+    ...new Set(
+      options.customerIds.map((id) => id.trim()).filter((id) => id !== ""),
+    ),
+  ];
+  if (customerIds.length === 0) {
+    throw new F402PendingFetchError(
+      "Report/Pending needs an explicit customer list (F402_PENDING_CUSTOMERS or --customers)",
+    );
+  }
+  const fetchImpl =
+    options.fetchImpl ??
+    ((input: string, init: RequestInit) => fetch(input, init));
+  const onFailure = options.onCustomerFailure ?? "throw";
+  const concurrency = Math.min(
+    16,
+    Math.max(1, Math.floor(options.concurrency ?? 6)),
+  );
+  const results = new Map<
+    number,
+    {
+      readonly rows: readonly Record<string, unknown>[];
+      readonly result: ReportPendingCustomerResult;
+    }
+  >();
+
+  let next = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= customerIds.length) return;
+      const customerID = customerIds[index]!;
+      let status: number | null = null;
+      try {
+        const response = await fetchImpl(url, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+            accept: "application/json, text/plain, */*",
+            "x-requested-with": "XMLHttpRequest",
+          },
+          body: new URLSearchParams({
+            customerID,
+            token: "",
+            operation: "Pending",
+          }).toString(),
+          redirect: "manual",
+          signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+        });
+        status = response.status;
+        const rows = reportPendingRows(
+          response.status,
+          response.headers.get("content-type") ?? "",
+          await response.text(),
+        );
+        results.set(index, {
+          rows,
+          result: {
+            customerIdChars: customerID.length,
+            ok: true,
+            status,
+            legs: rows.length,
+            error: null,
+          },
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Report/Pending failed";
+        results.set(index, {
+          rows: [],
+          result: {
+            customerIdChars: customerID.length,
+            ok: false,
+            status,
+            legs: 0,
+            error: message,
+          },
+        });
+        if (onFailure === "throw") throw error;
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, customerIds.length) }, () =>
+      worker(),
+    ),
+  );
+
+  const rows: Record<string, unknown>[] = [];
+  const perCustomer: ReportPendingCustomerResult[] = [];
+  for (let index = 0; index < customerIds.length; index += 1) {
+    const entry = results.get(index);
+    if (entry === undefined) continue; // unreachable after a resolved batch
+    rows.push(...entry.rows);
+    perCustomer.push(entry.result);
+  }
+  const okCount = perCustomer.filter((entry) => entry.ok).length;
+  return {
+    rows,
+    perCustomer,
+    okCount,
+    failedCount: perCustomer.length - okCount,
+    url,
+  };
+}
+
+/** Batch fetch + persist as a bare rows array (the shape `buildF402PendingRollup` reads). */
+export async function fetchAndPersistReportPending(
+  options: ReportPendingBatchOptions & { readonly capturePath: string },
+): Promise<ReportPendingBatchResult> {
+  const result = await fetchF402ReportPendingBatch(options);
+  persistPendingCapture(options.capturePath, result.rows);
+  return result;
+}

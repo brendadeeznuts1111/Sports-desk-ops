@@ -134,6 +134,18 @@ Consequences for the bridge workstreams:
 - **Player-reader decision unchanged**: the player credential path remains env-only until a writer
   or removal is chosen.
 
+### 6. Scope probe — `Report/Pending` has no agent-wide mode
+
+To see whether 3b's old agent-wide semantics could be preserved, the same bearer was sent with
+`customerID` = `""`, `"0"`, `"*"`, `"ALL"`, `"all"`, the keychain login (raw and uppercased), and
+`accountInfo.customerID` (raw and uppercased). Every one returned **400
+`{"status":"Failed","msg":"Invalid CustomerID"}`**; only real book customers return 200.
+
+**Conclusion:** `Report/Pending` is strictly customer-scoped. 3b cannot enumerate implicitly; it
+must take an explicit list (`--customers`, `--customers-file`, or `F402_PENDING_CUSTOMERS`) and
+fail closed unless `--allow-partial` is passed. The batch fetch was implemented in
+`lib/f402_pending_fetch.ts` (`fetchF402ReportPendingBatch`) with the same bearer/form contract.
+
 ## Implementation
 
 The captured flow is now implemented as `lib/f402_authenticate_customer.ts` (injectable fetch, no
