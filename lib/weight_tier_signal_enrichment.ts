@@ -330,6 +330,7 @@ function bookRowToLifetime(
     avgClvPoints: row.clvBps !== null ? row.clvBps / 100 : null,
     sharpCandidateGatePassed: false,
     source: "json_book",
+    handle: { kind: "row-index-fallback", rowIndex: null },
   };
 }
 

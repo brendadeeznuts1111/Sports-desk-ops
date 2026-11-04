@@ -1,0 +1,79 @@
+{
+  "$schema": "https://sportsdesk.internal/schemas/dod6-v54.json",
+  "magicHex": "0x444F4436",
+  "magicAscii": "DOD6",
+  "version": 54,
+  "headerByteLength": 2048,
+  "headerUint32Slots": 512,
+  "sectionCount": 88,
+  "alignmentBytes": 64,
+  "limits": {
+    "maxCustomerRows32": 32766,
+    "maxCustomerRows64": 1048574,
+    "maxRotationNumber": 1048575,
+    "radixSlotCount": 65536,
+    "closeRadixSlotCount": 65536,
+    "linearScanThreshold": 32,
+    "defaultCsrSlackSlotsPerCustomer": 2,
+    "inlineCsvMaxColumns": 24,
+    "inlineTopRotationsCapacity": 8,
+    "inlineCustomerComboScratchCapacity": 256
+  },
+  "sentinels": {
+    "nullCustomerHandle32Hex": "0xFFFFFFFF",
+    "nullCustomerHandle64Hex": "0xFFFFFFFFFFFFFFFF",
+    "emptyRadixSlotRow": -1,
+    "nullClvSentinel": -2147483648,
+    "nullPriceSentinel": -2147483648
+  },
+  "bitsetColumns": {
+    "highSeverityWatchBitset64Col": {
+      "elementType": "BigUint64Array",
+      "wordsFormula": "ceil(customerCapacity / 64)",
+      "replacesByteBoolArray": "isHighSeverityWatch: Uint8Array"
+    }
+  },
+  "handle32Layout": {
+    "rowIndex": { "shift": 0, "bits": 15, "maskHex": "0x7FFF" },
+    "spineGenerationMod4": { "shift": 15, "bits": 2, "maskHex": "0x3" },
+    "tierCode": { "shift": 17, "bits": 3, "maskHex": "0x7" },
+    "volBucketCode": { "shift": 20, "bits": 3, "maskHex": "0x7" },
+    "skillTagCode": { "shift": 23, "bits": 3, "maskHex": "0x7" },
+    "behaviorFlags6": { "shift": 26, "bits": 6, "maskHex": "0x3F" }
+  },
+  "handle64Layout": {
+    "rowIndex": { "shift": 0, "bits": 20, "maskHex": "0xFFFFF" },
+    "spineGeneration": { "shift": 20, "bits": 8, "maskHex": "0xFF" },
+    "tierCode": { "shift": 28, "bits": 3, "maskHex": "0x7" },
+    "volBucketCode": { "shift": 31, "bits": 3, "maskHex": "0x7" },
+    "skillTagCode": { "shift": 34, "bits": 3, "maskHex": "0x7" },
+    "behaviorFlags9": { "shift": 37, "bits": 9, "maskHex": "0x1FF" }
+  },
+  "customerPackedKey64Layout": {
+    "base40Payload": { "shift": 0, "bits": 62, "maxChars": 12, "radix": 40 },
+    "encodingMode": {
+      "shift": 62,
+      "bits": 2,
+      "modes": { "BASE40_EXACT_12": 1, "FNV1A_64_LONG": 2 }
+    }
+  },
+  "comboKey15Layout": {
+    "marketKindCode": { "shift": 0, "bits": 2, "maskHex": "0x3" },
+    "periodCode": { "shift": 2, "bits": 4, "maskHex": "0xF" },
+    "wagerTypeCode": { "shift": 6, "bits": 3, "maskHex": "0x7" },
+    "subSportCode": { "shift": 9, "bits": 6, "maskHex": "0x3F" }
+  },
+  "strides": {
+    "sport": 16,
+    "market": 4,
+    "period": 16,
+    "wagerType": 8,
+    "subSport": 64
+  },
+  "gateThresholds": {
+    "gate1SyntheticLogins": 100000,
+    "gate4MaxOverMeanRatio": 2.5,
+    "gate4ChiSquareReducedMax": 1.15,
+    "gate8RollingWindowDays": 30
+  }
+}

@@ -30,6 +30,11 @@ export interface DodCustomerLifetimeMeta {
   readonly avgClvPoints: number;
 }
 
+/** Stable identity: a binary handle, or an explicit fallback for CSV/JSON sources. */
+export type Dod6LookupHandle =
+  | { readonly kind: "binary"; readonly handle: number }
+  | { readonly kind: "row-index-fallback"; readonly rowIndex: number | null };
+
 export interface Dod6LifetimeLookup {
   readonly clvBps: number | null;
   readonly sharpScore: number | null;
@@ -38,6 +43,15 @@ export interface Dod6LifetimeLookup {
   readonly avgClvPoints: number | null;
   readonly sharpCandidateGatePassed: boolean;
   readonly source: "lifetime_csv" | "json_book" | "merged" | "dodbin_columnar";
+  /** Opaque identity; never sort by this. Use `rowOfHandle` for row-major order. */
+  readonly handle: Dod6LookupHandle;
+}
+
+/** Row-major accessor for an opaque handle; null when the fallback has no row. */
+export function rowOfHandle(identity: Dod6LookupHandle): number | null {
+  return identity.kind === "binary"
+    ? identity.handle & 0x7fff
+    : identity.rowIndex;
 }
 
 export interface Dod6SpineOverlay {
@@ -146,6 +160,7 @@ function lifetimeToLookup(meta: DodCustomerLifetimeMeta): Dod6LifetimeLookup {
     avgClvPoints: meta.avgClvPoints,
     sharpCandidateGatePassed: meta.clvLegs >= SHARP_CAND_MIN_CLV_LEGS_V54,
     source: "lifetime_csv",
+    handle: { kind: "row-index-fallback", rowIndex: null },
   };
 }
 
@@ -193,6 +208,7 @@ export async function createDod6SpineOverlay(options: {
         avgClvPoints: row.clvBps !== null ? row.clvBps / 100 : null,
         sharpCandidateGatePassed: false,
         source: "json_book",
+        handle: { kind: "row-index-fallback", rowIndex: null },
       };
     };
   }
@@ -215,6 +231,7 @@ export async function createDod6SpineOverlay(options: {
           avgClvPoints: fromColumnar.avgClvPoints,
           sharpCandidateGatePassed: fromColumnar.sharpCandidateGatePassed,
           source: "merged",
+          handle: fromColumnar.handle,
         };
       }
       if (fromCsv !== undefined) {
@@ -229,6 +246,7 @@ export async function createDod6SpineOverlay(options: {
           avgClvPoints: base.avgClvPoints,
           sharpCandidateGatePassed: base.sharpCandidateGatePassed,
           source: "merged",
+          handle: base.handle,
         };
       }
       return jsonLookup?.(login) ?? null;
