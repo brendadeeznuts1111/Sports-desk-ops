@@ -242,6 +242,38 @@ describe("Bun v1.4.0 primitives", () => {
     expect(clone.type).toBe("public");
   });
 
+  test("ML-KEM-768 encapsulateKey/decapsulateKey produce matching AES-GCM keys", async () => {
+    const kem = await crypto.subtle.generateKey("ML-KEM-768", true, [
+      "encapsulateKey",
+      "decapsulateKey",
+    ]);
+    const sharedAlg = { name: "AES-GCM", length: 256 };
+    const { sharedKey, ciphertext } = await crypto.subtle.encapsulateKey(
+      { name: "ML-KEM-768" },
+      kem.publicKey,
+      sharedAlg,
+      true,
+      ["encrypt", "decrypt"],
+    );
+    const recovered = await crypto.subtle.decapsulateKey(
+      { name: "ML-KEM-768" },
+      kem.privateKey,
+      ciphertext,
+      sharedAlg,
+      true,
+      ["encrypt", "decrypt"],
+    );
+    const left = new Uint8Array(
+      await crypto.subtle.exportKey("raw", sharedKey),
+    );
+    const right = new Uint8Array(
+      await crypto.subtle.exportKey("raw", recovered),
+    );
+    expect(sharedKey.type).toBe("secret");
+    expect(left.byteLength).toBe(32);
+    expect(left).toEqual(right);
+  });
+
   test("crypto.subtle ML-DSA-65 signs/verifies and keys survive structuredClone", async () => {
     const data = new TextEncoder().encode("hello");
     const kp = (await crypto.subtle.generateKey("ML-DSA-65", true, [

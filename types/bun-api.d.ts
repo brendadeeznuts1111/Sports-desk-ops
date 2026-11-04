@@ -72,12 +72,18 @@ declare global {
     ): Promise<ArrayBuffer>;
     encapsulateKey(
       algorithm: AlgorithmIdentifier,
-      key: CryptoKey,
+      publicKey: CryptoKey,
+      sharedKeyAlgorithm: AlgorithmIdentifier,
+      extractable: boolean,
+      keyUsages: readonly string[],
     ): Promise<{ sharedKey: CryptoKey; ciphertext: ArrayBuffer }>;
     decapsulateKey(
       algorithm: AlgorithmIdentifier,
-      key: CryptoKey,
+      privateKey: CryptoKey,
       ciphertext: BufferSource,
+      sharedKeyAlgorithm: AlgorithmIdentifier,
+      extractable: boolean,
+      keyUsages: readonly string[],
     ): Promise<CryptoKey>;
   }
 }
