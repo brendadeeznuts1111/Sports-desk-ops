@@ -49,6 +49,7 @@
     "pin:manager-oracle-snapshot": "bun run verification/manager-boot-oracle/run-oracle-snapshot-pin.ts",
     "probe:parse-tree": "bun run scripts/probe/parse-tree-only.ts",
     "probe:ingest-tree": "bun run scripts/probe/ingest-parsed-tree.ts",
+    "probe:client-seams": "bun run scripts/probe/client_seams_probe.ts",
     "manager:ingest-hierarchy": "bun run cli/f402_manager_hierarchy_ingest_cli.ts",
     "graph:agent": "bun run scripts/build_agent_graph.ts",
     "graph:agent:view": "bun run scripts/serve_agent_graph_view.ts",
@@ -228,7 +229,8 @@
     "fetch-periods": "bun run scripts/fetch-periods.ts",
     "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts",
     "bridge3c:rollup": "bun run scripts/gslive_tally_bridge3c.ts",
-    "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts"
+    "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts",
+    "bridge3b:rollup": "bun run scripts/f402_pending_bridge3b.ts"
   },
   "keywords": [
     "sportsdesk",
