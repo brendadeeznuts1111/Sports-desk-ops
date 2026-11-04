@@ -42,6 +42,17 @@ const filesToPublish = [
     meta: { surface: "gslive-link-hydration" },
   },
   {
+    // Compatibility mirror: this module used to publish at the bucket root, and a bookmarked
+    // /gslive-links.js keeps working instead of serving the stale pre-move bytes.
+    file: "dist/assets/gslive-links.js",
+    key: "gslive-links.js",
+    type: "application/javascript; charset=utf-8",
+    meta: {
+      surface: "gslive-link-hydration",
+      compatibility: "legacy-root-key",
+    },
+  },
+  {
     file: "dist/assets/live-ops.js",
     key: "assets/live-ops.js",
     type: "application/javascript; charset=utf-8",

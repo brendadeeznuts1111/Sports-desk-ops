@@ -1,5 +1,5 @@
 /**
- * Types for `docs/live-ops.js` (the /graph Live Wagers & Our Positions helpers).
+ * Types for `docs/assets/live-ops.js` (the /graph Live Wagers & Our Positions helpers).
  *
  * The module is plain browser JS shipped as-is, so this declaration file is the contract
  * the TS tests and the typechecker see. Keep it structural: unknown feed fields stay

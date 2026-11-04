@@ -1,6 +1,6 @@
 # Script exit codes
 
-Generated from package.json. Most gate/test scripts exit non-zero on failure; long-running servers/watchers stay alive.
+Curated catalog derived from `package.json` (221 scripts; `jq .scripts package.json` is authoritative for the full list). Most gate/test scripts exit non-zero on failure; long-running servers/watchers stay alive.
 
 ## apply
 
@@ -90,7 +90,7 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 
 ## docs
 
-- `docs:stage`: `mkdir -p dist/assets && cp docs/index.html dist/index.html && cp docs/graph.html dist/graph.html && cp docs/graph.js dist/graph.js && cp docs/gslive-links.js dist/gslive-links.js && cp docs/graph-live-feed.json dist/graph-live-feed.json && cp docs/backtest-4wk-cfb-nba.json dist/backtest-4wk-cfb-nba.json && cp docs/combo-uniqueness.json dist/combo-uniqueness.json && cp docs/cross-domain-bridge.json dist/cross-domain-bridge.json && cp docs/openapi.json dist/openapi.json && cp docs/api-reference.md dist/api-reference.md && cp -f docs/assets/* dist/assets/ && cp infra/pages/_headers dist/_headers`
+- `docs:stage`: `mkdir -p dist/assets && cp docs/index.html dist/index.html && cp docs/graph.html dist/graph.html && cp docs/graph.js dist/graph.js && cp docs/graph-live-feed.json dist/graph-live-feed.json && cp docs/backtest-4wk-cfb-nba.json dist/backtest-4wk-cfb-nba.json && cp docs/combo-uniqueness.json dist/combo-uniqueness.json && cp docs/cross-domain-bridge.json dist/cross-domain-bridge.json && cp docs/openapi.json dist/openapi.json && cp docs/api-reference.md dist/api-reference.md && cp -f docs/assets/* dist/assets/ && cp infra/pages/_headers dist/_headers`
 - `docs:openapi`: `bun run scripts/generate_openapi.ts`
 - `docs:render`: `bun run scripts/render_docs.ts`
 - `docs:serve`: `bun --no-orphans run scripts/serve_docs.ts`
@@ -249,9 +249,9 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `schema`: `bun run cli/sportsdesk_schema_cli.ts`
 - `schema:list`: `bun run schema --list`
 - `schema:json`: `bun run schema --json`
-- `schema:workspaces`: `bun --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' run schema:json`
-- `schema:parallel`: `bun --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' run schema`
-- `schema:sequential`: `bun --sequential --no-exit-on-error --if-present --filter 'sportsdesk-*' run schema`
+- `schema:workspaces`: `bun run --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' schema:json`
+- `schema:parallel`: `bun run --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' schema`
+- `schema:sequential`: `bun run --sequential --no-exit-on-error --if-present --filter 'sportsdesk-*' schema`
 - `schema:watch`: `bun --watch --no-clear-screen run cli/sportsdesk_schema_cli.ts`
 - `schema:watch:match_evaluations`: `bun --watch --no-clear-screen run schema --table match_evaluations`
 - `schema:debug`: `bun --inspect-wait=127.0.0.1:6499 run cli/sportsdesk_schema_cli.ts --table match_evaluations`
@@ -295,7 +295,7 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 
 ## test
 
-- `test`: `bun test`
+- `test`: `bun test --parallel --timings=.bun-test-timings.json --update-timings`
 - `test:manager-oracle-readonly`: `PRETEST_SKIP=1 bun test --parallel lib/f402_portal_oracle_slice.test.ts lib/f402_production_fixture_redaction.test.ts lib/f402_portal_runtime_pin.test.ts`
 - `test:har-redaction-verifier`: `bun test lib/f402_har_redaction_proof_verify.test.ts`
 - `test:docs`: `bun test tests/api_reference.test.ts tests/docs_evidence.test.ts`
@@ -303,7 +303,7 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 
 ## typecheck
 
-- `typecheck`: `bun run ensure:deep-tsconfig && bunx tsc -p tsconfig.json --noEmit`
+- `typecheck`: `bun run ensure:deep-tsconfig && bun check --no-script -p tsconfig.json`
 
 ## verify
 
@@ -316,7 +316,7 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `verify:manager-oracle-variance`: `bun run verification/manager-boot-oracle/run-variance-gate.ts`
 - `verify:manifest-consistency`: `bun run verification/manager-boot-oracle/run-manifest-consistency.ts`
 - `verify:gen-tokens-gate`: `bun run verification/gen-tokens-zero-drift-gate/run.ts`
-- `verify:docs`: `bun run scripts/verify_docs.ts`
+- `verify:docs`: `bun run check:ledger-consistency && bun run check:spec-citations && bun run scripts/verify_docs.ts`
 
 ## Long-running / non-exiting (by heuristic)
 
@@ -332,9 +332,11 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `schema:watch`
 - `schema:watch:match_evaluations`
 - `serve`
+- `wagers:watch`
 
 ## Gate/test-like (exit non-zero on failure)
 
+- `agent:doctor`
 - `apply:captures`
 - `artifacts:lock`
 - `artifacts:value`
@@ -342,13 +344,20 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `audit:customer-book`
 - `audit:ops`
 - `audit:release`
+- `audit:tool-calls`
 - `backtest:4wk`
+- `bench:capture`
+- `bench:graded-wager`
+- `bench:score-layout`
 - `bot`
 - `candidate`
+- `capture:all`
 - `capture:batch-pending-delete`
 - `capture:batch-probe-deleted-summary`
+- `capture:bet-ticker`
 - `capture:cf-ray-ledger`
 - `capture:discover`
+- `capture:dom`
 - `capture:evidence`
 - `capture:evidence:live`
 - `capture:f402`
@@ -357,6 +366,7 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `capture:ingest-customer-admin-list`
 - `capture:ingest-deleted-transactions`
 - `capture:ingest-deleted-wagers`
+- `capture:pending`
 - `capture:preflight`
 - `capture:probe-deleted-wagers`
 - `capture:probe-protocol-matrix`
@@ -372,12 +382,19 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `catalog:probe:dry`
 - `check:fetch-init`
 - `check:innerhtml`
+- `check:ledger-consistency`
+- `check:rotations`
+- `check:route-surface`
+- `check:secrets`
+- `check:spec-citations`
+- `ci:local`
 - `cli`
 - `combo`
 - `crawl:tiles`
 - `customers`
 - `deploy`
 - `deploy:docs`
+- `deps`
 - `docs:deploy`
 - `docs:openapi`
 - `docs:render`
@@ -414,10 +431,16 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `manager:ingest-hierarchy`
 - `normalize:customer-book`
 - `onepass`
+- `pin:cdn`
+- `pin:cdn:update`
 - `pin:manager-oracle-snapshot`
+- `pm:doctor`
+- `policy:check`
 - `postschema`
 - `preschema`
 - `pretest`
+- `probe:bun`
+- `probe:client-seams`
 - `probe:ingest-tree`
 - `probe:parse-tree`
 - `probes:index`
@@ -458,17 +481,22 @@ Generated from package.json. Most gate/test scripts exit non-zero on failure; lo
 - `schema:typecheck`
 - `schema:workspaces`
 - `secrets:f402`
+- `secrets:gslive`
 - `settlement`
 - `sim`
+- `sri:apply`
 - `tasks:render`
 - `test`
 - `test:capture`
+- `test:changed`
 - `test:docs`
 - `test:har-redaction-verifier`
 - `test:manager-oracle-readonly`
+- `test:serial`
 - `typecheck`
 - `verify:agent-graph`
 - `verify:agent-graph:strict`
+- `verify:bun-cli`
 - `verify:docs`
 - `verify:gen-tokens-gate`
 - `verify:manager-har-redaction-proof`

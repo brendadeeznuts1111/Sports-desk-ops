@@ -340,23 +340,13 @@ VERSION_HELP
     ;;
   stage)
     cd "$REPO_ROOT"
-    "$0" poll --once
+    # Feed-only refresh: the historical backtest artifact is a separate, deliberate build.
+    "$0" poll --once --no-backtest-artifact
     bun run scripts/generate_pipeline_reference_images.ts
-    mkdir -p dist/assets
-    cp docs/index.html dist/index.html
-    cp docs/graph.html dist/graph.html
-    cp docs/graph.js dist/graph.js
-    cp docs/gslive-links.js dist/gslive-links.js
-    cp docs/graph-live-feed.json dist/graph-live-feed.json
-    cp docs/backtest-4wk-cfb-nba.json dist/backtest-4wk-cfb-nba.json
-    cp docs/combo-uniqueness.json dist/combo-uniqueness.json
-    cp docs/cross-domain-bridge.json dist/cross-domain-bridge.json
-    cp docs/openapi.json dist/openapi.json
-    cp docs/api-reference.md dist/api-reference.md
-    cp -f docs/assets/* dist/assets/ 2>/dev/null || true
-    cp infra/pages/_headers dist/_headers
-    echo "✓ Staged dist/index.html, dist/graph.html, dist/graph.js, dist/gslive-links.js, dist/graph-live-feed.json, dist/combo-uniqueness.json, dist/cross-domain-bridge.json, dist/openapi.json, dist/api-reference.md, dist/assets/*, dist/_headers"
-    shasum -a 256 dist/index.html dist/graph.html dist/graph.js dist/gslive-links.js dist/graph-live-feed.json dist/combo-uniqueness.json dist/cross-domain-bridge.json dist/openapi.json dist/api-reference.md dist/assets/pipeline-artifacts-metadata.json dist/_headers
+    # Staging itself is package.json `docs:stage` — one list, so this cannot drift again.
+    bun run docs:stage
+    echo "✓ Staged dist/ via docs:stage (index.html, graph.html, graph.js, assets/gslive-links.js, assets/live-ops.js, graph-live-feed.json, backtest-4wk-cfb-nba.json, combo-uniqueness.json, cross-domain-bridge.json, openapi.json, api-reference.md, pipeline assets, _headers)"
+    shasum -a 256 dist/index.html dist/graph.html dist/graph.js dist/graph-live-feed.json dist/backtest-4wk-cfb-nba.json dist/combo-uniqueness.json dist/cross-domain-bridge.json dist/openapi.json dist/api-reference.md dist/assets/gslive-links.js dist/assets/live-ops.js dist/assets/pipeline-artifacts-metadata.json dist/_headers
     ;;
   deploy)
     "$0" stage
