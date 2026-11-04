@@ -7,6 +7,8 @@
 
 import { z } from "zod";
 
+import { R2_SECRETS_SERVICE } from "./r2_s3_client.ts";
+
 export const DEFAULT_BLOB_GATEWAY_URL = "http://127.0.0.1:4021";
 const IMAGE_CONTENT_TYPES = [
   "image/jpeg",
@@ -23,6 +25,7 @@ const uploadResponseSchema = z.object({
   bytes: z.number().int().nonnegative(),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  placeholder: z.string().startsWith("data:image/png;base64,"),
 });
 
 export interface ScreenshotBlobUploadOptions {
@@ -41,7 +44,25 @@ export interface ScreenshotBlobUploadResult {
   readonly bytesWritten: number;
   readonly width: number;
   readonly height: number;
+  /** ThumbHash LQIP data URL returned by the gateway. */
+  readonly placeholder: string;
   readonly url: string;
+}
+
+export async function resolveBlobApiToken(
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+): Promise<string> {
+  const configured = env.BLOB_API_TOKEN?.trim();
+  if (configured !== undefined && configured !== "") return configured;
+  try {
+    const stored = await Bun.secrets.get({
+      service: R2_SECRETS_SERVICE,
+      name: "BLOB_API_TOKEN",
+    });
+    return stored?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function resolveBlobGatewayUrl(
@@ -88,7 +109,7 @@ export async function uploadScreenshotToGateway(
     /\/+$/,
     "",
   );
-  const token = (options.apiToken ?? Bun.env.BLOB_API_TOKEN ?? "").trim();
+  const token = (options.apiToken ?? (await resolveBlobApiToken())).trim();
   if (token === "") throw new Error("BLOB_API_TOKEN is not set");
   if (
     !IMAGE_CONTENT_TYPES.includes(
@@ -142,6 +163,7 @@ export async function uploadScreenshotToGateway(
     bytesWritten: parsed.data.bytesWritten,
     width: parsed.data.width,
     height: parsed.data.height,
+    placeholder: parsed.data.placeholder,
     url: `${base}/api/v1/blobs/${key}`,
   };
 }

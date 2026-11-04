@@ -172,8 +172,10 @@ describe("blob + live-bets gateway", () => {
       bytes: number;
       width: number;
       height: number;
+      placeholder: string;
     };
     expect(body.key).toBe("blobs/photo-2.webp");
+    expect(body.placeholder).toStartWith("data:image/png;base64,");
     expect(body.bytesWritten).toBe(body.bytes);
     expect(body.width).toBeGreaterThan(0);
     expect(body.height).toBeGreaterThan(0);

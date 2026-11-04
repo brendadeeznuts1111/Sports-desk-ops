@@ -64,6 +64,7 @@ describe("screenshot blob upload", () => {
     expect(result.objectKey).toBe("blobs/small-shot.webp");
     expect(result.width).toBe(1);
     expect(result.height).toBe(1);
+    expect(result.placeholder).toStartWith("data:image/png;base64,");
     const stored = gateway.store.blobs.get("small-shot");
     expect(stored?.contentType).toBe("image/webp");
     expect(new TextDecoder().decode(stored?.bytes.slice(0, 4))).toBe("RIFF");

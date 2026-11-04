@@ -361,7 +361,7 @@ VERSION_HELP
   deploy)
     "$0" stage
     cd "$REPO_ROOT"
-    if [[ -n "${R2_ACCESS_KEY_ID:-}" && -n "${R2_SECRET_ACCESS_KEY:-}" ]]; then
+    if bun scripts/publish_r2_graph.mjs --check-credentials >/dev/null 2>&1; then
       bun run scripts/publish_r2_graph.mjs
     else
       echo "⚠️  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY unset — uploading via Wrangler OAuth."

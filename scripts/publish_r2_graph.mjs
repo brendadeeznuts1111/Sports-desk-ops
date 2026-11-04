@@ -11,12 +11,14 @@ import path from "node:path";
 
 import {
   R2S3Client,
+  resolveR2CredentialsAsync,
   resolveR2S3Options,
   sha256Hex,
 } from "../lib/r2_s3_client.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const listJson = process.argv.includes("--list-json");
+const checkCredentials = process.argv.includes("--check-credentials");
 
 const filesToPublish = [
   {
@@ -229,11 +231,16 @@ const filesToPublish = [
   },
 ];
 
-const resolved = resolveR2S3Options(Bun.env);
+if (checkCredentials) {
+  const probe = await R2S3Client.fromEnvOrSecrets();
+  process.exit(probe === null ? 2 : 0);
+}
+
+const envResolved = resolveR2S3Options(Bun.env);
 const bucket =
-  resolved?.bucket ?? Bun.env.R2_BUCKET_NAME ?? "sportsdesk-ops-reports";
+  envResolved?.bucket ?? Bun.env.R2_BUCKET_NAME ?? "sportsdesk-ops-reports";
 const publicBase =
-  resolved?.publicBase ??
+  envResolved?.publicBase ??
   Bun.env.R2_PUBLIC_URL ??
   "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
 
@@ -253,9 +260,10 @@ if (listJson) {
   process.exit(0);
 }
 
+const resolved = await resolveR2CredentialsAsync(Bun.env);
 if (resolved === null) {
   console.error(
-    "publish_r2_graph: no S3/R2 credentials (R2_*, S3_*, AWS_* or CLOUDFLARE_R2_TOKEN_ID + CLOUDFLARE_R2_API_TOKEN)",
+    "publish_r2_graph: no S3/R2 credentials in env or Bun.secrets service sportsdesk-ops",
   );
   process.exit(2);
 }

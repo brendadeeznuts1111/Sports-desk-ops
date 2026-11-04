@@ -16,7 +16,12 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { imageErrorCode } from "../lib/image_errors.ts";
-import { isS3Error, R2S3Client } from "../lib/r2_s3_client.ts";
+import {
+  isS3Error,
+  R2S3Client,
+  resolveR2CredentialsAsync,
+  resolveSecretBackedEnv,
+} from "../lib/r2_s3_client.ts";
 
 export interface BlobStat {
   readonly size: number;
@@ -30,6 +35,11 @@ export interface BlobStore {
     contentType: string,
   ): Promise<{ readonly bytesWritten: number }>;
   presignGet(key: string, expiresInSec: number): string;
+  /** Optional direct `Bun.Image` pipeline write (S3 adapter uses `pipeline.write(S3File)`). */
+  putImage?(
+    key: string,
+    image: Bun.Image,
+  ): Promise<{ readonly bytesWritten: number }>;
   exists(key: string): Promise<boolean>;
   stat(key: string): Promise<BlobStat>;
   /** A 200 body response (`new Response(s3file)` for S3, bytes for memory). */
@@ -58,6 +68,13 @@ export class MemoryBlobStore implements BlobStore {
     const url = `https://r2.test/blobs/${key}.webp?expires=${expiresInSec}`;
     this.presigns.push(url);
     return url;
+  }
+
+  async putImage(
+    key: string,
+    image: Bun.Image,
+  ): Promise<{ readonly bytesWritten: number }> {
+    return this.put(key, await image.bytes(), "image/webp");
   }
 
   async exists(key: string): Promise<boolean> {
@@ -313,6 +330,8 @@ async function transcodeToWebp(
   readonly bytes: Uint8Array;
   readonly width: number;
   readonly height: number;
+  readonly pipeline: Bun.Image;
+  readonly placeholder: string;
 }> {
   const image = new Bun.Image(bytes, { maxPixels, autoOrient: true });
   try {
@@ -322,7 +341,13 @@ async function transcodeToWebp(
         ? image.resize(1280, 1280, { fit: "inside" }).webp({ quality: 82 })
         : image.webp({ quality: 82 });
     const webp = await pipeline.bytes();
-    return { bytes: webp, width: pipeline.width, height: pipeline.height };
+    return {
+      bytes: webp,
+      width: pipeline.width,
+      height: pipeline.height,
+      pipeline,
+      placeholder: await pipeline.placeholder(),
+    };
   } catch (error) {
     const code = imageErrorCode(error);
     if (code === "ERR_IMAGE_TOO_MANY_PIXELS") {
@@ -527,6 +552,8 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             readonly bytes: Uint8Array;
             readonly width: number;
             readonly height: number;
+            readonly pipeline: Bun.Image;
+            readonly placeholder: string;
           };
           try {
             transcoded = await transcodeToWebp(raw, maxPixels);
@@ -537,17 +564,17 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             return jsonError(422, "image_rejected", "Image rejected");
           }
           try {
-            const { bytesWritten } = await options.blobs.put(
-              key,
-              transcoded.bytes,
-              "image/webp",
-            );
+            const { bytesWritten } =
+              options.blobs.putImage === undefined
+                ? await options.blobs.put(key, transcoded.bytes, "image/webp")
+                : await options.blobs.putImage(key, transcoded.pipeline);
             return Response.json({
               key: `blobs/${key}.webp`,
               bytesWritten,
               bytes: transcoded.bytes.byteLength,
               width: transcoded.width,
               height: transcoded.height,
+              placeholder: transcoded.placeholder,
             });
           } catch (error) {
             return storeFailure(error, "store_failed");
@@ -691,6 +718,10 @@ export function createS3BlobStore(config: {
     presignGet(key, expiresInSec) {
       return client.presign(path(key), { expiresIn: expiresInSec });
     },
+    async putImage(key, image) {
+      const bytesWritten = await image.write(client.file(path(key)));
+      return { bytesWritten };
+    },
     async exists(key) {
       return client.exists(path(key));
     },
@@ -709,18 +740,26 @@ export function createS3BlobStore(config: {
 
 if (import.meta.main) {
   try {
-    const endpoint =
-      Bun.env.R2_ENDPOINT ??
-      `https://${requiredEnv("CLOUDFLARE_ACCOUNT_ID")}.r2.cloudflarestorage.com`;
+    const resolved = await resolveR2CredentialsAsync();
+    if (resolved === null) {
+      throw new Error(
+        "R2 credentials are unavailable in env or Bun.secrets service sportsdesk-ops",
+      );
+    }
     const blobs = createS3BlobStore({
-      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
-      bucket: requiredEnv("R2_BUCKET_NAME"),
-      endpoint,
+      accessKeyId: resolved.accessKeyId,
+      secretAccessKey: resolved.secretAccessKey,
+      bucket: resolved.bucket,
+      endpoint: resolved.endpoint,
     });
+    const secretEnv = await resolveSecretBackedEnv();
+    const apiToken = secretEnv.BLOB_API_TOKEN ?? "";
+    if (apiToken.trim() === "") {
+      throw new Error("BLOB_API_TOKEN is required");
+    }
     const { server } = createBlobLiveBetsServer({
       blobs,
-      apiToken: requiredEnv("BLOB_API_TOKEN"),
+      apiToken,
       ticketSecret: requiredEnv("BLOB_TICKET_SECRET"),
       port: numberEnv("BLOB_PORT", 4021, 0),
       maxUploadBytes: numberEnv("BLOB_MAX_UPLOAD_BYTES", MAX_UPLOAD_BYTES),

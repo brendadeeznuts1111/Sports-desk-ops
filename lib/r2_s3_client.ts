@@ -93,8 +93,51 @@ function firstDefined(
   return undefined;
 }
 
+export const R2_SECRETS_SERVICE = "sportsdesk-ops";
+export const R2_SECRET_NAMES = [
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "R2_BUCKET_NAME",
+  "BLOB_API_TOKEN",
+  "CLOUDFLARE_R2_TOKEN_ID",
+  "CLOUDFLARE_R2_API_TOKEN",
+] as const;
+
+export interface BunSecretsReader {
+  get(options: {
+    readonly service: string;
+    readonly name: string;
+  }): Promise<string | null>;
+}
+
+export async function resolveSecretBackedEnv(
+  env: R2S3Env = Bun.env,
+  secrets: BunSecretsReader | null = Bun.secrets,
+): Promise<R2S3Env> {
+  const merged: Record<string, string | undefined> = { ...env };
+  if (secrets === null) return merged;
+  for (const name of R2_SECRET_NAMES) {
+    if (merged[name] !== undefined && merged[name] !== "") continue;
+    try {
+      const value = await secrets.get({ service: R2_SECRETS_SERVICE, name });
+      if (value !== null && value !== "") merged[name] = value;
+    } catch {
+      // Keychain unavailable/locked: keep the env-only contract.
+    }
+  }
+  return merged;
+}
+
 export function sha256Hex(value: string): string {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex");
+}
+
+export async function resolveR2CredentialsAsync(
+  env: R2S3Env = Bun.env,
+  secrets: BunSecretsReader | null = Bun.secrets,
+): Promise<R2S3Options | null> {
+  return resolveR2S3Options(await resolveSecretBackedEnv(env, secrets));
 }
 
 /**
@@ -328,6 +371,16 @@ export class R2S3Client {
 
   static fromEnv(env: R2S3Env = Bun.env): R2S3Client | null {
     const options = resolveR2S3Options(env);
+    return options === null ? null : R2S3Client.fromOptions(options);
+  }
+
+  /** Env precedence first, then Bun.secrets fallback for the missing names. */
+  static async fromEnvOrSecrets(
+    env: R2S3Env = Bun.env,
+    secrets: BunSecretsReader | null = Bun.secrets,
+  ): Promise<R2S3Client | null> {
+    const resolved = await resolveSecretBackedEnv(env, secrets);
+    const options = resolveR2S3Options(resolved);
     return options === null ? null : R2S3Client.fromOptions(options);
   }
 

@@ -15,6 +15,25 @@ This guide details the integration of your Cloudflare Account, Scoped API Token,
 | **`R2_BUCKET_NAME`**          | `sportsdesk-ops-reports`                                            | Dedicated bucket for report archives and audit bundles        |
 | **`R2_PUBLIC_URL`**           | `https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev`               | Public HTTPS gateway for zero-egress report downloads         |
 
+### 1.1. Bun.secrets fallback (unmounted `.env`)
+
+When `.env` is a FIFO/1Password mount that is not attached, `lib/r2_s3_client.ts` checks the
+`Bun.secrets` service **`sportsdesk-ops`** after the env precedence (`R2_*` → token SHA-256 →
+`S3_*` → `AWS_*`). The lookup names are `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`CLOUDFLARE_ACCOUNT_ID`, `R2_BUCKET_NAME`, and `BLOB_API_TOKEN`.
+
+Seed them once from the existing macOS Keychain entries:
+
+```bash
+bun scripts/secrets_r2.ts seed      # stores values without printing them
+bun scripts/secrets_r2.ts status    # names only: present/missing
+```
+
+`bun scripts/publish_r2_graph.mjs` and `./bin/dx deploy` then resolve R2 credentials automatically;
+`./bin/dx deploy` probes the same resolver (`--check-credentials`) before choosing the Wrangler
+fallback. `BLOB_API_TOKEN` is not derivable from the R2 keys and must be supplied separately when
+the gateway sink is used.
+
 ## 2. Token Verification & Cloudflare Edge Services
 
 ### 2.1. Instant Verification (Bun, no curl)

@@ -4,6 +4,7 @@ import {
   isS3Error,
   isS3ErrorCode,
   R2S3Client,
+  resolveR2CredentialsAsync,
   type R2S3ClientBackend,
   S3_ERROR_CODES,
   resolveR2S3Options,
@@ -143,6 +144,30 @@ describe("resolveR2S3Options", () => {
     });
     expect(options?.accessKeyId).toBe("token-id");
     expect(options?.secretAccessKey).toBe(sha256Hex("token-value"));
+  });
+
+  test("falls back to Bun.secrets after env precedence", async () => {
+    const secrets = {
+      async get({ name }: { service: string; name: string }) {
+        const values: Record<string, string> = {
+          R2_ACCESS_KEY_ID: "secret-access",
+          R2_SECRET_ACCESS_KEY: "secret-secret",
+          CLOUDFLARE_ACCOUNT_ID: "secret-account",
+          R2_BUCKET_NAME: "secret-bucket",
+        };
+        return values[name] ?? null;
+      },
+    };
+    const fromSecrets = await resolveR2CredentialsAsync({}, secrets);
+    expect(fromSecrets?.accessKeyId).toBe("secret-access");
+    expect(fromSecrets?.bucket).toBe("secret-bucket");
+    expect(fromSecrets?.endpoint).toBe(
+      "https://secret-account.r2.cloudflarestorage.com",
+    );
+
+    const envWins = await resolveR2CredentialsAsync(openaiEnv, secrets);
+    expect(envWins?.accessKeyId).toBe("access");
+    expect(envWins?.bucket).toBe("bucket");
   });
 
   test("returns null when bucket, endpoint or credentials are missing", () => {
