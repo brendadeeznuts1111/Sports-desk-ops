@@ -45,7 +45,7 @@ describe("f402 weblog bridge", () => {
     expect(classifyIp("146.75.146.74")).toBe("ICLOUD_RELAY");
     expect(classifyIp("140.248.1.2")).toBe("BOT_RING_140_248");
     expect(classifyIp("8.8.8.8")).toBe("OTHER");
-    expect(classifyIp("2001:db8::1")).toBe("UNKNOWN");
+    expect(classifyIp("2001:db8::1")).toBe("IPV6_OTHER_64");
   });
 
   test("causal join conserves wagers and passes the four gates", () => {
