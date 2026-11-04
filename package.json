@@ -76,7 +76,7 @@
     "ensure:deep-tsconfig": "bun run scripts/ensure_deep_tsconfig.ts",
     "typecheck": "bun run ensure:deep-tsconfig && bun check --no-script -p tsconfig.json",
     "lint": "bun --bun run oxlint --fix",
-    "lint:check": "bun --bun run oxlint --deny-warnings && bun --bun run oxlint --type-aware -c .oxlintrc.type-aware.json --deny-warnings",
+    "lint:check": "bun --bun run oxlint ${GITHUB_ACTIONS:+-f github} --deny-warnings && bun --bun run oxlint --type-aware -c .oxlintrc.type-aware.json ${GITHUB_ACTIONS:+-f github} --deny-warnings",
     "gen:tokens": "bun run scripts/generate_tokens.ts",
     "build:tokens": "bun run gen:tokens",
     "build:docs": "bun run scripts/generate_docs.ts",
