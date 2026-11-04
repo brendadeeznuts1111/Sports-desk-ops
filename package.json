@@ -32,6 +32,7 @@
     "capture:pending": "bun run scripts/capture/capture_pending_full.ts",
     "capture:bet-ticker": "bun run scripts/capture/capture_bet_ticker.ts",
     "bridge3a:poll": "bun run scripts/f402_bet_ticker_bridge3a.ts",
+    "live:stream-signals": "bun run scripts/sportsdesk-live-stream-cli.ts stream-signals",
     "capture:all": "bun run scripts/capture/capture_all_live.ts",
     "capture:dom": "bun run scripts/capture/capture_dom_surfaces.ts",
     "manual:fetch": "bun run scripts/fetch_user_manual.ts",
@@ -179,6 +180,7 @@
     "hierarchy:replay": "bun run scripts/capture/f402_hierarchy_replay.ts",
     "secrets:f402": "bun run scripts/secrets_f402.ts",
     "secrets:gslive": "bun run scripts/secrets_gslive.ts",
+    "secrets:github": "bun run scripts/secrets_github.ts",
     "capture:har": "bun run scripts/capture/har_probe.ts",
     "capture:discover": "bun run scripts/capture/discover_customers.ts",
     "capture:tls": "bun run scripts/capture/tls_provenance.ts",
@@ -234,6 +236,8 @@
     "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts",
     "bridge3b:rollup": "bun run scripts/f402_pending_bridge3b.ts",
     "gslive:audit-bet": "bun run scripts/gslive_bet_event_audit.ts",
+    "gslive:weblogs:refresh": "bun run scripts/gslive_weblog_refresh.ts",
+    "signals:kalshi": "bun run scripts/signals_kalshi_cli.ts",
     "weblog:rollup": "bun run scripts/f402_weblog_bridge.ts"
   },
   "keywords": [
