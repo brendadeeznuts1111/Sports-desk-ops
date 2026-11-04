@@ -440,6 +440,7 @@ Profiles are diagnostics, not artifacts: write them under `Scratch/profiles/` (g
 - **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
 - **Compression streams**: contract test round-trips `CompressionStream("gzip" | "deflate" | "deflate-raw" | "zstd" | "brotli")` through `DecompressionStream` with byte-identical output.
 - **`Response.textStream()`**: `lib/gslive_tally_rollup.ts::streamBetReportBets` now consumes `new Response(Bun.file(path)).textStream()`, so BOM stripping and multi-byte chunk reassembly are Bun's responsibility (tested with a BOM + `€🌍` split across bytes).
+- **`Bun.stringWidth` / `wrapAnsi` / `sliceAnsi`**: contract tests pin ANSI stripping, cursor/hyperlink sequences, ZWJ/flags/skin-tone/keycap graphemes, zero-width soft hyphen + combining marks, and CJK double width.
 - **`Bun.Archive`**: contract test round-trips `Bun.Archive.from` → `Bun.Archive.write` → `extract`.
 - **`URLPattern`**: contract test matches `/api/v1/blobs/:key` and rejects `/api/v1/live-bets`.
 - **PQC**: contract tests exercise `crypto.subtle` ML-KEM-768 `encapsulateBits`/`decapsulateBits` and `node:crypto` `ml-dsa-65` sign/verify, JWK `kty: "AKP"`, PEM/DER/encrypted PKCS#8, `createPublicKey`/`createPrivateKey` imports, and ML-KEM-768 keypairs.

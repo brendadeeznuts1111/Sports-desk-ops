@@ -70,6 +70,11 @@ describe("Bun v1.4.0 primitives", () => {
     expect(Bun.stringWidth("\x1b]8;;https://bun.sh\x07Bun\x1b]8;;\x07")).toBe(
       3,
     );
+    expect(Bun.stringWidth("\u00ad")).toBe(0);
+    expect(Bun.stringWidth("e\u0301")).toBe(1);
+    expect(Bun.stringWidth("👍🏽")).toBe(2);
+    expect(Bun.stringWidth("1️⃣")).toBe(2);
+    expect(Bun.stringWidth("中文")).toBe(4);
     expect(Bun.wrapAnsi("The quick brown fox", 10)).toBe(
       "The quick\nbrown fox",
     );
