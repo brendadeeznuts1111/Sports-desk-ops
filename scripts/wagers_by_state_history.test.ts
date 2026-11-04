@@ -262,9 +262,10 @@ describe("capture history: the series behind the v2 artifact", () => {
       expect(read.lines[1]?.delta?.migrations).toEqual([
         { from: "pending", to: "win", tickets: 1 },
       ]);
-      // Contract rule: the history carries counts, never ticket ids.
-      expect(historyText).not.toContain("T1");
-      expect(historyText).not.toContain("T5");
+      // Contract rule: the history carries counts, never ticket ids. Match the quoted JSON
+      // token: a bare "T1" also matches the `capturedAt` ISO timestamp (`…T10:00:46Z`).
+      expect(historyText).not.toContain('"T1"');
+      expect(historyText).not.toContain('"T5"');
       expect(read.lines[0]?.qualityFlags).toContain("unknown_states");
       expect(read.lines[1]?.totals.legs).toBe(3);
 
