@@ -1,0 +1,53 @@
+{
+  "scrapedAt": "2026-11-04T23:48:54.757Z",
+  "bunVersion": "1.4.4",
+  "bunVersionWithSha": "v1.4.4 (38afee6c8)",
+  "sourceBuild": "bun.sh docs",
+  "source": "https://bun.sh/reference/globals/bun",
+  "symbolNormalization": "data-algolia-id",
+  "kindRowCount": 331,
+  "distinctSymbolCount": 323,
+  "mergedExcess": 8,
+  "merged": [
+    {
+      "symbol": "globals.bun.$",
+      "kinds": ["function", "type", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.inspect",
+      "kinds": ["function", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.peek",
+      "kinds": ["function", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.Image",
+      "kinds": ["class", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.RedisClient",
+      "kinds": ["class", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.SQL",
+      "kinds": ["class", "namespace"]
+    },
+    {
+      "symbol": "globals.bun.WebView",
+      "kinds": ["class", "namespace"]
+    }
+  ],
+  "expectedKindRows": {
+    "function": 49,
+    "class": 28,
+    "interface": 124,
+    "type": 83,
+    "variable": 22,
+    "namespace": 25
+  },
+  "signatureCounts": {
+    "type": 207,
+    "value": 124
+  }
+}
