@@ -360,18 +360,44 @@ function bitWidth(value: number): number {
   return bits;
 }
 
+/**
+ * 24-bit cell key: channel 6 | sport 6 | period 6 | settlementState 6. The census maxima are
+ * 2/14/14/3; the spare bits stay zero and the pack/decode round-trip is checked by GATE-02.
+ */
 function packKey(
   channel: number,
   sport: number,
   period: number,
   state: number,
-): bigint {
+): number {
   return (
-    (BigInt(channel) << 24n) |
-    (BigInt(sport) << 16n) |
-    (BigInt(period) << 8n) |
-    BigInt(state)
+    ((channel & 0x3f) << 18) |
+    ((sport & 0x3f) << 12) |
+    ((period & 0x3f) << 6) |
+    (state & 0x3f)
   );
+}
+
+/** Set a bit in a Uint32 bitset; the array is fixed-capacity by construction. */
+function setBit(words: Uint32Array, bit: number): void {
+  const word = bit >>> 5;
+  words[word] = (words[word] ?? 0) | (1 << (bit & 31));
+}
+
+function hasBit(words: Uint32Array, bit: number): boolean {
+  return ((words[bit >>> 5] ?? 0) & (1 << (bit & 31))) !== 0;
+}
+
+/** Hamming weight over the fixed bitset words. */
+function popcount(words: Uint32Array): number {
+  let count = 0;
+  for (let index = 0; index < words.length; index += 1) {
+    let value = words[index]!;
+    value -= (value >>> 1) & 0x55555555;
+    value = (value & 0x33333333) + ((value >>> 2) & 0x33333333);
+    count += (((value + (value >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
+  }
+  return count;
 }
 
 /** Fold the streamed bets into deduped groups and cell columns. */
@@ -388,21 +414,44 @@ export async function buildGsliveTallyRollup(
   let fromEpochSec: number | null = null;
   let toEpochSec: number | null = null;
 
-  interface Group {
-    readonly gid: string;
-    readonly type: string;
-    readonly state: number;
-    readonly sport: string;
-    readonly period: string;
-    readonly risk: bigint;
-    settled: bigint | null;
-    resultSum: bigint;
-    readonly freePlay: boolean;
-    readonly open: boolean;
-    legs: number;
-    clvSum: bigint;
-    clvEligible: number;
-  }
+  // Fixed-capacity arenas. The census C_max=22,611 and B_max=118; 4× headroom keeps the
+  // radix load ≤0.25 and lets GATE-02 fail closed instead of growing a collection.
+  const GROUP_SLOT_BITS = 17;
+  const GROUP_SLOT_COUNT = 1 << GROUP_SLOT_BITS; // 131,072 slots
+  const GROUP_SLOT_MASK = GROUP_SLOT_COUNT - 1;
+  const MAX_GROUPS = GROUP_SLOT_COUNT >>> 2; // 32,768, load ≤ 0.25
+  const MAX_CELLS = 256; // census B_max=118, 2× headroom
+  const MAX_LABELS = 64; // census sport/period cardinality is 14 each
+  const CELL_SLOT_COUNT = 1 << 10; // 1,024 slots, load ≤ 0.25 at 256 cells
+  const CELL_SLOT_MASK = CELL_SLOT_COUNT - 1;
+  const CELL_WORD_COUNT = (MAX_CELLS + 31) >>> 5;
+
+  // Group dedupe: open-addressed gid slots plus SoA columns. No Map, no per-row object.
+  const groupSlots = new Uint32Array(GROUP_SLOT_COUNT);
+  const groupGid = new Uint32Array(MAX_GROUPS);
+  const groupType = new Uint8Array(MAX_GROUPS);
+  const groupState = new Uint8Array(MAX_GROUPS);
+  const groupSportLabel = new Uint8Array(MAX_GROUPS);
+  const groupPeriodLabel = new Uint8Array(MAX_GROUPS);
+  const groupLegs = new Uint16Array(MAX_GROUPS);
+  const groupRisk = new BigInt64Array(MAX_GROUPS);
+  const groupSettled = new BigInt64Array(MAX_GROUPS);
+  const groupResultSum = new BigInt64Array(MAX_GROUPS);
+  const groupClvSum = new BigInt64Array(MAX_GROUPS);
+  const groupClvEligible = new Uint32Array(MAX_GROUPS);
+  const groupFreePlayBits = new Uint32Array((MAX_GROUPS + 31) >>> 5);
+  const groupOpenBits = new Uint32Array((MAX_GROUPS + 31) >>> 5);
+  const groupSettledBits = new Uint32Array((MAX_GROUPS + 31) >>> 5);
+
+  // Inline label tables: fixed 64 slots each, linear search over ≤14 observed values.
+  const sports: string[] = [];
+  sports.length = MAX_LABELS;
+  const periods: string[] = [];
+  periods.length = MAX_LABELS;
+  let sportCount = 0;
+  let periodCount = 0;
+  let groupCount = 0;
+
   const anomalyCounts = {
     oddsDrift: 0,
     reversedCredit: 0,
@@ -411,11 +460,87 @@ export async function buildGsliveTallyRollup(
     adminUser: 0,
     delayMismatch: 0,
   };
-  const groups = new Map<string, Group>();
   let rowCount = 0;
   let malformedRowCount = 0;
   let maxGroupId = 0;
   let maxTicket = 0;
+
+  const groupHash = (gid: number): number =>
+    (Math.imul(gid, 0x9e3779b1) >>> 0) & GROUP_SLOT_MASK;
+
+  const findGroup = (gid: number): number => {
+    let slot = groupHash(gid);
+    for (let probe = 0; probe < GROUP_SLOT_COUNT; probe += 1) {
+      const entry = groupSlots[slot]!;
+      if (entry === 0) return -1;
+      const index = entry - 1;
+      if (groupGid[index] === gid) return index;
+      slot = (slot + 1) & GROUP_SLOT_MASK;
+    }
+    return -1;
+  };
+
+  const insertGroup = (gid: number): number => {
+    if (groupCount >= MAX_GROUPS) {
+      throw new DodGateFailureError({
+        gate: 2,
+        name: "UnsignedHandleAndKeyIntegrity",
+        status: "fail",
+        detail: `group arena exhausted at ${MAX_GROUPS} (C_max census 22,611)`,
+      });
+    }
+    let slot = groupHash(gid);
+    for (let probe = 0; probe < GROUP_SLOT_COUNT; probe += 1) {
+      if (groupSlots[slot] === 0) {
+        const index = groupCount;
+        groupCount += 1;
+        groupGid[index] = gid;
+        groupSlots[slot] = index + 1;
+        return index;
+      }
+      slot = (slot + 1) & GROUP_SLOT_MASK;
+    }
+    throw new DodGateFailureError({
+      gate: 2,
+      name: "UnsignedHandleAndKeyIntegrity",
+      status: "fail",
+      detail: "group radix table has no free slot",
+    });
+  };
+
+  const internSport = (value: string): number => {
+    for (let index = 0; index < sportCount; index += 1) {
+      if (sports[index] === value) return index;
+    }
+    if (sportCount >= MAX_LABELS) {
+      throw new DodGateFailureError({
+        gate: 2,
+        name: "UnsignedHandleAndKeyIntegrity",
+        status: "fail",
+        detail: `sport label cardinality exceeds ${MAX_LABELS}`,
+      });
+    }
+    sports[sportCount] = value;
+    sportCount += 1;
+    return sportCount - 1;
+  };
+
+  const internPeriod = (value: string): number => {
+    for (let index = 0; index < periodCount; index += 1) {
+      if (periods[index] === value) return index;
+    }
+    if (periodCount >= MAX_LABELS) {
+      throw new DodGateFailureError({
+        gate: 2,
+        name: "UnsignedHandleAndKeyIntegrity",
+        status: "fail",
+        detail: `period label cardinality exceeds ${MAX_LABELS}`,
+      });
+    }
+    periods[periodCount] = value;
+    periodCount += 1;
+    return periodCount - 1;
+  };
 
   for await (const row of streamBetReportBets(
     path,
@@ -424,23 +549,35 @@ export async function buildGsliveTallyRollup(
     rowCount += 1;
     if (fromEpochSec === null && typeof row.from === "number")
       fromEpochSec = row.from;
-    const gid = typeof row.betGroupId === "string" ? row.betGroupId.trim() : "";
+    const gidText =
+      typeof row.betGroupId === "string" ? row.betGroupId.trim() : "";
     const type = typeof row.type === "string" ? row.type.trim() : "";
     const state = Number(row.state);
     const ticket =
       typeof row.ticketNumber === "string"
         ? Number(row.ticketNumber)
         : Number.POSITIVE_INFINITY;
+    // The arena key is the 32-bit numeric betGroupId. Non-numeric or over-width keys fail the
+    // domain instead of being silently folded into another group.
     if (
-      gid === "" ||
+      gidText === "" ||
+      !/^\d+$/.test(gidText) ||
+      (gidText.length > 1 && gidText[0] === "0") ||
       (type !== "0" && type !== "1") ||
       !Number.isInteger(state) ||
+      state < 0 ||
+      state > 255 ||
       !Number.isFinite(ticket)
     ) {
       malformedRowCount += 1;
       continue;
     }
-    maxGroupId = Math.max(maxGroupId, Number(gid) || 0);
+    const gid = Number(gidText);
+    if (!Number.isSafeInteger(gid) || gid > 0xffffffff) {
+      malformedRowCount += 1;
+      continue;
+    }
+    maxGroupId = Math.max(maxGroupId, gid);
     maxTicket = Math.max(maxTicket, ticket);
     const logMs = parseGsliveTimestampMs(row.logTime);
     const acceptMs = parseGsliveTimestampMs(row.acceptTime, logMs ?? undefined);
@@ -478,40 +615,50 @@ export async function buildGsliveTallyRollup(
     const clvLine = f !== null && fc !== null && fc !== 0n ? f - fc : null;
     const parentSettled = parseCentsIfPresent(row.betGroupResult);
     const legResult = parseCentsIfPresent(row.result) ?? 0n;
-    const existing = groups.get(gid);
-    if (existing !== undefined) {
-      existing.legs += 1;
-      existing.resultSum += legResult;
-      if (existing.settled === null && parentSettled !== null) {
-        existing.settled = parentSettled;
+    const existing = findGroup(gid);
+    if (existing >= 0) {
+      groupLegs[existing] = groupLegs[existing]! + 1;
+      groupResultSum[existing] = groupResultSum[existing]! + legResult;
+      if (!hasBit(groupSettledBits, existing) && parentSettled !== null) {
+        groupSettled[existing] = parentSettled;
+        setBit(groupSettledBits, existing);
       }
       if (clvLine !== null) {
-        existing.clvSum += clvLine;
-        existing.clvEligible += 1;
+        groupClvSum[existing] = groupClvSum[existing]! + clvLine;
+        groupClvEligible[existing] = groupClvEligible[existing]! + 1;
       }
       continue;
     }
+    const index = insertGroup(gid);
+    groupType[index] = type === "0" ? 0 : 1;
+    groupState[index] = state;
+    groupSportLabel[index] = internSport(
+      String(row.displaySportId ?? "other").trim() || "other",
+    );
+    groupPeriodLabel[index] = internPeriod(
+      String(row.period ?? "other").trim() || "other",
+    );
+    groupRisk[index] = parseCentsStrict(row.bet);
+    if (parentSettled !== null) {
+      groupSettled[index] = parentSettled;
+      setBit(groupSettledBits, index);
+    }
+    groupResultSum[index] = legResult;
     const freePlayValue = row.isFreePlay;
-    const freePlay =
+    if (
       freePlayValue !== null &&
       freePlayValue !== undefined &&
       String(freePlayValue).trim() !== "" &&
-      String(freePlayValue).trim() !== "0";
-    groups.set(gid, {
-      gid,
-      type,
-      state,
-      sport: String(row.displaySportId ?? "other").trim() || "other",
-      period: String(row.period ?? "other").trim() || "other",
-      risk: parseCentsStrict(row.bet),
-      settled: parentSettled,
-      resultSum: legResult,
-      freePlay,
-      open: !(state === 1 || state === 2 || state === 3),
-      legs: 1,
-      clvSum: clvLine ?? 0n,
-      clvEligible: clvLine === null ? 0 : 1,
-    });
+      String(freePlayValue).trim() !== "0"
+    ) {
+      setBit(groupFreePlayBits, index);
+    }
+    if (!(state === 1 || state === 2 || state === 3)) {
+      setBit(groupOpenBits, index);
+    }
+    groupLegs[index] = 1;
+    groupClvSum[index] = clvLine ?? 0n;
+    groupClvEligible[index] = clvLine === null ? 0 : 1;
   }
 
   // GATE-01 domain bounds: observed width budgets (betGroupId ≤ 32 bits, ticket ≤ 32 bits).
@@ -523,19 +670,75 @@ export async function buildGsliveTallyRollup(
     detail: `betGroupId≤${bitWidth(maxGroupId)}b ticket≤${bitWidth(maxTicket)}b`,
   };
 
-  // SoA cell columns.
-  const labelKey = new Map<string, number>();
-  const channels: GsliveTallyChannel[] = [];
-  const sports: string[] = [];
-  const periods: string[] = [];
-  const states: GsliveSettlementState[] = [];
-  const ticketCounts: number[] = [];
-  const legCounts: number[] = [];
-  const risks: bigint[] = [];
-  const settleds: bigint[] = [];
-  const clvSums: bigint[] = [];
-  const clvEligibles: number[] = [];
+  // Cell arena: packed 24-bit keys, open-addressed slots, cache-contiguous SoA columns.
+  const cellSlots = new Uint16Array(CELL_SLOT_COUNT);
+  const cellKey = new Uint32Array(MAX_CELLS);
+  const cellChannel = new Uint8Array(MAX_CELLS);
+  const cellSportLabel = new Uint8Array(MAX_CELLS);
+  const cellPeriodLabel = new Uint8Array(MAX_CELLS);
+  const cellState = new Uint8Array(MAX_CELLS);
+  const cellTickets = new Uint32Array(MAX_CELLS);
+  const cellLegs = new Uint32Array(MAX_CELLS);
+  const cellRisk = new BigInt64Array(MAX_CELLS);
+  const cellSettled = new BigInt64Array(MAX_CELLS);
+  const cellClvSum = new BigInt64Array(MAX_CELLS);
+  const cellClvEligible = new Uint32Array(MAX_CELLS);
+  let cellCount = 0;
   let packingRoundTripFailed = false;
+
+  const cellHash = (key: number): number =>
+    (Math.imul(key, 0x9e3779b1) >>> 0) & CELL_SLOT_MASK;
+
+  const findCell = (key: number): number => {
+    let slot = cellHash(key);
+    for (let probe = 0; probe < CELL_SLOT_COUNT; probe += 1) {
+      const entry = cellSlots[slot]!;
+      if (entry === 0) return -1;
+      const index = entry - 1;
+      if (cellKey[index] === key) return index;
+      slot = (slot + 1) & CELL_SLOT_MASK;
+    }
+    return -1;
+  };
+
+  const insertCell = (
+    key: number,
+    channel: number,
+    sportLabel: number,
+    periodLabel: number,
+    stateIndex: number,
+  ): number => {
+    if (cellCount >= MAX_CELLS) {
+      throw new DodGateFailureError({
+        gate: 5,
+        name: "WireAndArtifactSchemaBounds",
+        status: "fail",
+        detail: `cell arena exhausted at ${MAX_CELLS} (B_max census 118)`,
+      });
+    }
+    let slot = cellHash(key);
+    for (let probe = 0; probe < CELL_SLOT_COUNT; probe += 1) {
+      if (cellSlots[slot] === 0) {
+        const index = cellCount;
+        cellCount += 1;
+        cellKey[index] = key;
+        cellChannel[index] = channel;
+        cellSportLabel[index] = sportLabel;
+        cellPeriodLabel[index] = periodLabel;
+        cellState[index] = stateIndex;
+        cellSlots[slot] = index + 1;
+        return index;
+      }
+      slot = (slot + 1) & CELL_SLOT_MASK;
+    }
+    throw new DodGateFailureError({
+      gate: 5,
+      name: "WireAndArtifactSchemaBounds",
+      status: "fail",
+      detail: "cell radix table has no free slot",
+    });
+  };
+
   let freePlayTickets = 0;
   let rawRisk = 0n;
   let rawSettled = 0n;
@@ -543,79 +746,69 @@ export async function buildGsliveTallyRollup(
   let rawLegs = 0;
   let clvSumTotal = 0n;
   let clvEligibleTotal = 0;
-  for (const group of groups.values()) {
-    if (group.type === "0" && group.legs !== 1) {
+  for (let group = 0; group < groupCount; group += 1) {
+    const type = groupType[group]!;
+    if (type === 0 && groupLegs[group] !== 1) {
       throw new DodGateFailureError({
         gate: 1,
         name: "RotationAndDomainBounds",
         status: "fail",
-        detail: `GSLIVE group with ${group.legs} legs`,
+        detail: `GSLIVE group with ${groupLegs[group]} legs`,
       });
     }
-    const channel: GsliveTallyChannel =
-      group.type === "0" ? "GSLIVE" : "GSBUILDER";
-    const settlement: GsliveSettlementState =
+    const channelIndex = type;
+    const settlement =
       (SETTLEMENT_CODES as Record<number, GsliveSettlementState>)[
-        group.state
+        groupState[group]!
       ] ?? "other";
-    const key = `${channel}|${group.sport}|${group.period}|${settlement}`;
-    let index = labelKey.get(key);
-    if (index === undefined) {
-      index = channels.length;
-      labelKey.set(key, index);
-      channels.push(channel);
-      sports.push(group.sport);
-      periods.push(group.period);
-      states.push(settlement);
-      ticketCounts.push(0);
-      legCounts.push(0);
-      risks.push(0n);
-      settleds.push(0n);
-      clvSums.push(0n);
-      clvEligibles.push(0);
-      const channelIndex = channel === "GSLIVE" ? 0 : 1;
-      const sportIndex = Number(group.sport) || 255;
-      const periodIndex = Math.min(periods.length + 1, 255);
-      const stateIndex =
-        settlement === "win"
-          ? 0
-          : settlement === "lose"
-            ? 1
-            : settlement === "push"
-              ? 2
-              : 3;
-      const packed = packKey(channelIndex, sportIndex, periodIndex, stateIndex);
-      const unpackedChannel = Number((packed >> 24n) & 0xffn);
-      const unpackedSport = Number((packed >> 16n) & 0xffn);
-      const unpackedPeriod = Number((packed >> 8n) & 0xffn);
-      const unpackedState = Number(packed & 0xffn);
+    const stateIndex =
+      settlement === "win"
+        ? 0
+        : settlement === "lose"
+          ? 1
+          : settlement === "push"
+            ? 2
+            : 3;
+    const sportLabel = groupSportLabel[group]!;
+    const periodLabel = groupPeriodLabel[group]!;
+    const key = packKey(channelIndex, sportLabel, periodLabel, stateIndex);
+    let cell = findCell(key);
+    if (cell < 0) {
+      cell = insertCell(key, channelIndex, sportLabel, periodLabel, stateIndex);
+      const unpackedChannel = (key >>> 18) & 0x3f;
+      const unpackedSport = (key >>> 12) & 0x3f;
+      const unpackedPeriod = (key >>> 6) & 0x3f;
+      const unpackedState = key & 0x3f;
       if (
         unpackedChannel !== channelIndex ||
-        unpackedSport !== sportIndex ||
-        unpackedPeriod !== periodIndex ||
+        unpackedSport !== sportLabel ||
+        unpackedPeriod !== periodLabel ||
         unpackedState !== stateIndex
       ) {
         packingRoundTripFailed = true;
       }
     }
-    const freePlay = group.freePlay;
+    const freePlay = hasBit(groupFreePlayBits, group);
     if (freePlay) freePlayTickets += 1;
-    ticketCounts[index] = (ticketCounts[index] ?? 0) + 1;
-    legCounts[index] = (legCounts[index] ?? 0) + group.legs;
-    rawLegs += group.legs;
-    const settled = group.settled ?? group.resultSum;
-    rawRisk += freePlay ? 0n : group.risk;
+    cellTickets[cell] = cellTickets[cell]! + 1;
+    cellLegs[cell] = cellLegs[cell]! + groupLegs[group]!;
+    rawLegs += groupLegs[group]!;
+    const settled = hasBit(groupSettledBits, group)
+      ? groupSettled[group]!
+      : groupResultSum[group]!;
+    rawRisk += freePlay ? 0n : groupRisk[group]!;
     rawSettled += freePlay ? 0n : settled;
-    clvSumTotal += group.clvSum;
-    clvEligibleTotal += group.clvEligible;
-    if (group.open) openExposure += freePlay ? 0n : group.risk;
-    risks[index] = (risks[index] ?? 0n) + (freePlay ? 0n : group.risk);
-    settleds[index] = (settleds[index] ?? 0n) + (freePlay ? 0n : settled);
-    clvSums[index] = (clvSums[index] ?? 0n) + group.clvSum;
-    clvEligibles[index] = (clvEligibles[index] ?? 0) + group.clvEligible;
+    clvSumTotal += groupClvSum[group]!;
+    clvEligibleTotal += groupClvEligible[group]!;
+    if (hasBit(groupOpenBits, group)) {
+      openExposure += freePlay ? 0n : groupRisk[group]!;
+    }
+    cellRisk[cell] = cellRisk[cell]! + (freePlay ? 0n : groupRisk[group]!);
+    cellSettled[cell] = cellSettled[cell]! + (freePlay ? 0n : settled);
+    cellClvSum[cell] = cellClvSum[cell]! + groupClvSum[group]!;
+    cellClvEligible[cell] = cellClvEligible[cell]! + groupClvEligible[group]!;
   }
 
-  const cellCount = channels.length;
   // GATE-02: unsigned handles; radix capacity is the next power of two ≥ 4×cells.
   const capacity = Math.max(
     16,
@@ -629,25 +822,86 @@ export async function buildGsliveTallyRollup(
     detail: `cells=${cellCount} capacity=${capacity} load=${load.toFixed(3)}`,
   };
 
-  // k=5 + complementary sibling suppression.
-  const suppressedIndices = new Set<number>();
+  // k=5 + complementary sibling suppression, as a bitset over cell indices.
+  const suppressedBits = new Uint32Array(CELL_WORD_COUNT);
   for (let index = 0; index < cellCount; index += 1) {
-    if ((ticketCounts[index] ?? 0) < GSLIVE_TALLY_K)
-      suppressedIndices.add(index);
+    if (cellTickets[index]! < GSLIVE_TALLY_K) setBit(suppressedBits, index);
   }
-  const siblingGroups = new Map<string, number[]>();
+  const siblingKey = (index: number): number =>
+    (cellSportLabel[index]! << 8) |
+    (cellPeriodLabel[index]! << 2) |
+    cellState[index]!;
+  const processedBits = new Uint32Array(CELL_WORD_COUNT);
   for (let index = 0; index < cellCount; index += 1) {
-    const key = `${sports[index]}|${periods[index]}|${states[index]}`;
-    const list = siblingGroups.get(key) ?? [];
-    list.push(index);
-    siblingGroups.set(key, list);
+    if (hasBit(processedBits, index)) continue;
+    const key = siblingKey(index);
+    let suppressedCount = 0;
+    let visibleCount = 0;
+    let lastVisible = -1;
+    for (let probe = index; probe < cellCount; probe += 1) {
+      if (hasBit(processedBits, probe) || siblingKey(probe) !== key) continue;
+      setBit(processedBits, probe);
+      if (hasBit(suppressedBits, probe)) {
+        suppressedCount += 1;
+      } else {
+        visibleCount += 1;
+        lastVisible = probe;
+      }
+    }
+    if (suppressedCount > 0 && visibleCount === 1) {
+      setBit(suppressedBits, lastVisible);
+    }
   }
-  for (const indices of siblingGroups.values()) {
-    const suppressed = indices.filter((index) => suppressedIndices.has(index));
-    const visible = indices.filter((index) => !suppressedIndices.has(index));
-    if (suppressed.length > 0 && visible.length === 1)
-      suppressedIndices.add(visible[0] as number);
-    if (suppressed.length > 0 && visible.length === 0) continue;
+  const suppressedCellCount = popcount(suppressedBits);
+
+  // Deterministic order: the same channel|sport|period|state string comparison as before,
+  // without materializing the strings or a dynamic array. `compareField` reproduces the
+  // separator (`|`, 0x7c) comparison when one label is a prefix of the other, which a plain
+  // field-by-field compare gets wrong (e.g. sport "2" vs "220").
+  const stateLabels = ["win", "lose", "push", "other"] as const;
+  const compareField = (left: string, right: string): number => {
+    const shared = Math.min(left.length, right.length);
+    for (let index = 0; index < shared; index += 1) {
+      const delta = left.charCodeAt(index) - right.charCodeAt(index);
+      if (delta !== 0) return delta;
+    }
+    if (left.length === right.length) return 0;
+    const separator = 0x7c;
+    return left.length < right.length
+      ? separator - right.charCodeAt(shared)
+      : left.charCodeAt(shared) - separator;
+  };
+  const compareCells = (left: number, right: number): number => {
+    const channel = compareField(
+      CHANNEL_CODES[cellChannel[left]!]!,
+      CHANNEL_CODES[cellChannel[right]!]!,
+    );
+    if (channel !== 0) return channel;
+    const sport = compareField(
+      sports[cellSportLabel[left]!]!,
+      sports[cellSportLabel[right]!]!,
+    );
+    if (sport !== 0) return sport;
+    const period = compareField(
+      periods[cellPeriodLabel[left]!]!,
+      periods[cellPeriodLabel[right]!]!,
+    );
+    if (period !== 0) return period;
+    return compareField(
+      stateLabels[cellState[left]!]!,
+      stateLabels[cellState[right]!]!,
+    );
+  };
+  const order = new Uint16Array(cellCount);
+  for (let index = 0; index < cellCount; index += 1) order[index] = index;
+  for (let index = 1; index < cellCount; index += 1) {
+    const value = order[index]!;
+    let cursor = index - 1;
+    while (cursor >= 0 && compareCells(order[cursor]!, value) > 0) {
+      order[cursor + 1] = order[cursor]!;
+      cursor -= 1;
+    }
+    order[cursor + 1] = value;
   }
 
   const cells: GsliveTallyCell[] = [];
@@ -663,27 +917,21 @@ export async function buildGsliveTallyRollup(
     suppressedClvSum = 0n,
     visibleClvEligible = 0,
     suppressedClvEligible = 0;
-  const order = Array.from({ length: cellCount }, (_, index) => index).sort(
-    (a, b) => {
-      const left = `${channels[a]}|${sports[a]}|${periods[a]}|${states[a]}`;
-      const right = `${channels[b]}|${sports[b]}|${periods[b]}|${states[b]}`;
-      return left < right ? -1 : left > right ? 1 : 0;
-    },
-  );
-  for (const index of order) {
+  for (let position = 0; position < cellCount; position += 1) {
+    const index = order[position]!;
     const cell: GsliveTallyCell = {
-      channel: channels[index] as GsliveTallyChannel,
-      sport: sports[index] as string,
-      period: periods[index] as string,
-      settlementState: states[index] as GsliveSettlementState,
-      ticketCount: ticketCounts[index] ?? 0,
-      legCount: legCounts[index] ?? 0,
-      riskCents: Number(risks[index] ?? 0n),
-      settledNetCents: Number(settleds[index] ?? 0n),
-      clvSumLineHundredths: Number(clvSums[index] ?? 0n),
-      clvEligibleLegCount: clvEligibles[index] ?? 0,
+      channel: CHANNEL_CODES[cellChannel[index]!]!,
+      sport: sports[cellSportLabel[index]!]!,
+      period: periods[cellPeriodLabel[index]!]!,
+      settlementState: stateLabels[cellState[index]!]!,
+      ticketCount: cellTickets[index]!,
+      legCount: cellLegs[index]!,
+      riskCents: Number(cellRisk[index]!),
+      settledNetCents: Number(cellSettled[index]!),
+      clvSumLineHundredths: Number(cellClvSum[index]!),
+      clvEligibleLegCount: cellClvEligible[index]!,
     };
-    if (suppressedIndices.has(index)) {
+    if (hasBit(suppressedBits, index)) {
       suppressedTickets += cell.ticketCount;
       suppressedLegs += cell.legCount;
       suppressedRisk += BigInt(cell.riskCents);
@@ -767,7 +1015,7 @@ export async function buildGsliveTallyRollup(
     ],
   ];
   const rawTotals: Array<[string, bigint]> = [
-    ["ticketCount", BigInt(groups.size)],
+    ["ticketCount", BigInt(groupCount)],
     ["legCount", BigInt(rawLegs)],
     ["riskCents", rawRisk],
     ["settledNetCents", rawSettled],
@@ -796,10 +1044,10 @@ export async function buildGsliveTallyRollup(
     window: { fromEpochSec, toEpochSec },
     rowCount,
     malformedRowCount,
-    distinctTicketCount: groups.size,
-    distinctBetGroupCount: groups.size,
+    distinctTicketCount: groupCount,
+    distinctBetGroupCount: groupCount,
     totals: {
-      ticketCount: groups.size,
+      ticketCount: groupCount,
       legCount: rawLegs,
       riskCents: Number(rawRisk),
       settledNetCents: Number(rawSettled),
@@ -813,7 +1061,7 @@ export async function buildGsliveTallyRollup(
       freePlayTickets,
     },
     suppressed: {
-      cellCount: suppressedIndices.size,
+      cellCount: suppressedCellCount,
       ticketCount: suppressedTickets,
       legCount: suppressedLegs,
       riskCents: Number(suppressedRisk),

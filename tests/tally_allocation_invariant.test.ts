@@ -1,18 +1,17 @@
 /**
  * The design docs claim "zero collection-heap allocations on the aggregation path" (no `Map`,
  * `Set`, `boolean[]`, dynamic `T[]`) in the TypedArray-arena design. The shipped
- * `lib/gslive_tally_rollup.ts` does not meet that yet: it allocates three `Map`s and one `Set`.
+ * `lib/gslive_tally_rollup.ts` now meets the collection half of that target: fixed-capacity
+ * gid/cell radix tables, SoA TypedArray columns, fixed label tables and Uint32 bitsets.
  *
- * A heap profile cannot attribute allocations to one call path (it snapshots retained objects), so
- * a "zero" claim needs either an allocation profiler plus an empty before/after delta or the arena
- * implementation. Until then this ratchet keeps the documented target falsifiable in the cheap
- * direction: the count may go down, never up. Removing the last collection turns the ratchet into
- * the real "zero" assertion without editing this test.
+ * This ratchet is the enforceable zero: a new `Map`/`Set` in the projection module fails it.
+ * JS still gives no stack-allocation guarantee; "inline capacity" here means fixed capacity and
+ * no growth, not a language-level stack object.
  */
 import { describe, expect, test } from "bun:test";
 
 const SOURCE = "lib/gslive_tally_rollup.ts";
-const BASELINE_COLLECTION_ALLOCATIONS = 4;
+const BASELINE_COLLECTION_ALLOCATIONS = 0;
 
 const source = await Bun.file(SOURCE).text();
 
@@ -29,6 +28,12 @@ describe("tally aggregation allocation invariant (design target)", () => {
     expect(allocations.length).toBeLessThanOrEqual(
       BASELINE_COLLECTION_ALLOCATIONS,
     );
+  });
+
+  test("no boolean[] on the aggregation path; flags are Uint32 bitsets", () => {
+    expect(source).not.toMatch(/\bboolean\s*\[\s*\]/);
+    expect(source).not.toMatch(/Array<\s*boolean\s*>/);
+    expect(source).toContain("new Uint32Array");
   });
 
   test("the design docs state the measured status instead of implying the invariant holds", async () => {

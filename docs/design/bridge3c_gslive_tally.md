@@ -115,11 +115,19 @@ via the service's HTTP surface.
   clvEligibleLegCountCol: Uint32Array
   cellFlagsBitSet: Uint32Array           // GSLIVE/GSBUILDER, ifBet, over/under, null-CLV
   ```
-- **Zero collection-heap allocations on the aggregation path**: no `Map`, `Set`, `boolean[]`, or
-  dynamic `T[]` resizing. Table/arena capacities are fixed from C_max.
-  **Status (measured 2026-11-04):** the shipped aggregation path in `lib/gslive_tally_rollup.ts` allocates `new Map` in `groups` (line 414), `labelKey` (527) and `siblingGroups` (638), plus `new Set` in `suppressedIndices` (633). This invariant is a target design (fixed TypedArray arenas), **not** a property of the current code. Verification: `bun --heap-prof-md --heap-prof-dir=profiles/ scripts/gslive_tally_bridge3c.ts <fixture> --dry-run --no-r2` gives a retained-object snapshot (it does NOT attribute allocations per call path, so it cannot by itself prove "zero"); the enforceable check is the ratchet in `tests/tally_allocation_invariant.test.ts`, which fails if the collection-allocation count in the projection module increases. Note: in this design revision GATE-02 is `UnsignedHandleAndKeyIntegrity`, not the allocation invariant, so the heap profile is recorded as allocation-invariant evidence, not as a GATE-02 artifact.
-- **InlineCapacityList<LegSlot, 8>**: census P100=8 exactly. Tickets >8 use the bounded 64-slot
-  overflow slab, increment `overflowTicketCount`; exhausting it fails GATE-05, never drops a leg.
+- **Zero collection-heap allocations on the aggregation path (shipped):** no `Map`, `Set`,
+  `boolean[]`, or dynamic `T[]` resizing. Group dedupe is an open-addressed `Uint32Array` gid table
+  with SoA group columns; cells are packed 24-bit keys with `Uint32Array`/`BigInt64Array` columns;
+  sport/period labels are fixed 64-slot tables with linear search; suppression and group flags are
+  `Uint32Array` bitsets. Table/arena capacities are fixed from C_max/B_max and fail closed.
+  **Status (measured 2026-11-04):** `lib/gslive_tally_rollup.ts` allocates **0** `new Map`/`new
+Set` (down from 4: `groups`, `labelKey`, `siblingGroups`, `suppressedIndices`). Verification:
+  `tests/tally_allocation_invariant.test.ts` now asserts 0, and `bun --heap-prof-md` remains the
+  retained-object cross-check. JS gives no stack-allocation guarantee; fixed capacity removes
+  growth, not heap residency.
+- **Inline capacity:** the 64-slot label tables, 1,024-slot cell index and `Uint16Array` cell
+  order are fixed-capacity inline tables. `InlineCapacityList<LegSlot, 8>` is not materialized
+  because the fold only needs `legs` (P100=8); per-leg slots would be dead memory in this stream.
 - **Radix probe hit re-checks the full 64-bit key**; keys are packed unsigned, never signed.
 
 **Per-stream key: `PackedTallyKey32`.** 3c has four natural dimensions:
