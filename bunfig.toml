@@ -58,6 +58,34 @@ correctness = "warn"
 "@typescript-eslint/no-require-imports" = "error"
 "preserve-caught-error" = "warn"
 
+# Type-aware gate: mirror .oxlintrc.type-aware.json, whose correctness category is off and
+# whose eight rules are the only type-aware errors. `bun lint --type-aware` turns on Bun's
+# recommended type-aware set, so the rules this repo has not triaged are named explicitly.
+"typescript/no-array-delete" = "error"
+"typescript/no-duplicate-type-constituents" = "error"
+"typescript/no-for-in-array" = "error"
+"typescript/no-meaningless-void-operator" = "error"
+"typescript/no-unsafe-enum-assignment" = "error"
+"typescript/no-unsafe-enum-comparison" = "error"
+"typescript/no-useless-default-assignment" = "error"
+"typescript/return-await" = ["error", "error-handling-correctness-only"]
+
+# Untriaged recommended type-aware rules (canary `bun lint --type-aware`, 2026-11-04):
+# 215 no-base-to-string, 166 no-floating-promises, 74 restrict-template-expressions,
+# 40 no-redundant-type-constituents, 10 require-array-sort-compare, 8 await-thenable,
+# 6 no-misused-spread, 6 no-implied-eval, 4 unbound-method, 1 no-unsafe-unary-minus.
+# Turning one on here (or fixing it) is the ratchet; the counts are the cleanup size.
+"@typescript-eslint/no-base-to-string" = "off"
+"@typescript-eslint/no-floating-promises" = "off"
+"@typescript-eslint/restrict-template-expressions" = "off"
+"@typescript-eslint/no-redundant-type-constituents" = "off"
+"@typescript-eslint/require-array-sort-compare" = "off"
+"@typescript-eslint/await-thenable" = "off"
+"@typescript-eslint/no-misused-spread" = "off"
+"@typescript-eslint/no-implied-eval" = "off"
+"@typescript-eslint/unbound-method" = "off"
+"@typescript-eslint/no-unsafe-unary-minus" = "off"
+
 [run]
 # Exit automatically when the parent process dies (macOS kqueue EVFILT_PROC/NOTE_EXIT)
 # and stop-verify-kill all spawned descendants (including headless Bun.WebView).
