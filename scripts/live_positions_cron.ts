@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { runGSLiveAllStatesSuspectAudit } from "./gslive_all_states_suspect_cron.ts";
 /**
  * @file scripts/live_positions_cron.ts
  * @description 10-Minute Bun.cron (every 10m) Live Volume & Open Positions Sync + Telegram Pulse Engine.
@@ -20,7 +19,7 @@ import { runGSLiveAllStatesSuspectAudit } from "./gslive_all_states_suspect_cron
 
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   formatCronScheduleLine,
   installOsCronJob,
@@ -50,7 +49,6 @@ import {
   type PendingRow,
 } from "../lib/live_bets.ts";
 import {
-  BET_TICKER_OPERATION,
   betTickerFile,
   isTickerNoise,
   toLiveWager,

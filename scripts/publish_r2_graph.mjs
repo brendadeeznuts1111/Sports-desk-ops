@@ -13,7 +13,6 @@ import {
   R2S3Client,
   resolveR2CredentialsAsync,
   resolveR2S3Options,
-  sha256Hex,
 } from "../lib/r2_s3_client.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");

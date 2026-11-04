@@ -58,7 +58,6 @@ function asString(value) {
   return typeof value === "string" ? value : "";
 }
 
-const round2 = (value) => Math.round(value * 100) / 100;
 const roundUsd = (value) => Math.round(value * 100) / 100;
 
 /**

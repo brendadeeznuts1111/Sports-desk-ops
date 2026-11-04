@@ -24,7 +24,6 @@ import { loginF402 } from "./capture/f402_login.ts";
 import { redactUrlForLog } from "./capture/redact.ts";
 import {
   blobKeyFromPath,
-  resolveBlobApiToken,
   resolveBlobGatewayUrl,
   uploadScreenshotToGateway,
 } from "../lib/blob_upload.ts";
