@@ -1,94 +1,46 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. Bun **1.4.4** (`packageManager` and `engines` in `package.json`).
+portal and the VPS service. 397 TypeScript files, 89 scripts, 139 tests. Bun **1.4.4**.
 
 ## Entrypoint and the gate chain
 
-`./bin/dx` is the operator entrypoint (`README.md`, "Always use `./bin/dx`"). `./bin/dx deploy`
-stages and publishes to R2 and Cloudflare Pages; `./bin/dx ship` deploys, then pushes `main`. The
-VPS service ships through `scripts/deploy/deploy_to_vps.sh`.
-
-`.github/workflows/ci.yml` is the gate list. Replay it locally before claiming a change works:
+`./bin/dx` is the operator entrypoint (`README.md:11-15`); `scripts/deploy/deploy_to_vps.sh` / `./bin/dx deploy`
+ship to the VPS. CI (`.github/workflows/ci.yml`, job `verify`) runs these steps in order and stops
+at the first failure — reproduce them locally before claiming a change works:
 
 ```sh
-bun run ci:local               # every `run` step of ci.yml, in order; stops at the first failure
-bun run ci:local --keep-going  # all steps, then the list of failures
-bun run ci:local --list        # print the steps without running them
+bun run verify:manager-oracle-slices
+bash scripts/ci/run-manager-oracle-gates.sh
+bun test lib/f402_har_redaction_proof_verify.test.ts
+bun run format:check
+bun run typecheck
+bun run lint:check
+bun run test:docs
+bun run verify:docs
+bun run check:route-surface
+bun run check:secrets
+bun run audit:ops
+bun run artifacts:lock
+bun run tasks:render --no-color --columns 0 >/dev/null && bun run docs:render
+bun run gen:tokens:gate
+bun bin/check-fetch-init.ts --verbose
+bun bin/check-innerhtml.ts --verbose
+CI=true bun run schema:gate
+bun test tests/
+bun test                                        # not in CI: also runs the colocated tests
 ```
 
-GitHub Actions cannot start on this private repo (startup_failure, 0 jobs), so a green badge does
-not exist; `ci:local` _is_ the CI run. It checks the working tree, so uncommitted files from other
-work count against it — to judge only your change, run it in a clean `git worktree` at `HEAD`.
-**Merge-ready** means `ci:local` passes; git **prepush-gate** (fast) runs catalog contract +
-typecheck only — not `format:check` or the full chain.
-The `policy:check` step runs the Bun-native ratchet from the `~/platform` checkout
-(`~/platform/policy/ratchet.ts`); without that checkout it fails — say so, do not drop the step.
-
-The CI test step is `bun test tests/ --parallel`. Colocated `*.test.ts` under `lib/` and `scripts/`
-run only under `bun run test` (all discovered tests), so run that too before pushing. It runs files
-across every core, each in a fresh global, and keeps `.bun-test-timings.json` (gitignored) so the
-slowest files start first; `bun run test:serial` is the one-process run, and
-`bun run test:changed` runs only the files git says your changes affect.
-
-After a Bun upgrade, `bun run probe:bun` diffs the runtime against `tests/bun_baseline.json`; the
-one-liner pitfalls it records are explained in `docs/bun-eval-pitfalls.md`.
-
-## Write Bun-native code
-
-Existing code is not precedent. `~/platform/policy/baseline.json` freezes the old Node-style
-sites; a new one fails `bun run policy:check`. The full rule table is the user rule
-`~/.cursor/rules/bun-native-policy.mdc`.
-
-- `Bun.env.NAME`, not `process.env`; declare the name in `types/env.d.ts`.
-- `Bun.file(path).text()` / `.json()` / `.bytes()` and `Bun.write`, not `readFileSync` /
-  `writeFileSync`.
-- `Bun.spawn` / `Bun.spawnSync` / `Bun.$`, not `node:child_process`; `Bun.sleep`, not a
-  hand-rolled `setTimeout` promise.
-- `import.meta.dir` / `import.meta.main`, not `fileURLToPath(import.meta.url)` or argv checks.
-- No `typeof Bun` guards or fallback branches in Bun-only code: call the API.
-- No `as any` and no hand-rolled `isRecord` / `asRecord` guards. Type external data `unknown`
-  and parse it once at the boundary with a `zod` schema.
-- `Bun.Image` ([docs](https://bun.com/docs/runtime/image),
-  [error codes](https://bun.com/reference/globals/bun/Image/ErrorCode)):
-  - `metadata()` reads only the header. To prove untrusted bytes decode, await a terminal
-    (`lib/logo_image.ts` `inspectLogo`).
-  - Untrusted input gets an explicit `maxPixels`; the default allows a 1 GiB decode.
-  - Never pass a request-derived string to `new Bun.Image(path)`: it reads that file.
-  - Branch on `imageErrorCode(err)` from `lib/image_errors.ts` (also reads `err.cause`), and
-    rethrow every code you do not handle. Wrap with `{ cause }` so the code survives.
-  - `rotate()` takes whole multiples of 90; `new Response(img)` encodes synchronously, so
-    await `.blob()` in a handler.
-  - Resized bytes differ between macOS and Linux unless `Bun.Image.backend = "bun"`; set it
-    before hashing or locking a resized image.
+There is **no single `check` script**, so a local run has to be assembled. Actions do run on this
+repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`); because the job stops at
+the first failing step, a red early step hides every later one.
 
 ## Layout
 
-`ROOT_LAYOUT.md` owns the directory table. Two things it does not say: tests are colocated in
-`lib/` and `scripts/` as well as `tests/`, and the runbooks live in `docs/runbooks/`.
-
-## Plans
-
-Multi-step plans (refactors, evidence work, pipeline changes) are how higher-level autonomy stays
-safe only when each step is **validatable**. For every step, state:
-
-| Field            | Content                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| **Accomplishes** | Observable outcome when the step is done (artifact, behavior, or doc claim).                      |
-| **Why**          | Which risk, ordering constraint, or gap this step closes.                                         |
-| **Depends on**   | Prior steps, files, envelope SHA, machine policy, or tools on `PATH`.                             |
-| **Verify**       | Fail-closed check: a gate command, test target, doctor line, or measured diff — not “looks good.” |
-
-Do **not** pre-write implementation in the plan (no code, types, or line-level edit lists). Discovery
-and coding belong in execution, after verify criteria for the step are fixed.
-
-Example (good step): “Normalize layout exports into the scored-graph contract so engine adapters
-share one rubric **→** without that, metrics are not comparable **→** depends on contract doc agreed
-**→** verify: `bun test lib/f402_agent_graph_metrics.test.ts` and fixture JSON unchanged unless
-regenerated with stated envelope.”
-
-Example (bad step): “Add `LaidOutEdge`, change `scoreLayout` loop to use `Uint32Array`, edit
-layouts.ts lines 53–75.”
+`lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
+`tests/` (84 files) plus **colocated tests in `lib/` and `scripts/`** (~55 more — CI only runs
+`tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
+`docs/` · root runbooks (runtime shapes, guardrails, token architecture, R2/API, VPS domain).
 
 ## Hard rules
 
@@ -96,38 +48,22 @@ layouts.ts lines 53–75.”
 
 Never paste **Bearer JWTs**, live cookies, or portal passwords into chat, commits, or scripts.
 Revoke any token that was exposed. Live manager API calls must use **`createF402ReplayTransport()`**
-(`lib/f402_replay_transport.ts`: WebView profile / session file / replay proxy); the policy text is
-`lib/f402_agent_policy.ts` and the operator guide `docs/evidence/agent-graph-operator.md`. Agent
-graph CLI: **`bun run graph:agent`** (no `--token` flags).
+(WebView profile / session file / replay proxy) — see `lib/f402_agent_policy.ts` and
+`docs/evidence/agent-graph-operator.md`. Agent graph CLI: **`bun run graph:agent`** (no `--token` flags).
 
 - **Production is read-only unless the task is explicitly a deploy.** Probe with `./bin/dx`, never
   mutate live data to make a number look right.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
-- **Token/secret work** goes through the documented SSOT path: `.1password/environments.toml`
-  (written by `code-project sync-environments --apply`) mounts `.env`. Fix the wiring; never
-  hand-write secrets into the repo.
-- **`verification/manager-boot-oracle/pinned/` is byte-pinned vendor code.** The oracle diffs it;
-  never edit or reformat it to satisfy a linter. Exclude it from the tool instead.
-- **Install policy is machine-owned** (`~/.bunfig.toml`: isolated linker, frozen lockfile, 3-day
-  release age); `tests/bun_config_policy.test.ts` keeps install keys out of the project bunfig.
-  The frozen lockfile makes plain `bun add`/`remove`/`update` exit 1, so change dependencies with
-  `bun-deps add <pkg>` (machine command; `bun run deps` at the root is the same). Run it in the
-  package that should own the dependency: inside a workspace it edits that `package.json`, and
-  `--catalog[=<name>]` records the version in the root catalog. After a hand edit to a catalog,
-  `bun-deps install`. A frozen install passes even when `bun.lock` is behind on workspace
-  versions or patches, so after `bun pm version` in a workspace run `bun-deps install`, and commit
-  patches with `bun-deps patch --commit <dir>` (plain `bun patch --commit` skips the lock).
-  `bun run pm:doctor` checks the whole setup on this machine, including lock drift and the
-  `@tennis-hq` registry and token that publishing needs. Frozen traps and command cheat sheet:
-  [docs/runbooks/bun-pm-policy.md](docs/runbooks/bun-pm-policy.md). There is no catalog yet: the workspace
-  packages in `packages/` have no dependencies of their own.
-- `Scratch/` and `dist/` are gitignored. The source scanners list files from git
-  (`lib/source_files.ts`), so an ignored file never fails a gate; do not commit either directory.
+- **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml` is
+  wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
+  `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
+  repo.
+- `gs-manager-cli.zip` (31 KB) is untracked junk — do not commit it.
+- `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
+  it `policy`-based scripts fail. Say so instead of disabling them.
 
 ## Doc ownership
 
-`README.md` = orientation · `ROOT_LAYOUT.md` = layout · `docs/runbooks/` = operational procedure ·
-`docs/` = long-form. Move procedure into `docs/runbooks/` rather than growing the root.
-
-Upstream Bun docs vs this repo: [docs/bun-upstream-reference.md](docs/bun-upstream-reference.md). Runtime **1.4.4** only.
+`README.md` = orientation + the runbook tree · the seven root runbooks = operational procedure ·
+`docs/` = long-form. Move procedure into `docs/` rather than growing the root.

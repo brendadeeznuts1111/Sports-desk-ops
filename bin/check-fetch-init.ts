@@ -63,6 +63,10 @@ function auditContent(content: string, relPath: string): AuditResult {
 
   const violations: string[] = [];
   const lines = content.split("\n");
+  // `body: {...}` is only a request body where requests are built; elsewhere it is any object
+  // key, e.g. a `parseArgs` option spec `body: { type: "string" }`.
+  const buildsRequests =
+    fetchCount > 0 || /\bnew\s+Request\s*\(|\bRequestInit\b/.test(content);
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx]!;
@@ -109,6 +113,7 @@ function auditContent(content: string, relPath: string): AuditResult {
 
     // 4. Plain object body in fetch init
     if (
+      buildsRequests &&
       OBJECT_BODY_PROPERTY_RE.test(line) &&
       !PARSE_ARGS_OPTION_RE.test(line)
     ) {

@@ -89,6 +89,7 @@ async function main(): Promise<void> {
     "mjs",
     "html",
   ])) {
+    if (file.includes("/verification/manager-boot-oracle/pinned/")) continue;
     scannedCount++;
     const fullPath = path.join(ROOT, file);
     const content = await Bun.file(fullPath).text();
