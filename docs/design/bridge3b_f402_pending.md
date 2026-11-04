@@ -1,139 +1,127 @@
 # Bridge 3b — Fantasy402 Pending Bets (design, no implementation)
 
-Status: **design only.** Stream: `f402-pending` WS delta + `f402-pending/latest.json` snapshot.
-Source: Fantasy402 `Manager/getPending` / `Report/Pending` open liability (`fantasy402.com`).
+Status: **design only.** WS `f402-pending`; R2 `f402-pending/latest.json`. Source:
+Fantasy402 `Manager/getPending` / `Report/Pending` open liability. Shared contracts:
+[`pii_sanitization.md`](./pii_sanitization.md), [`stream_map.md`](./stream_map.md),
+[`lib/bun_shapes.ts`](../../lib/bun_shapes.ts).
 
-## 1. Empirical inventory (no PII values reproduced)
+## Section 1 — Data-Oriented Design grounding and empirical census
 
-| Evidence                                                     | Observed                                                                                                                                                       |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/evidence/captures/2026-11-01/Pending.post.json`        | `response.bodySkeleton.fields.Pending.items` has **73 fields**, `truncated: true`; **21 nullable**, **52 non-null**                                            |
-| Same capture                                                 | `samples` count only; no full 73-field row bodies committed                                                                                                    |
-| `tests/f402-pending-wager-sample.json`                       | 46 fields (subset), 1 sample row                                                                                                                               |
-| `tests/fixtures/pending-panel-datatables-2026-11-03.html`    | 8 display columns (`Agent, Customer, Name, Accepted (CST), Scheduled, Description, Risk, To Win`), 8 data rows — a panel projection, not the 73-field wire row |
-| `data/live-bets.json`                                        | `pendingCount: 2`, 2 games; game shape has 19 fields (`ticketNumber`, `wagerNumber`, `picks`, `wagered`, `toWin`, `status`, `sport`, `subSport`, `period`, …)  |
-| DGS rotation sample (`tests/f402-pending-wager-sample.json`) | `Team1RotNum=243`, `Team2RotNum=244`; no 5000-range row observed in this sample                                                                                |
+Data-Oriented Design starts from measured layouts and transformations, not speculative object
+hierarchies: Richard Fabian, [Data-Oriented Design (2018)](https://www.dataorienteddesign.com/dodbook/);
+Mike Acton, [CppCon 2014](https://www.youtube.com/watch?v=rX0ItVEVjHc). The target is
+cache-contiguous Structure-of-Arrays columns sized from the census below.
 
-**Field map (all 73 wire names observed):**
+**Census source:** `docs/evidence/captures/2026-11-01/Pending.post.json` (body skeleton),
+`tests/f402-pending-wager-sample.json` (46-field sample), `tests/fixtures/pending-panel-datatables-2026-11-03.html`
+(8 display columns, 8 rows), `data/live-bets.json` (`pendingCount: 2`).
 
-```text
-ARBirdcageLink, ARLink, AcceptedDateTime, AdjSpread, AdjTotalPoints,
-AdjustableOddsFlag, AmountLost, AmountRefunded, AmountWagered, AmountWon,
-BoxLink, BuyPoints, ChosenTeamID, Comments, ContinueOnPushFlag,
-CreditAcctFlag, Description, FinalDecimal, FinalMoney, FreePlayFlag,
-GameDateTime, ItemNumber, LegAmountWagered, LegToWinAmount, LegWagerType,
-ListedPitcher1, ListedPitcher2, Login, LogoTeam1, LogoTeam2, NameFirst,
-OrigSpread, OrigTotalPoints, Outcome, ParlayName, Password,
-PeriodDescription, PeriodNumber, Pitcher1ReqFlag, Pitcher2ReqFlag,
-PlacedOn, PlayNumber, RifBackwardTicketNumber, RifBackwardWagerNumber,
-RifForwardAmountWagered, RifForwardTicketNumber, RifForwardWagerNumber,
-RifForwardWinOnlyFlag, RifNoActionFlag, RifWinOnlyFlag, RoundRobinLink,
-ShortName1, ShortName2, SportSubType, SportType, Team1FinalScore, Team1ID,
-Team1RotNum, Team2FinalScore, Team2ID, Team2RotNum, TeaserName, TeaserPoints,
-TicketNumber, Ties, ToWinAmount, TotalPointsOU, WagerCount, WagerNumber,
-WagerStatus, WagerType, customerID, totalPicks
-```
+| Census metric                                       | 3b observation                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wire fields                                         | **73** (`truncated: true` skeleton); **21 nullable / 52 required**                                                                                                                                                                                                                                                                                                                                             |
+| Actual committed full row                           | none; 46-field sample and 8-column panel are the only row-bearing fixtures                                                                                                                                                                                                                                                                                                                                     |
+| Nullable wire fields                                | `ARBirdcageLink`, `ARLink`, `AmountLost`, `AmountRefunded`, `AmountWon`, `BoxLink`, `ContinueOnPushFlag`, `FinalDecimal`, `ListedPitcher1`, `ListedPitcher2`, `RifBackwardTicketNumber`, `RifBackwardWagerNumber`, `RifForwardAmountWagered`, `RifForwardTicketNumber`, `RifForwardWagerNumber`, `RifForwardWinOnlyFlag`, `RifNoActionFlag`, `RifWinOnlyFlag`, `RoundRobinLink`, `TeaserName`, `TotalPointsOU` |
+| Malformed/empty rates                               | not measurable on the 73-field body (not committed); sample fields present and non-null; panel has 8×8 cells                                                                                                                                                                                                                                                                                                   |
+| `C_max` ticket / group                              | **2** observed tickets (`data/live-bets.json`), 2 groups                                                                                                                                                                                                                                                                                                                                                       |
+| Leg fanout                                          | P50=1, P95=1, P99=1, P99.9=1, **P100=1**                                                                                                                                                                                                                                                                                                                                                                       |
+| Identifier alphabet bitmask (`Login`, `customerID`) | **5** = `A-Z` bit0 + `0-9` bit2; max byte length **5**; no `_ . @ -`, no non-ASCII                                                                                                                                                                                                                                                                                                                             |
+| DGS rotations                                       | sample `Team1RotNum=243`, `Team2RotNum=244`; no 5000–5999 rows observed; protocol bound 20 bits, `0..1,048,575`                                                                                                                                                                                                                                                                                                |
+| Ticket/Wager numeric widths (sample)                | TicketNumber **30 bits**; WagerNumber **1 bit**; rotations **8 bits**; no 5000-range row                                                                                                                                                                                                                                                                                                                       |
+| Adj/teaser fields                                   | `AdjSpread`, `AdjTotalPoints`, `OrigSpread`, `OrigTotalPoints` present numeric; `TeaserPoints` absent in sample; no float-safe guarantee on wire                                                                                                                                                                                                                                                               |
+| Enum populations (observed)                         | WagerType `S`; WagerStatus `P`; FreePlayFlag `N`; Outcome `P`; periods `Game`/`2nd Half`; sports Football/Soccer; sub-sports NFL/ENG PREM                                                                                                                                                                                                                                                                      |
 
-Nullable in the skeleton: `ARBirdcageLink`, `ARLink`, `AmountLost`, `AmountRefunded`, `AmountWon`,
-`BoxLink`, `ContinueOnPushFlag`, `FinalDecimal`, `ListedPitcher1`, `ListedPitcher2`,
-`RifBackwardTicketNumber`, `RifBackwardWagerNumber`, `RifForwardAmountWagered`,
-`RifForwardTicketNumber`, `RifForwardWagerNumber`, `RifForwardWinOnlyFlag`, `RifNoActionFlag`,
-`RifWinOnlyFlag`, `RoundRobinLink`, `TeaserName`, `TotalPointsOU`.
+Alphabet bitmask convention: bit0 `A-Z`, bit1 `a-z`, bit2 `0-9`, bit3 `_`, bit4 `.`, bit5 `@`,
+bit6 `-`, bit7 non-ASCII, bit8 other printable.
 
-## 2. Pure projection contract
+## Section 2 — Census-derived SoA layout, allocation boundary, overflow
+
+- **C_max=2**, but the 73-field wire and panel fixtures justify a fixed table floor. Radix size:
+  `2^k >= 4 × C_max`; with the floor `2^12`, `k=12` (4,096 probes) for 3b.
+- **Identifier hashing:** stream raw UTF-8 byte spans into FNV-1a-64, trimming ASCII `0x20` at the
+  edges without allocating a `.trim()` substring. Observed alphabet bitmask 5 fits in raw bytes;
+  no Base-40 packing is used (no allocation/decoding benefit for a 5-byte identifier).
+- **SoA store (contiguous, fixed capacity):**
+  ```text
+  packedCellKeyCol: Uint32Array
+  ticketCountCol: Uint32Array
+  legCountCol: Uint32Array
+  riskCentsCol: BigInt64Array
+  settledNetCentsCol: BigInt64Array
+  definedLiabilityCentsCol: BigInt64Array
+  clvSumLineHundredthsCol: BigInt64Array
+  clvEligibleLegCountCol: Uint32Array
+  cellFlagsBitSet: Uint32Array
+  ```
+- **Memory invariant:** zero collection-heap allocations on the aggregation path. No `Map`, `Set`,
+  `boolean[]`, or dynamic `T[]` resizing. Column capacities are allocated once from `C_max` and the
+  radix table; the only growth is the preallocated arena.
+- **Inline legs:** `InlineCapacityList<LegSlot, 8>`; census P100=1, so 8 slots have 8× headroom.
+  If a ticket exceeds 8 legs, use the bounded overflow slab (64 slots) and increment
+  `overflowTicketCount`; if the slab is exhausted, fail closed via GATE-05. Never drop a leg or
+  reject a valid ticket silently.
+- **Radix table:** 4,096 entries, load factor `C_max / 4096 ≤ 0.25`; a probe hit re-checks the full
+  64-bit key (GATE-01/02).
+
+## Section 3 — Fixed-point accounting and cross-system reconciliation
+
+Branded integers only: `Cents`, `SettledCents`, `BasisPoints`, `LineHundredths`,
+`RotationNumber`; no IEEE-754 floats.
+
+- **Rotation:** validate 20-bit `0..1,048,575`; if `5000..5999`, `rotation -= 5000` (Alt-Spread);
+  never `rot & 0xFFFF`. Strip `Period`/`Live` prefixes before comparison.
+- **Effective lines:** parse `AdjSpread`, `AdjTotalPoints`, `TeaserPoints` to `LineHundredths`
+  (`×100`, round once, reject non-finite). `sideSign = +1` for team1, `-1` for team2;
+  `effectiveSpread = adjSpread ± teaser`; totals flip sign for Over vs Under. Store the bounded
+  `over|under` and `home|away` tags in `cellFlagsBitSet`.
+- **Dedupe:** `${Login.trim()}|${WagerNumber}|${TicketNumber}`; first occurrence of
+  `${TicketNumber}-${WagerNumber}-${totalPicks}` wins. `totalStakeCents` and
+  `potentialPayoutCents` once per parent; `definedLiabilityCents = potentialPayoutCents` (gross
+  worst-case payout; `netExposureCents = max(payout-stake,0)` diagnostic only).
+- **Conservation:** `sum(visible.metric)+suppressedResidual.metric === rawDedup.metric` for
+  ticketCount, legCount, stake, payout, liability.
+- **Reconciliation (3c ↔ 3b/3d):** `3c.openExposureCents == 3b.definedLiabilityCents` for the
+  GSLIVE+GSBUILDER slice, after the three divergence buckets: desk-date/UTC boundary,
+  widget-rejected/cancelled, unsettled cross-window carry. Residual beyond tolerance fails GATE-08.
+
+## Section 4 — Complete GATE-01..08 catalog
+
+| Gate                                               | Requirement                                                                                                               | 3b external arbiter / check                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| GATE-01 RotationAndDomainBounds                    | rotations 0..1,048,575, no 16-bit masking; full 64-bit key on radix hit                                                   | pending wire + DGS rotation census             |
+| GATE-02 UnsignedHandleAndKeyIntegrity              | keys in Uint32Array/BigUint64Array; load factor ≤0.25                                                                     | `assertNoSignedHandleArrays()`                 |
+| GATE-03 ExternalControlTotalAndSdcConservation     | visible+suppressed ≡ **external** control; deduped parents ≡ vendor ticket count; k=5 + sibling suppression; SDC sign-off | `Report/Pending` summary header / Mode 9 total |
+| GATE-04 InProcessKeyContainment                    | no PackedKey64, M.G, ticket/wager, Login-derived value in serialized output at any depth                                  | `assertNoPersistedHandleKeys()`                |
+| GATE-05 WireAndArtifactSchemaBounds                | <256 KiB, BOM stripped, `x-amz-meta-pii: none`, no PII/IP/login regex, overflow slab bounded                              | `assertSanitizedRollupArtifact()`              |
+| GATE-06 FixedPointAndSentinelAlgebra               | zero floats, explicit null sentinels, settled-only ROI denominator                                                        | projection serializer                          |
+| GATE-07 FreePlayPolicySigned                       | 2×2 FreePlay matrix signed before enabling stream (3d merge-blocker; 3b only counts flags)                                | Finance/Accounting memo                        |
+| GATE-08 TemporalCutoffAndCrossSystemReconciliation | 3c↔3b/3d identity and fail-closed R2 pointer preservation                                                                 | reconciliation report                          |
+
+**DodGateFailureError payload (all gates):**
 
 ```ts
-export interface PendingRollupInput {
-  readonly rows: readonly RawPendingWireRow[];
-  readonly deskDate: string;
-  readonly generatedAt: string;
-  readonly minCellSize?: number; // default 5
-}
-
-export interface PendingRollupArtifact {
-  schemaVersion: 1;
-  kind: "sanitized-f402-pending";
-  deskDate: string;
-  generatedAt: string;
-  source: {
-    policy: "getPending";
-    rowsAccepted: number;
-    rowsDropped: number;
-    ticketsDeduped: number;
-  };
-  totals: PendingMetrics;
-  dimensions: readonly PendingDimensionRow[];
-  suppressedResidual: PendingMetrics;
-  watermark: { wagerNumber: string; highestTicketNumber: string } | null;
-}
-
-export function projectSanitizedPendingRollup(
-  input: PendingRollupInput,
-): PendingRollupArtifact;
+new DodGateFailureError({
+  gate: 1..8,
+  gateName: string,
+  streamId: "f402-pending",
+  cells: number[],          // cell indices, never values
+  varianceCents: bigint,
+  rowCountDelta: number,
+  controlSource: string,    // named external arbiter
+});
 ```
 
-No I/O, network, clock, or filesystem. The publisher serializes and calls
-`assertSanitizedSettlementRollup` from the shared PII contract.
+FreePlay is counted (`freePlayLossRows`, `freePlayUnknownRows`) but its money policy is governed by
+GATE-07 and is not enabled here.
 
-## 3. Dedupe, rotations, and fixed-point lines
+## Section 5 — Risk, reversal, and falsification matrix
 
-- **Parent-ticket dedupe key:** `${Login.trim()}|${WagerNumber}|${TicketNumber}`.
-  A parlay parent is counted once; its leg rows are counted as `legCount` only.
-- Secondary key `${TicketNumber}-${WagerNumber}-${totalPicks}`: **first occurrence wins**; later
-  rows with the same parent/leg count are dropped and `ticketsDeduped` increments.
-- **DGS rotations:** if a rotation is in `[5000..5999]`, normalize `rot -= 5000`; strip
-  `Period`/`Live` prefixes from the rotation/period fields before comparing. Store
-  `rotationHundredths` as an integer (not a float).
-- **Effective lines (integer `LineHundredths`):**
-  - parse `AdjSpread`, `AdjTotalPoints`, `OrigSpread`, `OrigTotalPoints`, `TeaserPoints` and
-    `BuyPoints` with fixed-point string parsing (`* 100`, round once; reject non-finite/NaN);
-  - choose side from `ChosenTeamID` (`team1` vs `team2`);
-  - spread: `effectiveSpreadHundredths = adjSpreadHundredths + teaserPointsHundredths * sideSign`;
-  - total: `effectiveTotalHundredths = adjTotalHundredths ± teaserPointsHundredths`, with the sign
-    flipped for Over vs Under; store `totalSide: "over" | "under"`;
-  - `sideSign = +1` for `team1`, `-1` for `team2`; the chosen side is a bounded enum, never a name.
-- `totalStakeCents` = parent `AmountWagered` once; `potentialPayoutCents` = parent `ToWinAmount`
-  once; **`definedLiabilityCents = potentialPayoutCents`** (gross worst-case payout, never summed
-  per leg). `netExposureCents = max(potentialPayoutCents - totalStakeCents, 0)` is diagnostic only.
-- `FreePlayFlag === "Y"` is carried only as a bounded boolean; free-play stake does not increase
-  `totalStakeCents` twice.
+| Trigger                                     | Structural change                                                       | Fail-closed behavior                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| P100 > 8 legs                               | overflow slab used; if >64, increase N/arena only via reviewed design   | GATE-05 abort, no R2 write                                    |
+| C_max > 4,096                               | resize radix to next `2^k ≥ 4×C_max`                                    | GATE-02 load-factor abort before write                        |
+| Identifier alphabet gains `_ . @`/non-ASCII | hashing remains byte-span FNV-1a-64; revisit only if >2,048-byte values | GATE-05 value bound                                           |
+| GATE-03 external totals fail                | report variance, do not write                                           | `writeWithMetadata` aborted; existing `latest.json` untouched |
+| Gate-07 unsigned                            | 3d blocked; 3b may publish counts only                                  | merge-blocked                                                 |
+| Sign-off checklist                          | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03     | required before public R2 enable                              |
 
-## 4. Dimensions, metrics, suppression, cent conservation
-
-Dimensions: `sportSubType × period × wagerType × openStatus × rotationClass` (bounded labels;
-unknown → `other`). Metrics: `ticketCount`, `legCount`, `totalStakeCents`, `potentialPayoutCents`,
-`definedLiabilityCents`, `wagerNumber` watermark (aggregate string only).
-
-**Complementary suppression (k=5):** fold every cell with `ticketCount < 5` into
-`suppressedResidual`. If `0 < suppressedResidual.ticketCount < 5`, suppress the next-smallest
-sibling cell (deterministic label tie-break), repeat until the residual is either 0 or at least 5.
-Never publish a residual in `(0,5)` that could be differenced against totals to isolate one VIP
-ticket.
-
-**Cent-conservation identity enforced by tests:**
-
-```text
-sum(visibleCells.metric) + suppressedResidual.metric
-  === rawDeduplicatedTotal.metric
-for metric in {ticketCount, legCount, totalStakeCents, potentialPayoutCents,
-               definedLiabilityCents}
-```
-
-## 5. R2 snapshot
-
-- `f402-pending/latest.json`, content type `application/json`.
-- Metadata: `x-amz-meta-pii: none`, `schema-version=1`, `desk-date`, `generated-at`,
-  `watermark`, `sha256`.
-- Idempotent by `(deskDate, watermark, sha256)`; newer watermark replaces, identical content is a
-  no-op. Serialized artifact ceiling **< 256 KiB**.
-- Fail closed: malformed/null-key rows are dropped and counted; a failed drain never replaces the
-  last good snapshot.
-
-## 6. Test matrix
-
-1. 73-field synthetic row map (field names/nullability) with sentinel PII → no PII in JSON.
-2. Parent-ticket dedupe: multi-leg parlay → `ticketCount=1`, `legCount=N`, stake/payout once.
-3. DGS rotation 5000-range + Period/Live prefix normalization; spread/total teaser sign flip;
-   integer hundredths (no floating-point drift).
-4. Complementary suppression: residual never in `(0,5)`; cent conservation for all metrics.
-5. Malformed/null fields, duplicate rows, watermark regression → fail closed/no R2 replace.
+Tests must use raw fixtures only through aggregate assertions; no stdout rows or PII values.
