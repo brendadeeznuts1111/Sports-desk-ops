@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "typescript/return-await": ["error", "error-handling-correctness-only"]
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "verification/manager-boot-oracle/pinned/**"
+  ]
+}

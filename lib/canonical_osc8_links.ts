@@ -131,7 +131,7 @@ export interface AnsiMarkdownOptions {
 
 /**
  * Render Markdown to ANSI terminal string using native Bun.markdown.ansi().
- * Fully aligned with official bun.sh/docs/runtime/markdown.mdx and Bun.AnsiTheme:
+ * Fully aligned with official https://bun.com/docs/runtime/markdown and Bun.AnsiTheme:
  *  - colors: Emit ANSI styling (false for plain ASCII chrome without escapes)
  *  - hyperlinks: Emit clickable OSC 8 hyperlinks (\x1b]8;;URL\x1b\TEXT\x1b]8;;\x1b\)
  *  - light: Auto-detects or sets inline code palette for light backgrounds

@@ -181,7 +181,8 @@ export async function sessionFromGsliveProfile(
   const view = await (options.viewFactory ?? launchGsliveProfileView)(
     profileDir,
   );
-  return managerSessionFromView(
+  // `await` keeps the profile lock held until the session is built; `using` releases it on return.
+  return await managerSessionFromView(
     view,
     options.managerUrl ?? GSLIVE_MANAGER_URL,
     `WebView profile ${profileDir}`,

@@ -103,7 +103,7 @@ bun sportsdesk_cli.ts wire vig -c ABC700 -s Basketball --spread 15 --derivative 
 
 # 8. Bun.WebView screenshots (default output: scratch/shots/)
 ./bin/dx shot https://fantasy402-docs-4ay.pages.dev/graph.html --out scratch/shots/portal.png
-F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager --out scratch/shots/f402.png
+F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager.html --out scratch/shots/f402.png
 
 # 9. Polymarket profiles and CFB combos (public APIs)
 ./bin/dx profile 0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612

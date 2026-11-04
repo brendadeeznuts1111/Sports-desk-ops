@@ -7,7 +7,10 @@ import {
   encodeScreenshot,
   encodeScreenshotBlob,
   encodeScreenshotDataUrl,
+  formatKittyDirectEscape,
   formatKittyShmemEscape,
+  KITTY_DIRECT_CHUNK,
+  kittyTransmission,
   looksLike,
   mimeTypeForFormat,
   parseResize,
@@ -122,6 +125,52 @@ describe("screenshot encoding", () => {
     expect(() => formatKittyShmemEscape({ name: "", size: 10 })).toThrow(
       "invalid",
     );
+  });
+
+  test("Kitty direct transmission fits in one escape when the PNG is small", () => {
+    const b64 = PNG.toBase64();
+    expect(formatKittyDirectEscape(b64)).toBe(
+      `\x1b_Gf=100,t=d,a=T,m=0;${b64}\x1b\\`,
+    );
+    expect(() => formatKittyDirectEscape("")).toThrow("empty");
+  });
+
+  test("Kitty direct transmission splits a large PNG into 4096-byte chunks", () => {
+    const b64 = "A".repeat(KITTY_DIRECT_CHUNK * 2 + 100);
+    const escapes = formatKittyDirectEscape(b64)
+      .split("\x1b\\")
+      .filter((escape) => escape !== "")
+      .map((escape) => {
+        expect(escape.startsWith("\x1b_G")).toBe(true);
+        const [keys, chunk] = escape.slice(3).split(";");
+        return ["", keys, chunk] as const;
+      });
+    expect(escapes.map(([, keys]) => keys)).toEqual([
+      "f=100,t=d,a=T,m=1",
+      "m=1",
+      "m=0",
+    ]);
+    expect(escapes.map(([, , chunk]) => chunk!.length)).toEqual([
+      KITTY_DIRECT_CHUNK,
+      KITTY_DIRECT_CHUNK,
+      100,
+    ]);
+    expect(escapes.map(([, , chunk]) => chunk).join("")).toBe(b64);
+  });
+
+  test("Kitty uses shared memory only on a local POSIX terminal", () => {
+    expect(kittyTransmission("darwin", {})).toBe("shmem");
+    expect(kittyTransmission("linux", {})).toBe("shmem");
+    expect(kittyTransmission("win32", {})).toBe("direct");
+    expect(
+      kittyTransmission("linux", {
+        SSH_CONNECTION: "10.0.0.1 22 10.0.0.2 51000",
+      }),
+    ).toBe("direct");
+    expect(kittyTransmission("darwin", { SSH_TTY: "/dev/ttys003" })).toBe(
+      "direct",
+    );
+    expect(kittyTransmission("darwin", { SSH_TTY: "" })).toBe("shmem");
   });
 
   test("encodes jpeg, palette png, and resizes with fit/withoutEnlargement", async () => {

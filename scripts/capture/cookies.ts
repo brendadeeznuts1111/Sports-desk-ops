@@ -257,6 +257,51 @@ export function summarizeCookies(
   };
 }
 
+/** One cookie without its value: the only per-cookie shape that may be printed. */
+export interface CookieMetadata {
+  readonly name: string;
+  readonly domain: string;
+  readonly path: string;
+  /** ISO time, or "session" when the cookie ends with the browser session (CDP `expires: -1`). */
+  readonly expires: string;
+  readonly expired: boolean;
+  readonly httpOnly: boolean;
+  readonly secure: boolean;
+}
+
+/**
+ * Value-free metadata for the cookies scoped to `host`, expired ones included (a profile check
+ * wants to see them), sorted by name. Each field is copied by name, so no value can leak through.
+ */
+export function describeCookiesForHost(
+  cookies: readonly CdpCookie[],
+  host: string,
+  now: number = Date.now(),
+): CookieMetadata[] {
+  const normalizedHost = stripPort(host);
+  return cookies
+    .filter((cookie) => domainMatches(cookie.domain, normalizedHost))
+    .map((cookie): CookieMetadata => {
+      const expiresMs =
+        cookie.session !== true &&
+        cookie.expires !== undefined &&
+        cookie.expires > 0
+          ? cookie.expires * 1000
+          : null;
+      return {
+        name: cookie.name,
+        domain: cookie.domain,
+        path: cookie.path,
+        expires:
+          expiresMs === null ? "session" : new Date(expiresMs).toISOString(),
+        expired: expiresMs !== null && expiresMs <= now,
+        httpOnly: cookie.httpOnly,
+        secure: cookie.secure,
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export interface CookieHandoff {
   header: string;
   summary: CookieSummary;

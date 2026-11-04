@@ -475,7 +475,7 @@ For high-throughput downline ticker streams, sub-millisecond line surveillance, 
 
 ### 8.1 TCP & Unix Domain Socket Listener (`Bun.listen`)
 
-_Official Documentation: [https://bun.com/docs/api/tcp](https://bun.com/docs/api/tcp)_
+_Official Documentation: [https://bun.com/docs/runtime/networking/tcp](https://bun.com/docs/runtime/networking/tcp)_
 
 The `Bun.listen()` factory provisions raw TCP and Unix domain socket servers:
 
@@ -500,7 +500,7 @@ export interface SocketListenerOptions<T = undefined> {
 
 ### 8.2 Client Socket Connections (`Bun.connect`)
 
-_Official Documentation: [https://bun.com/docs/api/tcp#bun-connect](https://bun.com/docs/api/tcp#bun-connect)_
+_Official Documentation: [https://bun.com/docs/runtime/networking/tcp#create-a-connection-bun-connect](https://bun.com/docs/runtime/networking/tcp#create-a-connection-bun-connect)_
 
 `Bun.connect()` establishes outbound TCP, TLS, and Unix domain socket client streams:
 
@@ -523,7 +523,7 @@ const socket = await Bun.connect({
 
 ### 8.3 High-Frequency Datagram Telemetry (`Bun.udpSocket`)
 
-_Official Documentation: [https://bun.com/docs/api/udp](https://bun.com/docs/api/udp)_
+_Official Documentation: [https://bun.com/docs/runtime/networking/udp](https://bun.com/docs/runtime/networking/udp)_
 
 For loss-tolerant, low-latency odds tick streaming and syndicate volume pings:
 
@@ -578,7 +578,7 @@ For stdio and socket-based JSON-RPC transports (such as Model Context Protocol b
 
 ### 8.5 Unix Domain Socket Dual-Endpoint Pattern & Node.js Lifecycle Alignment
 
-_Official Documentation: [https://bun.com/docs/api/http#unix-domain-sockets](https://bun.com/docs/api/http#unix-domain-sockets)_
+_Official Documentation: [https://bun.com/docs/runtime/http/server#unix-domain-sockets](https://bun.com/docs/runtime/http/server#unix-domain-sockets)_
 
 SportsDesk standardizes on matching Unix domain socket paths between server listeners and client fetch dispatchers:
 

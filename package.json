@@ -75,7 +75,7 @@
     "ensure:deep-tsconfig": "bun run scripts/ensure_deep_tsconfig.ts",
     "typecheck": "bun run ensure:deep-tsconfig && bun check --no-script -p tsconfig.json",
     "lint": "bun --bun run oxlint --fix",
-    "lint:check": "bun --bun run oxlint --deny-warnings",
+    "lint:check": "bun --bun run oxlint --deny-warnings && bun --bun run oxlint --type-aware -c .oxlintrc.type-aware.json --deny-warnings",
     "gen:tokens": "bun run scripts/generate_tokens.ts",
     "build:tokens": "bun run gen:tokens",
     "build:docs": "bun run scripts/generate_docs.ts",
@@ -102,6 +102,7 @@
     "wagers:score-coverage": "bun run scripts/wager_score_coverage.ts",
     "session:login": "bun run scripts/session_login.ts",
     "session:status": "bun run scripts/session_login.ts --status",
+    "mcp:dx": "bun run scripts/mcp_dx_server.ts",
     "cli": "bun run cli/sportsdesk_cli.ts",
     "replay": "bun run cli/sportsdesk_replay_cli.ts",
     "ingestion:enrich-xml-golden": "bun run scripts/enrich_ingestion_jsonl_xml_golden.ts",
@@ -250,6 +251,7 @@
   "devDependencies": {
     "@types/bun": "1.4.4",
     "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "pele": "1.9.0",
     "typescript": "5.9.3"
   },
@@ -266,6 +268,7 @@
     "bun": "1.4.4"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "cytoscape": "3.30.2",
     "cytoscape-elk": "2.3.0",
     "elkjs": "0.12.1",

@@ -39,7 +39,8 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 - `./bin/dx gslive <LOGIN>` — GSLive Partner 118 links for one account: the 7-parameter `#/reports/users` deep link (`bot=true`, desk-day ISO window, `text=player_<LOGIN>`) and the `#/events/bet-history` sidecar (`calcTime` / `betTime`, epoch `from`/`to`, raw `partnerUserId`).
 - `./bin/dx docs` / `./bin/dx docs gslive` — deployed docs portal URLs, or the GSLive surface section.
 - `./bin/dx stale -i <export>` — stale-line cohort over a bet-log export (CSV/JSON/JSONL); seeds on operator stale notes or graded-then-cancelled tickets, then clusters other customers on the same market and window.
-- `./bin/dx shot <url>` — Bun.WebView screenshot (webkit on macOS, chrome elsewhere); `--f402-login` captures the manager after an opt-in login. Output goes to `scratch/shots/`.
+- `./bin/dx shot <url>` — Bun.WebView screenshot (webkit on macOS, chrome elsewhere); `--f402-login` captures the manager after an opt-in login. Output goes to `scratch/shots/`. `--profile <dir>` reuses a saved WebView profile and reports `signedOutMarkers` (empty = no signed-out page seen).
+- `./bin/dx session [status|login]` — the portal session file the replay transport reads. `status` (the default) is read-only; `login` needs `F402_LIVE_LOGIN=1`. A WebView profile alone gives the transport no cookies.
 - `./bin/dx profile <0x|username>` — Polymarket address profile: PnL, win rate, open positions, category mix, activity summary and strategy pattern from public APIs.
 - `./bin/dx combo legs|price|wallet|uniqueness` — CFB combo legs, product-of-legs pricing, wallet combo positions and per-game unique combo/wallet counts.
 - `./bin/dx combo backtest` — realized combo PnL by day/game from public activity (open combos excluded).

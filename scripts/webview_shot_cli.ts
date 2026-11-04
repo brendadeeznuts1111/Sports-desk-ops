@@ -8,34 +8,52 @@
  *   ./bin/dx shot <url> --encoding base64 --format webp
  *   ./bin/dx shot <url> --encoding raw-buffer > scratch/shots/page.png
  *   ./bin/dx shot <url> --encoding shmem --kitty
- *   F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager --out scratch/shots/f402.png
+ *   F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager.html --out scratch/shots/f402.png
+ *   ./bin/dx shot --profile scratch/webview-profile --f402-page /manager.html
  *
  * The login path never prints credentials; it reuses the evidence-capture WebView wrapper and the
  * same selectors as the capture tool.
- *
- * Invalid flag values are usage errors: they print to stderr and exit 2 before a view is launched,
- * so a typo cannot silently change the engine, viewport, format, or output encoding.
  */
 
-import { join } from "node:path";
-import { ManagedWebView } from "./capture/webview.ts";
-import { parseResize } from "../lib/screenshot_encode.ts";
-import { loginF402 } from "./capture/f402_login.ts";
-import { redactUrlForLog } from "./capture/redact.ts";
+import { statSync } from "node:fs";
+import { parseArgs } from "node:util";
+import { toLocalPath } from "../lib/local_path.ts";
+import { UsageError } from "../lib/usage_error.ts";
 import {
   blobKeyFromPath,
   resolveBlobGatewayUrl,
   uploadScreenshotToGateway,
 } from "../lib/blob_upload.ts";
+import {
+  formatKittyDirectEscape,
+  kittyTransmission,
+  parseResize,
+} from "../lib/screenshot_encode.ts";
+import { ManagedWebView, WebViewError } from "./capture/webview.ts";
+import {
+  captureShotFile,
+  checkProfile,
+  defaultShotPath,
+  describeShotError,
+  openShotView,
+  screenshotOptions,
+  withView,
+  VIEWPORT_MAX,
+  VIEWPORT_MIN,
+  type ShotBackend,
+  type ShotFileResult,
+  type ShotFormat,
+} from "./capture/shot.ts";
 
-const HELP = `Bun.WebView screenshot tool
+const RAW_HELP = `Bun.WebView screenshot tool
 
 Usage:
   bun run scripts/webview_shot_cli.ts <url> [options]
-  F402_LIVE_LOGIN=1 bun run scripts/webview_shot_cli.ts --f402-login [--f402-page /manager]
+  F402_LIVE_LOGIN=1 bun run scripts/webview_shot_cli.ts --f402-login [--f402-page /manager.html]
+  bun run scripts/webview_shot_cli.ts --profile <dir> [--f402-page /manager.html]
 
 Options:
-  --out <path>            Output file (default scratch/shots/webview-<epoch>.<ext>)
+  --out <path>            Output file or file:// URL (default scratch/shots/webview-<uuidv7>.<ext>)
   --width <px>            Viewport width in CSS px, 1..16384 (default 1440)
   --height <px>           Viewport height in CSS px, 1..16384 (default 900)
   --backend <name>        webkit (macOS default/zero deps) or chrome; anything else is rejected
@@ -43,7 +61,10 @@ Options:
   --encoding <name>       blob (default, mmap-backed on webkit) | base64 | buffer | raw-buffer | shmem
                           buffer prints a JSON object with base64 + bytes (a JSON base64 payload,
                           not a Node Buffer); raw-buffer writes the encoded bytes to stdout
-  --kitty                 Write Kitty graphics protocol t=s escape sequence (implies --encoding shmem)
+  --kitty                 Show the screenshot inline in a Kitty-protocol terminal (PNG only). Uses
+                          shared memory (t=s) locally, and direct transmission (t=d) on Windows or
+                          over SSH, where the terminal cannot read this machine's shared memory
+  --kitty-direct          --kitty, always with direct transmission
   --resize <WxH|W>        Resize with Bun.Image after capture, in output pixels (W keeps aspect ratio)
   --quality <1-100>       jpeg/webp quality (default 82)
   --wait-selector <css>   Wait for this selector before the screenshot
@@ -51,48 +72,54 @@ Options:
   --timeout-ms <ms>       Navigation/selector timeout (default 20000)
   --f402-login            Log in with F402_AGENT_ID / F402_PASSWORD before capturing
   --f402-page <path>      Navigate to this path after login (default /)
-  --upload-blob           Upload the captured image to PUT /api/v1/blobs/<key>
+  --profile <dir>         Reuse an existing WebView dataStore (path or file:// URL). With no URL it
+                          opens --f402-page on the portal; output adds signedOutMarkers
+                          (login-form, session-expired; empty = neither seen)
+  --thumb <px>            Also write a WebP thumbnail (fits in px x px) next to the screenshot
+  --placeholder           Include the ThumbHash data: URL of the screenshot
+  --console               Include the page console (redacted, at most 200 lines)
+  --cookies               Chrome only: the portal's cookies as name, domain, path, expiry and
+                          flags. Values are never printed
+  --upload-blob           Upload the captured image to PUT /api/v1/blobs/<key> (needs BLOB_API_TOKEN
+                          and the default --encoding blob)
   --blob-gateway <url>    Blob gateway base URL (default BLOB_GATEWAY_URL/BLOB_PORT)
   --blob-key <key>        Blob key (default derived from the output filename)
+  --retries <0-5>         Retry a failed navigation, waiting 500ms x attempt (default 0)
+  --json                  JSON even on a terminal (pipes always get JSON)
   -h, --help
 
 Pixels:
   Screenshots are device-pixel: WebKit renders at 2x on a Retina display, Chrome at 1x, so a
-  1440x900 CSS viewport yields a 2880x1800 WebKit PNG. --width/--height are CSS px, and chrome is
-  resized to exactly that viewport before capture (Bun's Chrome resize needs the CDP session, so the
-  CLI re-applies it after the first navigation). --resize applies after capture, in output pixels.
+  1440x900 CSS viewport yields a 2880x1800 WebKit PNG. --width/--height are CSS px; chrome is
+  resized to exactly that viewport after the first navigation. --resize applies after capture,
+  in output pixels.
 
-Errors: an unknown --backend/--format/--encoding or an out-of-range --width/--height/--quality/--resize
-prints a message to stderr and exits 2 without launching a browser.
+Errors: an unknown --backend/--format/--encoding or an out-of-range --width/--height/--quality/
+--resize prints a message to stderr and exits 2 without launching a browser.
+
+On a terminal the file result prints as a Bun.inspect.table; --json, a pipe, or --encoding
+base64/buffer/shmem prints JSON; raw-buffer writes the image bytes.
 
 Login is opt-in: it requires F402_LIVE_LOGIN=1 plus the credential env vars. A screenshot of a public
-page does not require login.`;
+page does not require login. --profile only reads a profile's cookies; it never signs in by itself.
+Chrome and WebKit keep separate cookie stores in the same directory, so --backend must match the
+backend that signed in.`;
 
-/** Invalid flag value: report on stderr and exit 2 without launching a view. */
-class UsageError extends Error {
-  readonly exitCode = 2;
-
-  constructor(message: string) {
-    super(message);
-    this.name = "UsageError";
-  }
-}
-
-const VIEWPORT_MIN = 1;
-const VIEWPORT_MAX = 16_384;
-
-const ENCODINGS = ["blob", "base64", "buffer", "raw-buffer", "shmem"] as const;
-type CliEncoding = (typeof ENCODINGS)[number];
+const HELP =
+  process.stdout.columns === undefined
+    ? RAW_HELP
+    : Bun.wrapAnsi(RAW_HELP, process.stdout.columns, { wordWrap: true });
 
 interface Options {
   url: string | null;
   out: string | null;
   width: number;
   height: number;
-  backend: "webkit" | "chrome";
-  format: "png" | "jpeg" | "webp";
+  backend: ShotBackend;
+  format: ShotFormat;
   encoding: CliEncoding;
   kitty: boolean;
+  kittyDirect: boolean;
   quality: number;
   resize: { width: number; height?: number } | null;
   waitSelector: string | null;
@@ -100,106 +127,116 @@ interface Options {
   timeoutMs: number;
   f402Login: boolean;
   f402Page: string;
+  profile: string | null;
+  /** `undefined` = the flag's value was out of range. */
+  thumb: number | null | undefined;
+  placeholder: boolean;
+  console: boolean;
+  cookies: boolean;
+  retries: number | undefined;
+  json: boolean;
   uploadBlob: boolean;
   blobGateway: string | null;
   blobKey: string | null;
 }
 
-function flag(
-  args: readonly string[],
-  names: readonly string[],
-  fallback: string,
-): string {
-  for (const name of names) {
-    const index = args.indexOf(name);
-    if (index !== -1 && index + 1 < args.length) return args[index + 1]!;
-  }
-  return fallback;
+const ENCODINGS = ["blob", "base64", "buffer", "raw-buffer", "shmem"] as const;
+type CliEncoding = (typeof ENCODINGS)[number];
+
+/** An integer in [min, max]; `undefined` when the flag was given out of range or not a number. */
+export function boundedInt(
+  raw: string,
+  min: number,
+  max: number,
+): number | undefined {
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= min && value <= max
+    ? value
+    : undefined;
 }
 
-/** Read an enumerated flag; an absent flag uses `fallback`, a bad value is a usage error. */
+function isDirectory(path: string): boolean {
+  return statSync(path, { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
+const SHOT_ARG_OPTIONS = {
+  out: { type: "string" },
+  width: { type: "string" },
+  height: { type: "string" },
+  backend: { type: "string" },
+  format: { type: "string" },
+  encoding: { type: "string" },
+  kitty: { type: "boolean" },
+  "kitty-direct": { type: "boolean" },
+  resize: { type: "string" },
+  quality: { type: "string" },
+  "wait-selector": { type: "string" },
+  "wait-ms": { type: "string" },
+  "timeout-ms": { type: "string" },
+  "f402-login": { type: "boolean" },
+  "f402-page": { type: "string" },
+  profile: { type: "string" },
+  thumb: { type: "string" },
+  placeholder: { type: "boolean" },
+  console: { type: "boolean" },
+  cookies: { type: "boolean" },
+  retries: { type: "string" },
+  json: { type: "boolean" },
+  "upload-blob": { type: "boolean" },
+  "blob-gateway": { type: "string" },
+  "blob-key": { type: "string" },
+  help: { type: "boolean", short: "h" },
+} as const;
+
+/** An argv the parser rejected: an unknown flag, a flag without its value, or a second URL. */
+export class ShotUsageError extends UsageError {
+  override readonly name = "ShotUsageError";
+}
+
+/** An enumerated flag: absent uses `fallback`, an unknown value is a usage error. */
 function choice<T extends string>(
-  args: readonly string[],
   name: string,
+  raw: string | undefined,
   choices: readonly T[],
   fallback: T,
   aliases: Readonly<Record<string, T>> = {},
 ): T {
-  const index = args.indexOf(name);
-  if (index === -1) return fallback;
-  const expected = [...choices, ...Object.keys(aliases)].join(", ");
-  const raw = args[index + 1];
-  if (raw === undefined) {
-    throw new UsageError(`${name} expects one of: ${expected}`);
-  }
+  if (raw === undefined) return fallback;
   const key = raw.trim().toLowerCase();
   const alias = aliases[key];
   if (alias !== undefined) return alias;
   const match = choices.find((candidate) => candidate === key);
   if (match !== undefined) return match;
-  throw new UsageError(`unknown ${name} "${raw}" (expected ${expected})`);
+  const expected = [...choices, ...Object.keys(aliases)].join(", ");
+  throw new ShotUsageError(`unknown ${name} "${raw}" (expected ${expected})`);
 }
 
-/**
- * Read a CSS-pixel viewport dimension. The CLI accepts the full Bun range and does not clamp:
- * a typo must not silently change the capture size, and ManagedWebView re-validates on launch.
- */
-function dimension(
-  args: readonly string[],
-  name: "--width" | "--height",
+/** An integer in [min, max] or a usage error: a typo must not silently change the capture. */
+function strictInt(
+  name: string,
+  raw: string | undefined,
   fallback: number,
+  min: number,
+  max: number,
+  unit: string,
 ): number {
-  const index = args.indexOf(name);
-  if (index === -1) return fallback;
-  const raw = args[index + 1];
-  if (raw === undefined) {
-    throw new UsageError(
-      `${name} expects an integer in ${VIEWPORT_MIN}..${VIEWPORT_MAX} CSS px`,
-    );
-  }
-  const value = Number(raw);
-  if (
-    !Number.isInteger(value) ||
-    value < VIEWPORT_MIN ||
-    value > VIEWPORT_MAX
-  ) {
-    throw new UsageError(
-      `${name} must be an integer in ${VIEWPORT_MIN}..${VIEWPORT_MAX} CSS px (got "${raw}")`,
+  if (raw === undefined) return fallback;
+  const value = boundedInt(raw, min, max);
+  if (value === undefined) {
+    throw new ShotUsageError(
+      `${name} must be an integer in ${min}..${max}${unit} (got "${raw}")`,
     );
   }
   return value;
 }
 
-function qualityOf(args: readonly string[]): number {
-  const index = args.indexOf("--quality");
-  if (index === -1) return 82;
-  const raw = args[index + 1];
-  if (raw === undefined) {
-    throw new UsageError("--quality expects an integer in 1..100");
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1 || value > 100) {
-    throw new UsageError(
-      `--quality must be an integer in 1..100 (got "${raw}")`,
-    );
-  }
-  return value;
-}
-
-function resizeOf(args: readonly string[]): Options["resize"] {
-  const index = args.indexOf("--resize");
-  if (index === -1) return null;
-  const raw = args[index + 1];
-  if (raw === undefined) {
-    throw new UsageError(
-      `--resize expects WxH or W in output pixels (${VIEWPORT_MIN}..${VIEWPORT_MAX})`,
-    );
-  }
+function strictResize(raw: string | undefined): Options["resize"] {
+  if (raw === undefined || raw === "") return null;
   let spec: { width: number; height?: number };
   try {
     spec = parseResize(raw);
   } catch (error) {
-    throw new UsageError(
+    throw new ShotUsageError(
       error instanceof Error ? error.message : String(error),
     );
   }
@@ -211,7 +248,7 @@ function resizeOf(args: readonly string[]): Options["resize"] {
       value < VIEWPORT_MIN ||
       value > VIEWPORT_MAX
     ) {
-      throw new UsageError(
+      throw new ShotUsageError(
         `--resize dimensions must be integers in ${VIEWPORT_MIN}..${VIEWPORT_MAX} output pixels (got "${raw}")`,
       );
     }
@@ -219,106 +256,169 @@ function resizeOf(args: readonly string[]): Options["resize"] {
   return spec;
 }
 
-function backendOf(args: readonly string[]): Options["backend"] {
-  // webp no longer forces Chrome: Bun.Image re-encodes the PNG on webkit.
-  return choice(
-    args,
-    "--backend",
-    ["webkit", "chrome"] as const,
-    process.platform === "darwin" ? "webkit" : "chrome",
-  );
-}
-
-function parseArgs(args: readonly string[]): Options {
-  const flagValues = new Set([
-    "--out",
-    "--width",
-    "--height",
-    "--backend",
-    "--format",
-    "--encoding",
-    "--resize",
-    "--quality",
-    "--wait-selector",
-    "--wait-ms",
-    "--timeout-ms",
-    "--f402-page",
-    "--blob-gateway",
-    "--blob-key",
-  ]);
-  let url: string | null = null;
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]!;
-    if (flagValues.has(arg)) {
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("-")) continue;
-    url = arg;
-    break;
+/** Throws {@link ShotUsageError}; `null` means --help. */
+export function parseShotArgs(argv: readonly string[]): Options | null {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: [...argv],
+      options: SHOT_ARG_OPTIONS,
+      strict: true,
+      allowPositionals: true,
+    });
+  } catch (error) {
+    throw new ShotUsageError(
+      error instanceof Error ? error.message : String(error),
+    );
   }
+  const { values, positionals } = parsed;
+  if (values.help === true) return null;
+  if (positionals.length > 1) {
+    throw new ShotUsageError(
+      `expected at most one URL, got ${positionals.length}: ${positionals.join(" ")}`,
+    );
+  }
+  const url = positionals[0] ?? null;
 
   const format = choice(
-    args,
     "--format",
+    values.format,
     ["png", "jpeg", "webp"] as const,
     "png",
     { jpg: "jpeg" },
   );
-  const kitty = args.includes("--kitty");
+  const kittyDirect = values["kitty-direct"] === true;
+  const kitty = kittyDirect || values.kitty === true;
   // --kitty implies shmem unless --encoding is given explicitly.
   const encoding = choice(
-    args,
     "--encoding",
+    values.encoding,
     ENCODINGS,
     kitty ? "shmem" : "blob",
   );
-  const backend = backendOf(args);
+  // webp no longer forces Chrome: Bun.Image re-encodes the PNG on webkit.
+  const backend = choice(
+    "--backend",
+    values.backend,
+    ["webkit", "chrome"] as const,
+    process.platform === "darwin" ? "webkit" : "chrome",
+  );
+  const thumbRaw = values.thumb ?? "";
 
-  const waitMs = Number(flag(args, ["--wait-ms"], "250"));
-  const timeoutMs = Number(flag(args, ["--timeout-ms"], "20000"));
+  const waitMs = Number(values["wait-ms"] ?? "250");
+  const timeoutMs = Number(values["timeout-ms"] ?? "20000");
 
   return {
     url,
-    out: flag(args, ["--out"], "") || null,
-    width: dimension(args, "--width", 1440),
-    height: dimension(args, "--height", 900),
+    out: localPathOrNull(values.out ?? ""),
+    width: strictInt(
+      "--width",
+      values.width,
+      1440,
+      VIEWPORT_MIN,
+      VIEWPORT_MAX,
+      " CSS px",
+    ),
+    height: strictInt(
+      "--height",
+      values.height,
+      900,
+      VIEWPORT_MIN,
+      VIEWPORT_MAX,
+      " CSS px",
+    ),
     backend,
     format,
     encoding,
     kitty,
-    quality: qualityOf(args),
-    resize: resizeOf(args),
-    waitSelector: flag(args, ["--wait-selector"], "") || null,
+    kittyDirect,
+    quality: strictInt("--quality", values.quality, 82, 1, 100, ""),
+    resize: strictResize(values.resize),
+    waitSelector: values["wait-selector"] || null,
     waitMs: Number.isFinite(waitMs) ? Math.max(0, waitMs) : 250,
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(1000, timeoutMs) : 20_000,
-    f402Login: args.includes("--f402-login"),
-    f402Page: flag(args, ["--f402-page"], "/"),
-    uploadBlob: args.includes("--upload-blob"),
-    blobGateway: flag(args, ["--blob-gateway"], "") || null,
-    blobKey: flag(args, ["--blob-key"], "") || null,
+    f402Login: values["f402-login"] === true,
+    f402Page: values["f402-page"] ?? "/",
+    profile: localPathOrNull(values.profile ?? ""),
+    thumb: thumbRaw === "" ? null : boundedInt(thumbRaw, 16, 2048),
+    placeholder: values.placeholder === true,
+    console: values.console === true,
+    cookies: values.cookies === true,
+    retries: boundedInt(values.retries ?? "0", 0, 5),
+    json: values.json === true,
+    uploadBlob: values["upload-blob"] === true,
+    blobGateway: values["blob-gateway"] || null,
+    blobKey: values["blob-key"] || null,
   };
 }
 
-export const DEFAULT_SHOT_DIR = "scratch/shots";
+function localPathOrNull(raw: string): string | null {
+  return raw === "" ? null : toLocalPath(raw);
+}
 
 export async function runWebviewShot(argv: readonly string[]): Promise<void> {
-  const args = [...argv];
-  if (args.includes("-h") || args.includes("--help")) {
+  let options: Options | null;
+  try {
+    options = parseShotArgs(argv);
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    console.error(`webview-shot: ${error.message}\n`);
+    console.error(HELP);
+    process.exitCode = 2;
+    return;
+  }
+  if (options === null) {
     console.log(HELP);
     return;
   }
-  let options: Options;
-  try {
-    options = parseArgs(args);
-  } catch (error) {
-    if (!(error instanceof UsageError)) throw error;
-    console.error(`webview-shot: ${error.message}`);
-    console.error("Run with --help for the supported values.");
-    process.exitCode = error.exitCode;
+  if (options.url !== null && !/^https?:\/\//.test(options.url)) {
+    console.error("webview-shot: the URL must be http(s)\n");
+    console.error(HELP);
+    process.exitCode = 1;
     return;
   }
-
+  if (options.url === null && !options.f402Login && options.profile === null) {
+    console.error(
+      "webview-shot: provide an http(s) URL, --f402-login or --profile\n",
+    );
+    console.error(HELP);
+    process.exitCode = 1;
+    return;
+  }
+  if (options.profile !== null && !isDirectory(options.profile)) {
+    console.error(
+      `webview-shot: --profile ${options.profile} is not a directory; a WebView would start an empty, signed-out profile there`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+  if (options.thumb === undefined) {
+    console.error("webview-shot: --thumb must be an integer from 16 to 2048");
+    process.exitCode = 2;
+    return;
+  }
+  if (options.retries === undefined) {
+    console.error("webview-shot: --retries must be an integer from 0 to 5");
+    process.exitCode = 2;
+    return;
+  }
+  if (options.cookies && options.backend !== "chrome") {
+    console.error(
+      "webview-shot: --cookies reads cookies over CDP, which only --backend chrome has",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  if (options.encoding === "shmem" && options.format !== "png") {
+    console.error(
+      `webview-shot: --encoding shmem captures a PNG shared-memory segment, so --format ${options.format} has no effect.`,
+    );
+    console.error(
+      "  Pass --format png (the default) or use --encoding blob/base64 for another format.",
+    );
+    process.exitCode = 2;
+    return;
+  }
   if (options.uploadBlob && options.encoding !== "blob") {
     console.error(
       "webview-shot: --upload-blob requires --encoding blob (the file-output path)",
@@ -331,81 +431,34 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  if (
-    !options.f402Login &&
-    (options.url === null || !/^https?:\/\//.test(options.url))
-  ) {
-    console.error("webview-shot: provide an http(s) URL or --f402-login\n");
-    console.error(HELP);
-    process.exitCode = 1;
-    return;
-  }
+  const request: ValidOptions = {
+    ...options,
+    thumb: options.thumb,
+    retries: options.retries,
+  };
+  await withView(
+    () => openShotView(request),
+    (view) => emitShot(view, request),
+  );
+}
 
-  const extension = options.format === "jpeg" ? "jpg" : options.format;
-  const out =
-    options.out ?? join(DEFAULT_SHOT_DIR, `webview-${Date.now()}.${extension}`);
+type ValidOptions = Omit<Options, "thumb" | "retries"> & {
+  readonly thumb: number | null;
+  readonly retries: number;
+};
 
-  await using view = ManagedWebView.launch({
-    backend: options.backend,
-    width: options.width,
-    height: options.height,
-    navigateTimeoutMs: options.timeoutMs,
-  });
-
-  if (options.f402Login) {
-    if (process.env.F402_LIVE_LOGIN?.trim() !== "1") {
-      throw new Error("F402 login is opt-in: set F402_LIVE_LOGIN=1");
-    }
-    await loginF402(view, { timeoutMs: options.timeoutMs });
-    const baseUrl = (
-      process.env.F402_BASE_URL?.trim() || "https://www.fantasy402.com"
-    ).replace(/\/$/, "");
-    const suffix = options.f402Page.startsWith("/")
-      ? options.f402Page
-      : `/${options.f402Page}`;
-    await view.navigate(`${baseUrl}${suffix}`, {
-      timeoutMs: options.timeoutMs,
-    });
-  } else {
-    await view.navigate(options.url!, { timeoutMs: options.timeoutMs });
-  }
-
-  // Bun's Chrome backend rejects Emulation.setDeviceMetricsOverride until the CDP session exists
-  // (created by the first navigation), so ManagedWebView's launch-time resize is a silent no-op for
-  // the first page. Without this, a 200x150 Chrome capture comes back as the constructor's outer
-  // window size (500x63). WebKit sizes the inner viewport from the constructor and needs no retry.
-  if (options.backend === "chrome") {
-    await view.resize(options.width, options.height);
-  }
-
-  if (options.waitSelector !== null) {
-    await view.waitForSelector(options.waitSelector, {
-      timeoutMs: options.timeoutMs,
-    });
-  }
-  if (options.waitMs > 0) await Bun.sleep(options.waitMs);
-
-  const shotOptions =
-    options.format === "png"
-      ? {
-          format: "png" as const,
-          ...(options.resize === null ? {} : { resize: options.resize }),
-        }
-      : {
-          format: options.format,
-          quality: options.quality,
-          ...(options.resize === null ? {} : { resize: options.resize }),
-        };
-
+async function emitShot(
+  view: ManagedWebView,
+  options: ValidOptions,
+): Promise<void> {
   if (options.encoding === "shmem") {
-    if (options.format !== "png") {
-      console.error(
-        `webview-shot: --encoding shmem captures a PNG shared-memory segment, so --format ${options.format} has no effect.`,
-      );
-      console.error(
-        "  Pass --format png (the default) or use --encoding blob/base64/buffer for another format.",
-      );
-      process.exitCode = 2;
+    if (
+      options.kitty &&
+      (options.kittyDirect ||
+        kittyTransmission(process.platform, process.env) === "direct")
+    ) {
+      const png = await view.screenshotBase64({ format: "png" });
+      process.stdout.write(formatKittyDirectEscape(png.base64));
       return;
     }
     const shmem = await view.screenshotShmem();
@@ -418,7 +471,8 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
   }
 
   if (options.encoding === "base64") {
-    const b64 = await view.screenshotBase64(shotOptions);
+    const profileCheck = await checkProfile(view, options.profile);
+    const b64 = await view.screenshotBase64(screenshotOptions(options));
     console.log(
       JSON.stringify(
         {
@@ -427,6 +481,7 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
           dataUri: b64.dataUri,
           backend: options.backend,
           format: options.format,
+          ...profileCheck,
         },
         null,
         2,
@@ -437,7 +492,7 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
 
   if (options.encoding === "raw-buffer") {
     // Binary on stdout, metadata on stderr, so `dx shot ... --encoding raw-buffer > page.png` works.
-    const blob = await view.screenshotBlob(shotOptions);
+    const blob = await view.screenshotBlob(screenshotOptions(options));
     const bytes = new Uint8Array(await blob.arrayBuffer());
     process.stdout.write(bytes);
     console.error(
@@ -447,9 +502,10 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
   }
 
   if (options.encoding === "buffer") {
-    // Legacy output shape: a JSON {base64, bytes} payload, not a Node Buffer. Kept for callers
-    // that already parse it; use --encoding raw-buffer when you want the bytes themselves.
-    const blob = await view.screenshotBlob(shotOptions);
+    // Legacy output shape: a JSON {base64, bytes} payload, not a Node Buffer; use raw-buffer for
+    // the bytes themselves.
+    const profileCheck = await checkProfile(view, options.profile);
+    const blob = await view.screenshotBlob(screenshotOptions(options));
     const bytes = new Uint8Array(await blob.arrayBuffer());
     console.log(
       JSON.stringify(
@@ -458,6 +514,7 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
           mimeType: blob.type,
           bytes: bytes.byteLength,
           base64: Buffer.from(bytes).toString("base64"),
+          ...profileCheck,
         },
         null,
         2,
@@ -466,50 +523,96 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
     return;
   }
 
-  const screenshot = await view.screenshotToFile(out, shotOptions);
-  const title = String((await view.evaluate("document.title")) ?? "");
-  const url = redactUrlForLog(
-    String((await view.evaluate("location.href")) ?? ""),
-  );
+  const captured = await captureShotFile(view, {
+    ...options,
+    encoding: "blob",
+    out: options.out ?? defaultShotPath(options.format),
+  });
   const blob = options.uploadBlob
     ? await uploadScreenshotToGateway(
-        new Uint8Array(await Bun.file(screenshot.path).arrayBuffer()),
-        screenshot.mimeType,
+        new Uint8Array(await Bun.file(captured.screenshot).arrayBuffer()),
+        captured.mimeType,
         {
-          ...(options.blobGateway === null
-            ? { gatewayUrl: resolveBlobGatewayUrl() }
-            : { gatewayUrl: options.blobGateway }),
-          ...(options.blobKey === null
-            ? { key: blobKeyFromPath(screenshot.path) }
-            : { key: options.blobKey }),
+          gatewayUrl: options.blobGateway ?? resolveBlobGatewayUrl(),
+          key: options.blobKey ?? blobKeyFromPath(captured.screenshot),
         },
       )
     : null;
-
+  const result = blob === null ? captured : { ...captured, blob };
   console.log(
-    JSON.stringify(
-      {
-        screenshot: screenshot.path,
-        bytes: screenshot.bytes,
-        sha256: screenshot.sha256,
-        mimeType: screenshot.mimeType,
-        backend: options.backend,
-        format: options.format,
-        encoding: options.encoding,
-        title,
-        url,
-        ...(blob === null ? {} : { blob }),
-      },
-      null,
-      2,
-    ),
+    options.json || process.stdout.isTTY !== true
+      ? JSON.stringify(result, null, 2)
+      : renderShotTable(result, process.stdout.isTTY === true),
+  );
+}
+
+/** One row per field: a screenshot result is one record, and a wide single row wraps badly. */
+export function renderShotTable(
+  result: ShotFileResult,
+  colors: boolean,
+): string {
+  const rows: { field: string; value: string }[] = [
+    { field: "screenshot", value: result.screenshot },
+    { field: "screenshotUrl", value: result.screenshotUrl },
+    { field: "bytes", value: String(result.bytes) },
+    { field: "sha256", value: result.sha256 },
+    { field: "backend", value: `${result.backend} (${result.format})` },
+    { field: "title", value: result.title },
+    { field: "url", value: result.url },
+  ];
+  if (result.signedOutMarkers !== undefined) {
+    rows.push({
+      field: "signedOutMarkers",
+      value:
+        result.signedOutMarkers.length === 0
+          ? "none seen"
+          : result.signedOutMarkers.join(", "),
+    });
+  }
+  if (result.thumb !== undefined)
+    rows.push({ field: "thumb", value: result.thumb });
+  if (result.blob !== undefined) {
+    rows.push({ field: "blob", value: JSON.stringify(result.blob) });
+  }
+  if (result.placeholder !== undefined) {
+    rows.push({
+      field: "placeholder",
+      value: `data: URL, ${result.placeholder.length} chars (--json prints it)`,
+    });
+  }
+  if (result.console !== undefined) {
+    rows.push({
+      field: "console",
+      value: `${result.console.length} line(s) (--json prints them)`,
+    });
+  }
+  if (result.cookies !== undefined) {
+    const expired = result.cookies.filter((cookie) => cookie.expired).length;
+    rows.push({
+      field: "cookies",
+      value:
+        result.cookies.length === 0
+          ? "no portal cookies"
+          : `${result.cookies.length} portal (${expired} expired): ${result.cookies.map((cookie) => cookie.name).join(", ")}`,
+    });
+  }
+  return Bun.inspect.table(
+    Object.fromEntries(rows.map(({ field, value }) => [field, { value }])),
+    ["value"],
+    { colors },
   );
 }
 
 if (import.meta.main) {
   runWebviewShot(process.argv.slice(2)).catch((error: unknown) => {
     console.error(
-      `webview-shot: ${error instanceof Error ? error.message : String(error)}`,
+      `webview-shot: ${
+        error instanceof WebViewError
+          ? describeShotError(error)
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      }`,
     );
     process.exitCode = 1;
   });
