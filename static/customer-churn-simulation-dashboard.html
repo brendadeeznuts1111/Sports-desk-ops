@@ -2400,6 +2400,8 @@
               <dd data-field="error">-</dd>
               <dt>Schedules</dt>
               <dd data-field="schedules">-</dd>
+              <dt>Seeding</dt>
+              <dd data-field="seeding">-</dd>
             </dl>
           </div>
           <div>
@@ -2807,7 +2809,7 @@
         );
       }
 
-      function renderStatus({ status, schedules, reportTypes }) {
+      function renderStatus({ status, schedules, reportTypes, seeding }) {
         setBadge(
           status.error ? "BOT ERROR" : status.mode.toUpperCase(),
           status.error
@@ -2873,6 +2875,16 @@
             )
             .join("; ") || "none",
         );
+        // Names only: `seeding` from /api/telegram/status carries a per-variable source label (env /
+        // keychain / missing), never the value.
+        if (Array.isArray(seeding)) {
+          const missing = seeding.filter((row) => row.kind === "missing");
+          const label =
+            missing.length === 0
+              ? seeding.map((row) => `${row.name}=${row.source}`).join("; ")
+              : `MISSING: ${missing.map((row) => row.name).join(", ")}  (run \`bun run secrets:env set <NAME>\`)`;
+          setField("seeding", label, missing.length === 0 ? "good" : "warn");
+        }
         fillSelect(reportSelect, reportTypes);
       }
 

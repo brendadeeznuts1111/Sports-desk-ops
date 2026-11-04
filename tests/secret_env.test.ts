@@ -53,6 +53,16 @@ describe("expandSecretSelection", () => {
       false,
     );
   });
+
+  test("telegram carries every variable the bot reads, so `--with telegram` seeds the daemon fully", () => {
+    expect(expandSecretSelection(["telegram"])).toEqual([
+      "TELEGRAM_BOT_TOKEN",
+      "TELEGRAM_CHAT_ID",
+      "TELEGRAM_MINIAPP_URL",
+      "TELEGRAM_WEBHOOK_SECRET",
+      "TELEGRAM_WEBHOOK_URL",
+    ]);
+  });
 });
 
 describe("resolveSecretEnv", () => {

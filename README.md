@@ -176,6 +176,25 @@ To ensure seamless embedding inside Telegram Web (`https://web.telegram.org`), T
 - `X-Frame-Options` is **strictly absent** from all server response headers (the deprecated `ALLOWALL` directive is never sent).
 - Embedding is governed exclusively by modern standards: `Content-Security-Policy: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;`.
 
+### Telegram Bot Seeding
+
+Every Telegram variable the bot reads is in one `--with telegram` group, so the daemon can be launched with the five values injected from the OS keychain (`com.bookdeskops.sportsdesk`) without writing them to a file or the shell. See [`docs/runbooks/telegram_seeding.md`](docs/runbooks/telegram_seeding.md) for the full flow; the one-line summary:
+
+```sh
+# Store each secret (values on stdin, never argv; keychain service com.bookdeskops.sportsdesk):
+printf %s "$BOT_TOKEN"       | bun run secrets:env set TELEGRAM_BOT_TOKEN
+printf %s "$WEBHOOK_SECRET"  | bun run secrets:env set TELEGRAM_WEBHOOK_SECRET
+printf %s "$CHAT_ID"         | bun run secrets:env set TELEGRAM_CHAT_ID
+printf %s "$WEBHOOK_URL"     | bun run secrets:env set TELEGRAM_WEBHOOK_URL
+printf %s "$MINIAPP_URL"     | bun run secrets:env set TELEGRAM_MINIAPP_URL
+
+bun run secrets:env status --with telegram          # every row should read "keychain"
+bun run secrets:env exec    --with telegram -- bun run serve
+curl -s http://127.0.0.1:4020/api/telegram/status -H "Authorization: Bearer $ADMIN" | jq '.seeding'
+```
+
+Mini App launches carry a signed `initData` payload. Server-side verification uses `verifyTelegramInitData` from [`lib/telegram_initdata.ts`](lib/telegram_initdata.ts), which performs the documented `HMAC_SHA256(key=SHA256(bot_token), data=sorted_data_check_string)` check with `crypto.timingSafeEqual` and a 5-minute `auth_date` window. The helper takes no I/O and never logs the token.
+
 ## Performance Telemetry & Micro-Benchmarks
 
 Empirical measurements on Bun v1.4.4 (macOS arm64). The first two rows are from `bun scripts/bench_server.ts` (2026-11-02, Apple M4; a single run, so treat the ratios as order-of-magnitude); the rest are from `tests/sendfile_threshold.test.ts`:
