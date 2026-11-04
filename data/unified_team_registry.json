@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "description": "Canonical SportsDesk team entities. Icons/logos are presentation aliases (portal CDN filenames); venue joins use codes and text (Kalshi event tickers, Polymarket gamma question/slug).",
+  "teams": [
+    {
+      "id": "nba:atl",
+      "league": "NBA",
+      "code": "ATL",
+      "displayName": "Atlanta Hawks",
+      "f402Names": ["ATLANTA HAWKS", "ATLANTA HAWK"],
+      "kalshiCodes": ["ATL"],
+      "polymarketHints": ["Atlanta", "Hawks"],
+      "portalLogoFile": "Atlanta-Hawks.png"
+    },
+    {
+      "id": "nba:was",
+      "league": "NBA",
+      "code": "WSH",
+      "displayName": "Washington Wizards",
+      "f402Names": ["WASHINGTON WIZARDS"],
+      "kalshiCodes": ["WAS"],
+      "polymarketHints": ["Washington", "Wizards"],
+      "portalLogoFile": null
+    },
+    {
+      "id": "nba:cha",
+      "league": "NBA",
+      "code": "CHA",
+      "displayName": "Charlotte Hornets",
+      "f402Names": ["CHARLOTTE HORNETS"],
+      "kalshiCodes": ["CHA"],
+      "polymarketHints": ["Charlotte", "Hornets"]
+    },
+    {
+      "id": "nba:bkn",
+      "league": "NBA",
+      "code": "BKN",
+      "displayName": "Brooklyn Nets",
+      "f402Names": ["BROOKLYN NETS"],
+      "kalshiCodes": ["BKN"],
+      "legacyCodes": ["BRK"],
+      "polymarketHints": ["Brooklyn", "Nets"]
+    },
+    {
+      "id": "nba:mil",
+      "league": "NBA",
+      "code": "MIL",
+      "displayName": "Milwaukee Bucks",
+      "f402Names": ["MILWAUKEE BUCKS"],
+      "kalshiCodes": ["MIL"],
+      "polymarketHints": ["Milwaukee", "Bucks"]
+    },
+    {
+      "id": "nba:bos",
+      "league": "NBA",
+      "code": "BOS",
+      "displayName": "Boston Celtics",
+      "f402Names": ["BOSTON CELTICS"],
+      "kalshiCodes": ["BOS"],
+      "polymarketHints": ["Boston", "Celtics"],
+      "portalLogoFile": "Boston-Celtics.png"
+    },
+    {
+      "id": "nba:gsw",
+      "league": "NBA",
+      "code": "GSW",
+      "displayName": "Golden State Warriors",
+      "f402Names": ["GOLDEN STATE WARRIORS"],
+      "kalshiCodes": ["GS"],
+      "legacyCodes": ["GSW"],
+      "polymarketHints": ["Golden State", "Warriors"]
+    },
+    {
+      "id": "nba:lal",
+      "league": "NBA",
+      "code": "LAL",
+      "displayName": "Los Angeles Lakers",
+      "f402Names": ["LOS ANGELES LAKERS", "LA LAKERS"],
+      "kalshiCodes": ["LAL"],
+      "polymarketHints": ["Lakers", "Los Angeles Lakers"]
+    },
+    {
+      "id": "nba:nyk",
+      "league": "NBA",
+      "code": "NYK",
+      "displayName": "New York Knicks",
+      "f402Names": ["NEW YORK KNICKS"],
+      "kalshiCodes": ["NYK", "NY"],
+      "polymarketHints": ["New York Knicks", "Knicks"]
+    },
+    {
+      "id": "nba:nop",
+      "league": "NBA",
+      "code": "NOP",
+      "displayName": "New Orleans Pelicans",
+      "f402Names": ["NEW ORLEANS PELICANS"],
+      "kalshiCodes": ["NO"],
+      "legacyCodes": ["NOP"],
+      "polymarketHints": ["New Orleans", "Pelicans"]
+    },
+    {
+      "id": "nba:sas",
+      "league": "NBA",
+      "code": "SAS",
+      "displayName": "San Antonio Spurs",
+      "f402Names": ["SAN ANTONIO SPURS"],
+      "kalshiCodes": ["SA"],
+      "legacyCodes": ["SAS"],
+      "polymarketHints": ["San Antonio", "Spurs"]
+    },
+    {
+      "id": "nba:phx",
+      "league": "NBA",
+      "code": "PHX",
+      "displayName": "Phoenix Suns",
+      "f402Names": ["PHOENIX SUNS"],
+      "kalshiCodes": ["PHX"],
+      "legacyCodes": ["PHO"],
+      "polymarketHints": ["Phoenix", "Suns"]
+    },
+    {
+      "id": "nfl:kc",
+      "league": "NFL",
+      "code": "KC",
+      "displayName": "Kansas City Chiefs",
+      "nicknames": ["Chiefs"],
+      "f402Names": ["KANSAS CITY CHIEFS"],
+      "kalshiCodes": ["KC"],
+      "polymarketHints": ["Kansas City", "Chiefs"],
+      "portalLogoFile": "Kansas-City-Chiefs.png"
+    },
+    {
+      "id": "nfl:buf",
+      "league": "NFL",
+      "code": "BUF",
+      "displayName": "Buffalo Bills",
+      "nicknames": ["Bills"],
+      "f402Names": ["BUFFALO BILLS"],
+      "kalshiCodes": ["BUF"],
+      "polymarketHints": ["Buffalo", "Bills"],
+      "portalLogoFile": "Buffalo-Bills.png"
+    },
+    {
+      "id": "nfl:phi",
+      "league": "NFL",
+      "code": "PHI",
+      "displayName": "Philadelphia Eagles",
+      "nicknames": ["Eagles"],
+      "f402Names": ["PHILADELPHIA EAGLES"],
+      "kalshiCodes": ["PHI"],
+      "polymarketHints": ["Philadelphia", "Eagles"],
+      "portalLogoFile": "Philadelphia-Eagles.png"
+    },
+    {
+      "id": "nfl:was",
+      "league": "NFL",
+      "code": "WAS",
+      "displayName": "Washington Commanders",
+      "nicknames": ["Commanders"],
+      "f402Names": ["WASHINGTON COMMANDERS"],
+      "kalshiCodes": ["WAS"],
+      "legacyCodes": ["WSH"],
+      "polymarketHints": ["Washington", "Commanders"],
+      "portalLogoFile": "washington-commanders.png"
+    },
+    {
+      "id": "nfl:lar",
+      "league": "NFL",
+      "code": "LAR",
+      "displayName": "Los Angeles Rams",
+      "nicknames": ["Rams"],
+      "f402Names": ["LOS ANGELES RAMS", "LA RAMS"],
+      "kalshiCodes": ["LAR"],
+      "legacyCodes": ["LA"],
+      "polymarketHints": ["Rams", "Los Angeles Rams"],
+      "portalLogoFile": "St.-Louiss-Rams.png"
+    },
+    {
+      "id": "nfl:lac",
+      "league": "NFL",
+      "code": "LAC",
+      "displayName": "Los Angeles Chargers",
+      "nicknames": ["Chargers"],
+      "f402Names": ["LOS ANGELES CHARGERS", "LA CHARGERS"],
+      "kalshiCodes": ["LAC"],
+      "polymarketHints": ["Chargers", "Los Angeles Chargers"],
+      "portalLogoFile": "Sann-DiegoLA.png"
+    },
+    {
+      "id": "nfl:jax",
+      "league": "NFL",
+      "code": "JAX",
+      "displayName": "Jacksonville Jaguars",
+      "nicknames": ["Jaguars"],
+      "f402Names": ["JACKSONVILLE JAGUARS"],
+      "kalshiCodes": ["JAC"],
+      "legacyCodes": ["JAX"],
+      "polymarketHints": ["Jacksonville", "Jaguars"],
+      "portalLogoFile": "Jacksonville-Jaguars.png"
+    }
+  ]
+}

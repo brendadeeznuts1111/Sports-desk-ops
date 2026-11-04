@@ -19,6 +19,10 @@ import type {
   KalshiOrderbook,
 } from "./kalshi_client.ts";
 import type { League, WatchlistSignal } from "./watchlist_signal_engine.ts";
+import {
+  getUnifiedTeamRegistry,
+  unifiedTeamCodesMatch,
+} from "./unified_team_registry.ts";
 
 export type SignalSide = "YES" | "NO";
 export type LiquidityVerdict = "ok" | "thin" | "wide" | "empty";
@@ -221,12 +225,23 @@ const ALIAS_MAP: ReadonlyMap<string, ReadonlySet<string>> = (() => {
   return map;
 })();
 
-/** Two codes name the same club when equal or linked by the alias table (either direction). */
-export function teamCodesMatch(a: string, b: string): boolean {
+/** Two codes name the same club when equal, in the legacy alias table, or the unified registry. */
+export function teamCodesMatch(
+  a: string,
+  b: string,
+  league: League = "UNKNOWN",
+): boolean {
   const left = a.trim().toUpperCase();
   const right = b.trim().toUpperCase();
   if (left === right) return true;
-  return ALIAS_MAP.get(left)?.has(right) ?? false;
+  if (ALIAS_MAP.get(left)?.has(right) ?? false) return true;
+  if (league !== "UNKNOWN") {
+    return unifiedTeamCodesMatch(league, a, b);
+  }
+  for (const probe of ["NBA", "NFL", "NHL", "MLB", "CFB", "EPL"] as const) {
+    if (getUnifiedTeamRegistry().codesEquivalent(probe, a, b)) return true;
+  }
+  return false;
 }
 
 function looksLikeCode(team: string): boolean {
@@ -270,6 +285,7 @@ function matchEvent(
   signals: readonly string[],
   events: readonly KalshiEvent[],
   seriesTicker: string,
+  league: League,
 ): EventMatch | null | "ambiguous" {
   const wanted = signals.map((team) => team.trim().toUpperCase());
   const matches: EventMatch[] = [];
@@ -281,7 +297,9 @@ function matchEvent(
       const codes = new Map<string, string>();
       let matched = 0;
       for (const team of wanted) {
-        const found = candidate.find((code) => teamCodesMatch(team, code));
+        const found = candidate.find((code) =>
+          teamCodesMatch(team, code, league),
+        );
         if (found !== undefined) {
           codes.set(team, found);
           matched += 1;
@@ -543,8 +561,18 @@ export async function joinWatchlistSignals(
   const config = options.config ?? DEFAULT_JOIN_CONFIG;
   const eventsBySeries = new Map<string, readonly KalshiEvent[] | null>();
   const joined: JoinedSignal[] = [];
+  const registry = getUnifiedTeamRegistry();
   for (const signal of signals) {
-    const seriesTicker = seriesTickerFor(signal);
+    const normalizedTeams = registry.normalizeTeamList(
+      signal.league,
+      signal.teams,
+    );
+    const normalizedSignal: WatchlistSignal = {
+      ...signal,
+      teams: normalizedTeams,
+      sideTeam: registry.normalizeSideTeam(signal.league, signal.sideTeam),
+    };
+    const seriesTicker = seriesTickerFor(normalizedSignal);
     const base: KalshiJoin = {
       seriesTicker,
       eventTicker: null,
@@ -562,10 +590,10 @@ export async function joinWatchlistSignals(
     };
     if (seriesTicker === null) {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: {
           ...base,
-          reason: `unsupported league/kind ${signal.league}/${signal.marketKind}`,
+          reason: `unsupported league/kind ${normalizedSignal.league}/${normalizedSignal.marketKind}`,
         },
       });
       continue;
@@ -585,14 +613,14 @@ export async function joinWatchlistSignals(
     }
     if (events === null) {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: { ...base, reason: joinFailure ?? "Kalshi unavailable" },
       });
       continue;
     }
     if (events.length === 0) {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: {
           ...base,
           reason: `no open events for series ${seriesTicker}`,
@@ -601,10 +629,10 @@ export async function joinWatchlistSignals(
       continue;
     }
 
-    const teamCodes = signal.teams.filter(looksLikeCode);
+    const teamCodes = normalizedSignal.teams.filter(looksLikeCode);
     if (teamCodes.length < 2) {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: {
           ...base,
           reason: "team codes unavailable for event matching",
@@ -612,10 +640,15 @@ export async function joinWatchlistSignals(
       });
       continue;
     }
-    const matched = matchEvent(teamCodes, events, seriesTicker);
+    const matched = matchEvent(
+      teamCodes,
+      events,
+      seriesTicker,
+      normalizedSignal.league,
+    );
     if (matched === null || matched === "ambiguous") {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: {
           ...base,
           reason:
@@ -627,14 +660,14 @@ export async function joinWatchlistSignals(
       continue;
     }
 
-    const choice = chooseMarket(signal, matched.event, matched);
+    const choice = chooseMarket(normalizedSignal, matched.event, matched);
     if (choice === "no_market") {
       joined.push({
-        ...signal,
+        ...normalizedSignal,
         kalshi: {
           ...base,
           eventTicker: matched.event.eventTicker,
-          reason: `no ${signal.marketKind} market at line ${String(signal.line)}`,
+          reason: `no ${normalizedSignal.marketKind} market at line ${String(normalizedSignal.line)}`,
         },
       });
       continue;
@@ -646,14 +679,14 @@ export async function joinWatchlistSignals(
       : null;
     const executablePrice = liquidity?.executablePrice ?? null;
     const edgeBps =
-      signal.fairProb !== null && executablePrice !== null
-        ? Math.round((signal.fairProb - executablePrice) * 10_000)
+      normalizedSignal.fairProb !== null && executablePrice !== null
+        ? Math.round((normalizedSignal.fairProb - executablePrice) * 10_000)
         : null;
     const failure = orderbook.ok
       ? null
       : `orderbook unavailable: ${orderbook.reason}`;
     const decision = verdictFor({
-      signal,
+      signal: normalizedSignal,
       choice,
       joinFailure: failure,
       liquidity,
@@ -661,14 +694,14 @@ export async function joinWatchlistSignals(
       config,
     });
     joined.push({
-      ...signal,
+      ...normalizedSignal,
       kalshi: {
         seriesTicker,
         eventTicker: matched.event.eventTicker,
         marketTicker: choice.market.ticker,
         marketTitle: choice.market.title,
         side: choice.side,
-        fairProb: signal.fairProb,
+        fairProb: normalizedSignal.fairProb,
         executablePrice,
         edgeBps,
         liquidity,
