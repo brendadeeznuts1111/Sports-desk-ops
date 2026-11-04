@@ -110,27 +110,19 @@ describe("Bun v1.4.0 primitives", () => {
   });
 
   test("ML-KEM-768 encapsulates and decapsulates; node:crypto ML-DSA-65 signs and verifies", async () => {
-    const kem = (await crypto.subtle.generateKey("ML-KEM-768", true, [
+    const kem = await crypto.subtle.generateKey("ML-KEM-768", true, [
       "encapsulateBits",
       "decapsulateBits",
-    ])) as CryptoKeyPair;
-    const { sharedKey, ciphertext } = await (
-      crypto.subtle as unknown as {
-        encapsulateBits: (
-          alg: unknown,
-          key: CryptoKey,
-        ) => Promise<{ sharedKey: ArrayBuffer; ciphertext: ArrayBuffer }>;
-      }
-    ).encapsulateBits({ name: "ML-KEM-768" }, kem.publicKey);
-    const recovered = await (
-      crypto.subtle as unknown as {
-        decapsulateBits: (
-          alg: unknown,
-          key: CryptoKey,
-          ciphertext: ArrayBuffer,
-        ) => Promise<ArrayBuffer>;
-      }
-    ).decapsulateBits({ name: "ML-KEM-768" }, kem.privateKey, ciphertext);
+    ]);
+    const { sharedKey, ciphertext } = await crypto.subtle.encapsulateBits(
+      { name: "ML-KEM-768" },
+      kem.publicKey,
+    );
+    const recovered = await crypto.subtle.decapsulateBits(
+      { name: "ML-KEM-768" },
+      kem.privateKey,
+      ciphertext,
+    );
     expect(new Uint8Array(recovered)).toEqual(new Uint8Array(sharedKey));
     const { generateKeyPairSync, sign, verify } = await import("node:crypto");
     const dsa = generateKeyPairSync("ml-dsa-65");

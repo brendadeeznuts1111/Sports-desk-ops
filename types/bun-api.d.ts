@@ -48,3 +48,36 @@ export interface BunSecretSetOptions {
   readonly value: string;
   readonly persist?: BunSecretPersist;
 }
+
+/**
+ * Bun 1.4 post-quantum Web Crypto extensions (ML-KEM / ML-DSA), not yet in @types/bun.
+ * Keeping these declarations here removes `as unknown as` casts at call sites.
+ */
+declare global {
+  interface SubtleCrypto {
+    generateKey(
+      algorithm:
+        "ML-KEM-768" | "ML-KEM-1024" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87",
+      extractable: boolean,
+      keyUsages: readonly string[],
+    ): Promise<CryptoKeyPair>;
+    encapsulateBits(
+      algorithm: AlgorithmIdentifier,
+      key: CryptoKey,
+    ): Promise<{ sharedKey: ArrayBuffer; ciphertext: ArrayBuffer }>;
+    decapsulateBits(
+      algorithm: AlgorithmIdentifier,
+      key: CryptoKey,
+      ciphertext: BufferSource,
+    ): Promise<ArrayBuffer>;
+    encapsulateKey(
+      algorithm: AlgorithmIdentifier,
+      key: CryptoKey,
+    ): Promise<{ sharedKey: CryptoKey; ciphertext: ArrayBuffer }>;
+    decapsulateKey(
+      algorithm: AlgorithmIdentifier,
+      key: CryptoKey,
+      ciphertext: BufferSource,
+    ): Promise<CryptoKey>;
+  }
+}
