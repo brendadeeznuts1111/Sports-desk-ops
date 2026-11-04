@@ -411,12 +411,10 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
   const pendingTickets = new Map<string, number>();
   const maxActiveTickets = options.maxActiveTickets ?? MAX_ACTIVE_TICKETS;
   const maxWsSubscriptions = options.maxWsSubscriptions ?? 32;
-  const subscriptionsOf = (
-    socket: Bun.ServerWebSocket<SocketData>,
-  ): readonly string[] =>
-    (socket as unknown as { subscriptions?: string[] }).subscriptions ?? [
-      ...socket.data.channels,
-    ];
+  const subscriptionsOf = (socket: {
+    readonly subscriptions?: string[];
+    readonly data: { readonly channels: ReadonlySet<string> };
+  }): readonly string[] => socket.subscriptions ?? [...socket.data.channels];
   // Resized bytes differ between platforms unless the Bun backend is pinned (AGENTS.md).
   Bun.Image.backend = "bun";
 

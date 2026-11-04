@@ -76,7 +76,20 @@ export interface BunShape {
  * below is declared. An entry here must name the source anchor that justifies it, or
  * `analyzeBunShapes` reports `runtime-only-without-source`.
  */
-export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map();
+export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map([
+  [
+    "CSRF",
+    "bun-types@1.4.4 has no Bun.CSRF declaration; probed by bin/bun_surface.ts",
+  ],
+  [
+    "isStandaloneExecutable",
+    "bun-types@1.4.4 has no Bun.isStandaloneExecutable declaration; probed by bin/bun_surface.ts",
+  ],
+  [
+    "sliceAnsi",
+    "bun-types@1.4.4 has no Bun.sliceAnsi declaration; probed by bin/bun_surface.ts",
+  ],
+]);
 
 /**
  * Shapes whose members depend on the caller, so they are not snapshotted: the
@@ -358,7 +371,8 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "data",
     heading: "Bun.JSONL",
     evidence: [
-      "surface:JSONL",
+      "surface:JSONL.parse",
+      "surface:JSONL.parseChunk",
       "test:tests/bun_capabilities.test.ts",
       "probe:data.parse",
     ],
@@ -408,6 +422,27 @@ export const BUN_SHAPES: readonly BunShape[] = [
     status: "declared-only",
   },
   // storage & scheduling
+  {
+    name: "CSRF",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.CSRF",
+    evidence: ["surface:CSRF"],
+  },
+  {
+    name: "isStandaloneExecutable",
+    kind: "value",
+    subsystem: "process",
+    heading: "Bun.isStandaloneExecutable",
+    evidence: ["surface:isStandaloneExecutable"],
+  },
+  {
+    name: "sliceAnsi",
+    kind: "value",
+    subsystem: "text",
+    heading: "Bun.sliceAnsi",
+    evidence: ["surface:sliceAnsi"],
+  },
   {
     name: "Archive",
     kind: "value",

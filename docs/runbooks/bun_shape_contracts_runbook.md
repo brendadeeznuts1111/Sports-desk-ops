@@ -154,6 +154,10 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/capture/f402_probe.ts`, `scripts/live_positions_cron.ts`
 - **Evidence:** `surface:write`
 
+#### Bun.isStandaloneExecutable
+
+`Bun.isStandaloneExecutable` is a Bun 1.4 runtime value pinned by `surface:isStandaloneExecutable`.
+
 ## Text and terminal rendering
 
 - `Bun.stringWidth("漢")` → 2 and ANSI escape codes are ignored by default; `Bun.wrapAnsi` wraps at the given column width — `text.width`.
@@ -210,6 +214,10 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `scripts/render_docs.ts`, `scripts/render_tasks.ts`
 - **Evidence:** `probe:text.width`
+
+#### Bun.sliceAnsi
+
+`Bun.sliceAnsi` is a Bun 1.4 runtime value pinned by `surface:sliceAnsi`.
 
 ## Data formats and parsing
 
@@ -476,6 +484,10 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `lib/schema_binary.ts`
 - **Evidence:** `probe:crypto.compress`
+
+#### Bun.CSRF
+
+`Bun.CSRF` is a Bun 1.4 runtime value pinned by `surface:CSRF`.
 
 ## Network and serving
 
