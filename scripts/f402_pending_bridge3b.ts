@@ -6,8 +6,14 @@ import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
-    from: { type: "string", default: "tests/f402-pending-wager-sample.json" },
-    "source-kind": { type: "string", default: "fixture" },
+    from: {
+      type: "string",
+      default:
+        Bun.env.F402_PENDING_CAPTURE_PATH ??
+        "tests/f402-pending-wager-sample.json",
+    },
+    "from-file": { type: "string" },
+    "source-kind": { type: "string" },
     live: { type: "boolean", default: false },
     "three-c-rollup": { type: "string" },
     "dry-run": { type: "boolean", default: false },
@@ -37,8 +43,18 @@ if (
     "--three-c-rollup must be a gslive-tally rollup with totals.openExposureCents",
   );
 }
-const rollup = await buildF402PendingRollup(values.from as string, {
-  sourceKind: values["source-kind"] as string,
+const fromPath = (values["from-file"] ?? values.from) as string;
+const sourceKind =
+  (values["source-kind"] as string | undefined) ??
+  (fromPath === "tests/f402-pending-wager-sample.json" ? "fixture" : "capture");
+if (sourceKind === "fixture" && values["dry-run"] !== true) {
+  console.error(
+    "bridge3b: refusing to publish fixture data to R2/WS; pass a captured --from-file or --source-kind capture",
+  );
+  process.exit(2);
+}
+const rollup = await buildF402PendingRollup(fromPath, {
+  sourceKind,
   live: values.live,
   ...(threeC === null
     ? {}

@@ -22,6 +22,7 @@
  *  Writes `Scratch/bet-tally.json` (gitignored) and prints a compact table.
  */
 
+import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { sessionFromGsliveProfile } from "../lib/gslive_session.ts";
@@ -226,7 +227,13 @@ export interface SecretReader {
 }
 
 export type ManagerSessionSource =
-  "webview-profile" | "running-chrome" | "keychain" | "env" | "none";
+  | "webview-profile"
+  | "running-chrome"
+  | "env-cookie"
+  | "session-file"
+  | "keychain"
+  | "env"
+  | "none";
 
 /** A resolved session is either usable or explicitly absent — never "none with a cookie". */
 export interface ActiveManagerSession {
@@ -252,15 +259,49 @@ function defaultSecretReader(): SecretReader | null {
   return null;
 }
 
+/** `GSID_COOKIE` wins: a full `GSID=…` header, or a bare id. */
+function cookieHeaderFromGsidCookie(
+  environment: Readonly<Record<string, string | undefined>>,
+): string {
+  const raw = (environment.GSID_COOKIE ?? "").trim();
+  if (raw === "") return "";
+  return raw.includes("=") ? raw : `GSID=${raw}`;
+}
+
+/** Read-only `GSLIVE_SESSION_FILE` / `$XDG_CONFIG_HOME/sportsdesk/gslive-session` fallback. */
+function cookieHeaderFromSessionFile(
+  environment: Readonly<Record<string, string | undefined>>,
+): string {
+  const explicit = (environment.GSLIVE_SESSION_FILE ?? "").trim();
+  const configHome =
+    (environment.XDG_CONFIG_HOME ?? "").trim() ||
+    `${(environment.HOME ?? "").trim()}/.config`;
+  const path =
+    explicit !== "" ? explicit : `${configHome}/sportsdesk/gslive-session`;
+  try {
+    const value = readFileSync(path, "utf8").trim();
+    if (value === "") return "";
+    return cookieHeaderFromValue(value, environment.GA);
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Resolve the manager session keychain-first: the OS keychain (Bun.secrets) retires the old
- * plaintext `.env`-only default, while `GSID` in the environment stays the CI/operator fallback.
- * A keychain read failure never blocks the env fallback.
+ * Resolve the manager session file/env-first so a host-exported cookie works without keychain
+ * mutation, then keychain (Bun.secrets), then `GSID` in the environment. Read-only: this function
+ * never writes the session anywhere.
  */
 export async function resolveManagerSession(
   environment: Readonly<Record<string, string | undefined>> = env,
   secrets: SecretReader | null = defaultSecretReader(),
 ): Promise<ManagerSession> {
+  const envCookie = cookieHeaderFromGsidCookie(environment);
+  if (envCookie !== "")
+    return { source: "env-cookie", cookieHeader: envCookie };
+  const fileCookie = cookieHeaderFromSessionFile(environment);
+  if (fileCookie !== "")
+    return { source: "session-file", cookieHeader: fileCookie };
   if (secrets !== null) {
     try {
       const gsid =

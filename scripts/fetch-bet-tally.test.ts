@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { z } from "zod";
 
@@ -436,6 +439,30 @@ describe("keychain-first manager session", () => {
     );
     expect(session.source).toBe("keychain");
     expect(session.cookieHeader).toBe("GSID=keychain-session; _ga=GA1.1.1");
+  });
+
+  test("GSID_COOKIE and the session file win over the keychain", async () => {
+    const cookie = await resolveManagerSession(
+      { GSID_COOKIE: "GSID=host-cookie; _ga=GA9" },
+      reader("keychain-session"),
+    );
+    expect(cookie.source).toBe("env-cookie");
+    expect(cookie.cookieHeader).toBe("GSID=host-cookie; _ga=GA9");
+
+    const dir = mkdtempSync(join(tmpdir(), "gslive-session-"));
+    try {
+      const file = join(dir, "session");
+      writeFileSync(file, "file-session\n", { mode: 0o600 });
+      const fromFile = await resolveManagerSession(
+        { GSLIVE_SESSION_FILE: file, GSID: "env-session" },
+        reader("keychain-session"),
+      );
+      expect(fromFile.source).toBe("session-file");
+      expect(fromFile.cookieHeader).toBe("GSID=file-session");
+      expect(readFileSync(file, "utf8")).toBe("file-session\n"); // read-only
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("missing or unreadable keychain falls back to GSID in the environment", async () => {
