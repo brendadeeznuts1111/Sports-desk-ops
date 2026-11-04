@@ -11,6 +11,8 @@
  * decision. Nothing here opens a socket or reads a credential.
  */
 
+import * as nodeCrypto from "node:crypto";
+
 import {
   flagValue,
   hasFlag,
@@ -54,7 +56,7 @@ Examples:
   ./bin/dx bun --url https://portal.example/cloud/api/Manager/getWebLog
 `.trim();
 
-type Group = "core" | "capture" | "storage";
+type Group = "core" | "capture" | "storage" | "compat";
 
 interface Check {
   readonly group: Group;
@@ -122,6 +124,26 @@ const CHECKS: readonly Check[] = [
   { group: "storage", name: "s3", read: () => Bun.s3 },
   { group: "storage", name: "RedisClient", read: () => Bun.RedisClient },
   { group: "storage", name: "cron", read: () => Bun.cron },
+
+  // Compatibility: Web/Node surfaces this repo can adopt, pinned so a runtime downgrade
+  // cannot remove them silently before adoption. They are presence-only like the rest; no
+  // source path calls them yet, so a missing one is a review item, not a broken capture.
+  {
+    group: "compat",
+    // node:crypto declares argon2Sync from Node 20.12; the cast keeps this check about the
+    // binary, not about the @types/node copy installed today.
+    name: "node:crypto.argon2Sync",
+    read: () =>
+      (nodeCrypto as unknown as Record<string, unknown>)["argon2Sync"],
+  },
+  {
+    group: "compat",
+    // Bun extension on the WHATWG client socket (pause/resume backpressure); lib.dom has no
+    // declaration for it, so read it off the prototype rather than a typed value.
+    name: "WebSocket.pause",
+    read: () =>
+      (WebSocket.prototype as unknown as Record<string, unknown>)["pause"],
+  },
 ];
 
 interface Drift {
@@ -461,7 +483,7 @@ if (hasFlag(parsed, "--json")) {
     `Bun ${report.runtime.version} (${report.runtime.revision}) · @types/bun ${types ?? "not installed"}`,
   );
   console.log(
-    `  surface   core ${counts("core")}   capture ${counts("capture")}   storage ${counts("storage")}`,
+    `  surface   core ${counts("core")}   capture ${counts("capture")}   storage ${counts("storage")}   compat ${counts("compat")}`,
   );
   if (namespaces !== null) {
     console.log(

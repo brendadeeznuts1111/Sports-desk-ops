@@ -25,6 +25,39 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof WebSocket).toBe("function");
   });
 
+  test("node:crypto argon2 and the WebSocket client extension are usable", async () => {
+    // v1.4.1 shipped argon2 in node:crypto and pause/resume on the WHATWG client socket.
+    // Both are pinned in bin/bun_surface.ts ("compat"); this test proves the behaviour, not
+    // just the property: a 32-byte tag for argon2id, and functions on the prototype.
+    //
+    // Params are the OWASP Password Storage Cheat Sheet recommendation for argon2id as of
+    // 2024-01: memory 19 MiB (19456 KiB), 2 passes, parallelism 1, 16-byte RANDOM nonce,
+    // 32-byte tag. Pinning these numbers here means the first production call site that needs
+    // password hashing does not have to invent its own params; it copies these. Measured cost
+    // on Bun 1.4.4 (Apple Silicon, 2026-11-04): ~20 ms per call, negligible for one CI run.
+    const crypto = (await import("node:crypto")) as unknown as Record<
+      string,
+      unknown
+    >;
+    const argon2Sync = crypto["argon2Sync"] as
+      | ((algorithm: string, options: Record<string, unknown>) => Buffer)
+      | undefined;
+    expect(typeof argon2Sync).toBe("function");
+    const randomBytes = crypto["randomBytes"] as (size: number) => Buffer;
+    const tag = argon2Sync!("argon2id", {
+      message: "pw",
+      nonce: randomBytes(16),
+      parallelism: 1,
+      tagLength: 32,
+      memory: 19456,
+      passes: 2,
+    });
+    expect(tag.length).toBe(32);
+    const socket = WebSocket.prototype as unknown as Record<string, unknown>;
+    expect(typeof socket["pause"]).toBe("function");
+    expect(typeof socket["resume"]).toBe("function");
+  });
+
   test("DNS resolution is available for the capture preflight", () => {
     // `Bun.dns.lookup` is the call `capture:preflight` depends on; verify it exists in this build.
     // `resolve` is present at runtime but missing from the 1.4.4 type surface, hence the cast.
