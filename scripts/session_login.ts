@@ -41,6 +41,8 @@ import {
   LEGACY_SECRETS_SERVICE,
   readSecretCanonicalThenLegacy,
 } from "../lib/secrets.ts";
+import { authenticateCustomer } from "../lib/f402_authenticate_customer.ts";
+import { writeF402BearerToken } from "../lib/f402_pending_fetch.ts";
 import {
   describeF402Session,
   f402SessionTtlMinutesFromEnv,
@@ -151,7 +153,9 @@ function liveLoginGateMessage(): string {
     "  F402_PASSWORD=<password>        (never commit it; .env is gitignored)",
     "Or read both credentials from the OS keychain (secrets:f402):",
     "  F402_LIVE_LOGIN=1 bun run session:login --from-keychain",
-    "Optional: F402_BASE_URL, F402_SESSION_FILE, F402_SESSION_TTL_MIN",
+    "Mint an HTTP-only agent bearer (no WebView), persisted for fetchF402Pending:",
+    "  F402_LIVE_LOGIN=1 bun run session:login --from-keychain --mint-bearer",
+    "Optional: F402_BASE_URL, F402_SESSION_FILE, F402_TOKEN_FILE, F402_SESSION_TTL_MIN",
     "Then: bun run session:status",
   ].join("\n");
 }
@@ -184,9 +188,17 @@ async function main(): Promise<void> {
       out: { type: "string" },
       "from-profile": { type: "string" },
       "from-keychain": { type: "boolean", default: false },
+      "mint-bearer": { type: "boolean", default: false },
       diagnose: { type: "boolean", default: false },
     },
   });
+
+  if (values["mint-bearer"] && values["from-profile"] !== undefined) {
+    console.error(
+      "session:login: --mint-bearer and --from-profile are mutually exclusive (bearer mint is HTTP-only; profile export copies cookies)",
+    );
+    process.exit(2);
+  }
 
   const env = Bun.env;
   const configured = {
@@ -293,6 +305,36 @@ async function main(): Promise<void> {
 
   // Source only — never a value.
   console.log(`credentials: ${resolved.credentials.source}`);
+
+  if (values["mint-bearer"]) {
+    try {
+      const minted = await authenticateCustomer({
+        agentId: resolved.credentials.agentId,
+        password: resolved.credentials.password,
+        baseUrl: configured.baseUrl,
+      });
+      const written = writeF402BearerToken(minted.token);
+      console.log(
+        `session:login: bearer minted (JWT, ${minted.tokenChars} chars, expires ${minted.expiresAtIso ?? "unknown"})`,
+      );
+      console.log(`  token file: ${written.path} (0600)`);
+      console.log(
+        "  scope: /cloud/api/System/* and /cloud/api/Report/Pending (customer-scoped); Manager/getPending is not authorized by this token",
+      );
+      if (values["ttl-min"] !== undefined) {
+        console.log(
+          "  note: --ttl-min applies to the cookie session; bearer expiry is server-issued",
+        );
+      }
+      process.exit(0);
+    } catch (error) {
+      console.error(
+        `session:login --mint-bearer failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      process.exit(1);
+    }
+  }
+
   let session: F402Session;
   try {
     session = await refreshF402Session({

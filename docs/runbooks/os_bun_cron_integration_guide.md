@@ -348,9 +348,14 @@ The daemon is a fresh process with no shell environment, so the gate reads the O
   no environment variable.
 - **bridge3b**: the CLI sends `Authorization: Bearer`, so the gate requires `F402_BEARER_TOKEN`
   or a non-empty `F402_TOKEN_FILE`. The stored agent id/password are deliberately **not** enough:
-  the cookie session is not accepted by that fetch. A bearer mint is **held** until
-  `POST /cloud/api/System/authenticateCustomer` is confirmed to return an _agent_ token (the
-  capture allowlist classifies it as an auth exchange, and no response was ever captured).
+  the cookie session is not accepted by that fetch.
+- **bearer mint (3b)**: `POST /cloud/api/System/authenticateCustomer` was captured live on
+  2026-11-04 and returns an HS256 agent JWT (1200 s expiry). Mint it over HTTP without a WebView:
+  `F402_LIVE_LOGIN=1 bun run session:login --from-keychain --mint-bearer`; the token lands in
+  `F402_TOKEN_FILE` (0600, default `$XDG_CONFIG_HOME/sportsdesk/f402-token`) and is read by
+  `fetchF402Pending`. The token is accepted by `/cloud/api/System/*` and
+  `/cloud/api/Report/Pending` (customer-scoped) — **not** by `/cloud/api/Manager/getPending`,
+  which returns 500 for every tested shape. 3b therefore reads `Report/Pending`, per customer.
 - **bridge3a**: needs an agent id (env `F402_AGENT_ID` or the keychain) **and** a readable
   session file. Only `F402_AGENT_ID` is injected into the child environment; the password is
   never passed on.

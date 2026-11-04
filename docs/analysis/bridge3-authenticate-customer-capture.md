@@ -134,6 +134,19 @@ Consequences for the bridge workstreams:
 - **Player-reader decision unchanged**: the player credential path remains env-only until a writer
   or removal is chosen.
 
+## Implementation
+
+The captured flow is now implemented as `lib/f402_authenticate_customer.ts` (injectable fetch, no
+secrets in errors) and exposed as:
+
+```sh
+F402_LIVE_LOGIN=1 bun run session:login --from-keychain --mint-bearer
+```
+
+which writes the JWT to `F402_TOKEN_FILE` (0600) for `fetchF402Pending`. Unit tests pin the exact
+JSON body, the uppercasing, the `code` JWT extraction/lifetime, and fail-closed errors; no network
+is used in tests. 3b's remaining change is to read `Report/Pending` instead of `Manager/getPending`.
+
 ## Reproduction notes
 
 - Request shape: `verification/manager-boot-oracle/pinned/security.js` (search

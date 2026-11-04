@@ -105,3 +105,19 @@ describe("session:login", () => {
     expect(result.err).toContain("F402_AGENT_ID and F402_PASSWORD");
   });
 });
+
+describe("session:login --mint-bearer", () => {
+  test("still requires the F402_LIVE_LOGIN gate", () => {
+    const result = run(["--mint-bearer"], {});
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("F402_LIVE_LOGIN=1");
+  });
+
+  test("is mutually exclusive with --from-profile", () => {
+    const result = run(["--mint-bearer", "--from-profile", dir], {
+      F402_LIVE_LOGIN: "1",
+    });
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("mutually exclusive");
+  });
+});

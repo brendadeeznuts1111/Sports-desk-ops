@@ -63,6 +63,40 @@ export function readF402TokenFile(
   }
 }
 
+/** Token-file path: `F402_TOKEN_FILE`, else `$XDG_CONFIG_HOME/sportsdesk/f402-token`. */
+export function resolveF402TokenFilePath(
+  env: Readonly<Record<string, string | undefined>> = Bun.env,
+): string {
+  const explicit = (env.F402_TOKEN_FILE ?? "").trim();
+  if (explicit !== "") return explicit;
+  const configHome =
+    (env.XDG_CONFIG_HOME ?? "").trim() || `${(env.HOME ?? "").trim()}/.config`;
+  return `${configHome}/sportsdesk/f402-token`;
+}
+
+/**
+ * Write one validated bearer token to a 0600 file (atomic temp+rename). The token is never logged.
+ * This is the `session:login --mint-bearer` half of the contract `resolveF402BearerToken` reads.
+ */
+export function writeF402BearerToken(
+  rawToken: string,
+  options: {
+    readonly path?: string;
+    readonly env?: Readonly<Record<string, string | undefined>>;
+  } = {},
+): { readonly path: string; readonly chars: number } {
+  const token = validateF402Token(rawToken);
+  if (token === null) {
+    throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+  }
+  const path = options.path ?? resolveF402TokenFilePath(options.env);
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const temp = `${path}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temp, token, { mode: 0o600 });
+  renameSync(temp, path);
+  return { path, chars: token.length };
+}
+
 /** Resolve the bearer token read-only: CLI, env, then the token file; fail before network I/O. */
 export function resolveF402BearerToken(
   options: {
@@ -91,12 +125,7 @@ export function resolveF402BearerToken(
     return token;
   }
 
-  const explicit = (env.F402_TOKEN_FILE ?? "").trim();
-  const configHome =
-    (env.XDG_CONFIG_HOME ?? "").trim() || `${(env.HOME ?? "").trim()}/.config`;
-  const path =
-    explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
-  const fromFile = readF402TokenFile(path, readFile);
+  const fromFile = readF402TokenFile(resolveF402TokenFilePath(env), readFile);
   if (fromFile !== null) return fromFile;
 
   throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
