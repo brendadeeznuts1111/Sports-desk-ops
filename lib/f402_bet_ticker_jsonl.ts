@@ -79,6 +79,7 @@ export async function readF402TickerJsonl(
   } catch (error) {
     throw new Error(
       `readF402TickerJsonl: cannot stat ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
   const windowBytes = positiveInt(

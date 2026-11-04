@@ -12,6 +12,16 @@ import {
   stripPtyCapture,
 } from "./bun_terminal.ts";
 import { BUN_TERMINAL_PTY_TEST_NAME } from "./bun_terminal_test_names.ts";
+import {
+  capabilityDiagnostics,
+  hasPty,
+} from "../tests/support/capabilities.ts";
+
+if (!hasPty) {
+  console.log(
+    `[bun_terminal] skipping PTY assertions: ${capabilityDiagnostics.pty.reason}`,
+  );
+}
 
 const BUN_V14_BLOG_SPAWN_PTY_EXAMPLE_VERBATIM = `const proc = Bun.spawn(["bash"], {
   terminal: {
@@ -61,7 +71,7 @@ test(BUN_TERMINAL_PTY_TEST_NAME.meta.v14BlogCapabilitiesShipNote, () => {
   );
 });
 
-test.skipIf(Bun.which("bash") === null)(
+test.skipIf(!hasPty || Bun.which("bash") === null)(
   BUN_TERMINAL_PTY_TEST_NAME.meta.v14BlogSpawnExampleRunnable,
   async () => {
     const result = await runBlogTerminalWriteHelloExample();
@@ -70,21 +80,24 @@ test.skipIf(Bun.which("bash") === null)(
   },
 );
 
-test(BUN_TERMINAL_PTY_TEST_NAME.spawn.childReportsIsTty, async () => {
-  const result = await spawnInPty([
-    process.execPath,
-    "-e",
-    "console.log(process.stdout.isTTY)",
-  ]);
-  expect(result.code).toBe(0);
-  expect(result.out.trim()).toBe("true");
-});
+test.skipIf(!hasPty)(
+  BUN_TERMINAL_PTY_TEST_NAME.spawn.childReportsIsTty,
+  async () => {
+    const result = await spawnInPty([
+      process.execPath,
+      "-e",
+      "console.log(process.stdout.isTTY)",
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.out.trim()).toBe("true");
+  },
+);
 
 test(BUN_TERMINAL_PTY_TEST_NAME.util.stripAnsiSgr, () => {
   expect(stripPtyCapture("\x1b[31mhi\x1b[0m")).toBe("hi");
 });
 
-test.skipIf(Bun.which("bash") === null)(
+test.skipIf(!hasPty || Bun.which("bash") === null)(
   BUN_TERMINAL_PTY_TEST_NAME.spawn.driveBashEchoCapture,
   async () => {
     const result = await driveBashScript(["echo pty-helper", "exit"]);
@@ -93,7 +106,7 @@ test.skipIf(Bun.which("bash") === null)(
   },
 );
 
-test.skipIf(Bun.which("bash") === null)(
+test.skipIf(!hasPty || Bun.which("bash") === null)(
   BUN_TERMINAL_PTY_TEST_NAME.spawn.terminalWriteResizeColored,
   async () => {
     let raw = "";

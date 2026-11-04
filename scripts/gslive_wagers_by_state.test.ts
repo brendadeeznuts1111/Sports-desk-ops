@@ -184,14 +184,64 @@ describe("value parsing", () => {
     expect(parseMoney("n/a")).toBe(0);
   });
 
-  test("parseBetTime reads the export's HH:MM:SS MM/DD/YYYY", () => {
+  /**
+   * The export carries US Pacific desk wall time. Assert the resolved instant and the
+   * America/Los_Angeles wall clock, never `new Date(ms)` local fields: those follow the process
+   * TZ (`bun test` is UTC), so a 20:50 PDT read drifts onto the next calendar day.
+   */
+  const losAngelesWallClock = (ms: number) => {
+    const zdt = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(
+      "America/Los_Angeles",
+    );
+    return {
+      year: zdt.year,
+      month: zdt.month,
+      day: zdt.day,
+      hour: zdt.hour,
+      minute: zdt.minute,
+      second: zdt.second,
+    };
+  };
+
+  test("parseBetTime reads the export's HH:MM:SS MM/DD/YYYY as US Pacific wall time", () => {
     const ms = parseBetTime("20:50:49 10/24/2026");
     expect(ms).not.toBeNull();
-    expect(new Date(ms ?? 0).getFullYear()).toBe(2026);
-    expect(new Date(ms ?? 0).getMonth()).toBe(9);
-    expect(new Date(ms ?? 0).getDate()).toBe(24);
+    // 2026-10-24 20:50:49 PDT (UTC-7): one fixed instant, independent of the process TZ.
+    expect(ms).toBe(1_792_900_249_000);
+    expect(new Date(ms ?? 0).toISOString()).toBe("2026-10-25T03:50:49.000Z");
+    expect(losAngelesWallClock(ms ?? 0)).toEqual({
+      year: 2026,
+      month: 10,
+      day: 24,
+      hour: 20,
+      minute: 50,
+      second: 49,
+    });
     expect(parseBetTime("")).toBeNull();
     expect(parseBetTime("not a time")).toBeNull();
+  });
+
+  test("parseBetTime keeps the PDT/PST offset across the DST boundary", () => {
+    // Same LA wall clock 11 days apart, on either side of the Nov 1 2026 fall-back.
+    const pdt = parseBetTime("20:50:49 10/24/2026");
+    const pst = parseBetTime("20:50:49 11/03/2026");
+    expect(pdt).toBe(1_792_900_249_000);
+    expect(pst).toBe(1_793_767_849_000);
+    expect(new Date(pdt ?? 0).toISOString()).toBe("2026-10-25T03:50:49.000Z");
+    expect(new Date(pst ?? 0).toISOString()).toBe("2026-11-04T04:50:49.000Z");
+    const wall = { year: 2026, hour: 20, minute: 50, second: 49 };
+    expect(losAngelesWallClock(pdt ?? 0)).toEqual({
+      ...wall,
+      month: 10,
+      day: 24,
+    });
+    expect(losAngelesWallClock(pst ?? 0)).toEqual({
+      ...wall,
+      month: 11,
+      day: 3,
+    });
+    // 10 days + the extra fall-back hour: a DST-blind parser would land 240h apart.
+    expect(((pst ?? 0) - (pdt ?? 0)) / 3_600_000).toBe(241);
   });
 
   test("resolveStateLabel maps observed numeric codes and labels a blank state", () => {

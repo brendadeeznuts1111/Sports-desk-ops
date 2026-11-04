@@ -44,14 +44,19 @@ describe("WebLog dashboard panel", () => {
     expect(withPanel[0]?.[1]).toContain('document.getElementById("live-desk")');
   });
 
-  test("declares the bridge WebSocket endpoint meta, empty by default", () => {
+  test("defaults the bridge socket to the same-origin guarded route", () => {
     const bridgeMeta = html.match(
       /<meta[^>]*name="sportsdesk-bridge-ws"[^>]*>/,
     );
     expect(bridgeMeta).not.toBeNull();
+    // Empty content = same origin, no separate host to configure.
     expect(bridgeMeta?.[0]).toContain('content=""');
     expect(html).toContain('id="bridge-ws-state"');
-    expect(html).toContain("WS: not configured");
+    expect(html).toContain('"/api/live-bets"');
+    // The bearer cannot be a header on a browser handshake, so it rides the subprotocol list.
+    expect(html).toContain("sportsdesk.bridge.v1");
+    expect(html).toContain('"bearer-" + token');
+    expect(html).not.toContain("/api/weblog");
   });
 
   test("subscribes to the five bridge topics", () => {

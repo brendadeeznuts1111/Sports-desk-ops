@@ -90,6 +90,7 @@ export function renderManagerBootRunbookTerminal(
     return cell;
   };
 
+  // trusted-markdown: repo runbook markdown only (ANSI table for a terminal).
   return Bun.markdown.render(
     markdown,
     {
@@ -135,6 +136,7 @@ export function renderManagerBootRunbookTerminal(
 
 /** Trusted internal markdown → HTML (`--html`); output is not sanitized. */
 export function renderManagerBootRunbookHtml(markdown: string): string {
+  // trusted-markdown: repo runbook markdown only; --html output is a file, not a DOM sink.
   return Bun.markdown.html(markdown, DOCS_RENDER_OPTIONS);
 }
 

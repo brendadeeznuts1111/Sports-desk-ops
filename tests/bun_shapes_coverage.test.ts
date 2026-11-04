@@ -141,7 +141,7 @@ describe("Bun shape coverage", () => {
       BUN_SHAPES.filter((s) => s.status !== "declared-only").length,
     );
     expect(headings).toHaveLength(BUN_SHAPES.length);
-  });
+  }, 30_000); // scans every source file plus bun-types' .d.ts set: I/O-bound, not a unit test.
 
   test("the manifest is written against this binary", async () => {
     const { BUN_SHAPE_PINS } = await import("../lib/bun_shapes.ts");

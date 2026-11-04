@@ -123,6 +123,7 @@ async function renderOne(
     html = await Bun.file(htmlPath).text();
     cached = true;
   } else {
+    // trusted-markdown: repo docs/ sources only; the result is a static file, not a DOM sink.
     html = Bun.markdown.html(buffer, DOCS_RENDER_OPTIONS);
     if (!dryRun) await writeAtomic(htmlPath, html);
     cached = false;

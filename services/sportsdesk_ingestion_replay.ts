@@ -777,6 +777,7 @@ export function renderSportsdeskPatternAnsi(markdown: string): string {
   const blue = Bun.color("#3B82F1", "ansi") ?? "";
   const reset = "\x1b[0m";
   const pad = SPORTSDESK_REPLAY_TABLE_COL_WIDTH;
+  // trusted-markdown: ANSI rows for the replay CLI; escape sequences are this module's own.
   return Bun.markdown.render(markdown, {
     tr: (children) => `${children}\n`,
     th: (c) => `\x1b[1;36m${String(c).padEnd(pad)}${reset}`,

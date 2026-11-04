@@ -2262,7 +2262,7 @@
           <span id="bridge-3b-status">Bridge 3b: awaiting_live_capture</span>
           <span id="bridge-3c-status">Bridge 3c: LIVE</span>
           <span id="weblog-status">Bridge WebLog: loading</span>
-          <span id="bridge-ws-state">WS: not configured</span>
+          <span id="bridge-ws-state">WS: connecting</span>
         </div>
         <p id="wl-gates">GATE-WL-01..04: loading…</p>
         <p id="wl-parsed">—</p>
@@ -4851,26 +4851,45 @@
       };
 
       /*
-       * Live bridge client. The deployment fills the meta content with its ws endpoint; an empty
-       * content means disabled, so there is deliberately no baked-in default URL.
+       * Live bridge client. Empty meta content means "same origin": the daemon serves the hub on
+       * the guarded /api/live-bets route it already exposes, so no new route and no ticket URL is
+       * needed. A non-empty content overrides the endpoint for a deployment that fronts it.
        */
       (() => {
         const meta = document.querySelector(
           'meta[name="sportsdesk-bridge-ws"]',
         );
-        const endpoint = (meta?.content || "").trim();
+        const configured = (meta?.content || "").trim();
+        const sameOrigin = configured === "";
+        const endpoint = sameOrigin
+          ? (location.protocol === "https:" ? "wss:" : "ws:") +
+            "//" +
+            location.host +
+            "/api/live-bets"
+          : configured;
         const stateEl = document.getElementById("bridge-ws-state");
         const setState = (text) => {
           if (stateEl) stateEl.textContent = text;
         };
-        if (!endpoint) {
-          setState("WS: not configured");
-          return;
-        }
         if (typeof WebSocket === "undefined") {
           setState("WS: unsupported");
           return;
         }
+        /*
+         * Browsers cannot set headers on a WebSocket handshake, so the admin token travels as the
+         * `bearer-<token>` subprotocol and the daemon turns it back into `authorization` before
+         * running the route's own guard. It never lands in a URL.
+         */
+        const openSocket = () => {
+          if (!sameOrigin) return new WebSocket(endpoint);
+          const token = (tokenInput?.value || "").trim();
+          const protocols = ["sportsdesk.bridge.v1"];
+          // A subprotocol is an HTTP token: a token with spaces or separators cannot be offered.
+          if (token !== "" && /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(token)) {
+            protocols.push("bearer-" + token);
+          }
+          return new WebSocket(endpoint, protocols);
+        };
 
         const active = new Set();
         let socket = null;
@@ -4913,7 +4932,7 @@
           let ws;
           setState("WS: connecting");
           try {
-            ws = new WebSocket(endpoint);
+            ws = openSocket();
           } catch {
             scheduleReconnect();
             return;
@@ -4958,6 +4977,17 @@
         };
 
         connect();
+
+        // Pasting the admin token is the case that unblocks a 401 loop: reconnect at once.
+        globalThis.addEventListener("sportsdesk-settings", () => {
+          if (!sameOrigin) return;
+          backoffMs = 1_000;
+          if (socket === null) {
+            if (reconnectTimer === null) connect();
+            return;
+          }
+          socket.close();
+        });
       })();
 
       (async () => {

@@ -1,7 +1,4 @@
 /** F402 WebLog + Mode 6 overlap bridge: streaming corpus profiling, IP clusters, sessions, gates. */
-import { createReadStream } from "node:fs";
-import { createGunzip } from "node:zlib";
-import { createInterface } from "node:readline";
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
 
 export const WEBLOG_KIND = "f402-weblog";
@@ -198,12 +195,350 @@ export function parseAccessMs(value: string): number {
   return Date.parse(`${value.trim().replace(" ", "T")}Z`);
 }
 
-async function* lines(path: string): AsyncGenerator<string> {
-  const compressed = path.endsWith(".gz");
-  const input = createReadStream(path);
-  const stream = compressed ? input.pipe(createGunzip()) : input;
-  const rl = createInterface({ input: stream, crlfDelay: Infinity });
-  for await (const line of rl) yield line;
+/** Bytes handed to one `Bun.JSONL.parseChunk` call; bounds one window, never the corpus. */
+export const WEBLOG_JSONL_WINDOW_BYTES = 1 << 20;
+/** A single record larger than this means the source is not newline-delimited JSON. */
+export const WEBLOG_JSONL_MAX_RECORD_BYTES = 8 << 20;
+
+/** Bun stream chunks may sit on a `SharedArrayBuffer`, so the reader keeps `ArrayBufferLike`. */
+export type WeblogJsonlBytes = Uint8Array<ArrayBufferLike>;
+
+/** Byte source for the reader: one buffer, a decompressed file stream, or explicit chunks. */
+export type WeblogJsonlByteSource =
+  | WeblogJsonlBytes
+  | AsyncIterable<WeblogJsonlBytes>
+  | Iterable<WeblogJsonlBytes>;
+
+/** `none` = plain `.jsonl`; the others put a `DecompressionStream` in front of the reader. */
+export type WeblogJsonlCompression = "none" | "gzip" | "zstd";
+
+export interface WeblogJsonlOptions {
+  /** Bytes fed to one `parseChunk` call (default `WEBLOG_JSONL_WINDOW_BYTES`). */
+  readonly windowBytes?: number;
+  /** Upper bound for one unterminated line (default `WEBLOG_JSONL_MAX_RECORD_BYTES`). */
+  readonly maxRecordBytes?: number;
+}
+
+export interface WeblogJsonlStats {
+  /** Physical lines consumed, blank lines included (the readline reader's `total`). */
+  readonly total: number;
+  /** Lines that were blank or not JSON. Row-shape rejections stay with the caller. */
+  readonly malformed: number;
+  /** Byte offset of the first unread byte; equals the source length after a full read. */
+  readonly bytesConsumed: number;
+}
+
+export interface WeblogJsonlRead extends WeblogJsonlStats {
+  readonly values: readonly unknown[];
+}
+
+export interface WeblogDecompressionSupport {
+  readonly gzip: boolean;
+  readonly zstd: boolean;
+}
+
+const GZIP_MAGIC = [0x1f, 0x8b] as const;
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd] as const;
+const MAGIC_PROBE_BYTES = 4;
+
+function positiveIntOption(
+  value: number | undefined,
+  fallback: number,
+): number {
+  return value !== undefined && Number.isSafeInteger(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function mergeBytes(
+  left: WeblogJsonlBytes,
+  right: WeblogJsonlBytes,
+): WeblogJsonlBytes {
+  if (right.length === 0) return left;
+  if (left.length === 0) return right;
+  const merged = new Uint8Array(left.length + right.length);
+  merged.set(left);
+  merged.set(right, left.length);
+  return merged;
+}
+
+/** Index of the last LF, or -1. LF terminates a record; CRLF is tolerated as its delimiter. */
+function lastLineFeed(bytes: WeblogJsonlBytes): number {
+  for (let index = bytes.length - 1; index >= 0; index -= 1) {
+    if (bytes[index] === 0x0a) return index;
+  }
+  return -1;
+}
+
+/** Physical line count of a newline-terminated window: `\r\n` once, a lone `\r` once. */
+function countLineBreaks(bytes: WeblogJsonlBytes): number {
+  let breaks = 0;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = bytes[index];
+    if (byte === 0x0a) {
+      breaks += 1;
+    } else if (byte === 0x0d) {
+      breaks += 1;
+      if (bytes[index + 1] === 0x0a) index += 1;
+    }
+  }
+  return breaks;
+}
+
+async function* widenByteSource(
+  source: WeblogJsonlByteSource,
+): AsyncGenerator<WeblogJsonlBytes> {
+  if (source instanceof Uint8Array) {
+    yield source;
+  } else if (Symbol.asyncIterator in source) {
+    yield* source as AsyncIterable<WeblogJsonlBytes>;
+  } else {
+    yield* source as Iterable<WeblogJsonlBytes>;
+  }
+}
+
+/**
+ * Stream JSONL bytes through `Bun.JSONL.parseChunk`, window by window.
+ *
+ * `parseChunk` reports `read` as a BYTE count for `Uint8Array` input (it is a character count for
+ * string input, which is why this reader never builds a window string), and `read` excludes the
+ * delimiter of the final parsed record. So the reader hands `parseChunk` only newline-terminated
+ * windows and advances the byte cursor over the whole window: the terminating delimiter is
+ * consumed with it, and bytes past `read` can only be blank lines, which are counted from the
+ * window's line breaks instead of being replayed as phantom records.
+ */
+async function scanWeblogJsonl(
+  source: WeblogJsonlByteSource,
+  options: WeblogJsonlOptions,
+  handlers: {
+    readonly onValue: (value: unknown) => void;
+    readonly onMalformedLine: () => void;
+  },
+): Promise<WeblogJsonlStats> {
+  const windowBytes = positiveIntOption(
+    options.windowBytes,
+    WEBLOG_JSONL_WINDOW_BYTES,
+  );
+  const maxRecordBytes = positiveIntOption(
+    options.maxRecordBytes,
+    WEBLOG_JSONL_MAX_RECORD_BYTES,
+  );
+  const parseChunk = Bun.JSONL?.parseChunk;
+  const decoder = new TextDecoder();
+  let pending: WeblogJsonlBytes = new Uint8Array(0);
+  let bytesConsumed = 0;
+  let total = 0;
+  let malformed = 0;
+
+  const emitMalformed = (count: number): void => {
+    for (let index = 0; index < count; index += 1) {
+      total += 1;
+      malformed += 1;
+      handlers.onMalformedLine();
+    }
+  };
+
+  /**
+   * Deterministic per-line fallback. The readline reader counted every physical line, so a blank
+   * or unparseable line is one malformed row here too, in order, never skipped or guessed.
+   */
+  const parseWindowLines = (window: WeblogJsonlBytes): void => {
+    const lines = decoder.decode(window).split(/\r\n|\r|\n/);
+    if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+    for (const line of lines) {
+      if (line.trim() === "") {
+        emitMalformed(1);
+        continue;
+      }
+      let value: unknown;
+      try {
+        value = JSON.parse(line);
+      } catch {
+        emitMalformed(1);
+        continue;
+      }
+      total += 1;
+      handlers.onValue(value);
+    }
+  };
+
+  const drainCompleteLines = (): void => {
+    for (;;) {
+      if (pending.length === 0) return;
+      const feed = lastLineFeed(pending);
+      if (feed < 0) return; // Unterminated tail: held back for the next window.
+      const cut = feed + 1;
+      const window = pending.subarray(0, cut);
+      if (typeof parseChunk !== "function") {
+        parseWindowLines(window);
+      } else {
+        const chunk = parseChunk(window);
+        if (chunk.error !== null && chunk.error !== undefined) {
+          // One bad record poisons a whole `parseChunk` call; re-read this window line by line
+          // so the malformed count stays identical to the per-line reader.
+          parseWindowLines(window);
+        } else {
+          for (const value of chunk.values) {
+            total += 1;
+            handlers.onValue(value);
+          }
+          // `parseChunk` silently skips blank and whitespace-only lines. They were malformed
+          // rows before this refactor, so count them from the window's line breaks.
+          emitMalformed(
+            Math.max(0, countLineBreaks(window) - chunk.values.length),
+          );
+        }
+      }
+      bytesConsumed += cut;
+      pending = pending.subarray(cut);
+    }
+  };
+
+  for await (const streamed of widenByteSource(source)) {
+    if (streamed.length === 0) continue;
+    for (let offset = 0; offset < streamed.length; offset += windowBytes) {
+      pending = mergeBytes(
+        pending,
+        streamed.subarray(offset, offset + windowBytes),
+      );
+      drainCompleteLines();
+      if (pending.length > maxRecordBytes) {
+        throw new Error(
+          `f402_weblog: unterminated JSONL record exceeds ${maxRecordBytes} bytes; ` +
+            "the source is not newline-delimited JSON",
+        );
+      }
+    }
+  }
+
+  // End of stream: readline also yields a final line without a trailing newline.
+  if (pending.length > 0) {
+    bytesConsumed += pending.length;
+    parseWindowLines(pending);
+    pending = new Uint8Array(0);
+  }
+  return { total, malformed, bytesConsumed };
+}
+
+/** Collect a byte source's JSON records (test/pipe entry point for the streaming reader). */
+export async function readWeblogJsonlChunks(
+  source: WeblogJsonlByteSource,
+  options: WeblogJsonlOptions = {},
+): Promise<WeblogJsonlRead> {
+  const values: unknown[] = [];
+  const stats = await scanWeblogJsonl(source, options, {
+    onValue: (value) => values.push(value),
+    onMalformedLine: () => {},
+  });
+  return { ...stats, values };
+}
+
+/** Read one JSONL file — plain, `.jsonl.gz` or `.jsonl.zst` — through the byte windows. */
+export async function readWeblogJsonlFile(
+  path: string,
+  options: WeblogJsonlOptions = {},
+): Promise<WeblogJsonlRead> {
+  return readWeblogJsonlChunks(await weblogFileChunks(path), options);
+}
+
+let cachedDecompressionSupport: WeblogDecompressionSupport | undefined;
+
+function probeDecompressionStream(format: "gzip" | "zstd"): boolean {
+  try {
+    // The ambient `CompressionFormat` types predate zstd; the runtime accepts "zstd" (probed).
+    new DecompressionStream(format as never);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether this Bun runtime can stream gzip/zstd through `DecompressionStream`.
+ *
+ * Measured on Bun 1.4.4 (macOS arm64): both `"gzip"` and `"zstd"` construct successfully, so the
+ * primary path below is the streaming one. The probe constructs a stream (the constructor throws
+ * for an unsupported format) and the answer is cached.
+ */
+export function weblogDecompressionSupport(): WeblogDecompressionSupport {
+  const cached = cachedDecompressionSupport;
+  if (cached !== undefined) return cached;
+  const measured: WeblogDecompressionSupport = {
+    gzip: probeDecompressionStream("gzip"),
+    zstd: probeDecompressionStream("zstd"),
+  };
+  cachedDecompressionSupport = measured;
+  return measured;
+}
+
+function compressionFromPath(path: string): WeblogJsonlCompression | null {
+  if (/\.gz$/i.test(path)) return "gzip";
+  if (/\.(?:zst|zstd)$/i.test(path)) return "zstd";
+  return null; // Unknown/plain suffix: fall back to the magic bytes.
+}
+
+function compressionFromMagic(
+  head: WeblogJsonlBytes,
+): WeblogJsonlCompression | null {
+  if (head[0] === GZIP_MAGIC[0] && head[1] === GZIP_MAGIC[1]) return "gzip";
+  if (
+    head.length >= ZSTD_MAGIC.length &&
+    ZSTD_MAGIC.every((byte, index) => head[index] === byte)
+  )
+    return "zstd";
+  return null;
+}
+
+/** Extension first, magic bytes as the backup for an unknown or misleading suffix. */
+async function detectWeblogCompression(
+  path: string,
+): Promise<WeblogJsonlCompression> {
+  const byExtension = compressionFromPath(path);
+  if (byExtension !== null) return byExtension;
+  let head: WeblogJsonlBytes;
+  try {
+    head = new Uint8Array(
+      await Bun.file(path).slice(0, MAGIC_PROBE_BYTES).arrayBuffer(),
+    );
+  } catch (error) {
+    throw new Error(
+      `f402_weblog: cannot read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  return compressionFromMagic(head) ?? "none";
+}
+
+async function* singleChunk(
+  bytes: Uint8Array,
+): AsyncGenerator<WeblogJsonlBytes> {
+  yield bytes;
+}
+
+async function weblogFileChunks(path: string): Promise<WeblogJsonlByteSource> {
+  const compression = await detectWeblogCompression(path);
+  const file = Bun.file(path);
+  if (compression === "none") return file.stream();
+  const support = weblogDecompressionSupport();
+  if (compression === "gzip") {
+    if (!support.gzip) {
+      throw new Error(
+        `f402_weblog: ${path} is gzip but this Bun runtime has no gzip DecompressionStream`,
+      );
+    }
+    return file.stream().pipeThrough(new DecompressionStream("gzip" as never));
+  }
+  if (support.zstd) {
+    return file.stream().pipeThrough(new DecompressionStream("zstd" as never));
+  }
+  // Degraded path for a runtime without streaming zstd. It materializes the file instead of
+  // streaming it; it cannot run on Bun 1.4.4, where the probe above reports zstd support.
+  if (typeof Bun.zstdDecompressSync === "function") {
+    return singleChunk(Bun.zstdDecompressSync(await file.bytes()));
+  }
+  throw new Error(
+    `f402_weblog: ${path} is zstd but this Bun runtime has neither a zstd DecompressionStream nor Bun.zstdDecompressSync`,
+  );
 }
 
 export async function readWeblogRows(paths: readonly string[]): Promise<{
@@ -217,34 +552,43 @@ export async function readWeblogRows(paths: readonly string[]): Promise<{
   let malformed = 0,
     total = 0;
   for (const path of paths) {
-    for await (const line of lines(path)) {
-      total += 1;
-      let raw: Record<string, unknown>;
-      try {
-        raw = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        malformed += 1;
-        continue;
-      }
-      const accessMs = parseAccessMs(String(raw.AccessDateTime ?? ""));
-      if (!Number.isFinite(accessMs)) {
-        malformed += 1;
-        continue;
-      }
-      const loginId = String(raw.LoginID ?? "").trim();
-      const ip = String(raw.IPAddress ?? "").trim();
-      const parsed = parseOperation(raw.Operation);
-      templates.add(parsed.template);
-      rows.push({
-        accessMs,
-        loginId,
-        ip,
-        ip32: ipToUint32(ip),
-        ipv6Prefix64: classifyIpv6(ip).prefix64,
-        operation: String(raw.Operation ?? ""),
-        ...parsed,
-      });
-    }
+    let invalid = 0;
+    const stats = await scanWeblogJsonl(
+      await weblogFileChunks(path),
+      {},
+      {
+        onValue: (value) => {
+          // JSON `null` and scalars are not WebLog rows. The readline reader counted scalars as
+          // malformed and crashed on `null`; counting both malformed keeps the counts deterministic.
+          if (value === null || typeof value !== "object") {
+            invalid += 1;
+            return;
+          }
+          const raw = value as Record<string, unknown>;
+          const accessMs = parseAccessMs(String(raw.AccessDateTime ?? ""));
+          if (!Number.isFinite(accessMs)) {
+            invalid += 1;
+            return;
+          }
+          const loginId = String(raw.LoginID ?? "").trim();
+          const ip = String(raw.IPAddress ?? "").trim();
+          const parsed = parseOperation(raw.Operation);
+          templates.add(parsed.template);
+          rows.push({
+            accessMs,
+            loginId,
+            ip,
+            ip32: ipToUint32(ip),
+            ipv6Prefix64: classifyIpv6(ip).prefix64,
+            operation: String(raw.Operation ?? ""),
+            ...parsed,
+          });
+        },
+        onMalformedLine: () => {},
+      },
+    );
+    total += stats.total;
+    malformed += stats.malformed + invalid;
   }
   return { rows, malformed, total, templates };
 }
@@ -260,20 +604,23 @@ export async function readBetsWindow(
   toMs: number,
 ): Promise<WagerRow[]> {
   const rows: WagerRow[] = [];
-  for await (const line of lines(path)) {
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(line) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    const insertMs = parseAccessMs(String(raw.InsertDateTime ?? ""));
-    if (!Number.isFinite(insertMs) || insertMs < fromMs || insertMs >= toMs)
-      continue;
-    const login = String(raw.Login ?? "").trim();
-    if (login === "") continue;
-    rows.push({ login, insertMs, ticket: String(raw.TicketNumber ?? "") });
-  }
+  await scanWeblogJsonl(
+    await weblogFileChunks(path),
+    {},
+    {
+      onValue: (value) => {
+        if (value === null || typeof value !== "object") return;
+        const raw = value as Record<string, unknown>;
+        const insertMs = parseAccessMs(String(raw.InsertDateTime ?? ""));
+        if (!Number.isFinite(insertMs) || insertMs < fromMs || insertMs >= toMs)
+          return;
+        const login = String(raw.Login ?? "").trim();
+        if (login === "") return;
+        rows.push({ login, insertMs, ticket: String(raw.TicketNumber ?? "") });
+      },
+      onMalformedLine: () => {},
+    },
+  );
   return rows;
 }
 

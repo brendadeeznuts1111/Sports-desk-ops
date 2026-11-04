@@ -6,12 +6,22 @@ import {
   spawnInPtyUntil,
 } from "./bun_terminal.ts";
 import { BUN_TERMINAL_PTY_TEST_NAME } from "./bun_terminal_test_names.ts";
+import {
+  capabilityDiagnostics,
+  hasPty,
+} from "../tests/support/capabilities.ts";
+
+if (!hasPty) {
+  console.log(
+    `[bun_terminal_blog_programs] skipping PTY assertions: ${capabilityDiagnostics.pty.reason}`,
+  );
+}
 
 const bashPath = Bun.which("bash");
 const vimPath = Bun.which("vim");
 const htopPath = Bun.which("htop");
 
-test.skipIf(bashPath === null)(
+test.skipIf(!hasPty || bashPath === null)(
   BUN_TERMINAL_PTY_TEST_NAME.blog.bashLcEcho,
   async () => {
     const result = await spawnInPty([
@@ -24,7 +34,7 @@ test.skipIf(bashPath === null)(
   },
 );
 
-test.skipIf(bashPath === null)(
+test.skipIf(!hasPty || bashPath === null)(
   BUN_TERMINAL_PTY_TEST_NAME.blog.bashTerminalWriteScript,
   async () => {
     const result = await driveBashScript(["echo scripted-input", "exit"]);
@@ -33,7 +43,7 @@ test.skipIf(bashPath === null)(
   },
 );
 
-test.skipIf(vimPath === null)(
+test.skipIf(!hasPty || vimPath === null)(
   BUN_TERMINAL_PTY_TEST_NAME.blog.vimBatchQuit,
   async () => {
     const result = await spawnInPty([
@@ -49,7 +59,7 @@ test.skipIf(vimPath === null)(
   },
 );
 
-test.skipIf(vimPath === null)(
+test.skipIf(!hasPty || vimPath === null)(
   BUN_TERMINAL_PTY_TEST_NAME.blog.vimIsattyStdout,
   async () => {
     const result = await spawnInPty([
@@ -68,7 +78,7 @@ test.skipIf(vimPath === null)(
   },
 );
 
-test.skipIf(htopPath === null)(
+test.skipIf(!hasPty || htopPath === null)(
   BUN_TERMINAL_PTY_TEST_NAME.blog.htopTuiFooterThenKill,
   async () => {
     const htopUi = /F10Quit|F1Help|htoprc/i;

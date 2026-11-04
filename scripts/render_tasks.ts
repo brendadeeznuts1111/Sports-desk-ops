@@ -100,6 +100,7 @@ const mdDone = (markdown.match(/^- \[x\]/gim) ?? []).length;
 
 // The gate runs on HTML regardless of the requested output: CSS/marker changes in ANSI cannot
 // hide a task-count drift.
+// trusted-markdown: docs/REMAINING_TASKS.md from the repo, counted here and never injected.
 const html = Bun.markdown.html(buffer, PARSER_OPTIONS);
 const htmlOpen = (html.match(/type="checkbox"(?![^>]*checked)/g) ?? []).length;
 const htmlDone = (html.match(/type="checkbox"[^>]*checked/g) ?? []).length;

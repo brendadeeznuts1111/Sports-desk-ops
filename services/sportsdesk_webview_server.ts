@@ -2280,17 +2280,21 @@ export function startServer(options?: ServerOptions) {
     },
   } satisfies Parameters<typeof Bun.serve>[0];
 
-  const server: Bun.Server<undefined> = Bun.serve(
-    unixSocket
-      ? { ...serveConfig, unix: unixSocket }
+  const server: Bun.Server<undefined> = Bun.serve({
+    ...serveConfig,
+    // The dashboard's live bridge upgrades a guarded route that is already in DAEMON_ROUTES.
+    fetch: withBridgeUpgrade(serveConfig.fetch, ingress),
+    websocket: bridgeWebsocket,
+    ...(unixSocket
+      ? { unix: unixSocket }
       : {
-          ...serveConfig,
           ...(options?.port !== undefined && { port: options.port }),
           ...(options?.hostname !== undefined && {
             hostname: options.hostname,
           }),
-        },
-  );
+        }),
+  });
+  attachBridgeHub(server);
   return server;
 }
 
@@ -2311,4 +2315,295 @@ async function withWeblog<T extends Record<string, unknown>>(
   const mod = await import("../lib/f402_weblog_latest.ts");
   const latest = await mod.loadWeblogLatest();
   return { ...value, weblog: latest.status === "ok" ? latest.rollup : latest };
+}
+
+/*
+ * Dashboard live bridge: a same-origin pub/sub hub that relays the blob gateway's bridge topics.
+ *
+ * Why an upgrade on `/api/live-bets` instead of a new route: that path is already a guarded route
+ * in DAEMON_ROUTES, so reusing it keeps the route table, the OpenAPI fragment and the ledger's
+ * route counts unchanged, and unauthenticated callers still meet the route's own `piiRejection`
+ * guard. A browser cannot set headers on a WebSocket handshake, so the dashboard offers the admin
+ * token as a `bearer-<token>` subprotocol and the guard runs against a synthetic request that
+ * carries it as `authorization`. The token never appears in a URL, a log or a public response.
+ */
+
+/** Topics the dashboard subscribes to; the relay republishes exactly these. */
+export const BRIDGE_WS_TOPICS = [
+  "wagers-by-state",
+  "f402-bet-ticker",
+  "f402-pending",
+  "gslive-tally",
+  "f402-weblog",
+] as const;
+
+/** Offered first by the dashboard; the server echoes it so the browser accepts the upgrade. */
+export const BRIDGE_WS_PROTOCOL = "sportsdesk.bridge.v1";
+
+/** Browsers cannot set headers on a WebSocket, so the bearer rides in the subprotocol list. */
+const BRIDGE_WS_TOKEN_PREFIX = "bearer-";
+
+/** An already-registered guarded route: reusing it keeps DAEMON_ROUTES and the ledger unchanged. */
+const BRIDGE_WS_PATH = "/api/live-bets";
+
+const BRIDGE_WS_CHANNEL_RE = /^[a-z0-9-]{1,32}$/;
+
+type BridgeSocket = {
+  readonly subscriptions: readonly string[];
+  subscribe: (channel: string) => void;
+  unsubscribe: (channel: string) => void;
+  send: (frame: string) => number;
+};
+
+type BridgeProtocols = {
+  readonly token: string | null;
+  readonly echo: string | null;
+};
+
+let bridgeHub: Bun.Server<undefined> | null = null;
+let bridgeRelaySocket: WebSocket | null = null;
+let bridgeRelayTimer: ReturnType<typeof setTimeout> | null = null;
+let bridgeRelayBackoffMs = 1_000;
+let bridgeRelayStarted = false;
+
+/** Give the upgrade path the live server instance; `startServer` calls this after `Bun.serve`. */
+export function attachBridgeHub(server: Bun.Server<undefined>): void {
+  bridgeHub = server;
+}
+
+/** Whether this request is the dashboard's WebSocket upgrade for the reused guarded route. */
+export function isBridgeUpgrade(req: Request): boolean {
+  const upgrade = req.headers.get("upgrade");
+  if (upgrade === null || upgrade.toLowerCase() !== "websocket") return false;
+  try {
+    return new URL(req.url).pathname === BRIDGE_WS_PATH;
+  } catch {
+    return false;
+  }
+}
+
+/** The admin token and the protocol to echo, read from what the browser offered. */
+export function bridgeProtocols(req: Request): BridgeProtocols {
+  const offered = (req.headers.get("sec-websocket-protocol") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+  const bearer = offered.find((value) =>
+    value.startsWith(BRIDGE_WS_TOKEN_PREFIX),
+  );
+  return {
+    token:
+      bearer === undefined ? null : bearer.slice(BRIDGE_WS_TOKEN_PREFIX.length),
+    echo: offered.includes(BRIDGE_WS_PROTOCOL) ? BRIDGE_WS_PROTOCOL : null,
+  };
+}
+
+/** What the route's guard sees: same URL, with the subprotocol token as a bearer header. */
+export function bridgeUpgradeRequest(req: Request): Request {
+  const { token } = bridgeProtocols(req);
+  const headers = new Headers(req.headers);
+  headers.delete("sec-websocket-protocol");
+  if (token === null || token === "") headers.delete("authorization");
+  else headers.set("authorization", `Bearer ${token}`);
+  return new Request(req.url, { method: req.method, headers });
+}
+
+/** `null` when the request may upgrade; otherwise the guarded route's own rejection. */
+export function bridgeUpgradeRejection(
+  req: Request,
+  address: string | null | undefined,
+  ingress: Ingress,
+): { status: number; error: string } | null {
+  return piiRejection(bridgeUpgradeRequest(req), address, ingress);
+}
+
+function bridgeRefusal(status: number, error: string): Response {
+  return Response.json({ success: false, error }, { status });
+}
+
+/** Wrap the daemon fetch so only the bridge upgrade diverges; every other request is untouched. */
+export function withBridgeUpgrade(
+  inner: (req: Request) => Promise<Response>,
+  ingress: Ingress,
+): (req: Request) => Promise<Response | undefined> {
+  return async (req) => {
+    if (!isBridgeUpgrade(req)) return inner(req);
+    const server = bridgeHub;
+    if (server === null) return bridgeRefusal(503, "hub_not_ready");
+    const rejected = bridgeUpgradeRejection(
+      req,
+      server.requestIP(req)?.address,
+      ingress,
+    );
+    if (rejected !== null)
+      return bridgeRefusal(rejected.status, rejected.error);
+    const { echo } = bridgeProtocols(req);
+    const upgraded = server.upgrade(
+      req,
+      echo === null ? {} : { headers: { "Sec-WebSocket-Protocol": echo } },
+    );
+    return upgraded ? undefined : bridgeRefusal(426, "upgrade_failed");
+  };
+}
+
+function bridgeSend(socket: BridgeSocket, payload: unknown): void {
+  socket.send(JSON.stringify(payload));
+}
+
+/**
+ * Same wire protocol as the blob gateway: `PING`/`PONG`, `SUBSCRIBE`/`SUBSCRIBED` and
+ * `UNSUBSCRIBE`/`UNSUBSCRIBED`, all synchronous (Bun auto-corks `message`). The ack's
+ * `channels` and `subscriptions` both come from uWebSockets' own topic table.
+ */
+export const bridgeWebsocket = {
+  open(): void {
+    startBridgeRelay();
+  },
+  message(ws: BridgeSocket, raw: string | Buffer): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf8"));
+    } catch {
+      bridgeSend(ws, { type: "ERROR", code: "invalid_json" });
+      return;
+    }
+    if (parsed === null || typeof parsed !== "object") {
+      bridgeSend(ws, { type: "ERROR", code: "invalid_message" });
+      return;
+    }
+    const msg = parsed as { type?: unknown; channel?: unknown };
+    if (msg.type === "PING") {
+      bridgeSend(ws, { type: "PONG", ts: Date.now() });
+      return;
+    }
+    if (
+      typeof msg.channel !== "string" ||
+      !BRIDGE_WS_CHANNEL_RE.test(msg.channel)
+    ) {
+      bridgeSend(ws, { type: "ERROR", code: "invalid_channel" });
+      return;
+    }
+    if (msg.type === "SUBSCRIBE") {
+      ws.subscribe(msg.channel);
+      bridgeSend(ws, {
+        type: "SUBSCRIBED",
+        channel: msg.channel,
+        channels: ws.subscriptions,
+        subscriptions: ws.subscriptions,
+      });
+      return;
+    }
+    if (msg.type !== "UNSUBSCRIBE") {
+      bridgeSend(ws, { type: "ERROR", code: "invalid_message" });
+      return;
+    }
+    ws.unsubscribe(msg.channel);
+    bridgeSend(ws, {
+      type: "UNSUBSCRIBED",
+      channel: msg.channel,
+      channels: ws.subscriptions,
+      subscriptions: ws.subscriptions,
+    });
+  },
+  close(): void {},
+};
+
+/** Connect once to the blob gateway and republish its bridge frames onto the local hub. */
+function startBridgeRelay(): void {
+  if (bridgeRelayStarted) return;
+  bridgeRelayStarted = true;
+  void connectBridgeRelay();
+}
+
+async function connectBridgeRelay(): Promise<void> {
+  const server = bridgeHub;
+  if (server === null) {
+    scheduleBridgeRelay();
+    return;
+  }
+  try {
+    const { resolveBlobApiToken, resolveBlobGatewayUrl } =
+      await import("../lib/blob_upload.ts");
+    const gateway = resolveBlobGatewayUrl();
+    const token = await resolveBlobApiToken();
+    if (token === "") {
+      scheduleBridgeRelay();
+      return;
+    }
+    const ticketResponse = await fetch(`${gateway}/api/v1/ws-tickets`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!ticketResponse.ok) {
+      scheduleBridgeRelay();
+      return;
+    }
+    const { ticket } = (await ticketResponse.json()) as { ticket?: unknown };
+    if (typeof ticket !== "string" || ticket === "") {
+      scheduleBridgeRelay();
+      return;
+    }
+    const url = new URL(`${gateway}/ws/live-bets`);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.searchParams.set("ticket", ticket);
+    const socket = new WebSocket(url);
+    bridgeRelaySocket = socket;
+    socket.addEventListener("open", () => {
+      bridgeRelayBackoffMs = 1_000;
+      for (const topic of BRIDGE_WS_TOPICS) {
+        socket.send(JSON.stringify({ type: "SUBSCRIBE", channel: topic }));
+      }
+    });
+    socket.addEventListener("message", (event) => {
+      const raw = typeof event.data === "string" ? event.data : "";
+      if (raw === "" || bridgeHub === null) return;
+      let kind: unknown;
+      try {
+        kind = (JSON.parse(raw) as { kind?: unknown }).kind;
+      } catch {
+        return;
+      }
+      if (
+        typeof kind !== "string" ||
+        !(BRIDGE_WS_TOPICS as readonly string[]).includes(kind)
+      ) {
+        return;
+      }
+      bridgeHub.publish(kind, raw);
+    });
+    socket.addEventListener("close", () => {
+      if (bridgeRelaySocket !== socket) return;
+      bridgeRelaySocket = null;
+      scheduleBridgeRelay();
+    });
+  } catch {
+    scheduleBridgeRelay();
+  }
+}
+
+function scheduleBridgeRelay(): void {
+  if (bridgeRelayTimer !== null) return;
+  const delay = bridgeRelayBackoffMs;
+  bridgeRelayBackoffMs = Math.min(bridgeRelayBackoffMs * 2, 30_000);
+  bridgeRelayTimer = setTimeout(() => {
+    bridgeRelayTimer = null;
+    void connectBridgeRelay();
+  }, delay);
+  // The relay retries in the background; it must not keep the process alive.
+  bridgeRelayTimer.unref?.();
+}
+
+/** Stop the relay and detach the hub; tests and shutdown use this. */
+export function stopBridgeHub(): void {
+  bridgeRelayStarted = false;
+  bridgeRelayBackoffMs = 1_000;
+  if (bridgeRelayTimer !== null) {
+    clearTimeout(bridgeRelayTimer);
+    bridgeRelayTimer = null;
+  }
+  const socket = bridgeRelaySocket;
+  bridgeRelaySocket = null;
+  bridgeHub = null;
+  socket?.close();
 }

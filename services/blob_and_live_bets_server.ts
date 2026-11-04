@@ -378,7 +378,7 @@ function numberEnv(name: string, fallback: number, minimum = 1): number {
   return value;
 }
 
-function requiredEnv(name: string): string {
+export function requiredEnv(name: string): string {
   const value = Bun.env[name];
   if (value === undefined || value.trim() === "") {
     throw new Error(`${name} is required`);

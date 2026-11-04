@@ -77,21 +77,22 @@ Each task carries a stable `Ref:` id. The id does not change when tasks are renu
 the table resolves it to the record that justifies the basis and to the artifact that closes it. A ref
 id that appears on a task but not in this table is a defect, and a test enforces it.
 
-| Ref                    | Task     | Basis record                              | Closes against    |
-| :--------------------- | :------- | :---------------------------------------- | :---------------- |
-| `RT-F402-CAPTURE`      | P0.1     | `[OBSERVED]` captures/2026-11-01/         | ledger row        |
-| `RT-PREFEE-PNL`        | P0.2     | `[UNVERIFIED]` third-party toolkit        | one wallet        |
-| `RT-AUTH-BACKEND-DIFF` | P0.3     | `[OBSERVED]` captures/2026-11-01/run.json | CDP vs WebKit     |
-| `RT-GSLIVE-LINKS`      | P1.6     | `[OBSERVED]` three GSLive surfaces        | three captures    |
-| `RT-ARTIFACT-CADENCE`  | P2.3     | `[CODE]` package.json:76                  | cadence + check   |
-| `RT-SEARCH-ESCAPE`     | P0.5     | `[CODE]` pinned manager.js search render  | sink test         |
-| `RT-DEFENSE-MEASURE`   | P0.6     | `[CODE]`/`[OBSERVED]` defense pack        | measured controls |
-| `RT-RENDER-HTML`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.html    | HTML artifact     |
-| `RT-RENDER-ANSI`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.ansi    | CLI/JS diff       |
-| `RT-RENDER-LISTITEM`   | Renderer | `[OBSERVED]` MCP api:Bun.markdown.render  | checked semantics |
-| `RT-RENDER-SECURITY`   | Renderer | `[OBSERVED]` MCP api:Bun.markdown.Options | tagFilter tests   |
-| `RT-DOCS-MANIFEST`     | Pipeline | `[CODE]` lib/docs_render_cache.ts         | stable buildId    |
-| `RT-DOCS-SERVE`        | Pipeline | `[CODE]` lib/docs_server.ts               | q-value + range   |
+| Ref                    | Task     | Basis record                                    | Closes against           |
+| :--------------------- | :------- | :---------------------------------------------- | :----------------------- |
+| `RT-F402-CAPTURE`      | P0.1     | `[OBSERVED]` captures/2026-11-01/               | ledger row               |
+| `RT-PREFEE-PNL`        | P0.2     | `[UNVERIFIED]` third-party toolkit              | one wallet               |
+| `RT-AUTH-BACKEND-DIFF` | P0.3     | `[OBSERVED]` captures/2026-11-01/run.json       | CDP vs WebKit            |
+| `RT-GSLIVE-LINKS`      | P1.6     | `[OBSERVED]` three GSLive surfaces              | three captures           |
+| `RT-ARTIFACT-CADENCE`  | P2.3     | `[CODE]` package.json:76                        | cadence + check          |
+| `RT-SEARCH-ESCAPE`     | P0.5     | `[CODE]` pinned manager.js search render        | sink test                |
+| `RT-DEFENSE-MEASURE`   | P0.6     | `[CODE]`/`[OBSERVED]` defense pack              | measured controls        |
+| `RT-PENDING-COUNT`     | P0.7     | `[CODE]`/`[OBSERVED]` pending-count feasibility | written Path A/B finding |
+| `RT-RENDER-HTML`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.html          | HTML artifact            |
+| `RT-RENDER-ANSI`       | Renderer | `[OBSERVED]` MCP api:Bun.markdown.ansi          | CLI/JS diff              |
+| `RT-RENDER-LISTITEM`   | Renderer | `[OBSERVED]` MCP api:Bun.markdown.render        | checked semantics        |
+| `RT-RENDER-SECURITY`   | Renderer | `[OBSERVED]` MCP api:Bun.markdown.Options       | tagFilter tests          |
+| `RT-DOCS-MANIFEST`     | Pipeline | `[CODE]` lib/docs_render_cache.ts               | stable buildId           |
+| `RT-DOCS-SERVE`        | Pipeline | `[CODE]` lib/docs_server.ts                     | q-value + range          |
 
 Full paths and line numbers stay on each task's **Basis** line; this table is the ref-to-record index,
 so an id resolves without guessing which artifact it came from.
@@ -247,7 +248,7 @@ so an id resolves without guessing which artifact it came from.
   - **Owner:** operator + settlement team + compliance
   - **Basis:** `[CODE]`/`[OBSERVED]`
     `docs/analysis/defense-measurement-2026-11-03/08-pending-customer-count-feasibility.md`: no
-    decision consumer documented; the portal's `Pending 2,400` is $2,400 of wager amount, not a
+    decision consumer documented; the portal's `Pending 2,400` is 2,400 dollars of wager amount, not a
     customer count; `getPending` (`TicketNumber-WagerNumber`), `getHistory`
     (`LOGIN|WAGERNUMBER`) and `getTransactionList` (`DocumentNumber`/`GradeNum`) share no join key.
   - **Blocked by:** authoritative wager transaction log/replica; settlement report for a named

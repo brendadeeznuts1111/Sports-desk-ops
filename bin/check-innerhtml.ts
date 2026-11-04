@@ -13,10 +13,16 @@
  * `integrity=` + `crossorigin="anonymous"`. `rel="stylesheet/less"` tags are pin-coverage only:
  * less.js fetches them over XHR, where browsers never consult SRI.
  *
+ * Also enforces that every `Bun.markdown.html(...)` / `Bun.markdown.render(...)` call is annotated:
+ * the native renderer passes raw HTML and attributes through unsanitized, so its output is a sink
+ * wherever it is placed. A call is only accepted with `// trusted-markdown: <reason>` on the same
+ * line or the line above, which keeps each raw-HTML decision reviewable.
+ *
  * Allowed:
  *   element.innerHTML = "" (literal clearing)
  *   element.innerHTML = "constant static string"
  *   element.innerHTML = expr; // sanitized: <ticket-or-path> — <reason>
+ *   Bun.markdown.html(src, opts); // trusted-markdown: <reason>
  */
 
 import path from "node:path";
@@ -39,6 +45,21 @@ const EXTERNAL_ASSET_TAG_RE =
 // A backslash run escapes the next character: client JS emitted from a TS template literal
 // carries its quotes double-escaped (`\\"`). Any bare quote in the middle still fails the match.
 const SAFE_STATIC_LITERAL_RE = /^(['"])(?:\\+.|(?!\1)[^\\])*\1$/;
+const MARKDOWN_SINK_RE = /\bBun\.markdown\.(?:html|render)\s*\(/;
+
+/**
+ * Help text can name the renderer (`--html   Bun.markdown.html() + options`), and only a call is a
+ * sink. A call starts the statement, or follows `=`, `(`, `:` or `,`, or a `return`.
+ */
+function isMarkdownSinkCall(line: string): boolean {
+  const match = MARKDOWN_SINK_RE.exec(line);
+  if (match === null) return false;
+  const before = line.slice(0, match.index).trimEnd();
+  if (before === "") return true;
+  const last = before.at(-1);
+  if (last === "=" || last === "(" || last === ":" || last === ",") return true;
+  return /\breturn$/.test(before);
+}
 
 function isTestFile(relPath: string): boolean {
   const norm = relPath.replace(/\\/g, "/");
@@ -71,6 +92,16 @@ function auditFile(content: string, relPath: string): string[] {
       stripped.includes("/* sanitized:")
     ) {
       continue;
+    }
+
+    if (
+      isMarkdownSinkCall(stripped) &&
+      !stripped.includes("// trusted-markdown:") &&
+      !(lines[idx - 1] ?? "").includes("// trusted-markdown:")
+    ) {
+      violations.push(
+        `Line ${idx + 1}: Unsafe Bun.markdown render sink '${stripped.slice(0, 60)}'. The native renderer passes raw HTML through; annotate with "// trusted-markdown: <reason>" or sanitize the output.`,
+      );
     }
 
     const match = stripped.match(INNER_HTML_ASSIGN_RE);
