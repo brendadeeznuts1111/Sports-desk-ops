@@ -50,6 +50,59 @@ describe("import.meta contract", () => {
     );
   });
 
+  test("resolve is synchronous, honors a string parent, and does not check existence", () => {
+    const parentUrl = new URL("file:///tmp/a/b/c.ts");
+    const expected = "file:///tmp/a/b/x.ts";
+
+    expect(typeof import.meta.resolve("./package.json")).toBe("string");
+    expect(import.meta.resolve("node:fs")).toBe("node:fs");
+    expect(import.meta.resolve("bun:test")).toBe("bun:test");
+    expect(import.meta.resolve("./x.ts", parentUrl.href)).toBe(expected);
+    // Bun 1.4.4 ignores the documented URL overload and resolves against this module.
+    // Pin the observed gap; a fix should fail this line and update the contract.
+    expect(import.meta.resolve("./x.ts", parentUrl)).toBe(
+      new URL("./x.ts", import.meta.url).href,
+    );
+    expect(import.meta.resolve("./does-not-exist-contract")).toBe(
+      new URL("./does-not-exist-contract", import.meta.url).href,
+    );
+  });
+
+  test("resolve follows the documented (specifier, parent?) string contract", () => {
+    // Bun returns a `file:` URL string (not a URL object), resolves relative specifiers against
+    // the module, keeps built-in schemes, and accepts a parent directory or file URL. Resolution
+    // is textual: it does not check that the target exists.
+    const moduleUrl = new URL(import.meta.url).href;
+    expect(import.meta.resolve("./import_meta_contract.test.ts")).toBe(
+      moduleUrl,
+    );
+    expect(import.meta.resolve("./nested/fixture.ts")).toBe(
+      new URL("./nested/fixture.ts", import.meta.url).href,
+    );
+    expect(import.meta.resolve("../package.json")).toBe(
+      new URL("../package.json", import.meta.url).href,
+    );
+    expect(import.meta.resolve("node:path")).toBe("node:path");
+    expect(import.meta.resolve("bun:test")).toBe("bun:test");
+
+    // A bare specifier goes through node_modules and resolves to a file URL.
+    expect(import.meta.resolve("oxlint").startsWith("file:")).toBe(true);
+
+    // The parent argument is a *module* path or URL: `./x` anchors at its dirname. Passing a
+    // directory as a plain path therefore resolves one level up (it is read as a file name);
+    // a trailing slash is what anchors at the directory itself.
+    expect(fileURLToPath(import.meta.resolve("./x.ts", import.meta.url))).toBe(
+      join(import.meta.dir, "x.ts"),
+    );
+    expect(fileURLToPath(import.meta.resolve("./x.ts", import.meta.dir))).toBe(
+      join(dirname(import.meta.dir), "x.ts"),
+    );
+    const nestedDir = join(import.meta.dir, "nested");
+    expect(fileURLToPath(import.meta.resolve("./x.ts", `${nestedDir}/`))).toBe(
+      join(nestedDir, "x.ts"),
+    );
+  });
+
   test("bun test exposes the env view without Vite keys on 1.4.4", () => {
     // The current docs say bun test adds MODE/DEV/PROD/SSR/BASE_URL. Bun 1.4.4 does not;
     // pin the observed shape so a runtime change surfaces here.
@@ -71,9 +124,14 @@ describe("import.meta contract", () => {
   test("glob and hot are absent at runtime on 1.4.4", () => {
     // The docs describe a bundler/HMR transform. Bun 1.4.4 neither exposes
     // import.meta.glob at runtime nor rewrites it in Bun.build/bun build; the built call still
-    // throws "import.meta.glob is not a function". Pin the gap so an implementation change
-    // surfaces here.
-    expect(import.meta.glob).toBeUndefined();
+    // throws "import.meta.glob is not a function". The documented options
+    // (Bun.ImportMetaGlobOptions: base/eager/exhaustive/import/query) are also absent from
+    // bun-types 1.4.4, so there is no type to compile against yet. Pin the gap so an
+    // implementation change surfaces here.
+    // `glob` is not on the 1.4.4 ImportMeta type; read it as an untyped runtime property.
+    expect(
+      (import.meta as ImportMeta & { glob?: unknown }).glob,
+    ).toBeUndefined();
     expect(import.meta.hot).toBeUndefined();
   });
 });
