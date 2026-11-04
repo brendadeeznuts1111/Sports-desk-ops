@@ -205,7 +205,10 @@ so an id resolves without guessing which artifact it came from.
     `bet-desc` in `pending-thin.js` is a copy of already-rendered `.gameReport` HTML, _not_ the
     origin — the source render (`getResultTicketPending` / `getResultTicketMobileDetails`, raw
     `Description`/`ChosenTeamID`/line/`Content` substitution) is the next follow-up. Module anchors
-    (`password-h`, `bet-desc`, `gameReport`) are checked by `pin:cdn`. `searchCustomer` (fullscreen) is the fifth sink,
+    (`password-h`, `bet-desc`, `gameReport`, `data-ticket`, `getDetailWager`) are checked by
+    `pin:cdn`. `delete-wager` table fields are system/game data (no Note/Comments field); server
+    provenance remains a question. The Select2 demo asset (`escapeMarkup` identity,
+    `http://api.github.com`) is absent from `manager.html` and the pinned graph: cleanup-only. `searchCustomer` (fullscreen) is the fifth sink,
     scheduled once reachability is confirmed: live in the pinned controller, trigger markup
     absent/commented.
 

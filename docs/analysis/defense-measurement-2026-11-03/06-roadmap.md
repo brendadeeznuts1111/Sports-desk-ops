@@ -93,6 +93,18 @@ origin is `getResultTicketPending` / `getResultTicketMobileDetails`, which subst
 `Description`/`ChosenTeamID`/line/`Content` into the pending-row HTML. Fixing `bet-desc` alone would
 not close that path — the source render is the next follow-up.
 
+**Checklist triage (2026-11-04):** the `manager.js`-only probes return zero for `password-h`,
+`bet-desc`, `data-ticket` and `select2-icons`; all four are in lazily loaded modules or a cached
+demo asset. `player-info.js` `password-h` is a raw `.html()` sink and is now escaped at the overlay.
+`pending-thin.js` `bet-desc` copies already-rendered `.gameReport` HTML; the origin render is
+`getResultTicketPending`/`getResultTicketMobileDetails` raw substitutions. `delete-wager.js` builds
+the wager table with string concatenation (`data-ticket`, `Login`, `Description`, `ChosenTeamID`,
+team IDs) and has **no Note/Comments field**; classify as system/game data, server-provenance
+question, not a confirmed player-controlled sink. The Select2 demo (`escapeMarkup` identity +
+`http://api.github.com`) is a cached asset with `transaction-history-main` markup, absent from
+`manager.html` and the pinned module graph: **cleanup-only/latent**, not live risk. Anchors now cover
+`password-h`, `bet-desc`, `gameReport`, `data-ticket`, `getDetailWager`.
+
 **Raised instead:** the Bearer verdict (item 2 — six requests, ~2 server-team hours) and the
 financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is
 maintained, not expanded.
