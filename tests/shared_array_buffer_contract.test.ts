@@ -25,6 +25,29 @@ describe("SharedArrayBuffer contract", () => {
     );
   });
 
+  test("species, tag, slice and grow semantics", () => {
+    expect(SharedArrayBuffer[Symbol.species]).toBe(SharedArrayBuffer);
+
+    const sab = new SharedArrayBuffer(8, { maxByteLength: 16 });
+    new Uint8Array(sab).set([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(Object.prototype.toString.call(sab)).toBe(
+      "[object SharedArrayBuffer]",
+    );
+
+    const slice = sab.slice(2, 5);
+    expect(slice).toBeInstanceOf(SharedArrayBuffer);
+    expect([...new Uint8Array(slice)]).toEqual([3, 4, 5]);
+    new Uint8Array(slice)[0] = 99;
+    expect(new Uint8Array(sab)[2]).toBe(3);
+
+    sab.grow(12);
+    expect(sab.byteLength).toBe(12);
+    expect(() => sab.grow()).toThrow(RangeError);
+    expect(() => sab.grow(4)).toThrow(RangeError);
+    expect(() => sab.grow(32)).toThrow(RangeError);
+    expect(() => new SharedArrayBuffer(8).grow(12)).toThrow(TypeError);
+  });
+
   test("Bun.JSONL.parseChunk reads SAB-backed views with byte offsets", () => {
     const text = '{"a":1}\n{"b":2}\n';
     const sab = new SharedArrayBuffer(text.length);
