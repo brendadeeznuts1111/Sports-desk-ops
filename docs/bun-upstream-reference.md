@@ -265,6 +265,21 @@ Two consequences for code here:
 - Walkthroughs: [bun.com/guides](https://bun.com/guides)
 - PM topics that match this repo: [install](https://bun.com/docs/pm/cli/install), [add](https://bun.com/docs/pm/cli/add), [remove](https://bun.com/docs/pm/cli/remove), [workspaces](https://bun.com/docs/pm/workspaces), [lifecycle](https://bun.com/docs/pm/lifecycle), [lockfile](https://bun.com/docs/pm/lockfile), [isolated installs](https://bun.com/docs/pm/isolated-installs), [patch](https://bun.com/docs/pm/cli/patch)
 
+**Ahead of the release — the `/docs/lint` linter.** [bun.com/docs/lint](https://bun.com/docs/lint)
+documents a built-in `bun lint` (rules in `bunfig.toml [lint]`, `--type-aware` backed by
+`bun check`, `--no-script`, `--doctor`). Measured 2026-11-04 on this machine: the latest GitHub
+release is **v1.4.4**, whose tag `bun-v1.4.4` is commit `38afee6c84…` — exactly the installed
+binary's revision (`1.4.4+38afee6c8`) — and the v1.4.4 blog post announces `bun fmt`, not a
+linter (`bun lint` appears zero times there; the only "lint" is `lint-staged` in the `bun fmt
+--staged` section). The command is absent from the binary: `bun --help` lists `fmt` but no `lint`,
+and `bun lint` (with or without `--no-script`) in a directory with no `lint` script fails with
+`Script not found "lint"`. In this repo the `package.json` `lint` script shadows the name, so
+`bun lint --type-aware` executes `oxlint --fix --type-aware` — a mutating oxlint run, not the
+documented linter. Until a release ships the command, `bun run lint:check` (oxlint 1.90.0 plus
+`.oxlintrc.type-aware.json`) remains the gate; after an upgrade, run `bun lint --doctor` to see
+which oxlint/ESLint rules run natively, then decide whether the shadowing script becomes
+`bun lint --fix` (inside that script `bun lint` is the linter, per the docs) or `--no-script`.
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
