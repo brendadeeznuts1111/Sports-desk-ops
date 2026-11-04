@@ -397,7 +397,7 @@ export interface ReportPendingBatchOptions {
   readonly onCustomerFailure?: "throw" | "skip";
   /** `exp` of the initial token, from `f402TokenExpiresAtMs`; enables proactive refresh. */
   readonly expiresAtMs?: number | null;
-  /** Renew at this point before expiry; default 120_000 ms (2 min). */
+  /** Renew at this point before expiry; default 300_000 ms (5 min). */
   readonly refreshLeadMs?: number;
   /** Mint a fresh token when the current one is near expiry or a request returns 401. */
   readonly refreshToken?: (
@@ -563,7 +563,7 @@ export async function fetchF402ReportPendingBatch(
   }
   async function ensureFresh(): Promise<void> {
     if (expiresAtMs === null || options.refreshToken === undefined) return;
-    const lead = options.refreshLeadMs ?? 120_000;
+    const lead = options.refreshLeadMs ?? 300_000;
     if (Date.now() < expiresAtMs - lead) return;
     await refreshNow();
   }

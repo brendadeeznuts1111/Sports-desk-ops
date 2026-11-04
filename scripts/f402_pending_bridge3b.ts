@@ -7,9 +7,9 @@ import {
   fetchAndPersistPending,
   f402TokenExpiresAtMs,
   fetchAndPersistReportPending,
-  renewF402BearerToken,
   resolveF402BearerToken,
 } from "../lib/f402_pending_fetch.ts";
+import { refreshF402BearerWithFallback } from "./f402_bearer_refresh.ts";
 import { createF402PendingSink } from "../lib/f402_pending_sink.ts";
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -166,11 +166,17 @@ if (fetchRequested) {
       maxRetries,
       expiresAtMs,
       refreshToken: async (current) => {
-        const renewed = await renewF402BearerToken({ token: current });
+        const refreshed = await refreshF402BearerWithFallback({
+          token: current,
+        });
+        const expires =
+          refreshed.expiresAtMs === null
+            ? "unknown"
+            : new Date(refreshed.expiresAtMs).toISOString();
         console.error(
-          `[bridge3b] bearer refreshed (expires ${renewed.expiresAtIso ?? "unknown"})`,
+          `[bridge3b] bearer ${refreshed.method} (expires ${expires})`,
         );
-        return { token: renewed.token, expiresAtMs: renewed.expiresAtMs };
+        return { token: refreshed.token, expiresAtMs: refreshed.expiresAtMs };
       },
     });
     console.error(

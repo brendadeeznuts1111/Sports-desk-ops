@@ -104,10 +104,15 @@ describe("bridge3b: a bearer source only (Q2)", () => {
     }
   });
 
-  test("an env bearer token satisfies 3b", async () => {
+  test("an env bearer token satisfies 3b when a customer list is configured", async () => {
     const { probe } = keychain(
       {},
-      { env: { F402_BEARER_TOKEN: "x".repeat(32) } },
+      {
+        env: {
+          F402_BEARER_TOKEN: "x".repeat(32),
+          F402_PENDING_CUSTOMERS_FILE: "/tmp/customers",
+        },
+      },
     );
     expect(await probe.check(job("bridge3b"))).toEqual({
       ok: true,
@@ -115,12 +120,31 @@ describe("bridge3b: a bearer source only (Q2)", () => {
     });
   });
 
-  test("a token file satisfies 3b", async () => {
-    const { probe } = keychain({}, { tokenFilePresent: true });
+  test("a token file satisfies 3b when a customer list is configured", async () => {
+    const { probe } = keychain(
+      {},
+      {
+        tokenFilePresent: true,
+        env: { F402_PENDING_CUSTOMERS_FILE: "/tmp/customers" },
+      },
+    );
     expect(await probe.check(job("bridge3b"))).toEqual({
       ok: true,
       source: "token-file",
     });
+  });
+
+  test("a bearer without a customer list is unconfigured and does not spawn", async () => {
+    const { probe } = keychain(
+      {},
+      { env: { F402_BEARER_TOKEN: "x".repeat(32) } },
+    );
+    const decision = await probe.check(job("bridge3b"));
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.error).toContain("unconfigured");
+      expect(decision.error).toContain("customer list");
+    }
   });
 });
 

@@ -33,5 +33,10 @@ object and an R2 object never updates per event.
   ticket, wager or group id appears in WS payloads or R2 objects.
 - **No raw rows anywhere:** the PII rules in [`pii_sanitization.md`](./pii_sanitization.md) apply to
   every stream; `betReport-all.json` and raw ticker/pending/graded rows are never uploaded.
+- **Cron mechanism is per-stream.** 3a/3b run in-process `Bun.cron` inside the `:4020` webview
+  daemon (`lib/bun_cron.ts` → `startInProcessCron`, schedule `sched_bridge_rollup_15m`), because
+  their WS surface is that daemon. 3c is in the same in-process cycle today. 3d is design-only.
+  An OS-level launcher (launchd) remains the requirement for daily 3c/3d rollups that must survive
+  daemon restarts; do not describe the in-process tick as OS-level.
 - Stream 6 objects are immutable evidence; deleting them is explicit cleanup, not a freshness
   signal. Stream 7 is a single-writer snapshot and never carries raw rows.

@@ -358,7 +358,9 @@ The daemon is a fresh process with no shell environment, so the gate reads the O
   which returns 500 for every tested shape. 3b therefore reads `Report/Pending`, per customer.
   It requires an explicit list: `--customers id,id`, `--customers-file <path>`, or
   `F402_PENDING_CUSTOMERS` (the daemon env is handed to the bridge child). A bearer fetch without
-  a list exits 2 **before any network I/O**; `--allow-legacy-manager` keeps the dead
+  a list exits 2 **before any network I/O**; the cron gate additionally records
+  `bridge3b unconfigured: … customer list …` and does not spawn the CLI, so an unconfigured poller
+  cannot produce 96 exit-2 log lines/day. `--allow-legacy-manager` keeps the dead
   Manager/getPending request for historical reproduction only. `--allow-partial` downgrades a
   per-customer failure to a warning; the default fails closed. There is **no**
   agent-wide/wildcard scope on Report/Pending (empty, `0`, `*`, `ALL`, agent login and
@@ -367,9 +369,13 @@ The daemon is a fresh process with no shell environment, so the gate reads the O
   `bun run customers:export --from <approved-export.json|csv> --out <list>` (0600, ids never
   printed), then point `F402_PENDING_CUSTOMERS_FILE` at it. The curated
   `enriched_customers_full.json` cohort is a test fixture, not a book — the exporter warns when it
-  is used. A minted JWT lasts 1200 s: 3b refreshes it via `renewToken` when under 2 minutes remain
-  (and retries once on a 401), backs off with jitter on 429/5xx/network failures
-  (`--max-retries`, default 2), and bounds load with `--max-concurrency` (default 6, cap 16).
+  is used. A minted JWT lasts 1200 s: 3b refreshes it via `renewToken` when under 5 minutes remain
+  and retries once on a 401; if renewal fails (expired/rotated token) it **re-mints** through the
+  captured `authenticateCustomer` contract using the F402 pair in the OS keychain, writes the
+  replacement to `F402_TOKEN_FILE`, and only aborts if both paths fail (even with
+  `--allow-partial`). The daemon therefore needs keychain access to the F402 pair, not just a stale
+  token file. Long batches back off with jitter on 429/5xx/network failures
+  (`--max-retries`, default 2) and bound load with `--max-concurrency` (default 6, cap 16).
 - **bridge3a**: needs an agent id (env `F402_AGENT_ID` or the keychain) **and** a readable
   session file. Only `F402_AGENT_ID` is injected into the child environment; the password is
   never passed on.

@@ -524,15 +524,30 @@ export function keychainCredentialProbe(
         const envName = (
           ["F402_BEARER_TOKEN", "F402_TOKEN_FILE"] as const
         ).find((name) => nonEmpty(envValue(env, name)));
-        if (envName !== undefined)
-          return { ok: true, source: `env:${envName}` };
-        if (tokenFilePresent(defaultTokenFilePath(env))) {
-          return { ok: true, source: "token-file" };
+        const hasBearer =
+          envName !== undefined || tokenFilePresent(defaultTokenFilePath(env));
+        if (!hasBearer) {
+          return {
+            ok: false,
+            error:
+              "missing credentials: bearer token (F402_BEARER_TOKEN or F402_TOKEN_FILE); the cookie session is not accepted by the 3b fetch",
+          };
+        }
+        // Report/Pending is customer-scoped; without a list 3b would spawn and exit 2 every
+        // tick. Refuse before spawn so the state is "unconfigured", not 96 failed runs/day.
+        const hasCustomerList =
+          nonEmpty(envValue(env, "F402_PENDING_CUSTOMERS")) ||
+          nonEmpty(envValue(env, "F402_PENDING_CUSTOMERS_FILE"));
+        if (!hasCustomerList) {
+          return {
+            ok: false,
+            error:
+              "unconfigured: bridge3b needs an explicit customer list (F402_PENDING_CUSTOMERS_FILE / F402_PENDING_CUSTOMERS); not spawning",
+          };
         }
         return {
-          ok: false,
-          error:
-            "missing credentials: bearer token (F402_BEARER_TOKEN or F402_TOKEN_FILE); the cookie session is not accepted by the 3b fetch",
+          ok: true,
+          source: envName === undefined ? "token-file" : `env:${envName}`,
         };
       }
       // bridge3a
