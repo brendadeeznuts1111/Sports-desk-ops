@@ -76,10 +76,14 @@ const generatedAt = new Date().toISOString();
 const deskDate = chicagoDate(observedEnd);
 const rangeStart = text(window.observedStart) || null;
 
+const sourcePath = text(source.path);
+const sourceKind = sourcePath.endsWith(".json")
+  ? "bet-report-json"
+  : text(source.kind) || "offline-csv";
 const payload = {
   schemaVersion: 2,
   kind: "gslive-wagers",
-  sourceKind: "offline-csv",
+  sourceKind,
   capturedAt: observedEnd,
   generatedAt,
   deskDate,
@@ -148,7 +152,7 @@ await client.writeWithMetadata(KEY, new TextEncoder().encode(body), {
     "desk-date": deskDate,
     "generated-at": generatedAt,
     sha256: artifactSha,
-    source: "gslive-wagers-offline-csv",
+    source: `gslive-wagers-${sourceKind}`,
   },
 });
 const stat = await client.stat(KEY);
