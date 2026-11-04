@@ -12,6 +12,9 @@
  *      - `--once`   : Execute a single poll cycle and write `graph-live-feed.json` + `graph.html`
  *      - `--cron`   : Run continuous in-process `Bun.cron("* * * * *", ...)` (60s cadence)
  *      - `--r2`     : Automatically publish updated `graph-live-feed.json` and `graph.html` to Cloudflare R2 on each tick
+ *      - `--no-backtest-artifact` : skip rewriting `docs/backtest-4wk-cfb-nba.json` (the historical
+ *                     artifact is regenerated only deliberately; a live feed refresh must not
+ *                     dirty it with environment-dependent inputs)
  */
 
 import fs from "node:fs";
@@ -1218,7 +1221,16 @@ async function readGsliveWagersSidecar(): Promise<WagersLiveEvent | null> {
 
 export async function writeGraphLiveFeedOnce(
   syncR2 = false,
-  options?: { readonly live?: boolean; readonly liveF402?: boolean },
+  options?: {
+    readonly live?: boolean;
+    readonly liveF402?: boolean;
+    /**
+     * Rewrite `docs/backtest-4wk-cfb-nba.json` (and the staged dist copy). Defaults to true for
+     * the historical `--once` behaviour; pass false for a feed-only refresh so environment
+     * differences cannot silently replace the committed backtest artifact.
+     */
+    readonly writeBacktestArtifact?: boolean;
+  },
 ): Promise<GraphLiveFeedPayload> {
   let snapshot: PolymarketSnapshot | null = null;
   let ingest: readonly WalletIngestState[] | null = null;
@@ -1307,7 +1319,7 @@ export async function writeGraphLiveFeedOnce(
 
   const serialized = JSON.stringify(payload, null, 2) + "\n";
   fs.writeFileSync(docsTarget, serialized, "utf8");
-  if (payload.backtest4Wk) {
+  if (payload.backtest4Wk && options?.writeBacktestArtifact !== false) {
     const btJson = JSON.stringify(payload.backtest4Wk, null, 2) + "\n";
     fs.writeFileSync(
       path.join(repoRoot, "docs", "backtest-4wk-cfb-nba.json"),
@@ -1359,10 +1371,15 @@ if (import.meta.main) {
     args.includes("--live") || process.env.SPORTSDESK_LIVE_INGEST === "1";
   const liveF402 =
     args.includes("--live-f402") || process.env.SPORTSDESK_LIVE_F402 === "1";
+  const writeBacktestArtifact = !args.includes("--no-backtest-artifact");
 
   const run = async (): Promise<void> => {
     try {
-      await writeGraphLiveFeedOnce(syncR2, { live, liveF402 });
+      await writeGraphLiveFeedOnce(syncR2, {
+        live,
+        liveF402,
+        writeBacktestArtifact,
+      });
     } catch (error) {
       console.error(`[GraphPoller] ✗ poll failed: ${(error as Error).message}`);
       process.exitCode = 1;
