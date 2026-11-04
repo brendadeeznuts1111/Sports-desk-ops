@@ -148,30 +148,34 @@ async function remove(): Promise<void> {
   );
 }
 
-const parsed = parseCliArgs(process.argv.slice(2), {
-  valueFlags: ["--agent-id"],
-});
-if (wantsHelp(parsed)) {
-  printHelp(HELP);
-  process.exit(0);
+async function main(): Promise<void> {
+  const parsed = parseCliArgs(process.argv.slice(2), {
+    valueFlags: ["--agent-id"],
+  });
+  if (wantsHelp(parsed)) {
+    printHelp(HELP);
+    process.exit(0);
+  }
+
+  const command = parsed.positionals[0] ?? "status";
+
+  switch (command) {
+    case "status":
+      await status();
+      break;
+    case "set":
+      await store(flagValue(parsed, "--agent-id", ""));
+      break;
+    case "delete":
+      await remove();
+      break;
+    default:
+      console.error(
+        `secrets:f402: unknown command "${command}" (status|set|delete).`,
+      );
+      console.error("  bun run secrets:f402 status");
+      process.exit(2);
+  }
 }
 
-const command = parsed.positionals[0] ?? "status";
-
-switch (command) {
-  case "status":
-    await status();
-    break;
-  case "set":
-    await store(flagValue(parsed, "--agent-id", ""));
-    break;
-  case "delete":
-    await remove();
-    break;
-  default:
-    console.error(
-      `secrets:f402: unknown command "${command}" (status|set|delete).`,
-    );
-    console.error("  bun run secrets:f402 status");
-    process.exit(2);
-}
+if (import.meta.main) await main();

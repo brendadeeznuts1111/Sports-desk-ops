@@ -11,7 +11,7 @@
  */
 
 import { parseCliArgs, printHelp, wantsHelp } from "../lib/cli_args.ts";
-import type { BunSecretSetOptions } from "../types/bun-api.ts";
+import type { BunSecretSetOptions } from "../types/bun-api";
 import { secretSetOptions } from "../lib/r2_s3_client.ts";
 import { GSID_SECRET, GSID_SECRET_LEGACY } from "./fetch-bet-tally.ts";
 import { secrets, stdin } from "bun";
@@ -105,61 +105,67 @@ async function readStdInValue(): Promise<string> {
   return chunks.join("").split("\n")[0]?.trim() ?? "";
 }
 
-const parsed = parseCliArgs(process.argv.slice(2), { valueFlags: [] });
-if (wantsHelp(parsed)) {
-  printHelp(HELP);
-  process.exit(0);
-}
-
-const command = parsed.positionals[0] ?? "status";
-
-switch (command) {
-  case "status": {
-    const status = await gsliveSecretStatus();
-    console.log(`service: ${status.service}`);
-    console.log(`name: ${status.name}`);
-    console.log(`session: ${status.present ? "stored" : "absent"}`);
-    if (!status.present) {
-      console.error("  printf '%s' \"$GSID\" | bun run secrets:gslive set");
-    }
-    break;
+async function main(): Promise<void> {
+  const parsed = parseCliArgs(process.argv.slice(2), { valueFlags: [] });
+  if (wantsHelp(parsed)) {
+    printHelp(HELP);
+    process.exit(0);
   }
-  case "set": {
-    if (process.stdin.isTTY) {
+
+  const command = parsed.positionals[0] ?? "status";
+
+  switch (command) {
+    case "status": {
+      const status = await gsliveSecretStatus();
+      console.log(`service: ${status.service}`);
+      console.log(`name: ${status.name}`);
+      console.log(`session: ${status.present ? "stored" : "absent"}`);
+      if (!status.present) {
+        console.error("  printf '%s' \"$GSID\" | bun run secrets:gslive set");
+      }
+      break;
+    }
+    case "set": {
+      if (process.stdin.isTTY) {
+        console.error(
+          "secrets:gslive: pipe the session on stdin; it is not accepted on argv.",
+        );
+        console.error("  printf '%s' \"$GSID\" | bun run secrets:gslive set");
+        process.exit(2);
+      }
+      const result = await setGsliveSecret(await readStdInValue());
+      if (result === "empty") {
+        console.error("secrets:gslive: stdin was empty; nothing stored.");
+        process.exit(2);
+      }
       console.error(
-        "secrets:gslive: pipe the session on stdin; it is not accepted on argv.",
+        `secrets:gslive: stored the session under service ${GSID_SECRET.service}, name ${GSID_SECRET.name}`,
       );
-      console.error("  printf '%s' \"$GSID\" | bun run secrets:gslive set");
+      break;
+    }
+    case "login": {
+      const { ensureGsid } = await import("../lib/gslive_auto_session.ts");
+      const gsid = await ensureGsid();
+      console.error(
+        `secrets:gslive: GSLive session ready (GSID ${gsid === "" ? "missing" : "verified"}, value not printed)`,
+      );
+      break;
+    }
+    case "delete": {
+      await deleteGsliveSecret();
+      console.error(
+        `secrets:gslive: removed the ${GSID_SECRET.service} session`,
+      );
+      break;
+    }
+    default: {
+      console.error(
+        `secrets:gslive: unknown command "${command}" (status|set|delete).`,
+      );
+      console.error("  bun run secrets:gslive status");
       process.exit(2);
     }
-    const result = await setGsliveSecret(await readStdInValue());
-    if (result === "empty") {
-      console.error("secrets:gslive: stdin was empty; nothing stored.");
-      process.exit(2);
-    }
-    console.error(
-      `secrets:gslive: stored the session under service ${GSID_SECRET.service}, name ${GSID_SECRET.name}`,
-    );
-    break;
-  }
-  case "login": {
-    const { ensureGsid } = await import("../lib/gslive_auto_session.ts");
-    const gsid = await ensureGsid();
-    console.error(
-      `secrets:gslive: GSLive session ready (GSID ${gsid === "" ? "missing" : "verified"}, value not printed)`,
-    );
-    break;
-  }
-  case "delete": {
-    await deleteGsliveSecret();
-    console.error(`secrets:gslive: removed the ${GSID_SECRET.service} session`);
-    break;
-  }
-  default: {
-    console.error(
-      `secrets:gslive: unknown command "${command}" (status|set|delete).`,
-    );
-    console.error("  bun run secrets:gslive status");
-    process.exit(2);
   }
 }
+
+if (import.meta.main) await main();

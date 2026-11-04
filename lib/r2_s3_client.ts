@@ -13,7 +13,7 @@ import type {
   S3ListObjectsResponse,
   S3Stats,
 } from "bun";
-import type { BunSecretSetOptions } from "../types/bun-api.ts";
+import type { BunSecretSetOptions } from "../types/bun-api";
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
 

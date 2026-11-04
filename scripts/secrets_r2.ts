@@ -122,8 +122,12 @@ async function remove(): Promise<void> {
   }
 }
 
-const action = (process.argv[2] ?? "status") as Action;
-if (action === "seed") await seed();
-else if (action === "status") await status();
-else if (action === "delete") await remove();
-else usage();
+async function main(): Promise<void> {
+  const action = (process.argv[2] ?? "status") as Action;
+  if (action === "seed") await seed();
+  else if (action === "status") await status();
+  else if (action === "delete") await remove();
+  else usage();
+}
+
+if (import.meta.main) await main();

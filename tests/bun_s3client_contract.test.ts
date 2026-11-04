@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { BunS3Client } from "../types/bun-api.ts";
+import type { BunS3Client } from "../types/bun-api";
 
 const METHODS = [
   "delete",
