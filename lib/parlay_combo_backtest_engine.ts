@@ -1309,7 +1309,7 @@ export function runFourWeekParlayComboBacktest(
           ? `https://polymarket.com/profile/${wallet}`
           : null,
         polymarketPositionsApiUrl: wallet
-          ? `https://data-api.polymarket.com/positions?user=${wallet}`
+          ? `https://data-api.polymarket.com/v2/positions?user=${wallet}`
           : null,
         cfbParlayTickets: c.cfbTickets,
         cfbParlayHandleUsd: c.cfbHandleUsd,

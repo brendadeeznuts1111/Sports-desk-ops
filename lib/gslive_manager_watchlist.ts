@@ -887,7 +887,7 @@ export function getUnifiedWatchlistRegistry(): readonly WatchlistUnifiedEntry[] 
         ? `https://polymarket.com/profile/${r.proxyWallet}`
         : null,
       polymarketPositionsApiUrl: r.proxyWallet
-        ? `https://data-api.polymarket.com/positions?user=${r.proxyWallet}`
+        ? `https://data-api.polymarket.com/v2/positions?user=${r.proxyWallet}`
         : null,
       polygonscanUrl: r.proxyWallet
         ? `https://polygonscan.com/address/${r.proxyWallet}`

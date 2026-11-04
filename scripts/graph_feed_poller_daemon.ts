@@ -4,7 +4,7 @@
  * @description Live Polymarket & Fantasy402 Pending-Bet Poller Daemon (Bun.cron + bun --watch compatible).
  *
  * Capabilities:
- *   1. Polls Polymarket Data API (`https://data-api.polymarket.com/positions?user=<0x>`) and Fantasy402
+ *   1. Polls Polymarket Data API (`https://data-api.polymarket.com/v2/positions?user=<0x>`) and Fantasy402
  *      `Manager/getPending` across all 39 tracked syndicate `0x` wallets.
  *   2. Generates `docs/graph-live-feed.json` and `dist/graph-live-feed.json`. The portal hydrates
  *      its GSLive links and timestamps client-side from that feed, so no HTML is rewritten here.
@@ -678,7 +678,7 @@ export function buildGraphLiveFeed(
           ? `https://polymarket.com/profile/${addr}`
           : "",
         polymarketPositionsApiUrl: addressValid
-          ? `https://data-api.polymarket.com/positions?user=${addr}`
+          ? `https://data-api.polymarket.com/v2/positions?user=${addr}`
           : "",
         polygonscanUrl: addressValid
           ? `https://polygonscan.com/address/${addr}`
@@ -747,7 +747,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x07db5765beba17be154cbfbd6324a15f3c81fa4f",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x07db5765beba17be154cbfbd6324a15f3c81fa4f",
+        "https://data-api.polymarket.com/v2/positions?user=0x07db5765beba17be154cbfbd6324a15f3c81fa4f",
       f402CustomerId: "MJ102",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=MJ102",
@@ -771,7 +771,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x91aF0041c882d190e4412a9b77c01f98a220f112",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x91aF0041c882d190e4412a9b77c01f98a220f112",
+        "https://data-api.polymarket.com/v2/positions?user=0x91aF0041c882d190e4412a9b77c01f98a220f112",
       f402CustomerId: "MJ103",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=MJ103",
@@ -795,7 +795,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
+        "https://data-api.polymarket.com/v2/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       f402CustomerId: "AT10359",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=AT10359",
@@ -819,7 +819,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x3aF8c9104E2b78a142dE90B218a91D89D",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x3aF8c9104E2b78a142dE90B218a91D89D",
+        "https://data-api.polymarket.com/v2/positions?user=0x3aF8c9104E2b78a142dE90B218a91D89D",
       f402CustomerId: "CB112_2",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=CUB22_T1",
@@ -843,7 +843,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+        "https://data-api.polymarket.com/v2/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
       f402CustomerId: "BGD101",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=BGD101",
@@ -867,7 +867,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x50cc8708aff3791f2d6125645c82bda532baa534",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x50cc8708aff3791f2d6125645c82bda532baa534",
+        "https://data-api.polymarket.com/v2/positions?user=0x50cc8708aff3791f2d6125645c82bda532baa534",
       f402CustomerId: "EJ8834",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=EJ8834",
@@ -891,7 +891,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
+        "https://data-api.polymarket.com/v2/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       f402CustomerId: "AT10359",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=AT10359",
@@ -915,7 +915,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x22e29a644a9d14564967b3f9f50346b7ad425c32",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x22e29a644a9d14564967b3f9f50346b7ad425c32",
+        "https://data-api.polymarket.com/v2/positions?user=0x22e29a644a9d14564967b3f9f50346b7ad425c32",
       f402CustomerId: "ABC700",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=ABC700",
@@ -939,7 +939,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+        "https://data-api.polymarket.com/v2/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
       f402CustomerId: "BGD101",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=BGD101",
@@ -963,7 +963,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x88d199c044a210f877b312e900c412a881b999c0",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x88d199c044a210f877b312e900c412a881b999c0",
+        "https://data-api.polymarket.com/v2/positions?user=0x88d199c044a210f877b312e900c412a881b999c0",
       f402CustomerId: "CHURN_059",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=CHURN_059",
@@ -987,7 +987,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x50cc8708aff3791f2d6125645c82bda532baa534",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x50cc8708aff3791f2d6125645c82bda532baa534",
+        "https://data-api.polymarket.com/v2/positions?user=0x50cc8708aff3791f2d6125645c82bda532baa534",
       f402CustomerId: "EJ8834",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=EJ8834",
@@ -1011,7 +1011,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
+        "https://data-api.polymarket.com/v2/positions?user=0x53224176b413f20ac63d61f1a0e19002ffb38acb",
       f402CustomerId: "AT10359",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=AT10359",
@@ -1035,7 +1035,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x22e29a644a9d14564967b3f9f50346b7ad425c32",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x22e29a644a9d14564967b3f9f50346b7ad425c32",
+        "https://data-api.polymarket.com/v2/positions?user=0x22e29a644a9d14564967b3f9f50346b7ad425c32",
       f402CustomerId: "ABC700",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=ABC700",
@@ -1059,7 +1059,7 @@ export function buildGraphLiveFeed(
       polymarketProfileUrl:
         "https://polymarket.com/profile/0x3af8392189d021cfa82000000000000000021cfa",
       polymarketPositionsApiUrl:
-        "https://data-api.polymarket.com/positions?user=0x3af8392189d021cfa82000000000000000021cfa",
+        "https://data-api.polymarket.com/v2/positions?user=0x3af8392189d021cfa82000000000000000021cfa",
       f402CustomerId: "CB112_1",
       f402CustomerProfileUrl:
         "https://fantasy402.com/manager.html?customer=CB112_1",

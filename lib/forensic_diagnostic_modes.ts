@@ -8,7 +8,7 @@
  *     `getPendingByTicket`, `getTypeInfo`, `getRotationNumber`, `getLineGame`)
  *   - `app/manager/module/ip-tracker.js` (`Manager/getWebLog` Modes `A`, `B` Per-Office vs Global, `C` YYYY-MM-DD, `I`)
  *   - `app/manager/module/bet-ticker.js` (`Manager/getBetTicker`, `getListVip`, `vipListInsert`)
- *   - Polymarket Public APIs (Gamma, CLOB REST/WSS, Data API `positions?user=<0x>`)
+ *   - Polymarket Public APIs (Gamma, CLOB REST/WSS, Data API `v2/positions?user=<0x>`)
  *
  * | Domain             | Mode                      | Checks                                                        | Output                                                        |
  * |--------------------|---------------------------|---------------------------------------------------------------|---------------------------------------------------------------|
@@ -126,7 +126,7 @@ export const TEN_MODE_CATALOG: readonly DiagnosticModeSpec[] = [
     upstreamEndpoints: [
       "api/Report/Pending (getLineGame / getRotationNumber)",
       "Manager/getBetTicker",
-      "Polymarket Data API (/positions?user=<0x>)",
+      "Polymarket Data API (/v2/positions?user=<0x>)",
     ],
     cliFlag: "--mode=7",
   },

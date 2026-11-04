@@ -58,7 +58,7 @@ describe("4-Week Full-Customer CFB & NBA Parlay & Combo Backtest Engine", () => 
       "https://polymarket.com/profile/0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
     );
     expect(bgd?.polymarketPositionsApiUrl).toBe(
-      "https://data-api.polymarket.com/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+      "https://data-api.polymarket.com/v2/positions?user=0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
     );
 
     const rf = report.customerLeaderboard.find(
@@ -255,7 +255,7 @@ describe("4-Week backtest engine — committed synthetic fixture (CI-safe)", () 
       "https://polymarket.com/profile/0x55a866f711d987c544e089b677f189d558e666f3",
     );
     expect(pey?.polymarketPositionsApiUrl).toBe(
-      "https://data-api.polymarket.com/positions?user=0x55a866f711d987c544e089b677f189d558e666f3",
+      "https://data-api.polymarket.com/v2/positions?user=0x55a866f711d987c544e089b677f189d558e666f3",
     );
     expect(pey?.f402CustomerProfileUrl).toBe(
       "https://fantasy402.com/manager.html?customer=PEY101",
