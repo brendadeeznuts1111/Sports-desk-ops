@@ -461,12 +461,23 @@ depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touchi
 
 ### Decision rule
 
-- **Use `Bun.JSONL.parse(text)`** when every line is expected to be valid JSON and a malformed
-  line should either throw (if nothing parsed) or be acceptable as silent truncation of the
-  prefix. Drop-in replacement for the `.split("\n").filter(…).map(JSON.parse)` pipeline.
-- **Use `Bun.JSONL.parseChunk(text | Uint8Array)`** for streaming or zero-copy byte handling.
-  Handles a partial trailing line correctly (`result.read < input.length` ⇒ hold the tail).
-  A malformed middle line stops parsing and reports the error; no per-line recovery.
+- **Use `Bun.JSONL.parse(text | Uint8Array)`** when every line is expected to be valid JSON and
+  a malformed line should either throw (if nothing parsed) or be acceptable as silent truncation
+  of the prefix. Drop-in replacement for the `.split("\n").filter(…).map(JSON.parse)` pipeline.
+  With `Uint8Array` input, Bun skips a UTF-8 BOM at byte 0.
+- **Use `Bun.JSONL.parseChunk(input, start?, end?)`** for streaming or zero-copy byte handling.
+  The return shape is `{ values, read, done, error }`:
+  - `read` is a **byte** offset when `input` is a `Uint8Array` (character offset for strings) and
+    always points into the original buffer, so `buf = buf.subarray(result.read)` is the correct
+    zero-copy continuation.
+  - `done: true` means the entire input was consumed; prefer that over
+    `result.read < input.length` to decide whether to hold a tail.
+  - The optional `start` / `end` **byte** offsets (`Uint8Array` only) let you reparse a subrange
+    of an existing buffer without a `.subarray()` allocation.
+  - A malformed middle line stops parsing and reports `error`; no per-line recovery. If you
+    need skip-middle-line semantics on top of `parseChunk`, you must find the next `\n` after
+    `result.read` and re-call with that as the new `start` — at which point the hand-rolled loop
+    is simpler and that site belongs in the holdout table above.
 - **Keep the hand-rolled `for (line of text.split("\n")) { try { JSON.parse(line) } catch {…} }`
   loop** when any of the following holds:
   - Skip-malformed is the intended semantic (append-only ledgers, audit logs).
