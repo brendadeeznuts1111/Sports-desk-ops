@@ -159,6 +159,34 @@ describe("security seam preload: installation", () => {
     expect(endCalls).toBe(1);
   });
 
+  test("decorates a class export by materializing own props on the instance", async () => {
+    const source = await preloadSource();
+    const context = runPreload(
+      source,
+      "https://www.fantasy402.com/manager.html",
+    );
+    class Security {
+      vendorMethod(): string {
+        return "vendor";
+      }
+    }
+    decorate(context, Security as unknown as Record<string, unknown>);
+
+    const instance = new Security() as unknown as Record<string, unknown>;
+    for (const key of SEAM_OWN_PROPERTIES) {
+      expect(Object.prototype.hasOwnProperty.call(instance, key)).toBe(false);
+    }
+    for (const key of SEAM_OWN_PROPERTIES) void instance[key];
+    for (const key of SEAM_OWN_PROPERTIES) {
+      expect(Object.prototype.hasOwnProperty.call(instance, key)).toBe(true);
+    }
+    expect(instance["vendorMethod"]).toBeInstanceOf(Function);
+    expect(Object.getPrototypeOf(instance)).toBe(Security.prototype);
+    expect(
+      Object.prototype.hasOwnProperty.call(Security.prototype, "escHtml"),
+    ).toBe(true);
+  });
+
   test("kill switch is latched at preload and cannot be cleared by a later URL rewrite", async () => {
     const source = await preloadSource();
     const context = runPreload(
@@ -194,6 +222,17 @@ describe("security seam preload: escape seams", () => {
     expect(seam.escHtml(`<img src=x onerror="a&b">'`)).toBe(
       "&lt;img src=x onerror=&quot;a&amp;b&quot;&gt;&#39;",
     );
+    // Each of the five HTML-significant characters on its own.
+    expect(seam.escHtml("&")).toBe("&amp;");
+    expect(seam.escHtml("<")).toBe("&lt;");
+    expect(seam.escHtml(">")).toBe("&gt;");
+    expect(seam.escHtml('"')).toBe("&quot;");
+    expect(seam.escHtml("'")).toBe("&#39;");
+    // Non-ASCII and a BMP-plus code point (surrogate pair) are passed through unchanged.
+    expect(seam.escHtml("é")).toBe("é");
+    expect(seam.escHtml("😀")).toBe("😀");
+    expect(seam.escHtml("\uD83D\uDE00")).toBe("\uD83D\uDE00");
+    expect(seam.escHtml("a\u0000b")).toBe("a\u0000b");
     expect(seam.escHtml(null)).toBe("");
     expect(seam.escHtml(undefined)).toBe("");
   });
@@ -352,6 +391,7 @@ describe("seam probe and installer", () => {
       authenticated: true,
       csrf: "",
       reason: null,
+      diag: null,
     };
   }
 
@@ -400,7 +440,9 @@ describe("seam probe and installer", () => {
         calls.push({ method, params: params ?? {} });
       },
     };
-    const installed = await installSecuritySeamsPreload(chrome);
+    const installed = await installSecuritySeamsPreload(chrome, {
+      backend: "chrome",
+    });
     expect(installed.installed).toBe(true);
     expect(calls[0]?.method).toBe("Page.addScriptToEvaluateOnNewDocument");
 
@@ -410,7 +452,9 @@ describe("seam probe and installer", () => {
         throw new Error("webkit has no cdp");
       },
     };
-    const refused = await installSecuritySeamsPreload(webkit);
+    const refused = await installSecuritySeamsPreload(webkit, {
+      backend: "webkit",
+    });
     expect(refused.installed).toBe(false);
     expect(refused.reason).toContain("webkit");
   });
@@ -422,7 +466,10 @@ describe("seam probe and installer", () => {
         throw new Error("evaluate should not run on webkit");
       },
     };
-    const outcome = await probeSecuritySeams(webkit, { moduleLeaves: leaves });
+    const outcome = await probeSecuritySeams(webkit, {
+      moduleLeaves: leaves,
+      backend: "webkit",
+    });
     expect(outcome.covered).toBe(false);
     expect(outcome.notes.join(" ")).toContain("not covered");
   });
@@ -432,7 +479,10 @@ describe("seam probe and installer", () => {
       backend: "chrome" as const,
       evaluate: async () => JSON.stringify(goodProbe()),
     };
-    const outcome = await probeSecuritySeams(chrome, { moduleLeaves: leaves });
+    const outcome = await probeSecuritySeams(chrome, {
+      moduleLeaves: leaves,
+      backend: "chrome",
+    });
     expect(outcome.covered).toBe(true);
     expect(outcome.issues).toEqual([]);
   });

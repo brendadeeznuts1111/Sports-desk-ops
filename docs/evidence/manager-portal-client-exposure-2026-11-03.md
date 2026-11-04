@@ -40,7 +40,7 @@ own login is a sufficient search term), and can then read:
 
 Impact is therefore not "act as agent" in the abstract: it is **full manager API access with the
 agent's token, plus a reusable plaintext password**, and it survives the session if the password is
-reused. The token store is `sessionStorage`, not a cookie (traced in §2), so `document.cookie` is
+reused. The token store is `sessionStorage`, not a cookie (traced below), so `document.cookie` is
 irrelevant and there is no cookie CSRF surface to bring into the threat model.
 
 **What this establishes:** the render sink, the data path and the absence of output encoding.
@@ -48,21 +48,15 @@ irrelevant and there is no cookie CSRF surface to bring into the threat model.
 No capture of that form exists in this repo; the write side is assumed, and if the server encodes or
 rejects it the path is closed at the source.
 
-## 2. Path #2 — there is no CSRF or cookie surface to steal
+### Credential store — why there is no CSRF surface
 
-Unauthenticated probes on 2026-11-03 (and the recorded authenticated boot request of 2026-11-01):
+This is a negative result supporting §1, not a separate finding. Unauthenticated probes on
+2026-11-03 and the recorded authenticated boot request (2026-11-01) agree: `POST /cloud/api/Manager/…`
+without the header is **401 Authorization Required** from openresty, the authenticated request carries
+the credential only as an `Authorization` header, and the only `Set-Cookie` on any response is
+Cloudflare `__cf_bm` (bot management, `HttpOnly`). There is no session cookie and no CSRF header.
 
-| Request                                                                    | Result                                                                                                                                       |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /qubic/api/Manager/getAuthorizations` (the bundle's internal `path`) | **404** openresty HTML                                                                                                                       |
-| `POST /cloud/api/Manager/getAuthorizations` (live route)                   | **401 Authorization Required** openresty HTML                                                                                                |
-| same, with `Origin: https://attacker.example`                              | 401, **no `Access-Control-Allow-Origin`**                                                                                                    |
-| recorded authenticated `getAuthorizations`                                 | 200; cookies are only `cf_clearance` + `__cf_bm`; the credential is the redacted `Authorization` header; **no `Set-Cookie`, no CSRF header** |
-
-The only `Set-Cookie` on any response is Cloudflare `__cf_bm` (bot management, `HttpOnly`,
-`SameSite=None`, `Secure`) — not a session or CSRF credential, and unreadable by script.
-
-The credential path is now traced end to end in the pinned `security.js`:
+The credential path in the pinned `security.js` is:
 
 | Byte          | What it does                                                                                           |
 | ------------- | ------------------------------------------------------------------------------------------------------ |
@@ -72,11 +66,12 @@ The credential path is now traced end to end in the pinned `security.js`:
 | 20296         | `renewToken` refreshes `n.token` **in memory only** — it never writes storage                          |
 | ~24422        | `$.ajaxPrefilter` reads `n.token` for `Authorization: Bearer`; no cookie participates                  |
 
-So there is **no ambient credential**: CSRF is not the exposure, and `n.csrf()` returning `""` is
-correct rather than a gap. The token is JS-readable for the life of the tab, which makes §1's XSS the
-whole game and makes the client escaping seam the primary control for it.
+No cookie is involved, so there is **no ambient authority for cross-site requests**: CSRF is not the
+exposure and `n.csrf()` correctly returns `""` because there is nothing to return. The token is
+JS-readable for the life of the tab, which makes §1's XSS the whole game and the client escaping seam
+the primary control for it. Do not re-open this as a CSRF finding on the strength of a stale HAR.
 
-## 3. Path #3 — the CDN trust root and a test stylesheet in production
+## 2. Path #2 — the CDN trust root and a test stylesheet in production
 
 `manager.html` is served unauthenticated, 200, and loads **86 distinct external assets** from four
 origins: `cdn.fastassets.io` (most), `cdnjs.cloudflare.com` (2), `fonts.googleapis.com`,
@@ -107,7 +102,7 @@ search. It cannot read `sessionStorage`, so the agent's JWT remains out of CSS r
 `manager-test.less` contains no `[data-pass]`/`[data-login]` selectors — this is an ability, not an
 observed leak.
 
-## 4. What this repository now does about it
+## 3. What this repository now does about it
 
 Detection for path #3, in the existing pin pattern:
 
@@ -152,14 +147,33 @@ Client-side seam (this repository, rolling out):
   the pinned controller graph, so `message`, `total-active-customer` and the `customer-admin`
   submodules are covered. The gate fails if the pinned controller references a leaf the allowlist
   omits.
+- **`system/security` exports a class, not a singleton** (measured live: `require("system/security")`
+  is a function whose only own key is `extend`; consumers instantiate it). Decorating the export
+  itself applied zero members to the singleton — the first live probe caught exactly that. The seam
+  now adds non-enumerable prototype accessors; the first read on an instance materializes the member
+  as an **own** property of that instance. No `__proto__` assignment, no prototype pollution, and
+  the decoration is retroactive for instances already created.
+- `bun run probe:client-seams -- --profile <dir> [--login]` runs the probe on the live
+  `manager.html?external-view=active&module=bet-ticker` page over Chrome/CDP (the wider exec mode is
+  required where the sandbox blocks Chrome). Measured on an unauthenticated profile: preload
+  installed, `system/security` loaded, **10/10 seam own properties present**, `appliedCount: 1` via
+  the registry sweep, `csrf: ""` reported dormant with its reason, and `isAuthenticated() === false`
+  (correct for no session). The authenticated bet-ticker run is blocked in this environment: the
+  login path has no keychain entry (`MissingF402CredentialsError`), and the bootstrapped profile does
+  not settle under automation. That check must run with the operator's keychain/session populated
+  before the `external-view` fix lands.
 - The kill switch `?no-seam` is latched into `window.__F402_SEAM_DISABLED__` at preload time and read
   from that global at decoration time, so a page that rewrites its URL cannot re-enable the seam.
 - `probeSecuritySeams` asserts own properties, every controller leaf, and `isAuthenticated()` on the
   booted page; it **reports `csrf` as dormant and why**, and it returns `covered: false` on WebKit
   instead of passing.
-- **WebKit is not covered.** Bun.WebView has no preload/interception hook and WebKit has no `cdp()`;
-  Safari/iPhone sessions keep the `external-view` bypass until a non-CDP path exists. This is a
-  phased rollout, not a complete fix.
+- **WebKit is not covered, and the gap is live, not theoretical.** Measured 2026-11-03:
+  `git grep -h '"backend"' -- docs data` over tracked provenance files yields **50 `webkit` and
+  3 `chrome`** sessions (the boot HAR itself is Chrome), i.e. the repository's recorded capture
+  sessions are overwhelmingly WebKit. Bun.WebView has no preload/interception hook and WebKit has no
+  `cdp()`, so those sessions keep the `external-view` bypass after the Chrome fix lands; the probe
+  returns `covered: false` there. This is a phased rollout whose second phase needs a non-CDP
+  injection path (a rewriting proxy we own, or a Safari extension), not a complete fix.
 - **Held for one cycle:** the `external-view` call site. `manager.js` `setAccountInfo` runs
   `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no auth check. The
   four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else unchanged) is
@@ -184,18 +198,18 @@ Limits, stated so nobody relies on a control that does not exist:
 - CSS-internal targets are recorded and diffed, not pinned byte-for-byte. A new font/image host is
   visible at the next check, not blocked by it.
 
-## 5. Upstream actions (not this repository's to deploy)
+## 4. Upstream actions (not this repository's to deploy)
 
-Two of these are a different kind of control from §4. Removing `data-pass` fixes the exposure; a
+Two of these are a different kind of control from §3. Removing `data-pass` fixes the exposure; a
 document CSP decides whether an injected script can run at all. Pin + SRI answers "did the asset
 change" and "should the browser execute it" — neither stops an inline payload, an inline handler or a
-`javascript:` URL from executing. CSP is complementary to SRI, not part of the supply-chain section.
+`javascript:` URL from executing. CSP is complementary to SRI, not part of the supply-chain section (§2).
 
 | Pri | Action                                                                                                            | Why                                                           |
 | --- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | P0  | **A.** Remove `Password` from the API response and `data-pass`/the password span from the DOM; escape `NameFirst` | Root cause of path #1; pinning does not fix it                |
 | P0  | **B.** Add the CSP header below to `manager.html`                                                                 | The missing half: decides whether injected script runs at all |
-| P0  | Add `integrity=` + `crossorigin="anonymous"` to every CDN script/stylesheet (manifest-provided)                   | Prevention for path #3, where ACAO allows it                  |
+| P0  | Add `integrity=` + `crossorigin="anonymous"` to every CDN script/stylesheet (manifest-provided)                   | Prevention for path #2 (CDN), where ACAO allows it            |
 | P0  | Delete `manager-test.less` from the production bucket and page                                                    | 302 KB test artifact in the critical path                     |
 | P1  | Precompile the three `.less` files to `.css` and drop `less.js`                                                   | Only way to get SRI on the stylesheets                        |
 | P1  | Upgrade jQuery 1.11.0; restrict/rotate the Maps browser key; move the JWT out of `sessionStorage`                 | EOL library, exposed key, script-readable token               |
@@ -216,7 +230,7 @@ with `$("<span>").text(nameFirst)` or `textContent` instead of the string concat
 `n.html(e.join(""))` (byte 82730) with DOM construction (`createElement` / `textContent` / `append`).
 
 Why both: escaping `NameFirst` stops path #1 but leaves plaintext player passwords in transit and in
-the DOM, visible to every agent and exfiltratable by a stylesheet (§3). Only removing them from the
+the DOM, visible to every agent and exfiltratable by a stylesheet (§2). Only removing them from the
 response fixes the exposure. Escaping stays required for every field that remains.
 
 Verification: a `NameFirst` of `<img src=x onerror=…>` renders as literal text and produces no
@@ -266,4 +280,4 @@ handler on a test page is blocked; a normal session produces no legitimate viola
 This is a client-code and asset review, not a full portal audit. The player-facing write path in
 §1 is assumed, not captured. No credential was used and no exploit was executed, so the claims are
 about reachable code and pinned bytes, not about a successful takeover. Server-side behaviour
-(gateway rules, WAF, response sanitization) was not tested beyond the unauthenticated probes in §2.
+(gateway rules, WAF, response sanitization) was not tested beyond the unauthenticated probes in §1.

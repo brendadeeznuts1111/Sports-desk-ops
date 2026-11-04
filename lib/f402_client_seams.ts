@@ -119,6 +119,7 @@ const SeamProbeSchema = z.object({
   authenticated: z.boolean().nullable(),
   csrf: z.string().nullable(),
   reason: z.string().nullable(),
+  diag: z.record(z.string(), z.unknown()).nullable(),
 });
 
 export type SeamProbe = z.infer<typeof SeamProbeSchema>;
@@ -129,11 +130,16 @@ export function buildSeamProbeScript(leaves: readonly string[]): string {
   const expectedLeaves = JSON.stringify(leaves);
   return `(function () {
   var out = { applied: false, ownProperties: {}, allowed: {}, authenticated: null, csrf: null, reason: null };
-  var n = null;
-  try { n = window.require ? window.require("system/security") : null; } catch (error) { out.reason = "require-threw"; }
-  if (!n) { out.reason = out.reason || "security-module-not-loaded"; return JSON.stringify(out); }
+  var exported = null;
+  try { exported = window.require ? window.require("system/security") : null; } catch (error) { out.reason = "require-threw"; }
+  if (!exported) { out.reason = out.reason || "security-module-not-loaded"; return JSON.stringify(out); }
+  var n = exported;
+  if (typeof exported === "function") {
+    try { n = new exported(); } catch (error0) { out.reason = "security-instantiate-threw"; }
+  }
   var properties = ${properties};
   for (var i = 0; i < properties.length; i += 1) {
+    try { var touched = n[properties[i]]; void touched; } catch (error1) {}
     out.ownProperties[properties[i]] = Object.prototype.hasOwnProperty.call(n, properties[i]);
   }
   out.applied = !!(out.ownProperties.escHtml && out.ownProperties.isAllowedModule && out.ownProperties.allowedModules);
@@ -143,6 +149,17 @@ export function buildSeamProbeScript(leaves: readonly string[]): string {
   }
   try { out.authenticated = n.isAuthenticated() === true; } catch (error3) { out.reason = out.reason || "isAuthenticated-threw"; }
   try { out.csrf = n.csrf(); } catch (error4) { out.reason = out.reason || "csrf-threw"; }
+  out.diag = {
+    preload: !!window.__F402_SEAMS__,
+    seamDisabled: window.__F402_SEAM_DISABLED__ === true,
+    requirejs: !!window.requirejs,
+    hasOnResourceLoad: !!(window.requirejs && typeof window.requirejs.onResourceLoad === "function"),
+    exportedType: typeof exported,
+    keys: Object.keys(n).slice(0, 30),
+    seam: window.__F402_SEAMS__ && typeof window.__F402_SEAMS__.diag === "function"
+      ? window.__F402_SEAMS__.diag()
+      : null
+  };
   return JSON.stringify(out);
 })()`;
 }
@@ -158,6 +175,7 @@ export interface SeamProbeOutcome {
   readonly notes: readonly string[];
   readonly csrf: string | null;
   readonly authenticated: boolean | null;
+  readonly diag: Readonly<Record<string, unknown>> | null;
 }
 
 /** Turn a probe result into gate issues and explicit notes. A dormant control is a note, never a pass. */
@@ -195,5 +213,6 @@ export function evaluateSeamProbe(
     notes,
     csrf: probe.csrf,
     authenticated: probe.authenticated,
+    diag: probe.diag,
   };
 }

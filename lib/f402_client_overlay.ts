@@ -26,13 +26,15 @@ export const SECURITY_SEAMS_PRELOAD_PATH = join(
 export type WebViewBackend = "chrome" | "webkit";
 
 export interface CdpView {
-  readonly backend?: WebViewBackend;
   cdp(method: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface EvaluateView {
-  readonly backend?: WebViewBackend;
   evaluate(expression: string): Promise<unknown>;
+}
+
+export interface BackendOption {
+  readonly backend?: WebViewBackend;
 }
 
 export interface InstallOutcome {
@@ -40,8 +42,12 @@ export interface InstallOutcome {
   readonly reason: string | null;
 }
 
-export interface ProbeOptions {
+export interface ProbeOptions extends BackendOption {
   readonly moduleLeaves: readonly string[];
+}
+
+export interface InstallOptions extends BackendOption {
+  readonly source?: string;
 }
 
 export async function securitySeamsPreloadSource(
@@ -58,16 +64,16 @@ export async function securitySeamsPreloadSource(
  */
 export async function installSecuritySeamsPreload(
   view: CdpView,
-  source?: string,
+  options: InstallOptions = {},
 ): Promise<InstallOutcome> {
-  if (view.backend !== undefined && view.backend !== "chrome") {
+  if (options.backend !== undefined && options.backend !== "chrome") {
     return {
       installed: false,
       reason:
         "webkit backend has no cdp(); the seam preload is not installed and the session is not covered",
     };
   }
-  const preload = source ?? (await securitySeamsPreloadSource());
+  const preload = options.source ?? (await securitySeamsPreloadSource());
   await view.cdp("Page.addScriptToEvaluateOnNewDocument", {
     source: preload,
   });
@@ -79,7 +85,7 @@ export async function probeSecuritySeams(
   view: EvaluateView,
   options: ProbeOptions,
 ): Promise<SeamProbeOutcome> {
-  if (view.backend !== undefined && view.backend !== "chrome") {
+  if (options.backend !== undefined && options.backend !== "chrome") {
     return {
       covered: false,
       issues: [],
@@ -88,6 +94,7 @@ export async function probeSecuritySeams(
       ],
       csrf: null,
       authenticated: null,
+      diag: null,
     };
   }
   const raw = await view.evaluate(buildSeamProbeScript(options.moduleLeaves));

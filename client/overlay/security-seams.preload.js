@@ -59,6 +59,53 @@
   }
   window.__F402_SEAM_DISABLED__ = seamDisabled;
 
+  var loadNames = [];
+  var appliedCount = 0;
+  var hookInstalled = false;
+  var sweepCount = 0;
+
+  function requirejsRegistry() {
+    var req = window.requirejs;
+    var contexts = req && req.s && req.s.contexts;
+    var context = contexts && contexts._;
+    var defined = context && context.defined;
+    return defined || null;
+  }
+
+  // The application can install or replace `requirejs.onResourceLoad`, so the hook is not the only
+  // path: a short watchdog reads requirejs' defined-module registry and decorates the export once
+  // it appears. Prototype decoration is retroactive for already-created instances, so a late sweep
+  // still reaches the singleton the controller created.
+  function sweep() {
+    sweepCount += 1;
+    var defined = requirejsRegistry();
+    if (!defined) return false;
+    var exported = defined["system/security"];
+    if (!exported) return false;
+    return apply(exported);
+  }
+
+  window.__F402_SEAMS__ = {
+    sweep: sweep,
+    diag: function () {
+      return {
+        hookInstalled: hookInstalled,
+        loadNames: loadNames.slice(-10),
+        appliedCount: appliedCount,
+        sweepCount: sweepCount,
+        registry: requirejsRegistry() !== null,
+      };
+    },
+    isAllowedModule: function (m) {
+      if (typeof m !== "string" || !m) return false;
+      var leaf = m.split("/").pop();
+      return (
+        /^[a-z0-9][a-z0-9-]*$/.test(leaf) && ALLOWED_LEAVES.indexOf(leaf) !== -1
+      );
+    },
+    allowedLeaves: ALLOWED_LEAVES.slice(),
+  };
+
   // Hand-rolled on purpose: this file runs in the browser page, where Bun.escapeHTML is not
   // available. Single pass over the same five metacharacters, keyed by code point so the policy
   // scanner sees one regex replace rather than an escaping chain.
@@ -98,54 +145,126 @@
     return !!sessionStorage.customerID && !sessionExpired();
   }
 
+  var SEAM_KEYS = [
+    "escHtml",
+    "escUrl",
+    "csrf",
+    "sessionExpired",
+    "isAuthenticated",
+    "requireAuth",
+    "allowedModules",
+    "isAllowedModule",
+    "endSession",
+    "flags",
+  ];
+
+  function seamValue(instance, key, priorEndSession, priorFlags) {
+    if (key === "escHtml") return escHtml;
+    if (key === "escUrl") return escUrl;
+    if (key === "csrf") return csrf;
+    if (key === "sessionExpired") return sessionExpired;
+    if (key === "isAuthenticated") return isAuthenticated;
+    if (key === "allowedModules") return new Set(ALLOWED_LEAVES);
+    if (key === "flags") {
+      return Object.assign({ unifiedPost: false }, priorFlags || {});
+    }
+    if (key === "isAllowedModule") {
+      return function (m) {
+        if (typeof m !== "string" || !m) return false;
+        var leaf = m.split("/").pop();
+        return (
+          /^[a-z0-9][a-z0-9-]*$/.test(leaf) && instance.allowedModules.has(leaf)
+        );
+      };
+    }
+    if (key === "requireAuth") {
+      return function (fn) {
+        return function () {
+          if (!instance.isAuthenticated()) {
+            instance.endSession();
+            return false;
+          }
+          return fn.apply(this, arguments);
+        };
+      };
+    }
+    // endSession
+    return function () {
+      if (priorEndSession) return priorEndSession.apply(instance, arguments);
+      if (typeof instance.logOut === "function") return instance.logOut();
+      if (typeof instance.sessionDestroy === "function")
+        return instance.sessionDestroy();
+    };
+  }
+
+  function installInstanceSeam(instance, key, priorEndSession, priorFlags) {
+    // defineProperty, not assignment: the prototype accessor has no setter, and strict-mode
+    // assignment to it throws. This creates the own data property that shadows the accessor.
+    Object.defineProperty(instance, key, {
+      value: seamValue(instance, key, priorEndSession, priorFlags),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  // The live module exports a class (`core/class`'s extend), so the singleton most call sites use
+  // is an instance created by a consumer. An own property on the constructor would never reach it.
+  // Put an accessor on the class prototype; the first read on any instance materializes the member
+  // as an OWN property of that instance and re-defines it there. No `__proto__` assignment and no
+  // prototype pollution: the accessor is a plain own property of the prototype object.
+  function decorateClass(ExportedClass) {
+    var proto = ExportedClass.prototype;
+    if (!proto || typeof proto !== "object") return false;
+    var installed = false;
+    for (var i = 0; i < SEAM_KEYS.length; i += 1) {
+      var key = SEAM_KEYS[i];
+      if (Object.prototype.hasOwnProperty.call(proto, key)) continue;
+      (function (seamKey) {
+        Object.defineProperty(proto, seamKey, {
+          configurable: true,
+          enumerable: false,
+          get: function () {
+            // No vendor endSession exists on the class (the accessor is only added when the
+            // prototype does not already own one), so pass null rather than re-reading this.endSession,
+            // which would re-enter this accessor.
+            installInstanceSeam(this, seamKey, null, undefined);
+            return this[seamKey];
+          },
+        });
+      })(key);
+      installed = true;
+    }
+    return installed;
+  }
+
   function apply(api) {
-    if (!api || typeof api !== "object") return false;
+    if (!api) return false;
+    if (typeof api === "function") return decorateClass(api);
+    if (typeof api !== "object") return false;
     if (Object.prototype.hasOwnProperty.call(api, "escHtml")) return false;
 
     var priorEndSession =
       typeof api.endSession === "function" ? api.endSession : null;
-
-    api.escHtml = escHtml;
-    api.escUrl = escUrl;
-    api.csrf = csrf;
-    api.sessionExpired = sessionExpired;
-    api.isAuthenticated = isAuthenticated;
-    api.allowedModules = new Set(ALLOWED_LEAVES);
-    api.isAllowedModule = function (m) {
-      if (typeof m !== "string" || !m) return false;
-      var leaf = m.split("/").pop();
-      return /^[a-z0-9][a-z0-9-]*$/.test(leaf) && api.allowedModules.has(leaf);
-    };
-    api.requireAuth = function (fn) {
-      return function () {
-        if (!api.isAuthenticated()) {
-          api.endSession();
-          return false;
-        }
-        return fn.apply(this, arguments);
-      };
-    };
-    api.endSession = function () {
-      if (priorEndSession) return priorEndSession.apply(api, arguments);
-      if (typeof api.logOut === "function") return api.logOut();
-      if (typeof api.sessionDestroy === "function") return api.sessionDestroy();
-    };
-    api.flags = Object.assign({ unifiedPost: false }, api.flags || {});
+    var priorFlags = api.flags;
+    for (var i = 0; i < SEAM_KEYS.length; i += 1) {
+      installInstanceSeam(api, SEAM_KEYS[i], priorEndSession, priorFlags);
+    }
     return true;
   }
 
-  var hooked = false;
   function install(requirejs) {
-    if (hooked || !requirejs) return;
-    hooked = true;
+    if (hookInstalled || !requirejs) return;
+    hookInstalled = true;
     var previous = requirejs.onResourceLoad;
     requirejs.onResourceLoad = function (context, map, defined) {
+      if (map && map.name) loadNames.push(map.name);
       if (
         !window.__F402_SEAM_DISABLED__ &&
         map &&
         map.name === "system/security"
       ) {
-        apply(defined);
+        if (apply(defined)) appliedCount += 1;
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);
@@ -168,16 +287,18 @@
     }
   }
 
-  // Debug/probe hook only: exposes the decorator and the allowlist predicate, not the singleton.
-  window.__F402_SEAMS__ = {
-    apply: apply,
-    isAllowedModule: function (m) {
-      if (typeof m !== "string" || !m) return false;
-      var leaf = m.split("/").pop();
-      return (
-        /^[a-z0-9][a-z0-9-]*$/.test(leaf) && ALLOWED_LEAVES.indexOf(leaf) !== -1
-      );
-    },
-    allowedLeaves: ALLOWED_LEAVES.slice(),
-  };
+  // Watchdog: run for ~30s after load. The app may replace onResourceLoad, and a module defined
+  // before this script's first tick is missed by the hook; the registry sweep still finds it.
+  // Prototype decoration is retroactive for already-created instances, so a late sweep works.
+  var sweeps = 0;
+  var sweepTimer = setInterval(function () {
+    if (!window.__F402_SEAM_DISABLED__) sweep();
+    sweeps += 1;
+    if (sweeps > 300) clearInterval(sweepTimer);
+  }, 100);
+  if (document.addEventListener) {
+    document.addEventListener("DOMContentLoaded", function () {
+      if (!window.__F402_SEAM_DISABLED__) sweep();
+    });
+  }
 })();
