@@ -8,7 +8,7 @@ Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Spo
 
 If you are opening this repository for the first time or starting a desk shift, read the **[Operator Quickstart, Data Cleaning Pipeline & 10-Mode Action Runbook](docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md)** and open the **[Live 6-Tab Surveillance, ROT Bet-Ticker & 10-Mode Forensic Portal (`graph.html`)](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html)**.
 
-Always use **`./bin/dx`** as your primary entrypoint—it automatically configures sandbox/host `$HOME/.gitconfig`, links `/Users/nolarose/dotfiles`, loads Cloudflare R2 credentials, and runs its tooling through Bun (`v1.4.4`):
+Always use **`./bin/dx`** as your primary entrypoint—it configures sandbox/host `$HOME/.gitconfig`, links your dotfiles checkout (`$DX_DOTFILES_DIR`, else `~/dotfiles`; never overwriting a real file), loads Cloudflare Pages credentials, and runs its tooling through Bun (`v1.4.4`). Run `./bin/dx help` for every command and `./bin/dx scripts` for the grouped `package.json` scripts:
 
 ```bash
 # 1. Verify environment, Git config, staged dist/ assets, and live Cloudflare R2 gateway
@@ -33,6 +33,9 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 
 **Operator tools:**
 
+- `./bin/dx status` — measured, not asserted: git, R2 S3 and Pages credentials, and a 3-second HEAD probe of the R2 portal (`DX_STATUS_OFFLINE=1` skips the probe). Each line says what it checked.
+- `./bin/dx setup [--replace]` — reports any real file (for example `~/.zshrc`) that `dx` declined to replace with a dotfiles symlink; `--replace` moves it to `<path>.dx-backup-<epoch>` and links.
+- `./bin/dx scripts [substring]` — the 200+ `package.json` scripts grouped by prefix; a substring lists the matching commands.
 - `./bin/dx gslive <LOGIN>` — GSLive Partner 118 links for one account: the 7-parameter `#/reports/users` deep link (`bot=true`, desk-day ISO window, `text=player_<LOGIN>`) and the `#/events/bet-history` sidecar (`calcTime` / `betTime`, epoch `from`/`to`, raw `partnerUserId`).
 - `./bin/dx docs` / `./bin/dx docs gslive` — deployed docs portal URLs, or the GSLive surface section.
 - `./bin/dx stale -i <export>` — stale-line cohort over a bet-log export (CSV/JSON/JSONL); seeds on operator stale notes or graded-then-cancelled tickets, then clusters other customers on the same market and window.
@@ -67,13 +70,13 @@ bun run cli -b
 # 2. Inspect Qwen3.5-4B (Layers 18-28) neuron token registry with TrueColor ANSI swatches
 bun run cli -N
 
-# 3. Verify design tokens, CIEDE2000 color distance, and WCAG contrast (592 assertions)
+# 3. Verify design tokens, CIEDE2000 color distance, and WCAG contrast
 bun test tests/verify_tokens.test.ts
 
 # 4. Compile tokens across TypeScript, Webview, and TMA dashboards (Zero-Drift SSOT)
 bun run gen:tokens
 
-# 5. Run all 10 test suites across headers, port cascade, proxy isolation, timeouts, and benchmarks (813 assertions)
+# 5. Run every test: tests/ (what CI runs) plus the suites colocated in lib/ and scripts/ (CI does not)
 bun test
 
 # 6. Run 24h sniper surveillance
