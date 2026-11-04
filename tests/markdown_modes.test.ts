@@ -4,9 +4,9 @@ import { describe, expect, test } from "bun:test";
  * What the four Markdown modes actually do with the constructs that were supposed to make HTML and
  * ANSI disagree.
  *
- * The 1.4.3 documentation says `ansi()` enables `wikiLinks`, `underline` and `latexMath` by default,
- * with no `Options` to disable them. Measured on 1.4.4: only `wikiLinks` changes anything, and only
- * when passed to `html()`. These tests pin the observed behaviour, so a Bun change surfaces here
+ * The current guide lists `wikiLinks`, `underline` and `latexMath` as opt-in (default `false`).
+ * Measured on 1.4.4: only `wikiLinks` changes output, and only when passed to `html()`; `underline`
+ * and `latexMath` are inert. These tests pin the observed behaviour, so a Bun change surfaces here
  * instead of silently altering a rendered doc.
  */
 describe("markdown mode divergence", () => {
@@ -42,5 +42,33 @@ describe("markdown mode divergence", () => {
 
   test("render() passes text through when no callbacks are given", () => {
     expect(Bun.markdown.render(SAMPLE, {}, {})).toContain("[[page]]");
+  });
+
+  test("autolinks are opt-in, and headings accept the partial { ids: true } shape", () => {
+    const plain = Bun.markdown.html("Visit www.example.com");
+    expect(plain).not.toContain("<a ");
+    const linked = Bun.markdown.html("Visit www.example.com", {
+      autolinks: true,
+    });
+    expect(linked).toContain('<a href="http://www.example.com">');
+
+    // The guide's granular form is accepted at runtime: id, no heading anchor.
+    const idsOnly = Bun.markdown.html("## Hello World", {
+      headings: { ids: true },
+    });
+    expect(idsOnly).toContain('<h2 id="hello-world">Hello World</h2>');
+    expect(idsOnly).not.toContain('<a href="#hello-world">');
+  });
+
+  test("react() uses the React 19 element symbol, and reactVersion: 18 opts down", () => {
+    const element = Bun.markdown.react("# Hello") as {
+      readonly $$typeof?: symbol;
+    };
+    expect(element.$$typeof).toBe(Symbol.for("react.transitional.element"));
+
+    const legacy = Bun.markdown.react("# Hello", undefined, {
+      reactVersion: 18,
+    }) as { readonly $$typeof?: symbol };
+    expect(legacy.$$typeof).toBe(Symbol.for("react.element"));
   });
 });

@@ -513,9 +513,11 @@ enforces that with no undocumented surface.
   `@types/bun` accepts only the options object — TypeScript reports `TS2554: Expected 1 arguments,
 but got 2`. Repo code therefore uses the object form exclusively, and `lib/secrets.ts` types its
   provider as `Pick<typeof Bun.secrets, "get">` so a positional call cannot slip in.
-- `Bun.markdown`: `html` callbacks receive `html` — "Raw HTML content"; `tagFilter` is the GFM tag
-  filter, `noHtmlBlocks`/`noHtmlSpans` disable HTML, and the API is marked "Unstable API" —
-  https://bun.com/docs/runtime/markdown
+- `Bun.markdown`: `html`, `render` and `react` share the GFM `Options` (`tables`, `strikethrough`,
+  `tasklists`, `autolinks`, `headings`, `tagFilter`, `noHtmlBlocks`/`noHtmlSpans`, `wikiLinks`,
+  `underline`, `latexMath`, …); `html` callbacks receive `html` — "Raw HTML content"; `tagFilter` is
+  the GFM tag filter; `react(..., undefined, { reactVersion: 18 })` is the React 18 element symbol;
+  the API is marked "Unstable API" — https://bun.com/docs/runtime/markdown
 - Child processes expose `.terminal.close()` and `exited` —
   https://bun.com/docs/runtime/child-process#reusable-terminal
 - `--no-env-file` disables automatic `.env` loading —

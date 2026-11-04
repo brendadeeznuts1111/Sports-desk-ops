@@ -35,12 +35,12 @@ The JS API and the `bun ./file.md` loader are both documented as Rust-based. The
 widths and `COLUMNS` detection, not a different parser core; still diff both after a Bun upgrade before
 snapshotting either output.
 
-`Bun.markdown.ansi()` takes an `AnsiTheme` only — `tagFilter`/`headings` belong to `html()`. The 1.4.3
-guide says it enables `wikiLinks`, `underline` and `latexMath` by default; measured on 1.4.4, `ansi()`
-leaves wiki brackets, double underscores and dollar math literal, and only `html({ wikiLinks: true })`
-changes output to an `x-wikilink` element. `underline` and `latexMath` had no effect on these inputs
-either way. This doc still avoids all three (test-enforced) so the artifact cannot opt into a link the
-terminal view does not render. Per-task colouring requires `render()`, where `listItem.checked` is `undefined` for a plain
+`Bun.markdown.ansi()` takes an `AnsiTheme` only — parser `Options` belong to `html()`/`render()`.
+The current guide lists `wikiLinks`, `underline` and `latexMath` as opt-in (default `false`); measured
+on 1.4.4, `ansi()` leaves wiki brackets, double underscores and dollar math literal, and only
+`html({ wikiLinks: true })` changes output to an `x-wikilink` element. `underline` and `latexMath`
+had no effect on these inputs either way. This doc still avoids all three (test-enforced) so the
+artifact cannot opt into a link the terminal view does not render. Per-task colouring requires `render()`, where `listItem.checked` is `undefined` for a plain
 bullet, `false` for `- [ ]`, and `true` for `- [x]`.
 
 `tagFilter` is a GFM compatibility filter, not a sanitizer: it escapes a specific tag list but leaves
@@ -53,9 +53,11 @@ Those four claims are resolved against Bun records, not memory:
 - `api:Bun.markdown.html` — `html(input, options?: Options): string`.
 - `api:Bun.markdown.ansi` — `ansi(input, theme?: AnsiTheme): string` (no `Options` parameter).
 - `api:Bun.markdown.render` — `render(input, callbacks?, options?): string`.
-- `api:Bun.markdown.Options` — `headings?: boolean | { autolink: boolean; ids: boolean }` (both fields
-  required by the type; the guide's `{ ids: true }` example is partial) and `tagFilter?: boolean`
-  described as the GFM tag filter for disallowed tags.
+- `api:Bun.markdown.react` — `react(input, overrides?, options?): ReactElement`; `reactVersion: 18`
+  selects the legacy `react.element` symbol instead of React 19's transitional one.
+- `api:Bun.markdown.Options` — `headings?: boolean | { autolink: boolean; ids: boolean }` and
+  `tagFilter?: boolean` described as the GFM tag filter for disallowed tags. The guide's `{ ids: true }`
+  example is partial but accepted at runtime (measured on 1.4.4).
 - `api:Bun.markdown.ListItemMeta` — the `listItem` meta, including `checked?`.
 
 Record version: `bun-types` v1.4.3, resolved through the `bun-dev` MCP server. Record ids are cited in
