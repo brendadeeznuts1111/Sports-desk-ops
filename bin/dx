@@ -137,13 +137,29 @@ fi
 # 4. Normalize PATH (Repo bin + User local bin + Dotfiles bin + Bun + Homebrew)
 export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:$HOME/.bun/bin:$HOST_HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-# 5. Load Cloudflare Pages credentials if present in repo or workspace
+# 5. Load Cloudflare Pages credentials if present in repo or workspace.
+# Only the two Pages names are read, as data: the file is never `source`d, so a stray `R2_*` /
+# `F402_*` line or a command in it cannot reach every `dx` subcommand. A value already in the
+# environment (keychain via `dx exec --with pages`, CI) wins over the file.
+dx_load_pages_env() {
+  local file="$1" line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line#export }"
+    case "$line" in
+      CLOUDFLARE_API_TOKEN=* | CLOUDFLARE_ACCOUNT_ID=*)
+        key="${line%%=*}"
+        value="${line#*=}"
+        value="${value%[\"\']}"
+        value="${value#[\"\']}"
+        [[ -n "${!key:-}" ]] || export "$key=$value"
+        ;;
+    esac
+  done <"$file"
+}
 for cf_env in "$REPO_ROOT/cloudflare.env" "$XDG_CONFIG_HOME/cloudflare/pages.env" "${GEMINI_WORKSPACE_DIR:-}/cloudflare.env"; do
   if [[ -n "$cf_env" && -r "$cf_env" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$cf_env"
-    set +a
+    dx_load_pages_env "$cf_env"
     break
   fi
 done

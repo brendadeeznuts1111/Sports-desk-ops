@@ -74,3 +74,8 @@ lib/.tmp-*/
 # Bun test env files. `.env.example` is tracked and intentionally not matched.
 .env.test
 .env.test.*
+
+# Cloudflare Pages credentials read by bin/dx (`cloudflare.env` in the repo root or the workspace).
+/cloudflare.env
+cloudflare.env
+pages.env

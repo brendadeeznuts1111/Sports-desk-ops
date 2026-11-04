@@ -92,6 +92,36 @@ function isSymlinkTo(file: string, target: string): boolean {
   return lstatSync(file).isSymbolicLink() && readlinkSync(file) === target;
 }
 
+describe("Cloudflare Pages credential file", () => {
+  async function pagesEnv(body: string): Promise<void> {
+    await Bun.write(
+      path.join(home, ".config", "cloudflare", "pages.env"),
+      body,
+    );
+  }
+  const probe = [
+    "exec",
+    "sh",
+    "-c",
+    'printf "%s|%s|%s" "$CLOUDFLARE_API_TOKEN" "${R2_SECRET_ACCESS_KEY:-unset}" "${INJECTED:-unset}"',
+  ];
+
+  test("only the two Pages names are read from the file", async () => {
+    await pagesEnv(
+      'export CLOUDFLARE_API_TOKEN="pages-token"\nR2_SECRET_ACCESS_KEY=leak\nINJECTED=$(touch /tmp/never)\n',
+    );
+    const result = await dx(probe);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("pages-token|unset|unset");
+  });
+
+  test("a value already in the environment wins over the file", async () => {
+    await pagesEnv("CLOUDFLARE_API_TOKEN=from-file\n");
+    const result = await dx(probe, { CLOUDFLARE_API_TOKEN: "from-env" });
+    expect(result.stdout).toBe("from-env|unset|unset");
+  });
+});
+
 describe("dx exec --with", () => {
   const R2_ENV = {
     R2_ACCESS_KEY_ID: "test-access-id",
