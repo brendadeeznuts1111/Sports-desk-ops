@@ -39,3 +39,9 @@ ignorePatterns = [
 # Exit automatically when the parent process dies (macOS kqueue EVFILT_PROC/NOTE_EXIT)
 # and stop-verify-kill all spawned descendants (including headless Bun.WebView).
 noOrphans = true
+
+[console]
+# How many levels `console.log` expands before printing `[Object ...]` (Bun's default is 2). 8 keeps
+# nested report objects (a secrets row with its mention counts and aliases is 7 deep) readable.
+# `bun --console-depth=N` overrides it. Plain `Bun.inspect` is not affected by this setting.
+depth = 8
