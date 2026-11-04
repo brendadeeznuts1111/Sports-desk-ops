@@ -92,14 +92,18 @@ export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * Shapes whose members depend on the caller, so they are not snapshotted: the
- * environment, the argv vector and the stdio streams.
+ * Shapes whose members depend on the caller or the process environment, so they are not
+ * snapshotted: the environment, the argv vector, the stdio streams, and `Bun.s3` (lazily
+ * initialized from the S3/R2 credentials present at startup, so its prototype walk differs
+ * between a credentialed shell and a `--no-env-file` run). `Bun.s3`'s nine members are pinned
+ * directly by `tests/bun_s3client_contract.test.ts`.
  */
 export const VOLATILE_SHAPES: ReadonlySet<string> = new Set([
   "env",
   "argv",
   "stdin",
   "stdout",
+  "s3",
 ]);
 
 /** Properties every function inherits that say nothing about the API surface. */

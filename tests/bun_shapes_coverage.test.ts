@@ -119,7 +119,14 @@ describe("Bun shape coverage", () => {
     const memberFile = (await Bun.file(
       join(root, "tests/bun_shape_members.json"),
     ).json()) as { shapes: Record<string, string[]> };
-    const memberBaseline = new Map(Object.entries(memberFile.shapes));
+    // Volatile shapes (env, argv, stdio, Bun.s3) are not snapshotted: their members depend on
+    // the caller/environment. Filtering the baseline keeps an absent map entry from reading as
+    // "no member surface in the binary now".
+    const memberBaseline = new Map(
+      Object.entries(memberFile.shapes).filter(
+        ([name]) => !VOLATILE_SHAPES.has(name),
+      ),
+    );
 
     const problems = analyzeBunShapes({
       usage,
