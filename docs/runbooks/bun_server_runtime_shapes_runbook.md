@@ -742,6 +742,25 @@ view and let the process-exit net handle the rest.
 
 ---
 
+### Uploading screenshots to the blob gateway
+
+`./bin/dx shot` can hand the captured file to the hardened blob gateway. The gateway
+(`services/blob_and_live_bets_server.ts`) validates the bearer token, caps the upload, decodes with
+`Bun.Image`, downscales only when the capture exceeds 1280px (never upscales), and stores
+`blobs/<key>.webp`; the client then verifies the stored object through `GET ?download=1`.
+
+```sh
+BLOB_API_TOKEN=... ./bin/dx shot --f402-login --f402-page /manager \
+  --out scratch/shots/manager.png --upload-blob \
+  --blob-gateway http://127.0.0.1:4021 --blob-key gslive-manager-evidence
+```
+
+- `--upload-blob` requires the default file encoding (`--encoding blob`) and `BLOB_API_TOKEN`.
+- `--blob-gateway` overrides `BLOB_GATEWAY_URL`/`BLOB_PORT` (default loopback `4021`).
+- The final JSON adds `blob: {key, objectKey, bytesWritten, width, height, url}` after the PUT and
+  the download verification both succeed; a failed upload exits non-zero after the local file is
+  written, so the screenshot is never lost silently.
+
 ## 10. Explicit Resource Management & JavaScriptCore Upgrades
 
 Bun v1.4+ features an upgraded WebKit JavaScriptCore (JSC) engine with native support for TC39 Explicit Resource Management:

@@ -32,6 +32,24 @@ describe("Bun PTY terminal automation", () => {
     expect(result.out).toContain("raw-buffer");
   });
 
+  test("dx shot --help advertises blob upload and rejects non-file encodings", async () => {
+    const help = await spawnInPty(["./bin/dx", "shot", "--help"]);
+    expect(help.code).toBe(0);
+    expect(help.out).toContain("--upload-blob");
+    expect(help.out).toContain("--blob-gateway");
+
+    const rejected = await spawnInPty([
+      "./bin/dx",
+      "shot",
+      "https://example.com",
+      "--upload-blob",
+      "--encoding",
+      "raw-buffer",
+    ]);
+    expect(rejected.code).toBe(2);
+    expect(rejected.out).toContain("--upload-blob requires --encoding blob");
+  });
+
   test("dx shot rejects an unknown --backend without launching a view", async () => {
     const result = await spawnInPty([
       "./bin/dx",

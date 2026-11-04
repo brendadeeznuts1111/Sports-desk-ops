@@ -22,6 +22,11 @@ import { ManagedWebView } from "./capture/webview.ts";
 import { parseResize } from "../lib/screenshot_encode.ts";
 import { loginF402 } from "./capture/f402_login.ts";
 import { redactUrlForLog } from "./capture/redact.ts";
+import {
+  blobKeyFromPath,
+  resolveBlobGatewayUrl,
+  uploadScreenshotToGateway,
+} from "../lib/blob_upload.ts";
 
 const HELP = `Bun.WebView screenshot tool
 
@@ -46,6 +51,9 @@ Options:
   --timeout-ms <ms>       Navigation/selector timeout (default 20000)
   --f402-login            Log in with F402_AGENT_ID / F402_PASSWORD before capturing
   --f402-page <path>      Navigate to this path after login (default /)
+  --upload-blob           Upload the captured image to PUT /api/v1/blobs/<key>
+  --blob-gateway <url>    Blob gateway base URL (default BLOB_GATEWAY_URL/BLOB_PORT)
+  --blob-key <key>        Blob key (default derived from the output filename)
   -h, --help
 
 Pixels:
@@ -92,6 +100,9 @@ interface Options {
   timeoutMs: number;
   f402Login: boolean;
   f402Page: string;
+  uploadBlob: boolean;
+  blobGateway: string | null;
+  blobKey: string | null;
 }
 
 function flag(
@@ -232,6 +243,8 @@ function parseArgs(args: readonly string[]): Options {
     "--wait-ms",
     "--timeout-ms",
     "--f402-page",
+    "--blob-gateway",
+    "--blob-key",
   ]);
   let url: string | null = null;
   for (let index = 0; index < args.length; index += 1) {
@@ -281,6 +294,9 @@ function parseArgs(args: readonly string[]): Options {
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(1000, timeoutMs) : 20_000,
     f402Login: args.includes("--f402-login"),
     f402Page: flag(args, ["--f402-page"], "/"),
+    uploadBlob: args.includes("--upload-blob"),
+    blobGateway: flag(args, ["--blob-gateway"], "") || null,
+    blobKey: flag(args, ["--blob-key"], "") || null,
   };
 }
 
@@ -303,6 +319,18 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
     return;
   }
 
+  if (options.uploadBlob && options.encoding !== "blob") {
+    console.error(
+      "webview-shot: --upload-blob requires --encoding blob (the file-output path)",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  if (options.uploadBlob && !(Bun.env.BLOB_API_TOKEN ?? "").trim()) {
+    console.error("webview-shot: --upload-blob requires BLOB_API_TOKEN");
+    process.exitCode = 2;
+    return;
+  }
   if (
     !options.f402Login &&
     (options.url === null || !/^https?:\/\//.test(options.url))
@@ -443,6 +471,21 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
   const url = redactUrlForLog(
     String((await view.evaluate("location.href")) ?? ""),
   );
+  const blob = options.uploadBlob
+    ? await uploadScreenshotToGateway(
+        new Uint8Array(await Bun.file(screenshot.path).arrayBuffer()),
+        screenshot.mimeType,
+        {
+          ...(options.blobGateway === null
+            ? { gatewayUrl: resolveBlobGatewayUrl() }
+            : { gatewayUrl: options.blobGateway }),
+          ...(options.blobKey === null
+            ? { key: blobKeyFromPath(screenshot.path) }
+            : { key: options.blobKey }),
+        },
+      )
+    : null;
+
   console.log(
     JSON.stringify(
       {
@@ -455,6 +498,7 @@ export async function runWebviewShot(argv: readonly string[]): Promise<void> {
         encoding: options.encoding,
         title,
         url,
+        ...(blob === null ? {} : { blob }),
       },
       null,
       2,
