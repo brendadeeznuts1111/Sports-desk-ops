@@ -1234,23 +1234,29 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:455-531` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:468-544` · response not captured
 
 **Presigned download URL for one blob**
 
-Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).
+Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). Surface: surface.blob-live-bets (tier B).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV1BlobsKey`
 - **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
 
 **Parameters**
 
-| Name  | In   | Required | Type   | Description                                            |
-| ----- | ---- | -------- | ------ | ------------------------------------------------------ |
-| `key` | path | yes      | string | Validated blob key; `..` and leading dots are refused. |
+| Name       | In    | Required | Type               | Description                                            |
+| ---------- | ----- | -------- | ------------------ | ------------------------------------------------------ |
+| `key`      | path  | yes      | string             | Validated blob key; `..` and leading dots are refused. |
+| `download` | query | no       | string — one of: 1 | Stream the object body (200) instead of redirecting.   |
 
 **Responses**
 
+- **HTTP 200** — Object body streamed from S3File.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/octet-stream`: **authored response schema — no response body was captured**
 - **HTTP 302** — Redirect to a short-lived presigned URL.
   - response header `location`: declared, no example
 - **HTTP 400** — Invalid blob key.
@@ -1274,7 +1280,7 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:455-531` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:468-544` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
@@ -1344,7 +1350,7 @@ No declared fields.
 
 ### `DELETE /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:531-548` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:554-571` · response not captured
 
 **Delete one stored blob**
 
@@ -1389,7 +1395,7 @@ Bearer-auth DELETE validates the key, returns 404 when the blob is absent, remov
 
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-454` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:421-467` · response not captured
 
 **Publish a live-bets event to subscribers**
 
@@ -1441,7 +1447,7 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:383-407` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:396-420` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
@@ -1576,7 +1582,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:550-579` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:573-602` · response not captured
 
 **Live-bets WebSocket upgrade**
 

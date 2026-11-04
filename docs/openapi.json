@@ -2943,7 +2943,7 @@
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Presigned download URL for one blob",
-        "description": "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
+        "description": "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). Surface: surface.blob-live-bets (tier B).",
         "operationId": "getApiV1BlobsKey",
         "parameters": [
           {
@@ -2955,9 +2955,41 @@
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
             },
             "description": "Validated blob key; `..` and leading dots are refused."
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            },
+            "description": "Stream the object body (200) instead of redirecting."
           }
         ],
         "responses": {
+          "200": {
+            "description": "Object body streamed from S3File.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
           "302": {
             "description": "Redirect to a short-lived presigned URL.",
             "headers": {
@@ -3049,7 +3081,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:455-531"],
+          "sources": ["services/blob_and_live_bets_server.ts:468-544"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3280,7 +3312,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:455-531"],
+          "sources": ["services/blob_and_live_bets_server.ts:468-544"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3413,7 +3445,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:531-548"],
+          "sources": ["services/blob_and_live_bets_server.ts:554-571"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3510,7 +3542,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:383-407"],
+          "sources": ["services/blob_and_live_bets_server.ts:396-420"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3679,7 +3711,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:408-454"],
+          "sources": ["services/blob_and_live_bets_server.ts:421-467"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3761,7 +3793,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:550-579"],
+          "sources": ["services/blob_and_live_bets_server.ts:573-602"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }

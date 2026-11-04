@@ -39,6 +39,14 @@ class MemoryStore implements BlobStore {
     if (bytes === undefined) throw new Error("blob not found");
     return { size: bytes.byteLength, contentType: "image/webp" };
   }
+  async getResponse(key: string): Promise<Response> {
+    const bytes = this.objects.get(key);
+    if (bytes === undefined) throw new Error("blob not found");
+    return new Response(bytes, {
+      headers: { "content-type": "image/webp" },
+    });
+  }
+
   async delete(key: string): Promise<void> {
     this.objects.delete(key);
   }

@@ -2032,11 +2032,29 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
       tag: TAG_DAEMON,
       summary: "Presigned download URL for one blob",
       description:
-        "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
+        "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. With `?download=1` the handler returns the object body directly via `new Response(S3File)` (200). Surface: surface.blob-live-bets (tier B).",
       requiredCapture:
         "HTTP capture of a presigned redirect (route is handler-verified only; no response was captured).",
-      parameters: [keyParameter],
+      parameters: [
+        keyParameter,
+        {
+          name: "download",
+          in: "query",
+          required: false,
+          schema: { type: "string", enum: ["1"] },
+          description: "Stream the object body (200) instead of redirecting.",
+        },
+      ],
       responses: {
+        "200": {
+          description: "Object body streamed from S3File.",
+          headers: daemonHeaders(),
+          content: {
+            "application/octet-stream": {
+              schema: { type: "string", format: "binary" },
+            },
+          },
+        },
         "302": {
           description: "Redirect to a short-lived presigned URL.",
           headers: { location: { schema: { type: "string" } } },

@@ -287,6 +287,27 @@ describe("blob + live-bets gateway", () => {
     }
   });
 
+  test("GET ?download=1 returns the bytes directly; missing is 404", async () => {
+    const h = start();
+    await fetch(`${h.url}/api/v1/blobs/download-me`, {
+      method: "PUT",
+      headers: { ...auth(), "content-type": "image/png" },
+      body: pngBytes(),
+    });
+    const response = await fetch(
+      `${h.url}/api/v1/blobs/download-me?download=1`,
+      { headers: auth() },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const missing = await fetch(`${h.url}/api/v1/blobs/missing?download=1`, {
+      headers: auth(),
+    });
+    expect(missing.status).toBe(404);
+  });
+
   test("PUT then DELETE removes a blob; unknown DELETE is 404", async () => {
     const h = start();
     const created = await fetch(`${h.url}/api/v1/blobs/delete-me`, {

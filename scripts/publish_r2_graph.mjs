@@ -276,7 +276,7 @@ for (const item of filesToPublish) {
   const file = Bun.file(path.join(repoRoot, item.file));
   if (!(await file.exists())) continue;
   const bytes = await file.bytes();
-  await client.writeWithMetadata(item.key, bytes, {
+  await client.putWithMetadata(item.key, bytes, {
     type: item.type,
     metadata: item.meta ?? {},
   });

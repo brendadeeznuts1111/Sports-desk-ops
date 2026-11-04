@@ -167,17 +167,23 @@ export class R2S3Client {
   async write(
     key: string,
     data: Uint8Array | string,
-    type = "application/octet-stream",
+    options: { readonly type?: string } = {},
   ): Promise<number> {
+    const type = options.type ?? "application/octet-stream";
     const written = await this.client.write(key, data, { type });
     return written ?? byteLength(data);
+  }
+
+  /** A 200 response backed directly by the lazy S3File (`new Response(s3file)`). */
+  redirectResponse(key: string): Response {
+    return new Response(this.client.file(key));
   }
 
   /**
    * Upload with `x-amz-meta-*` headers. Bun's S3 writer has no metadata option, so
    * this presigns a PUT, then sends the caller's metadata headers on the upload.
    */
-  async writeWithMetadata(
+  async putWithMetadata(
     key: string,
     data: Uint8Array | string,
     options: {
@@ -188,7 +194,7 @@ export class R2S3Client {
     const type = options.type ?? "application/octet-stream";
     const metadata = options.metadata ?? {};
     if (Object.keys(metadata).length === 0) {
-      return this.write(key, data, type);
+      return this.write(key, data, { type });
     }
     const url = this.client.presign(key, {
       method: "PUT",

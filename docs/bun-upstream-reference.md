@@ -316,6 +316,17 @@ ordering all match; the **skill resource is stale** ("Don't use Bun for type-che
 even though 1.4 ships `bun check`. The audit reports it as drift; pass `--fail-on-drift` to make
 drift fatal. Transport is covered offline by `scripts/bun_docs_mcp.test.ts` (fake fetch).
 
+## Cloudflare R2 (`Bun.S3Client` / `Bun.s3`)
+
+The four upstream patterns this repo's R2 integration is pinned to:
+
+- [Bun.S3Client and the `Bun.s3` global](https://bun.com/docs/runtime/s3#bun-s3client-bun-s3): `lib/r2_s3_client.ts` wraps one `Bun.S3Client`; `Bun.s3` is asserted in `tests/bun_s3client_contract.test.ts`.
+- [Using Bun's S3Client with Cloudflare R2](https://bun.com/docs/runtime/s3#using-bun-s-s3client-with-cloudflare-r2): the adapter builds `new Bun.S3Client({ bucket, accessKeyId, secretAccessKey, endpoint: "https://<account>.r2.cloudflarestorage.com" })`.
+- [`method` in presign options](https://bun.com/docs/runtime/s3#method): `putWithMetadata` presigns `{ method: "PUT", expiresIn: 300, type }`, then forwards `x-amz-meta-*` headers without a local SigV4 signer.
+- [`new Response(s3file)`](https://bun.com/docs/runtime/s3#new-response-s3file): `redirectResponse` wraps the lazy `S3File` in a 200 response; the blob gateway serves it for `GET /api/v1/blobs/{key}?download=1`.
+
+Environment resolution is documented in `lib/r2_s3_client.ts` (`R2_*` → `S3_*` → `AWS_*`, or `CLOUDFLARE_R2_TOKEN_ID` + SHA-256 of `CLOUDFLARE_R2_API_TOKEN`).
+
 ## Optional git pins (upstream doc PRs only)
 
 Commits on `main` **after** 1.4.4. Navigation and voice, not runtime.

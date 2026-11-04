@@ -32,6 +32,8 @@ export interface BlobStore {
   presignGet(key: string, expiresInSec: number): string;
   exists(key: string): Promise<boolean>;
   stat(key: string): Promise<BlobStat>;
+  /** A 200 body response (`new Response(s3file)` for S3, bytes for memory). */
+  getResponse(key: string): Promise<Response>;
   delete(key: string): Promise<void>;
 }
 
@@ -66,6 +68,17 @@ export class MemoryBlobStore implements BlobStore {
     const stored = this.blobs.get(key);
     if (stored === undefined) throw new Error("blob not found");
     return { size: stored.bytes.byteLength, contentType: stored.contentType };
+  }
+
+  async getResponse(key: string): Promise<Response> {
+    const stored = this.blobs.get(key);
+    if (stored === undefined) throw new Error("blob not found");
+    return new Response(stored.bytes, {
+      headers: {
+        "content-type": stored.contentType,
+        "content-length": String(stored.bytes.byteLength),
+      },
+    });
   }
 
   async delete(key: string): Promise<void> {
@@ -453,13 +466,23 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
         },
       },
       "/api/v1/blobs/:key": {
-        GET: (request: KeyedRequest) => {
+        GET: async (request: KeyedRequest) => {
           if (!authorized(request, options.apiToken)) {
             return jsonError(401, "unauthorized", "Bearer token required");
           }
           const key = request.params.key;
           if (!validKey(key)) {
             return jsonError(400, "invalid_key", "Invalid blob key");
+          }
+          if (new URL(request.url).searchParams.get("download") === "1") {
+            try {
+              if (!(await options.blobs.exists(key))) {
+                return jsonError(404, "not_found", "Blob not found");
+              }
+              return await options.blobs.getResponse(key);
+            } catch {
+              return jsonError(502, "read_failed", "Could not read the blob");
+            }
           }
           let url: string;
           try {
@@ -658,7 +681,9 @@ export function createS3BlobStore(config: {
   const path = (key: string): string => `blobs/${key}.webp`;
   return {
     async put(key, bytes, contentType) {
-      const bytesWritten = await client.write(path(key), bytes, contentType);
+      const bytesWritten = await client.write(path(key), bytes, {
+        type: contentType,
+      });
       return { bytesWritten };
     },
     presignGet(key, expiresInSec) {
@@ -670,6 +695,9 @@ export function createS3BlobStore(config: {
     async stat(key) {
       const stat = await client.stat(path(key));
       return { size: stat.size, contentType: stat.type };
+    },
+    async getResponse(key) {
+      return client.redirectResponse(path(key));
     },
     async delete(key) {
       await client.delete(path(key));

@@ -125,7 +125,7 @@ describe("resolveR2S3Options", () => {
 });
 
 describe("R2S3Client uploads", () => {
-  test("writeWithMetadata presigns a PUT and sends x-amz-meta-* headers", async () => {
+  test("putWithMetadata presigns a PUT and sends x-amz-meta-* headers", async () => {
     const backend = new FakeBackend();
     const client = R2S3Client.fromOptions(
       {
@@ -157,7 +157,7 @@ describe("R2S3Client uploads", () => {
     }) as typeof fetch;
 
     const bytes = new Uint8Array([1, 2, 3]);
-    const written = await client.writeWithMetadata("blobs/k.webp", bytes, {
+    const written = await client.putWithMetadata("blobs/k.webp", bytes, {
       type: "image/webp",
       metadata: { surface: "blob", Author: "desk" },
     });
@@ -169,6 +169,27 @@ describe("R2S3Client uploads", () => {
     expect(captured?.headers.get("x-amz-meta-surface")).toBe("blob");
     expect(captured?.headers.get("x-amz-meta-author")).toBe("desk");
     expect(captured?.headers.get("content-type")).toBe("image/webp");
+  });
+
+  test("redirectResponse wraps the lazy S3File in a Response", async () => {
+    const backend = new FakeBackend();
+    backend.file = (): Bun.S3File =>
+      new Blob(["blob-bytes"], {
+        type: "application/octet-stream",
+      }) as unknown as Bun.S3File;
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const response = client.redirectResponse("blobs/one.webp");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("blob-bytes");
   });
 
   test("write delegates to S3Client.write with the content type", async () => {
@@ -183,7 +204,7 @@ describe("R2S3Client uploads", () => {
       },
       backend,
     );
-    await client.write("a.txt", "hello", "text/plain");
+    await client.write("a.txt", "hello", { type: "text/plain" });
     expect(backend.writes).toEqual([{ key: "a.txt", type: "text/plain" }]);
   });
 
