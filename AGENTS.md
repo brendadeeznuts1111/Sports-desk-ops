@@ -1,7 +1,8 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. 397 TypeScript files, 89 scripts, 139 tests. Bun **1.4.4**.
+portal and the VPS service. 790 tracked TypeScript files (318 test files), 186 files under
+`scripts/`. Bun **1.4.4**.
 
 ## Entrypoint and the gate chain
 
@@ -67,8 +68,8 @@ with `bun run audit:tool-calls`.
 ## Layout
 
 `lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
-`tests/` (84 files) plus **colocated tests in `lib/` and `scripts/`** (~55 more — CI only runs
-`tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
+`tests/` (237 `*.test.ts` suites plus fixtures) plus **81 colocated tests in `lib/` and
+`scripts/`** (CI only runs `tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
 `docs/` · root runbooks (runtime shapes, guardrails, token architecture, R2/API, VPS domain).
 
 ## Hard rules

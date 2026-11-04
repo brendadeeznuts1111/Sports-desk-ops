@@ -4,7 +4,7 @@ Companion to [ledger.json](./ledger.json). Two kinds of surface are recorded out
 operation list:
 
 - **D — real surface.** The surface exists in code, fixtures or an external deliverable. Most of its
-  routes are now published as operations in `docs/openapi.json` (70 paths / 70 operations); the rows
+  routes are now published as operations in `docs/openapi.json` (87 paths / 89 operations); the rows
   below say which members still have no spec path of their own.
 - **E — documented, not implemented.** The spec publishes an operation that no code in this repo serves.
 

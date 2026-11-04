@@ -14,17 +14,17 @@ it.** Everything else is labelled as observed, inferred or unimplemented — in 
 
 | Tier  | Meaning                                                                                                                                                                                                      | Count       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| **A** | Captured wire contract: a real request **and** a real response capture exist.                                                                                                                                | 8           |
-| **B** | Observed first-party evidence: a captured or operator-recorded wire request, an observed request payload, or a route this repo serves verified against its handler source. Response may still be uncaptured. | 7           |
-| **C** | Inferred only: authored in the spec/generators, a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response observed.                                       | 30          |
+| **A** | Captured wire contract: a real request **and** a real response capture exist.                                                                                                                                | 11          |
+| **B** | Observed first-party evidence: a captured or operator-recorded wire request, an observed request payload, or a route this repo serves verified against its handler source. Response may still be uncaptured. | 15          |
+| **C** | Inferred only: authored in the spec/generators, a repo TypeScript wire type, or a UI/DOM observation whose URL+method is a candidate. No request or response observed.                                       | 29          |
 | **D** | A real surface recorded in `surfaces[]`, never in `operations[]`. Most of its routes are now published in the spec.                                                                                          | 20 surfaces |
 | **E** | Documented operation with no implementation in this repository.                                                                                                                                              | 10          |
 
-**Operations:** the ledger has 59 rows = 58 paths (`/api/desk/auth/session` carries both `POST` and
-`DELETE`): A 11 + B 9 + C 29 + D 0 + E 10 = 59. The published spec has **75 paths / 75 operations**
-(`scripts/audit_docs_webview_cron.ts`): the 48 ledger rows that are not reserved — 59 minus the 10
-tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 27 routes recorded only as
-`surfaces[]` members (26 daemon routes and `POST /cloud/api/Manager/getHistory`).
+**Operations:** the ledger has 65 rows = 62 paths (`/api/desk/auth/session` carries both `POST` and
+`DELETE`): A 11 + B 15 + C 29 + D 0 + E 10 = 65. The published spec has **87 paths / 89 operations**
+(`scripts/audit_docs_webview_cron.ts`): the 52 ledger paths that are not reserved — 65 rows minus the
+10 tier-E rows and the blocked `/manager-tools/ajax.php` row — plus the 35 routes recorded only as
+`surfaces[]` members (34 daemon routes and `POST /cloud/api/Manager/getHistory`).
 **Surfaces:** 21 rows (D 20, E 1). Surface counts are kept separate from operation counts.
 
 **Tier A comes from two live sessions.** The 2026-10-31 run (Bun.WebView login → portal JWT handoff →

@@ -904,7 +904,7 @@ export const PIPELINE_ARTIFACTS: readonly PipelineArtifactSpec[] = [
       <rect class="card" x="42" y="660" width="332" height="158" stroke="#06b6d4" />
       <text x="58" y="685" class="card-title">🔗 Polymarket APIs &amp; GSLive Partner 118</text>
       <text x="58" y="708" class="card-body">• CLOB WSS (&lt;500ms SLA: 345ms E2E)</text>
-      <text x="58" y="726" class="card-body">• data-api.polymarket.com/positions?user=0x</text>
+      <text x="58" y="726" class="card-body">• data-api.polymarket.com/v2/positions?user=0x</text>
       <text x="58" y="744" class="card-body">• plive.sportswidgets.pro/manager-tools/</text>
       <text x="58" y="766" class="card-accent" fill="#6ee7b7">39 0x Wallets ↔ 49 F402 Logins ↔ player_[login]</text>
 

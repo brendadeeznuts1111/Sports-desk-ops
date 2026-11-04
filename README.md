@@ -251,30 +251,27 @@ All tokens and contracts are verified continuously through `lib/validation/token
 4. **WCAG 2.1 Contrast Standards**: $\ge 3.0:1$ for graphical UI badges against dark surfaces (`#070b14` / `#0b1329`) and $\ge 4.5:1$ for typography.
 5. **Zero Dead Tokens**: Asserts bidirectional reference consistency (all declared tokens used, all used tokens declared).
 
-### Test Suite Classification (813 Assertions Total)
+### Test Suite Classification
 
-The test suite consists of 10 test suites across 34 tests and 813 total assertions:
+The suite is grouped by what it verifies. Assertion counts drift with every edit, so the numbers
+here are not pinned; the authoritative counts are what CI's `bun test` reports (last full local run
+2026-11-04: 2,763 passed, 49 skipped, 2,812 tests across 320 files).
 
-- **Token Verification Suite (`tests/verify_tokens.test.ts`, 592 assertions)**:
-  - **Table-Driven & Structural Tests (242 assertions)**:
-    - Single Source of Truth & Zero-Drift Regeneration: 85 assertions
-    - Color Uniqueness & Pairwise Evaluation: 11 assertions
-    - WCAG 2.1 Contrast & Readability: 48 assertions
-    - Discriminated Union Guardrails: 46 assertions
-    - Dead-Token & Bi-Directional Reference Consistency: 52 assertions
-  - **Generative Property-Based Tests (350 assertions)**:
-    - `test_property_ciede2000_metric_axioms`: 150 assertions evaluating identity of indiscernibles, non-negativity, and symmetry across randomized color vectors.
-    - `test_property_wcag_contrast_ratio_bounds`: 200 assertions evaluating contrast ratio bounds `[1.0, 21.0]` and monotonicity across randomized luminance pairs.
-- **Server Runtime & Network Hardening Suites (221 assertions)**:
-  - `tests/sendfile_threshold.test.ts`: 156 assertions evaluating 16 KB, 64 KB, and 1 MB lazy handle construction latency vs end-to-end socket throughput.
-  - `tests/server_headers.test.ts`: 21 assertions verifying absence of `X-Frame-Options` and presence of required Telegram Mini App `frame-ancestors`.
-  - `tests/server_error.test.ts`: 14 assertions verifying non-Error exceptions in production return structured 500 JSON without stack traces.
-  - `tests/fetch_proxy_isolation.test.ts`: 12 assertions verifying `NO_PROXY`, `{ proxy: false }` direct bypass, and `respectNoProxy: false` overrides.
-  - `tests/fetch_timeout.test.ts`: 7 assertions verifying `AbortSignal.timeout` aborts slow upstreams and validates service bounds.
-  - `tests/bench_server.test.ts`: load-independent checks that `Response.json` matches `JSON.stringify` + `new Response`, and that `new Response(Bun.file())` reads lazily (timings live in `scripts/bench_server.ts`).
-  - `tests/fetch_url_credentials.test.ts`: 3 assertions auditing codebase for 0 embedded URL credentials and 0 `rejectUnauthorized: false` occurrences.
-  - `tests/server_port.test.ts`: 2 assertions verifying `BUN_PORT=4100` cascade resolution without code overrides.
-  - `tests/env_types.test-d.ts` / `tests/env_types.test.ts`: Type assertion verifying `expectTypeOf<typeof Bun.env.KEY>().toEqualTypeOf<typeof process.env.KEY>()`.
+- **Token verification** (`tests/verify_tokens.test.ts`): zero-drift regeneration from
+  `design/tokens.toml`, 24-bit colour uniqueness, CIEDE2000 perceptual separation, WCAG 2.1
+  contrast, dead-token/bi-directional reference consistency, discriminated-union guardrails, and
+  the generative property tests `test_property_ciede2000_metric_axioms` and
+  `test_property_wcag_contrast_ratio_bounds`.
+- **Server runtime & network hardening**: `tests/sendfile_threshold.test.ts` (lazy handle
+  construction vs end-to-end socket throughput at 16 KB / 64 KB / 1 MB),
+  `tests/server_headers.test.ts` (no `X-Frame-Options`; Telegram `frame-ancestors` present),
+  `tests/server_error.test.ts` (non-Error throws become structured 500 JSON without stack traces),
+  `tests/fetch_proxy_isolation.test.ts` (`NO_PROXY`, `{ proxy: false }`, `respectNoProxy`),
+  `tests/fetch_timeout.test.ts` (`AbortSignal.timeout`), `tests/bench_server.test.ts`
+  (`Response.json` vs `JSON.stringify` equivalence, lazy `Bun.file` bodies),
+  `tests/fetch_url_credentials.test.ts` (no embedded URL credentials, no
+  `rejectUnauthorized: false`), `tests/server_port.test.ts` (`BUN_PORT=4100` cascade), and
+  `tests/env_types.test.ts` / `tests/env_types.test-d.ts` (Bun.env typing).
 
 ## Project Structure
 

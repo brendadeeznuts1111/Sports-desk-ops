@@ -28,13 +28,13 @@ Do not shell out to curl; do not add npm packages.
 
 ## APIs (public, no auth)
 
-| Endpoint                                                                        | Purpose                               |
-| :------------------------------------------------------------------------------ | :------------------------------------ |
-| `data-api.polymarket.com/positions?user=<0x>&sizeThreshold=0&limit=500&offset=` | current positions                     |
-| `data-api.polymarket.com/activity?user=<0x>&limit=500&end=<last timestamp>`     | activity, cursor by timestamp         |
-| `data-api.polymarket.com/v2/leaderboard?user=<0x>&time_period=all\|month\|week` | PnL snapshot (single user; not `day`) |
-| `data-api.polymarket.com/v2/leaderboard?limit=500&cursor=`                      | username → wallet (lb-api is retired) |
-| `gamma-api.polymarket.com/events?slug=<eventSlug>`                              | category/tags                         |
+| Endpoint                                                                        | Purpose                                               |
+| :------------------------------------------------------------------------------ | :---------------------------------------------------- |
+| `data-api.polymarket.com/v2/positions?user=<0x>&limit=500&cursor=`              | current positions (v1 `/positions` retired: HTTP 410) |
+| `data-api.polymarket.com/activity?user=<0x>&limit=500&end=<last timestamp>`     | activity, cursor by timestamp                         |
+| `data-api.polymarket.com/v2/leaderboard?user=<0x>&time_period=all\|month\|week` | PnL snapshot (single user; not `day`)                 |
+| `data-api.polymarket.com/v2/leaderboard?limit=500&cursor=`                      | username → wallet (lb-api is retired)                 |
+| `gamma-api.polymarket.com/events?slug=<eventSlug>`                              | category/tags                                         |
 
 ## Rules that matter
 
