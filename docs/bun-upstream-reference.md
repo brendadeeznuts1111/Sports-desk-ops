@@ -280,6 +280,21 @@ documented linter. Until a release ships the command, `bun run lint:check` (oxli
 which oxlint/ESLint rules run natively, then decide whether the shadowing script becomes
 `bun lint --fix` (inside that script `bun lint` is the linter, per the docs) or `--no-script`.
 
+**Type-aware parity, measured on oxlint 1.90.0 (2026-11-04).** oxlint implements the same 61
+type-aware rules the docs describe (the docs' `@typescript-eslint/*` names map to `typescript/*`),
+but with two operational differences the docs' builtin would remove:
+
+- Type-aware runs require the pinned native package `oxlint-tsgolint@7.0.2005` (declared in
+  `package.json`; platform binaries ship as optional deps). Outside a project that installs it,
+  `oxlint --type-aware` fails with `Failed to find tsgolint executable` — so the gate is not
+  self-contained the way a builtin would be.
+- oxlint's `--type-check` reports TypeScript diagnostics: on this checkout it reproduced exactly
+  the three `tsc` errors in `lib/bridge_and_channel_router.ts` (TS2412 + 2×TS2379) in 1.6 s over
+  925 files. `bun run typecheck` (tsc) is faster (~0.2 s) and remains the type-error SSOT; adding
+  `--type-check` to lint would only duplicate it. `--tsconfig` with a narrower `include` did not
+  change those type-check diagnostics, confirming the docs' caveat: next to an oxlint config it
+  sets import resolution, not the tsconfig used to type-check each file.
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
