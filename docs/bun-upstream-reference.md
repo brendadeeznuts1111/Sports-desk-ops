@@ -411,6 +411,8 @@ Pinned/used by this repo (Bun 1.4.4):
 
 There is no hand-rolled TOML parser in this repo. `lib/toml_parse.ts` is a 4-line wrapper over `Bun.TOML.parse` (Bun 1.4.0 passes 708/708 TOML v1.1 cases), and `tests/toml_native.test.ts` pins the project `bunfig.toml` and `config/wagers-capture.toml` to it. `Bun.TOML.stringify` is available for future config writers; do not reintroduce a JS parser for either direction.
 
+Measured on Bun 1.4.4: an offset date-time (`released = 2026-08-10T12:00:00Z`) parses to a **Temporal.Instant** (`epochMilliseconds: 1786363200000`), not the string shown in the upstream snippet; the instant's `toJSON()` returns the ISO string. `Bun.TOML.stringify({ name: "app", deps: { bun: "1.4.0" } })` matches upstream (quoted table `[deps]`). The test pins the Temporal behaviour so a future Bun change is visible.
+
 ## CPU / heap profiling
 
 Bun ships the profilers; no npm package is involved.

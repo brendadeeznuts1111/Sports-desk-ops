@@ -31,12 +31,17 @@ describe("native Bun.TOML", () => {
     const parsed = Bun.TOML.parse(
       `released = 2026-08-10T12:00:00Z\n[package]\n"name" = "app"\n`,
     ) as { released?: string; package?: { name?: string } };
-    const released = parsed.released as string | { epochMilliseconds?: number };
-    expect(
-      typeof released === "string"
-        ? released
-        : new Date(released.epochMilliseconds as number).toISOString(),
-    ).toBe("2026-08-10T12:00:00.000Z");
+    // Bun 1.4.4 returns a Temporal.Instant for TOML offset date-times (the upstream
+    // snippet shows a string; measured behavior is pinned here).
+    const released = parsed.released as {
+      epochMilliseconds?: number;
+      constructor?: { name?: string };
+    };
+    expect(released.epochMilliseconds).toBe(1786363200000);
+    expect(released.constructor?.name).toBe("Instant");
+    expect(new Date(released.epochMilliseconds as number).toISOString()).toBe(
+      "2026-08-10T12:00:00.000Z",
+    );
     expect(parsed.package?.name).toBe("app");
     const round = Bun.TOML.parse(
       Bun.TOML.stringify({ name: "app", deps: { bun: "1.4.4" } }),
