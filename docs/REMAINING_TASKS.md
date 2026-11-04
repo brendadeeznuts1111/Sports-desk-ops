@@ -242,6 +242,22 @@ so an id resolves without guessing which artifact it came from.
     reconciliation that holds or the written no-reconciliation finding; item 4 three chains measured
     before/after each control; roadmap re-derived from the results.
 
+- [ ] **P0.7 Establish whether the pending-customer count is computable (Path A or Path B)**
+  - **Ref:** `RT-PENDING-COUNT`
+  - **Owner:** operator + settlement team + compliance
+  - **Basis:** `[CODE]`/`[OBSERVED]`
+    `docs/analysis/defense-measurement-2026-11-03/08-pending-customer-count-feasibility.md`: no
+    decision consumer documented; the portal's `Pending 2,400` is $2,400 of wager amount, not a
+    customer count; `getPending` (`TicketNumber-WagerNumber`), `getHistory`
+    (`LOGIN|WAGERNUMBER`) and `getTransactionList` (`DocumentNumber`/`GradeNum`) share no join key.
+  - **Blocked by:** authoritative wager transaction log/replica; settlement report for a named
+    date; compliance definitions of "active customer"/"open position"/"pending"; reconciliation
+    ledger or written confirmation none exists; test environment with known pending wagers;
+    settlement and compliance leads (~1 hour each); test account + authorization (issue #23).
+  - **Exit:** Path A — 20-customer manual sample matches, settlement confirms end-of-day on a named
+    date, compliance confirms definition, negative cases hold; or Path B — written finding linked
+    from item 3 and unblock requested. Current state: **Path B (blocked)**.
+
 ## P1 — coverage and data quality
 
 - [ ] **P1.6 Capture GSLive deep-link behaviour**

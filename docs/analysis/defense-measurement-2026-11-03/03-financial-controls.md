@@ -69,6 +69,16 @@ the client can produce is not evidence of a mutation. Item 3's acceptance is the
 team confirms a server-side ledger/invariant exists (with its definition), or produces a written
 finding that none does.** That cannot be satisfied by client code.
 
+## Pending-customer count — Path B blocked (2026-11-04)
+
+The question "how many customers have pending bets" is addressed in
+[08-pending-customer-count-feasibility.md](./08-pending-customer-count-feasibility.md). Finding: no
+decision consumer is documented; the portal's `Pending 2,400` is **$2,400 in wager amount**, not a
+customer count; and the three observed namespaces (`getPending` `TicketNumber-WagerNumber`,
+`getHistory` `LOGIN|WAGERNUMBER`, `getTransactionList` `DocumentNumber`/`GradeNum`) share no join key.
+The count is blocked on the authoritative transaction log/reconciliation plus settlement and
+compliance definitions — input to this item, not a replacement for it.
+
 ## What the business owner must answer
 
 1. What is the authoritative ledger for distribution changes, balance adjustments, wager

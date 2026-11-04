@@ -45,6 +45,7 @@ test. That cannot be satisfied by repository analysis, and this pack does not pr
 - [05-detection-response.md](./05-detection-response.md) — per-control detection and response, or an explicit "neither".
 - [06-roadmap.md](./06-roadmap.md) — re-prioritized one-pager naming what to pause and what to raise.
 - [07-module-sink-census.md](./07-module-sink-census.md) — module-level `.html()` census and remaining audit surface.
+- [08-pending-customer-count-feasibility.md](./08-pending-customer-count-feasibility.md) — Path B finding: no decision consumer, no join key, no transaction log/reconciliation.
 
 ## Headline (provisional until item 2)
 
