@@ -4,10 +4,20 @@
     "correctness": "off"
   },
   "rules": {
+    "typescript/no-array-delete": "error",
+    "typescript/no-duplicate-type-constituents": "error",
+    "typescript/no-for-in-array": "error",
+    "typescript/no-meaningless-void-operator": "error",
+    "typescript/no-unsafe-enum-assignment": "error",
+    "typescript/no-unsafe-enum-comparison": "error",
+    "typescript/no-useless-default-assignment": "error",
     "typescript/return-await": ["error", "error-handling-correctness-only"]
   },
   "ignorePatterns": [
     "**/node_modules/**",
-    "verification/manager-boot-oracle/pinned/**"
+    "verification/manager-boot-oracle/pinned/**",
+    "scratch/**",
+    "Scratch/**",
+    "dist/**"
   ]
 }
