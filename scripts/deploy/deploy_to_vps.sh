@@ -85,7 +85,10 @@ mkdir -p "$APP_DIR" "$APP_DIR/static"
 # Copy application tree from repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-for dir in cli services lib static catalog validation; do
+# `scripts` ships because services/ and lib/ import it (live_positions_cron, evidence_capture,
+# capture/*, check_spec_citations); tests/dashboard_credentials.test.ts bundles the unit's entry
+# points against this list and fails when an import leaves it.
+for dir in cli services lib scripts static catalog validation; do
   mkdir -p "${APP_DIR}/${dir}"
   cp -R "${REPO_ROOT}/${dir}/." "${APP_DIR}/${dir}/" 2>/dev/null || true
 done
@@ -99,6 +102,17 @@ cp -f "${REPO_ROOT}"/*.json "${APP_DIR}/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.csv "${APP_DIR}/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.xlsx "${APP_DIR}/" 2>/dev/null || true
 cp -f "${REPO_ROOT}/package.json" "${APP_DIR}/" 2>/dev/null || true
+# The service imports npm packages (zod, cytoscape, elkjs, react, the MCP SDK). `*.json` above does
+# not match bun.lock, so ship it explicitly: without it the VPS has no lockfile to install from.
+cp -f "${REPO_ROOT}/bun.lock" "${REPO_ROOT}/.bun-version" "${APP_DIR}/"
+
+# Install exactly what bun.lock pins. `bun ci` is `bun install --frozen-lockfile` and fails when
+# package.json and bun.lock disagree; `--production` skips devDependencies (typescript, oxlint, ...).
+# No `|| true`: a failed install must stop the deploy, not leave a service that dies on `import "zod"`.
+# Native resolution is right here (the VPS installs for itself), so no --os/--cpu/--libc. The
+# workspace packages/ are not shipped; Bun notes the two missing ones and skips them.
+echo -e "      Installing locked production dependencies..."
+(cd "$APP_DIR" && "$BUN_BIN" ci --production)
 
 # Prepare Production .env
 if [ -f "${REPO_ROOT}/.env" ]; then
