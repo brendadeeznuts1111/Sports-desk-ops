@@ -491,6 +491,10 @@ enforces that with no undocumented surface.
 - `Bun.JSONL.parseChunk`: `read` is "Number of bytes (for `Uint8Array`) or characters (for strings)
   consumed" and, for `Uint8Array`, "always a byte offset into the original buffer. Use it with
   `TypedArray.subarray()`" — https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+- `ServerWebSocket.subscriptions` is a getter returning "an array of every topic the socket is
+  currently subscribed to" (shipped in 1.3.2; the anchor is in the v1.4 blog's runtime
+  long-tail) — https://bun.com/blog/bun-v1.4#runtime (PR #24299). The announcement states no
+  ordering, which is why the gateway compares subscription sets and the test sorts.
 - `server.publish()` / `ws.publish()` return `0` (dropped) or `-1` (backpressure), "honoring the
   same contract as `ws.send()`" — https://bun.com/blog/bun-v1.4
 - `subscriberCount(topic: string)` counts subscribers for a topic —
@@ -519,8 +523,9 @@ enforces that with no undocumented surface.
 
 - `parseChunk(...).read` excludes the newline that terminates the last parsed record (byte-level
   probe; see `tests/bun_jsonl_chunking.test.ts` / `tests/f402_weblog.test.ts`).
-- `ws.subscriptions` is returned in hash order, not insertion order (black-box probe; tests sort
-  before comparing).
+- `ws.subscriptions` **ordering**: the runtime returns topics in hash order, not insertion order.
+  Existence/array/current-state semantics are doc-confirmed above; the ordering is not documented
+  anywhere indexed (black-box probe; the gateway treats it as a set and tests sort).
 - `open`/`message` are automatically corked (from the `/reference` docs, which this MCP does not
   index).
 - `ws.publish()` excludes the sender and `publishToSelf` changes that (0.6.3 change; not present in
