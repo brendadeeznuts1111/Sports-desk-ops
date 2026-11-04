@@ -49,8 +49,11 @@ import {
   type PendingRow,
 } from "../lib/live_bets.ts";
 import {
+  collectLocalArtifacts,
+  publishArtifactsToR2,
   publishLivePositionsToR2,
-  type LivePositionsR2PublishResult,
+  type LocalArtifactSpec,
+  type R2PublishResult,
 } from "../lib/live_positions_r2_publisher.ts";
 import {
   betTickerFile,
@@ -73,6 +76,19 @@ export const OS_CRON_TITLE = "sportsdesk-live-positions-10m";
 export const DEFAULT_SCHEDULE = "*/10 * * * *";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
+
+/**
+ * Factory for an `observedAtFromBody` extractor the local-artifact loader accepts: returns the
+ * value of `fieldName` when the parsed body is an object with a string under that key, otherwise
+ * `null` so the loader falls back to file mtime.
+ */
+function readIsoField(fieldName: string): (body: unknown) => string | null {
+  return (body) => {
+    if (body === null || typeof body !== "object") return null;
+    const value = (body as Record<string, unknown>)[fieldName];
+    return typeof value === "string" && value !== "" ? value : null;
+  };
+}
 const DEFAULT_BETS_JSONL =
   Bun.env.F402_BETS_JSONL ??
   "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
@@ -960,16 +976,23 @@ export async function runLivePositionsPulse(options?: {
   );
   await writeCaptureHealth(healthPath, mergedHealth);
 
-  // 4. Mirror the three local KPI artifacts to R2 under `<prefix>/latest.json`. The sinks pull
-  //    their credentials from Bun.secrets (`r2` group); if the keychain has no R2 entry the publish
-  //    is a logged no-op so this unseeded laptops still run the local path. R2 errors never fail
-  //    the tick that already wrote to disk; `live-positions-cron.jsonl` records the outcome.
-  let r2Publish: LivePositionsR2PublishResult | { ok: false; summary: string } =
-    { ok: false, summary: "R2 publish: skipped (no credentials)" };
+  // 4. Mirror the local KPI artifacts to R2 under `<prefix>/latest.json`. The sinks pull their
+  //    credentials from Bun.secrets (`r2` group); if the keychain has no R2 entry the publish is a
+  //    logged no-op so unseeded laptops still run the local path. R2 errors never fail the tick
+  //    that already wrote to disk; `live-positions-cron.jsonl` records the outcome.
+  //
+  //    First batch: the three artifacts this cron just wrote. Second batch: whatever optional
+  //    local files exist (agent-tree, agent-index, customer-profiles) — those are refreshed by
+  //    other jobs so they can be stale but we still mirror them with their file mtime as
+  //    observed-at so a remote reader can decide freshness themselves.
+  let r2Publish: R2PublishResult | { ok: false; summary: string } = {
+    ok: false,
+    summary: "R2 publish: skipped (no credentials)",
+  };
   try {
     const client = await R2S3Client.fromEnvOrSecrets();
     if (client !== null) {
-      r2Publish = await publishLivePositionsToR2(client, {
+      const first = await publishLivePositionsToR2(client, {
         liveWagersText,
         liveBetsText,
         captureHealthText: JSON.stringify(mergedHealth),
@@ -980,6 +1003,60 @@ export async function runLivePositionsPulse(options?: {
           captureHealth: mergedHealth.schemaVersion ?? 1,
         },
       });
+
+      const optionalSpecs: LocalArtifactSpec[] = [
+        {
+          key: "agent-tree/latest.json",
+          relativePath: "data/agent-tree.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("observedAt"),
+        },
+        {
+          key: "agent-index/latest.json",
+          relativePath: "data/agent-index.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("observedAt"),
+        },
+        {
+          key: "customer-profiles/latest.json",
+          relativePath: "data/customer-profiles.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("generatedAt"),
+        },
+      ];
+      const { artifacts: optional, skipped } = await collectLocalArtifacts(
+        REPO_ROOT,
+        optionalSpecs,
+      );
+      const second =
+        optional.length === 0
+          ? {
+              ok: true,
+              writes: [],
+              summary: "R2 publish: 0/0 optional (none present)",
+            }
+          : await publishArtifactsToR2(client, optional);
+
+      const combinedOk = first.ok && second.ok;
+      const combinedBytes = [...first.writes, ...second.writes].reduce(
+        (sum, write) => sum + write.bytes,
+        0,
+      );
+      const combinedFails = [...first.writes, ...second.writes].filter(
+        (write) => !write.ok,
+      );
+      const skippedNote =
+        skipped.length === 0
+          ? ""
+          : ` (skipped=${skipped.map((s) => s.relativePath).join(",")})`;
+      const combinedSummary = combinedOk
+        ? `R2 publish: ${first.writes.length + second.writes.length}/${first.writes.length + second.writes.length} ok (${combinedBytes} bytes to ${client.bucket})${skippedNote}`
+        : `R2 publish: ${first.writes.length + second.writes.length - combinedFails.length}/${first.writes.length + second.writes.length} ok, failed=${combinedFails.map((w) => w.key).join(",")}${skippedNote}`;
+      r2Publish = {
+        ok: combinedOk,
+        writes: [...first.writes, ...second.writes],
+        summary: combinedSummary,
+      };
     }
   } catch (error) {
     r2Publish = {

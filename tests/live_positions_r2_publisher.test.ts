@@ -7,11 +7,18 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import {
+  collectLocalArtifacts,
   LIVE_POSITIONS_R2_CONTENT_TYPE,
   LIVE_POSITIONS_R2_KEYS,
   LIVE_POSITIONS_R2_SOURCE,
+  publishArtifactsToR2,
   publishLivePositionsToR2,
+  type R2Artifact,
 } from "../lib/live_positions_r2_publisher.ts";
 import { R2S3Client, type R2S3ClientBackend } from "../lib/r2_s3_client.ts";
 
@@ -205,5 +212,112 @@ describe("publishLivePositionsToR2", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("publishArtifactsToR2", () => {
+  test("publishes an arbitrary artifact list and carries extraMetadata headers through", async () => {
+    const records: RecordedFetchWrite[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetchFor(records);
+    try {
+      const artifacts: R2Artifact[] = [
+        {
+          key: "agent-tree/latest.json",
+          text: '{"nodes":{},"schemaVersion":2}',
+          schemaVersion: 2,
+          observedAtIso: "2026-11-04T19:10:00.000Z",
+          extraMetadata: { "row-count": "42" },
+        },
+      ];
+      const result = await publishArtifactsToR2(makeClient(), artifacts, {
+        source: "scripts/custom_runner.ts",
+      });
+      expect(result.ok).toBe(true);
+      expect(result.writes).toHaveLength(1);
+      const [record] = records;
+      expect(record?.url).toContain("/agent-tree/latest.json");
+      expect(record?.headers["x-amz-meta-source"]).toBe(
+        "scripts/custom_runner.ts",
+      );
+      expect(record?.headers["x-amz-meta-row-count"]).toBe("42");
+      expect(record?.headers["x-amz-meta-schema-version"]).toBe("2");
+      expect(result.summary).toBe(
+        "R2 publish: 1/1 ok (30 bytes to sportsdesk-ops-reports)",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("the default source label is scripts/live_positions_cron.ts", async () => {
+    const records: RecordedFetchWrite[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetchFor(records);
+    try {
+      await publishArtifactsToR2(makeClient(), [
+        {
+          key: "x/latest.json",
+          text: "{}",
+          schemaVersion: 1,
+          observedAtIso: "2026-11-04T19:10:00.000Z",
+        },
+      ]);
+      expect(records[0]?.headers["x-amz-meta-source"]).toBe(
+        LIVE_POSITIONS_R2_SOURCE,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("collectLocalArtifacts", () => {
+  test("loads present files and records missing ones under skipped", async () => {
+    const root = await mkdtemp(join(tmpdir(), "r2-artifacts-"));
+    await Bun.write(
+      join(root, "data", "agent-tree.json"),
+      '{"observedAt":"2026-11-04T19:10:00.000Z","nodes":{}}',
+    );
+    const result = await collectLocalArtifacts(root, [
+      {
+        key: "agent-tree/latest.json",
+        relativePath: "data/agent-tree.json",
+        schemaVersion: 1,
+        observedAtFromBody: (body) =>
+          typeof body === "object" && body !== null && "observedAt" in body
+            ? ((body as { observedAt: unknown }).observedAt as string)
+            : null,
+      },
+      {
+        key: "contests/latest.json",
+        relativePath: "data/contests.json",
+        schemaVersion: 1,
+      },
+    ]);
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0]?.key).toBe("agent-tree/latest.json");
+    expect(result.artifacts[0]?.observedAtIso).toBe("2026-11-04T19:10:00.000Z");
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]).toEqual({
+      relativePath: "data/contests.json",
+      reason: "missing",
+    });
+  });
+
+  test("falls back to file mtime when observedAtFromBody is missing or returns null", async () => {
+    const root = await mkdtemp(join(tmpdir(), "r2-artifacts-"));
+    await Bun.write(join(root, "data", "scoreboard.json"), '{"games":[]}');
+    const result = await collectLocalArtifacts(root, [
+      {
+        key: "scoreboard/latest.json",
+        relativePath: "data/scoreboard.json",
+        schemaVersion: 1,
+      },
+    ]);
+    expect(result.artifacts).toHaveLength(1);
+    const iso = result.artifacts[0]?.observedAtIso;
+    expect(typeof iso).toBe("string");
+    expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
