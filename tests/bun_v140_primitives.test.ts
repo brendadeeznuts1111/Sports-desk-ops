@@ -82,6 +82,50 @@ describe("Bun v1.4.0 primitives", () => {
     expect(pattern.test("https://example.test/api/v1/live-bets")).toBe(false);
   });
 
+  test("node:crypto PQC imports JWK/PEM/DER/encrypted PKCS#8 and ML-KEM keypairs", async () => {
+    const { generateKeyPairSync, createPrivateKey, createPublicKey } =
+      await import("node:crypto");
+    const dsa = generateKeyPairSync("ml-dsa-65");
+    const jwk = dsa.publicKey.export({ format: "jwk" }) as {
+      kty: string;
+      alg: string;
+      pub: string;
+    };
+    expect(jwk.kty).toBe("AKP");
+    expect(jwk.alg).toBe("ML-DSA-65");
+    expect(typeof jwk.pub).toBe("string");
+    const pem = dsa.privateKey.export({
+      format: "pem",
+      type: "pkcs8",
+    }) as string;
+    expect(createPrivateKey(pem).asymmetricKeyType).toBe("ml-dsa-65");
+    expect(createPublicKey({ key: jwk, format: "jwk" }).asymmetricKeyType).toBe(
+      "ml-dsa-65",
+    );
+    const der = dsa.privateKey.export({
+      format: "der",
+      type: "pkcs8",
+    }) as Buffer;
+    expect(
+      createPrivateKey({ key: der, format: "der", type: "pkcs8" })
+        .asymmetricKeyType,
+    ).toBe("ml-dsa-65");
+    const encrypted = dsa.privateKey.export({
+      format: "pem",
+      type: "pkcs8",
+      cipher: "aes-256-cbc",
+      passphrase: "pw",
+    }) as string;
+    expect(
+      createPrivateKey({ key: encrypted, format: "pem", passphrase: "pw" })
+        .asymmetricKeyType,
+    ).toBe("ml-dsa-65");
+    const kem = generateKeyPairSync("ml-kem-768");
+    expect(
+      (kem.publicKey.export({ format: "jwk" }) as { kty: string }).kty,
+    ).toBe("AKP");
+  });
+
   test("crypto.subtle ML-DSA-65 signs/verifies and keys survive structuredClone", async () => {
     const data = new TextEncoder().encode("hello");
     const kp = (await crypto.subtle.generateKey("ML-DSA-65", true, [
