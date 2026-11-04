@@ -82,7 +82,34 @@ describe("Bun v1.4.0 primitives", () => {
     expect(pattern.test("https://example.test/api/v1/live-bets")).toBe(false);
   });
 
-  test("ML-KEM-768 encapsulates and decapsulates; ML-DSA-65 signs and verifies", async () => {
+  test("crypto.subtle ML-DSA-65 signs/verifies and keys survive structuredClone", async () => {
+    const data = new TextEncoder().encode("hello");
+    const kp = (await crypto.subtle.generateKey("ML-DSA-65", true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
+    const sig = await crypto.subtle.sign(
+      { name: "ML-DSA-65" },
+      kp.privateKey,
+      data,
+    );
+    expect(
+      await crypto.subtle.verify(
+        { name: "ML-DSA-65" },
+        kp.publicKey,
+        sig,
+        data,
+      ),
+    ).toBe(true);
+    const clone = structuredClone(kp.publicKey);
+    expect(clone.type).toBe("public");
+    const jwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as {
+      kty: string;
+    };
+    expect(jwk.kty).toBe("AKP");
+  });
+
+  test("ML-KEM-768 encapsulates and decapsulates; node:crypto ML-DSA-65 signs and verifies", async () => {
     const kem = (await crypto.subtle.generateKey("ML-KEM-768", true, [
       "encapsulateBits",
       "decapsulateBits",
