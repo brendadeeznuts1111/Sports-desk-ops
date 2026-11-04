@@ -158,7 +158,7 @@ describe("pollF402BetTickerOnce", () => {
     expect(outcome.state.previousRows).toHaveLength(0);
   });
 
-  test("a regression leaves the state untouched and publishes nothing", async () => {
+  test("a regression reports `regressed` and leaves R2/WS and the state untouched", async () => {
     const { sink, liveBets, r2 } = recorder();
     const state: F402BetTickerPollState = {
       watermark: 10,
@@ -170,26 +170,49 @@ describe("pollF402BetTickerOnce", () => {
       state,
       now: () => NOW,
     });
-    expect(outcome.status).toBe("skipped");
-    if (outcome.status !== "skipped") return;
-    expect(outcome.reason).toBe("regression");
+    expect(outcome.status).toBe("regressed");
+    if (outcome.status !== "regressed") return;
+    expect(outcome.watermark).toBe(10);
+    expect(outcome.pageMax).toBe(5);
     expect(outcome.state).toBe(state);
     expect(liveBets).toHaveLength(0);
     expect(r2).toHaveLength(0);
   });
 
-  test("a probe error is a fail-closed skip", async () => {
-    const { sink } = recorder();
+  test("an unsettled drain reports `unsettled` and leaves R2/WS untouched", async () => {
+    const { sink, liveBets, r2 } = recorder();
+    const state: F402BetTickerPollState = { watermark: 0, previousRows: [] };
+    const outcome = await pollF402BetTickerOnce({
+      probe: queue([page([tick(1)]), page([tick(2)])]).probe,
+      sink,
+      state,
+      now: () => NOW,
+      pageLimit: 1,
+      maxPages: 2,
+    });
+    expect(outcome.status).toBe("unsettled");
+    if (outcome.status !== "unsettled") return;
+    expect(outcome.pages).toBe(2);
+    expect(outcome.state).toBe(state);
+    expect(liveBets).toHaveLength(0);
+    expect(r2).toHaveLength(0);
+  });
+
+  test("a probe error is a fail-closed `error`", async () => {
+    const { sink, liveBets, r2 } = recorder();
+    const state: F402BetTickerPollState = { watermark: 0, previousRows: [] };
     const outcome = await pollF402BetTickerOnce({
       probe: queue([page([], "unauthorized")]).probe,
       sink,
-      state: COLD,
+      state,
       now: () => NOW,
     });
-    expect(outcome.status).toBe("skipped");
-    if (outcome.status !== "skipped") return;
-    expect(outcome.reason).toBe("error");
+    expect(outcome.status).toBe("error");
+    if (outcome.status !== "error") return;
     expect(outcome.error).toBe("unauthorized");
+    expect(outcome.state).toBe(state);
+    expect(liveBets).toHaveLength(0);
+    expect(r2).toHaveLength(0);
   });
 
   test("sink failures are reported but the processed poll advances the state", async () => {

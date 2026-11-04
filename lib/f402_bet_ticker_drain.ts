@@ -14,7 +14,7 @@
  *
  * Failure rules:
  *  - a probe error is returned as `error`; the caller keeps the previous watermark and snapshot;
- *  - a page whose highest wager number is below the watermark is `regression` (the page fell
+ *  - a page whose highest wager number is below the watermark is `regressed` (the page fell
  *    behind the processed point); nothing is published and the caller raises an alert.
  */
 
@@ -50,7 +50,7 @@ export type F402TickerDrainResult =
       readonly pages: number;
     }
   | {
-      readonly status: "regression";
+      readonly status: "regressed";
       readonly watermark: number;
       readonly pageMax: number;
       readonly pages: number;
@@ -98,7 +98,7 @@ export async function drainF402BetTicker(
 
     const pageMax = highestWagerNumber(probe.ticks);
     if (watermark > 0 && probe.rows > 0 && pageMax < watermark) {
-      return { status: "regression", watermark, pageMax, pages };
+      return { status: "regressed", watermark, pageMax, pages };
     }
 
     let added = 0;

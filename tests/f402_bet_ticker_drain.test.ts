@@ -89,7 +89,7 @@ describe("drainF402BetTicker", () => {
       watermark: 200,
     });
     expect(result).toEqual({
-      status: "regression",
+      status: "regressed",
       watermark: 200,
       pageMax: 5,
       pages: 1,

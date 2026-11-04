@@ -92,6 +92,24 @@ export function demuxWagerType(wagerType: unknown): F402BetTickerWagerType {
 }
 
 /**
+ * Sentinel channels: `ALERT` mirrors a real ticket, `BLOCKED` is a portal sentinel, and
+ * `NON_SPORTS_DROP` is outside the accepted book. Their rows stay counted for observability
+ * (`ticketCount`/`legCount`) but every money axis is pinned to zero, so none of them can enter
+ * handle, risk, or to-win totals.
+ */
+export const F402_BET_TICKER_SENTINEL_CHANNELS = [
+  "ALERT",
+  "BLOCKED",
+  "NON_SPORTS_DROP",
+] as const;
+
+export function isSentinelChannel(channel: F402BetTickerChannel): boolean {
+  return (F402_BET_TICKER_SENTINEL_CHANNELS as readonly string[]).includes(
+    channel,
+  );
+}
+
+/**
  * The locked dedupe key. The ticker payload has no `TicketNumber`, so this is
  * `${wagerNumber}-${wagerNumber}` on every observed row unless a future payload carries
  * `TicketNumber`; the identical ALERT twin shares the key either way.
@@ -118,14 +136,28 @@ export function amountToCents(value: number | null): number {
   return Math.round(value * CENTS_PER_DOLLAR);
 }
 
-/** `VolumeAmount` in cents, forced to zero for an ALERT mirror row. */
+/** `VolumeAmount` in cents, pinned to zero for every sentinel channel. */
 export function canonicalVolumeCents(row: F402TickerRow): number {
-  return demuxChannel(row.ticketWriter) === "ALERT"
+  return isSentinelChannel(demuxChannel(row.ticketWriter))
     ? 0
     : amountToCents(row.volumeAmount);
 }
 
-/** One deduped ticket: the non-ALERT owner carries money and legs; an ALERT twin is kept aside. */
+/** `AmountWagered` in cents, pinned to zero for every sentinel channel. */
+export function canonicalRiskCents(row: F402TickerRow): number {
+  return isSentinelChannel(demuxChannel(row.ticketWriter))
+    ? 0
+    : amountToCents(row.amountWagered);
+}
+
+/** `ToWinAmount` in cents, pinned to zero for every sentinel channel. */
+export function canonicalToWinCents(row: F402TickerRow): number {
+  return isSentinelChannel(demuxChannel(row.ticketWriter))
+    ? 0
+    : amountToCents(row.toWinAmount);
+}
+
+/** One deduped ticket: the non-sentinel owner carries money and legs; an ALERT twin is kept aside. */
 interface DedupedTicket {
   readonly key: string;
   readonly owner: F402TickerRow;
@@ -134,6 +166,9 @@ interface DedupedTicket {
   readonly wagerType: F402BetTickerWagerType;
   readonly legCount: number;
   readonly canonicalVolumeCents: number;
+  /** Internal money axes; unpublished, but pinned to zero for sentinel channels. */
+  readonly riskCents: number;
+  readonly toWinCents: number;
 }
 
 function legCountOf(row: F402TickerRow): number {
@@ -153,6 +188,8 @@ function makeTicket(
     wagerType: demuxWagerType(owner.wagerType),
     legCount: legCountOf(owner),
     canonicalVolumeCents: canonicalVolumeCents(owner),
+    riskCents: canonicalRiskCents(owner),
+    toWinCents: canonicalToWinCents(owner),
   };
 }
 
@@ -387,7 +424,9 @@ export function projectF402TickerDelta(
       old.channel !== ticket.channel ||
       old.wagerType !== ticket.wagerType ||
       old.legCount !== ticket.legCount ||
-      old.canonicalVolumeCents !== ticket.canonicalVolumeCents
+      old.canonicalVolumeCents !== ticket.canonicalVolumeCents ||
+      old.riskCents !== ticket.riskCents ||
+      old.toWinCents !== ticket.toWinCents
     ) {
       changedTickets += 1;
     }

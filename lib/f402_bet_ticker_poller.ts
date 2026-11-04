@@ -68,16 +68,29 @@ export type F402BetTickerPollOutcome =
       readonly state: F402BetTickerPollState;
     }
   | {
-      readonly status: "skipped";
-      readonly reason: "regression" | "unsettled" | "error";
-      readonly error?: string;
+      readonly status: "regressed";
+      readonly watermark: number;
+      readonly pageMax: number;
+      readonly state: F402BetTickerPollState;
+    }
+  | {
+      readonly status: "unsettled";
+      readonly pages: number;
+      readonly state: F402BetTickerPollState;
+    }
+  | {
+      readonly status: "error";
+      readonly error: string;
       readonly state: F402BetTickerPollState;
     };
 
+/** Default poll cadence once the loop is wired; the CLI passes it explicitly. */
+export const F402_BET_TICKER_DEFAULT_POLL_INTERVAL_MS = 15_000;
+
 /**
  * Run one poll against the injected probe and sink. Returns an outcome instead of throwing: the
- * caller logs it and keeps the returned state, which is unchanged for a skip and advanced for a
- * processed poll.
+ * caller logs it and keeps the returned state, which is unchanged for a fail-closed result and
+ * advanced only for a processed poll.
  */
 export async function pollF402BetTickerOnce(
   options: F402BetTickerPollOptions,
@@ -94,23 +107,23 @@ export async function pollF402BetTickerOnce(
 
   if (drain.status === "error") {
     return {
-      status: "skipped",
-      reason: "error",
+      status: "error",
       error: drain.error,
       state: options.state,
     };
   }
-  if (drain.status === "regression") {
+  if (drain.status === "regressed") {
     return {
-      status: "skipped",
-      reason: "regression",
+      status: "regressed",
+      watermark: drain.watermark,
+      pageMax: drain.pageMax,
       state: options.state,
     };
   }
   if (drain.status === "unsettled") {
     return {
-      status: "skipped",
-      reason: "unsettled",
+      status: "unsettled",
+      pages: drain.pages,
       state: options.state,
     };
   }

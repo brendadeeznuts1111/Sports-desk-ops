@@ -50,11 +50,14 @@ via the service's HTTP surface.
 
 ## Locked accounting rules
 
-### ALERT rows are not handle
+### Sentinel rows are not handle (`ALERT`, `BLOCKED`, `NON_SPORTS_DROP`)
 
-- Every parsed `ALERT` row sets `canonicalVolumeCents = 0`; it never contributes to handle,
-  risk, to-win, or settled volume.
-- Count it separately as `alertTwinCount` and in the `CONFIRM`, `LATE`, and `ORPHAN` metrics.
+- Every parsed row whose resolved channel is `ALERT`, `BLOCKED`, or `NON_SPORTS_DROP` pins
+  `canonicalVolumeCents = 0`, `riskCents = 0`, and `toWinCents = 0`; none of them contributes to
+  handle, risk, to-win, or settled volume.
+- Their `ticketCount` and `legCount` counters are **retained** (per channel and per wager type) so
+  sentinel traffic stays observable without entering accepted handle totals.
+- Count `ALERT` separately as `alertTwinCount` and in the `CONFIRM`, `LATE`, and `ORPHAN` metrics.
   These are count axes, not money axes.
 - An ALERT row and its non-ALERT twin must not both add money. The dedupe key
   `${TicketNumber}-${WagerNumber}` identifies the twin; the non-ALERT row owns the money.
@@ -76,9 +79,15 @@ via the service's HTTP surface.
   one delta and advance the watermark.
 - If a poll returns no row above the watermark, publish no event (idempotent no-op) but keep the last
   good R2 snapshot.
-- If the response goes backwards (a row or page below the watermark), fail closed: do not publish,
-  do not replace R2, and surface a watermark-regression alert.
+- If the response goes backwards (a page whose highest wager number is below the watermark), fail
+  closed: do not publish, do not replace R2, and surface a watermark-regression alert.
 - A failed/incomplete drain leaves the previous watermark and R2 snapshot untouched.
+- **Default poll cadence: 15_000 ms** (`F402_BET_TICKER_DEFAULT_POLL_INTERVAL_MS`), whether the loop
+  is driven by the CLI (`--interval-ms`; `--once` runs a single poll) or by a future daemon.
+- **Fail-closed regression reporting:** a page below the watermark yields drain status `regressed`
+  and `maxPages` exhaustion yields `unsettled`. The poller reports that status and leaves R2 and WS
+  untouched — no write, no publish, state unchanged — and never advances the watermark on such a
+  poll.
 
 ## Contract sketch
 
@@ -130,8 +139,8 @@ and publishes the result.
 metadata: { pii: "none", ... } })`; verify with `stat` and presigned GET.
 - Failure semantics: a failed poll/drain never replaces the last good R2 snapshot; WS publish failure
   is reported but does not discard the poll result.
-- Tests: pure delta projection (new/gone/changed, ALERT zero-volume, dedupe once, no PII, no raw
-  rows), watermark/drain behavior, gateway publish contract, R2 write with metadata, and a live smoke
+- Tests: pure delta projection (new/gone/changed, sentinel zero-volume for
+  ALERT/BLOCKED/NON_SPORTS_DROP, dedupe once, no PII, no raw rows), watermark/drain behavior, gateway publish contract, R2 write with metadata, and a live smoke
   that deletes its test object.
 
 ## Phase 1 implementation notes (measured)
@@ -148,7 +157,8 @@ where the captured payload settled the wording above:
 - The channel is **`TicketWriter`**, not `ShortDesc` (observed: `Internet`, `ALERT`, `GSLIVE`,
   `GSBUILDER`). `ShortDesc` is parsed only for the leg count; the raw string is never emitted.
 - `AmountWagered`/`ToWinAmount`/`VolumeAmount` are **whole-dollar integers** in the committed paste,
-  so canonical volume is `VolumeAmount × 100` exactly; an ALERT row is forced to 0.
+  so canonical volume is `VolumeAmount × 100` exactly; every `ALERT`, `BLOCKED`, and
+  `NON_SPORTS_DROP` row is forced to 0 on each money axis while its counts stay visible.
 - A full-snapshot endpoint that repeats every row makes a strict 100-row page loop unconvergeable, so
   the drain also settles on a page that adds no new ticket (a bounded completion, not a partial
   publish). A page whose highest wager number is below the watermark is still a fail-closed
@@ -161,6 +171,7 @@ scoped to 3c/3d; this note locks the watermark).
 
 ## Remaining open decisions
 
-- Poll cadence and the corresponding R2 freshness budget (watermark handles same-page duplicates).
+- ~~Poll cadence~~ Resolved: the default is **15_000 ms** (locked in “Locked watermark and 100-row
+  drain”); `--once` runs a single poll, and the watermark makes same-page duplicates idempotent.
 - Whether `alertTwinCount` should also expose a per-channel breakdown; the money rule is already
   locked to zero.

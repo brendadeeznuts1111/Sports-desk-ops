@@ -3,8 +3,9 @@
  * @file f402_bet_ticker_bridge3a.ts
  * @description Bridge 3a poller CLI: read the Fantasy402 bet ticker read-only, drain it, project the
  * sanitized delta, publish the WS event on `f402-bet-ticker`, and write
- * `f402-bet-ticker/latest.json` to R2. One poll by default; `--interval-ms` keeps an in-memory
- * watermark and previous rows across polls in this process.
+ * `f402-bet-ticker/latest.json` to R2. Polls every `--interval-ms` (default 15_000 ms, the locked
+ * cadence); `--once` runs a single poll. The watermark and previous rows stay in memory for the
+ * life of the process.
  *
  * Auth never appears on argv or in logs: the probe runs through `createF402ReplayTransport()`
  * (proxy, session file, or FetchSession), and the gateway token comes from `BLOB_API_TOKEN`.
@@ -25,6 +26,7 @@ import {
   F402_BET_TICKER_R2_KEY,
 } from "../lib/f402_bet_ticker_delta.ts";
 import {
+  F402_BET_TICKER_DEFAULT_POLL_INTERVAL_MS,
   pollF402BetTickerOnce,
   type F402BetTickerPollOutcome,
   type F402BetTickerPollState,
@@ -52,12 +54,13 @@ const HELP = [
   "",
   "  --agent <id>         agent whose ticker to read (falls back to F402_AGENT_ID)",
   "  --base-url <url>     Fantasy402 base URL (default https://fantasy402.com)",
-  "  --interval-ms <n>    poll every n ms; 0 (default) runs one poll",
+  "  --interval-ms <n>    poll every n ms (default 15000)",
+  "  --once               run one poll and exit",
   "  --from-body <path>   replay a saved getBetTicker body (raw body or capture envelope)",
   "  --no-ws              do not publish the gateway delta",
   "  --no-r2              do not write the R2 snapshot",
   "  --publish-baseline   emit the first poll as a delta instead of establishing a silent watermark",
-  "  --dry-run            no sinks; print the sanitized delta/snapshot JSON to stdout",
+  "  --dry-run            no sinks; one poll; print the sanitized delta/snapshot JSON to stdout",
   "",
   "Auth: a session file (bun run session:login), F402_SESSION_FILE or F402_REPLAY_PROXY_URL.",
   "Gateway: BLOB_API_TOKEN, BLOB_GATEWAY_URL or BLOB_PORT (default http://127.0.0.1:4021).",
@@ -80,6 +83,7 @@ const { values } = (() => {
         "base-url": { type: "string" },
         "interval-ms": { type: "string" },
         "from-body": { type: "string" },
+        once: { type: "boolean", default: false },
         "no-ws": { type: "boolean", default: false },
         "no-r2": { type: "boolean", default: false },
         "publish-baseline": { type: "boolean", default: false },
@@ -97,8 +101,11 @@ if (values.help) {
   process.exit(0);
 }
 
+const dryRun = values["dry-run"];
 const intervalMs = (() => {
-  const raw = values["interval-ms"] ?? "0";
+  if (values.once || dryRun) return 0;
+  const raw = values["interval-ms"];
+  if (raw === undefined) return F402_BET_TICKER_DEFAULT_POLL_INTERVAL_MS;
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
     usage("--interval-ms must be a non-negative integer");
@@ -108,7 +115,6 @@ const intervalMs = (() => {
 
 const agentId = (values.agent ?? Bun.env.F402_AGENT_ID ?? "").trim();
 const baseUrl = (values["base-url"] ?? "https://fantasy402.com").trim();
-const dryRun = values["dry-run"];
 if (agentId === "" && values["from-body"] === undefined) {
   usage("no agent: pass --agent <id> or set F402_AGENT_ID");
 }
@@ -247,10 +253,18 @@ function logOutcome(outcome: F402BetTickerPollOutcome): number {
     case "noop":
       console.error(`[bridge3a] noop (${outcome.reason})`);
       return 0;
-    case "skipped":
+    case "regressed":
       console.error(
-        `[bridge3a] skipped ${outcome.reason}${outcome.error === undefined ? "" : `: ${outcome.error}`}`,
+        `[bridge3a] regressed watermark=${outcome.watermark} pageMax=${outcome.pageMax} (R2/WS untouched)`,
       );
+      return 1;
+    case "unsettled":
+      console.error(
+        `[bridge3a] unsettled pages=${outcome.pages} (R2/WS untouched)`,
+      );
+      return 1;
+    case "error":
+      console.error(`[bridge3a] error: ${outcome.error}`);
       return 1;
   }
 }
@@ -297,7 +311,13 @@ async function main(): Promise<number> {
       });
       const code = logOutcome(outcome);
       if (code !== 0) exitCode = code;
-      if (outcome.status !== "skipped") state = outcome.state;
+      if (
+        outcome.status === "published" ||
+        outcome.status === "baseline" ||
+        outcome.status === "noop"
+      ) {
+        state = outcome.state;
+      }
       if (
         dryRun &&
         (outcome.status === "published" || outcome.status === "baseline")

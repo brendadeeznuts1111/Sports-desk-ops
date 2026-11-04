@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   assertSanitizedTickerArtifact,
   buildF402TickerSnapshot,
+  canonicalRiskCents,
+  canonicalToWinCents,
   canonicalVolumeCents,
   demuxChannel,
   demuxWagerType,
@@ -255,6 +257,96 @@ describe("projectF402TickerDelta", () => {
         "2026-11-03T18:00:00.000Z",
       ).sourceSha256,
     ).not.toBe(first.sourceSha256);
+  });
+});
+
+describe("sentinel channels", () => {
+  test("BLOCKED and NON_SPORTS_DROP are counted but carry zero money", () => {
+    const blocked = row({
+      wagerNumber: "801",
+      ticketWriter: "BLOCKED",
+      volumeAmount: 500,
+      amountWagered: 500,
+      toWinAmount: 400,
+    });
+    const dropped = row({
+      wagerNumber: "802",
+      ticketWriter: "NON_SPORTS_DROP",
+      volumeAmount: 700,
+      amountWagered: 700,
+      toWinAmount: 600,
+    });
+    const accepted = row({
+      wagerNumber: "803",
+      ticketWriter: "GSLIVE",
+      volumeAmount: 1000,
+      amountWagered: 1000,
+      toWinAmount: 900,
+    });
+    const event = projectF402TickerDelta(
+      [],
+      [blocked, dropped, accepted],
+      "2026-11-03T18:00:00.000Z",
+    );
+    const byChannel = new Map(
+      event.byChannel.map((entry) => [entry.channel, entry]),
+    );
+    expect(byChannel.get("BLOCKED")).toEqual({
+      channel: "BLOCKED",
+      ticketCount: 1,
+      legCount: 1,
+      canonicalVolumeCents: 0,
+    });
+    expect(byChannel.get("NON_SPORTS_DROP")).toEqual({
+      channel: "NON_SPORTS_DROP",
+      ticketCount: 1,
+      legCount: 1,
+      canonicalVolumeCents: 0,
+    });
+    const handleCents = event.byChannel.reduce(
+      (total, entry) => total + entry.canonicalVolumeCents,
+      0,
+    );
+    // Only the accepted GSLIVE row contributes: $1,000 in cents.
+    expect(handleCents).toBe(100_000);
+    // The internal risk/to-win axes are pinned too.
+    expect(canonicalRiskCents(blocked)).toBe(0);
+    expect(canonicalToWinCents(dropped)).toBe(0);
+    expect(canonicalVolumeCents(blocked)).toBe(0);
+    expect(canonicalVolumeCents(dropped)).toBe(0);
+  });
+
+  test("ALERT, BLOCKED, and NON_SPORTS_DROP stay out of a mixed handle sum", () => {
+    const event = projectF402TickerDelta(
+      [],
+      [
+        row({ wagerNumber: "901", ticketWriter: "ALERT", volumeAmount: 900 }),
+        row({ wagerNumber: "902", ticketWriter: "BLOCKED", volumeAmount: 800 }),
+        row({
+          wagerNumber: "903",
+          ticketWriter: "NON_SPORTS_DROP",
+          volumeAmount: 700,
+        }),
+        row({
+          wagerNumber: "904",
+          ticketWriter: "Internet",
+          volumeAmount: 100,
+        }),
+      ],
+      "2026-11-03T18:00:00.000Z",
+    );
+    expect(
+      event.byChannel.reduce(
+        (total, entry) => total + entry.canonicalVolumeCents,
+        0,
+      ),
+    ).toBe(10_000);
+    expect(event.byChannel.map((entry) => entry.channel)).toEqual([
+      "Internet",
+      "ALERT",
+      "BLOCKED",
+      "NON_SPORTS_DROP",
+    ]);
   });
 });
 
