@@ -3,6 +3,7 @@ dist/
 wrangler
 .env
 .env.local
+.env.*.local
 partnerConfig.json
 i18n-resources.json
 manager-common.json
