@@ -8,16 +8,26 @@ import {
   fetchEventLog,
 } from "../lib/gslive_auto_session.ts";
 import {
+  extractBetLogAuditTargets,
   parseBetLog,
   validateAndAuditBetTimeline,
 } from "../lib/gslive_bet_event_log.ts";
 
+const scanArgs = Bun.argv
+  .slice(2)
+  .map((arg, index, all) =>
+    arg === "--scan-report" &&
+    (all[index + 1] === undefined || all[index + 1]?.startsWith("--"))
+      ? "--scan-report=Scratch/betReport-all.json"
+      : arg,
+  );
 const { values } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: scanArgs,
   options: {
     "bet-id": { type: "string" },
     "event-id": { type: "string" },
     "from-fixture": { type: "string" },
+    "scan-report": { type: "string" },
     expected: { type: "string" },
     json: { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
@@ -26,6 +36,33 @@ const { values } = parseArgs({
 if (values.help) {
   console.log(
     "Usage: bun run gslive:audit-bet [--bet-id 350826311 --event-id 207059651] [--from-fixture path] [--expected accepted] [--json]",
+  );
+  process.exit(0);
+}
+if (values["scan-report"] !== undefined) {
+  const payload = JSON.parse(
+    readFileSync(values["scan-report"] as string, "utf8"),
+  ) as { r?: { bets?: Record<string, unknown>[] } } | Record<string, unknown>[];
+  const rows = Array.isArray(payload) ? payload : (payload.r?.bets ?? []);
+  const targets = extractBetLogAuditTargets(rows);
+  const reasonCounts: Record<string, number> = {};
+  for (const target of targets) {
+    for (const reason of target.reasons) {
+      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    }
+  }
+  console.log(
+    JSON.stringify(
+      {
+        file: values["scan-report"],
+        rows: rows.length,
+        targets: targets.length,
+        reasonCounts,
+        note: "summary only — bet ids/event ids not printed",
+      },
+      null,
+      2,
+    ),
   );
   process.exit(0);
 }

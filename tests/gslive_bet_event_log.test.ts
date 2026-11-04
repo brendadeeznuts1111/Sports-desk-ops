@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  auditEventTimeline,
+  extractBetLogAuditTargets,
   parseBetLog,
   parseEventLog,
   validateAndAuditBetTimeline,
@@ -54,6 +56,85 @@ describe("gslive bet/event log audit", () => {
     expect(audit.anomalies).not.toContain("SCORE_DURING_DELAY_WINDOW");
     expect(audit.anomalies).not.toContain("POSSESSION_FLIP_DURING_DELAY");
     expect(audit.anomalies).not.toContain("MANUAL_ADMIN_INTERVENTION");
+  });
+
+  test("detects frozen-clock scoring and extended outage on 207059641", () => {
+    const fixture206 = JSON.parse(
+      readFileSync(
+        resolve(import.meta.dir, "fixtures/gslive-event-log-207059641.json"),
+        "utf8",
+      ),
+    ) as { eventLog: unknown; event: { state: string } };
+    const ticks = parseEventLog(fixture206.eventLog);
+    expect(ticks).toHaveLength(23);
+    const audit = auditEventTimeline(
+      fixture206.eventLog,
+      fixture206.event.state,
+    );
+    expect(audit.maxFeedGapMs).toBe(120717);
+    expect(audit.frozenClockScoreChanges).toBe(3);
+    expect(audit.anomalies).toContain("FROZEN_CLOCK_SCORING_OR_PLAY");
+    expect(audit.anomalies).toContain("EXTENDED_FEED_OUTAGE");
+  });
+
+  test("pre-screens 69-field rows for audit triggers", () => {
+    const rows = [
+      {
+        id: "1",
+        eID: "10",
+        logTime: "1793761946",
+        acceptTime: "1793761952000",
+        delay: "6",
+        fVal: "2.4",
+        fVal_new: "2.5",
+        adminUser: null,
+        manualLogExists: "0",
+        isSuspectedBot: "0",
+        reversedCredit: null,
+        eventResult: "settled directly",
+      },
+      {
+        id: "2",
+        eID: "10",
+        logTime: "1793761946",
+        acceptTime: "1793761953000",
+        delay: "6",
+        fVal: "2.4",
+        fVal_new: "2.4",
+        adminUser: "admin",
+        manualLogExists: "1",
+        isSuspectedBot: "1",
+        reversedCredit: "5",
+        eventResult: JSON.stringify({ m: [10, 4] }),
+      },
+      {
+        id: "3",
+        eID: "10",
+        logTime: "1793761946",
+        acceptTime: "1793761952000",
+        delay: "6",
+        fVal: "2.4",
+        fVal_new: "2.4",
+        adminUser: null,
+        manualLogExists: "0",
+        isSuspectedBot: "0",
+        reversedCredit: null,
+        eventResult: "settled directly",
+      },
+    ];
+    const targets = extractBetLogAuditTargets(rows);
+    expect(targets).toHaveLength(2);
+    expect(targets[0]?.reasons).toContain("ODDS_DRIFT");
+    expect(targets[1]?.reasons).toEqual(
+      expect.arrayContaining([
+        "DELAY_MISMATCH",
+        "ADMIN_USER",
+        "MANUAL_LOG",
+        "SUSPECTED_BOT",
+        "REVERSED_CREDIT",
+      ]),
+    );
+    expect(targets[1]?.placementSnapshotM).toEqual([10, 4]);
   });
 
   test("flags state mismatch and a score inside the delay window", () => {

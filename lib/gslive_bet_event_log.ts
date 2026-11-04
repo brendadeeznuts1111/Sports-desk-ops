@@ -42,7 +42,9 @@ export type AnomalyFlag =
   | "ACCEPTED_WHILE_BLOCKED"
   | "FEED_STALL_AT_PLACEMENT"
   | "ODDS_IMPROVEMENT_DURING_DELAY"
-  | "MANUAL_ADMIN_INTERVENTION";
+  | "MANUAL_ADMIN_INTERVENTION"
+  | "FROZEN_CLOCK_SCORING_OR_PLAY"
+  | "EXTENDED_FEED_OUTAGE";
 
 const num = (v: unknown): number | null => {
   const n =
@@ -182,9 +184,161 @@ export interface BetTimelineAudit {
   readonly msFromPlaceToNextScore: number | null;
   readonly msFromAcceptToNextScore: number | null;
   readonly would12sDelayInterceptScore: boolean | null;
+  readonly maxFeedGapMs: number | null;
+  readonly frozenClockScoreChanges: number;
   readonly anomalies: readonly AnomalyFlag[];
 }
 
+export interface EventTimelineAudit {
+  readonly maxFeedGapMs: number | null;
+  readonly frozenClockScoreChanges: number;
+  readonly frozenClockSpanMs: number | null;
+  readonly anomalies: readonly AnomalyFlag[];
+}
+/** Frozen-clock / long-outage audit over parsed ticks (state unblocked gates the frozen flag). */
+export function auditEventTimeline(
+  payload: unknown,
+  eventState = "unblocked",
+  outageThresholdMs = 60_000,
+): EventTimelineAudit {
+  const ticks = parseEventLog(payload);
+  let maxFeedGapMs: number | null = null;
+  for (let i = 1; i < ticks.length; i += 1) {
+    const gap =
+      (ticks[i]?.updateTimeMs ?? 0) - (ticks[i - 1]?.updateTimeMs ?? 0);
+    if (maxFeedGapMs === null || gap > maxFeedGapMs) maxFeedGapMs = gap;
+  }
+  let best = { changes: 0, span: 0 };
+  let runStart: number | null = null,
+    runClock: number | null = null,
+    runChanges = 0,
+    prevM: readonly [number, number] | null = null;
+  for (const tick of ticks) {
+    if (runClock === null || tick.t !== runClock) {
+      if (runStart !== null && runChanges > best.changes)
+        best = {
+          changes: runChanges,
+          span: prevM === null ? 0 : tick.updateTimeMs - runStart,
+        };
+      runStart = tick.updateTimeMs;
+      runClock = tick.t;
+      runChanges = 0;
+      prevM = tick.m;
+      continue;
+    }
+    if (prevM !== null && (tick.m[0] !== prevM[0] || tick.m[1] !== prevM[1])) {
+      runChanges += 1;
+      best = {
+        changes: runChanges,
+        span: runStart === null ? 0 : tick.updateTimeMs - runStart,
+      };
+    }
+    prevM = tick.m;
+  }
+  let longPossessionFlip = false;
+  for (let i = 1; i < ticks.length; i += 1) {
+    const a = ticks[i - 1],
+      b = ticks[i];
+    if (
+      a !== undefined &&
+      b !== undefined &&
+      a.p !== b.p &&
+      b.updateTimeMs - a.updateTimeMs > 15_000
+    )
+      longPossessionFlip = true;
+  }
+  const anomalies: AnomalyFlag[] = [];
+  if (
+    eventState.toLowerCase() === "unblocked" &&
+    (best.changes > 0 || longPossessionFlip)
+  )
+    anomalies.push("FROZEN_CLOCK_SCORING_OR_PLAY");
+  if (maxFeedGapMs !== null && maxFeedGapMs > outageThresholdMs)
+    anomalies.push("EXTENDED_FEED_OUTAGE");
+  return {
+    maxFeedGapMs,
+    frozenClockScoreChanges: best.changes,
+    frozenClockSpanMs: best.changes > 0 ? best.span : null,
+    anomalies,
+  };
+}
+export interface BetLogAuditTarget {
+  readonly betId: string;
+  readonly eventId: string;
+  readonly logTime: string;
+  readonly reasons: readonly string[];
+  readonly placementSnapshotM: readonly [number, number] | null;
+}
+export type PrescreenReason =
+  | "ODDS_DRIFT"
+  | "DELAY_MISMATCH"
+  | "ADMIN_USER"
+  | "MANUAL_LOG"
+  | "SUSPECTED_BOT"
+  | "REVERSED_CREDIT"
+  | "PLACEMENT_SNAPSHOT_MISMATCH";
+/** Stage 1: pre-screen 69-field getBetReport rows before spending a getBetLog call. */
+export function extractBetLogAuditTargets(
+  rows: readonly Record<string, unknown>[],
+  eventLogs?: ReadonlyMap<string, unknown>,
+): BetLogAuditTarget[] {
+  const targets: BetLogAuditTarget[] = [];
+  for (const row of rows) {
+    const reasons: string[] = [];
+    if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
+      reasons.push("ODDS_DRIFT");
+    const acceptSeconds = Number(row.acceptTime);
+    if (
+      Number.isFinite(acceptSeconds) &&
+      Number.isFinite(delaySec) &&
+      Number.isFinite(logSeconds)
+    ) {
+      if (Math.abs(acceptSeconds - logSeconds - delaySec) > 1) {
+        reasons.push("DELAY_MISMATCH");
+      }
+    }
+    if (row.adminUser !== null && row.adminUser !== undefined)
+      reasons.push("ADMIN_USER");
+    if (String(row.manualLogExists ?? "0") !== "0") reasons.push("MANUAL_LOG");
+    if (String(row.isSuspectedBot ?? "0") !== "0")
+      reasons.push("SUSPECTED_BOT");
+    if (row.reversedCredit !== null && row.reversedCredit !== undefined)
+      reasons.push("REVERSED_CREDIT");
+    let snapshot: readonly [number, number] | null = null;
+    try {
+      const parsed = JSON.parse(String(row.eventResult ?? "")) as {
+        m?: unknown;
+      };
+      if (Array.isArray(parsed.m) && parsed.m.length >= 2)
+        snapshot = [Number(parsed.m[0]), Number(parsed.m[1])];
+    } catch {
+      /* non-JSON marker */
+    }
+    const eventId = String(row.eID ?? "");
+    const eventLog = eventLogs?.get(eventId);
+    if (snapshot !== null && eventLog !== undefined) {
+      const logEpochMs = Number.isFinite(logSeconds) ? logSeconds * 1000 : NaN;
+      const ticks = parseEventLog(eventLog).filter(
+        (tick) => tick.updateTimeMs <= logEpochMs,
+      );
+      const atPlace = ticks.at(-1)?.m ?? null;
+      if (
+        atPlace !== null &&
+        (atPlace[0] !== snapshot[0] || atPlace[1] !== snapshot[1])
+      )
+        reasons.push("PLACEMENT_SNAPSHOT_MISMATCH");
+    }
+    if (reasons.length > 0)
+      targets.push({
+        betId: String(row.id ?? ""),
+        eventId,
+        logTime: String(row.logTime ?? ""),
+        reasons,
+        placementSnapshotM: snapshot,
+      });
+  }
+  return targets;
+}
 export function validateAndAuditBetTimeline(input: {
   readonly betId: string;
   readonly expectedWagerState?: string;
@@ -237,6 +391,11 @@ export function validateAndAuditBetTimeline(input: {
     delayWindow.length > 0 &&
     atPlace !== null &&
     delayWindow.some((tick) => tick.p !== atPlace.p);
+  const timelineAudit = auditEventTimeline(
+    input.eventLog,
+    input.eventState ?? "unblocked",
+    input.stallThresholdMs ?? 5_000,
+  );
   const anomalies: AnomalyFlag[] = [];
   const stateMatchesExpected =
     input.expectedWagerState === undefined
@@ -272,6 +431,8 @@ export function validateAndAuditBetTimeline(input: {
     msFromPlaceToNextScore: msFromPlace,
     msFromAcceptToNextScore: msFromAccept,
     would12sDelayInterceptScore: would12s,
+    maxFeedGapMs: timelineAudit.maxFeedGapMs,
+    frozenClockScoreChanges: timelineAudit.frozenClockScoreChanges,
     anomalies,
   };
 }
