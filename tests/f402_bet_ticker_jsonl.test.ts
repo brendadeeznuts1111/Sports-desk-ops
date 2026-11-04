@@ -7,6 +7,7 @@ import {
   loadF402TickerJsonlState,
   readF402TickerJsonl,
   saveF402TickerJsonlState,
+  shouldRefreshWindowSnapshot,
 } from "../lib/f402_bet_ticker_jsonl.ts";
 
 const dirs: string[] = [];
@@ -107,6 +108,44 @@ describe("readF402TickerJsonl", () => {
     const read = await readF402TickerJsonl(path);
     expect(read.rows).toHaveLength(2);
     expect(read.skippedLines).toBe(1);
+  });
+
+  test("window refresh happens every N ticks and only with new bytes", () => {
+    expect(
+      shouldRefreshWindowSnapshot({
+        tick: 4,
+        every: 4,
+        bytesSinceLastWrite: 10,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRefreshWindowSnapshot({
+        tick: 3,
+        every: 4,
+        bytesSinceLastWrite: 10,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRefreshWindowSnapshot({
+        tick: 4,
+        every: 4,
+        bytesSinceLastWrite: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRefreshWindowSnapshot({
+        tick: 1,
+        every: 1,
+        bytesSinceLastWrite: 5,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRefreshWindowSnapshot({
+        tick: 4,
+        every: 0,
+        bytesSinceLastWrite: 5,
+      }),
+    ).toBe(false);
   });
 
   test("persisted offset/watermark round-trips and is scoped to its file", async () => {

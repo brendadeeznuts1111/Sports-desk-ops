@@ -10,7 +10,7 @@
  * below it. `published: 0` is a valid 200 (no subscriber), not an error.
  */
 
-import { R2S3Client } from "./r2_s3_client.ts";
+import { R2S3Client, resolveSecretBackedEnv } from "./r2_s3_client.ts";
 import {
   F402_BET_TICKER_KIND,
   F402_BET_TICKER_LIVE_CHANNEL,
@@ -38,6 +38,8 @@ export interface F402BetTickerSinkOptions {
   readonly r2: boolean;
   readonly gatewayUrl?: string;
   readonly apiToken?: string;
+  /** Test seam for the env → Bun.secrets token fallback. */
+  readonly apiTokenResolver?: () => Promise<string>;
   readonly fetchImpl?: (
     input: string | URL | Request,
     init?: RequestInit,
@@ -80,6 +82,17 @@ export function createF402BetTickerSink(
     options.gatewayUrl ?? resolveF402BetTickerGatewayUrl()
   ).replace(/\/+$/, "");
   const apiToken = options.apiToken ?? "";
+  let tokenPromise: Promise<string> | null = null;
+  /** Env first, then `com.bookdeskops.sportsdesk` via Bun.secrets — no manual export needed. */
+  const resolveApiToken = async (): Promise<string> => {
+    if (apiToken.trim() !== "") return apiToken;
+    if (options.apiTokenResolver !== undefined)
+      return options.apiTokenResolver();
+    tokenPromise ??= resolveSecretBackedEnv().then(
+      (resolved) => resolved.BLOB_API_TOKEN ?? "",
+    );
+    return tokenPromise;
+  };
 
   return {
     async publishLiveBets(event) {
@@ -87,7 +100,8 @@ export function createF402BetTickerSink(
       if (event.kind !== F402_BET_TICKER_KIND) {
         return { ok: false, error: `unexpected event kind ${event.kind}` };
       }
-      if (apiToken.trim() === "") {
+      const token = await resolveApiToken();
+      if (token.trim() === "") {
         return { ok: false, error: "BLOB_API_TOKEN is not set" };
       }
       try {
@@ -102,7 +116,7 @@ export function createF402BetTickerSink(
         const response = await fetchImpl(`${gatewayUrl}/api/v1/live-bets`, {
           method: "POST",
           headers: {
-            authorization: `Bearer ${apiToken}`,
+            authorization: `Bearer ${token}`,
             "content-type": "application/json",
           },
           body: JSON.stringify({

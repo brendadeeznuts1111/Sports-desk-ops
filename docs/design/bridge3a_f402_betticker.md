@@ -138,7 +138,11 @@ and publishes the result.
   `probes/out13/f402-bets.jsonl` by byte offset + wager-number watermark (partial trailing line held
   back), so the bridge can publish without opening a second Fantasy402 login session. Incremental
   polls publish WS deltas only; `f402-bet-ticker/latest.json` is written by window polls (cold start
-  or `--jsonl-window-snapshot`), so the object always describes the live window, not a delta.
+  or `--jsonl-window-snapshot`), so the object always describes the live window, not a delta. In loop
+  mode the window snapshot is refreshed every `--r2-window-every` ticks (default 4 = 60 s at 15 s)
+  when new bytes arrived, while every tick publishes an incremental WS delta. The sink resolves
+  `BLOB_API_TOKEN` from env first and then `com.bookdeskops.sportsdesk` via `Bun.secrets`, so the
+  CLI needs no manual export.
 - WS: `POST /api/v1/live-bets` with bearer, channel `f402-bet-ticker`.
 - R2: `R2S3Client.fromEnvOrSecrets()` + `writeWithMetadata("f402-bet-ticker/latest.json", ..., {
 metadata: { pii: "none", ... } })`; verify with `stat` and presigned GET.

@@ -215,6 +215,21 @@ export async function readF402TickerJsonl(
   }
 }
 
+/**
+ * Whether a loop tick should refresh the R2 window snapshot: every `every` ticks, and only when
+ * new bytes actually arrived since the last window write (no empty rewrites).
+ */
+export function shouldRefreshWindowSnapshot(input: {
+  readonly tick: number;
+  readonly every: number;
+  readonly bytesSinceLastWrite: number;
+}): boolean {
+  const { tick, every, bytesSinceLastWrite } = input;
+  if (bytesSinceLastWrite <= 0) return false;
+  if (!Number.isSafeInteger(every) || every < 1) return false;
+  return tick > 0 && tick % every === 0;
+}
+
 export interface F402TickerJsonlPersistedState extends F402TickerJsonlState {
   readonly version: 1;
   readonly path: string;

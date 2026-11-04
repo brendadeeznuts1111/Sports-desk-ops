@@ -107,6 +107,8 @@ describe("f402 bet ticker sink", () => {
       r2: false,
       gatewayUrl: "http://gateway.test",
       apiToken: "",
+      // The real fallback resolves the keychain token; this seam forces a genuinely empty result.
+      apiTokenResolver: async () => "",
       fetchImpl: async () => {
         called = true;
         return Response.json({ published: 0 });
@@ -132,6 +134,43 @@ describe("f402 bet ticker sink", () => {
       ok: false,
       error: "live-bets gateway returned HTTP 503",
     });
+  });
+
+  test("resolves BLOB_API_TOKEN from the secret fallback when env is unset", async () => {
+    let authorization = "";
+    const sink = createF402BetTickerSink({
+      liveBets: true,
+      r2: false,
+      gatewayUrl: "http://gateway.test",
+      apiToken: "",
+      apiTokenResolver: async () => "secret-token",
+      fetchImpl: async (_input, init) => {
+        authorization = new Headers(init?.headers).get("authorization") ?? "";
+        return Response.json({ published: 1 });
+      },
+    });
+    expect((await sink.publishLiveBets(EVENT)).ok).toBe(true);
+    expect(authorization).toBe("Bearer secret-token");
+  });
+
+  test("a missing resolved token still fails closed", async () => {
+    let called = false;
+    const sink = createF402BetTickerSink({
+      liveBets: true,
+      r2: false,
+      gatewayUrl: "http://gateway.test",
+      apiToken: "",
+      apiTokenResolver: async () => "",
+      fetchImpl: async () => {
+        called = true;
+        return Response.json({ published: 0 });
+      },
+    });
+    expect(await sink.publishLiveBets(EVENT)).toEqual({
+      ok: false,
+      error: "BLOB_API_TOKEN is not set",
+    });
+    expect(called).toBe(false);
   });
 
   test("skips disabled sinks", async () => {

@@ -26,6 +26,8 @@ import { parseArgs } from "node:util";
 import {
   F402_BET_TICKER_LIVE_CHANNEL,
   F402_BET_TICKER_R2_KEY,
+  buildF402TickerSnapshot,
+  projectF402TickerDelta,
 } from "../lib/f402_bet_ticker_delta.ts";
 import {
   F402_BET_TICKER_DEFAULT_POLL_INTERVAL_MS,
@@ -39,6 +41,7 @@ import {
   loadF402TickerJsonlState,
   readF402TickerJsonl,
   saveF402TickerJsonlState,
+  shouldRefreshWindowSnapshot,
   type F402TickerJsonlState,
 } from "../lib/f402_bet_ticker_jsonl.ts";
 import {
@@ -71,6 +74,8 @@ const HELP = [
   "  --jsonl-state <path>  persisted offset/watermark for --from-jsonl",
   "                        (default Scratch/f402-bet-ticker/jsonl-state.json)",
   "  --jsonl-window-snapshot  ignore persisted state; read the window and write R2",
+  "  --r2-window-every <n>  refresh the R2 window snapshot every n loop ticks",
+  "                        with new bytes (default 4 = 60s at 15s)",
   "  --no-ws              do not publish the gateway delta",
   "  --no-r2              do not write the R2 snapshot",
   "  --publish-baseline   emit the first poll as a delta instead of establishing a silent watermark",
@@ -101,6 +106,7 @@ const { values } = (() => {
         "jsonl-window-bytes": { type: "string" },
         "jsonl-state": { type: "string" },
         "jsonl-window-snapshot": { type: "boolean", default: false },
+        "r2-window-every": { type: "string" },
         once: { type: "boolean", default: false },
         "no-ws": { type: "boolean", default: false },
         "no-r2": { type: "boolean", default: false },
@@ -311,6 +317,15 @@ async function main(): Promise<number> {
     }
     return parsed;
   })();
+  const r2WindowEvery = (() => {
+    const raw = values["r2-window-every"];
+    if (raw === undefined) return 4;
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed < 1) {
+      usage("--r2-window-every must be a positive integer");
+    }
+    return parsed;
+  })();
   const jsonlStatePath =
     values["jsonl-state"] ?? "Scratch/f402-bet-ticker/jsonl-state.json";
   const forceWindowSnapshot = values["jsonl-window-snapshot"];
@@ -318,10 +333,11 @@ async function main(): Promise<number> {
     fromJsonl === undefined || forceWindowSnapshot
       ? undefined
       : await loadF402TickerJsonlState(jsonlStatePath, fromJsonl);
-  // R2 holds the live-window snapshot. An incremental JSONL read covers only new rows, so writing
-  // it would replace the window with a delta-scoped object; only window polls write R2.
-  const windowSnapshot =
+  // R2 holds the live-window snapshot. An incremental JSONL read covers only new rows, so the
+  // poller must not write it; window polls (cold start, forced) and the periodic window refresh do.
+  let pollerWindowPoll =
     fromJsonl === undefined || forceWindowSnapshot || jsonlState === undefined;
+  let lastJsonlBytesRead = 0;
 
   // One poll's probe: read the new tail bytes once, then answer the drain's follow-up pages empty.
   const jsonlProbeForPoll = (): ((
@@ -338,6 +354,7 @@ async function main(): Promise<number> {
         });
         jsonlState = read.state;
         tailRows = read.rows;
+        lastJsonlBytesRead = read.bytesRead;
         console.error(
           `[bridge3a] jsonl rows=${read.rows.length} bytes=${read.bytesRead} ` +
             `skipped=${read.skippedLines} reset=${read.reset} ` +
@@ -374,7 +391,7 @@ async function main(): Promise<number> {
     publishLiveBets: (event: Parameters<typeof baseSink.publishLiveBets>[0]) =>
       baseSink.publishLiveBets(event),
     publishR2: (snapshot: Parameters<typeof baseSink.publishR2>[0]) =>
-      windowSnapshot
+      pollerWindowPoll
         ? baseSink.publishR2(snapshot)
         : Promise.resolve({ ok: true, skipped: true }),
   };
@@ -399,8 +416,15 @@ async function main(): Promise<number> {
   process.on("SIGINT", onSignal);
 
   let exitCode = 0;
+  let tick = 0;
+  let bytesSinceWindow = 0;
   try {
     do {
+      pollerWindowPoll =
+        fromJsonl === undefined ||
+        forceWindowSnapshot ||
+        jsonlState === undefined;
+      lastJsonlBytesRead = 0;
       const outcome = await pollF402BetTickerOnce({
         probe: probeForPoll(),
         sink,
@@ -417,14 +441,48 @@ async function main(): Promise<number> {
       ) {
         state = outcome.state;
       }
+      const processed =
+        outcome.status === "published" ||
+        outcome.status === "baseline" ||
+        outcome.status === "noop";
+      if (processed) {
+        tick += 1;
+        bytesSinceWindow += lastJsonlBytesRead;
+      }
+      if (fromJsonl !== undefined && jsonlState !== undefined && processed) {
+        await saveF402TickerJsonlState(jsonlStatePath, fromJsonl, jsonlState);
+      }
       if (
         fromJsonl !== undefined &&
-        jsonlState !== undefined &&
-        (outcome.status === "published" ||
-          outcome.status === "baseline" ||
-          outcome.status === "noop")
+        !dryRun &&
+        !values["no-r2"] &&
+        intervalMs > 0 &&
+        processed &&
+        shouldRefreshWindowSnapshot({
+          tick,
+          every: r2WindowEvery,
+          bytesSinceLastWrite: bytesSinceWindow,
+        })
       ) {
-        await saveF402TickerJsonlState(jsonlStatePath, fromJsonl, jsonlState);
+        const window = await readF402TickerJsonl(fromJsonl, {
+          windowBytes: jsonlWindowBytes,
+          filterWatermark: false,
+        });
+        const windowEvent = projectF402TickerDelta(
+          [],
+          window.rows,
+          new Date().toISOString(),
+        );
+        const windowSnapshot = buildF402TickerSnapshot(
+          windowEvent,
+          window.rows.length,
+        );
+        const result = await baseSink.publishR2(windowSnapshot);
+        console.error(
+          `[bridge3a] r2 window rows=${window.rows.length} ` +
+            `watermark=${windowSnapshot.watermark} r2=${sinkStatus(result)}`,
+        );
+        if (result.ok || result.skipped === true) bytesSinceWindow = 0;
       }
       if (
         dryRun &&
