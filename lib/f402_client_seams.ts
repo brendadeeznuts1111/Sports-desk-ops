@@ -54,6 +54,11 @@ export const ALLOWED_MODULES: readonly string[] = [
  * moves that branch, the wrapper installs, looks healthy, and does nothing. These substrings are
  * checked against the pinned controller bytes whenever pins move, and the install fails loudly if
  * the method itself is gone.
+ *
+ * The `"manager/module/"` anchor assumes the vendor concatenates `"manager/module/" + id`. If that
+ * is refactored to an array join (`["manager", "module", id].join("/")`), the anchor still passes
+ * while the concatenation the wrapper intercepts is gone — update the anchor and the wrapper
+ * together. The allowlist remains the bypass control either way.
  */
 export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
   "setAccountInfo:function",

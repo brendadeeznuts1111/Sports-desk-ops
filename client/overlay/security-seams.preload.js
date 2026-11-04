@@ -106,6 +106,7 @@
     }
     var defined = requirejsRegistry();
     if (!defined) return false;
+    flushRejects();
     var decorated = false;
     var security = defined["system/security"];
     if (security) decorated = apply(security) || decorated;
@@ -126,6 +127,10 @@
         registryDegraded: registryDegraded,
         managerGuardInstalled: managerGuardInstalled,
         managerGuardFailure: managerGuardFailure,
+        rejectCount: rejectBuffer().length,
+        unflushedRejects: rejectBuffer().filter(function (entry) {
+          return entry.flushed !== true;
+        }).length,
         externalViewGuard: externalViewGuard,
       };
     },
@@ -284,6 +289,73 @@
   var managerGuardInstalled = false;
   var managerGuardFailure = null;
 
+  // Rejections are audit records, not diagnostics. The live client has no
+  // `r.security(r.events.MODULE_REJECT, …)` API (verified in language.js and the pinned
+  // controller), so the durable sink is system/log's `write` -> POST /cloud/api/Log/write, and the
+  // queryable buffer is `window.__F402_REJECTS__` (read by the probe). console.warn is only a
+  // third, local signal.
+  function rejectBuffer() {
+    if (!window.__F402_REJECTS__) window.__F402_REJECTS__ = [];
+    return window.__F402_REJECTS__;
+  }
+
+  function logSink() {
+    var defined = requirejsRegistry();
+    var Log = defined && defined["system/log"];
+    if (!Log) return null;
+    try {
+      var instance = typeof Log === "function" ? new Log() : Log;
+      return instance && typeof instance.write === "function" ? instance : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function flushRejects() {
+    var pending = rejectBuffer().filter(function (entry) {
+      return entry.flushed !== true;
+    });
+    if (pending.length === 0) return;
+    var sink = logSink();
+    if (!sink) return;
+    for (var i = 0; i < pending.length; i += 1) {
+      try {
+        sink.write({
+          customerID: sessionStorage.customerID,
+          description:
+            "external-view module rejected: " +
+            pending[i].reason +
+            " " +
+            String(pending[i].module),
+        });
+        pending[i].flushed = true;
+      } catch {
+        return;
+      }
+    }
+  }
+
+  function auditModuleReject(reason, moduleId) {
+    var entry = {
+      reason: reason,
+      module: moduleId === null ? null : String(moduleId),
+      href: location.href,
+      ts: new Date().toISOString(),
+      flushed: false,
+    };
+    rejectBuffer().push(entry);
+    console.warn(
+      "[f402-seam] external-view guard rejected module:",
+      entry.module,
+    );
+    flushRejects();
+    return entry;
+  }
+
+  // Deliberately stricter than the vendor's `dataUrl` (which regex-extracts without percent-
+  // decoding): searchParams decodes, so the wrapper matches a superset of the forms the original
+  // treats as external-view. Do not "fix" this to match dataUrl exactly — that would reopen an
+  // encoded-module bypass. A change to the *matching rule* (e.g. case-insensitive) requires both.
   function urlParam(name) {
     try {
       return new URL(location.href).searchParams.get(name);
@@ -341,15 +413,12 @@
                 }
                 var mod = urlParam("module");
                 if (!api.isAllowedModule(mod)) {
-                  console.warn(
-                    "[f402-seam] blocked dynamic module load:",
-                    String(mod),
-                  );
+                  auditModuleReject("module-not-allowed", mod);
                   return;
                 }
               } catch {
                 // Fail closed: a guard that cannot evaluate must not let the branch through.
-                console.warn("[f402-seam] external-view guard failed closed");
+                auditModuleReject("guard-error", urlParam("module"));
                 if (typeof api.endSession === "function") api.endSession();
                 return;
               }

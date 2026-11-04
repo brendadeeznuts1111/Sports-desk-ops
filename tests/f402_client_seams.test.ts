@@ -617,6 +617,111 @@ describe("external-view call-site guard (flag-gated, dead by default)", () => {
     expect(f.manager.calls).toBe(0);
   });
 
+  test("rejected module ids are buffered and flushed to system/log.write", async () => {
+    const source = await preloadSource();
+    const context = runPreload(
+      source,
+      "https://x/manager.html?external-view=active&module=../../evil&external-view-guard=1",
+      { session: { customerID: "C1" } },
+    );
+    const defined = withRegistry(context);
+
+    const writes: Record<string, unknown>[] = [];
+    class Log {
+      write(payload: Record<string, unknown>): void {
+        writes.push(payload);
+      }
+    }
+    defined["system/log"] = Log;
+
+    class Security {
+      logOut(): void {
+        // not reached: the session is valid
+      }
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+
+    let calls = 0;
+    class Manager {
+      setAccountInfo(): void {
+        calls += 1;
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const instance = new Manager() as unknown as Record<string, unknown>;
+    (instance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+
+    expect(calls).toBe(0);
+    const rejections = context.window["__F402_REJECTS__"] as Array<
+      Record<string, unknown>
+    >;
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]?.["reason"]).toBe("module-not-allowed");
+    expect(rejections[0]?.["module"]).toBe("../../evil");
+    expect(rejections[0]?.["flushed"]).toBe(true);
+    expect(writes).toHaveLength(1);
+    expect(String(writes[0]?.["description"])).toContain("../../evil");
+  });
+
+  test("a reject is buffered until the log module resolves, then swept", async () => {
+    const source = await preloadSource();
+    const context = runPreload(
+      source,
+      "https://x/manager.html?external-view=active&module=../../evil&external-view-guard=1",
+      { session: { customerID: "C1" } },
+    );
+    const defined = withRegistry(context);
+
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+
+    class Manager {
+      setAccountInfo(): void {}
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const managerInstance = new Manager() as unknown as Record<string, unknown>;
+    (managerInstance["setAccountInfo"] as (...a: unknown[]) => unknown)();
+
+    const rejections = context.window["__F402_REJECTS__"] as Array<
+      Record<string, unknown>
+    >;
+    expect(rejections[0]?.["flushed"]).toBe(false);
+
+    const writes: Record<string, unknown>[] = [];
+    class Log {
+      write(payload: Record<string, unknown>): void {
+        writes.push(payload);
+      }
+    }
+    defined["system/log"] = Log;
+    const seams = context.window["__F402_SEAMS__"] as { sweep: () => boolean };
+    seams.sweep();
+    expect(rejections[0]?.["flushed"]).toBe(true);
+    expect(writes).toHaveLength(1);
+  });
+
   test("guard is inert outside the active external-view branch and installs once", async () => {
     const f = await fixture(
       "https://x/manager.html?module=player-info&external-view-guard=1",

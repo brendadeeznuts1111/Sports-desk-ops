@@ -61,7 +61,8 @@ if (values.help === true) {
   --profile <dir>  Chrome dataStore (default F402_WEBVIEW_PROFILE or scratch/f402-manager-webview-profile)
   --url <url>      page to probe (default: manager.html?external-view=active&module=bet-ticker)
   --base <url>     portal base (default F402_BASE_URL or https://www.fantasy402.com)
-  --login          sign in first via keychain/TTY (scripts/capture/f402_login.ts)
+  --login          sign in first via keychain/TTY (optional: omit when the profile already
+                   has a live session)
   --waitMs <ms>    boot wait after the probed navigation (default 30000)
   --no-seam        negative control: skip the preload, expect the probe to fail
   --expect-rendered <css>

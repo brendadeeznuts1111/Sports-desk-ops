@@ -33,9 +33,15 @@ this runbook is the only sanctioned way to turn it on.
 
 ```sh
 bun run probe:client-seams \
-  --profile <logged-in-profile> --login --guard \
+  --profile <logged-in-profile> --guard \
   --expect-rendered '[data-wager-number]'
 ```
+
+`--profile` is a profile that already has a live session. **Do not pass `--login` with it:** `--login`
+is only for provisioning/renewing a session via the keychain/TTY path, and in an unattended
+environment it fails with `MissingF402CredentialsError` even when the profile itself is logged in.
+Use `--login` only on a machine that can authenticate interactively, then provision the profile with
+`bun run session:login --from-profile <dir>`.
 
 `--guard` appends `external-view-guard=1` to the probed URL, so the preload latches the canary flag
 for that document. Without it the probe still runs but exercises the dead-by-default path.
@@ -53,6 +59,11 @@ for that document. Without it the probe still runs but exercises the dead-by-def
 The selector is the automated acceptance; a visual check that ticker rows populate is still
 recommended for the first canary session because the selector proves the render target exists, not
 that the data path is healthy.
+
+Rejections are queryable in the probe payload: `probe.diag.seam.rejectCount` and
+`unflushedRejects` (0/0 on a clean canary session). A non-zero count means the guard blocked a
+`module` id; `unflushedRejects > 0` means `system/log` had not resolved yet and the buffer is still
+pending flush.
 
 ## Scope and navigation
 

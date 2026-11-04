@@ -182,6 +182,18 @@ so an id resolves without guessing which artifact it came from.
     `headersObserved: false`.
   - **Blocked by:** a local Chrome/Chromium binary (`BUN_CHROME_PATH`) to execute the single-op CDP re-capture.
 
+- [ ] **P0.5 Escape the searchComponent render sink (independent of the external-view canary)**
+  - **Ref:** `RT-SEARCH-ESCAPE`
+  - **Owner:** client/seam workstream
+  - **Issue:** [#16](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/16)
+  - **Basis:** `[CODE]` pinned `manager.js` player branch builds `<li>` with `NameFirst` and
+    `Password` by concatenation and injects with `.html()` (bytes 80222/82730); the dropdown is one
+    hop from `sessionStorage.credentials.code`.
+  - **Fix:** apply the seam escaper to the search render path (overlay or upstream), then migrate
+    `getMessageInit`, `getPopUpMessages`, `setCommunicationMessages`, `setHistory` one per PR.
+  - **Exit:** a `NameFirst` payload renders as literal text and sends no request; sink tests cover
+    the migrated path. **Not blocked by the external-view canary.**
+
 ## P1 — coverage and data quality
 
 - [ ] **P1.6 Capture GSLive deep-link behaviour**

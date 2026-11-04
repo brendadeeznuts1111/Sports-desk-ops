@@ -222,6 +222,21 @@ Client-side seam (this repository, rolling out):
   `guard_anchor_missing` and `pin:cdn:update` refuses to pin when they move; the install logs and
   records `managerGuardFailure` if `setAccountInfo` is gone; and with the flag on, the probe treats
   an uninstalled wrapper as a structural failure, so the canary cannot pass on an inert guard.
+- **Rejections are audit records, not diagnostics.** The live client exposes no
+  `r.security(r.events.MODULE_REJECT, …)` API (verified against `language.js` and the pinned
+  controller). A blocked `module` id is buffered in `window.__F402_REJECTS__` (queryable; the probe
+  reports `rejectCount`/`unflushedRejects` in diagnostics) and flushed to `system/log.write` →
+  `POST /cloud/api/Log/write`, which is durable and authenticated. `console.warn` is only the third,
+  local signal — it is never the audit path.
+- **The wrapper's URL parsing is deliberately stricter than the vendor's `dataUrl`.** `dataUrl`
+  regex-extracts without percent-decoding; the wrapper uses `URLSearchParams`, which decodes. The
+  wrapper therefore matches a superset of what the original treats as external-view, which is safe
+  for a guard. Do not "align" the two; a change to the vendor's **matching rule** (e.g.
+  case-insensitivity) requires both implementations, while a change to `dataUrl`'s decoding does not.
+- **Sink migrations are not gated on the canary.** `searchComponent` (the player-branch
+  `NameFirst`/`Password` interpolation into `.html()`) is independent of the external-view work and
+  is the highest-value remaining XSS fix, one hop from the Bearer in `sessionStorage`; it is tracked
+  as its own task (#16) and can proceed while the canary is blocked on credentials.
 
 Limits, stated so nobody relies on a control that does not exist:
 
