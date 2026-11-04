@@ -5,9 +5,18 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  // ast-grep-ignore: node-fs-read-write-file -- sync CLI fixtures; the CLI under test is sync.
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+
+import {
+  arrayValue,
+  booleanValue,
+  numberValue,
+  recordValue,
+  stringValue,
+} from "../lib/zod_guards.ts";
 
 import {
   AUTOBET_CONFIG_REL_PATH,
@@ -255,44 +264,9 @@ interface CliResult {
   readonly body: Record<string, unknown>;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`expected a JSON object, got ${JSON.stringify(value)}`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function asArray(value: unknown): readonly unknown[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`expected a JSON array, got ${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
-function asString(value: unknown): string {
-  if (typeof value !== "string") {
-    throw new Error(`expected a string, got ${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
-function asNumber(value: unknown): number {
-  if (typeof value !== "number") {
-    throw new Error(`expected a number, got ${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
-function asBoolean(value: unknown): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`expected a boolean, got ${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
 function parseJsonObject(text: string): Record<string, unknown> {
   const value: unknown = JSON.parse(text);
-  return asRecord(value);
+  return recordValue(value);
 }
 
 /**
@@ -353,8 +327,8 @@ async function runCliAsync(
     stderr: "pipe",
   });
   const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    proc.stdout.text(),
+    proc.stderr.text(),
     proc.exited,
   ]);
   let body: Record<string, unknown> = {};
@@ -364,6 +338,27 @@ async function runCliAsync(
     body = {};
   }
   return { code, stdout, stderr, body };
+}
+
+/**
+ * Run the real CLI with raw argv (no implicit globals). Help tests need this because `--help`
+ * must work without a valid --root/config: it exits before any artifact or config is read.
+ */
+function runCliRaw(args: readonly string[]): {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
+} {
+  const proc = Bun.spawnSync({
+    cmd: [process.execPath, CLI_PATH, ...args],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    code: proc.exitCode ?? -1,
+    stdout: proc.stdout.toString(),
+    stderr: proc.stderr.toString(),
+  };
 }
 
 function writeAutobetConfig(
@@ -1320,11 +1315,11 @@ describe("CLI contract", () => {
     for (const args of cases) {
       const result = runCli(root, args);
       expect(result.code).toBe(2);
-      const error = asRecord(result.body["error"]);
-      expect(asString(error["code"])).toBe("usage_error");
+      const error = recordValue(result.body["error"]);
+      expect(stringValue(error["code"])).toBe("usage_error");
       expect(result.stderr.trim().length).toBeGreaterThan(0);
-      expect(asBoolean(result.body["success"])).toBe(false);
-      expect(asNumber(result.body["schemaVersion"])).toBe(1);
+      expect(booleanValue(result.body["success"])).toBe(false);
+      expect(numberValue(result.body["schemaVersion"])).toBe(1);
     }
   });
 
@@ -1332,7 +1327,7 @@ describe("CLI contract", () => {
     const root = makeTemporaryRoot();
     const result = runCli(root, ["status"]);
     expect(result.code).toBe(1);
-    expect(asString(asRecord(result.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(result.body["error"])["code"])).toBe(
       "config_missing",
     );
   });
@@ -1343,29 +1338,29 @@ describe("CLI contract", () => {
 
     const status = runCli(root, ["status"]);
     expect(status.code).toBe(0);
-    expect(asBoolean(status.body["success"])).toBe(true);
-    const ledger = asRecord(status.body["ledger"]);
-    expect(asBoolean(ledger["exists"])).toBe(false);
-    expect(asNumber(ledger["events"])).toBe(0);
-    const sources = asArray(status.body["sources"]);
+    expect(booleanValue(status.body["success"])).toBe(true);
+    const ledger = recordValue(status.body["ledger"]);
+    expect(booleanValue(ledger["exists"])).toBe(false);
+    expect(numberValue(ledger["events"])).toBe(0);
+    const sources = arrayValue(status.body["sources"]);
     expect(sources).toHaveLength(3);
     for (const source of sources) {
-      const record = asRecord(source);
-      expect(asString(record["path"]).length).toBeGreaterThan(0);
-      expect(asBoolean(record["exists"])).toBe(false);
+      const record = recordValue(source);
+      expect(stringValue(record["path"]).length).toBeGreaterThan(0);
+      expect(booleanValue(record["exists"])).toBe(false);
       expect(record["ageSeconds"]).toBeNull();
-      expect(asBoolean(record["stale"])).toBe(true);
+      expect(booleanValue(record["stale"])).toBe(true);
     }
 
     const signals = runCli(root, ["signals"]);
     expect(signals.code).toBe(0);
-    const counts = asRecord(signals.body["counts"]);
-    expect(asNumber(counts["total"])).toBe(0);
-    expect(asNumber(counts["eligible"])).toBe(0);
+    const counts = recordValue(signals.body["counts"]);
+    expect(numberValue(counts["total"])).toBe(0);
+    expect(numberValue(counts["eligible"])).toBe(0);
 
     const enqueue = runCli(root, ["enqueue"]);
     expect(enqueue.code).toBe(0);
-    expect(asArray(enqueue.body["created"])).toHaveLength(0);
+    expect(arrayValue(enqueue.body["created"])).toHaveLength(0);
   });
 
   test("a corrupt ledger fails journal with ledger_corrupt and the line number", () => {
@@ -1387,10 +1382,10 @@ describe("CLI contract", () => {
     );
     const result = runCli(root, ["journal"]);
     expect(result.code).toBe(1);
-    const error = asRecord(result.body["error"]);
-    expect(asString(error["code"])).toBe("ledger_corrupt");
-    const details = asRecord(error["details"]);
-    expect(asNumber(details["line"])).toBe(2);
+    const error = recordValue(result.body["error"]);
+    expect(stringValue(error["code"])).toBe("ledger_corrupt");
+    const details = recordValue(error["details"]);
+    expect(numberValue(details["line"])).toBe(2);
     expect(result.stderr).toContain("ledger_corrupt");
   });
 
@@ -1404,28 +1399,28 @@ describe("CLI contract", () => {
 
     const hidden = runCli(root, ["signals"]);
     expect(hidden.code).toBe(0);
-    expect(asArray(hidden.body["signals"])).toHaveLength(0);
+    expect(arrayValue(hidden.body["signals"])).toHaveLength(0);
 
     const shown = runCli(root, ["signals", "--include-rejected"]);
     expect(shown.code).toBe(0);
-    const counts = asRecord(shown.body["counts"]);
-    expect(asNumber(counts["total"])).toBe(2);
-    expect(asNumber(counts["eligible"])).toBe(0);
-    expect(asNumber(counts["rejected"])).toBe(2);
-    const first = asRecord(asArray(shown.body["signals"])[0]);
-    const gate = asRecord(first["gate"]);
-    expect(asBoolean(gate["eligible"])).toBe(false);
+    const counts = recordValue(shown.body["counts"]);
+    expect(numberValue(counts["total"])).toBe(2);
+    expect(numberValue(counts["eligible"])).toBe(0);
+    expect(numberValue(counts["rejected"])).toBe(2);
+    const first = recordValue(arrayValue(shown.body["signals"])[0]);
+    const gate = recordValue(first["gate"]);
+    expect(booleanValue(gate["eligible"])).toBe(false);
     expect(gate["reasons"]).toEqual(["fixture_provenance", "freshness"]);
-    const signal = asRecord(first["signal"]);
-    const signalProvenance = asRecord(signal["provenance"]);
-    expect(asBoolean(signalProvenance["fixture"])).toBe(true);
+    const signal = recordValue(first["signal"]);
+    const signalProvenance = recordValue(signal["provenance"]);
+    expect(booleanValue(signalProvenance["fixture"])).toBe(true);
 
     const enqueue = runCli(root, ["enqueue"]);
     expect(enqueue.code).toBe(0);
-    expect(asArray(enqueue.body["created"])).toHaveLength(0);
-    const skipped = asArray(enqueue.body["skipped"]);
+    expect(arrayValue(enqueue.body["created"])).toHaveLength(0);
+    const skipped = arrayValue(enqueue.body["skipped"]);
     expect(skipped).toHaveLength(2);
-    expect(asArray(asRecord(skipped[0])["reasons"])).toContain(
+    expect(arrayValue(recordValue(skipped[0])["reasons"])).toContain(
       "fixture_provenance",
     );
   });
@@ -1457,14 +1452,14 @@ describe("CLI contract", () => {
       laterIso,
     );
     expect(first.code).toBe(3);
-    expect(asString(asRecord(first.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(first.body["error"])["code"])).toBe(
       "intent_expired",
     );
 
     const journalAfterFirst = runCli(root, ["journal"], laterIso);
-    const events = asArray(journalAfterFirst.body["events"]);
+    const events = arrayValue(journalAfterFirst.body["events"]);
     expect(events).toHaveLength(2);
-    expect(asString(asRecord(events[1])["type"])).toBe("intent_expired");
+    expect(stringValue(recordValue(events[1])["type"])).toBe("intent_expired");
 
     const second = runCli(
       root,
@@ -1473,7 +1468,7 @@ describe("CLI contract", () => {
     );
     expect(second.code).toBe(3);
     const journalAfterSecond = runCli(root, ["journal"], laterIso);
-    expect(asArray(journalAfterSecond.body["events"])).toHaveLength(2);
+    expect(arrayValue(journalAfterSecond.body["events"])).toHaveLength(2);
   });
 
   test("end-to-end paper lifecycle in a temp root", () => {
@@ -1485,92 +1480,104 @@ describe("CLI contract", () => {
     const status = runCli(root, ["status"]);
     expect(status.code).toBe(0);
     expect(status.body["success"]).toBe(true);
-    expect(asString(status.body["command"])).toBe("status");
-    expect(asNumber(status.body["schemaVersion"])).toBe(AUTOBET_SCHEMA_VERSION);
+    expect(stringValue(status.body["command"])).toBe("status");
+    expect(numberValue(status.body["schemaVersion"])).toBe(
+      AUTOBET_SCHEMA_VERSION,
+    );
     expect(status.stdout.trim().split("\n")).toHaveLength(1);
-    const effective = asRecord(asRecord(status.body["config"])["effective"]);
-    expect(asString(effective["mode"])).toBe("paper");
-    expect(asNumber(effective["stakeUsd"])).toBe(25);
-    const ledgerBefore = asRecord(status.body["ledger"]);
-    expect(asBoolean(ledgerBefore["exists"])).toBe(false);
-    expect(asNumber(asRecord(ledgerBefore["intents"])["total"])).toBe(0);
-    const safety = asRecord(status.body["safety"]);
-    expect(asBoolean(safety["liveExecution"])).toBe(false);
-    expect(asString(safety["reason"])).toBe("paper_mode_only");
-    const sources = asArray(status.body["sources"]);
+    const effective = recordValue(
+      recordValue(status.body["config"])["effective"],
+    );
+    expect(stringValue(effective["mode"])).toBe("paper");
+    expect(numberValue(effective["stakeUsd"])).toBe(25);
+    const ledgerBefore = recordValue(status.body["ledger"]);
+    expect(booleanValue(ledgerBefore["exists"])).toBe(false);
+    expect(numberValue(recordValue(ledgerBefore["intents"])["total"])).toBe(0);
+    const safety = recordValue(status.body["safety"]);
+    expect(booleanValue(safety["liveExecution"])).toBe(false);
+    expect(stringValue(safety["reason"])).toBe("paper_mode_only");
+    const sources = arrayValue(status.body["sources"]);
     expect(sources).toHaveLength(3);
     for (const source of sources) {
-      expect(asBoolean(asRecord(source)["exists"])).toBe(true);
+      expect(booleanValue(recordValue(source)["exists"])).toBe(true);
     }
 
     // 2. signals: two fresh, non-fixture signals, both eligible.
     const signals = runCli(root, ["signals"]);
     expect(signals.code).toBe(0);
-    const signalCounts = asRecord(signals.body["counts"]);
-    expect(asNumber(signalCounts["total"])).toBe(2);
-    expect(asNumber(signalCounts["eligible"])).toBe(2);
-    expect(asNumber(signalCounts["rejected"])).toBe(0);
-    const signalRows = asArray(signals.body["signals"]);
+    const signalCounts = recordValue(signals.body["counts"]);
+    expect(numberValue(signalCounts["total"])).toBe(2);
+    expect(numberValue(signalCounts["eligible"])).toBe(2);
+    expect(numberValue(signalCounts["rejected"])).toBe(0);
+    const signalRows = arrayValue(signals.body["signals"]);
     expect(signalRows).toHaveLength(2);
-    const firstSignalRow = asRecord(signalRows[0]);
-    expect(asBoolean(asRecord(firstSignalRow["gate"])["eligible"])).toBe(true);
-    const firstSignal = asRecord(firstSignalRow["signal"]);
-    expect(asBoolean(asRecord(firstSignal["provenance"])["fixture"])).toBe(
-      false,
+    const firstSignalRow = recordValue(signalRows[0]);
+    expect(booleanValue(recordValue(firstSignalRow["gate"])["eligible"])).toBe(
+      true,
     );
-    expect(asArray(signals.body["sources"])).toHaveLength(3);
+    const firstSignal = recordValue(firstSignalRow["signal"]);
+    expect(
+      booleanValue(recordValue(firstSignal["provenance"])["fixture"]),
+    ).toBe(false);
+    expect(arrayValue(signals.body["sources"])).toHaveLength(3);
 
     // 3. plan: dry run queues both, nothing written.
     const plan = runCli(root, ["plan"]);
     expect(plan.code).toBe(0);
-    const wouldQueue = asArray(plan.body["wouldQueue"]);
+    const wouldQueue = arrayValue(plan.body["wouldQueue"]);
     expect(wouldQueue).toHaveLength(2);
-    expect(asArray(plan.body["skipped"])).toHaveLength(0);
-    const caps = asRecord(plan.body["caps"]);
-    expect(asNumber(caps["dailyStakeCapUsd"])).toBe(500);
-    expect(asNumber(caps["dailyStakeUsedUsd"])).toBe(0);
-    expect(asNumber(caps["remainingUsd"])).toBe(500);
-    expect(asNumber(caps["perLeagueDailyStakeCapUsd"])).toBe(250);
+    expect(arrayValue(plan.body["skipped"])).toHaveLength(0);
+    const caps = recordValue(plan.body["caps"]);
+    expect(numberValue(caps["dailyStakeCapUsd"])).toBe(500);
+    expect(numberValue(caps["dailyStakeUsedUsd"])).toBe(0);
+    expect(numberValue(caps["remainingUsd"])).toBe(500);
+    expect(numberValue(caps["perLeagueDailyStakeCapUsd"])).toBe(250);
     expect(
-      asNumber(asRecord(runCli(root, ["status"]).body["ledger"])["events"]),
+      numberValue(
+        recordValue(runCli(root, ["status"]).body["ledger"])["events"],
+      ),
     ).toBe(0);
 
     // 4. enqueue creates both intents; a second run is idempotent.
     const enqueue = runCli(root, ["enqueue", "--actor", "e2e-operator"]);
     expect(enqueue.code).toBe(0);
-    const created = asArray(enqueue.body["created"]);
+    const created = arrayValue(enqueue.body["created"]);
     expect(created).toHaveLength(2);
-    const intentA = asRecord(created[0]);
-    const intentB = asRecord(created[1]);
-    const intentAId = asString(intentA["intentId"]);
-    const intentBId = asString(intentB["intentId"]);
+    const intentA = recordValue(created[0]);
+    const intentB = recordValue(created[1]);
+    const intentAId = stringValue(intentA["intentId"]);
+    const intentBId = stringValue(intentB["intentId"]);
     expect(intentAId.startsWith("wa-")).toBe(true);
-    expect(asString(intentA["createdBy"])).toBe("e2e-operator");
-    expect(asString(intentA["status"])).toBe("queued");
-    const enqueueLedger = asRecord(enqueue.body["ledger"]);
-    expect(asNumber(asRecord(enqueueLedger["intents"])["queued"])).toBe(2);
-    expect(asNumber(enqueueLedger["events"])).toBe(2);
+    expect(stringValue(intentA["createdBy"])).toBe("e2e-operator");
+    expect(stringValue(intentA["status"])).toBe("queued");
+    const enqueueLedger = recordValue(enqueue.body["ledger"]);
+    expect(numberValue(recordValue(enqueueLedger["intents"])["queued"])).toBe(
+      2,
+    );
+    expect(numberValue(enqueueLedger["events"])).toBe(2);
 
     const enqueueAgain = runCli(root, ["enqueue"]);
     expect(enqueueAgain.code).toBe(0);
-    expect(asArray(enqueueAgain.body["created"])).toHaveLength(0);
-    const skippedAgain = asArray(enqueueAgain.body["skipped"]);
+    expect(arrayValue(enqueueAgain.body["created"])).toHaveLength(0);
+    const skippedAgain = arrayValue(enqueueAgain.body["skipped"]);
     expect(skippedAgain).toHaveLength(2);
     for (const skipped of skippedAgain) {
-      const record = asRecord(skipped);
-      expect(asArray(record["reasons"])).toContain("duplicate_intent");
-      expect(asString(record["existingIntentId"]).startsWith("wa-")).toBe(true);
+      const record = recordValue(skipped);
+      expect(arrayValue(record["reasons"])).toContain("duplicate_intent");
+      expect(stringValue(record["existingIntentId"]).startsWith("wa-")).toBe(
+        true,
+      );
     }
 
     // 5. list: both queued.
     const queuedList = runCli(root, ["list", "--status", "queued"]);
     expect(queuedList.code).toBe(0);
-    expect(asArray(queuedList.body["intents"])).toHaveLength(2);
+    expect(arrayValue(queuedList.body["intents"])).toHaveLength(2);
 
     // 6. execution is refused before approval.
     const executeQueued = runCli(root, ["execute", intentAId]);
     expect(executeQueued.code).toBe(3);
-    expect(asString(asRecord(executeQueued.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(executeQueued.body["error"])["code"])).toBe(
       "invalid_transition",
     );
 
@@ -1584,7 +1591,7 @@ describe("CLI contract", () => {
       "paper approval",
     ]);
     expect(approve.code).toBe(0);
-    expect(asString(asRecord(approve.body["intent"])["status"])).toBe(
+    expect(stringValue(recordValue(approve.body["intent"])["status"])).toBe(
       "approved",
     );
 
@@ -1595,7 +1602,7 @@ describe("CLI contract", () => {
       "e2e-approver",
     ]);
     expect(approveAgain.code).toBe(3);
-    expect(asString(asRecord(approveAgain.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(approveAgain.body["error"])["code"])).toBe(
       "invalid_transition",
     );
 
@@ -1615,36 +1622,42 @@ describe("CLI contract", () => {
       "draftkings",
     ]);
     expect(liveExecute.code).toBe(3);
-    expect(asString(asRecord(liveExecute.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(liveExecute.body["error"])["code"])).toBe(
       "live_disabled",
     );
 
     // 9. paper fill (default venue) at the slipped reference price.
     const execute = runCli(root, ["execute", intentAId]);
     expect(execute.code).toBe(0);
-    const fill = asRecord(execute.body["fill"]);
-    expect(asString(fill["venue"])).toBe("paper");
-    expect(asString(fill["referenceSource"])).toBe("watchlist_signal.fairProb");
-    expect(asNumber(fill["stakeUsd"])).toBe(25);
-    expect(asNumber(fill["slippageBps"])).toBe(50);
-    const payoutIfWinUsd = asNumber(fill["payoutIfWinUsd"]);
+    const fill = recordValue(execute.body["fill"]);
+    expect(stringValue(fill["venue"])).toBe("paper");
+    expect(stringValue(fill["referenceSource"])).toBe(
+      "watchlist_signal.fairProb",
+    );
+    expect(numberValue(fill["stakeUsd"])).toBe(25);
+    expect(numberValue(fill["slippageBps"])).toBe(50);
+    const payoutIfWinUsd = numberValue(fill["payoutIfWinUsd"]);
     expect(payoutIfWinUsd).toBeGreaterThan(0);
-    expect(asString(asRecord(execute.body["intent"])["status"])).toBe("filled");
+    expect(stringValue(recordValue(execute.body["intent"])["status"])).toBe(
+      "filled",
+    );
 
     // 10. settle for a win: profit matches the fill, summary aggregates it.
     const settle = runCli(root, ["settle", intentAId, "--result", "won"]);
     expect(settle.code).toBe(0);
-    const settlement = asRecord(settle.body["settlement"]);
-    expect(asString(settlement["result"])).toBe("won");
-    expect(asNumber(settlement["profitUsd"])).toBe(payoutIfWinUsd);
-    expect(Math.round(asNumber(settlement["payoutUsd"]) * 100)).toBe(
+    const settlement = recordValue(settle.body["settlement"]);
+    expect(stringValue(settlement["result"])).toBe("won");
+    expect(numberValue(settlement["profitUsd"])).toBe(payoutIfWinUsd);
+    expect(Math.round(numberValue(settlement["payoutUsd"]) * 100)).toBe(
       2_500 + Math.round(payoutIfWinUsd * 100),
     );
-    const ledgerSummary = asRecord(settle.body["ledgerSummary"]);
-    expect(asNumber(ledgerSummary["settledStakeUsd"])).toBe(25);
-    expect(asNumber(ledgerSummary["profitUsd"])).toBe(payoutIfWinUsd);
-    expect(asNumber(ledgerSummary["roiPct"])).toBeGreaterThan(0);
-    expect(asString(asRecord(settle.body["intent"])["status"])).toBe("settled");
+    const ledgerSummary = recordValue(settle.body["ledgerSummary"]);
+    expect(numberValue(ledgerSummary["settledStakeUsd"])).toBe(25);
+    expect(numberValue(ledgerSummary["profitUsd"])).toBe(payoutIfWinUsd);
+    expect(numberValue(ledgerSummary["roiPct"])).toBeGreaterThan(0);
+    expect(stringValue(recordValue(settle.body["intent"])["status"])).toBe(
+      "settled",
+    );
 
     // 11. reject the second intent, then terminal statuses are immutable.
     const reject = runCli(root, [
@@ -1656,7 +1669,7 @@ describe("CLI contract", () => {
       "operator veto",
     ]);
     expect(reject.code).toBe(0);
-    expect(asString(asRecord(reject.body["intent"])["status"])).toBe(
+    expect(stringValue(recordValue(reject.body["intent"])["status"])).toBe(
       "rejected",
     );
 
@@ -1669,7 +1682,7 @@ describe("CLI contract", () => {
       "again",
     ]);
     expect(rejectAgain.code).toBe(3);
-    expect(asString(asRecord(rejectAgain.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(rejectAgain.body["error"])["code"])).toBe(
       "invalid_transition",
     );
 
@@ -1682,23 +1695,25 @@ describe("CLI contract", () => {
       "too late",
     ]);
     expect(rejectSettled.code).toBe(3);
-    expect(asString(asRecord(rejectSettled.body["error"])["code"])).toBe(
+    expect(stringValue(recordValue(rejectSettled.body["error"])["code"])).toBe(
       "invalid_transition",
     );
 
     // 12. list by derived status.
     const settledList = runCli(root, ["list", "--status", "settled"]);
     expect(settledList.code).toBe(0);
-    expect(asArray(settledList.body["intents"])).toHaveLength(1);
+    expect(arrayValue(settledList.body["intents"])).toHaveLength(1);
     const rejectedList = runCli(root, ["list", "--status", "rejected"]);
-    expect(asArray(rejectedList.body["intents"])).toHaveLength(1);
+    expect(arrayValue(rejectedList.body["intents"])).toHaveLength(1);
 
     // 13. journal: created A, created B, approved, filled, settled, rejected.
     const journal = runCli(root, ["journal", "--limit", "500"]);
     expect(journal.code).toBe(0);
-    const events = asArray(journal.body["events"]);
+    const events = arrayValue(journal.body["events"]);
     expect(events).toHaveLength(6);
-    expect(events.map((event) => asString(asRecord(event)["type"]))).toEqual([
+    expect(
+      events.map((event) => stringValue(recordValue(event)["type"])),
+    ).toEqual([
       "intent_created",
       "intent_created",
       "intent_approved",
@@ -1706,38 +1721,265 @@ describe("CLI contract", () => {
       "intent_settled",
       "intent_rejected",
     ]);
-    const journalSummary = asRecord(journal.body["summary"]);
-    expect(asNumber(journalSummary["intents"])).toBe(2);
-    expect(asNumber(asRecord(journalSummary["byStatus"])["settled"])).toBe(1);
-    expect(asNumber(asRecord(journalSummary["byStatus"])["rejected"])).toBe(1);
-    expect(asNumber(journalSummary["stakedUsd"])).toBe(25);
-    expect(asNumber(journalSummary["profitUsd"])).toBe(payoutIfWinUsd);
+    const journalSummary = recordValue(journal.body["summary"]);
+    expect(numberValue(journalSummary["intents"])).toBe(2);
+    expect(
+      numberValue(recordValue(journalSummary["byStatus"])["settled"]),
+    ).toBe(1);
+    expect(
+      numberValue(recordValue(journalSummary["byStatus"])["rejected"]),
+    ).toBe(1);
+    expect(numberValue(journalSummary["stakedUsd"])).toBe(25);
+    expect(numberValue(journalSummary["profitUsd"])).toBe(payoutIfWinUsd);
 
     // 14. final status reflects the folded ledger.
     const finalStatus = runCli(root, ["status"]);
-    const finalLedger = asRecord(finalStatus.body["ledger"]);
-    expect(asBoolean(finalLedger["exists"])).toBe(true);
-    expect(asNumber(finalLedger["events"])).toBe(6);
-    const finalCounts = asRecord(finalLedger["intents"]);
-    expect(asNumber(finalCounts["total"])).toBe(2);
-    expect(asNumber(finalCounts["settled"])).toBe(1);
-    expect(asNumber(finalCounts["rejected"])).toBe(1);
-    expect(asString(finalLedger["lastEventAt"])).toBe(NOW_ISO);
+    const finalLedger = recordValue(finalStatus.body["ledger"]);
+    expect(booleanValue(finalLedger["exists"])).toBe(true);
+    expect(numberValue(finalLedger["events"])).toBe(6);
+    const finalCounts = recordValue(finalLedger["intents"]);
+    expect(numberValue(finalCounts["total"])).toBe(2);
+    expect(numberValue(finalCounts["settled"])).toBe(1);
+    expect(numberValue(finalCounts["rejected"])).toBe(1);
+    expect(stringValue(finalLedger["lastEventAt"])).toBe(NOW_ISO);
 
     // 15. a rejected intent releases its dedupe slot and stake: only A still blocks.
     const planAfter = runCli(root, ["plan"]);
     expect(planAfter.code).toBe(0);
-    expect(asArray(planAfter.body["wouldQueue"])).toHaveLength(1);
-    const skippedAfter = asArray(planAfter.body["skipped"]);
+    expect(arrayValue(planAfter.body["wouldQueue"])).toHaveLength(1);
+    const skippedAfter = arrayValue(planAfter.body["skipped"]);
     expect(skippedAfter).toHaveLength(1);
-    expect(asString(asRecord(skippedAfter[0])["existingIntentId"])).toBe(
+    expect(stringValue(recordValue(skippedAfter[0])["existingIntentId"])).toBe(
       intentAId,
     );
     const signalsAfter = runCli(root, ["signals", "--include-rejected"]);
-    const countsAfter = asRecord(signalsAfter.body["counts"]);
-    expect(asNumber(countsAfter["total"])).toBe(2);
-    expect(asNumber(countsAfter["eligible"])).toBe(1);
-    expect(asNumber(countsAfter["rejected"])).toBe(1);
+    const countsAfter = recordValue(signalsAfter.body["counts"]);
+    expect(numberValue(countsAfter["total"])).toBe(2);
+    expect(numberValue(countsAfter["eligible"])).toBe(1);
+    expect(numberValue(countsAfter["rejected"])).toBe(1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* CLI help and short flags                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe("CLI help and short flags", () => {
+  const COMMAND_NAMES = [
+    "status",
+    "signals",
+    "plan",
+    "enqueue",
+    "list",
+    "approve",
+    "reject",
+    "execute",
+    "settle",
+    "journal",
+    "watch",
+  ] as const;
+
+  test("root help prints the command table, global flags, exit codes and examples", () => {
+    for (const flag of ["--help", "-h"]) {
+      const result = runCliRaw([flag]);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(
+        "Usage: bun run autobet <command> [flags] [args]",
+      );
+      expect(result.stdout).toContain("Commands:");
+      expect(result.stdout).toContain("Global flags:");
+      expect(result.stdout).toContain("Exit codes:");
+      expect(result.stdout).toContain("Examples:");
+      expect(result.stdout).toContain("-h, --help");
+      expect(result.stdout).toContain("-j, --json");
+      expect(result.stdout).toContain("-r, --root <path>");
+      expect(result.stdout).toContain("-c, --config <path>");
+      expect(result.stdout).toContain("-n, --now <iso>");
+      for (const name of COMMAND_NAMES) {
+        expect(result.stdout).toContain(name);
+      }
+      expect(result.stdout).not.toContain('"success"');
+    }
+  });
+
+  test("every command has detailed --help: usage, arguments/flags and examples", () => {
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      status: ["Config", "Options:", "Examples:"],
+      signals: [
+        "-l, --limit <N>",
+        "-m, --min-confidence <0..100>",
+        "-i, --include-rejected",
+        "Examples:",
+      ],
+      plan: ["same planner as `enqueue`", "Examples:"],
+      enqueue: ["-a, --actor <name>", "idempotent", "Examples:"],
+      list: ["-s, --status <status>", "-l, --limit <N>", "Examples:"],
+      approve: [
+        "Arguments:",
+        "<intentId>",
+        "-a, --actor <name>",
+        "-o, --note <text>",
+        "human decision",
+        "Examples:",
+      ],
+      reject: ["-R, --reason <text>", "required", "Examples:"],
+      execute: ["-v, --venue <venue>", "live_disabled", "Examples:"],
+      settle: ["-e, --result <won|lost|void>", "Examples:"],
+      journal: ["-l, --limit <N>", "Examples:"],
+      watch: [
+        "-i, --interval-seconds <N>",
+        "NEVER approves or executes",
+        "Examples:",
+      ],
+    };
+    for (const name of COMMAND_NAMES) {
+      for (const flag of ["--help", "-h"]) {
+        // A missing root/config must not matter: help exits before any read.
+        const result = runCliRaw([
+          name,
+          flag,
+          "--root",
+          "/definitely-not-a-real-autobet-root",
+          "--json",
+        ]);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain(`Usage: bun run autobet ${name}`);
+        expect(result.stdout).toContain("Options:");
+        expect(result.stdout).toContain("-h, --help");
+        for (const fragment of expected[name] ?? []) {
+          expect(result.stdout).toContain(fragment);
+        }
+      }
+    }
+  });
+
+  test("unknown flag and unknown command point at the help topic", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    const unknownFlag = runCli(root, ["signals", "--bogus"]);
+    expect(unknownFlag.code).toBe(2);
+    const flagError = recordValue(unknownFlag.body["error"]);
+    expect(stringValue(flagError["code"])).toBe("usage_error");
+    expect(stringValue(flagError["message"])).toContain(
+      "bun run autobet signals --help",
+    );
+
+    const unknownCommand = runCli(root, ["nonsense"]);
+    expect(unknownCommand.code).toBe(2);
+    expect(
+      stringValue(recordValue(unknownCommand.body["error"])["message"]),
+    ).toContain("bun run autobet --help");
+  });
+
+  test("global short flags -j -r -c -n are accepted", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    writeFileSync(
+      join(root, "config", "alt.json"),
+      `${JSON.stringify(validConfigRaw({ stakeUsd: 10 }), null, 2)}\n`,
+    );
+    const proc = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        CLI_PATH,
+        "status",
+        "-j",
+        "-r",
+        root,
+        "-c",
+        "config/alt.json",
+        "-n",
+        NOW_ISO,
+      ],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(proc.exitCode).toBe(0);
+    const body = recordValue(JSON.parse(proc.stdout.toString()));
+    expect(booleanValue(body["success"])).toBe(true);
+    expect(stringValue(body["generatedAt"])).toBe(NOW_ISO);
+    const config = recordValue(body["config"]);
+    expect(stringValue(config["path"])).toBe("config/alt.json");
+    expect(numberValue(recordValue(config["effective"])["stakeUsd"])).toBe(10);
+  });
+
+  test("command short flags drive the whole paper lifecycle", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    writeSignalArtifacts(root);
+
+    const enqueue = runCli(root, ["enqueue", "-a", "short-actor"]);
+    expect(enqueue.code).toBe(0);
+    const created = arrayValue(enqueue.body["created"]).map(recordValue);
+    expect(created).toHaveLength(2);
+    expect(stringValue(created[0]?.["createdBy"])).toBe("short-actor");
+    const intentA = stringValue(created[0]?.["intentId"]);
+    const intentB = stringValue(created[1]?.["intentId"]);
+
+    // -a and -o, with the flag before the positional.
+    const approve = runCli(root, [
+      "approve",
+      "-a",
+      "short-actor",
+      intentA,
+      "-o",
+      "short-note",
+    ]);
+    expect(approve.code).toBe(0);
+    const queued = runCli(root, ["list", "-s", "queued", "-l", "1"]);
+    expect(queued.code).toBe(0);
+    expect(arrayValue(queued.body["intents"])).toHaveLength(1);
+
+    const execute = runCli(root, ["execute", intentA, "-v", "paper"]);
+    expect(execute.code).toBe(0);
+    expect(stringValue(recordValue(execute.body["fill"])["venue"])).toBe(
+      "paper",
+    );
+    const live = runCli(root, ["execute", intentB, "-v", "live"]);
+    expect(live.code).toBe(3);
+    expect(stringValue(recordValue(live.body["error"])["code"])).toBe(
+      "live_disabled",
+    );
+
+    const settle = runCli(root, ["settle", intentA, "-e", "won"]);
+    expect(settle.code).toBe(0);
+    const reject = runCli(root, [
+      "reject",
+      intentB,
+      "-a",
+      "short-actor",
+      "-R",
+      "short reason",
+    ]);
+    expect(reject.code).toBe(0);
+
+    const journal = runCli(root, ["journal", "-l", "500"]);
+    expect(journal.code).toBe(0);
+    const events = arrayValue(journal.body["events"]).map(recordValue);
+    const approvals = events.filter(
+      (event) => stringValue(event["type"]) === "intent_approved",
+    );
+    expect(approvals).toHaveLength(1);
+    expect(stringValue(recordValue(approvals[0]?.["data"])["note"])).toBe(
+      "short-note",
+    );
+    expect(
+      events.filter((event) => stringValue(event["type"]) === "intent_settled"),
+    ).toHaveLength(1);
+    expect(
+      events.filter(
+        (event) => stringValue(event["type"]) === "intent_rejected",
+      ),
+    ).toHaveLength(1);
+
+    const signals = runCli(root, ["signals", "-i", "-m", "60", "-l", "1"]);
+    expect(signals.code).toBe(0);
+    expect(arrayValue(signals.body["signals"])).toHaveLength(1);
+
+    // watch -i with --help must print help instead of starting the loop.
+    const watchHelp = runCliRaw(["watch", "-i", "30", "--help"]);
+    expect(watchHelp.code).toBe(0);
+    expect(watchHelp.stdout).toContain("Usage: bun run autobet watch");
   });
 });
 
@@ -1756,7 +1998,7 @@ describe("concurrency safety", () => {
     );
     expect(results.every((result) => result.code === 0)).toBe(true);
     const created = results.reduce(
-      (sum, result) => sum + asArray(result.body["created"]).length,
+      (sum, result) => sum + arrayValue(result.body["created"]).length,
       0,
     );
     // Two eligible signals in the fixture: the first writer creates both, the rest skip them.
@@ -1764,14 +2006,14 @@ describe("concurrency safety", () => {
 
     const list = runCli(root, ["list"]);
     expect(list.code).toBe(0);
-    expect(asArray(list.body["intents"])).toHaveLength(2);
+    expect(arrayValue(list.body["intents"])).toHaveLength(2);
 
     const journal = runCli(root, ["journal", "--limit", "500"]);
     expect(journal.code).toBe(0);
-    const events = asArray(journal.body["events"]);
+    const events = arrayValue(journal.body["events"]);
     expect(
       events.filter(
-        (event) => asString(asRecord(event)["type"]) === "intent_created",
+        (event) => stringValue(recordValue(event)["type"]) === "intent_created",
       ),
     ).toHaveLength(2);
   });
@@ -1786,17 +2028,17 @@ describe("concurrency safety", () => {
     );
     expect(results.every((result) => result.code === 0)).toBe(true);
     const created = results.flatMap((result) =>
-      asArray(result.body["created"]).map(asRecord),
+      arrayValue(result.body["created"]).map(recordValue),
     );
     const stakedUsd = created.reduce(
-      (sum, intent) => sum + asNumber(intent["stakeUsd"]),
+      (sum, intent) => sum + numberValue(intent["stakeUsd"]),
       0,
     );
     expect(created).toHaveLength(1);
     expect(stakedUsd).toBeLessThanOrEqual(40);
 
     const list = runCli(root, ["list"]);
-    expect(asArray(list.body["intents"])).toHaveLength(1);
+    expect(arrayValue(list.body["intents"])).toHaveLength(1);
     expect(runCli(root, ["journal"]).code).toBe(0);
   });
 
@@ -1806,8 +2048,8 @@ describe("concurrency safety", () => {
     writeSignalArtifacts(root);
     const enqueue = runCli(root, ["enqueue"]);
     expect(enqueue.code).toBe(0);
-    const intentId = asString(
-      asRecord(asArray(enqueue.body["created"])[0])["intentId"],
+    const intentId = stringValue(
+      recordValue(arrayValue(enqueue.body["created"])[0])["intentId"],
     );
     expect(intentId).not.toBe("");
 
@@ -1820,7 +2062,7 @@ describe("concurrency safety", () => {
     expect(accepted).toHaveLength(1);
     for (const refused of results.filter((result) => result.code !== 0)) {
       expect(refused.code).toBe(3);
-      expect(asString(asRecord(refused.body["error"])["code"])).toBe(
+      expect(stringValue(recordValue(refused.body["error"])["code"])).toBe(
         "invalid_transition",
       );
     }
@@ -1829,13 +2071,13 @@ describe("concurrency safety", () => {
     // later read ledger_corrupt. The ledger must still fold, with exactly one approval.
     const journal = runCli(root, ["journal", "--limit", "500"]);
     expect(journal.code).toBe(0);
-    const approvals = asArray(journal.body["events"]).filter(
-      (event) => asString(asRecord(event)["type"]) === "intent_approved",
+    const approvals = arrayValue(journal.body["events"]).filter(
+      (event) => stringValue(recordValue(event)["type"]) === "intent_approved",
     );
     expect(approvals).toHaveLength(1);
     const list = runCli(root, ["list", "--status", "approved"]);
     expect(list.code).toBe(0);
-    expect(asArray(list.body["intents"])).toHaveLength(1);
+    expect(arrayValue(list.body["intents"])).toHaveLength(1);
   });
 
   test("a held ledger lock is a ledger_locked refusal, and the callback never runs", async () => {

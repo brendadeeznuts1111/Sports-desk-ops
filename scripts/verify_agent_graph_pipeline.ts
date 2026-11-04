@@ -122,10 +122,7 @@ async function main(): Promise<void> {
       stdout: "pipe",
       stderr: "pipe",
     });
-    const [code, err] = await Promise.all([
-      proc.exited,
-      new Response(proc.stderr).text(),
-    ]);
+    const [code, err] = await Promise.all([proc.exited, proc.stderr.text()]);
     record(
       "graph:agent subprocess skips when fresh",
       code === 0 && err.includes("up-to-date"),
@@ -216,7 +213,7 @@ async function main(): Promise<void> {
       join(SCRATCH, AGENT_GRAPH_VIEWS_DIR, "structural.json"),
     );
     if (!(await file.exists())) return null;
-    const structural = JSON.parse(await file.text()) as StructuralGraphExport;
+    const structural = (await file.json()) as StructuralGraphExport;
     const roots = structural.nodes
       .filter((n) => n.data.upline === null)
       .sort((a, b) => b.data.subtree - a.data.subtree);
@@ -328,7 +325,7 @@ async function verifyReadableViews(
     record("views index + structural.json exist", false, "missing");
     return;
   }
-  const index = JSON.parse(await indexFile.text()) as AgentGraphViewIndex;
+  const index = (await indexFile.json()) as AgentGraphViewIndex;
   record(
     "views index envelope sha matches manifest",
     index.envelopeSha256 === manifest.envelopeSha256,
@@ -349,9 +346,7 @@ async function verifyReadableViews(
 
   // Independent check: recursive CTE over the portal-parser SQLite tree must agree with the
   // envelope-structural tree on per-root totals (divergence stays inside each root).
-  const structural = JSON.parse(
-    await structuralFile.text(),
-  ) as StructuralGraphExport;
+  const structural = (await structuralFile.json()) as StructuralGraphExport;
   const structuralRoots = new Map(
     structural.nodes
       .filter((n) => n.data.upline === null)

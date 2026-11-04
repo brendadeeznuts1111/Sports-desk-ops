@@ -67,7 +67,7 @@ export function generalRowsDifferOnlyInAgentLabels(
     if (a === undefined || b === undefined) return false;
     const { AgentID: _a1, Login: _a2, ...restA } = a;
     const { AgentID: _b1, Login: _b2, ...restB } = b;
-    if (JSON.stringify(restA) !== JSON.stringify(restB)) return false;
+    if (!Bun.deepEquals(restA, restB, true)) return false;
   }
   return true;
 }

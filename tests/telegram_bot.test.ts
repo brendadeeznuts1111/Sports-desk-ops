@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 const AUTHORIZED = "100";
-const env = process.env as Record<string, string | undefined>;
+const env = Bun.env as Record<string, string | undefined>;
 
 function makeBot() {
   const bot = new SportsDeskTelegramService({

@@ -216,7 +216,7 @@ export async function executePlayerColumnMutation(
 
   const baseUrl = (
     options.portalBaseUrl ??
-    process.env.SPORTSDESK_PORTAL_HTTP_BASE ??
+    Bun.env.SPORTSDESK_PORTAL_HTTP_BASE ??
     "https://www.fantasy402.com"
   ).replace(/\/$/, "");
   const updateUrl = `${baseUrl}/cloud/api/Manager/updateByColumn`;
@@ -422,7 +422,7 @@ export async function fetchPlayerInfo(options: {
 }): Promise<Record<string, unknown> | null> {
   const baseUrl = (
     options.portalBaseUrl ??
-    process.env.SPORTSDESK_PORTAL_HTTP_BASE ??
+    Bun.env.SPORTSDESK_PORTAL_HTTP_BASE ??
     "https://www.fantasy402.com"
   ).replace(/\/$/, "");
   const readUrl = `${baseUrl}/cloud/api/Manager/getInfoPlayer`;
@@ -470,7 +470,7 @@ export async function executeVigSetupInsert(
 ): Promise<VigSetupExecutionResult> {
   const baseUrl = (
     options.portalBaseUrl ??
-    process.env.SPORTSDESK_PORTAL_HTTP_BASE ??
+    Bun.env.SPORTSDESK_PORTAL_HTTP_BASE ??
     "https://www.fantasy402.com"
   ).replace(/\/$/, "");
   const insertUrl = `${baseUrl}/cloud/api/Manager/vigSetupInsert`;
@@ -589,7 +589,7 @@ export async function queryIpTrackerWebLog(
 ): Promise<WebLogQueryResult> {
   const baseUrl = (
     options.portalBaseUrl ??
-    process.env.SPORTSDESK_PORTAL_HTTP_BASE ??
+    Bun.env.SPORTSDESK_PORTAL_HTTP_BASE ??
     "https://www.fantasy402.com"
   ).replace(/\/$/, "");
   const logUrl = `${baseUrl}/cloud/api/Manager/getWebLog`;

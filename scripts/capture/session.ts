@@ -80,7 +80,7 @@ const makeDefaultFactory =
   };
 
 function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return Bun.sleep(ms);
 }
 
 /** Methods the capture core is allowed to put on the wire. */

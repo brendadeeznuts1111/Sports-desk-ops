@@ -518,7 +518,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 if (import.meta.main) {
   runCatalogProbe(process.argv.slice(2), {
-    env: process.env,
+    env: Bun.env,
     now: () => new Date(),
     stdout: (line) => console.log(line),
     stderr: (line) => console.error(line),

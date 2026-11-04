@@ -15,6 +15,8 @@
  *  because a partial sample would be presented as a measurement.
  */
 
+// Atomic temp-write + chmod: Bun.write has no mode/rename primitive for this journal.
+// ast-grep-ignore: node-fs-read-write-file
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -217,8 +219,7 @@ function isAuthFailure(error: unknown): boolean {
   );
 }
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((done) => setTimeout(done, ms));
+const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
 
 interface CandidateBet {
   readonly account: GsliveWeblogWatchlistAccount;

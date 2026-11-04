@@ -66,17 +66,17 @@ async function withEnv(
     "no_proxy",
   ];
   const previous = new Map<string, string | undefined>();
-  for (const key of keys) previous.set(key, process.env[key]);
+  for (const key of keys) previous.set(key, Bun.env[key]);
   for (const [key, value] of Object.entries(values)) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+    if (value === undefined) delete Bun.env[key];
+    else Bun.env[key] = value;
   }
   try {
     await fn();
   } finally {
     for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+      if (value === undefined) delete Bun.env[key];
+      else Bun.env[key] = value;
     }
   }
 }

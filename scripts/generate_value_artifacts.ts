@@ -43,7 +43,7 @@ function flag(
 
 const args = process.argv.slice(2);
 const outDir = flag(args, ["--out-dir"], "docs");
-const walletFile = flag(args, ["--wallet-file"], process.env.WALLET_FILE ?? "");
+const walletFile = flag(args, ["--wallet-file"], Bun.env.WALLET_FILE ?? "");
 const bridgeJsonPath = flag(args, ["--bridge-json"], "");
 const gates: readonly ComboGate[] = ["permissive", "all-legs-cfb", "full-game"];
 

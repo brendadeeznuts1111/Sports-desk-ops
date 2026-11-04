@@ -59,14 +59,14 @@ if (wantsHelp(parsed)) {
 const base = flagValue(
   parsed,
   "--base",
-  process.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
+  Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
 );
 const outRoot = flagValue(parsed, "--out", "scratch/f402-discover");
 const dbPath = flagValue(parsed, "--db", "scratch/customers.sqlite");
 
 const EXPRESSION = (baseUrl: string) => `(async () => {
   const creds = JSON.parse(sessionStorage.getItem("credentials") ?? "{}");
-  const agentID = ${JSON.stringify(process.env.F402_AGENT_ID ?? "")};
+  const agentID = ${JSON.stringify(Bun.env.F402_AGENT_ID ?? "")};
   const body = new URLSearchParams({ agentID, agentOwner: agentID, wagerNumber: "0", operation: "getBetTicker", RRO: "1" }).toString();
   const r = await fetch(${JSON.stringify(baseUrl)} + "/cloud/api/Manager/getBetTicker", {
     method: "POST",

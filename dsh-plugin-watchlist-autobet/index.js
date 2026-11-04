@@ -153,7 +153,8 @@ const TEXT_OUTPUT = {
  * @param {unknown} value
  * @returns {boolean}
  */
-function isPlainObject(value) {
+// Dependency-free plugin runs in Electron's Node (no zod): local narrowing is intentional.
+function isPlainObjectValue(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
@@ -180,8 +181,8 @@ function defineTool(spec) {
     isConcurrencySafe: spec.isConcurrencySafe,
     async execute(args) {
       try {
-        const value = await spec.execute(isPlainObject(args) ? args : {});
-        if (isPlainObject(value)) return value;
+        const value = await spec.execute(isPlainObjectValue(args) ? args : {});
+        if (isPlainObjectValue(value)) return value;
         return {
           available: false,
           reason: "internal_error",
@@ -606,7 +607,7 @@ export function apply(ctx, config) {
     if (failure.parsed !== undefined && failure.parsed !== null) {
       answer.cli = failure.parsed;
       const error = failure.parsed.error;
-      if (isPlainObject(error) && error.details !== undefined) {
+      if (isPlainObjectValue(error) && error.details !== undefined) {
         answer.details = error.details;
       }
     }
@@ -678,7 +679,7 @@ export function apply(ctx, config) {
       };
     }
     const parsed = parseJson(result.stdout);
-    if (parsed.ok && isPlainObject(parsed.value)) {
+    if (parsed.ok && isPlainObjectValue(parsed.value)) {
       const payload = parsed.value;
       if (payload.success === true) {
         if (!result.ok) {
@@ -697,7 +698,7 @@ export function apply(ctx, config) {
         return payload;
       }
       if (payload.success === false) {
-        const error = isPlainObject(payload.error) ? payload.error : {};
+        const error = isPlainObjectValue(payload.error) ? payload.error : {};
         return cliFailure({
           reason:
             typeof error.code === "string" && error.code !== ""

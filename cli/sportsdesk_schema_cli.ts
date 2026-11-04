@@ -188,7 +188,7 @@ async function main(): Promise<number> {
 
   assertSsotRegistryInSync();
 
-  const dbPathEarly = values.db ?? process.env.SPORTSDESK_SCHEMA_DB?.trim();
+  const dbPathEarly = values.db ?? Bun.env.SPORTSDESK_SCHEMA_DB?.trim();
   const databaseFromUrl =
     values.url !== undefined ? asDatabaseURL(values.url) : undefined;
   const tableFromUrl =
@@ -241,7 +241,7 @@ async function main(): Promise<number> {
     );
   }
 
-  const dbPath = values.db ?? process.env.SPORTSDESK_SCHEMA_DB?.trim();
+  const dbPath = values.db ?? Bun.env.SPORTSDESK_SCHEMA_DB?.trim();
 
   let dbHeader: Uint8Array | undefined;
   if (dbPath) {

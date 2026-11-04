@@ -16,12 +16,12 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
 const ALLOWED = "https://desk.example";
 /** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
 function setEnv(key: string, value: string | undefined): void {
-  if (value === undefined) Reflect.deleteProperty(process.env, key);
-  else Reflect.set(process.env, key, value);
+  if (value === undefined) Reflect.deleteProperty(Bun.env, key);
+  else Reflect.set(Bun.env, key, value);
 }
 
-const savedOrigins = process.env["SPORTSDESK_ALLOWED_ORIGINS"];
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
+const savedOrigins = Bun.env["SPORTSDESK_ALLOWED_ORIGINS"];
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
 setEnv("SPORTSDESK_ALLOWED_ORIGINS", ALLOWED);
 setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
 

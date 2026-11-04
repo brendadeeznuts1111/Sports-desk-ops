@@ -30,8 +30,8 @@ describe("check-innerhtml 5-case meta-test suite", () => {
         ],
         {
           env: {
-            PATH: process.env.PATH ?? "",
-            HOME: process.env.HOME ?? "",
+            PATH: Bun.env.PATH ?? "",
+            HOME: Bun.env.HOME ?? "",
           },
         },
       );
@@ -116,7 +116,7 @@ describe("check-innerhtml Bun.markdown sink coverage", () => {
           path.join(import.meta.dir, "../bin/check-innerhtml.ts"),
           root,
         ],
-        { env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" } },
+        { env: { PATH: Bun.env.PATH ?? "", HOME: Bun.env.HOME ?? "" } },
       );
       return { exitCode: proc.exitCode, stdout: proc.stdout.toString() };
     } finally {

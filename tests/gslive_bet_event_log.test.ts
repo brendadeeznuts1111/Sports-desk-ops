@@ -73,10 +73,10 @@ describe("gslive bet/event log audit", () => {
   });
 
   test("resolves LA offsets independently of the process time zone", () => {
-    const original = process.env.TZ;
+    const original = Bun.env.TZ;
     try {
       for (const zone of ["UTC", "America/New_York", "Asia/Tokyo"]) {
-        process.env.TZ = zone;
+        Bun.env.TZ = zone;
         expect(parseGsliveTimestampMs("2026-10-27 12:00:00")).toBe(
           Date.UTC(2026, 9, 27, 19, 0, 0),
         );
@@ -85,8 +85,8 @@ describe("gslive bet/event log audit", () => {
         );
       }
     } finally {
-      if (original === undefined) delete process.env.TZ;
-      else process.env.TZ = original;
+      if (original === undefined) delete Bun.env.TZ;
+      else Bun.env.TZ = original;
     }
   });
 

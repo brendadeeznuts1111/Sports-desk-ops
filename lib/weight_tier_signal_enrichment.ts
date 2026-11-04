@@ -3,6 +3,8 @@
  *
  * Replay-safe cross-layer signals from bet-ticker rows plus optional DOD6/GSLive overlays.
  */
+// Sync enrichment path: callers are pure sync transforms.
+// ast-grep-ignore: node-fs-read-write-file
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -187,6 +189,8 @@ export function loadDod6BookOverlayFromJson(
   path: string,
 ): Dod6CustomerBookOverlay {
   const absolute = resolve(path);
+  // Sync enrichment path: callers are pure sync transforms.
+  // ast-grep-ignore: node-fs-read-write-file
   const raw = JSON.parse(readFileSync(absolute, "utf8")) as unknown;
   if (!Array.isArray(raw)) {
     throw new Error(`DOD6 book overlay: expected array in ${absolute}`);

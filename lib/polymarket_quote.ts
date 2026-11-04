@@ -7,6 +7,7 @@
  * name both teams. A closed or mismatched market is `{available:false, reason}` — never a guessed
  * token — because an execution decision built on the wrong market is worse than no venue offer.
  */
+import { isRecordValue } from "./zod_guards.ts";
 import type { KalshiClient } from "./kalshi_client.ts";
 import { getUnifiedTeamRegistry } from "./unified_team_registry.ts";
 
@@ -73,10 +74,6 @@ export interface PolymarketQuoteClientOptions {
   readonly timeoutMs?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function parseNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -118,7 +115,7 @@ export interface PolymarketMarketCandidate {
 export function parseGammaMarket(
   value: unknown,
 ): PolymarketMarketCandidate | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   if (value["active"] !== true || value["closed"] === true) return null;
   const marketId = parseString(value["id"]);
   const question = parseString(value["question"]);
@@ -140,10 +137,10 @@ export function parseGammaMarket(
 export function parseGammaSearch(
   value: unknown,
 ): readonly PolymarketMarketCandidate[] {
-  if (!isRecord(value) || !Array.isArray(value["events"])) return [];
+  if (!isRecordValue(value) || !Array.isArray(value["events"])) return [];
   const markets: PolymarketMarketCandidate[] = [];
   for (const rawEvent of value["events"]) {
-    if (!isRecord(rawEvent)) continue;
+    if (!isRecordValue(rawEvent)) continue;
     const eventMarkets = Array.isArray(rawEvent["markets"])
       ? rawEvent["markets"]
       : [];
@@ -159,7 +156,7 @@ function parseBookLevels(value: unknown): readonly PolymarketLevel[] | null {
   if (!Array.isArray(value)) return null;
   const levels: PolymarketLevel[] = [];
   for (const raw of value) {
-    if (!isRecord(raw)) continue;
+    if (!isRecordValue(raw)) continue;
     const price = parseNumber(raw["price"]);
     const size = parseNumber(raw["size"]);
     if (price === null || size === null) continue;
@@ -179,7 +176,7 @@ export interface ParsedPolymarketBook {
 export function parsePolymarketBook(
   value: unknown,
 ): ParsedPolymarketBook | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   const bids = parseBookLevels(value["bids"]);
   const asks = parseBookLevels(value["asks"]);
   if (bids === null || asks === null) return null;

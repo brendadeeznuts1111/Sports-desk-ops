@@ -12,11 +12,11 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
 
 /** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
 function setEnv(key: string, value: string | undefined): void {
-  if (value === undefined) Reflect.deleteProperty(process.env, key);
-  else Reflect.set(process.env, key, value);
+  if (value === undefined) Reflect.deleteProperty(Bun.env, key);
+  else Reflect.set(Bun.env, key, value);
 }
 
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
 setEnv("SPORTSDESK_ADMIN_TOKEN", "limits-token");
 
 const server = startServer({

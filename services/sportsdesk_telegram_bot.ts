@@ -191,16 +191,16 @@ export class SportsDeskTelegramService {
     this.activityLogPath =
       options?.activityLogPath !== undefined
         ? options.activityLogPath
-        : process.env.TELEGRAM_ACTIVITY_LOG ||
-          (process.env.NODE_ENV === "test"
+        : Bun.env.TELEGRAM_ACTIVITY_LOG ||
+          (Bun.env.NODE_ENV === "test"
             ? null
             : resolve(import.meta.dir, "../reports/telegram-activity.jsonl"));
     this.apiBaseUrl = options?.apiBaseUrl ?? "https://api.telegram.org";
-    this.botToken = options?.botToken ?? process.env.TELEGRAM_BOT_TOKEN ?? "";
-    this.defaultChatId = options?.chatId ?? process.env.TELEGRAM_CHAT_ID ?? "";
+    this.botToken = options?.botToken ?? Bun.env.TELEGRAM_BOT_TOKEN ?? "";
+    this.defaultChatId = options?.chatId ?? Bun.env.TELEGRAM_CHAT_ID ?? "";
     this.miniappBaseUrl = (
       options?.miniappUrl ??
-      process.env.TELEGRAM_MINIAPP_URL ??
+      Bun.env.TELEGRAM_MINIAPP_URL ??
       "http://localhost:4020"
     ).replace(/\/+$/, "");
     this.isLiveMode = Boolean(
@@ -211,13 +211,13 @@ export class SportsDeskTelegramService {
     this.authorizedChatIds = new Set(
       [
         this.defaultChatId,
-        ...(process.env.TELEGRAM_ADMIN_CHAT_IDS ?? "").split(","),
+        ...(Bun.env.TELEGRAM_ADMIN_CHAT_IDS ?? "").split(","),
       ]
         .map((id) => id.trim())
         .filter((id) => id.length > 0),
     );
-    this.webhookUrl = process.env.TELEGRAM_WEBHOOK_URL ?? "";
-    this.webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+    this.webhookUrl = Bun.env.TELEGRAM_WEBHOOK_URL ?? "";
+    this.webhookSecret = Bun.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 
     this.fetchSession = new Bun.FetchSession({
       tls: {

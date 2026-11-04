@@ -304,8 +304,8 @@ describe("schema_manifest_db_parity", () => {
   });
 
   test("runManifestDumpParity logs bypass to stderr", () => {
-    const prevCi = process.env.CI;
-    delete process.env.CI;
+    const prevCi = Bun.env.CI;
+    delete Bun.env.CI;
     const dump = prodDumpFromManifest(fixtureManifest, {
       ingestion_trades: `
         CREATE TABLE ingestion_trades (
@@ -331,8 +331,8 @@ describe("schema_manifest_db_parity", () => {
       expect(stderrLines.some((l) => l.includes("[BYPASS]"))).toBe(true);
     } finally {
       console.error = orig;
-      if (prevCi === undefined) delete process.env.CI;
-      else process.env.CI = prevCi;
+      if (prevCi === undefined) delete Bun.env.CI;
+      else Bun.env.CI = prevCi;
     }
   });
 

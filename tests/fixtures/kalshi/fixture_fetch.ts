@@ -5,6 +5,8 @@
  * `curl` (see each file's `source`/`capturedAtIso`), then trimmed: arrays shortened, real field
  * names and values kept. Tests never hit the network — this fetch answers from those files.
  */
+// Sync fixture reader: callers are sync test helpers; Bun.file is async.
+// ast-grep-ignore: node-fs-read-write-file
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

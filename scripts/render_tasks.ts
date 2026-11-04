@@ -113,7 +113,7 @@ if (mdOpen !== htmlOpen || mdDone !== htmlDone) {
 }
 
 const outIsTTY = process.stdout.isTTY === true;
-const forceColor = process.env.FORCE_COLOR;
+const forceColor = Bun.env.FORCE_COLOR;
 const forcedColor =
   forceColor === "1" ||
   forceColor === "true" ||
@@ -125,7 +125,7 @@ const forcedColor =
       : undefined;
 const color =
   forcedColor ??
-  ("NO_COLOR" in process.env
+  ("NO_COLOR" in Bun.env
     ? false
     : wantColor || (outPath === "" && outIsTTY && Bun.enableANSIColors));
 const columns =
@@ -145,7 +145,7 @@ const rendered =
             console.error("tasks: Bun.markdown.ansi is unavailable");
             process.exit(2);
           }
-          const light = process.env.COLORFGBG?.endsWith(";15");
+          const light = Bun.env.COLORFGBG?.endsWith(";15");
           return Bun.markdown.ansi(buffer, {
             colors: !noColor && color,
             columns,

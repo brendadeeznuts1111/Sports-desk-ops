@@ -20,7 +20,7 @@ if (existing === null) {
 const store = new CaptureStore({ root });
 for (const entry of existing.captures) {
   const absolutePath = join(root, ...entry.file.split("/"));
-  const parsed = JSON.parse(await Bun.file(absolutePath).text()) as unknown;
+  const parsed = (await Bun.file(absolutePath).json()) as unknown;
   const record = assertCaptureRecord(parsed);
   await store.write(record);
 }

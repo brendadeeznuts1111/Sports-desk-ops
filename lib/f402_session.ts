@@ -40,7 +40,7 @@ export interface F402SessionFileOptions {
 const DEFAULT_TTL_MINUTES = 30;
 
 export function resolveF402SessionPath(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = Bun.env,
 ): string {
   const explicit = env["F402_SESSION_FILE"]?.trim();
   if (explicit) return explicit;
@@ -49,7 +49,7 @@ export function resolveF402SessionPath(
 
 /** Session TTL from `F402_SESSION_TTL_MIN` (minutes), falling back to the 30-minute default. */
 export function f402SessionTtlMinutesFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = Bun.env,
 ): number {
   const raw = Number(env["F402_SESSION_TTL_MIN"] ?? DEFAULT_TTL_MINUTES);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TTL_MINUTES;
@@ -202,7 +202,7 @@ export interface RefreshF402SessionOptions {
 export async function refreshF402Session(
   options?: RefreshF402SessionOptions,
 ): Promise<F402Session> {
-  const env = options?.env ?? process.env;
+  const env = options?.env ?? Bun.env;
   if (env["F402_LIVE_LOGIN"]?.trim() !== "1") {
     throw new Error(
       "F402 live login disabled (set F402_LIVE_LOGIN=1 to allow one WebView login)",

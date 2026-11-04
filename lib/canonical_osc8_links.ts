@@ -143,7 +143,7 @@ export function renderAnsiMarkdown(
   options?: AnsiMarkdownOptions,
 ): string {
   const useColors =
-    options?.colors ?? (!process.env.NO_COLOR && process.env.TERM !== "dumb");
+    options?.colors ?? (!Bun.env.NO_COLOR && Bun.env.TERM !== "dumb");
   const useHyperlinks = options?.hyperlinks ?? true;
   const terminalWidth =
     options?.columns !== undefined

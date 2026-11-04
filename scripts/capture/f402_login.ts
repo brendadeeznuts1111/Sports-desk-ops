@@ -52,7 +52,7 @@ export interface SecretsReader {
 
 /** @see loadF402CredentialsSecure in lib/f402_credentials_policy.ts */
 export async function loadF402Credentials(
-  env: Env = process.env,
+  env: Env = Bun.env,
   secrets: SecretsReader | null = Bun.secrets,
 ): Promise<F402Credentials> {
   const { loadF402CredentialsSecure } =
@@ -61,7 +61,7 @@ export async function loadF402Credentials(
 }
 
 export async function loadF402PlayerCredentials(
-  env: Env = process.env,
+  env: Env = Bun.env,
   secrets: SecretsReader | null = Bun.secrets,
 ): Promise<F402LoginIdentity> {
   const read = async (name: string): Promise<string> => {
@@ -86,7 +86,7 @@ export async function loadF402PlayerCredentials(
 }
 
 export async function loadF402LoginIdentity(
-  env: Env = process.env,
+  env: Env = Bun.env,
   kind: F402LoginKind = "agent",
 ): Promise<F402LoginIdentity> {
   if (kind === "player") {
@@ -196,7 +196,7 @@ export async function loginF402(
   view: LoginView,
   options: LoginOptions = {},
 ): Promise<LoginOutcome> {
-  const env = options.env ?? process.env;
+  const env = options.env ?? Bun.env;
   const loginKind = options.loginKind ?? "agent";
   const identity =
     options.loginIdentity ??

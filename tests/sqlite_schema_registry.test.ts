@@ -69,7 +69,7 @@ describe("sqlite_schema_registry", () => {
       stdout: "pipe",
     });
     expect(await proc.exited).toBe(0);
-    const out = await new Response(proc.stdout).text();
+    const out = await proc.stdout.text();
     expect(out).toContain("match_evaluations");
   });
 });

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+// ast-grep-ignore: node-fs-read-write-file -- sync git-fixture writes; Bun.write is async.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -7,6 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Node script (see pinned/README): import.meta.dir is Bun-only.
+// ast-grep-ignore: bun-import-meta-dir
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const managerPath = path.join(__dirname, "pinned/manager.js");
 const outDir = path.join(__dirname, "extracted");

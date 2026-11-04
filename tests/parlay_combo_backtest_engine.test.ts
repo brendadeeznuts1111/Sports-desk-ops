@@ -282,7 +282,7 @@ describe("4-Week backtest engine — committed synthetic fixture (CI-safe)", () 
 
   test("fixture run matches the committed expectation", async () => {
     const slice = goldenSlice(report);
-    if (process.env.BACKTEST_FIXTURE_UPDATE_GOLDEN === "1") {
+    if (Bun.env.BACKTEST_FIXTURE_UPDATE_GOLDEN === "1") {
       await Bun.write(
         GOLDEN_PATH,
         JSON.stringify({ $comment: GOLDEN_COMMENT, ...slice }, null, 2) + "\n",

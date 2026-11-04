@@ -12,8 +12,8 @@ import {
   startServer,
 } from "../services/sportsdesk_webview_server.ts";
 
-const env = process.env as unknown as Record<string, string | undefined>;
-const saved = process.env.BRIDGE_ROLLUP_STATE_PATH;
+const env = Bun.env as unknown as Record<string, string | undefined>;
+const saved = Bun.env.BRIDGE_ROLLUP_STATE_PATH;
 
 function setEnv(name: string, value: string | undefined): void {
   if (value === undefined) Reflect.deleteProperty(env, name);

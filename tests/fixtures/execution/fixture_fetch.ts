@@ -5,6 +5,8 @@
  * the captures in this directory. The helper records every URL so a test can prove that no order
  * endpoint (Kalshi `/portfolio/orders`, Polymarket order paths) was ever requested.
  */
+// Sync fixture reader: callers are sync test helpers; Bun.file is async.
+// ast-grep-ignore: node-fs-read-write-file
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { kalshiFixtureFetch } from "../kalshi/fixture_fetch.ts";

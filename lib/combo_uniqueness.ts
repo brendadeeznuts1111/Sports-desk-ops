@@ -251,9 +251,7 @@ async function cachedEvents(
 
   if (options?.fresh !== true) {
     try {
-      const parsed = JSON.parse(
-        await readFile(path, "utf8"),
-      ) as Partial<EventCacheFile>;
+      const parsed = (await Bun.file(path).json()) as Partial<EventCacheFile>;
       if (parsed.schemaVersion === 1 && parsed.url === url) {
         const fetchedAt = Date.parse(parsed.fetchedAtIso ?? "");
         const ttl = cacheTtlMs(options);
@@ -660,9 +658,7 @@ async function readCache(
 ): Promise<readonly unknown[] | null> {
   if (options?.fresh === true) return null;
   try {
-    const parsed = JSON.parse(
-      await readFile(path, "utf8"),
-    ) as Partial<CacheFile>;
+    const parsed = (await Bun.file(path).json()) as Partial<CacheFile>;
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.records))
       return null;
     const fetchedAt = Date.parse(parsed.fetchedAtIso ?? "");

@@ -33,14 +33,12 @@ describe("candidate_cli", () => {
     const v3: MatchPolicy = { ms: 15, mode: "exact" };
     writeFileSync(policyPath, JSON.stringify(v3));
 
-    const pending = JSON.parse(
-      await Bun.file(
-        join(
-          import.meta.dir,
-          "fixtures/candidate-match-pending-football-college.json",
-        ),
-      ).text(),
-    );
+    const pending = await Bun.file(
+      join(
+        import.meta.dir,
+        "fixtures/candidate-match-pending-football-college.json",
+      ),
+    ).json();
     const ticker = {
       matchKey: pending.matchKey,
       timeDifferenceMs: 12,
@@ -84,7 +82,7 @@ describe("candidate_cli", () => {
       stdout: "pipe",
     });
     const code = await proc.exited;
-    const out = await new Response(proc.stdout).text();
+    const out = await proc.stdout.text();
     const body = JSON.parse(out) as { newlyAccepted: number; exitCode: number };
     expect(body.newlyAccepted).toBe(1);
     expect(code).toBe(2);
@@ -93,14 +91,12 @@ describe("candidate_cli", () => {
   test("verify exits 5 on serializer drift", async () => {
     const dir = mkdtempSync(join(tmpdir(), "candidate-verify-"));
     const dbPath = join(dir, "eval.sqlite");
-    const pending = JSON.parse(
-      await Bun.file(
-        join(
-          import.meta.dir,
-          "fixtures/candidate-match-pending-football-college.json",
-        ),
-      ).text(),
-    );
+    const pending = await Bun.file(
+      join(
+        import.meta.dir,
+        "fixtures/candidate-match-pending-football-college.json",
+      ),
+    ).json();
     const ticker = {
       matchKey: pending.matchKey,
       timeDifferenceMs: 8,
@@ -143,14 +139,12 @@ describe("candidate_cli", () => {
   test("verify exits 5 on valid_time fork", async () => {
     const dir = mkdtempSync(join(tmpdir(), "candidate-valid-fork-"));
     const dbPath = join(dir, "eval.sqlite");
-    const pending = JSON.parse(
-      await Bun.file(
-        join(
-          import.meta.dir,
-          "fixtures/candidate-match-pending-football-college.json",
-        ),
-      ).text(),
-    );
+    const pending = await Bun.file(
+      join(
+        import.meta.dir,
+        "fixtures/candidate-match-pending-football-college.json",
+      ),
+    ).json();
     const ticker = {
       matchKey: pending.matchKey,
       timeDifferenceMs: 8,
@@ -203,14 +197,12 @@ describe("candidate_cli", () => {
     const policyPath = join(dir, "policy.json");
     writeFileSync(policyPath, JSON.stringify(DEFAULT_MATCH_POLICY));
 
-    const pending = JSON.parse(
-      await Bun.file(
-        join(
-          import.meta.dir,
-          "fixtures/candidate-match-pending-football-college.json",
-        ),
-      ).text(),
-    );
+    const pending = await Bun.file(
+      join(
+        import.meta.dir,
+        "fixtures/candidate-match-pending-football-college.json",
+      ),
+    ).json();
     const ticker = {
       matchKey: pending.matchKey,
       timeDifferenceMs: 8,

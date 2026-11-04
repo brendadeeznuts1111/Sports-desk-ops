@@ -183,7 +183,7 @@ const MAX_CONSOLE_TEXT = 500;
 const MAX_VIEWPORT_DIMENSION = 16_384;
 
 function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return Bun.sleep(ms);
 }
 
 function isSettledUrl(
@@ -689,7 +689,7 @@ export class ManagedWebView {
           `element not found within ${timeoutMs}ms: ${selector}`,
         );
       }
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      await Bun.sleep(pollMs);
     }
   }
 

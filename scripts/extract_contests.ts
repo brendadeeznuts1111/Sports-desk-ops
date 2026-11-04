@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   let sourceLabel: string;
 
   if (args.stdin) {
-    const piped = await new Response(Bun.stdin.stream()).text();
+    const piped = await Bun.stdin.text();
     if (piped.trim() === "") {
       throw new Error("stdin was empty; pipe the markup or pass --html <file>");
     }

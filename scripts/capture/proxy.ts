@@ -69,7 +69,7 @@ function firstNonEmpty(env: Env, keys: readonly string[]): string | null {
 }
 
 /** Read proxy configuration from an environment snapshot. */
-export function readProxyEnv(env: Env = process.env): ProxySettings {
+export function readProxyEnv(env: Env = Bun.env): ProxySettings {
   const rawNoProxy = firstNonEmpty(env, ["NO_PROXY", "no_proxy"]);
   return {
     httpProxy: firstNonEmpty(env, ["HTTP_PROXY", "http_proxy"]),
@@ -331,7 +331,7 @@ export function proxyForUrl(
  */
 export function setProxyEnv(
   proxy: string | null,
-  env: Env = process.env,
+  env: Env = Bun.env,
 ): () => void {
   const normalized = proxy === null ? null : normalizeProxyUrl(proxy);
   const previous = new Map<string, string | undefined>();
@@ -356,7 +356,7 @@ export function setProxyEnv(
 export async function withProxyEnv<T>(
   proxy: string | null,
   fn: () => Promise<T> | T,
-  env: Env = process.env,
+  env: Env = Bun.env,
 ): Promise<T> {
   const restore = setProxyEnv(proxy, env);
   try {

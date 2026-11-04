@@ -1,6 +1,8 @@
 /**
  * Merge portal scoreboard nicknames + logo filenames into the unified team registry.
  */
+// Sync registry maintenance script: it reads and rewrites one committed JSON file.
+// ast-grep-ignore: node-fs-read-write-file
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 

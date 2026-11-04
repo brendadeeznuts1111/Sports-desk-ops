@@ -19,15 +19,15 @@ describe("Server Port Cascade Resolution", () => {
       ],
       cwd: projectRoot,
       env: {
-        ...process.env,
+        ...Bun.env,
         BUN_PORT: "4100",
       },
       stdout: "pipe",
       stderr: "pipe",
     });
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
+    const stdout = await proc.stdout.text();
+    const stderr = await proc.stderr.text();
     const exitCode = await proc.exited;
 
     if (exitCode !== 0) {

@@ -229,7 +229,7 @@ function fixtureProbe(path: string): {
   return {
     async probe(wagerNumber) {
       if (rows === null) {
-        const payload: unknown = JSON.parse(await Bun.file(path).text());
+        const payload: unknown = await Bun.file(path).json();
         const raw = rowsFromPayload(payload);
         rows = raw
           .map((row) => parseF402TickerRow(row))

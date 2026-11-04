@@ -19,9 +19,7 @@ async function main(): Promise<number> {
     ? resolve(process.argv[2]!)
     : defaultFixture;
 
-  const existing = parseProdSchemaDump(
-    JSON.parse(await Bun.file(fixturePath).text()),
-  );
+  const existing = parseProdSchemaDump(await Bun.file(fixturePath).json());
   const drift = compareFixtureTablesToRegistry(existing);
 
   if (drift.equal) {

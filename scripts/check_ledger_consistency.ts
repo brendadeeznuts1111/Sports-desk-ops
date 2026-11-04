@@ -15,7 +15,7 @@ import { loadManifestIndex } from "./apply_captures.ts";
 const root = resolve(import.meta.dir, "..");
 
 async function readJson(path: string): Promise<unknown> {
-  return JSON.parse(await Bun.file(path).text());
+  return await Bun.file(path).json();
 }
 
 const ledgerPath = resolve(root, "docs/evidence/ledger.json");

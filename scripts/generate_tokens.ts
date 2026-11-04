@@ -55,7 +55,7 @@ function emitRepoFile(
 
 function writeEmissionManifest(): void {
   assertStrictGateEmission(emittedThisRun);
-  const runId = process.env[GEN_TOKENS_GATE_RUN_ID_ENV];
+  const runId = Bun.env[GEN_TOKENS_GATE_RUN_ID_ENV];
   const manifest = buildManifestFromDisk(rootDir, emittedThisRun, runId);
   const manifestPath = resolve(rootDir, GEN_TOKEN_EMISSION_MANIFEST);
   mkdirSync(resolve(manifestPath, ".."), { recursive: true });

@@ -16,7 +16,7 @@ async function run(args: readonly string[]): Promise<{
   const child = Bun.spawn([process.execPath, SCRIPT, ...args], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, NO_COLOR: "1" },
+    env: { ...Bun.env, NO_COLOR: "1" },
   });
   const [stdout, stderr, code] = await Promise.all([
     child.stdout.text(),

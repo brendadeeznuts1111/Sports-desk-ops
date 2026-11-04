@@ -115,6 +115,30 @@ validated values; no shell string is ever assembled, so user text cannot become 
 `limit`/`minConfidence` are range-checked, `status`/`result`/`decision` are closed sets,
 `intentId` is pattern-checked, and free text is length/control-character checked.
 
+The CLI documents itself, so the plugin never re-implements help:
+
+```sh
+bun run autobet --help              # command table, global flags, exit codes, examples
+bun run autobet <command> --help    # arguments, long + short flags, defaults, examples
+```
+
+Global flags are accepted before or after the command, long or short: `-h/--help`, `-j/--json`,
+`-r/--root <path>`, `-c/--config <path>`, `-n/--now <iso>`.
+
+| Command   | Short flags      | Effect                                                               |
+| :-------- | :--------------- | :------------------------------------------------------------------- |
+| `status`  | –                | config, ledger and source freshness                                  |
+| `signals` | `-l`, `-m`, `-i` | gate verdicts; `-i` includes rejected, `-m` pre-filters confidence   |
+| `plan`    | –                | dry run of `enqueue`; writes nothing                                 |
+| `enqueue` | `-a`             | idempotent queue of eligible intents; never approves or executes     |
+| `list`    | `-s`, `-l`       | intents by derived status (expiry computed at read time)             |
+| `approve` | `-a`, `-o`       | human decision: queued -> approved                                   |
+| `reject`  | `-a`, `-R`       | queued/approved -> rejected; reason required, releases stake         |
+| `execute` | `-v`             | paper fill of an approved intent; any other venue -> `live_disabled` |
+| `settle`  | `-e`             | won/lost/void for a filled intent, folds paper P&L                   |
+| `journal` | `-l`             | append-only event tail plus the folded paper summary                 |
+| `watch`   | `-i`             | enqueue loop (interval ≥ 30 s); queues only, never executes          |
+
 ## Failure shape
 
 A CLI success payload is returned unchanged (`success: true`, `schemaVersion: 1`,
@@ -158,6 +182,12 @@ without `confirm: true` (and that the refusal is reached before validation / bef
 asserts malformed arguments are refused, asserts a missing CLI yields a structured answer
 rather than an exception, and asserts the disposer releases all nine registrations. It points
 `repoPath` at a non-existent temp directory, so it needs neither the CLI nor a real ledger.
+
+The CLI surface is covered by `bun test tests/watchlist_autobet.test.ts` (60 tests): paper
+lifecycle, gate/config/ledger corruption, concurrency safety, and the CLI help contract —
+root command table, every command's `--help` (usage, arguments, long and short flags, examples),
+short-flag parsing (`-j -r -c -n` globals plus `-l -m -i -a -o -s -R -v -e -i` command flags),
+and actionable unknown-flag/unknown-command errors.
 
 ## Installing
 

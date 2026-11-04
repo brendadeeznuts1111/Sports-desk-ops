@@ -143,9 +143,8 @@ export async function recordCronRun(
  */
 export default {
   async scheduled(controller: Bun.CronController): Promise<void> {
-    const modeEnv =
-      process.env.ARTIFACTS_CRON_MODE === "live" ? "live" : "offline";
-    const journalPath = process.env.ARTIFACTS_CRON_JOURNAL ?? DEFAULT_JOURNAL;
+    const modeEnv = Bun.env.ARTIFACTS_CRON_MODE === "live" ? "live" : "offline";
+    const journalPath = Bun.env.ARTIFACTS_CRON_JOURNAL ?? DEFAULT_JOURNAL;
     console.error(
       JSON.stringify({
         signal: "ARTIFACTS_CRON_OS_FIRE",
@@ -171,9 +170,9 @@ if (import.meta.main && !isBunOsCronInvocation(process.argv)) {
   const schedule = flagValue(
     parsed,
     "--schedule",
-    process.env.ARTIFACTS_CRON ?? "0 6 * * *",
+    Bun.env.ARTIFACTS_CRON ?? "0 6 * * *",
   );
-  const tz = flagValue(parsed, "--tz", process.env.ARTIFACTS_CRON_TZ ?? "");
+  const tz = flagValue(parsed, "--tz", Bun.env.ARTIFACTS_CRON_TZ ?? "");
   const mode = flagValue(parsed, "--mode", "offline");
   const journal = flagValue(parsed, "--journal", DEFAULT_JOURNAL);
   const historyArg = flagValue(parsed, "--history", "");

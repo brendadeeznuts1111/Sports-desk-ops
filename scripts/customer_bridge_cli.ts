@@ -13,7 +13,7 @@
  * the machine except the `0x` proxy wallet that is already public on-chain.
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   buildAttributionRegistry,
@@ -115,7 +115,7 @@ interface BridgeCacheFile {
 }
 
 function ttlMs(): number {
-  const hours = Number(process.env.BRIDGE_TTL_HOURS ?? "24");
+  const hours = Number(Bun.env.BRIDGE_TTL_HOURS ?? "24");
   return Math.max(0, Number.isFinite(hours) ? hours : 24) * 3_600_000;
 }
 
@@ -125,9 +125,7 @@ async function readCache(
 ): Promise<PolyObservation | null> {
   if (fresh) return null;
   try {
-    const parsed = JSON.parse(
-      await readFile(path, "utf8"),
-    ) as Partial<BridgeCacheFile>;
+    const parsed = (await Bun.file(path).json()) as Partial<BridgeCacheFile>;
     if (parsed.schemaVersion !== 1 || parsed.observation === undefined)
       return null;
     const fetchedAt = Date.parse(parsed.fetchedAtIso ?? "");

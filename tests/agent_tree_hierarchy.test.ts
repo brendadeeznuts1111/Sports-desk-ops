@@ -6,8 +6,8 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
  * `?view=hierarchy` folds the parent edges once, server-side, and reports the payload's defects.
  */
 
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
-Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
 
 const server = startServer({
   port: 0,
@@ -19,9 +19,9 @@ const base = `http://127.0.0.1:${server.port}`;
 afterAll(() => {
   server.stop(true);
   if (savedToken === undefined) {
-    Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
+    Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
   } else {
-    Reflect.set(process.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
+    Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
   }
 });
 

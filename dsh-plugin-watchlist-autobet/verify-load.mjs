@@ -30,6 +30,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Runs under Node as well as Bun: import.meta.dir is Bun-only.
+// ast-grep-ignore: bun-import-meta-dir
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The bundle must never reach the real repo in this smoke test. */
 const MISSING_REPO = join(tmpdir(), `dsh-autobet-verify-no-cli-${process.pid}`);
@@ -108,7 +110,8 @@ async function checkAsync(label, body) {
  * @param {unknown} value
  * @returns {value is Record<string, unknown>}
  */
-function isPlainObject(value) {
+// Dependency-free verifier runs in Electron's Node (no zod): local narrowing is intentional.
+function isPlainObjectValue(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
@@ -221,6 +224,8 @@ check("registers exactly the nine fixed tools", () => {
   );
   const names = harness.registered.map((tool) => tool.name).sort();
   assert(
+    // Node-runtime verifier: Bun.deepEquals is not available in Electron's Node.
+    // ast-grep-ignore: bun-deep-equals
     JSON.stringify(names) === JSON.stringify(EXPECTED_TOOL_NAMES),
     `names are ${JSON.stringify(names)}`,
   );
@@ -251,11 +256,11 @@ for (const tool of harness.registered) {
       "description must explain the capability",
     );
     assert(
-      isPlainObject(tool.parameters) && tool.parameters.type === "object",
+      isPlainObjectValue(tool.parameters) && tool.parameters.type === "object",
       "parameters must be an object-root JSON schema",
     );
     assert(
-      isPlainObject(tool.output?.schema),
+      isPlainObjectValue(tool.output?.schema),
       "output.schema must be an object",
     );
     assert(
@@ -294,7 +299,7 @@ await checkAsync(
   async () => {
     for (const name of ["autobet_status", "autobet_plan"]) {
       const value = await call(name, {});
-      assert(isPlainObject(value), `${name} did not return an object`);
+      assert(isPlainObjectValue(value), `${name} did not return an object`);
       assert(value.available === false, `${name} reported available:true`);
       assert(
         value.reason === "cli_missing",
@@ -362,7 +367,7 @@ await checkAsync(
   async () => {
     for (const name of WRITE_TOOLS) {
       const value = await call(name, WRITE_ARGUMENTS[name]);
-      assert(isPlainObject(value), `${name} did not return an object`);
+      assert(isPlainObjectValue(value), `${name} did not return an object`);
       assert(
         value.available === false && value.reason === "confirmation_required",
         `${name} reason is ${value.reason}; it must be confirmation_required without confirm:true`,
@@ -514,7 +519,7 @@ await checkAsync(
   "every answer is one JSON-serializable plain object",
   async () => {
     for (const { name, value } of results) {
-      assert(isPlainObject(value), `${name} returned a non-object answer`);
+      assert(isPlainObjectValue(value), `${name} returned a non-object answer`);
       let roundTrip;
       try {
         roundTrip = JSON.parse(JSON.stringify(value));
@@ -525,6 +530,8 @@ await checkAsync(
         );
       }
       assert(
+        // Node-runtime verifier: Bun.deepEquals is not available in Electron's Node.
+        // ast-grep-ignore: bun-deep-equals
         JSON.stringify(roundTrip) === JSON.stringify(value),
         `${name} answer does not survive a JSON round-trip`,
       );
@@ -563,6 +570,8 @@ check("dispose releases every registration", () => {
   );
   const released = [...harness.disposed].sort();
   assert(
+    // Node-runtime verifier: Bun.deepEquals is not available in Electron's Node.
+    // ast-grep-ignore: bun-deep-equals
     JSON.stringify(released) === JSON.stringify(EXPECTED_TOOL_NAMES),
     `disposer released ${JSON.stringify(released)}`,
   );

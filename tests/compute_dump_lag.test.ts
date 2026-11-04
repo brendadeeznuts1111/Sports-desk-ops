@@ -20,7 +20,7 @@ describe("compute_dump_lag", () => {
       },
     );
     expect(await proc.exited).toBe(0);
-    const out = await new Response(proc.stdout).text();
+    const out = await proc.stdout.text();
     const doc = JSON.parse(out) as {
       dump_lag_days: number;
       captured_at: string;

@@ -382,9 +382,7 @@ export async function authenticateWithWebView(
     // that reloads the page and drops the typed values. Wait, then retry with a
     // refill if the first attempt landed prematurely.
     const hydrationMs = Number(config.env["F402_LOGIN_HYDRATION_MS"] ?? "1500");
-    await new Promise((resolve) =>
-      setTimeout(resolve, Number.isFinite(hydrationMs) ? hydrationMs : 1500),
-    );
+    await Bun.sleep(Number.isFinite(hydrationMs) ? hydrationMs : 1500);
     const submitExists = await view.evaluate(
       `(() => document.querySelector(${escapeForExpression(config.login.submitSelector)}) !== null)()`,
     );
@@ -407,7 +405,7 @@ export async function authenticateWithWebView(
           String(probe["url"] ?? "").length > 0;
         if (authed) break;
         if (Date.now() >= attemptEnd || Date.now() >= attemptDeadline) break;
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await Bun.sleep(250);
       }
       if (
         isPlainObject(probe) &&
@@ -422,7 +420,7 @@ export async function authenticateWithWebView(
       await view.waitForSelector(config.login.userSelector, {
         timeoutMs: 10_000,
       });
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await Bun.sleep(1_000);
     }
     if (isPlainObject(probe) && probe["hasPasswordField"] === true) {
       throw new Error(
@@ -527,7 +525,7 @@ async function extractPortalAuthorization(
         return captured;
       }
       if (Date.now() >= deadline) return undefined;
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await Bun.sleep(250);
     }
   } catch {
     return undefined;
@@ -945,7 +943,7 @@ async function runLive(
   };
 
   const restoreProxy =
-    options.proxy === null ? () => {} : setProxyEnv(options.proxy, process.env);
+    options.proxy === null ? () => {} : setProxyEnv(options.proxy, Bun.env);
   let auth: LiveAuthSession | null = null;
   let transport: HttpTransport | null = null;
   const warnings: string[] = [];
@@ -1066,7 +1064,7 @@ async function runLive(
 function mergeDeps(overrides: Partial<CliDeps>): CliDeps {
   const rootDir = overrides.rootDir ?? defaultRootDir();
   return {
-    env: overrides.env ?? process.env,
+    env: overrides.env ?? Bun.env,
     now: overrides.now ?? (() => new Date()),
     stdout: overrides.stdout ?? ((line: string) => console.log(line)),
     stderr: overrides.stderr ?? ((line: string) => console.error(line)),

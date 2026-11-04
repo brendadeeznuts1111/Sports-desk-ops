@@ -670,7 +670,7 @@ describe("--fail-on-alert exit semantics (end to end)", () => {
           stderr: "pipe",
         });
         const exitCode = await proc.exited;
-        const stderr = await new Response(proc.stderr).text();
+        const stderr = await proc.stderr.text();
         expect(exitCode).toBe(withFlag ? 1 : 0);
         expect(await Bun.file(paths.artifact).exists()).toBe(true);
         expect((await readWagersHistory(10, paths.history)).lines).toHaveLength(

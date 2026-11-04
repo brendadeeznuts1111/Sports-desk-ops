@@ -484,9 +484,9 @@ async function main(args: readonly string[]): Promise<void> {
       const baselinePath = flagValue(rest, "--check");
       if (baselinePath !== undefined) {
         // Offline: no network, only catalog coverage of the committed baseline.
-        const baseline = JSON.parse(
-          await Bun.file(baselinePath).text(),
-        ) as BunShapeDocsBaseline;
+        const baseline = (await Bun.file(
+          baselinePath,
+        ).json()) as BunShapeDocsBaseline;
         const problems = checkBunShapeDocsBaseline(baseline);
         print(JSON.stringify({ baselinePath, problems }, null, 2));
         if (problems.length > 0) {

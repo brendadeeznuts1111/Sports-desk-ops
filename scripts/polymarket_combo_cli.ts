@@ -94,7 +94,7 @@ function comboUniquenessOptions(
   args: readonly string[],
   gate: ComboGate,
 ): ComboUniquenessOptions {
-  const env = process.env;
+  const env = Bun.env;
   const envFlag = (key: string): boolean => env[key] === "1";
   const walletFile = flag(args, ["--wallet-file"], env.WALLET_FILE ?? "");
   return {
@@ -259,10 +259,10 @@ export async function runPolymarketCombo(
 
   if (sub === "uniqueness" || sub === "verify-subset") {
     const gate: ComboGate =
-      args.includes("--all-legs-cfb") || process.env.ALL_LEGS_CFB === "1"
+      args.includes("--all-legs-cfb") || Bun.env.ALL_LEGS_CFB === "1"
         ? "all-legs-cfb"
         : args.includes("--strict-full-game") ||
-            process.env.STRICT_FULL_GAME === "1"
+            Bun.env.STRICT_FULL_GAME === "1"
           ? "full-game"
           : "permissive";
 
@@ -451,7 +451,7 @@ export async function runPolymarketCombo(
   }
 
   if (sub === "backtest") {
-    const env = process.env;
+    const env = Bun.env;
     const days = Number(flag(args, ["--days"], "30"));
     const cfbOnly = !args.includes("--all-venues");
     const walletArg = flag(args, ["--wallets"], "");

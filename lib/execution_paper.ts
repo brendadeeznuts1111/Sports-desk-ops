@@ -10,12 +10,15 @@
  * this feature writes. `root` is a seam so tests use a temp directory; the path resolver refuses to
  * escape it.
  */
+// Atomic append with an explicit 0600 mode: openSync/writeSync are the primitives Bun.write lacks.
+// ast-grep-ignore: node-fs-read-write-file
 import {
   chmodSync,
   closeSync,
   existsSync,
   mkdirSync,
   openSync,
+  // ast-grep-ignore: node-fs-read-write-file -- sync ledger reader; Bun.file is async.
   readFileSync,
   statSync,
   writeSync,

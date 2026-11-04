@@ -63,7 +63,7 @@ afterEach(() => {
 
 function baseEnv(overrides: Record<string, string | undefined> = {}): Env {
   const env: Env = {};
-  for (const [key, value] of Object.entries(process.env)) {
+  for (const [key, value] of Object.entries(Bun.env)) {
     if (value !== undefined && !key.startsWith("F402_")) env[key] = value;
   }
   // The repo `.env` is auto-loaded by `bun run` and would otherwise fill the
@@ -107,8 +107,8 @@ async function runCliProcess(
     stderr: "pipe",
     env: stringEnv,
   });
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
+  const stdout = await proc.stdout.text();
+  const stderr = await proc.stderr.text();
   const code = await proc.exited;
   return { code, stdout, stderr };
 }
@@ -550,7 +550,7 @@ describe("CLI — live pipeline with injected browser/transport (no network)", (
         };
       },
       createTransport: () => transport,
-      loadOpenApi: async () => JSON.parse(await Bun.file(OPENAPI_PATH).text()),
+      loadOpenApi: async () => await Bun.file(OPENAPI_PATH).json(),
     };
   }
 

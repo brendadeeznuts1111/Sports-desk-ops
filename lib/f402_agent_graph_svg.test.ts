@@ -5,14 +5,12 @@ import { cytoscapeExportToSvg } from "./f402_agent_graph_svg.ts";
 
 describe("f402_agent_graph_svg", () => {
   test("renders nodes and edges as SVG", async () => {
-    const graph = JSON.parse(
-      await Bun.file(
-        join(
-          import.meta.dir,
-          "../tests/fixtures/f402-list-agents-by-agent-snippet.json",
-        ),
-      ).text(),
-    );
+    const graph = await Bun.file(
+      join(
+        import.meta.dir,
+        "../tests/fixtures/f402-list-agents-by-agent-snippet.json",
+      ),
+    ).json();
     const exportGraph = {
       nodes: (
         graph.GENERAL as { AgentID: string; Login: string; Level: number }[]

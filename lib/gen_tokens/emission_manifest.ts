@@ -29,7 +29,7 @@ export function buildManifestFromDisk(
 export function assertStrictGateEmission(
   emittedPaths: readonly string[],
 ): void {
-  if (process.env[GEN_TOKENS_GATE_ENV] !== "1") return;
+  if (Bun.env[GEN_TOKENS_GATE_ENV] !== "1") return;
 
   const expected = new Set(GEN_TOKEN_EMISSION_PATHS);
   const actual = new Set(emittedPaths);

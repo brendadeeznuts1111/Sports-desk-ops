@@ -59,7 +59,7 @@ export interface ManagerBootRunbookRenderOptions {
 
 function ansiEnabled(explicit?: boolean): boolean {
   if (explicit !== undefined) return explicit;
-  return process.env.NO_COLOR === undefined && process.env.TERM !== "dumb";
+  return Bun.env.NO_COLOR === undefined && Bun.env.TERM !== "dumb";
 }
 
 function osc8Link(text: string, url: string): string {

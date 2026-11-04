@@ -26,8 +26,8 @@ async function runCatalog(
   });
   const [exit, out, err] = await Promise.all([
     proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    proc.stdout.text(),
+    proc.stderr.text(),
   ]);
   return { exit, out, err: out + err };
 }

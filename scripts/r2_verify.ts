@@ -52,12 +52,12 @@ const prefix = flagValue(parsed, "--prefix", "docs");
 const bucket = flagValue(
   parsed,
   "--bucket",
-  process.env.R2_BUCKET_NAME ?? "sportsdesk-ops-reports",
+  Bun.env.R2_BUCKET_NAME ?? "sportsdesk-ops-reports",
 );
 const strict = hasFlag(parsed, "--strict");
-const endpoint = process.env.R2_ENDPOINT ?? "";
-const accessKeyId = process.env.R2_ACCESS_KEY_ID ?? "";
-const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY ?? "";
+const endpoint = Bun.env.R2_ENDPOINT ?? "";
+const accessKeyId = Bun.env.R2_ACCESS_KEY_ID ?? "";
+const secretAccessKey = Bun.env.R2_SECRET_ACCESS_KEY ?? "";
 
 if (endpoint === "" || accessKeyId === "" || secretAccessKey === "") {
   console.error("r2:verify:local: R2 credentials are not configured.");

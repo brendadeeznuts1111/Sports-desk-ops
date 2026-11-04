@@ -16,7 +16,7 @@ async function main(): Promise<number> {
     import.meta.dir,
     pathArg ?? "../tests/fixtures/prod-schema.json",
   );
-  const dump = parseProdSchemaDump(JSON.parse(await Bun.file(dumpPath).text()));
+  const dump = parseProdSchemaDump(await Bun.file(dumpPath).json());
   let commitIso: string;
   try {
     commitIso = execSync(`git log -1 --format=%aI -- "${dumpPath}"`, {

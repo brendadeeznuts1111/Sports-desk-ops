@@ -34,7 +34,7 @@ import {
   randomUUID,
   sign as cryptoSign,
 } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { isRecordValue } from "./zod_guards.ts";
 import { CANONICAL_SECRETS_SERVICE, readSecretOrNull } from "./secrets.ts";
 
 /** Production host, same one the read-only client uses. */
@@ -219,7 +219,8 @@ export function kalshiSigningMessage(
   method: string,
   path: string,
 ): string {
-  const pathWithoutQuery = path.split("?")[0] ?? path;
+  const pathWithoutQuery = new URL(path, "https://placeholder.invalid")
+    .pathname;
   return `${Math.trunc(timestampMs)}${method.toUpperCase()}${pathWithoutQuery}`;
 }
 
@@ -335,7 +336,7 @@ export function buildKalshiOrder(
 export async function resolveKalshiCredentials(
   options: ResolveKalshiCredentialsOptions = {},
 ): Promise<KalshiCredentialsResolution> {
-  const env = options.env ?? process.env;
+  const env = options.env ?? Bun.env;
   const readPemFile = options.readFile ?? defaultReadFile;
   const getSecret = options.getSecret ?? defaultGetSecret;
 
@@ -552,7 +553,7 @@ async function placeKalshiOrderInner(
       "Kalshi returned a non-JSON order response",
     );
   }
-  if (!isRecord(parsed)) {
+  if (!isRecordValue(parsed)) {
     return refused(
       "unparseable_response",
       "Kalshi returned a non-object order response",
@@ -590,8 +591,8 @@ interface NormalizedKalshiOrder {
  * order into an exception.
  */
 function normalizeKalshiOrder(raw: unknown): NormalizedKalshiOrder | null {
-  if (!isRecord(raw)) return null;
-  const nested = isRecord(raw["order"]) ? raw["order"] : null;
+  if (!isRecordValue(raw)) return null;
+  const nested = isRecordValue(raw["order"]) ? raw["order"] : null;
   const fields = nested ?? raw;
   const venueOrderId =
     firstString(fields, ["order_id", "orderId"]) ??
@@ -650,9 +651,9 @@ function extractApiErrorMessage(bodyText: string): string | null {
   const bounded = trimmed.length > 8_192 ? trimmed.slice(0, 8_192) : trimmed;
   try {
     const parsed: unknown = JSON.parse(bounded);
-    if (isRecord(parsed)) {
+    if (isRecordValue(parsed)) {
       const error = parsed["error"];
-      if (isRecord(error)) {
+      if (isRecordValue(error)) {
         const message = firstString(error, ["message", "detail", "code"]);
         if (message !== null) return message;
       }
@@ -840,16 +841,12 @@ function firstNumber(
   return null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 function defaultReadFile(path: string): Promise<string> {
-  return readFile(path, "utf8");
+  return Bun.file(path).text();
 }
 
 function defaultGetSecret(name: string): Promise<string | null> {

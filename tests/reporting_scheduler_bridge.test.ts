@@ -69,8 +69,8 @@ function fakeTelegram(): {
   };
 }
 
-const env = process.env as unknown as Record<string, string | undefined>;
-const savedStatePath = process.env.BRIDGE_ROLLUP_STATE_PATH;
+const env = Bun.env as unknown as Record<string, string | undefined>;
+const savedStatePath = Bun.env.BRIDGE_ROLLUP_STATE_PATH;
 
 afterEach(() => {
   // Leave a loud default behind: a later test that forgets to inject must not spawn the CLIs.

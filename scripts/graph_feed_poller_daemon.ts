@@ -1258,15 +1258,14 @@ export async function writeGraphLiveFeedOnce(
   }
 
   if (options?.liveF402) {
-    const offline = process.env.F402_OFFLINE_ONLY?.trim() === "1";
+    const offline = Bun.env.F402_OFFLINE_ONLY?.trim() === "1";
     if (offline) {
       console.warn(
         "[GraphPoller] f402: F402_OFFLINE_ONLY=1 — session probe skipped",
       );
     } else {
-      const agentId = process.env.F402_AGENT_ID?.trim() || "BILLY666";
-      const baseUrl =
-        process.env.F402_BASE_URL?.trim() || "https://fantasy402.com";
+      const agentId = Bun.env.F402_AGENT_ID?.trim() || "BILLY666";
+      const baseUrl = Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com";
       let session = readF402Session();
       if (session === null) {
         try {
@@ -1368,9 +1367,9 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const syncR2 = args.includes("--r2");
   const live =
-    args.includes("--live") || process.env.SPORTSDESK_LIVE_INGEST === "1";
+    args.includes("--live") || Bun.env.SPORTSDESK_LIVE_INGEST === "1";
   const liveF402 =
-    args.includes("--live-f402") || process.env.SPORTSDESK_LIVE_F402 === "1";
+    args.includes("--live-f402") || Bun.env.SPORTSDESK_LIVE_F402 === "1";
   const writeBacktestArtifact = !args.includes("--no-backtest-artifact");
 
   const run = async (): Promise<void> => {

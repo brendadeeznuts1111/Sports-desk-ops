@@ -117,7 +117,7 @@ export function logAllowlistBypassIfEnabled(
 export function assertAllowlistBypassNotInCi(
   opts: ManifestDumpParityOptions,
 ): void {
-  if (process.env.CI !== "true") return;
+  if (Bun.env.CI !== "true") return;
   if (!opts.allowlistBypass) return;
   throw new Error(
     "SPORTSDESK_SCHEMA_DUMP_ALLOWLIST_BYPASS=1 is forbidden in CI",
@@ -302,12 +302,11 @@ export async function assertManifestMatchesDumpFile(
 }
 
 export function prodDumpParityOptionsFromEnv(): ManifestDumpParityOptions {
-  const strictTables = process.env.SPORTSDESK_SCHEMA_DUMP_STRICT_TABLES !== "0";
+  const strictTables = Bun.env.SPORTSDESK_SCHEMA_DUMP_STRICT_TABLES !== "0";
   return {
     strictProdOnlyTables: strictTables,
     strictStaleAllowlist: strictTables,
-    allowlistBypass:
-      process.env.SPORTSDESK_SCHEMA_DUMP_ALLOWLIST_BYPASS === "1",
+    allowlistBypass: Bun.env.SPORTSDESK_SCHEMA_DUMP_ALLOWLIST_BYPASS === "1",
   };
 }
 

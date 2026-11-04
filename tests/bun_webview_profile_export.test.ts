@@ -106,7 +106,7 @@ afterAll(() => {
 describe.skipIf(
   chromePath === null ||
     !hasChromeProfile ||
-    process.env.DSH_SESSION_ID !== undefined,
+    Bun.env.DSH_SESSION_ID !== undefined,
 )("session:login --from-profile (Chrome dataStore)", () => {
   beforeAll(() => {
     server = Bun.serve({

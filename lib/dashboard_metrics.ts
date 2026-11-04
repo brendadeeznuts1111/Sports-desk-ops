@@ -22,6 +22,7 @@
  */
 import { readdirSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { isRecordValue } from "./zod_guards.ts";
 import { cachedJsonFile } from "./artifact_cache.ts";
 import {
   DAEMON_PREFIX_ROUTES,
@@ -119,10 +120,6 @@ export interface FeedSummary {
   readonly counts: FeedCounts;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /** A finite number, or `null`. Never `NaN`/`Infinity` in a response body. */
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -204,7 +201,7 @@ export function deriveFeedSummary(
   raw: unknown,
   options: { readonly now?: Date; readonly source?: string } = {},
 ): FeedSummary {
-  if (!isRecord(raw))
+  if (!isRecordValue(raw))
     return unmeasuredFeedSummary("feed artifact is not an object");
   const now = options.now ?? new Date();
   const source = options.source ?? FEED_PATH;
@@ -542,11 +539,11 @@ export interface BridgeInputs {
 
 /** The census bridge value: stream 3c's row count and its ticket cardinality. */
 export function censusBridgeValue(census: unknown): CensusValue | null {
-  if (!isRecord(census)) return null;
+  if (!isRecordValue(census)) return null;
   const streams = recordAt(census, "streams");
-  if (!isRecord(streams)) return null;
+  if (!isRecordValue(streams)) return null;
   const tally = recordAt(streams, "3c-gslive-tally");
-  if (!isRecord(tally)) return null;
+  if (!isRecordValue(tally)) return null;
   const legs = finiteInteger(recordAt(tally, "rows"));
   const tickets = finiteInteger(recordAt(tally, "CmaxTickets"));
   return legs === null || tickets === null ? null : { legs, tickets };
@@ -554,11 +551,11 @@ export function censusBridgeValue(census: unknown): CensusValue | null {
 
 /** The weblog bridge value, with the match percentage the gate's arithmetic implies. */
 export function weblogBridgeValue(rollup: unknown): WeblogValue | null {
-  if (!isRecord(rollup)) return null;
+  if (!isRecordValue(rollup)) return null;
   const rows = recordAt(rollup, "rows");
   const join = recordAt(rollup, "join");
   const negativeControls = recordAt(rollup, "negativeControls");
-  if (!isRecord(rows) || !isRecord(join)) return null;
+  if (!isRecordValue(rows) || !isRecordValue(join)) return null;
   const total = finiteInteger(recordAt(rows, "total"));
   const parsed = finiteInteger(recordAt(rows, "parsed"));
   const matched = finiteInteger(recordAt(join, "matched"));
@@ -571,10 +568,10 @@ export function weblogBridgeValue(rollup: unknown): WeblogValue | null {
   ) {
     return null;
   }
-  const negative = isRecord(negativeControls) ? negativeControls : {};
+  const negative = isRecordValue(negativeControls) ? negativeControls : {};
   const flags = recordAt(rollup, "flags");
   const flag = (key: string): number | null =>
-    isRecord(flags) ? finiteInteger(recordAt(flags, key)) : null;
+    isRecordValue(flags) ? finiteInteger(recordAt(flags, key)) : null;
   return {
     rows: total,
     parsed,
@@ -1040,7 +1037,7 @@ async function loadCensus(root: string): Promise<CensusInput | null> {
     .stat()
     .catch(() => null);
   const asOf =
-    (isRecord(artifact.value)
+    (isRecordValue(artifact.value)
       ? nonEmptyString(recordAt(artifact.value, "censusDate"))
       : null) ?? (stat === null ? null : stat.mtime.toISOString());
   return {
@@ -1053,7 +1050,7 @@ async function loadCensus(root: string): Promise<CensusInput | null> {
 async function loadLiveBets(root: string): Promise<LiveBetsInput | null> {
   const path = join(root, LIVE_BETS_PATH);
   const artifact = await readJsonArtifact(path);
-  if (artifact === null || !isRecord(artifact.value)) return null;
+  if (artifact === null || !isRecordValue(artifact.value)) return null;
   const pendingCount = finiteInteger(recordAt(artifact.value, "pendingCount"));
   if (pendingCount === null) return null;
   const stat = await Bun.file(path)
@@ -1072,7 +1069,9 @@ async function loadWeblog(root: string): Promise<WeblogInput | null> {
     .stat()
     .catch(() => null);
   const window = recordAt(local.rollup, "window");
-  const toMs = isRecord(window) ? finiteNumber(recordAt(window, "toMs")) : null;
+  const toMs = isRecordValue(window)
+    ? finiteNumber(recordAt(window, "toMs"))
+    : null;
   const asOf =
     toMs !== null && toMs > 0
       ? new Date(toMs).toISOString()

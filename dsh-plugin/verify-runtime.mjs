@@ -35,6 +35,8 @@ import { fileURLToPath } from "node:url";
 
 // Derive the checkout from this script, not from the operator's home: a copied/linked plugin or a
 // second worktree would otherwise run its gates against a checkout that is not the one it lives in.
+// Electron/Node runtime: import.meta.dir is Bun-only.
+// ast-grep-ignore: bun-import-meta-dir
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const CONFIG = {

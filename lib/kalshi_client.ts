@@ -15,6 +15,8 @@
  * parsed at this boundary and `null` when unparseable. Everything downstream sees numbers or null.
  */
 
+import { isRecordValue } from "./zod_guards.ts";
+
 export const KALSHI_DEFAULT_BASE_URL =
   "https://api.elections.kalshi.com/trade-api/v2";
 
@@ -108,10 +110,6 @@ interface CacheEntry {
   readonly value: unknown;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /** A dollar/fixed-point string to a finite number, or `null`. */
 export function parseKalshiNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -126,7 +124,7 @@ function parseString(value: unknown): string | null {
 
 /** One market row; `null` when the ticker is missing (a market we cannot address is unusable). */
 export function parseKalshiMarket(value: unknown): KalshiMarket | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   const ticker = parseString(value["ticker"]);
   if (ticker === null) return null;
   return {
@@ -150,7 +148,7 @@ export function parseKalshiMarket(value: unknown): KalshiMarket | null {
 }
 
 export function parseKalshiEvent(value: unknown): KalshiEvent | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   const eventTicker = parseString(value["event_ticker"]);
   if (eventTicker === null) return null;
   const rawMarkets = Array.isArray(value["markets"]) ? value["markets"] : [];
@@ -175,7 +173,7 @@ export function parseKalshiEvent(value: unknown): KalshiEvent | null {
 export function parseKalshiEvents(
   value: unknown,
 ): readonly KalshiEvent[] | null {
-  if (!isRecord(value) || !Array.isArray(value["events"])) return null;
+  if (!isRecordValue(value) || !Array.isArray(value["events"])) return null;
   const events: KalshiEvent[] = [];
   for (const raw of value["events"]) {
     const event = parseKalshiEvent(raw);
@@ -200,8 +198,10 @@ function parseLevels(value: unknown): readonly KalshiLevel[] | null {
 
 /** `{orderbook_fp:{yes_dollars,no_dollars}}`; `null` when either side is unreadable. */
 export function parseKalshiOrderbook(value: unknown): KalshiOrderbook | null {
-  if (!isRecord(value)) return null;
-  const book = isRecord(value["orderbook_fp"]) ? value["orderbook_fp"] : value;
+  if (!isRecordValue(value)) return null;
+  const book = isRecordValue(value["orderbook_fp"])
+    ? value["orderbook_fp"]
+    : value;
   const yes = parseLevels(book["yes_dollars"]);
   const no = parseLevels(book["no_dollars"]);
   if (yes === null || no === null) return null;
@@ -349,7 +349,8 @@ export class KalshiClient {
   ): Promise<KalshiResult<KalshiOrderbook>> {
     const url = `${this.baseUrl}/markets/${encodeURIComponent(marketTicker)}/orderbook?depth=10`;
     return this.cachedRequest("orderbook", url, this.orderbookTtlMs, (raw) => {
-      if (!isRecord(raw) || !isRecord(raw["orderbook_fp"])) return null;
+      if (!isRecordValue(raw) || !isRecordValue(raw["orderbook_fp"]))
+        return null;
       return parseKalshiOrderbook(raw);
     });
   }
@@ -358,7 +359,7 @@ export class KalshiClient {
   async getMarket(marketTicker: string): Promise<KalshiResult<KalshiMarket>> {
     const url = `${this.baseUrl}/markets/${encodeURIComponent(marketTicker)}`;
     return this.cachedRequest("market", url, this.eventsTtlMs, (raw) => {
-      if (!isRecord(raw)) return null;
+      if (!isRecordValue(raw)) return null;
       return parseKalshiMarket(raw["market"]);
     });
   }

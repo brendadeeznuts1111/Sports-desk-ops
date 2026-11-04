@@ -7,8 +7,8 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
  * under test is the only one sent and the response is read as bytes.
  */
 
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
-Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
 
 const server = startServer({
   port: 0,
@@ -20,9 +20,9 @@ const port = server.port ?? 0;
 afterAll(() => {
   server.stop(true);
   if (savedToken === undefined) {
-    Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
+    Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
   } else {
-    Reflect.set(process.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
+    Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
   }
 });
 

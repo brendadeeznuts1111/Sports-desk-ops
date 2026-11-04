@@ -24,13 +24,13 @@ import {
   chmod,
   mkdir,
   open,
-  readFile,
   stat,
   unlink,
   type FileHandle,
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { isRecordValue } from "./zod_guards.ts";
 import type {
   League,
   OverUnder,
@@ -228,10 +228,6 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
   "eligibleLeagues",
 ]);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -274,7 +270,7 @@ export function parseAutobetConfig(raw: unknown): AutobetConfigParseResult {
     errors.push({ path, message });
   };
 
-  if (!isRecord(raw)) {
+  if (!isRecordValue(raw)) {
     return {
       ok: false,
       errors: [{ path: "", message: "config must be a JSON object" }],
@@ -452,7 +448,7 @@ export async function loadAutobetConfig(
   const absolute = resolve(root, configRelPath);
   let text: string;
   try {
-    text = await readFile(absolute, "utf8");
+    text = await Bun.file(absolute).text();
   } catch (error) {
     if (isNotFoundError(error)) {
       throw new AutobetError(
@@ -1580,7 +1576,7 @@ export function ledgerLockPathFor(ledgerPath: string): string {
 }
 
 function sleepMilliseconds(ms: number): Promise<void> {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+  return Bun.sleep(ms);
 }
 
 function errorCodeOf(error: unknown): string | null {
@@ -1612,8 +1608,8 @@ export async function withLedgerLock<T>(
   const retryMs = options.retryMs ?? LEDGER_LOCK_RETRY_MS;
   const lockPath = ledgerLockPathFor(ledgerPath);
   await mkdir(dirname(lockPath), { recursive: true });
-  const startedAt = Date.now();
-  const deadline = startedAt + timeoutMs;
+  const startedAt = Bun.nanoseconds();
+  const deadline = startedAt + timeoutMs * 1e6;
 
   for (;;) {
     let handle: FileHandle;
@@ -1649,12 +1645,12 @@ export async function withLedgerLock<T>(
         await unlink(lockPath).catch(() => undefined);
         continue;
       }
-      if (Date.now() >= deadline) {
+      if (Bun.nanoseconds() >= deadline) {
         throw new AutobetError(
           "ledger_locked",
           `another autobet process holds the ledger lock (${lockPath}); nothing was written. ` +
             "Retry after it finishes, or remove the lock file if the holder crashed.",
-          { lockPath, waitedMs: Date.now() - startedAt },
+          { lockPath, waitedMs: (Bun.nanoseconds() - startedAt) / 1e6 },
         );
       }
       await sleepMilliseconds(retryMs);
@@ -1736,7 +1732,7 @@ export async function readLedger(
 ): Promise<ReadLedgerResult> {
   let text: string;
   try {
-    text = await readFile(path, "utf8");
+    text = await Bun.file(path).text();
   } catch (error) {
     if (isNotFoundError(error)) {
       const intents: AutobetIntent[] = [];
@@ -1915,7 +1911,7 @@ function parseLedgerEventShape(payload: unknown):
       readonly ok: false;
       readonly message: string;
     } {
-  if (!isRecord(payload)) {
+  if (!isRecordValue(payload)) {
     return { ok: false, message: "event must be a JSON object" };
   }
   if (payload["schemaVersion"] !== AUTOBET_SCHEMA_VERSION) {
@@ -1944,7 +1940,7 @@ function parseLedgerEventShape(payload: unknown):
     };
   }
   const data = payload["data"];
-  if (!isRecord(data)) {
+  if (!isRecordValue(data)) {
     return { ok: false, message: "event.data must be a JSON object" };
   }
   return {
@@ -1990,7 +1986,7 @@ function readIsoTimestamp(value: unknown): string | null {
 }
 
 function parseProvenance(value: unknown): SignalProvenance | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   const dataMode = readNullableString(value["dataMode"]);
   const asOf = readNullableString(value["asOf"]);
   const ageSeconds = readNullableNumber(value["ageSeconds"]);
@@ -2014,7 +2010,7 @@ function parseAccounts(value: unknown): IntentAccount[] | null {
   if (!Array.isArray(value)) return null;
   const accounts: IntentAccount[] = [];
   for (const raw of value) {
-    if (!isRecord(raw)) return null;
+    if (!isRecordValue(raw)) return null;
     const login = raw["login"];
     const agentId = readNullableString(raw["agentId"]);
     const archetype = readNullableString(raw["archetype"]);
@@ -2040,7 +2036,7 @@ function parseGateChecks(value: unknown): GateCheck[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const checks: GateCheck[] = [];
   for (const raw of value) {
-    if (!isRecord(raw)) return null;
+    if (!isRecordValue(raw)) return null;
     const check = raw["check"];
     const ok = raw["ok"];
     const detail = raw["detail"];
@@ -2207,7 +2203,7 @@ function parseIntentCore(
 }
 
 function parsePaperFill(value: unknown): PaperFill | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   if (value["venue"] !== "paper") return null;
   const filledAt = readIsoTimestamp(value["filledAt"]);
   const stakeUsd = value["stakeUsd"];
@@ -2242,7 +2238,7 @@ function parsePaperFill(value: unknown): PaperFill | null {
 }
 
 function parseSettlement(value: unknown): Settlement | null {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
   const result = value["result"];
   const settledAt = readIsoTimestamp(value["settledAt"]);
   const profitUsd = value["profitUsd"];

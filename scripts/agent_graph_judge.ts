@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   if (!(await indexFile.exists())) {
     throw new Error("Missing views index — run: bun run graph:agent:views");
   }
-  const index = JSON.parse(await indexFile.text()) as AgentGraphViewIndex;
+  const index = (await indexFile.json()) as AgentGraphViewIndex;
   const questions = buildQuestions(
     tree,
     new Set(index.views.flatMap((v) => (v.focusId ? [v.focusId] : []))),
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
     );
     return;
   }
-  const answers = JSON.parse(await Bun.file(values.score!).text()) as Record<
+  const answers = (await Bun.file(values.score!).json()) as Record<
     string,
     unknown
   >;

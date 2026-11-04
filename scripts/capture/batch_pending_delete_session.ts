@@ -57,7 +57,7 @@ const profile = flag("--profile", "scratch/webview-profile");
 const prefix = flag("--prefix", "/cloud/api/Report");
 const base = flag(
   "--base",
-  process.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
+  Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
 );
 
 interface TargetsFile {

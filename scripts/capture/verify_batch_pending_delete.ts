@@ -39,7 +39,7 @@ if (runLive) {
       "--limit",
       String(liveLimit),
     ],
-    { cwd: root, stdout: "inherit", stderr: "inherit", env: process.env },
+    { cwd: root, stdout: "inherit", stderr: "inherit", env: Bun.env },
   );
   const code = await proc.exited;
   if (code !== 0) fail(`live batch exited ${code}`);

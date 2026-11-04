@@ -7,15 +7,15 @@ const snapshotScript = resolve(repoRoot, "scripts/schema_snapshot.ts");
 
 describe("schema CI gate", () => {
   test("SPORTSDESK_SCHEMA_DUMP_ALLOWLIST_BYPASS forbidden when CI=true", () => {
-    const prev = process.env.CI;
-    process.env.CI = "true";
+    const prev = Bun.env.CI;
+    Bun.env.CI = "true";
     try {
       expect(() =>
         assertAllowlistBypassNotInCi({ allowlistBypass: true }),
       ).toThrow(/forbidden in CI/);
     } finally {
-      if (prev === undefined) delete process.env.CI;
-      else process.env.CI = prev;
+      if (prev === undefined) delete Bun.env.CI;
+      else Bun.env.CI = prev;
     }
   });
 
@@ -23,7 +23,7 @@ describe("schema CI gate", () => {
     const proc = Bun.spawn(["bun", "run", snapshotScript], {
       cwd: repoRoot,
       env: {
-        ...process.env,
+        ...Bun.env,
         CI: "true",
         SPORTSDESK_SCHEMA_SNAPSHOT_QUIET: "1",
         SPORTSDESK_SCHEMA_SNAPSHOT_JSON:

@@ -31,7 +31,7 @@ const REMOTE_PEER = "203.0.113.9";
  * `Reflect` (same object as `Bun.env`) instead of casting the global type away.
  */
 function setEnv(name: string, value: string | undefined): void {
-  const env = process.env as unknown as Record<string, string | undefined>;
+  const env = Bun.env as unknown as Record<string, string | undefined>;
   if (value === undefined) Reflect.deleteProperty(env, name);
   else Reflect.set(env, name, value);
 }
@@ -101,7 +101,7 @@ describe("bridge handshake pieces", () => {
 });
 
 describe("the route's own guard decides the upgrade", () => {
-  const saved = process.env.SPORTSDESK_ADMIN_TOKEN;
+  const saved = Bun.env.SPORTSDESK_ADMIN_TOKEN;
 
   beforeAll(() => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", ADMIN_TOKEN);
@@ -218,9 +218,9 @@ describe("daemon hub relays the blob gateway's bridge frames", () => {
   let browser: WebSocket | undefined;
   let relayReady: Promise<void>;
   const saved = {
-    admin: process.env.SPORTSDESK_ADMIN_TOKEN,
-    blobToken: process.env.BLOB_API_TOKEN,
-    gatewayUrl: process.env.BLOB_GATEWAY_URL,
+    admin: Bun.env.SPORTSDESK_ADMIN_TOKEN,
+    blobToken: Bun.env.BLOB_API_TOKEN,
+    gatewayUrl: Bun.env.BLOB_GATEWAY_URL,
   };
 
   beforeAll(() => {

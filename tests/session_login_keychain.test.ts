@@ -213,8 +213,8 @@ describe("session:login CLI fail-closed paths", () => {
       stdout: "pipe",
       stderr: "pipe",
       env: {
-        PATH: process.env["PATH"] ?? "",
-        HOME: process.env["HOME"] ?? "",
+        PATH: Bun.env["PATH"] ?? "",
+        HOME: Bun.env["HOME"] ?? "",
         ...env,
       },
     });

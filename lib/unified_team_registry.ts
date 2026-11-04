@@ -10,6 +10,8 @@
  * This module resolves any alias → canonical `code` within a league, then exposes venue codes and
  * Polymarket search hints. Expand `data/unified_team_registry.json` as captures prove new pairs.
  */
+// Committed registry loaded synchronously at module init; callers are sync.
+// ast-grep-ignore: node-fs-read-write-file
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -221,6 +223,8 @@ export function loadUnifiedTeamRegistry(
   path: string = DEFAULT_REGISTRY_PATH,
 ): UnifiedTeamRegistry {
   const parsed = JSON.parse(
+    // Committed registry loaded synchronously at module init; callers are sync.
+    // ast-grep-ignore: node-fs-read-write-file
     readFileSync(path, "utf8"),
   ) as UnifiedTeamRegistryFile;
   if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.teams)) {

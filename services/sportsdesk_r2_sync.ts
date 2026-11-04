@@ -26,19 +26,17 @@ export interface R2Config {
 export function getR2Config(): R2Config {
   return {
     accountId:
-      process.env.CLOUDFLARE_ACCOUNT_ID || "7a470541a704caaf91e71efccc78fd36",
+      Bun.env.CLOUDFLARE_ACCOUNT_ID || "7a470541a704caaf91e71efccc78fd36",
     apiToken:
-      process.env.CLOUDFLARE_R2_API_TOKEN ||
-      process.env.CLOUDFLARE_API_TOKEN ||
-      "",
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+      Bun.env.CLOUDFLARE_R2_API_TOKEN || Bun.env.CLOUDFLARE_API_TOKEN || "",
+    accessKeyId: Bun.env.R2_ACCESS_KEY_ID || "",
+    secretAccessKey: Bun.env.R2_SECRET_ACCESS_KEY || "",
     endpoint:
-      process.env.R2_ENDPOINT ||
+      Bun.env.R2_ENDPOINT ||
       "https://7a470541a704caaf91e71efccc78fd36.r2.cloudflarestorage.com",
-    bucketName: process.env.R2_BUCKET_NAME || "sportsdesk-ops-reports",
+    bucketName: Bun.env.R2_BUCKET_NAME || "sportsdesk-ops-reports",
     publicUrl:
-      process.env.R2_PUBLIC_URL ||
+      Bun.env.R2_PUBLIC_URL ||
       "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev",
   };
 }

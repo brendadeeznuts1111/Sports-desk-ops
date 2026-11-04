@@ -60,8 +60,8 @@ export async function violateFetchInvariants() {
           stdout: "pipe",
           stderr: "pipe",
           env: {
-            PATH: process.env.PATH ?? "",
-            HOME: process.env.HOME ?? "",
+            PATH: Bun.env.PATH ?? "",
+            HOME: Bun.env.HOME ?? "",
           },
           signal: AbortSignal.timeout(15_000),
         },
@@ -105,7 +105,7 @@ export async function violateFetchInvariants() {
         {
           stdout: "pipe",
           stderr: "pipe",
-          env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" },
+          env: { PATH: Bun.env.PATH ?? "", HOME: Bun.env.HOME ?? "" },
           signal: AbortSignal.timeout(15_000),
         },
       );

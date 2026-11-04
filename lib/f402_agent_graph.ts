@@ -171,6 +171,6 @@ export async function buildAgentGraph(
 export async function loadAccountFixtureFromFile(
   path: string,
 ): Promise<AccountInfoOwnerFixture> {
-  const raw = JSON.parse(await Bun.file(path).text()) as unknown;
+  const raw = (await Bun.file(path).json()) as unknown;
   return loadAccountInfoOwnerFixture(raw);
 }

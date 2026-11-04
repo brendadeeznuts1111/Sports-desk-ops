@@ -514,7 +514,7 @@ describe("Portal GSLive link hydration", () => {
 
     try {
       await import("../docs/graph.js");
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await Bun.sleep(20);
 
       expect(report.attrs.href).toBe(WALLET.gsLivePlayerReportUrl);
       expect(report.attrs["data-gslive-hydrated"]).toBe("1");

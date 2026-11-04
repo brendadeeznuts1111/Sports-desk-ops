@@ -41,9 +41,10 @@ if (values.help) {
 const threeC =
   values["three-c-rollup"] === undefined
     ? null
-    : (JSON.parse(
-        await Bun.file(values["three-c-rollup"] as string).text(),
-      ) as { kind?: string; totals?: { openExposureCents?: number } });
+    : ((await Bun.file(values["three-c-rollup"] as string).json()) as {
+        kind?: string;
+        totals?: { openExposureCents?: number };
+      });
 if (
   threeC !== null &&
   (threeC.kind !== "gslive-tally" ||

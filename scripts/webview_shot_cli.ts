@@ -455,7 +455,7 @@ async function emitShot(
     if (
       options.kitty &&
       (options.kittyDirect ||
-        kittyTransmission(process.platform, process.env) === "direct")
+        kittyTransmission(process.platform, Bun.env) === "direct")
     ) {
       const png = await view.screenshotBase64({ format: "png" });
       process.stdout.write(formatKittyDirectEscape(png.base64));

@@ -547,7 +547,7 @@ export type SettlementInvariantReport = {
 export function resolveHistoryPollUrl(baseUrl?: string): string {
   const base =
     baseUrl?.replace(/\/$/, "") ??
-    process.env.SPORTSDESK_PORTAL_HTTP_BASE?.replace(/\/$/, "");
+    Bun.env.SPORTSDESK_PORTAL_HTTP_BASE?.replace(/\/$/, "");
   if (!base) {
     throw new Error(
       "SPORTSDESK_PORTAL_HTTP_BASE is required for live getHistory poll",

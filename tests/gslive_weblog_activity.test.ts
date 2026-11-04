@@ -3,8 +3,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
+  // ast-grep-ignore: node-fs-read-write-file -- the loader under test is sync; fixtures must be too.
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -51,7 +51,7 @@ interface Fixture {
   }[];
 }
 
-const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as Fixture;
+const fixture = (await Bun.file(FIXTURE_PATH).json()) as Fixture;
 
 const accountByLogin = new Map(
   fixture.accounts.map((account) => [account.customerLogin, account]),
@@ -105,6 +105,7 @@ function withTempRoot(
     if (artifact !== null) {
       const path = join(root, artifactRelative);
       mkdirSync(dirname(path), { recursive: true });
+      // ast-grep-ignore: node-fs-read-write-file -- fixture mode 0600 for a sync loader.
       writeFileSync(path, `${JSON.stringify(artifact, null, 2)}\n`, {
         mode: 0o600,
       });
@@ -375,6 +376,7 @@ describe("loadGsliveWeblogActivity", () => {
       (root) => {
         const path = join(root, GSLIVE_WEBLOG_ARTIFACT_RELATIVE);
         mkdirSync(dirname(path), { recursive: true });
+        // ast-grep-ignore: node-fs-read-write-file -- malformed fixture for a sync loader.
         writeFileSync(path, "{ not json");
         const activity = loadGsliveWeblogActivity({ root, now: FIXED_NOW });
         expect(activity.status).toBe("not_measured");
@@ -495,7 +497,7 @@ describe("scripts/gslive_weblog_refresh.ts --dry-run", () => {
       {
         cwd: REPO_ROOT,
         env: {
-          ...process.env,
+          ...Bun.env,
           GSID: "",
           GSID_COOKIE: "",
           GSLIVE_SESSION_FILE: "/nonexistent/gslive-session",

@@ -31,11 +31,11 @@ import {
 import { schemaStrictEnabled } from "../lib/schema_runtime_flags.ts";
 
 const outJson =
-  process.env.SPORTSDESK_SCHEMA_SNAPSHOT_JSON?.trim() ??
+  Bun.env.SPORTSDESK_SCHEMA_SNAPSHOT_JSON?.trim() ??
   resolve(import.meta.dir, "../reports/schema.snapshot.json");
 
 const outBin =
-  process.env.SPORTSDESK_SCHEMA_SNAPSHOT_BIN?.trim() ??
+  Bun.env.SPORTSDESK_SCHEMA_SNAPSHOT_BIN?.trim() ??
   resolve(import.meta.dir, "../reports/schema.manifest.bin");
 
 const defaultProdDump = resolve(
@@ -43,11 +43,10 @@ const defaultProdDump = resolve(
   "../tests/fixtures/prod-schema.json",
 );
 
-const prodDumpPath =
-  process.env.SPORTSDESK_SCHEMA_DUMP?.trim() ?? defaultProdDump;
+const prodDumpPath = Bun.env.SPORTSDESK_SCHEMA_DUMP?.trim() ?? defaultProdDump;
 
 function logCaTrustSource(): void {
-  if (process.env.SPORTSDESK_SCHEMA_CA !== "system") return;
+  if (Bun.env.SPORTSDESK_SCHEMA_CA !== "system") return;
   const platform =
     process.platform === "darwin"
       ? "macOS keychain"
@@ -59,7 +58,7 @@ function logCaTrustSource(): void {
 
 async function main(): Promise<number> {
   logCaTrustSource();
-  const dbEnv = process.env.SPORTSDESK_SCHEMA_DB?.trim();
+  const dbEnv = Bun.env.SPORTSDESK_SCHEMA_DB?.trim();
   const report = buildSqliteSchemaReport(
     undefined,
     defaultSchemaReportProvenance({
@@ -90,7 +89,7 @@ async function main(): Promise<number> {
   const decoded = decodeManifest(manifestBytes);
   const parityOpts = prodDumpParityOptionsFromEnv();
 
-  const skipDumpParity = process.env.SPORTSDESK_SCHEMA_SKIP_DUMP_PARITY === "1";
+  const skipDumpParity = Bun.env.SPORTSDESK_SCHEMA_SKIP_DUMP_PARITY === "1";
   if (!skipDumpParity && (await Bun.file(prodDumpPath).exists())) {
     const parityExit = await runManifestDumpParityFile(
       prodDumpPath,
@@ -100,7 +99,7 @@ async function main(): Promise<number> {
     if (parityExit !== 0) return parityExit;
   }
 
-  const liveParity = process.env.SPORTSDESK_SCHEMA_PARITY_LIVE === "1" && dbEnv;
+  const liveParity = Bun.env.SPORTSDESK_SCHEMA_PARITY_LIVE === "1" && dbEnv;
   if (liveParity) {
     const dbPath = resolve(dbEnv);
     if (await Bun.file(dbPath).exists()) {
@@ -108,7 +107,7 @@ async function main(): Promise<number> {
     }
   }
 
-  if (process.env.SPORTSDESK_SCHEMA_SNAPSHOT_QUIET !== "1") {
+  if (Bun.env.SPORTSDESK_SCHEMA_SNAPSHOT_QUIET !== "1") {
     console.log(`schema snapshot: ${outJson}`);
     console.log(
       `schema manifest: ${outBin} (${encodeManifest(report).byteLength} bytes)`,

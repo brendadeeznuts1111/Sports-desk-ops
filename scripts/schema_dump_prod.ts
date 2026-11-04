@@ -46,7 +46,7 @@ async function main(): Promise<number> {
 
   const dbPath =
     args.find((a) => !a.startsWith("-"))?.trim() ??
-    process.env.SPORTSDESK_SCHEMA_DB?.trim();
+    Bun.env.SPORTSDESK_SCHEMA_DB?.trim();
 
   const existing = await readExistingDump(outPath);
 

@@ -32,7 +32,7 @@ const HELP =
   "  Env: PSTACK_STATECHART, TLA2TOOLS, JAVA; mise on PATH installs Java/TLC on first run.";
 
 function findStatechart(): string {
-  const fromEnv = process.env.PSTACK_STATECHART?.trim();
+  const fromEnv = Bun.env.PSTACK_STATECHART?.trim();
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
 
   const root = path.join(
@@ -68,7 +68,7 @@ function emptyDir(target: string): void {
 
 function runStatechart(): number {
   const statechart = findStatechart();
-  const env = { ...process.env };
+  const env = { ...Bun.env };
   const homeBin = path.join(os.homedir(), ".local/bin");
   if (!env.PATH?.includes(homeBin)) {
     env.PATH = `${homeBin}:${env.PATH ?? ""}`;

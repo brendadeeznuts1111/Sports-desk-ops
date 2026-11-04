@@ -48,8 +48,8 @@ const PII = ["/api/live-bets", "/api/live-wagers", "/api/agent-tree", "/graph"];
 
 /** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
 function setEnv(key: string, value: string | undefined): void {
-  if (value === undefined) Reflect.deleteProperty(process.env, key);
-  else Reflect.set(process.env, key, value);
+  if (value === undefined) Reflect.deleteProperty(Bun.env, key);
+  else Reflect.set(Bun.env, key, value);
 }
 
 function socketFor(name: string): string {
@@ -63,8 +63,8 @@ function overSocket(socket: string, path: string): Promise<Response> {
 
 describe("proxied ingress requires the token", () => {
   const socket = socketFor("guard");
-  const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
-  const savedTrust = process.env["SPORTSDESK_TRUST_PROXY"];
+  const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+  const savedTrust = Bun.env["SPORTSDESK_TRUST_PROXY"];
 
   const server = (() => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
@@ -156,8 +156,8 @@ describe("proxied ingress requires the token", () => {
 
 describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary", () => {
   const socket = socketFor("trust");
-  const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
-  const savedTrust = process.env["SPORTSDESK_TRUST_PROXY"];
+  const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
+  const savedTrust = Bun.env["SPORTSDESK_TRUST_PROXY"];
 
   const server = (() => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);

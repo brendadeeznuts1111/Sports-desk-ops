@@ -45,7 +45,7 @@ function detectChromeExecutable(
   exists: (path: string) => boolean = existsSync,
 ): string | null {
   // Bun.WebView honors BUN_CHROME_PATH; only report what the caller already set.
-  const configured = process.env.BUN_CHROME_PATH;
+  const configured = Bun.env.BUN_CHROME_PATH;
   if (configured !== undefined && configured.length > 0) {
     return exists(configured) ? configured : null;
   }
@@ -122,8 +122,8 @@ async function pngSize(blob: Blob): Promise<{ width: number; height: number }> {
 // Runs with or without Chrome: pins the gate that decides the suite below.
 describe("chrome detection gate", () => {
   test("PATH first, then macOS bundles, otherwise null", () => {
-    const saved = process.env.BUN_CHROME_PATH;
-    delete process.env.BUN_CHROME_PATH;
+    const saved = Bun.env.BUN_CHROME_PATH;
+    delete Bun.env.BUN_CHROME_PATH;
     try {
       expect(
         detectChromeExecutable(
@@ -155,8 +155,8 @@ describe("chrome detection gate", () => {
         ),
       ).toBeNull();
     } finally {
-      if (saved === undefined) delete process.env.BUN_CHROME_PATH;
-      else process.env.BUN_CHROME_PATH = saved;
+      if (saved === undefined) delete Bun.env.BUN_CHROME_PATH;
+      else Bun.env.BUN_CHROME_PATH = saved;
     }
   });
 });

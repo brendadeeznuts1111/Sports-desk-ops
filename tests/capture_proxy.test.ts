@@ -39,14 +39,14 @@ function credentialUrl(
 
 function snapshotProxyEnv(): EnvSnapshot {
   const snapshot: EnvSnapshot = {};
-  for (const key of PROXY_KEYS) snapshot[key] = process.env[key];
+  for (const key of PROXY_KEYS) snapshot[key] = Bun.env[key];
   return snapshot;
 }
 
 /** process.env properties are typed readonly; mutate through Reflect. */
 function setProcessEnv(key: string, value: string | undefined): void {
-  if (value === undefined) Reflect.deleteProperty(process.env, key);
-  else Reflect.set(process.env, key, value);
+  if (value === undefined) Reflect.deleteProperty(Bun.env, key);
+  else Reflect.set(Bun.env, key, value);
 }
 
 function restoreProxyEnv(snapshot: EnvSnapshot): void {
@@ -254,13 +254,13 @@ describe("setProxyEnv / withProxyEnv", () => {
 
   test("withProxyEnv restores the environment even when the body throws", async () => {
     envSnapshot = snapshotProxyEnv();
-    const before = process.env.HTTP_PROXY;
+    const before = Bun.env.HTTP_PROXY;
     await expect(
       withProxyEnv("http://proxy.example:8080", () => {
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
-    expect(process.env.HTTP_PROXY).toBe(before);
+    expect(Bun.env.HTTP_PROXY).toBe(before);
   });
 });
 
@@ -307,7 +307,7 @@ describe("Bun env-proxy behavior (in-process forward proxy smoke)", () => {
       const targetUrl = `http://127.0.0.1:${target.port}/hello`;
       const restore = setProxyEnv(
         `http://127.0.0.1:${forwarder.port}`,
-        process.env,
+        Bun.env,
       );
       try {
         const proxied = await fetch(targetUrl);

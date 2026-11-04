@@ -173,7 +173,7 @@ async function probeSecretsWrite(): Promise<
 }
 
 function chromeProfileDirs(): string[] {
-  const configured = (process.env.CHROME_PROFILE_DIR ?? "").trim();
+  const configured = (Bun.env.CHROME_PROFILE_DIR ?? "").trim();
   if (configured !== "") return [configured];
   const home = homedir();
   if (process.platform === "darwin") {
@@ -184,7 +184,7 @@ function chromeProfileDirs(): string[] {
     ];
   }
   if (process.platform === "win32") {
-    const local = process.env.LOCALAPPDATA ?? home;
+    const local = Bun.env.LOCALAPPDATA ?? home;
     return [
       join(local, "Google/Chrome/User Data"),
       join(local, "Chromium/User Data"),

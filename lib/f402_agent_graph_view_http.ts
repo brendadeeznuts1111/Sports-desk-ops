@@ -113,12 +113,10 @@ export async function loadFreshViews(
     return null;
   const key = `${indexFile.lastModified}:${structuralFile.lastModified}`;
   if (viewsCache?.key === key) return viewsCache.value;
-  const index = JSON.parse(await indexFile.text()) as AgentGraphViewIndex;
+  const index = (await indexFile.json()) as AgentGraphViewIndex;
   const manifest = await readAgentGraphManifest(paths.graphManifest);
   if (manifest?.envelopeSha256 !== index.envelopeSha256) return null;
-  const structural = JSON.parse(
-    await structuralFile.text(),
-  ) as StructuralGraphExport;
+  const structural = (await structuralFile.json()) as StructuralGraphExport;
   const idsByLogin = new Map<string, string[]>();
   for (const n of structural.nodes) {
     const login = n.data.label.toUpperCase();
@@ -234,7 +232,7 @@ export async function loadAgentGraphExport(
       `Missing ${graphJsonPath} — run: bun run graph:agent -- --envelope tests/fixtures/f402-list-agents-by-agent-snippet.json`,
     );
   }
-  return JSON.parse(await file.text()) as CytoscapeGraphExport;
+  return (await file.json()) as CytoscapeGraphExport;
 }
 
 export async function isAgentGraphWebpFresh(

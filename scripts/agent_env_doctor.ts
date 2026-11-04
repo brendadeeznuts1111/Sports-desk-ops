@@ -77,8 +77,8 @@ export function mainCheckoutRoot(root: string): string | null {
 }
 
 function playwrightHeadlessShell(): string | null {
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH
-    ? path.resolve(process.env.PLAYWRIGHT_BROWSERS_PATH)
+  const base = Bun.env.PLAYWRIGHT_BROWSERS_PATH
+    ? path.resolve(Bun.env.PLAYWRIGHT_BROWSERS_PATH)
     : path.join(os.homedir(), "Library/Caches/ms-playwright");
   let entries: string[] = [];
   try {
@@ -297,15 +297,15 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
   const tokenFiles = [
     path.join(root, "cloudflare.env"),
     path.join(
-      process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+      Bun.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
       "cloudflare",
       "pages.env",
     ),
   ];
   const tokenFile = tokenFiles.find(exists);
   const envToken =
-    process.env.CLOUDFLARE_API_TOKEN !== undefined &&
-    process.env.CLOUDFLARE_API_TOKEN !== "";
+    Bun.env.CLOUDFLARE_API_TOKEN !== undefined &&
+    Bun.env.CLOUDFLARE_API_TOKEN !== "";
   checks.push({
     id: "deploy",
     status: envToken || tokenFile !== undefined ? "ok" : "warn",

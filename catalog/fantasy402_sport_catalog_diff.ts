@@ -321,13 +321,11 @@ export function buildCatalogDiffReport(
     });
   }
 
-  const pathsChanged =
-    JSON.stringify(
-      allExpectedEmptyPaths(fixture.expectedEmptySubSportPaths).sort(),
-    ) !==
-    JSON.stringify(
-      allExpectedEmptyPaths(probe.expectedEmptySubSportPaths).sort(),
-    );
+  const pathsChanged = !Bun.deepEquals(
+    allExpectedEmptyPaths(fixture.expectedEmptySubSportPaths).sort(),
+    allExpectedEmptyPaths(probe.expectedEmptySubSportPaths).sort(),
+    true,
+  );
   if (pathsChanged) {
     rows.push({
       category: "Expected empty paths",

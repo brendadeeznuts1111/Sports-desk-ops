@@ -114,7 +114,7 @@ export async function readAgentGraphManifest(
   const file = Bun.file(manifestPath);
   if (!(await file.exists())) return null;
   try {
-    const parsed = JSON.parse(await file.text()) as AgentGraphBuildManifest;
+    const parsed = (await file.json()) as AgentGraphBuildManifest;
     if (parsed.version !== AGENT_GRAPH_MANIFEST_VERSION) return null;
     return parsed;
   } catch {

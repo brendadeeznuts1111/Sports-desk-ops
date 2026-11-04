@@ -358,13 +358,13 @@ function runSessionLogin(...args: string[]) {
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      PATH: process.env["PATH"] ?? "",
-      HOME: process.env["HOME"] ?? "",
+      PATH: Bun.env["PATH"] ?? "",
+      HOME: Bun.env["HOME"] ?? "",
     },
   });
 }
 
-describe.skipIf(!hasChromeProfile || process.env.DSH_SESSION_ID !== undefined)(
+describe.skipIf(!hasChromeProfile || Bun.env.DSH_SESSION_ID !== undefined)(
   "session:login --from-profile",
   () => {
     test("skips the credential login gate and names the missing profile", () => {

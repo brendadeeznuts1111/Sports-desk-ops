@@ -1452,9 +1452,7 @@ let gslivePeriodsPromise: Promise<GsLiveSportPeriods | null> | undefined;
 function loadGsLivePeriods(): Promise<GsLiveSportPeriods | null> {
   gslivePeriodsPromise ??= (async () => {
     try {
-      const payload: unknown = JSON.parse(
-        await Bun.file(GSLIVE_PERIODS_FIXTURE).text(),
-      );
+      const payload: unknown = await Bun.file(GSLIVE_PERIODS_FIXTURE).json();
       return parseGsLiveSportPeriods(payload);
     } catch {
       return null;

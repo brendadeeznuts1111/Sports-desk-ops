@@ -45,7 +45,7 @@ describe("Outbound Fetch Proxy Isolation (NO_PROXY Verification)", () => {
       ],
       {
         env: {
-          ...process.env,
+          ...Bun.env,
           HTTP_PROXY: undefined,
           HTTPS_PROXY: undefined,
           ALL_PROXY: undefined,

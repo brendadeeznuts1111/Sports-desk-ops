@@ -17,7 +17,7 @@ async function runDumpScript(args: string[]): Promise<number> {
     cwd: repoRoot,
     stderr: "pipe",
     stdout: "pipe",
-    env: { ...process.env, SPORTSDESK_SCHEMA_DB: "" },
+    env: { ...Bun.env, SPORTSDESK_SCHEMA_DB: "" },
   });
   return proc.exited;
 }
@@ -32,7 +32,7 @@ describe("schema dump captured_at discipline", () => {
 
     expect(await runDumpScript(["--from-registry", `--out=${out}`])).toBe(0);
 
-    const after = parseProdSchemaDump(JSON.parse(await Bun.file(out).text()));
+    const after = parseProdSchemaDump(await Bun.file(out).json());
     expect(after.captured_at).toBe("2020-01-01T00:00:00.000Z");
   });
 
@@ -60,7 +60,7 @@ describe("schema dump captured_at discipline", () => {
 
     expect(await runDumpScript([dbPath, `--out=${out}`])).toBe(0);
 
-    const after = parseProdSchemaDump(JSON.parse(await Bun.file(out).text()));
+    const after = parseProdSchemaDump(await Bun.file(out).json());
     expect(after.captured_at).not.toBe("2020-01-01T00:00:00.000Z");
   });
 });

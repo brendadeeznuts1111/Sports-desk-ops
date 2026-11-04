@@ -137,7 +137,7 @@ async function readMacOsKeychainValue(
       return "";
     }
     if (result !== 0) return "";
-    return (await new Response(proc.stdout).text()).trim();
+    return (await proc.stdout.text()).trim();
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }

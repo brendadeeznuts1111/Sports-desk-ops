@@ -232,7 +232,7 @@ export function extractFormKeys(postData: string | undefined): string[] {
 }
 
 export async function resolveAgentId(): Promise<string> {
-  const fromEnv = process.env.F402_AGENT_ID?.trim() ?? "";
+  const fromEnv = Bun.env.F402_AGENT_ID?.trim() ?? "";
   if (fromEnv !== "") return fromEnv;
   try {
     return (
@@ -260,7 +260,7 @@ async function main(): Promise<number> {
   const base = flagValue(
     parsed,
     "--base",
-    process.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
+    Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
   );
   const backendRaw = flagValue(
     parsed,
@@ -420,9 +420,7 @@ async function main(): Promise<number> {
 
   // PendingDelete and report probes must send the wager owner's customerID, not the agent session.
   const resolveWireCustomerId = (): string =>
-    reportCustomerId ||
-    process.env.F402_CUSTOMER_ID?.trim() ||
-    "__CUSTOMER_ID__";
+    reportCustomerId || Bun.env.F402_CUSTOMER_ID?.trim() || "__CUSTOMER_ID__";
 
   const bodyFor = (op: (typeof ops)[number]): string => {
     if (explicitBody !== "") return explicitBody;
@@ -607,7 +605,7 @@ async function main(): Promise<number> {
       }
       await view.evaluate(buildDnsPrefetchExpression(base));
       const ctxCustomer =
-        reportCustomerId || process.env.F402_CUSTOMER_ID?.trim() || "";
+        reportCustomerId || Bun.env.F402_CUSTOMER_ID?.trim() || "";
       const openCustomerManagerContext =
         ctxCustomer !== "" &&
         (reportCustomerContext || customerAdminPartial !== "");
@@ -820,9 +818,8 @@ async function main(): Promise<number> {
               : {}),
             reportCustomerContextApplied:
               (reportCustomerContext || customerAdminPartial !== "") &&
-              (reportCustomerId ||
-                process.env.F402_CUSTOMER_ID?.trim() ||
-                "") !== "",
+              (reportCustomerId || Bun.env.F402_CUSTOMER_ID?.trim() || "") !==
+                "",
             ...(customerAdminPartial !== ""
               ? {
                   customerAdminPartialLoaded: customerAdminPartialUrl(

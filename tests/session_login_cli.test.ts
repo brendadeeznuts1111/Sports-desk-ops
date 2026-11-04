@@ -22,8 +22,8 @@ function run(args: string[], env: Record<string, string> = {}) {
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      PATH: process.env["PATH"] ?? "",
-      HOME: process.env["HOME"] ?? "",
+      PATH: Bun.env["PATH"] ?? "",
+      HOME: Bun.env["HOME"] ?? "",
       // Start every case from an empty auth environment.
       ...env,
     },

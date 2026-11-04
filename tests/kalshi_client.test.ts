@@ -177,7 +177,7 @@ describe("KalshiClient cache, TTL and failure", () => {
     const fetchImpl = (async () => {
       active += 1;
       peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await Bun.sleep(5);
       active -= 1;
       return Response.json({ events: [] });
     }) as unknown as typeof fetch;

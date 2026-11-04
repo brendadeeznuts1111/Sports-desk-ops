@@ -55,7 +55,7 @@ describe("schema_fixture_drift", () => {
       stderr: "pipe",
     });
     expect(await proc.exited).toBe(1);
-    const err = await new Response(proc.stderr).text();
+    const err = await proc.stderr.text();
     expect(err).toMatch(/schema:sync-prod-dump/);
   });
 });

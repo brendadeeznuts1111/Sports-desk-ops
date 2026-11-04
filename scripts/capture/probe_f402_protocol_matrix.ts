@@ -38,7 +38,7 @@ function flag(name: string, fallback: string): string {
 
 const base = flag(
   "--base",
-  process.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
+  Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
 );
 const customer = flag("--customer", "TACO217").trim();
 const backend = flag("--backend", "webkit") === "chrome" ? "chrome" : "webkit";

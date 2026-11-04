@@ -1,44 +1,44 @@
 {
   "schemaVersion": 1,
-  "generatedAtIso": "2026-10-31T22:35:41.614Z",
+  "generatedAtIso": "2026-11-04T16:57:06.205Z",
   "index": {
-    "games": 1719,
+    "games": 1919,
     "activeOnly": false,
     "since": null
   },
   "gates": {
     "permissive": {
-      "kept": 485,
-      "permissiveCombos": 485,
+      "kept": 196,
+      "permissiveCombos": 196,
       "exclusions": {
         "UNRESOLVED_LEGS": 0,
         "CROSS_GAME": 0,
         "INELIGIBLE_LEG_TYPE": 0
       },
-      "includedCrossGame": 317,
-      "distinctWallets": 17
+      "includedCrossGame": 115,
+      "distinctWallets": 7
     },
     "all-legs-cfb": {
-      "kept": 308,
-      "permissiveCombos": 485,
+      "kept": 116,
+      "permissiveCombos": 196,
       "exclusions": {
-        "UNRESOLVED_LEGS": 174,
+        "UNRESOLVED_LEGS": 80,
         "CROSS_GAME": 0,
-        "INELIGIBLE_LEG_TYPE": 3
+        "INELIGIBLE_LEG_TYPE": 0
       },
-      "includedCrossGame": 282,
-      "distinctWallets": 15
+      "includedCrossGame": 100,
+      "distinctWallets": 5
     },
     "full-game": {
-      "kept": 26,
-      "permissiveCombos": 485,
+      "kept": 16,
+      "permissiveCombos": 196,
       "exclusions": {
-        "UNRESOLVED_LEGS": 174,
-        "CROSS_GAME": 284,
-        "INELIGIBLE_LEG_TYPE": 1
+        "UNRESOLVED_LEGS": 80,
+        "CROSS_GAME": 100,
+        "INELIGIBLE_LEG_TYPE": 0
       },
       "includedCrossGame": 0,
-      "distinctWallets": 2
+      "distinctWallets": 1
     }
   },
   "diagnostics": {
@@ -46,24 +46,12 @@
     "legsWithoutStableId": 0,
     "combosWithUnstableIdentity": 0,
     "unresolved": {
-      "combos": 174,
-      "legs": 383,
-      "distinctLegKeys": 267,
-      "oneOffLegKeys": 214,
-      "systemicLegKeys": 53,
+      "combos": 80,
+      "legs": 129,
+      "distinctLegKeys": 94,
+      "oneOffLegKeys": 75,
+      "systemicLegKeys": 19,
       "top": [
-        {
-          "legKey": "0xafac62dcb1494cb8d99498a1f926c8f73882463036b82ef371495cf824d1e468",
-          "combos": 9
-        },
-        {
-          "legKey": "0x338782072160e4142e3762a7d6bc16c59cc794a2b20aa46d0419fb96d34cdca7",
-          "combos": 8
-        },
-        {
-          "legKey": "0xa5d905ab088c5f184ad17d4aa6b26460fda3f6df2fa0f2eb32b01a552c986912",
-          "combos": 6
-        },
         {
           "legKey": "0x01b0ddb9c0424d8862cc8d5a6a504862530000000000000000000000000000",
           "combos": 5
@@ -73,52 +61,64 @@
           "combos": 5
         },
         {
-          "legKey": "0x46566f222a2b53f8fc3abc5a4b04af547e56d06b193eb121146753d167f20619",
+          "legKey": "0xde1ddd3994f4eb4361b09450fe7c0e57b0ddb9c0424d8862cc8d5a6a50486253",
           "combos": 5
         },
         {
-          "legKey": "0x4e99fa5ec730c734a239c851f60f0ccea255c5b9cd6ecb8399e8542eb9a54c3c",
-          "combos": 5
-        },
-        {
-          "legKey": "0x0117698adf90b62ba9be0abb371e7d230e0000000000000000000000000000",
+          "legKey": "0x01975a8e6fe09e67c752ec4e541b24e8cf0000000000000000000000000000",
           "combos": 4
         },
         {
-          "legKey": "0x0157a5e528140c48d3f835a631ddc2918e0000000000000000000000000000",
+          "legKey": "0x01f44007a724e2b82b38cb0601d9588e7d0000000000000000000000000000",
           "combos": 4
         },
         {
-          "legKey": "0x0173b1e49870fe400dcebd69e67420152a0000000000000000000000000000",
+          "legKey": "0x8b7fec5127d02837f18a6fc4252802a9f44007a724e2b82b38cb0601d9588e7d",
           "combos": 4
+        },
+        {
+          "legKey": "0xd8e9a35c2e7dae0daa0aa883ce454a6719ef623baa9c6420ccd91dd53d5239c4",
+          "combos": 3
+        },
+        {
+          "legKey": "0x010fe2dc85663cb08153410ee8c78ded8e0000000000000000000000000000",
+          "combos": 2
+        },
+        {
+          "legKey": "0x0113ab3f07c812ef1201c1532877be77ec0000000000000000000000000000",
+          "combos": 2
+        },
+        {
+          "legKey": "0x0122e4b4a73c4ac0fa8ea211d9da6af3a40000000000000000000000000000",
+          "combos": 2
         }
       ]
     },
-    "combosWithoutAttribution": 15809,
+    "combosWithoutAttribution": 13591,
     "recordsWithoutLegs": 0,
-    "cfbTouchRatePct": 2.98,
-    "suspectedComboOfComboLegKeys": 134
+    "cfbTouchRatePct": 1.42,
+    "suspectedComboOfComboLegKeys": 35
   },
   "dedupe": {
-    "collapsed": 278,
-    "byId": 1,
-    "byLegSet": 277
+    "collapsed": 131,
+    "byId": 0,
+    "byLegSet": 131
   },
   "chain": {
     "edges": [
       {
         "treatment": "all-legs-cfb",
         "reference": "permissive",
-        "referenceSize": 485,
-        "treatmentSize": 308,
+        "referenceSize": 196,
+        "treatmentSize": 116,
         "leaks": 0,
         "vacuous": false
       },
       {
         "treatment": "full-game",
         "reference": "all-legs-cfb",
-        "referenceSize": 308,
-        "treatmentSize": 26,
+        "referenceSize": 116,
+        "treatmentSize": 16,
         "leaks": 0,
         "vacuous": false
       }
@@ -126,5 +126,5 @@
     "leaks": 0,
     "vacuous": false
   },
-  "walletsScanned": 322
+  "walletsScanned": 228
 }

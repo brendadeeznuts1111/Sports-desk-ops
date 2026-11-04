@@ -496,7 +496,7 @@ if (values.baseline) {
       continue;
     }
     for (const field of DIFFED) {
-      if (JSON.stringify(prev[field]) !== JSON.stringify(now[field])) {
+      if (!Bun.deepEquals(prev[field], now[field], true)) {
         console.log(
           `DIFF     ${id}.${field}\n  was: ${JSON.stringify(prev[field])}\n  now: ${JSON.stringify(now[field])}`,
         );

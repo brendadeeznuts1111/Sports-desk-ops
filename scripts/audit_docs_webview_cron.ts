@@ -1248,7 +1248,7 @@ export async function runDocumentationAudit(
   const rootDir = options.rootDir ?? DEFAULT_ROOT_DIR;
   const outDir = options.outDir ?? join(rootDir, "reports");
   const portalUrl =
-    options.portalUrl ?? process.env["DOCS_PORTAL_URL"] ?? DEFAULT_PORTAL_URL;
+    options.portalUrl ?? Bun.env["DOCS_PORTAL_URL"] ?? DEFAULT_PORTAL_URL;
   const offline = options.offline ?? false;
   const skipLive = options.skipLive ?? false;
   const mode: AuditMode = options.mode ?? (offline ? "offline" : "once");

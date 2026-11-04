@@ -10,7 +10,10 @@
  * token, row payload, or admin user name into the artifact.
  */
 
+// Sync loader: callers are pure sync artifact readers.
+// ast-grep-ignore: node-fs-read-write-file
 import { existsSync, readFileSync } from "node:fs";
+import { isRecordValue } from "./zod_guards.ts";
 import { join } from "node:path";
 
 import {
@@ -196,9 +199,6 @@ export function gsliveWeblogFlagSeverity(
   return FLAG_SEVERITY[code] ?? "MEDIUM";
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim() !== "";
 
@@ -296,7 +296,7 @@ export function buildGsliveWeblogArtifact(
   const rowsById = new Map<string, Readonly<Record<string, unknown>>>();
   for (const report of input.reports) {
     for (const row of report.rows) {
-      if (!isRecord(row)) continue;
+      if (!isRecordValue(row)) continue;
       const betId = String(row.id ?? "").trim();
       if (betId !== "" && !rowsById.has(betId)) rowsById.set(betId, row);
     }
@@ -471,7 +471,7 @@ interface ValidatedArtifact {
 
 function parseAccount(raw: unknown, index: number): GsliveWeblogAccount {
   const where = `accounts[${index}]`;
-  if (!isRecord(raw)) throw new Error(`${where} is not an object`);
+  if (!isRecordValue(raw)) throw new Error(`${where} is not an object`);
   for (const field of [
     "customerLogin",
     "gsLivePlayerId",
@@ -501,7 +501,7 @@ function parseAccount(raw: unknown, index: number): GsliveWeblogAccount {
     throw new Error(`${where}.flags must be an array`);
   }
   const flags: GsliveWeblogFlag[] = raw.flags.map((flag, flagIndex) => {
-    if (!isRecord(flag)) {
+    if (!isRecordValue(flag)) {
       throw new Error(`${where}.flags[${flagIndex}] is not an object`);
     }
     if (!isNonEmptyString(flag.code)) {
@@ -541,7 +541,7 @@ function parseAccount(raw: unknown, index: number): GsliveWeblogAccount {
 }
 
 function parseArtifact(raw: unknown): ValidatedArtifact {
-  if (!isRecord(raw)) throw new Error("artifact is not a JSON object");
+  if (!isRecordValue(raw)) throw new Error("artifact is not a JSON object");
   if (raw.schemaVersion !== 1) {
     throw new Error(
       `unsupported schemaVersion ${JSON.stringify(raw.schemaVersion)} (expected 1)`,
@@ -560,11 +560,11 @@ function parseArtifact(raw: unknown): ValidatedArtifact {
   if (!isNonEmptyString(raw.source)) {
     throw new Error("source must be a non-empty string");
   }
-  if (!isRecord(raw.window)) throw new Error("window must be an object");
+  if (!isRecordValue(raw.window)) throw new Error("window must be an object");
   if (!isIsoString(raw.window.fromIso) || !isIsoString(raw.window.toIso)) {
     throw new Error("window.fromIso/window.toIso must be ISO timestamps");
   }
-  if (!isRecord(raw.session)) throw new Error("session must be an object");
+  if (!isRecordValue(raw.session)) throw new Error("session must be an object");
   if (typeof raw.session.configured !== "boolean") {
     throw new Error("session.configured must be a boolean");
   }
@@ -581,7 +581,7 @@ function parseArtifact(raw: unknown): ValidatedArtifact {
     throw new Error("accounts must be an array");
   }
   const accounts = raw.accounts.map(parseAccount);
-  if (!isRecord(raw.summary)) throw new Error("summary must be an object");
+  if (!isRecordValue(raw.summary)) throw new Error("summary must be an object");
   const { accounts: accountCount, bets, flagsByCode } = raw.summary;
   if (
     typeof accountCount !== "number" ||
@@ -593,7 +593,7 @@ function parseArtifact(raw: unknown): ValidatedArtifact {
   if (typeof bets !== "number" || !Number.isInteger(bets) || bets < 0) {
     throw new Error("summary.bets must be a non-negative integer");
   }
-  if (!isRecord(flagsByCode)) {
+  if (!isRecordValue(flagsByCode)) {
     throw new Error("summary.flagsByCode must be an object");
   }
   const normalizedFlags: Record<string, number> = {};
@@ -677,6 +677,8 @@ export function loadGsliveWeblogActivity(options?: {
   }
   let raw: unknown;
   try {
+    // Sync loader: the caller is a pure sync artifact reader.
+    // ast-grep-ignore: node-fs-read-write-file
     raw = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

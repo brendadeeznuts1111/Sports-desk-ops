@@ -17,8 +17,8 @@ const PNG = resolve(
   import.meta.dir,
   "../docs/assets/pipeline-10-mode-architecture.png",
 );
-const savedBase = process.env["SPORTSDESK_LOGO_BASE_URL"];
-const savedToken = process.env["SPORTSDESK_ADMIN_TOKEN"];
+const savedBase = Bun.env["SPORTSDESK_LOGO_BASE_URL"];
+const savedToken = Bun.env["SPORTSDESK_ADMIN_TOKEN"];
 
 let upstreamHits = 0;
 /** A 20px-wide logo, so "never upscale" has something small to leave alone. */
@@ -59,11 +59,11 @@ const upstream = Bun.serve({
 });
 
 Reflect.set(
-  process.env,
+  Bun.env,
   "SPORTSDESK_LOGO_BASE_URL",
   `http://127.0.0.1:${upstream.port}/images/team-logos/`,
 );
-Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
+Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
 
 const server = startServer({
   port: 0,
@@ -76,11 +76,11 @@ afterAll(() => {
   server.stop(true);
   upstream.stop(true);
   if (savedBase === undefined)
-    Reflect.deleteProperty(process.env, "SPORTSDESK_LOGO_BASE_URL");
-  else Reflect.set(process.env, "SPORTSDESK_LOGO_BASE_URL", savedBase);
+    Reflect.deleteProperty(Bun.env, "SPORTSDESK_LOGO_BASE_URL");
+  else Reflect.set(Bun.env, "SPORTSDESK_LOGO_BASE_URL", savedBase);
   if (savedToken === undefined)
-    Reflect.deleteProperty(process.env, "SPORTSDESK_ADMIN_TOKEN");
-  else Reflect.set(process.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
+    Reflect.deleteProperty(Bun.env, "SPORTSDESK_ADMIN_TOKEN");
+  else Reflect.set(Bun.env, "SPORTSDESK_ADMIN_TOKEN", savedToken);
 });
 
 describe("logo bytes carry their measurement", () => {

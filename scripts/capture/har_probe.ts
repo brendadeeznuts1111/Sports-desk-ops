@@ -112,7 +112,7 @@ async function main(): Promise<number> {
   const base = flagValue(
     parsed,
     "--base",
-    process.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
+    Bun.env.F402_BASE_URL?.trim() || "https://fantasy402.com",
   );
   const suiteRaw = flagValue(parsed, "--suite", "").toLowerCase();
   const prefix = flagValue(parsed, "--prefix", PROBE_PREFIXES[0]!);
@@ -133,12 +133,12 @@ async function main(): Promise<number> {
   const customerId = flagValue(
     parsed,
     "--customer-id",
-    process.env.F402_CUSTOMER_ID?.trim() ?? "",
+    Bun.env.F402_CUSTOMER_ID?.trim() ?? "",
   );
   const agentId = flagValue(
     parsed,
     "--agent-id",
-    process.env.F402_AGENT_ID?.trim() ?? "",
+    Bun.env.F402_AGENT_ID?.trim() ?? "",
   );
   const opsArg = flagValue(parsed, "--ops", "");
   const forceJsonBody = hasFlag(parsed, "--json-body");

@@ -91,7 +91,7 @@ async function probeOne(
       cwd: root,
       stdout: "inherit",
       stderr: "inherit",
-      env: process.env,
+      env: Bun.env,
     },
   );
   return proc.exited;

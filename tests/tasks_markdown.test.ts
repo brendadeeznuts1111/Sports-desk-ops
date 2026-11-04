@@ -206,7 +206,7 @@ describe("remaining-tasks markdown", () => {
       stdout: "pipe",
       stderr: "pipe",
     });
-    const out = await new Response(proc.stdout).text();
+    const out = await proc.stdout.text();
     expect(await proc.exited).toBe(0);
     expect(out).toContain("Remaining tasks");
     expect(out).toContain("P0.1");

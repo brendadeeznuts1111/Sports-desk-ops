@@ -24,7 +24,7 @@ const CTX: PortalHierarchyParserContext = {
 
 describe("f402_agent_graph", () => {
   test("buildAgentGraph from envelope ingests GENERAL only and exports edges", async () => {
-    const envelope = JSON.parse(await Bun.file(SNIPPET).text()) as {
+    const envelope = (await Bun.file(SNIPPET).json()) as {
       GENERAL: ListAgentsByAgentGeneralWireRow[];
       PLAYERS: unknown[];
     };
@@ -44,7 +44,7 @@ describe("f402_agent_graph", () => {
     const db = openSportsdeskSqlite(":memory:");
     try {
       db.exec(AGENTS_TABLE_DDL);
-      const envelope = JSON.parse(await Bun.file(SNIPPET).text()) as {
+      const envelope = (await Bun.file(SNIPPET).json()) as {
         GENERAL: ListAgentsByAgentGeneralWireRow[];
       };
       ingestManagerHierarchy(db, { GENERAL: envelope.GENERAL }, CTX);

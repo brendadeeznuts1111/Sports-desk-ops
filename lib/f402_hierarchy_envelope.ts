@@ -84,10 +84,10 @@ export async function filterHierarchyJsonStream(
     stdout: "pipe",
     stderr: "pipe",
   });
-  const out = await new Response(proc.stdout).text();
+  const out = await proc.stdout.text();
   const exit = await proc.exited;
   if (exit !== 0) {
-    const err = await new Response(proc.stderr).text();
+    const err = await proc.stderr.text();
     throw new Error(`jq hierarchy filter failed (${exit}): ${err.trim()}`);
   }
   return parseListAgentsByAgentEnvelope(JSON.parse(out.trim()));

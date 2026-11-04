@@ -11,7 +11,7 @@ import {
 import { getR2Config } from "./sportsdesk_r2_sync.ts";
 
 const INGESTION_AUDIT_OBJECT_KEY =
-  process.env.SPORTSDESK_INGESTION_R2_KEY?.trim() || "ingestion-audit.jsonl";
+  Bun.env.SPORTSDESK_INGESTION_R2_KEY?.trim() || "ingestion-audit.jsonl";
 
 export type IngestionFeedSource = {
   url: string;
@@ -29,7 +29,7 @@ export function resolveIngestionFeedSource(options?: {
 
   if (options?.channelCode) {
     const envKey = `SPORTSDESK_FEED_URL_${options.channelCode}` as const;
-    const laneUrl = process.env[envKey];
+    const laneUrl = Bun.env[envKey];
     if (laneUrl?.trim()) {
       return {
         url: laneUrl.trim(),
@@ -40,10 +40,7 @@ export function resolveIngestionFeedSource(options?: {
       (c) => c.channelCode === options.channelCode,
     );
     if (ch) {
-      const portalEnv = process.env.SPORTSDESK_PORTAL_HTTP_BASE?.replace(
-        /\/$/,
-        "",
-      );
+      const portalEnv = Bun.env.SPORTSDESK_PORTAL_HTTP_BASE?.replace(/\/$/, "");
       if (portalEnv && ch.transportUri.startsWith("portal://")) {
         const path = ch.transportUri.replace(/^portal:\/\//, "");
         return {
@@ -55,8 +52,8 @@ export function resolveIngestionFeedSource(options?: {
   }
 
   const direct =
-    process.env.SPORTSDESK_INGESTION_FEED_URL?.trim() ||
-    process.env.SPORTSDESK_INGESTION_AUDIT_URL?.trim();
+    Bun.env.SPORTSDESK_INGESTION_FEED_URL?.trim() ||
+    Bun.env.SPORTSDESK_INGESTION_AUDIT_URL?.trim();
   if (direct) {
     return { url: direct, label: "SPORTSDESK_INGESTION_FEED_URL" };
   }

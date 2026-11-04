@@ -194,8 +194,8 @@ export async function runGraphviz(
   });
   const [code, out, err] = await Promise.all([
     proc.exited,
-    new Response(proc.stdout).bytes(),
-    new Response(proc.stderr).text(),
+    proc.stdout.bytes(),
+    proc.stderr.text(),
   ]);
   if (code !== 0)
     throw new GraphvizError(`${engine} exited ${code}: ${err.slice(0, 400)}`);

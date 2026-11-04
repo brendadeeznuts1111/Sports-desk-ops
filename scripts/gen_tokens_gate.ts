@@ -86,7 +86,7 @@ function main(): number {
 
   const gateRunId = randomUUID();
   const genEnv = {
-    ...process.env,
+    ...Bun.env,
     [GEN_TOKENS_GATE_ENV]: "1",
     [GEN_TOKENS_GATE_RUN_ID_ENV]: gateRunId,
   };

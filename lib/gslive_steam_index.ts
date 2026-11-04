@@ -56,7 +56,7 @@ export async function loadGsliveSteamIndexFromJson(
   if (!existsSync(absolute)) {
     throw new Error(`GSLive steam index missing: ${absolute}`);
   }
-  const parsed = JSON.parse(await Bun.file(absolute).text()) as unknown;
+  const parsed = (await Bun.file(absolute).json()) as unknown;
   const byRot = new Map<string, GsliveSteamEntry>();
 
   if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {

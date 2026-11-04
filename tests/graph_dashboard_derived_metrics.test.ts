@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
@@ -18,8 +17,8 @@ import { resolve } from "node:path";
  */
 
 const ROOT = resolve(import.meta.dir, "..");
-const HTML = readFileSync(resolve(ROOT, "docs", "graph.html"), "utf8");
-const JS = readFileSync(resolve(ROOT, "docs", "graph.js"), "utf8");
+const HTML = await Bun.file(resolve(ROOT, "docs", "graph.html")).text();
+const JS = await Bun.file(resolve(ROOT, "docs", "graph.js")).text();
 
 function region(pattern: RegExp, label: string): string {
   const match = HTML.match(pattern);

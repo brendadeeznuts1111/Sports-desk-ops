@@ -41,11 +41,11 @@ async function applyDiscoverEnv(): Promise<boolean> {
     await import("./load_discover_context.ts");
   const ctx = await discoverContextFromRoot(root);
   if (ctx === null) return false;
-  process.env.F402_CUSTOMER_ID = ctx.customerId;
-  if (ctx.ticketNumber !== "") process.env.F402_PROBE_TICKET = ctx.ticketNumber;
-  if (ctx.wagerNumber !== "") process.env.F402_PROBE_WAGER = ctx.wagerNumber;
+  Bun.env.F402_CUSTOMER_ID = ctx.customerId;
+  if (ctx.ticketNumber !== "") Bun.env.F402_PROBE_TICKET = ctx.ticketNumber;
+  if (ctx.wagerNumber !== "") Bun.env.F402_PROBE_WAGER = ctx.wagerNumber;
   if (ctx.flag !== undefined && ctx.flag !== "") {
-    process.env.F402_PROBE_FLAG = ctx.flag;
+    Bun.env.F402_PROBE_FLAG = ctx.flag;
   }
   console.error(
     `reprobe_pending_500s: discover context from ${ctx.discoverDir} (customer + ${ctx.ticketNumber !== "" ? "ticket sample" : "no ticket sample"})`,
@@ -71,9 +71,9 @@ const skipDiagnosticBatch =
 
 function extraProbeArgs(): string[] {
   const out: string[] = [];
-  const ticket = process.env.F402_PROBE_TICKET?.trim();
-  const wager = process.env.F402_PROBE_WAGER?.trim();
-  const flag = process.env.F402_PROBE_FLAG?.trim();
+  const ticket = Bun.env.F402_PROBE_TICKET?.trim();
+  const wager = Bun.env.F402_PROBE_WAGER?.trim();
+  const flag = Bun.env.F402_PROBE_FLAG?.trim();
   if (ticket) out.push("--ticket", ticket);
   if (wager) out.push("--wager", wager);
   if (flag) out.push("--flag", flag);
@@ -111,7 +111,7 @@ async function runBatch(
       cwd: root,
       stdout: "inherit",
       stderr: "inherit",
-      env: process.env,
+      env: Bun.env,
     },
   );
   return proc.exited;
@@ -187,7 +187,7 @@ async function runPendingDeleteTicketProbe(
       cwd: root,
       stdout: "inherit",
       stderr: "inherit",
-      env: process.env,
+      env: Bun.env,
     },
   );
   return proc.exited;
