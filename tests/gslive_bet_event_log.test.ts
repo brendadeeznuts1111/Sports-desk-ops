@@ -72,6 +72,24 @@ describe("gslive bet/event log audit", () => {
     expect(parseGsliveTimestampMs(1793163519000)).toBe(1793163519000);
   });
 
+  test("resolves LA offsets independently of the process time zone", () => {
+    const original = process.env.TZ;
+    try {
+      for (const zone of ["UTC", "America/New_York", "Asia/Tokyo"]) {
+        process.env.TZ = zone;
+        expect(parseGsliveTimestampMs("2026-10-27 12:00:00")).toBe(
+          Date.UTC(2026, 9, 27, 19, 0, 0),
+        );
+        expect(parseGsliveTimestampMs("2026-11-03 12:00:00")).toBe(
+          Date.UTC(2026, 10, 3, 20, 0, 0),
+        );
+      }
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+
   test("detects frozen-clock scoring and extended outage on 207059641", () => {
     const fixture206 = JSON.parse(
       readFileSync(
