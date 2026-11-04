@@ -97,7 +97,7 @@ Sort all wagers by state, day, event, player, or agent via the live Manager Tool
 
   POST https://plive.sportswidgets.pro/manager-tools/ajax.php  (action: "getBetReport")
 
-Auth: GSID session cookie from Bun.env.GSID (.env, gitignored).
+Auth: GSID session cookie from Bun.env.GSLIVE_SESSION_ID (.env, gitignored; legacy GSID also read).
 
 "Wager legs" = number of rows sharing the same Bet Group (parlay legs).
 "Wager number" = the Ticket column.
@@ -117,7 +117,7 @@ Output: table, json, csv, one-line summaries, or full pretty-printed objects.
 
 Exit codes:
   0  success
-  1  missing GSID, non-ok HTTP, non-JSON body, redirect-to-login, or invalid args`,
+  1  missing GSLIVE_SESSION_ID, non-ok HTTP, non-JSON body, redirect-to-login, or invalid args`,
     );
     return;
   }

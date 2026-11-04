@@ -105,6 +105,18 @@ describe("cookieHeaderFromEnv", () => {
     expect(cookieHeaderFromEnv({ GSID: "   " })).toBe("");
   });
 
+  test("reads GSLIVE_SESSION_ID, falls back to the pre-rename GSID, and keeps the cookie named GSID", () => {
+    expect(cookieHeaderFromEnv({ GSLIVE_SESSION_ID: "new-session" })).toBe(
+      "GSID=new-session",
+    );
+    expect(cookieHeaderFromEnv({ GSLIVE_SESSION_ID: "new", GSID: "old" })).toBe(
+      "GSID=new",
+    );
+    expect(cookieHeaderFromEnv({ GSLIVE_SESSION_ID: "  ", GSID: "old" })).toBe(
+      "GSID=old",
+    );
+  });
+
   test("builds the cookie from env only, with optional _ga", () => {
     expect(cookieHeaderFromEnv({ GSID: "fixture-session" })).toBe(
       "GSID=fixture-session",

@@ -47,6 +47,7 @@ import { readF402Session } from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   GSID_KEYCHAIN_NAME,
+  GSID_LEGACY_NAME,
   readSecretCanonicalThenLegacy,
 } from "./secrets.ts";
 
@@ -110,6 +111,7 @@ export interface BridgeCredentialProbe {
 const F402_CREDENTIAL_ENV = [
   "F402_TOKEN_FILE",
   "F402_BEARER_TOKEN",
+  "GSLIVE_SESSION_ID",
   "GSID",
 ] as const;
 
@@ -169,7 +171,12 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
       "{root}/scratch/bridge-rollup/bridge3c.json",
     ],
     timeoutMs: 180_000,
-    requiredEnv: ["GSID", "GSID_COOKIE", "GSLIVE_SESSION_FILE"],
+    requiredEnv: [
+      "GSLIVE_SESSION_ID",
+      "GSID",
+      "GSID_COOKIE",
+      "GSLIVE_SESSION_FILE",
+    ],
   },
   {
     id: "weblog",
@@ -498,6 +505,7 @@ export function keychainCredentialProbe(
       if (job.id === "weblog") return { ok: true, source: "corpus" };
       if (job.id === "bridge3c") {
         const envNames = [
+          "GSLIVE_SESSION_ID",
           "GSID",
           "GSID_COOKIE",
           "GSLIVE_SESSION_FILE",
@@ -505,13 +513,15 @@ export function keychainCredentialProbe(
         const fromEnv = envNames.find((name) => nonEmpty(envValue(env, name)));
         if (fromEnv !== undefined)
           return { ok: true, source: `env:${fromEnv}` };
-        if (await readSecret(gsidName).catch(() => null)) {
-          return { ok: true, source: "keychain:GSID" };
+        for (const name of [gsidName, GSID_LEGACY_NAME]) {
+          if (await readSecret(name).catch(() => null)) {
+            return { ok: true, source: `keychain:${name}` };
+          }
         }
         return {
           ok: false,
           error:
-            "missing credentials: GSID (env GSID/GSID_COOKIE/GSLIVE_SESSION_FILE or keychain)",
+            "missing credentials: GSLIVE_SESSION_ID (env GSLIVE_SESSION_ID/GSID/GSID_COOKIE/GSLIVE_SESSION_FILE or keychain)",
         };
       }
       if (job.id === "bridge3b") {

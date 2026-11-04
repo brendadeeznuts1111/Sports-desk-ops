@@ -4,7 +4,7 @@
  *
  * GET https://plive.sportswidgets.pro/manager-tools/translations/v2/getI18nResources/index.php?lng=en&ns=translation&appId=2
  *
- * Auth: GSID session cookie from Bun.env.GSID (.env, gitignored).
+ * Auth: GSID session cookie from Bun.env.GSLIVE_SESSION_ID (.env, gitignored; legacy GSID also read).
  * Bun's `fetch` auto-decodes gzip/br/deflate; we send accept + cookie + referer + user-agent only.
  *
  * Fail-closed: 302 = GSID expired, non-ok = error, non-JSON content-type = login HTML trap
@@ -54,7 +54,7 @@ Fetch Manager Tools i18n translation resources.
 
   GET https://plive.sportswidgets.pro/manager-tools/translations/v2/getI18nResources/index.php?lng=en&ns=translation&appId=2
 
-Auth is cookie-based: the GSID session GUID (from Bun.env.GSID / .env).
+Auth is cookie-based: the GSID session GUID (from Bun.env.GSLIVE_SESSION_ID / .env; legacy GSID also read).
 
 Output:
   - i18n-resources.json  (atomic write, gitignored)
@@ -62,9 +62,9 @@ Output:
 
 Exit codes:
   0  success
-  1  missing GSID, non-ok HTTP, non-JSON body, or redirect-to-login
+  1  missing GSLIVE_SESSION_ID, non-ok HTTP, non-JSON body, or redirect-to-login
 
-Set GSID in .env (gitignored) or export Bun.env.GSID before running.`,
+Set GSLIVE_SESSION_ID in .env (gitignored) or export it before running (legacy GSID also read).`,
     );
     return;
   }

@@ -28,17 +28,17 @@ export function assertBunFloor(tool: string): void {
   }
 }
 
-/** Read the GSID session cookie or throw a fail-closed error. Never logs it.
+/** Read the GSID session id (`GSLIVE_SESSION_ID`, legacy `GSID`) as a cookie header or throw a fail-closed error. Never logs it.
  * `read` is injectable so tests exercise both paths without mutating `Bun.env`
  * (whose typed entries are readonly). */
 export function requireGsid(
   tool: string,
   read: (name: string) => string | undefined = (name) => Bun.env[name],
 ): string {
-  const gsid = read("GSID");
+  const gsid = read("GSLIVE_SESSION_ID") || read("GSID");
   if (!gsid) {
     throw new Error(
-      `${tool}: GSID is empty — set GSID in .env (gitignored) or Bun.env.GSID`,
+      `${tool}: GSLIVE_SESSION_ID is empty — set it (legacy name GSID also works) in .env (gitignored) or Bun.env`,
     );
   }
   return `GSID=${gsid}`;

@@ -36,12 +36,20 @@ export const SECRET_ENV_GROUPS = {
   ],
   pages: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
   blob: ["BLOB_API_TOKEN", "BLOB_TICKET_SECRET"],
-  gslive: ["GSID"],
+  gslive: ["GSLIVE_SESSION_ID"],
   daemon: ["SPORTSDESK_ADMIN_TOKEN"],
   telegram: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type SecretEnvGroup = keyof typeof SECRET_ENV_GROUPS;
+
+/**
+ * Pre-rename names, read as a fallback and injected under the registry name. `GSID` is also the
+ * portal's cookie name; only the variable and keychain entry were renamed.
+ */
+export const SECRET_ENV_ALIASES: Readonly<
+  Record<string, readonly string[] | undefined>
+> = { GSLIVE_SESSION_ID: ["GSID"] };
 
 /** Every name the registry knows, de-duplicated and sorted. */
 export const SECRET_ENV_NAMES: readonly string[] = [
@@ -75,8 +83,12 @@ export function expandSecretSelection(tokens: readonly string[]): string[] {
 }
 
 export type SecretSource =
-  | { readonly kind: "env" }
-  | { readonly kind: "keychain"; readonly service: string }
+  | { readonly kind: "env"; readonly via?: string }
+  | {
+      readonly kind: "keychain";
+      readonly service: string;
+      readonly via?: string;
+    }
   | { readonly kind: "missing" };
 
 export interface SecretReportRow {
@@ -109,13 +121,25 @@ export async function resolveSecretEnv(
   const resolved: Record<string, string> = {};
   const report: SecretReportRow[] = [];
   for (const name of names) {
-    const fromEnv = (env[name] ?? "").trim();
-    if (fromEnv !== "") {
-      resolved[name] = fromEnv;
-      report.push({ name, source: { kind: "env" } });
+    const candidates = [name, ...(SECRET_ENV_ALIASES[name] ?? [])];
+    const via = (candidate: string) =>
+      candidate === name ? {} : { via: candidate };
+    const found = candidates.find((c) => (env[c] ?? "").trim() !== "");
+    if (found !== undefined) {
+      resolved[name] = (env[found] ?? "").trim();
+      report.push({ name, source: { kind: "env", ...via(found) } });
       continue;
     }
-    const stored = await read(name);
+    let stored: { readonly value: string; readonly service: string } | null =
+      null;
+    let storedAs = name;
+    for (const candidate of candidates) {
+      stored = await read(candidate);
+      if (stored !== null) {
+        storedAs = candidate;
+        break;
+      }
+    }
     if (stored === null) {
       report.push({ name, source: { kind: "missing" } });
       continue;
@@ -123,7 +147,7 @@ export async function resolveSecretEnv(
     resolved[name] = stored.value;
     report.push({
       name,
-      source: { kind: "keychain", service: stored.service },
+      source: { kind: "keychain", service: stored.service, ...via(storedAs) },
     });
   }
   return { env: resolved, report };
@@ -133,13 +157,16 @@ export async function resolveSecretEnv(
 export function describeSource(source: SecretSource): string {
   switch (source.kind) {
     case "env":
-      return "env";
-    case "keychain":
-      return source.service === CANONICAL_SECRETS_SERVICE
-        ? "keychain"
-        : source.service === LEGACY_SECRETS_SERVICE
-          ? "keychain (legacy service)"
-          : `keychain (${source.service})`;
+      return source.via === undefined ? "env" : `env (as ${source.via})`;
+    case "keychain": {
+      const where =
+        source.service === CANONICAL_SECRETS_SERVICE
+          ? "keychain"
+          : source.service === LEGACY_SECRETS_SERVICE
+            ? "keychain (legacy service)"
+            : `keychain (${source.service})`;
+      return source.via === undefined ? where : `${where} (as ${source.via})`;
+    }
     case "missing":
       return "missing";
   }

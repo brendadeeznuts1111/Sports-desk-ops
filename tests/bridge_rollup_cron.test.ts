@@ -350,9 +350,9 @@ describe("bridge rollup cycle", () => {
     expect(first.alerts).toEqual([]);
     const agentError = "missing credentials: F402_AGENT_ID";
     const pendingError =
-      "missing credentials: F402_TOKEN_FILE, F402_BEARER_TOKEN, GSID";
+      "missing credentials: F402_TOKEN_FILE, F402_BEARER_TOKEN, GSLIVE_SESSION_ID, GSID";
     const tallyError =
-      "missing credentials: GSID, GSID_COOKIE, GSLIVE_SESSION_FILE";
+      "missing credentials: GSLIVE_SESSION_ID, GSID, GSID_COOKIE, GSLIVE_SESSION_FILE";
     expect(first.jobs.find((job) => job.id === "bridge3a")).toMatchObject({
       ok: false,
       durationMs: 0,
@@ -564,6 +564,7 @@ describe("bridge rollup cycle", () => {
     expect(byId("bridge3b").requiredEnv).toEqual([
       "F402_TOKEN_FILE",
       "F402_BEARER_TOKEN",
+      "GSLIVE_SESSION_ID",
       "GSID",
     ]);
     expect(byId("bridge3c").args).toEqual([
@@ -579,6 +580,7 @@ describe("bridge rollup cycle", () => {
       "{root}/scratch/bridge-rollup/bridge3c.json",
     ]);
     expect(byId("bridge3c").requiredEnv).toEqual([
+      "GSLIVE_SESSION_ID",
       "GSID",
       "GSID_COOKIE",
       "GSLIVE_SESSION_FILE",

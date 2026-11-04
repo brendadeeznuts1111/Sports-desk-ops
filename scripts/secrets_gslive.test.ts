@@ -73,6 +73,35 @@ describe("secrets:gslive keychain helper", () => {
     expect((await gsliveSecretStatus(store)).present).toBe(false);
   });
 
+  test("delete removes the pre-rename GSID entry too, so it cannot resurrect the session", async () => {
+    const stored = new Set(["GSLIVE_SESSION_ID", "GSID"]);
+    const store: SecretStore = {
+      async get(options) {
+        return stored.has(options.name) ? "fixture-session" : null;
+      },
+      async set() {},
+      async delete(options) {
+        return stored.delete(options.name);
+      },
+    };
+    expect(await deleteGsliveSecret(store)).toBe(true);
+    expect(stored.size).toBe(0);
+    expect((await gsliveSecretStatus(store)).present).toBe(false);
+  });
+
+  test("a session stored under the pre-rename name reads as stored", async () => {
+    const store: SecretStore = {
+      async get(options) {
+        return options.name === "GSID" ? "fixture-session" : null;
+      },
+      async set() {},
+      async delete() {
+        return false;
+      },
+    };
+    expect((await gsliveSecretStatus(store)).present).toBe(true);
+  });
+
   test("an unreadable keychain reports absent, not stored", async () => {
     const store: SecretStore = {
       async get() {

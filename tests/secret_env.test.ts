@@ -35,7 +35,9 @@ describe("expandSecretSelection", () => {
   });
 
   test("a variable name selects just that name", () => {
-    expect(expandSecretSelection(["GSID"])).toEqual(["GSID"]);
+    expect(expandSecretSelection(["GSLIVE_SESSION_ID"])).toEqual([
+      "GSLIVE_SESSION_ID",
+    ]);
   });
 
   test("an unknown token is a usage error, not an empty selection", () => {
@@ -52,24 +54,60 @@ describe("expandSecretSelection", () => {
 
 describe("resolveSecretEnv", () => {
   test("environment wins over the keychain", async () => {
-    const result = await resolveSecretEnv(["GSID"], {
-      env: { GSID: " from-env " },
+    const result = await resolveSecretEnv(["GSLIVE_SESSION_ID"], {
+      env: { GSLIVE_SESSION_ID: " from-env " },
       read: fakeKeychain({
-        GSID: { value: "from-keychain", service: CANONICAL_SECRETS_SERVICE },
+        GSLIVE_SESSION_ID: {
+          value: "from-keychain",
+          service: CANONICAL_SECRETS_SERVICE,
+        },
       }),
     });
-    expect(result.env["GSID"]).toBe("from-env");
+    expect(result.env["GSLIVE_SESSION_ID"]).toBe("from-env");
+    expect(result.report[0]?.source).toEqual({ kind: "env" });
+  });
+
+  test("the pre-rename GSID is read from env and from the keychain, and injected under the new name", async () => {
+    const fromEnv = await resolveSecretEnv(["GSLIVE_SESSION_ID"], {
+      env: { GSID: "old-env" },
+      read: fakeKeychain({}),
+    });
+    expect(fromEnv.env["GSLIVE_SESSION_ID"]).toBe("old-env");
+    expect(fromEnv.env["GSID"]).toBeUndefined();
+    expect(describeSource(fromEnv.report[0]!.source)).toBe("env (as GSID)");
+
+    const fromKeychain = await resolveSecretEnv(["GSLIVE_SESSION_ID"], {
+      env: {},
+      read: fakeKeychain({
+        GSID: { value: "old-keychain", service: CANONICAL_SECRETS_SERVICE },
+      }),
+    });
+    expect(fromKeychain.env["GSLIVE_SESSION_ID"]).toBe("old-keychain");
+    expect(describeSource(fromKeychain.report[0]!.source)).toBe(
+      "keychain (as GSID)",
+    );
+  });
+
+  test("the new name wins over the pre-rename one", async () => {
+    const result = await resolveSecretEnv(["GSLIVE_SESSION_ID"], {
+      env: { GSLIVE_SESSION_ID: "new", GSID: "old" },
+      read: fakeKeychain({}),
+    });
+    expect(result.env["GSLIVE_SESSION_ID"]).toBe("new");
     expect(result.report[0]?.source).toEqual({ kind: "env" });
   });
 
   test("a blank environment value falls through to the keychain", async () => {
-    const result = await resolveSecretEnv(["GSID"], {
-      env: { GSID: "   " },
+    const result = await resolveSecretEnv(["GSLIVE_SESSION_ID"], {
+      env: { GSLIVE_SESSION_ID: "   " },
       read: fakeKeychain({
-        GSID: { value: "from-keychain", service: CANONICAL_SECRETS_SERVICE },
+        GSLIVE_SESSION_ID: {
+          value: "from-keychain",
+          service: CANONICAL_SECRETS_SERVICE,
+        },
       }),
     });
-    expect(result.env["GSID"]).toBe("from-keychain");
+    expect(result.env["GSLIVE_SESSION_ID"]).toBe("from-keychain");
     expect(describeSource(result.report[0]!.source)).toBe("keychain");
   });
 
@@ -95,15 +133,18 @@ describe("resolveSecretEnv", () => {
   });
 
   test("the report never contains a value", async () => {
-    const result = await resolveSecretEnv(["GSID", "BLOB_API_TOKEN"], {
-      env: { GSID: "sekrit-env-value" },
-      read: fakeKeychain({
-        BLOB_API_TOKEN: {
-          value: "sekrit-keychain-value",
-          service: CANONICAL_SECRETS_SERVICE,
-        },
-      }),
-    });
+    const result = await resolveSecretEnv(
+      ["GSLIVE_SESSION_ID", "BLOB_API_TOKEN"],
+      {
+        env: { GSLIVE_SESSION_ID: "sekrit-env-value" },
+        read: fakeKeychain({
+          BLOB_API_TOKEN: {
+            value: "sekrit-keychain-value",
+            service: CANONICAL_SECRETS_SERVICE,
+          },
+        }),
+      },
+    );
     const printed = JSON.stringify(result.report);
     expect(printed).not.toContain("sekrit-env-value");
     expect(printed).not.toContain("sekrit-keychain-value");
@@ -113,10 +154,10 @@ describe("resolveSecretEnv", () => {
 describe("childEnv", () => {
   test("layers resolved secrets over the parent and drops undefined entries", () => {
     const merged = childEnv(
-      { PATH: "/bin", GSID: "old", GONE: undefined },
-      { env: { GSID: "new" }, report: [] },
+      { PATH: "/bin", GSLIVE_SESSION_ID: "old", GONE: undefined },
+      { env: { GSLIVE_SESSION_ID: "new" }, report: [] },
     );
-    expect(merged).toEqual({ PATH: "/bin", GSID: "new" });
+    expect(merged).toEqual({ PATH: "/bin", GSLIVE_SESSION_ID: "new" });
   });
 });
 
@@ -144,24 +185,24 @@ describe("secrets_env.ts exec", () => {
       [
         "exec",
         "--with",
-        "GSID",
+        "GSLIVE_SESSION_ID",
         "--",
         "sh",
         "-c",
-        'printf "%s|%s" "$GSID" "${TELEGRAM_BOT_TOKEN:-unset}"',
+        'printf "%s|%s" "$GSLIVE_SESSION_ID" "${TELEGRAM_BOT_TOKEN:-unset}"',
       ],
-      { GSID: "g-123", TELEGRAM_BOT_TOKEN: "" },
+      { GSLIVE_SESSION_ID: "g-123", TELEGRAM_BOT_TOKEN: "" },
     );
     expect(result.code).toBe(0);
     expect(result.stdout).toBe("g-123|unset");
-    expect(result.stderr).toContain("injecting GSID←env");
+    expect(result.stderr).toContain("injecting GSLIVE_SESSION_ID←env");
     expect(result.stderr).not.toContain("g-123");
   });
 
   test("the child's exit code is passed through", async () => {
     const result = await run(
-      ["exec", "--with", "GSID", "--", "sh", "-c", "exit 7"],
-      { GSID: "x" },
+      ["exec", "--with", "GSLIVE_SESSION_ID", "--", "sh", "-c", "exit 7"],
+      { GSLIVE_SESSION_ID: "x" },
     );
     expect(result.code).toBe(7);
   });
@@ -181,12 +222,15 @@ describe("secrets_env.ts exec", () => {
 
 describe("secrets_env.ts status and set", () => {
   test("status names each source and never prints a value", async () => {
-    const result = await run(["status", "--with", "GSID", "--json"], {
-      GSID: "value-that-must-not-print",
-    });
+    const result = await run(
+      ["status", "--with", "GSLIVE_SESSION_ID", "--json"],
+      {
+        GSLIVE_SESSION_ID: "value-that-must-not-print",
+      },
+    );
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual([
-      { name: "GSID", source: { kind: "env" } },
+      { name: "GSLIVE_SESSION_ID", source: { kind: "env" } },
     ]);
     expect(result.stdout).not.toContain("value-that-must-not-print");
   });

@@ -13,11 +13,15 @@
 import { parseCliArgs, printHelp, wantsHelp } from "../lib/cli_args.ts";
 import type { BunSecretSetOptions } from "../types/bun-api.ts";
 import { secretSetOptions } from "../lib/r2_s3_client.ts";
-import { GSID_SECRET, GSID_SECRET_LEGACY } from "./fetch-bet-tally.ts";
+import {
+  GSID_SECRET,
+  GSID_SECRET_LEGACY,
+  GSID_SECRET_PRE_RENAME,
+} from "./fetch-bet-tally.ts";
 import { secrets, stdin } from "bun";
 
 const HELP = `
-secrets:gslive — store the GSLive manager session (GSID) in the OS keychain
+secrets:gslive — store the GSLive manager session (GSLIVE_SESSION_ID) in the OS keychain
 
 Usage:
   bun run secrets:gslive status
@@ -32,7 +36,7 @@ The value is read from stdin, never from argv and never printed. Keychain entry:
   name    ${GSID_SECRET.name}
 
 Examples:
-  printf '%s' "$GSID" | bun run secrets:gslive set
+  printf '%s' "$GSLIVE_SESSION_ID" | bun run secrets:gslive set
   op read "op://Private/sportsdesk-gslive/GSID" | bun run secrets:gslive set
   bun run secrets:gslive status
 `.trim();
@@ -67,7 +71,9 @@ export async function gsliveSecretStatus(
   let present = false;
   try {
     const value =
-      (await store.get(GSID_SECRET)) ?? (await store.get(GSID_SECRET_LEGACY));
+      (await store.get(GSID_SECRET)) ??
+      (await store.get(GSID_SECRET_PRE_RENAME)) ??
+      (await store.get(GSID_SECRET_LEGACY));
     present = (value ?? "").trim() !== "";
   } catch {
     // A locked/unavailable keychain means "not readable here", not "stored".
@@ -92,7 +98,10 @@ export async function setGsliveSecret(
 export async function deleteGsliveSecret(
   store: SecretStore = defaultSecretStore(),
 ): Promise<boolean> {
-  return store.delete(GSID_SECRET);
+  // Remove the pre-rename entry too, or a deleted session would still resolve through the fallback.
+  const removed = await store.delete(GSID_SECRET);
+  const removedPreRename = await store.delete(GSID_SECRET_PRE_RENAME);
+  return removed || removedPreRename;
 }
 
 /** Read one stdin line; the value is not echoed, stored in shell history, or put on argv. */
@@ -146,7 +155,7 @@ switch (command) {
     const { ensureGsid } = await import("../lib/gslive_auto_session.ts");
     const gsid = await ensureGsid();
     console.error(
-      `secrets:gslive: GSLive session ready (GSID ${gsid === "" ? "missing" : "verified"}, value not printed)`,
+      `secrets:gslive: GSLive session ready (GSLIVE_SESSION_ID ${gsid === "" ? "missing" : "verified"}, value not printed)`,
     );
     break;
   }

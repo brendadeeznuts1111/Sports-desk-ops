@@ -18,9 +18,18 @@ describe("requireGsid", () => {
     expect(requireGsid("tool-x", () => "abc123")).toBe("GSID=abc123");
   });
 
-  test("throws fail-closed when GSID is missing", () => {
+  test("prefers GSLIVE_SESSION_ID and still reads the pre-rename GSID", () => {
+    const read = (values: Record<string, string>) => (name: string) =>
+      values[name];
+    expect(
+      requireGsid("t", read({ GSLIVE_SESSION_ID: "new", GSID: "old" })),
+    ).toBe("GSID=new");
+    expect(requireGsid("t", read({ GSID: "old" }))).toBe("GSID=old");
+  });
+
+  test("throws fail-closed when the session id is missing", () => {
     expect(() => requireGsid("tool-x", () => undefined)).toThrow(
-      /GSID is empty/,
+      /GSLIVE_SESSION_ID is empty/,
     );
   });
 });

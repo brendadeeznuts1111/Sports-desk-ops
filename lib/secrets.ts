@@ -75,4 +75,20 @@ export const F402_KEYCHAIN_NAMES = {
   password: "f402-password",
 } as const;
 
-export const GSID_KEYCHAIN_NAME = "GSID" as const;
+/**
+ * The GSLive manager session id. `GSID` is the name of the portal's session *cookie* (set by
+ * Manager Tools, so it never changes); the variable and keychain entry that carry its value are
+ * `GSLIVE_SESSION_ID` (`<SYSTEM>_<NOUN>_<KIND>`). The pre-rename name stays readable everywhere
+ * and is never written, so existing `.env` files, cron environments and keychain entries work.
+ */
+export const GSLIVE_SESSION_ID_NAME = "GSLIVE_SESSION_ID" as const;
+export const GSID_LEGACY_NAME = "GSID" as const;
+export const GSID_KEYCHAIN_NAME = GSLIVE_SESSION_ID_NAME;
+
+/** New name first, then the pre-rename one; blank values do not count. */
+export function gsliveSessionIdFromEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const current = (env[GSLIVE_SESSION_ID_NAME] ?? "").trim();
+  return current !== "" ? current : (env[GSID_LEGACY_NAME] ?? "").trim();
+}

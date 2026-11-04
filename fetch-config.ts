@@ -4,7 +4,7 @@
  *
  * GET https://plive.sportswidgets.pro/manager-tools/partnerConfig/
  *
- * Auth is cookie-based: the `GSID` session GUID (from Bun.env.GSID / .env). Bun's `fetch`
+ * Auth is cookie-based: the `GSID` session GUID (from Bun.env.GSLIVE_SESSION_ID / .env; legacy GSID also read). Bun's `fetch`
  * auto-decodes gzip/br/deflate and silently drops forbidden headers (sec-*), so we send
  * accept + cookie + referer + user-agent only.
  *
@@ -113,7 +113,7 @@ Fetch the partner (white-label) config from the Manager Tools SPA and persist it
 
   GET https://plive.sportswidgets.pro/manager-tools/partnerConfig/
 
-Auth is cookie-based: the GSID session GUID (from Bun.env.GSID / .env).
+Auth is cookie-based: the GSID session GUID (from Bun.env.GSLIVE_SESSION_ID / .env; legacy GSID also read).
 
 Output:
   - partnerConfig.json  (atomic write, gitignored)
@@ -121,9 +121,9 @@ Output:
 
 Exit codes:
   0  success
-  1  missing GSID, non-ok HTTP, non-JSON body, or redirect-to-login
+  1  missing GSLIVE_SESSION_ID, non-ok HTTP, non-JSON body, or redirect-to-login
 
-Set GSID in .env (gitignored) or export Bun.env.GSID before running.`,
+Set GSLIVE_SESSION_ID in .env (gitignored) or export it before running (legacy GSID also read).`,
     );
     return;
   }

@@ -197,7 +197,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx deps [add|remove|version|check]
                                     bun-deps (frozen-safe); version = pm version + lock refresh
 
-  Manager Tools / partner config (GSID cookie auth — set GSID in .env)
+  Manager Tools / partner config (GSID cookie auth — set GSLIVE_SESSION_ID in .env)
     ./bin/dx fetch-config           Fetch partnerConfig JSON → partnerConfig.json
     ./bin/dx fetch-i18n             Fetch i18n translation resources → i18n-resources.json
     ./bin/dx fetch-common           Fetch manager-tools common data → manager-common.json
@@ -205,7 +205,7 @@ Usage: ./bin/dx <command> [args...]
 
   Wagers by state, day, event, player, agent (columns, groups, layout from config/wagers.json)
     ./bin/dx wagers-by-state --from=M/D/YYYY --to=M/D/YYYY [--state=X] [--nlegs=N] [--wager-number N] [--format=table|json|csv|summary|inspect|columns|grid] [--out=PATH] [--group-by=state|day|event|player|agent] [--top=N]
-    ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSID; --format/--out/--group-by/--top supported)
+    ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSLIVE_SESSION_ID; --format/--out/--group-by/--top supported)
 
   Surveillance / ingestion
     ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix

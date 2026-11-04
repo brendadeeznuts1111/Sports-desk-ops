@@ -66,8 +66,28 @@ describe("bridge3c: GSID is keychain-first", () => {
     const { probe } = keychain({ [GSID_KEYCHAIN_NAME]: "stored-session" });
     expect(await probe.check(job("bridge3c"))).toEqual({
       ok: true,
+      source: "keychain:GSLIVE_SESSION_ID",
+    });
+  });
+
+  test("a keychain entry stored under the pre-rename name still satisfies 3c", async () => {
+    const { probe } = keychain({ GSID: "stored-session" });
+    expect(await probe.check(job("bridge3c"))).toEqual({
+      ok: true,
       source: "keychain:GSID",
     });
+  });
+
+  test("the new env name satisfies 3c", async () => {
+    const { probe, reads } = keychain(
+      {},
+      { env: { GSLIVE_SESSION_ID: "env-session" } },
+    );
+    expect(await probe.check(job("bridge3c"))).toEqual({
+      ok: true,
+      source: "env:GSLIVE_SESSION_ID",
+    });
+    expect(reads).toEqual([]);
   });
 
   test("an env GSID wins without touching the keychain", async () => {

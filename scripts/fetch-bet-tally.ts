@@ -26,6 +26,11 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { sessionFromGsliveProfile } from "../lib/gslive_session.ts";
+import {
+  GSID_LEGACY_NAME,
+  GSLIVE_SESSION_ID_NAME,
+  gsliveSessionIdFromEnv,
+} from "../lib/secrets.ts";
 
 import { z } from "zod";
 import { argv, env, secrets, write } from "bun";
@@ -207,13 +212,18 @@ function cookieHeaderFromValue(gsid: string, ga: string | undefined): string {
 export function cookieHeaderFromEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): string {
-  return cookieHeaderFromValue(env.GSID ?? "", env.GA);
+  return cookieHeaderFromValue(gsliveSessionIdFromEnv(env), env.GA);
 }
 
 /** OS-keychain entry (Bun.secrets) the manager session is read from before any env fallback. */
 export const GSID_SECRET = {
   service: "com.bookdeskops.sportsdesk",
-  name: "GSID",
+  name: GSLIVE_SESSION_ID_NAME,
+} as const;
+/** Pre-rename entry (same service, name `GSID`): read fallback only, never written. */
+export const GSID_SECRET_PRE_RENAME = {
+  service: "com.bookdeskops.sportsdesk",
+  name: GSID_LEGACY_NAME,
 } as const;
 /** Legacy keychain entry kept as a read fallback during migration. */
 export const GSID_SECRET_LEGACY = {
@@ -306,6 +316,7 @@ export async function resolveManagerSession(
     try {
       const gsid =
         (await secrets.get(GSID_SECRET))?.trim() ??
+        (await secrets.get(GSID_SECRET_PRE_RENAME))?.trim() ??
         (await secrets.get(GSID_SECRET_LEGACY))?.trim() ??
         "";
       if (gsid !== "") {
@@ -332,7 +343,7 @@ export async function requireManagerSession(
   if (session.source === "none") {
     throw new Error(
       "No manager session. Provision it in the OS keychain via `bun run secrets:gslive set` " +
-        "(keychain service com.bookdeskops.sportsdesk, name GSID), or provide GSID through the SSOT " +
+        "(keychain service com.bookdeskops.sportsdesk, name GSLIVE_SESSION_ID), or provide GSLIVE_SESSION_ID (legacy: GSID) through the SSOT " +
         "environment. Never paste a live session cookie into chat, a commit, or a script.",
     );
   }
