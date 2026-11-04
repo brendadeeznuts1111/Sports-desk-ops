@@ -25,10 +25,10 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof WebSocket).toBe("function");
   });
 
-  test("node:crypto argon2 and the WebSocket client extension are usable", async () => {
-    // v1.4.1 shipped argon2 in node:crypto and pause/resume on the WHATWG client socket.
-    // Both are pinned in bin/bun_surface.ts ("compat"); this test proves the behaviour, not
-    // just the property: a 32-byte tag for argon2id, and functions on the prototype.
+  test("node:crypto argon2 is RFC 9106-correct at production parameters", async () => {
+    // v1.4.1 shipped argon2 in node:crypto; bin/bun_surface.ts pins it as "compat". This is a
+    // known-answer check, not a length check: the RFC 9106 Argon2id vector (message 0x01 x32,
+    // nonce 0x02 x16, secret 0x03 x8, associated data 0x04 x12, t=3, m=32 KiB, p=4, tag 32).
     const crypto = (await import("node:crypto")) as unknown as Record<
       string,
       unknown
@@ -36,16 +36,47 @@ describe("Bun capabilities used by the ops tooling", () => {
     const argon2Sync = crypto["argon2Sync"] as
       | ((algorithm: string, options: Record<string, unknown>) => Buffer)
       | undefined;
+    const randomBytes = crypto["randomBytes"] as (size: number) => Buffer;
     expect(typeof argon2Sync).toBe("function");
-    const tag = argon2Sync!("argon2id", {
+
+    const rfcTag = argon2Sync!("argon2id", {
+      message: Buffer.alloc(32, 1),
+      nonce: Buffer.alloc(16, 2),
+      secret: Buffer.alloc(8, 3),
+      associatedData: Buffer.alloc(12, 4),
+      parallelism: 4,
+      tagLength: 32,
+      memory: 32,
+      passes: 3,
+    });
+    expect(rfcTag.toString("hex")).toBe(
+      "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659",
+    );
+
+    // Production shape: OWASP-style Argon2id (19 MiB, t=2, p=1) with a 16-byte nonce. The tag is
+    // deterministic for a stored nonce and changes when the nonce does.
+    const nonce = randomBytes(16);
+    const options = {
       message: "pw",
-      nonce: "saltsalt",
+      nonce,
       parallelism: 1,
       tagLength: 32,
-      memory: 8,
-      passes: 1,
-    });
-    expect(tag.length).toBe(32);
+      memory: 19_456,
+      passes: 2,
+    };
+    const first = argon2Sync!("argon2id", options);
+    const second = argon2Sync!("argon2id", options);
+    expect(first.length).toBe(32);
+    expect(first.equals(second)).toBe(true);
+    expect(
+      argon2Sync!("argon2id", {
+        ...options,
+        nonce: randomBytes(16),
+      }).equals(first),
+    ).toBe(false);
+  });
+
+  test("the WebSocket client extension exposes pause/resume", () => {
     const socket = WebSocket.prototype as unknown as Record<string, unknown>;
     expect(typeof socket["pause"]).toBe("function");
     expect(typeof socket["resume"]).toBe("function");
