@@ -20,7 +20,10 @@
 import { open, stat } from "node:fs/promises";
 
 import { sha256Hex, stableJson } from "./f402_bet_ticker_delta.ts";
-import { parseGsliveTimestampMs } from "./gslive_bet_event_log.ts";
+import {
+  classifyDelayElapsedSec,
+  parseGsliveTimestampMs,
+} from "./gslive_bet_event_log.ts";
 
 export const GSLIVE_TALLY_KIND = "gslive-tally";
 export const GSLIVE_TALLY_SCHEMA_VERSION = 1;
@@ -438,13 +441,14 @@ export async function buildGsliveTallyRollup(
       anomalyCounts.suspectedBot += 1;
     if (row.adminUser !== null && row.adminUser !== undefined)
       anomalyCounts.adminUser += 1;
-    if (
-      acceptMs !== null &&
-      logMs !== null &&
-      Number.isFinite(delaySec) &&
-      Math.abs(acceptMs - logMs - delaySec * 1000) > 1500
-    )
-      anomalyCounts.delayMismatch += 1;
+    if (acceptMs !== null && logMs !== null && Number.isFinite(delaySec)) {
+      const elapsedSec = classifyDelayElapsedSec(
+        acceptMs,
+        Math.floor(logMs / 1000),
+        delaySec,
+      );
+      if (elapsedSec < -1 || elapsedSec > 3) anomalyCounts.delayMismatch += 1;
+    }
     const betDetails = (() => {
       try {
         const parsed: unknown = JSON.parse(String(row.betDetails ?? "{}"));

@@ -35,6 +35,7 @@
  */
 
 import { mkdir, rename } from "node:fs/promises";
+import { parseGsliveTimestampMs } from "../lib/gslive_bet_event_log.ts";
 import { parseArgs } from "node:util";
 
 import { sessionFromGsliveProfile } from "../lib/gslive_session.ts";
@@ -439,16 +440,21 @@ export function parseBetTime(cell: string): number | null {
     .trim()
     .match(/^(\d{1,2}):(\d{2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (match === null) return null;
-  const [, hh, mm, ss, month, day, year] = match;
-  const ms = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hh),
-    Number(mm),
-    Number(ss),
-  ).getTime();
-  return Number.isFinite(ms) ? ms : null;
+  const [
+    ,
+    hh = "0",
+    mm = "0",
+    ss = "0",
+    month = "1",
+    day = "1",
+    year = "1970",
+  ] = match;
+  const pad = (value: string): string => value.padStart(2, "0");
+  // The export carries desk wall time (US Pacific). Parse explicitly so the value does not
+  // depend on the process TZ (bun test defaults to UTC; bun run is local).
+  return parseGsliveTimestampMs(
+    `${year}-${pad(month)}-${pad(day)}T${pad(hh)}:${pad(mm)}:${pad(ss)}`,
+  );
 }
 
 /**

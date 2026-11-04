@@ -262,40 +262,8 @@ export function auditEventTimeline(
     anomalies,
   };
 }
-/** Parse GS Manager timestamps: epoch seconds/ms or "YYYY-MM-DD HH:mm:ss(.SSS)" in LA time. */
-function losAngelesOffsetMinutes(utcMs: number): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(new Date(utcMs));
-  const get = (type: string) =>
-    Number(parts.find((part) => part.type === type)?.value ?? "0");
-  const wallAsUtc = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour"),
-    get("minute"),
-    get("second"),
-  );
-  return Math.round((wallAsUtc - utcMs) / 60_000);
-}
-
-export function parseGsliveTimestampMs(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value))
-    return value < 1e12 ? value * 1000 : value;
-  const text = typeof value === "string" ? value.trim() : "";
-  if (text === "") return null;
-  if (/^\d+$/.test(text)) {
-    const n = Number(text);
-    return n < 1e12 ? n * 1000 : n;
-  }
+/** Parse GS Manager timestamps: epoch seconds/ms or "YYYY-MM-DD HH:mm:ss(.SSS)" desk wall time. */
+function fallbackLosAngelesMs(text: string): number | null {
   const m =
     /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(
       text,
@@ -310,16 +278,80 @@ export function parseGsliveTimestampMs(value: unknown): number | null {
     Number(m[6]),
     Number((m[7] ?? "0").padEnd(3, "0")),
   );
-  // Resolve the offset for the actual wall time, then re-check on the candidate instant so the
-  // PDT (-07:00) / PST (-08:00) boundary is honored on both sides of the Nov 1 DST transition.
-  let offset = losAngelesOffsetMinutes(wallUtc);
-  let candidate = wallUtc - offset * 60_000;
-  const confirmed = losAngelesOffsetMinutes(candidate);
-  if (confirmed !== offset) {
-    offset = confirmed;
-    candidate = wallUtc - offset * 60_000;
+  const offset = (utc: number): number => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(new Date(utc));
+    const get = (t: string) =>
+      Number(parts.find((p) => p.type === t)?.value ?? "0");
+    return Math.round(
+      (Date.UTC(
+        get("year"),
+        get("month") - 1,
+        get("day"),
+        get("hour"),
+        get("minute"),
+        get("second"),
+      ) -
+        utc) /
+        60_000,
+    );
+  };
+  const first = offset(wallUtc);
+  const candidate = wallUtc - first * 60_000;
+  const confirmed = offset(candidate);
+  return confirmed === first ? candidate : wallUtc - confirmed * 60_000;
+}
+
+export function parseGsliveTimestampMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value))
+    return value < 1e12 ? value * 1000 : value;
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") return null;
+  if (/^\d+$/.test(text)) {
+    const n = Number(text);
+    return n < 1e12 ? n * 1000 : n;
   }
-  return candidate;
+  const iso = text.replace(" ", "T");
+  const TemporalApi = (
+    globalThis as {
+      Temporal?: {
+        PlainDateTime?: {
+          from(input: string): {
+            toZonedDateTime(zone: string): { epochMilliseconds: number };
+          };
+        };
+      };
+    }
+  ).Temporal;
+  if (TemporalApi?.PlainDateTime !== undefined) {
+    try {
+      return Number(
+        TemporalApi.PlainDateTime.from(iso).toZonedDateTime(
+          "America/Los_Angeles",
+        ).epochMilliseconds,
+      );
+    } catch {
+      /* fall through to Intl */
+    }
+  }
+  return fallbackLosAngelesMs(text);
+}
+
+/** Normal handshake: logTime floor (0..999 ms) + 1–2 s DGS ticket creation. */
+export function classifyDelayElapsedSec(
+  acceptMs: number,
+  logTimeSec: number,
+  delaySec: number,
+): number {
+  return Math.floor(acceptMs / 1000) - logTimeSec - delaySec;
 }
 export interface BetLogAuditTarget {
   readonly betId: string;
@@ -349,13 +381,13 @@ export function extractBetLogAuditTargets(
     const acceptMs = parseGsliveTimestampMs(row.acceptTime);
     const logMs = parseGsliveTimestampMs(row.logTime);
     const delaySec = Number(row.delay);
-    if (
-      acceptMs !== null &&
-      logMs !== null &&
-      Number.isFinite(delaySec) &&
-      Math.abs(acceptMs - logMs - delaySec * 1000) > 1500
-    ) {
-      reasons.push("DELAY_MISMATCH");
+    if (acceptMs !== null && logMs !== null && Number.isFinite(delaySec)) {
+      const elapsedSec = classifyDelayElapsedSec(
+        acceptMs,
+        Math.floor(logMs / 1000),
+        delaySec,
+      );
+      if (elapsedSec < -1 || elapsedSec > 3) reasons.push("DELAY_MISMATCH");
     }
     if (row.adminUser !== null && row.adminUser !== undefined)
       reasons.push("ADMIN_USER");

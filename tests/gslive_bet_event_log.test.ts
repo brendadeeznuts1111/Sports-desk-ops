@@ -130,7 +130,7 @@ describe("gslive bet/event log audit", () => {
         eID: "10",
         logTime: "1793761946",
         acceptTime: "1793761953000",
-        delay: "5",
+        delay: "0",
         fVal: "2.4",
         fVal_new: "2.4",
         adminUser: "admin",
