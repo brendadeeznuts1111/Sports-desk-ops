@@ -664,6 +664,66 @@ describe("security seam preload: module allowlist", () => {
     expect(htmlCalls[1]).toBe("<b>raw</b>");
   });
 
+  test("player-info restores the html hook when the success handler throws", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    const htmlCalls: string[] = [];
+    const passwordTarget = {
+      is: (sel: string) => sel === '[data-field="password-h"]',
+    };
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+      fn: {
+        html(this: unknown, value: string): void {
+          htmlCalls.push(value);
+        },
+      },
+    };
+    const jq = context.window["jQuery"] as {
+      fn: { html: (this: unknown, v: string) => void };
+    };
+    const baseHtml = jq.fn.html;
+    class PlayerInfo {
+      data(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "getInfoPlayer" },
+          success: () => {
+            jq.fn.html.call(passwordTarget, "first");
+            throw new Error("render failed");
+          },
+        });
+      }
+    }
+    defined["manager/module/player-info"] = PlayerInfo;
+    decorateNamed(
+      context,
+      "manager/module/player-info",
+      PlayerInfo as unknown as Record<string, unknown>,
+    );
+    new PlayerInfo().data();
+    expect(() =>
+      (captured as unknown as { success: () => void }).success(),
+    ).toThrow("render failed");
+    expect(htmlCalls[0]).toBe("first");
+    // finally restored the hook, so a later render is not escaped by a stale wrapper.
+    expect(jq.fn.html).toBe(baseHtml);
+    jq.fn.html.call(passwordTarget, "second");
+    expect(htmlCalls[1]).toBe("second");
+  });
+
   test("a manager class without searchComponent installs loudly, not silently", async () => {
     const source = await preloadSource();
     const context = runPreload(source, "https://x/");

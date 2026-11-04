@@ -44,6 +44,7 @@ test. That cannot be satisfied by repository analysis, and this pack does not pr
 - [04-attack-exercises.md](./04-attack-exercises.md) — three chains, before/after measurement protocol, authorization gate.
 - [05-detection-response.md](./05-detection-response.md) — per-control detection and response, or an explicit "neither".
 - [06-roadmap.md](./06-roadmap.md) — re-prioritized one-pager naming what to pause and what to raise.
+- [07-module-sink-census.md](./07-module-sink-census.md) — module-level `.html()` census and remaining audit surface.
 
 ## Headline (provisional until item 2)
 

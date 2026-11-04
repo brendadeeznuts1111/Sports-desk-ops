@@ -121,8 +121,12 @@
     if (manager) decorated = applySearchCustomerEscaper(manager) || decorated;
     if (manager)
       decorated = applyGetCommunicationMessagesEscaper(manager) || decorated;
-    var playerInfo = defined["manager/module/player-info"];
-    if (playerInfo) decorated = applyPlayerInfoEscaper(playerInfo) || decorated;
+    for (var moduleName in MODULE_SINK_WRAPPERS) {
+      if (defined[moduleName]) {
+        decorated =
+          applyModuleSinkWrapper(moduleName, defined[moduleName]) || decorated;
+      }
+    }
     return decorated;
   }
 
@@ -1094,6 +1098,19 @@
     return true;
   }
 
+  // Module-level sink wrappers. A module is cheap to add: name its export and a wrapper, and the
+  // loader hook + watchdog sweep apply it. The pin gate's MODULE_SINK_ANCHORS separately verifies
+  // the selector/entry point still exists in the live bytes.
+  var MODULE_SINK_WRAPPERS = {
+    "manager/module/player-info": applyPlayerInfoEscaper,
+  };
+
+  function applyModuleSinkWrapper(name, moduleExport) {
+    var wrapper = MODULE_SINK_WRAPPERS[name];
+    if (typeof wrapper !== "function") return false;
+    return wrapper(moduleExport);
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -1125,9 +1142,10 @@
       if (
         !window.__F402_SEAM_DISABLED__ &&
         map &&
-        map.name === "manager/module/player-info"
+        map.name &&
+        MODULE_SINK_WRAPPERS[map.name]
       ) {
-        applyPlayerInfoEscaper(defined);
+        applyModuleSinkWrapper(map.name, defined);
       }
       if (
         !window.__F402_SEAM_DISABLED__ &&

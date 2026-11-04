@@ -84,10 +84,15 @@ because it is used in a jQuery `[data-customer="…"]` selector. `getCommunicati
 popup) also landed; Lobibox source confirms `msg` is concatenated without escaping, so the popup path
 was a real sink.
 
-**Module-level sinks (2026-11-04):** `player-info.js` renders `n.Password` via `.html()` into
-`[data-field="password-h"]` (plaintext on screen). Wrapped by intercepting `getInfoPlayer` success
-and escaping only that selector; `.val()` and stored data stay raw. Module anchors `password-h`,
-`bet-desc`, `gameReport` are now checked by `pin:cdn` against the live module bytes. `bet-desc` is
+**Module-level sinks (2026-11-04):** the overlay now has a **generic module wrapper registry**
+(`MODULE_SINK_WRAPPERS`): a module name + wrapper function, applied by the loader hook and the
+watchdog sweep. `player-info.js` is the first entry; it renders `n.Password` via `.html()` into
+`[data-field="password-h"]` and is wrapped by intercepting `getInfoPlayer` success and escaping only
+that selector; `.val()` and stored data stay raw. Module anchors (`password-h`, `bet-desc`,
+`gameReport`, `data-ticket`, `getDetailWager`) are checked by `pin:cdn` against the live module
+bytes. See [07-module-sink-census.md](./07-module-sink-census.md): 29 modules, 651 `.html()` calls,
+98 candidate calls with a player-adjacent field in the window — not all sinks, but the remaining
+audit surface. `bet-desc` is
 **not** an independent sink: it copies already-rendered `.gameReport` HTML into the delete modal; the
 origin is `getResultTicketPending` / `getResultTicketMobileDetails`, which substitute raw
 `Description`/`ChosenTeamID`/line/`Content` into the pending-row HTML. Fixing `bet-desc` alone would

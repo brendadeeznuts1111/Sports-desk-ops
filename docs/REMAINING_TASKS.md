@@ -208,7 +208,10 @@ so an id resolves without guessing which artifact it came from.
     (`password-h`, `bet-desc`, `gameReport`, `data-ticket`, `getDetailWager`) are checked by
     `pin:cdn`. `delete-wager` table fields are system/game data (no Note/Comments field); server
     provenance remains a question. The Select2 demo asset (`escapeMarkup` identity,
-    `http://api.github.com`) is absent from `manager.html` and the pinned graph: cleanup-only. `searchCustomer` (fullscreen) is the fifth sink,
+    `http://api.github.com`) is absent from `manager.html` and the pinned graph: cleanup-only.
+    Module wrapper registry is generic (`MODULE_SINK_WRAPPERS`); the census (29 modules, 651
+    `.html()` calls, 98 candidates) is in `07-module-sink-census.md`. `bet-desc` remains
+    anchor-protected but **not closed**; source render tracked as issue #21. `searchCustomer` (fullscreen) is the fifth sink,
     scheduled once reachability is confirmed: live in the pinned controller, trigger markup
     absent/commented.
 
