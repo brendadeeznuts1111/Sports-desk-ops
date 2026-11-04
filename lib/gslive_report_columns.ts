@@ -1,117 +1,271 @@
 /**
- * @file lib/gslive_report_columns.ts
- * @description Display-label vocabulary for GS Manager reports.
+ * @file gslive_report_columns.ts
+ * @description Last Bets (GS Manager Tools → Events → Bet History) column and filter catalog.
  *
- * Source: the public i18n bundle the console loads
- * (`/manager-tools/translations/v2/getI18nResources/index.php?lng=en&ns=translation&appId=2`),
- * observed 2026-11-02. These are **UI labels**, not wire field names. The bundle also
- * shows how reports are produced ("Generating report. Please wait…", "Report has been
- * generated successfully.", "Report History", "To CSV", "To Excel"), which is why this
- * mapper targets an exported header row rather than a JSON grid response.
- *
- * Use it to turn a downloaded CSV/XLS header row into canonical keys, and to fail loudly
- * on headers that were never observed. It invents no transport, method or response shape;
- * `docs/gs-manager-contracts.md` still marks every report kind `blocked_contract`.
+ * Observed in the live browser 2026-11-03 (Table settings shows 53 / 53): 52 named columns plus
+ * the row-selection checkbox. The checkbox is modeled separately and is not a wire field until a
+ * table-schema capture confirms it. Wire mappings are best-effort against
+ * `Scratch/betReport-all.json` (69 raw keys); `null` means UI-only or a nested/derived value.
  */
-
+export const UI_LAST_BETS_SLOT_COUNT = 53;
+export const UI_LAST_BETS_NAMED_COLUMN_COUNT = 52;
+export interface LastBetsColumn {
+  readonly index: number;
+  readonly label: string;
+  readonly column: string;
+  readonly wireKey: string | null;
+}
+export const LAST_BETS_COLUMNS: readonly LastBetsColumn[] = [
+  { index: 1, label: "Bet Group", column: "betGroup", wireKey: "betGroupId" },
+  { index: 2, label: "Id", column: "id", wireKey: "id" },
+  { index: 3, label: "Player", column: "player", wireKey: "userID" },
+  { index: 4, label: "Player Id", column: "playerId", wireKey: "playerId" },
+  { index: 5, label: "Profile", column: "profile", wireKey: "profile" },
+  { index: 6, label: "Agent", column: "agent", wireKey: "agent" },
+  { index: 7, label: "Ticket", column: "ticket", wireKey: "ticketNumber" },
+  { index: 8, label: "If bet", column: "ifBet", wireKey: "ifBet" },
+  { index: 9, label: "Risk", column: "risk", wireKey: "bet" },
+  { index: 10, label: "To Win", column: "toWin", wireKey: "betGroupToWin" },
+  {
+    index: 11,
+    label: "Then bet",
+    column: "thenBet",
+    wireKey: "reversedCredit",
+  },
+  { index: 12, label: "Premium", column: "premium", wireKey: "premium" },
+  { index: 13, label: "Result", column: "result", wireKey: "betGroupResult" },
+  { index: 14, label: "Free bet", column: "freeBet", wireKey: "isFreePlay" },
+  {
+    index: 15,
+    label: "Sport / League",
+    column: "sportLeague",
+    wireKey: null,
+  },
+  {
+    index: 16,
+    label: "Sport (SportId)",
+    column: "sportSportId",
+    wireKey: "displaySportId",
+  },
+  {
+    index: 17,
+    label: "League (LeagueId)",
+    column: "leagueLeagueId",
+    wireKey: "lID",
+  },
+  { index: 18, label: "Event Id", column: "eventId", wireKey: "eID" },
+  { index: 19, label: "Event Details", column: "eventDetails", wireKey: "ev" },
+  { index: 20, label: "Bet price", column: "betPrice", wireKey: "fVal" },
+  { index: 21, label: "Period", column: "period", wireKey: "period" },
+  {
+    index: 22,
+    label: "Market",
+    column: "market",
+    wireKey: "marketTypeCategory",
+  },
+  {
+    index: 23,
+    label: "Market Id",
+    column: "marketId",
+    wireKey: "betDetails.m",
+  },
+  { index: 24, label: "Side", column: "side", wireKey: "team1" },
+  { index: 25, label: "Open Spots", column: "openSpots", wireKey: "openSpots" },
+  { index: 26, label: "Prop figure", column: "propFigure", wireKey: null },
+  { index: 27, label: "Contestant", column: "contestant", wireKey: "team2" },
+  { index: 28, label: "Figure", column: "figure", wireKey: null },
+  {
+    index: 29,
+    label: "Wager Type Category",
+    column: "wagerTypeCategory",
+    wireKey: null,
+  },
+  { index: 30, label: "Logs", column: "logs", wireKey: null },
+  {
+    index: 31,
+    label: "Time Until Score",
+    column: "timeUntilScore",
+    wireKey: null,
+  },
+  { index: 32, label: "Bet Time", column: "betTime", wireKey: "acceptTime" },
+  { index: 33, label: "Bet Time (Day)", column: "betTimeDay", wireKey: null },
+  {
+    index: 34,
+    label: "Bet Time (Month)",
+    column: "betTimeMonth",
+    wireKey: null,
+  },
+  { index: 35, label: "Bet Time (Hour)", column: "betTimeHour", wireKey: null },
+  {
+    index: 36,
+    label: "Bet Time (Minutes)",
+    column: "betTimeMinutes",
+    wireKey: null,
+  },
+  {
+    index: 37,
+    label: "Bet Time (Seconds)",
+    column: "betTimeSeconds",
+    wireKey: null,
+  },
+  { index: 38, label: "Grade Time", column: "gradeTime", wireKey: "gradeTime" },
+  { index: 39, label: "State", column: "state", wireKey: "state" },
+  { index: 40, label: "Accept Type", column: "acceptType", wireKey: "accept" },
+  { index: 41, label: "Actions", column: "actions", wireKey: null },
+  { index: 42, label: "Type", column: "type", wireKey: "type" },
+  { index: 43, label: "IP Address", column: "ipAddress", wireKey: "ipAddress" },
+  {
+    index: 44,
+    label: "Featured Bet Id",
+    column: "featuredBetId",
+    wireKey: null,
+  },
+  {
+    index: 45,
+    label: "Featured Bet Price",
+    column: "featuredBetPrice",
+    wireKey: null,
+  },
+  {
+    index: 46,
+    label: "Disclaimer",
+    column: "disclaimer",
+    wireKey: "disclaimer",
+  },
+  {
+    index: 47,
+    label: "Teaser Name",
+    column: "teaserName",
+    wireKey: "teaserName",
+  },
+  { index: 48, label: "Admin User", column: "adminUser", wireKey: "adminUser" },
+  {
+    index: 49,
+    label: "Uncorrelated Odds",
+    column: "uncorrelatedOdds",
+    wireKey: "finalUncorrelatedOdds",
+  },
+  { index: 50, label: "Partner", column: "partner", wireKey: "partnerID" },
+  {
+    index: 51,
+    label: "User Group Id",
+    column: "userGroupId",
+    wireKey: "userGroupId",
+  },
+  { index: 52, label: "Delay", column: "delay", wireKey: "delay" },
+] as const;
+export const ROW_SELECTION_COLUMN = {
+  index: 53,
+  label: "Row selection",
+  column: "rowSelection",
+  wireKey: null,
+} as const;
 export type GsLiveColumn =
-  | "login"
-  | "agent"
-  | "bet"
-  | "win"
-  | "loss"
-  | "toWin"
-  | "profit"
-  | "pending"
-  | "gradedTotal"
-  | "pendingTotal"
-  | "wagerCount"
-  | "hold"
-  | "vigorish"
-  | "ratio"
-  | "line"
-  | "side"
-  | "price"
-  | "event"
-  | "league"
-  | "period"
-  | "market"
-  | "sport"
-  | "legs"
-  | "parlay"
-  | "teaser"
-  | "betTime"
-  | "endTime"
-  | "gradeTime"
-  | "description"
-  | "comment";
-
-/**
- * Observed label → canonical key. Several labels collapse onto one key because the
- * console uses them interchangeably across report kinds ("Player" / "Player Name" /
- * "Login"; "Sports" / "Sport").
- */
-const LABELS: Readonly<Record<GsLiveColumn, readonly string[]>> = {
-  login: ["Player", "Player Name", "Login"],
-  agent: ["Agent", "Agent Name"],
-  bet: ["Bet", "Bets"],
-  win: ["Win"],
-  loss: ["Loss"],
-  toWin: ["To Win"],
-  profit: ["Profit"],
-  pending: ["Pending"],
-  gradedTotal: ["Graded total"],
-  pendingTotal: ["Pending total"],
-  wagerCount: ["Wager Count"],
-  hold: ["Hold"],
-  vigorish: ["Vigorish"],
-  ratio: ["Ratio"],
-  line: ["Line"],
-  side: ["Side"],
-  price: ["Price"],
-  event: ["Event"],
-  league: ["League"],
-  period: ["Period"],
-  market: ["Market"],
-  sport: ["Sports", "Sport"],
-  legs: ["Legs"],
-  parlay: ["Parlay"],
-  teaser: ["Teaser"],
-  betTime: ["Bet time"],
-  endTime: ["End time"],
-  gradeTime: ["Grade time"],
-  description: ["Description"],
-  comment: ["Comment"],
+  (typeof LAST_BETS_COLUMNS)[number]["column"] | "rowSelection";
+export interface LastBetsFilter {
+  readonly label: string;
+  readonly control: string;
+  readonly bodyKeys: readonly string[];
+}
+export const LAST_BETS_FILTERS: readonly LastBetsFilter[] = [
+  {
+    label: "Date range (with Grade time / Bet time basis)",
+    control: "dateRange",
+    bodyKeys: ["from", "to", "dateFilterBy"],
+  },
+  { label: "Player", control: "player", bodyKeys: ["partnerUserId"] },
+  { label: "Agent", control: "agent", bodyKeys: ["agent"] },
+  { label: "Event Id", control: "eventId", bodyKeys: ["eventId"] },
+  { label: "Bet Id", control: "betId", bodyKeys: ["betId"] },
+  { label: "Bet Group Id", control: "betGroupId", bodyKeys: ["betGroupId"] },
+  { label: "Group Kind", control: "groupKind", bodyKeys: ["group"] },
+  { label: "Group Name", control: "groupName", bodyKeys: ["group"] },
+  { label: "Free Bet Id", control: "freeBetId", bodyKeys: ["freeBetId"] },
+  { label: "State", control: "state", bodyKeys: ["state"] },
+  { label: "Sport", control: "sport", bodyKeys: ["sId"] },
+  { label: "Period", control: "period", bodyKeys: ["period"] },
+  { label: "Min Wager", control: "minWager", bodyKeys: ["minVolume"] },
+  {
+    label: "Max Time Until Score",
+    control: "maxTimeUntilScore",
+    bodyKeys: ["maxTimeUntilScore"],
+  },
+  { label: "Market", control: "market", bodyKeys: ["mId"] },
+] as const;
+export const LAST_BETS_FILTER_COUNT = 15;
+const ALIASES: Readonly<Record<string, GsLiveColumn>> = {
+  "Player Name": "player",
+  Login: "player",
+  "Player Id": "playerId",
+  Agent: "agent",
+  Ticket: "ticket",
+  "If bet": "ifBet",
+  Bet: "risk",
+  Bets: "risk",
+  "To Win": "toWin",
+  "Then bet": "thenBet",
+  Result: "result",
+  "Free bet": "freeBet",
+  "Sport / League": "sportLeague",
+  Sports: "sportLeague",
+  Sport: "sportLeague",
+  "Sport (SportId)": "sportSportId",
+  "League (LeagueId)": "leagueLeagueId",
+  "Event Id": "eventId",
+  "Event Details": "eventDetails",
+  "Bet price": "betPrice",
+  Period: "period",
+  Market: "market",
+  "Market Id": "marketId",
+  "Open Spots": "openSpots",
+  "Prop figure": "propFigure",
+  Contestant: "contestant",
+  Figure: "figure",
+  "Wager Type Category": "wagerTypeCategory",
+  Logs: "logs",
+  "Time Until Score": "timeUntilScore",
+  "Bet Time": "betTime",
+  "Bet Time (Day)": "betTimeDay",
+  "Bet Time (Month)": "betTimeMonth",
+  "Bet Time (Hour)": "betTimeHour",
+  "Bet Time (Minutes)": "betTimeMinutes",
+  "Bet Time (Seconds)": "betTimeSeconds",
+  "Grade Time": "gradeTime",
+  State: "state",
+  "Accept Type": "acceptType",
+  Actions: "actions",
+  Type: "type",
+  "IP Address": "ipAddress",
+  "Featured Bet Id": "featuredBetId",
+  "Featured Bet Price": "featuredBetPrice",
+  Disclaimer: "disclaimer",
+  "Teaser Name": "teaserName",
+  "Admin User": "adminUser",
+  "Uncorrelated Odds": "uncorrelatedOdds",
+  Partner: "partner",
+  "User Group Id": "userGroupId",
+  Delay: "delay",
+  "Row selection": "rowSelection",
 };
-
-/** Header comparisons ignore case, surrounding space and repeated whitespace. */
 function normalizeLabel(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
-
-const BY_LABEL: ReadonlyMap<string, GsLiveColumn> = new Map(
-  Object.entries(LABELS).flatMap(([column, labels]) =>
-    labels.map(
-      (label) => [normalizeLabel(label), column as GsLiveColumn] as const,
-    ),
+const BY_LABEL: ReadonlyMap<string, GsLiveColumn> = new Map([
+  ...LAST_BETS_COLUMNS.map(
+    (c) => [normalizeLabel(c.label), c.column as GsLiveColumn] as const,
   ),
-);
-
-/** Canonical key for one observed header label, or `null` if never observed. */
+  ...Object.entries(ALIASES).map(
+    ([label, column]) => [normalizeLabel(label), column] as const,
+  ),
+]);
 export function canonicalizeGsLiveHeader(header: string): GsLiveColumn | null {
   return BY_LABEL.get(normalizeLabel(header)) ?? null;
 }
-
 export interface MappedHeaders {
-  /** One entry per input header, in order. `null` where the label was not observed. */
   readonly columns: (GsLiveColumn | null)[];
-  /** Headers that matched no known label — a schema change or a different report. */
   readonly unknown: string[];
-  /** Canonical keys that appeared more than once (e.g. two "Win" columns). */
   readonly duplicates: GsLiveColumn[];
 }
-
-/** Map an exported report header row positionally, surfacing unknown labels. */
 export function mapGsLiveHeaders(headers: readonly string[]): MappedHeaders {
   const columns = headers.map((header) => canonicalizeGsLiveHeader(header));
   const seen = new Set<GsLiveColumn>();
@@ -123,12 +277,24 @@ export function mapGsLiveHeaders(headers: readonly string[]): MappedHeaders {
   }
   return {
     columns,
-    unknown: headers.filter((_, index) => columns[index] === null),
+    unknown: headers.filter((_, i) => columns[i] === null),
     duplicates: [...duplicates],
   };
 }
-
-/** All labels known for a column, for document export ("Login (Player / Player Name)"). */
-export function labelsFor(column: GsLiveColumn): readonly string[] {
-  return LABELS[column];
+/** Structural self-check used by the contracts test. */
+export function verifyLastBetsCatalog(): {
+  slots: number;
+  named: number;
+  filters: number;
+  mapped: number;
+  unmapped: number;
+} {
+  const mapped = LAST_BETS_COLUMNS.filter((c) => c.wireKey !== null).length;
+  return {
+    slots: UI_LAST_BETS_SLOT_COUNT,
+    named: LAST_BETS_COLUMNS.length,
+    filters: LAST_BETS_FILTERS.length,
+    mapped,
+    unmapped: LAST_BETS_COLUMNS.length - mapped,
+  };
 }

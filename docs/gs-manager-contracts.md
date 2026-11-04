@@ -476,3 +476,35 @@ loopback-only if a local HTTP API is ever added (`zip:contracts/api-security-spe
 - The CLI's manifest ledger is not an ingestion checkpoint system (`zip:README.md:37`).
 - No mock output contains customer data, and no live call was ever made (`zip:README.md:3`,
   `zip:README.md:37`).
+
+## Last Bets — 53-column UI catalog and 15 filters (observed 2026-11-03)
+
+The live **Events → Bet History → Table settings** shows **53 / 53**. Reconciled against the
+2026-11-03 browser extraction: **52 named columns plus the row-selection checkbox**. The catalog is
+encoded in `lib/gslive_report_columns.ts`:
+
+- `UI_LAST_BETS_SLOT_COUNT = 53`, `UI_LAST_BETS_NAMED_COLUMN_COUNT = 52`
+- `LAST_BETS_COLUMNS` (52 entries, in UI order) and `ROW_SELECTION_COLUMN` (slot 53, modeled
+  separately; it is not treated as a wire field until a table-schema capture confirms it)
+- `LAST_BETS_FILTERS` — **15** filter controls, each with the `getBetReport` body key(s) it reaches
+
+Columns: Bet Group, Id, Player, Player Id, Profile, Agent, Ticket, If bet, Risk, To Win, Then bet,
+Premium, Result, Free bet, Sport / League, Sport (SportId), League (LeagueId), Event Id, Event
+Details, Bet price, Period, Market, Market Id, Side, Open Spots, Prop figure, Contestant, Figure,
+Wager Type Category, Logs, Time Until Score, Bet Time, Bet Time (Day), Bet Time (Month), Bet Time
+(Hour), Bet Time (Minutes), Bet Time (Seconds), Grade Time, State, Accept Type, Actions, Type,
+IP Address, Featured Bet Id, Featured Bet Price, Disclaimer, Teaser Name, Admin User, Uncorrelated
+Odds, Partner, User Group Id, Delay (+ row selection = 53).
+
+Filters (15): **Date range** with **Grade time / Bet time** basis (`from`, `to`, `dateFilterBy`),
+Player (`partnerUserId`), Agent (`agent`), Event Id (`eventId`), Bet Id (`betId`), Bet Group Id
+(`betGroupId`), Group Kind (`group`), Group Name (`group`; same body key, unverified split), Free Bet
+Id (`freeBetId`), State (`state`), Sport (`sId`), Period (`period`), Min Wager (`minVolume`),
+**Max Time Until Score** (`maxTimeUntilScore`), Market (`mId`).
+
+Wire reconciliation: `Scratch/betReport-all.json` has **69** raw row keys; 38 of the 52 columns map
+to a single wire key, 14 are UI-only/derived/nested (`betDetails.m`, Logs, Actions, Time Until Score,
+Bet Time parts, Featured Bet fields, Prop figure, Figure, Sport / League, Wager Type Category). `Scratch/ajax-getBetReport-body.json` has
+**20** body keys and contains every mapped filter key. `Scratch/gslive-wagers-by-state.csv` has **18**
+columns; all 18 canonicalize through the label map. This catalog is UI vocabulary, not a transport
+contract: every report kind remains `blocked_contract` until a redacted request/response pair lands.
