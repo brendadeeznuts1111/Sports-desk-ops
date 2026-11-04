@@ -380,6 +380,10 @@ function computeCumulativeAndDelta(
         const lines = text.split("\n");
         leftover = lines.pop() ?? "";
 
+        // Intentional hand-rolled JSONL loop; `Bun.JSONL.parseChunk` would stop at the first
+        // malformed line and lose cumulative state. The writer may truncate mid-line on signal,
+        // so middle-line corruption must not blind the reader. See
+        // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;

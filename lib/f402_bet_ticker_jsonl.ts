@@ -98,6 +98,10 @@ export async function readF402TickerJsonl(
     const rows: F402TickerRow[] = [];
     let skippedLines = 0;
     let watermark = previousWatermark;
+    // Intentional hand-rolled JSONL loop on the compressed-file path: we need the per-line
+    // `skippedLines` count, which `Bun.JSONL.parse()` / `parseChunk` (used on the uncompressed
+    // byte-range path below) do not report. See
+    // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
       let payload: unknown;

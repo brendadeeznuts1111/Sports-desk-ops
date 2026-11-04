@@ -441,6 +441,43 @@ BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=scratch/profiles BUN_CPU_PROFILE_NAME=supe
 
 Profiles are diagnostics, not artifacts: write them under `scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
 
+## When NOT to migrate to `Bun.JSONL` (2026-11-04 audit)
+
+The repo reaches for `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on new JSONL work
+(25+ call sites; see the long-tail table above, [`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts),
+[`lib/cron_journal.ts`](../lib/cron_journal.ts), [`services/sportsdesk_ingestion_replay.ts`](../services/sportsdesk_ingestion_replay.ts)).
+A sweep of the remaining hand-rolled `for (line of text.split("\n")) { try { JSON.parse(line) } catch {…} }`
+sites found **six intentional holdouts**, each because `Bun.JSONL` lacks a specific semantic they
+depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touching these files.
+
+| File:line                                        | Pattern                                     | Semantic `Bun.JSONL` does not provide                                                       |
+| :----------------------------------------------- | :------------------------------------------ | :------------------------------------------------------------------------------------------ |
+| `lib/execution_paper.ts:161`                     | per-line try/catch, skip malformed          | Ledger reads skip malformed lines; `parse()` stops at the first bad line and drops the rest |
+| `lib/f402_bet_ticker_jsonl.ts:101` (zst/gz path) | per-line try/catch + `skippedLines` counter | Per-line skip count; `parseChunk` reports one aggregate `error`, not a per-row tally        |
+| `scripts/live_positions_cron.ts:355`             | chunked streaming + per-line skip           | Crash-tolerant reader for a 16 MB chunked stream (writer may truncate mid-line on signal)   |
+| `scripts/audit_tool_calls.ts:109`                | per-line try/catch                          | DSH session files can have bad **middle** lines, not just a partial trailing one            |
+| `scripts/ingestion_replay_xml_golden_gate.ts:45` | strict parse + original-text passthrough    | Gate must throw on malformed; preserves the exact original line text when `xml` is absent   |
+| `lib/stale_line_cohort.ts:256`                   | strict parse in a `catch` fallback          | Must throw on malformed input; `parse()` returns the parsed prefix silently                 |
+
+### Decision rule
+
+- **Use `Bun.JSONL.parse(text)`** when every line is expected to be valid JSON and a malformed
+  line should either throw (if nothing parsed) or be acceptable as silent truncation of the
+  prefix. Drop-in replacement for the `.split("\n").filter(…).map(JSON.parse)` pipeline.
+- **Use `Bun.JSONL.parseChunk(text | Uint8Array)`** for streaming or zero-copy byte handling.
+  Handles a partial trailing line correctly (`result.read < input.length` ⇒ hold the tail).
+  A malformed middle line stops parsing and reports the error; no per-line recovery.
+- **Keep the hand-rolled `for (line of text.split("\n")) { try { JSON.parse(line) } catch {…} }`
+  loop** when any of the following holds:
+  - Skip-malformed is the intended semantic (append-only ledgers, audit logs).
+  - A per-line error count is needed in the output.
+  - The reader must tolerate bad middle lines (concurrent writers, crash recovery, chunked
+    streaming where the writer may die mid-line).
+  - The gate must **throw** on the first bad line — `Bun.JSONL.parse()` returns the parsed
+    prefix silently instead.
+
+If you migrate one of the six holdouts above, remove its row from this table in the same PR.
+
 ## v1.4.0 feed/transport primitives in use
 
 - **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
