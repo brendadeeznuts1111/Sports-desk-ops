@@ -226,6 +226,8 @@ Usage: ./bin/dx <command> [args...]
                                     Cross-domain customer book ↔ Polymarket wallet join
     ./bin/dx pipeline               Docs/artifact verification gates (apply:captures … verify:docs)
     ./bin/dx exec <program> [args]  Run any program with dx's environment (PATH programs also run directly)
+    ./bin/dx exec --with <group|NAME> [--] <program> [args]
+                                    ...and inject keychain-backed credentials (groups: r2 pages blob gslive daemon telegram)
     ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login, --profile <dir>)
     ./bin/dx session [status|login] Portal session file the replay transport reads (status is read-only)
     ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
@@ -508,6 +510,11 @@ VERSION_HELP
     fi
     ;;
   exec)
+    # `dx exec --with <group|NAME>[,…] [--] prog args` hands keychain-backed credentials to that
+    # one program (environment first, keychain second). Without --with it is the plain passthrough.
+    case "${1:-}" in
+      --with | --with=*) exec bun "$REPO_ROOT/scripts/secrets_env.ts" exec "$@" ;;
+    esac
     exec "$@"
     ;;
   *)

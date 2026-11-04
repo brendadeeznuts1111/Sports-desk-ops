@@ -180,6 +180,7 @@
     "hierarchy:replay": "bun run scripts/capture/f402_hierarchy_replay.ts",
     "secrets:f402": "bun run scripts/secrets_f402.ts",
     "secrets:gslive": "bun run scripts/secrets_gslive.ts",
+    "secrets:env": "bun run scripts/secrets_env.ts",
     "capture:har": "bun run scripts/capture/har_probe.ts",
     "capture:discover": "bun run scripts/capture/discover_customers.ts",
     "capture:tls": "bun run scripts/capture/tls_provenance.ts",
