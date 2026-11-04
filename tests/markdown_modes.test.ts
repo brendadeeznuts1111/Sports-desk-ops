@@ -44,6 +44,18 @@ describe("markdown mode divergence", () => {
     expect(Bun.markdown.render(SAMPLE, {}, {})).toContain("[[page]]");
   });
 
+  test("fenced code keeps the info-string as a language class", () => {
+    const html = Bun.markdown.html("```ts\nconst x: number = 1\n```");
+    expect(html).toContain('<code class="language-ts">');
+    expect(html).toContain("const x: number = 1");
+
+    const custom = Bun.markdown.render("```js\nconsole.log(1)\n```", {
+      code: (children, meta) =>
+        `<pre data-language="${meta?.language ?? ""}">${children}</pre>`,
+    });
+    expect(custom).toBe('<pre data-language="js">console.log(1)\n</pre>');
+  });
+
   test("autolinks are opt-in, and headings accept the partial { ids: true } shape", () => {
     const plain = Bun.markdown.html("Visit www.example.com");
     expect(plain).not.toContain("<a ");
