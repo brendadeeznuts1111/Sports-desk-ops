@@ -121,6 +121,8 @@
     if (manager) decorated = applySearchCustomerEscaper(manager) || decorated;
     if (manager)
       decorated = applyGetCommunicationMessagesEscaper(manager) || decorated;
+    var playerInfo = defined["manager/module/player-info"];
+    if (playerInfo) decorated = applyPlayerInfoEscaper(playerInfo) || decorated;
     return decorated;
   }
 
@@ -154,6 +156,8 @@
           communicationMessagesListEscaperInstalled,
         communicationMessagesListEscaperFailure:
           communicationMessagesListEscaperFailure,
+        playerInfoEscaperInstalled: playerInfoEscaperInstalled,
+        playerInfoEscaperFailure: playerInfoEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -1012,6 +1016,84 @@
     return true;
   }
 
+  // Sink migration for manager/module/player-info. Its `data` method fetches getInfoPlayer and
+  // renders n.Password with .html() into [data-field="password-h"]. The same value is also written
+  // with .val() into the reset field, so escape only the .html() call for that selector; the data
+  // object and the val() path stay raw.
+  var playerInfoEscaperInstalled = false;
+  var playerInfoEscaperFailure = null;
+
+  function applyPlayerInfoEscaper(PlayerInfo) {
+    if (playerInfoEscaperInstalled) return false;
+    if (!PlayerInfo || !PlayerInfo.prototype) {
+      playerInfoEscaperFailure = "player-info-invalid";
+      return false;
+    }
+    var proto = PlayerInfo.prototype;
+    var original = proto.data;
+    if (typeof original !== "function") {
+      playerInfoEscaperFailure = "player-info-data-missing";
+      console.error(
+        "[f402-seam] player-info password escaper cannot install: data() missing — update the overlay against the current module",
+      );
+      return false;
+    }
+    playerInfoEscaperInstalled = true;
+    Object.defineProperty(proto, "data", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          typeof jq.ajax !== "function"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var baseAjax = jq.ajax;
+        jq.ajax = function (options) {
+          if (
+            options &&
+            options.data &&
+            options.data.operation === "getInfoPlayer" &&
+            typeof options.success === "function"
+          ) {
+            var rawSuccess = options.success;
+            options.success = function () {
+              var baseHtml = jq.fn.html;
+              jq.fn.html = function (value) {
+                if (
+                  typeof value === "string" &&
+                  this &&
+                  typeof this.is === "function" &&
+                  this.is('[data-field="password-h"]')
+                ) {
+                  return baseHtml.call(this, api.escHtml(value));
+                }
+                return baseHtml.apply(this, arguments);
+              };
+              try {
+                return rawSuccess.apply(this, arguments);
+              } finally {
+                jq.fn.html = baseHtml;
+              }
+            };
+          }
+          return baseAjax.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.ajax = baseAjax;
+        }
+      },
+    });
+    return true;
+  }
+
   function apply(api) {
     if (!api) return false;
     if (typeof api === "function") return decorateClass(api);
@@ -1039,6 +1121,13 @@
         map.name === "system/security"
       ) {
         if (apply(defined)) appliedCount += 1;
+      }
+      if (
+        !window.__F402_SEAM_DISABLED__ &&
+        map &&
+        map.name === "manager/module/player-info"
+      ) {
+        applyPlayerInfoEscaper(defined);
       }
       if (
         !window.__F402_SEAM_DISABLED__ &&

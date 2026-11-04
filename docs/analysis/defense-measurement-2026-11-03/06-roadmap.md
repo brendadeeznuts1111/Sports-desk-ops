@@ -71,17 +71,27 @@ renders as text `A&B` (not `A&amp;B`), `id`/`for` attributes decode to `c&d`, la
 `getElementById` work. Only a raw `#id` jQuery/CSS selector containing `&`/`<` would differ, and
 `setPlayers()` does not use one. Prefer render-copy for new sinks regardless.
 
-**Render-copy decision:** adopted for `getMessageInit` (and `getPopUpMessages` if it follows the same
-multi-consumer shape). `setCommunicationMessages` is the exception — one `.html()` call containing a
-raw template plus interpolated fields, so it uses the `setHistory`-style per-field escape. The arrays
-landmine and parser-semantics questions disappear for render-copy paths.
+**Render-copy decision:** adopted for `getMessageInit` (escaped copies for the dropdown render,
+`emailCount` restored raw). `getPopUpMessages`, `setCommunicationMessages`, `searchCustomer` and
+`getCommunicationMessages` are splicers, so they use `setHistory`-style per-field escape at the
+template/sink boundary. The arrays landmine and parser-semantics questions disappear for
+render-copy paths.
 
-**Fifth sink — `searchCustomer` (fullscreen search):** it is **live in the pinned controller**
-(`searchCustomer:function`, operation `searchCustomerAdmin`, renders `info.Password`, `info.Login`
-and `info.NameFirst`) and is bound at boot to `[data-field="search-customer"]` keyup. The captured
-DOM's fullscreen-search panel is commented out, so _reachability is unresolved_ rather than dead.
-It is scheduled, not omitted: migrate it as the fifth sink after the four below, once
-reachability is confirmed.
+**`searchCustomer` (fullscreen search):** **live in the pinned controller** and bound at boot to
+`[data-field="search-customer"]` keyup. Migrated **defensively** (not reachability-gated):
+`Login`/`Password`/`NameFirst` escaped in the `searchCustomerAdmin` response; `CustomerID` stays raw
+because it is used in a jQuery `[data-customer="…"]` selector. `getCommunicationMessages` (Stamp +
+popup) also landed; Lobibox source confirms `msg` is concatenated without escaping, so the popup path
+was a real sink.
+
+**Module-level sinks (2026-11-04):** `player-info.js` renders `n.Password` via `.html()` into
+`[data-field="password-h"]` (plaintext on screen). Wrapped by intercepting `getInfoPlayer` success
+and escaping only that selector; `.val()` and stored data stay raw. Module anchors `password-h`,
+`bet-desc`, `gameReport` are now checked by `pin:cdn` against the live module bytes. `bet-desc` is
+**not** an independent sink: it copies already-rendered `.gameReport` HTML into the delete modal; the
+origin is `getResultTicketPending` / `getResultTicketMobileDetails`, which substitute raw
+`Description`/`ChosenTeamID`/line/`Content` into the pending-row HTML. Fixing `bet-desc` alone would
+not close that path — the source render is the next follow-up.
 
 **Raised instead:** the Bearer verdict (item 2 — six requests, ~2 server-team hours) and the
 financial ledger/reconciliation question (item 3). `data-pass` stays P0 upstream; the pin gate is

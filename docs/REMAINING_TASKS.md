@@ -201,11 +201,11 @@ so an id resolves without guessing which artifact it came from.
     the migrated path. **Not blocked by the external-view canary.**
   - **Unpaused 2026-11-04 as hygiene:** escaping is correct regardless of the Bearer verdict; the
     overlay now escapes `NameFirst`/`Login`/`Password` on `manager/manager.searchComponent` rows.
-    All tracked sinks landed: `searchComponent`, `setHistory`, `getMessageInit`, `getPopUpMessages`,
-    `setCommunicationMessages`, `searchCustomer` (defensive, independent of reachability), and
-    `getCommunicationMessages` (Stamp + popup; Lobibox confirmed to concatenate `msg` without
-    escaping). `<BR>` strip preserved before escape. Next: broader `.html()`-sink census, if wanted;
-    the tracked sink class is closed. `searchCustomer` (fullscreen) is the fifth sink,
+    All tracked manager sinks landed; module-level `player-info.password-h` now escaped.
+    `bet-desc` in `pending-thin.js` is a copy of already-rendered `.gameReport` HTML, _not_ the
+    origin — the source render (`getResultTicketPending` / `getResultTicketMobileDetails`, raw
+    `Description`/`ChosenTeamID`/line/`Content` substitution) is the next follow-up. Module anchors
+    (`password-h`, `bet-desc`, `gameReport`) are checked by `pin:cdn`. `searchCustomer` (fullscreen) is the fifth sink,
     scheduled once reachability is confirmed: live in the pinned controller, trigger markup
     absent/commented.
 

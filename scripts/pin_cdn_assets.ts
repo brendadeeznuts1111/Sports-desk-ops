@@ -19,7 +19,10 @@
 import { parseArgs } from "node:util";
 
 import { extractExternalAssets } from "../lib/f402_cdn_assets.ts";
-import { missingExternalViewGuardAnchors } from "../lib/f402_client_seams.ts";
+import {
+  missingExternalViewGuardAnchors,
+  missingModuleSinkAnchors,
+} from "../lib/f402_client_seams.ts";
 import {
   appModuleCoverage,
   appModuleUrl,
@@ -332,6 +335,16 @@ async function check(): Promise<void> {
         driftCount += 1;
         details.push(
           `css_reference_drift ${url}: ${referenceDrift.join(", ")}`,
+        );
+      }
+      const sinkAnchors = missingModuleSinkAnchors(
+        url,
+        new TextDecoder().decode(outcome.bytes),
+      );
+      if (sinkAnchors.length > 0) {
+        driftCount += 1;
+        details.push(
+          `module_sink_anchor_missing ${url}: ${sinkAnchors.join(", ")} — the overlay wrapper is inert`,
         );
       }
       continue;

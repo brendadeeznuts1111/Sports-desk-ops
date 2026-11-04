@@ -11,6 +11,7 @@ import {
   isAllowedModule,
   managerModuleIds,
   missingExternalViewGuardAnchors,
+  missingModuleSinkAnchors,
   managerModuleLeaves,
   parseRenderCheck,
   parseSeamProbe,
@@ -580,6 +581,87 @@ describe("security seam preload: module allowlist", () => {
     instance.players[0]!.NameFirst = "<b>y</b>";
     instance.searchComponent();
     expect(instance.players[0]!.NameFirst).toContain("&lt;b&gt;");
+  });
+
+  test("module sink anchors exist and fail on a move", async () => {
+    expect(
+      missingModuleSinkAnchors(
+        "https://www.fantasy402.com/app/manager/module/player-info.js",
+        "x password-h y",
+      ),
+    ).toEqual([]);
+    expect(
+      missingModuleSinkAnchors(
+        "https://www.fantasy402.com/app/manager/module/player-info.js",
+        "x password z",
+      ),
+    ).toEqual(["password-h"]);
+    expect(
+      missingModuleSinkAnchors(
+        "https://www.fantasy402.com/app/manager/module/pending-thin.js",
+        "gameReport but no modal field",
+      ),
+    ).toEqual(["bet-desc"]);
+    expect(
+      missingModuleSinkAnchors("https://example.test/other.js", ""),
+    ).toEqual([]);
+  });
+
+  test("player-info.password-h is escaped while other .html calls stay raw", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    const htmlCalls: string[] = [];
+    const passwordTarget = {
+      is: (sel: string) => sel === '[data-field="password-h"]',
+    };
+    const otherTarget = { is: () => false };
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+      fn: {
+        html(this: unknown, value: string): void {
+          htmlCalls.push(value);
+        },
+      },
+    };
+    class PlayerInfo {
+      data(): void {
+        const jq = context.window["jQuery"] as {
+          ajax: (o: unknown) => void;
+          fn: { html: (this: unknown, v: string) => void };
+        };
+        jq.ajax({
+          data: { operation: "getInfoPlayer" },
+          success: () => {
+            jq.fn.html.call(passwordTarget, 'p"w<d');
+            jq.fn.html.call(otherTarget, "<b>raw</b>");
+          },
+        });
+      }
+    }
+    defined["manager/module/player-info"] = PlayerInfo;
+    decorateNamed(
+      context,
+      "manager/module/player-info",
+      PlayerInfo as unknown as Record<string, unknown>,
+    );
+    new PlayerInfo().data();
+    expect(captured).not.toBeNull();
+    (captured as unknown as { success: () => void }).success();
+    expect(htmlCalls[0]).toBe("p&quot;w&lt;d");
+    expect(htmlCalls[1]).toBe("<b>raw</b>");
   });
 
   test("a manager class without searchComponent installs loudly, not silently", async () => {

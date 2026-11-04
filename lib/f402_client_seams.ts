@@ -66,6 +66,21 @@ export const ALLOWED_MODULES: readonly string[] = [
  * while the concatenation the wrapper intercepts is gone — update the anchor and the wrapper
  * together. The allowlist remains the bypass control either way.
  */
+/**
+ * Sinks that live in lazily loaded manager modules rather than manager.js. The pin gate fetches
+ * these assets anyway; each anchor must survive the pin or the overlay wrapper is inert.
+ */
+export const MODULE_SINK_ANCHORS: Readonly<Record<string, readonly string[]>> =
+  {
+    "https://www.fantasy402.com/app/manager/module/player-info.js": [
+      "password-h",
+    ],
+    "https://www.fantasy402.com/app/manager/module/pending-thin.js": [
+      "bet-desc",
+      "gameReport",
+    ],
+  } as const;
+
 export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
   "setAccountInfo:function",
   '"external-view"',
@@ -80,6 +95,15 @@ export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [
 ] as const;
 
 /** Anchor substrings missing from a controller bundle. Empty means the wrapper still has a target. */
+export function missingModuleSinkAnchors(
+  url: string,
+  source: string,
+): string[] {
+  const anchors = MODULE_SINK_ANCHORS[url];
+  if (anchors === undefined) return [];
+  return anchors.filter((anchor) => !source.includes(anchor));
+}
+
 export function missingExternalViewGuardAnchors(managerJs: string): string[] {
   return EXTERNAL_VIEW_GUARD_ANCHORS.filter(
     (anchor) => !managerJs.includes(anchor),
