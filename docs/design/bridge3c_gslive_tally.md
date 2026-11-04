@@ -1,6 +1,6 @@
 # Bridge 3c — GSLive Bet Report / Tally (design, no implementation)
 
-Status: **design only.** Batch snapshot `gslive-tally/<YYYY-MM-DD>/rollup.json` plus
+Status: **Phase 1 implemented** (`lib/gslive_tally_rollup.ts`, `lib/gslive_tally_sink.ts`, `bun run bridge3c:rollup`). Batch snapshot `gslive-tally/<YYYY-MM-DD>/rollup.json` plus
 `gslive-tally/latest.json` pointer. Source: GSLive Partner 118 `getBetReport` / markets-report.
 Shared contracts: [`pii_sanitization.md`](./pii_sanitization.md), [`stream_map.md`](./stream_map.md),
 [`lib/bun_shapes.ts`](../../lib/bun_shapes.ts).

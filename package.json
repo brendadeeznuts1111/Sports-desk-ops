@@ -226,7 +226,9 @@
     "fetch-config": "bun run fetch-config.ts",
     "fetch-bet-tally": "bun run scripts/fetch-bet-tally.ts",
     "fetch-periods": "bun run scripts/fetch-periods.ts",
-    "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts"
+    "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts",
+    "bridge3c:rollup": "bun run scripts/gslive_tally_bridge3c.ts",
+    "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts"
   },
   "keywords": [
     "sportsdesk",
