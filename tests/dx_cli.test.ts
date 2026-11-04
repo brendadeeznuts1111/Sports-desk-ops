@@ -92,6 +92,57 @@ function isSymlinkTo(file: string, target: string): boolean {
   return lstatSync(file).isSymbolicLink() && readlinkSync(file) === target;
 }
 
+describe("dx exec --with", () => {
+  const R2_ENV = {
+    R2_ACCESS_KEY_ID: "test-access-id",
+    R2_SECRET_ACCESS_KEY: "test-secret-value",
+    CLOUDFLARE_ACCOUNT_ID: "test-account",
+    R2_BUCKET_NAME: "test-bucket",
+  };
+
+  // Every requested name is already in the environment, so the keychain is never read: a test
+  // must not reach the real keychain (see the "Hard rules" note in AGENTS.md).
+  test("--with r2 delivers exactly the r2 group to the child", async () => {
+    const result = await dx(["exec", "--with", "r2", "--", "env"], R2_ENV);
+    expect(result.code).toBe(0);
+    const childEnv = new Map(
+      result.stdout
+        .split("\n")
+        .filter((line) => line.includes("="))
+        .map((line) => [
+          line.slice(0, line.indexOf("=")),
+          line.slice(line.indexOf("=") + 1),
+        ]),
+    );
+    for (const [name, value] of Object.entries(R2_ENV)) {
+      expect(childEnv.get(name)).toBe(value);
+    }
+  });
+
+  test("the injection summary names sources and never a value", async () => {
+    const result = await dx(["exec", "--with", "r2", "--", "true"], R2_ENV);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("secrets: injecting");
+    expect(result.stderr).toContain("R2_ACCESS_KEY_ID←env");
+    for (const value of Object.values(R2_ENV)) {
+      expect(result.stderr).not.toContain(value);
+    }
+  });
+
+  test("an unknown group is refused with exit 2 and runs nothing", async () => {
+    const result = await dx(["exec", "--with", "r3", "--", "echo", "ran"]);
+    expect(result.code).toBe(2);
+    expect(result.stdout).not.toContain("ran");
+  });
+
+  test("plain `dx exec` still passes through without injecting", async () => {
+    const result = await dx(["exec", "echo", "plain"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe("plain");
+    expect(result.stderr).not.toContain("secrets: injecting");
+  });
+});
+
 describe("dx command dispatch", () => {
   test("an unknown command exits 2 with a suggestion instead of `exec: … not found`", async () => {
     const result = await dx(["stauts"]);

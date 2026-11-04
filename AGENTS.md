@@ -85,6 +85,10 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
   mutate live data to make a number look right.
 - **Evidence labelling:** any claim in docs or commits states what was measured and when. The docs
   gates exist because fabricated contracts shipped before.
+- **Tests never read the real keychain.** `./bin/dx exec --with <group|NAME>` reads it for any name
+  missing from the environment, and no source scan sees a shell wrapper. A test may call it only
+  with every requested name already set in the spawned environment (see `tests/dx_cli.test.ts`);
+  otherwise inject through a fake provider (`lib/secret_env.ts` takes `read`).
 - **Token/secret work** goes through the documented SSOT path; `.1password/environments.toml` is
   wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
   `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
