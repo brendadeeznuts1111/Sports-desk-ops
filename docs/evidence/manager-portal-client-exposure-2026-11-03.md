@@ -40,7 +40,8 @@ own login is a sufficient search term), and can then read:
 
 Impact is therefore not "act as agent" in the abstract: it is **full manager API access with the
 agent's token, plus a reusable plaintext password**, and it survives the session if the password is
-reused. `document.cookie` is irrelevant — see §2.
+reused. The token store is `sessionStorage`, not a cookie (traced in §2), so `document.cookie` is
+irrelevant and there is no cookie CSRF surface to bring into the threat model.
 
 **What this establishes:** the render sink, the data path and the absence of output encoding.
 **What it does not establish:** that the player-facing profile update accepts markup in `NameFirst`.
@@ -59,11 +60,21 @@ Unauthenticated probes on 2026-11-03 (and the recorded authenticated boot reques
 | recorded authenticated `getAuthorizations`                                 | 200; cookies are only `cf_clearance` + `__cf_bm`; the credential is the redacted `Authorization` header; **no `Set-Cookie`, no CSRF header** |
 
 The only `Set-Cookie` on any response is Cloudflare `__cf_bm` (bot management, `HttpOnly`,
-`SameSite=None`, `Secure`) — not a session or CSRF credential, and unreadable by script. So there is
-no ambient authority to forge cross-site requests with, and §1 does not need one: the token is
-readable by the injected script and replayable from anywhere as
-`authorization: Bearer <sessionStorage.credentials.code>`. The cookie half of the original
-hypothesis is moot.
+`SameSite=None`, `Secure`) — not a session or CSRF credential, and unreadable by script.
+
+The credential path is now traced end to end in the pinned `security.js`:
+
+| Byte          | What it does                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| 16389         | `authenticate_normal` writes `sessionStorage.credentials = {code, redirect_uri, password, customerID}` |
+| 17663 / 17739 | the M/A login branch also writes `sessionStorage.token`                                                |
+| 19652         | `verifySession` hydrates `n.token = credentials.code` and starts the refresh interval                  |
+| 20296         | `renewToken` refreshes `n.token` **in memory only** — it never writes storage                          |
+| ~24422        | `$.ajaxPrefilter` reads `n.token` for `Authorization: Bearer`; no cookie participates                  |
+
+So there is **no ambient credential**: CSRF is not the exposure, and `n.csrf()` returning `""` is
+correct rather than a gap. The token is JS-readable for the life of the tab, which makes §1's XSS the
+whole game and makes the client escaping seam the primary control for it.
 
 ## 3. Path #3 — the CDN trust root and a test stylesheet in production
 
@@ -129,6 +140,31 @@ Detection for path #3, in the existing pin pattern:
 - The two tracked Mini App pages now load `telegram.org/js/telegram-web-app.js` with its pinned SRI.
 - `tests/f402_cdn_integrity.test.ts` covers the SHA-384 vector, extraction/normalization, the four
   rejection classes, rewrite behaviour, and that the tracked pages still pass the gate.
+
+Client-side seam (this repository, rolling out):
+
+- `client/overlay/security-seams.preload.js` — injected before page scripts over CDP
+  (`Page.addScriptToEvaluateOnNewDocument`) on the Chrome backend. It decorates
+  `system/security` on `requirejs.onResourceLoad` with **own properties only** (`escHtml`, `escUrl`,
+  `csrf`, `sessionExpired`, `isAuthenticated`, `requireAuth`, `allowedModules`, `isAllowedModule`,
+  `endSession`, `flags`); the prototype is untouched and no call site changes.
+- `isAllowedModule` accepts a leaf or a full AMD id and gates the leaf; the allowlist is seeded from
+  the pinned controller graph, so `message`, `total-active-customer` and the `customer-admin`
+  submodules are covered. The gate fails if the pinned controller references a leaf the allowlist
+  omits.
+- The kill switch `?no-seam` is latched into `window.__F402_SEAM_DISABLED__` at preload time and read
+  from that global at decoration time, so a page that rewrites its URL cannot re-enable the seam.
+- `probeSecuritySeams` asserts own properties, every controller leaf, and `isAuthenticated()` on the
+  booted page; it **reports `csrf` as dormant and why**, and it returns `covered: false` on WebKit
+  instead of passing.
+- **WebKit is not covered.** Bun.WebView has no preload/interception hook and WebKit has no `cdp()`;
+  Safari/iPhone sessions keep the `external-view` bypass until a non-CDP path exists. This is a
+  phased rollout, not a complete fix.
+- **Held for one cycle:** the `external-view` call site. `manager.js` `setAccountInfo` runs
+  `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no auth check. The
+  four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else unchanged) is
+  specified but not applied; bet ticker loads through this path and the seam must first prove
+  itself on a live session. **The gap remains open until that follow-up lands.**
 
 Limits, stated so nobody relies on a control that does not exist:
 
