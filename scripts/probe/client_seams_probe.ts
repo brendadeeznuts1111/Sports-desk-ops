@@ -11,8 +11,10 @@
  * allowlist, and that `isAuthenticated()` returns true on the page the fix will guard. WebKit has no
  * cdp(), so this runner only launches Chrome and reports `covered: false` for any other backend.
  *
- * Exit: 0 covered + clean, 1 covered + issues, 3 not covered, 4 probe could not run (login/boot).
- * No credential is printed; login uses the keychain/TTY path in scripts/capture/f402_login.ts.
+ * Exit: 0 covered + authenticated + clean; 1 covered but a structural assertion failed;
+ *       2 covered, structural pass, authenticated path unverified; 3 not covered (WebKit);
+ *       4 probe could not run (login/boot). No credential is printed; login uses the keychain/TTY
+ * path in scripts/capture/f402_login.ts.
  */
 
 import { join } from "node:path";
@@ -22,7 +24,10 @@ import {
   installSecuritySeamsPreload,
   probeSecuritySeams,
 } from "../../lib/f402_client_overlay.ts";
-import { managerModuleLeaves } from "../../lib/f402_client_seams.ts";
+import {
+  managerModuleLeaves,
+  seamProbeExitCode,
+} from "../../lib/f402_client_seams.ts";
 import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { resolveF402WebViewProfileDir } from "../../lib/f402_replay_transport.ts";
 import { loginF402 } from "../capture/f402_login.ts";
@@ -56,7 +61,10 @@ if (values.help === true) {
   --login          sign in first via keychain/TTY (scripts/capture/f402_login.ts)
   --waitMs <ms>    boot wait after the probed navigation (default 30000)
   --no-seam        negative control: skip the preload, expect the probe to fail
-  --help           this text`);
+  --help           this text
+
+  Exit: 0 covered+authenticated+clean; 1 structural failure; 2 structural pass, authenticated
+  unverified; 3 not covered (WebKit); 4 could not run.`);
   process.exit(0);
 }
 
@@ -164,6 +172,8 @@ try {
         title: view.title,
         preloadInstalled: installed,
         securityModuleLoaded: booted,
+        structural: probe.structural,
+        authenticated: probe.authenticated === true ? "verified" : "unverified",
         probe,
       },
       null,
@@ -171,8 +181,7 @@ try {
     ),
   );
 
-  if (!probe.covered) process.exit(3);
-  process.exit(probe.issues.length > 0 ? 1 : 0);
+  process.exit(seamProbeExitCode(probe));
 } catch (error) {
   console.error(
     JSON.stringify({

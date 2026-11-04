@@ -169,13 +169,39 @@ export function parseSeamProbe(raw: unknown): SeamProbe {
   return SeamProbeSchema.parse(value);
 }
 
+export type ProbeStructural = "pass" | "fail" | "not-covered";
+
 export interface SeamProbeOutcome {
   readonly covered: boolean;
+  /** Structural verdict: own properties, allowlist coverage and installation. */
+  readonly structural: ProbeStructural;
   readonly issues: readonly string[];
   readonly notes: readonly string[];
   readonly csrf: string | null;
   readonly authenticated: boolean | null;
   readonly diag: Readonly<Record<string, unknown>> | null;
+}
+
+function seamDiagnostics(probe: SeamProbe): Record<string, unknown> | null {
+  const seam = probe.diag?.["seam"];
+  return typeof seam === "object" && seam !== null
+    ? (seam as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Exit-code contract shared by the probe runner:
+ *   0 covered, authenticated and clean
+ *   1 covered, structural failure
+ *   2 covered, structural pass, authenticated path unverified
+ *   3 not covered (WebKit)
+ * (4 is reserved for "could not run" and lives in the runner.)
+ */
+export function seamProbeExitCode(outcome: SeamProbeOutcome): 0 | 1 | 2 | 3 {
+  if (!outcome.covered) return 3;
+  if (outcome.structural === "fail") return 1;
+  if (outcome.authenticated !== true) return 2;
+  return 0;
 }
 
 /** Turn a probe result into gate issues and explicit notes. A dormant control is a note, never a pass. */
@@ -198,7 +224,15 @@ export function evaluateSeamProbe(
     }
   }
   if (probe.authenticated !== true) {
-    issues.push("isAuthenticated() did not return true on the booted page");
+    notes.push(
+      "authenticated path unverified: isAuthenticated() returned false/null; the seam is structurally installed but the session check was not exercised",
+    );
+  }
+  const seam = seamDiagnostics(probe);
+  if (seam?.["registryDegraded"] === true) {
+    notes.push(
+      "requirejs registry degraded: requirejs.s.contexts is unavailable, so the watchdog could not verify the loaded security module; the onResourceLoad path still applies",
+    );
   }
   if (probe.csrf === "") {
     notes.push(
@@ -209,6 +243,7 @@ export function evaluateSeamProbe(
 
   return {
     covered: true,
+    structural: issues.length === 0 ? "pass" : "fail",
     issues,
     notes,
     csrf: probe.csrf,

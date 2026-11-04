@@ -88,6 +88,7 @@ export async function probeSecuritySeams(
   if (options.backend !== undefined && options.backend !== "chrome") {
     return {
       covered: false,
+      structural: "not-covered",
       issues: [],
       notes: [
         "not covered: WebKit backend has no cdp()/preload; the seam is absent on this session, not verified",

@@ -63,6 +63,7 @@
   var appliedCount = 0;
   var hookInstalled = false;
   var sweepCount = 0;
+  var registryDegraded = false;
 
   function requirejsRegistry() {
     var req = window.requirejs;
@@ -78,6 +79,13 @@
   // still reaches the singleton the controller created.
   function sweep() {
     sweepCount += 1;
+    var req = window.requirejs;
+    if (!req || !req.s || !req.s.contexts) {
+      // `requirejs.s` is private. If RequireJS changes it, keep the page alive and let the probe
+      // report the degradation instead of breaking the controller.
+      registryDegraded = true;
+      return false;
+    }
     var defined = requirejsRegistry();
     if (!defined) return false;
     var exported = defined["system/security"];
@@ -94,6 +102,7 @@
         appliedCount: appliedCount,
         sweepCount: sweepCount,
         registry: requirejsRegistry() !== null,
+        registryDegraded: registryDegraded,
       };
     },
     isAllowedModule: function (m) {
@@ -166,7 +175,10 @@
     if (key === "isAuthenticated") return isAuthenticated;
     if (key === "allowedModules") return new Set(ALLOWED_LEAVES);
     if (key === "flags") {
-      return Object.assign({ unifiedPost: false }, priorFlags || {});
+      return Object.assign(
+        { unifiedPost: false, externalViewGuard: false },
+        priorFlags || {},
+      );
     }
     if (key === "isAllowedModule") {
       return function (m) {
@@ -203,8 +215,8 @@
     Object.defineProperty(instance, key, {
       value: seamValue(instance, key, priorEndSession, priorFlags),
       writable: true,
-      enumerable: true,
-      configurable: true,
+      enumerable: false,
+      configurable: false,
     });
   }
 
@@ -225,6 +237,13 @@
           configurable: true,
           enumerable: false,
           get: function () {
+            if (this === proto) {
+              // Reading the seam on the prototype would materialize an own value there and turn the
+              // accessor into shared state for every instance. Make that mistake loud.
+              throw new TypeError(
+                "system/security seam: access on prototype, not instance",
+              );
+            }
             // No vendor endSession exists on the class (the accessor is only added when the
             // prototype does not already own one), so pass null rather than re-reading this.endSession,
             // which would re-enter this accessor.

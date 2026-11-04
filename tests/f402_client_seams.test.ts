@@ -11,6 +11,7 @@ import {
   parseSeamProbe,
   preloadAllowedLeaves,
   SEAM_OWN_PROPERTIES,
+  seamProbeExitCode,
 } from "../lib/f402_client_seams.ts";
 import type { SeamProbe } from "../lib/f402_client_seams.ts";
 import {
@@ -43,7 +44,7 @@ interface SecurityApi {
   allowedModules: Set<string>;
   isAllowedModule: (moduleId: unknown) => boolean;
   endSession: () => unknown;
-  flags: { unifiedPost: boolean };
+  flags: { unifiedPost: boolean; externalViewGuard: boolean };
   logOut?: () => void;
   [key: string]: unknown;
 }
@@ -182,9 +183,26 @@ describe("security seam preload: installation", () => {
     }
     expect(instance["vendorMethod"]).toBeInstanceOf(Function);
     expect(Object.getPrototypeOf(instance)).toBe(Security.prototype);
+
+    const own = Object.getOwnPropertyDescriptor(instance, "escHtml");
+    expect(own?.enumerable).toBe(false);
+    expect(own?.configurable).toBe(false);
+
+    const protoDescriptor = Object.getOwnPropertyDescriptor(
+      Security.prototype,
+      "escHtml",
+    );
+    expect(protoDescriptor?.enumerable).toBe(false);
+    expect(typeof protoDescriptor?.get).toBe("function");
+    // Reading the seam on the prototype must throw and must not replace the accessor with a value.
     expect(
-      Object.prototype.hasOwnProperty.call(Security.prototype, "escHtml"),
-    ).toBe(true);
+      () =>
+        (Security.prototype as unknown as Record<string, unknown>)["escHtml"],
+    ).toThrow(/access on prototype/);
+    expect(
+      typeof Object.getOwnPropertyDescriptor(Security.prototype, "escHtml")
+        ?.get,
+    ).toBe("function");
   });
 
   test("kill switch is latched at preload and cannot be cleared by a later URL rewrite", async () => {
@@ -358,6 +376,30 @@ describe("security seam preload: module allowlist", () => {
     expect(seam.isAllowedModule("future-module")).toBe(true);
   });
 
+  test("flags expose the dormant unified transport and the phase-1 external-view gate", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const api: Record<string, unknown> = {};
+    decorate(context, api);
+    expect(asApi(api).flags).toEqual({
+      unifiedPost: false,
+      externalViewGuard: false,
+    });
+  });
+
+  test("registry degradation is an audit signal, not a page break", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const seams = context.window["__F402_SEAMS__"] as {
+      sweep: () => boolean;
+      diag: () => { registryDegraded: boolean };
+    };
+    // The fake requirejs has no private `.s.contexts` registry.
+    expect(() => seams.sweep()).not.toThrow();
+    expect(seams.sweep()).toBe(false);
+    expect(seams.diag().registryDegraded).toBe(true);
+  });
+
   test("the preload list, the gate list and the pinned controller agree", async () => {
     const source = await preloadSource();
     expect(preloadAllowedLeaves(source).sort()).toEqual(
@@ -405,15 +447,48 @@ describe("seam probe and installer", () => {
     );
   });
 
-  test("a missing own property, false allowlist entry or failed session check is an issue", () => {
+  test("structural failures are issues; an unverified session is a note and exit 2", () => {
     const broken = goodProbe();
     broken.ownProperties["csrf"] = false;
     broken.allowed["bet-ticker"] = false;
     broken.authenticated = false;
-    const issues = evaluateSeamProbe(broken, leaves).issues.join(" ");
-    expect(issues).toContain("not an own property: csrf");
-    expect(issues).toContain("isAllowedModule(bet-ticker)");
-    expect(issues).toContain("isAuthenticated()");
+    const outcome = evaluateSeamProbe(broken, leaves);
+    expect(outcome.structural).toBe("fail");
+    expect(outcome.issues.join(" ")).toContain("not an own property: csrf");
+    expect(outcome.issues.join(" ")).toContain("isAllowedModule(bet-ticker)");
+    expect(outcome.issues.join(" ")).not.toContain("isAuthenticated()");
+    expect(outcome.notes.join(" ")).toContain("authenticated path unverified");
+    expect(seamProbeExitCode(outcome)).toBe(1);
+
+    const unauthenticated = goodProbe();
+    unauthenticated.authenticated = false;
+    const pass = evaluateSeamProbe(unauthenticated, leaves);
+    expect(pass.structural).toBe("pass");
+    expect(pass.issues).toEqual([]);
+    expect(seamProbeExitCode(pass)).toBe(2);
+
+    const clean = evaluateSeamProbe(goodProbe(), leaves);
+    expect(seamProbeExitCode(clean)).toBe(0);
+  });
+
+  test("registry degradation is surfaced as a probe note", () => {
+    const probe = goodProbe();
+    probe.diag = { seam: { registryDegraded: true } };
+    const notes = evaluateSeamProbe(probe, leaves).notes.join(" ");
+    expect(notes).toContain("requirejs registry degraded");
+  });
+
+  test("exit-code contract distinguishes covered/uncovered and completed/could-not-run", () => {
+    const uncovered = {
+      covered: false,
+      structural: "not-covered" as const,
+      issues: [],
+      notes: [],
+      csrf: null,
+      authenticated: null,
+      diag: null,
+    };
+    expect(seamProbeExitCode(uncovered)).toBe(3);
   });
 
   test("an unapplied seam fails with its reason", () => {
@@ -471,6 +546,7 @@ describe("seam probe and installer", () => {
       backend: "webkit",
     });
     expect(outcome.covered).toBe(false);
+    expect(outcome.structural).toBe("not-covered");
     expect(outcome.notes.join(" ")).toContain("not covered");
   });
 

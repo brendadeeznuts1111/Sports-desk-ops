@@ -151,17 +151,27 @@ Client-side seam (this repository, rolling out):
   is a function whose only own key is `extend`; consumers instantiate it). Decorating the export
   itself applied zero members to the singleton — the first live probe caught exactly that. The seam
   now adds non-enumerable prototype accessors; the first read on an instance materializes the member
-  as an **own** property of that instance. No `__proto__` assignment, no prototype pollution, and
-  the decoration is retroactive for instances already created.
+  as a **non-enumerable, non-configurable own** property of that instance. Reading a seam on the
+  prototype itself throws instead of silently converting the accessor into shared value state. No
+  `__proto__` assignment, no prototype pollution, and the decoration is retroactive for instances
+  already created.
 - `bun run probe:client-seams -- --profile <dir> [--login]` runs the probe on the live
   `manager.html?external-view=active&module=bet-ticker` page over Chrome/CDP (the wider exec mode is
   required where the sandbox blocks Chrome). Measured on an unauthenticated profile: preload
   installed, `system/security` loaded, **10/10 seam own properties present**, `appliedCount: 1` via
   the registry sweep, `csrf: ""` reported dormant with its reason, and `isAuthenticated() === false`
-  (correct for no session). The authenticated bet-ticker run is blocked in this environment: the
-  login path has no keychain entry (`MissingF402CredentialsError`), and the bootstrapped profile does
-  not settle under automation. That check must run with the operator's keychain/session populated
-  before the `external-view` fix lands.
+  (correct for no session). The probe reports `structural: pass, authenticated: unverified` and exits
+  **2**, not 1: the seam is structurally verified, the session path is not.
+- Probe exit contract: **0** covered + authenticated + clean · **1** structural failure · **2**
+  structural pass, authenticated unverified · **3** not covered (WebKit) · **4** could not run.
+  The `external-view` fix is accepted only on exit **0**.
+- Registry degradation is an audit signal, not a page break: if RequireJS drops the private
+  `requirejs.s.contexts` API the sweep records `registryDegraded` and the probe reports it in the
+  notes; the `onResourceLoad` path still applies.
+- `flags` carries the phase-1 gate for the held fix: `{ unifiedPost: false, externalViewGuard: false }`.
+  The authenticated bet-ticker run is blocked in this environment: the login path has no keychain
+  entry (`MissingF402CredentialsError`), and the bootstrapped profile does not settle under
+  automation. See the Option B decision below.
 - The kill switch `?no-seam` is latched into `window.__F402_SEAM_DISABLED__` at preload time and read
   from that global at decoration time, so a page that rewrites its URL cannot re-enable the seam.
 - `probeSecuritySeams` asserts own properties, every controller leaf, and `isAuthenticated()` on the
@@ -169,16 +179,22 @@ Client-side seam (this repository, rolling out):
   instead of passing.
 - **WebKit is not covered, and the gap is live, not theoretical.** Measured 2026-11-03:
   `git grep -h '"backend"' -- docs data` over tracked provenance files yields **50 `webkit` and
-  3 `chrome`** sessions (the boot HAR itself is Chrome), i.e. the repository's recorded capture
-  sessions are overwhelmingly WebKit. Bun.WebView has no preload/interception hook and WebKit has no
-  `cdp()`, so those sessions keep the `external-view` bypass after the Chrome fix lands; the probe
-  returns `covered: false` there. This is a phased rollout whose second phase needs a non-CDP
-  injection path (a rewriting proxy we own, or a Safari extension), not a complete fix.
-- **Held for one cycle:** the `external-view` call site. `manager.js` `setAccountInfo` runs
-  `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no auth check. The
-  four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else unchanged) is
-  specified but not applied; bet ticker loads through this path and the seam must first prove
-  itself on a live session. **The gap remains open until that follow-up lands.**
+  3 `chrome`** sessions (the boot HAR itself is Chrome). **Phase 1 (Chrome/CDP) therefore reaches
+  roughly 6% of recorded sessions; the WebKit injection path is the actual fix, not phase 2 in
+  importance.** Bun.WebView has no preload/interception hook and WebKit has no `cdp()`, so those
+  sessions keep the `external-view` bypass after the Chrome fix lands; the probe returns
+  `covered: false` there. **On WebKit, both `data-pass` and the bet-ticker bypass remain open** —
+  that belongs at the top of the upstream ticket, not as a footnote.
+- **Held: the `external-view` call site (phase-1 demonstration, Chrome only).** `manager.js`
+  `setAccountInfo` runs `require(["manager/module/" + dataUrl("module")])` on a URL parameter with no
+  auth check. The four-line fix (`isAuthenticated` guard → `isAllowedModule(mod)` → reject, else
+  unchanged) is specified but not applied. Decision for the hold: **Option B — flag-gated canary.**
+  The guard ships behind `flags.externalViewGuard` (default `false`); acceptance is a probe exit
+  **0** on a logged-in profile on the bet-ticker page, then enable on one canary instance. If the
+  session check misfires on the load-bearing bet-ticker path, flip the flag and revert without a
+  redeploy. This environment cannot authenticate, so "wait for auth" is not a plan; code-review-only
+  sign-off plus a named canary is the bounded path. **The bypass remains open on Chrome until the
+  canary runs, and on WebKit unconditionally.**
 
 Limits, stated so nobody relies on a control that does not exist:
 
@@ -281,3 +297,6 @@ This is a client-code and asset review, not a full portal audit. The player-faci
 §1 is assumed, not captured. No credential was used and no exploit was executed, so the claims are
 about reachable code and pinned bytes, not about a successful takeover. Server-side behaviour
 (gateway rules, WAF, response sanitization) was not tested beyond the unauthenticated probes in §1.
+The seam's authenticated path is **unverified** here: the live probe ran without a session, so
+`isAuthenticated() === true` on the bet-ticker page has not been demonstrated, and the
+`external-view` fix stays behind its flag until it is.
