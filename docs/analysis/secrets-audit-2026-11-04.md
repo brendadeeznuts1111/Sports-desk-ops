@@ -452,3 +452,22 @@ Test classification detail lives in the four workstream reports; the core set is
 `lib/f402_credentials_policy.test.ts`, `scripts/fetch-bet-tally.test.ts`,
 `scripts/secrets_gslive.test.ts`, `tests/f402_bet_ticker_sink.test.ts`,
 `tests/bun_capabilities.test.ts`, `tests/bun_eval_patterns.test.ts`, `tests/cli_help.test.ts`.
+
+---
+
+## 12. Post-audit status (2026-11-04)
+
+This section is intentionally outside the snapshot: the audit body describes `8522a04`, and the
+fixes below landed on `feat/secrets-keychain-hardening` afterwards.
+
+| Finding                            | Status                                                                                                                                                                                                                                                                       | Commit    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 5 — write CLIs execute on import   | **Fixed**: `import.meta.main` guards on `secrets_f402`, `secrets_gslive`, `secrets_r2`, `capture:f402-har`                                                                                                                                                                   | `f7f1673` |
+| 15 — `../types/bun-api.ts`         | **Fixed**: extensionless import resolves to the only file, `bun-api.d.ts`                                                                                                                                                                                                    | `f7f1673` |
+| 2 — F402 readers legacy-only       | **Fixed**: `resolveAgentId` routes through `lib/secrets.readSecretCanonicalThenLegacy`; player credentials are env-only because nothing writes `f402-player-*`                                                                                                               | `d24b866` |
+| 4 — GSLive status/delete asymmetry | **Fixed**: status reports the service it actually found; delete removes canonical + `sportsdesk-gslive` + `sportsdesk-ops`                                                                                                                                                   | `97bcfe3` |
+| 1 — three GSID fallbacks           | **Partial**: status/delete now cover all three services, but the readers still differ (`lib/secrets` = canonical → `sportsdesk-ops`; `fetch-bet-tally` = canonical → `sportsdesk-gslive`; `gslive_auto_session` = canonical only). A single contract module is still needed. | —         |
+| 3, 6, 7, 8, 9, 10, 11, 12, 13, 14  | **Open** (see §7)                                                                                                                                                                                                                                                            | —         |
+
+Consequence for the runbook: `docs/bun-upstream-reference.md` now says write canonical, verify with
+`secrets:f402 status`, then delete legacy — not the other way round.
