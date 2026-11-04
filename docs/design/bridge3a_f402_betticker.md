@@ -134,6 +134,31 @@ metadata: { pii: "none", ... } })`; verify with `stat` and presigned GET.
   rows), watermark/drain behavior, gateway publish contract, R2 write with metadata, and a live smoke
   that deletes its test object.
 
+## Phase 1 implementation notes (measured)
+
+Implemented in `lib/f402_bet_ticker_delta.ts` (pure projection), `lib/f402_bet_ticker_drain.ts`
+(watermark/100-row drain), `lib/f402_bet_ticker_sink.ts` (WS + R2), `lib/f402_bet_ticker_poller.ts`
+(orchestration), and `scripts/f402_bet_ticker_bridge3a.ts` (`bun run bridge3a:poll`). Four points
+where the captured payload settled the wording above:
+
+- The captured ticker row has **no `TicketNumber`** (13 fields; `docs/evidence/captures/2026-10-31/getBetTicker.post.json`).
+  In this feed `WagerNumber` is the ticket id (`lib/live_wagers.ts`), so the locked
+  `${TicketNumber}-${WagerNumber}` key collapses to `${WagerNumber}-${WagerNumber}`; the code keeps
+  the full two-part form if a future payload carries `TicketNumber`.
+- The channel is **`TicketWriter`**, not `ShortDesc` (observed: `Internet`, `ALERT`, `GSLIVE`,
+  `GSBUILDER`). `ShortDesc` is parsed only for the leg count; the raw string is never emitted.
+- `AmountWagered`/`ToWinAmount`/`VolumeAmount` are **whole-dollar integers** in the committed paste,
+  so canonical volume is `VolumeAmount × 100` exactly; an ALERT row is forced to 0.
+- A full-snapshot endpoint that repeats every row makes a strict 100-row page loop unconvergeable, so
+  the drain also settles on a page that adds no new ticket (a bounded completion, not a partial
+  publish). A page whose highest wager number is below the watermark is still a fail-closed
+  regression, and `maxPages` exhaustion is `unsettled`.
+
+`confirmCount` is an alert twin in the same batch, `lateCount` one whose twin arrives in a later
+poll, and `orphanCount` one with no twin yet. `watermark` is the highest numeric wager number of the
+completed drain and appears in both the WS delta and the R2 snapshot (the PII contract's drop list is
+scoped to 3c/3d; this note locks the watermark).
+
 ## Remaining open decisions
 
 - Poll cadence and the corresponding R2 freshness budget (watermark handles same-page duplicates).
