@@ -295,6 +295,29 @@ but with two operational differences the docs' builtin would remove:
   change those type-check diagnostics, confirming the docs' caveat: next to an oxlint config it
   sets import resolution, not the tsconfig used to type-check each file.
 
+**Ahead of the release — `import.meta.glob` and the `bun test` env view.** The
+[`ImportMeta` reference](https://bun.com/reference/globals/bun/ImportMeta) documents
+`import.meta.glob()` (lazy and `{ eager: true }`) as a transpiler/bundler transform and says that
+under `bun test` `import.meta.env` also carries Vite's `MODE`, `DEV`, `PROD`, `SSR` and
+`BASE_URL`. Measured on 1.4.4 (2026-11-04), neither holds, and both are absent from the pinned
+`bun-types@1.4.4` as well:
+
+- `import.meta.glob` is `undefined` in `.ts`, `.tsx`, `.js` and `.mjs` at runtime (calling it
+  throws `TypeError: import.meta.glob is not a function`), and `bun --hot` does not add it.
+  `Bun.build({ entrypoints, target: "bun" })` and `bun build --target=bun|browser` report success
+  but leave the `import.meta.glob(...)` call untransformed; running that bundle throws the same
+  TypeError. `bun-types@1.4.4` has no `glob`/`ImportMetaGlobOptions` declaration, so any use is a
+  TS2339 until a release declares it.
+- Under `bun test`: `import.meta.env === process.env` and `NODE_ENV=test` hold, but `MODE`, `DEV`,
+  `PROD`, `SSR` and `BASE_URL` are absent (`"MODE" in env === false`, values undefined).
+
+Everything else on the page measured as documented: `dir`/`dirname` (equal), `file` (basename),
+`filename`/`path` (equal), `url` (`file:`), `main`, `env === process.env`, `require` (loads CJS),
+`resolve` (file URL; accepts a parent URL or path; **does not check existence** — a missing path
+still resolves), and `hot` as `undefined` in a normal run and even under `bun --hot` on a plain
+script. The two gaps are pinned as tripwires in
+[tests/import_meta_contract.test.ts](../tests/import_meta_contract.test.ts).
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
