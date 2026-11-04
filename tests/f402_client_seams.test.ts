@@ -475,7 +475,7 @@ describe("security seam preload: module allowlist", () => {
   test("manager overlay anchors exist in the pinned controller and fail on a move", async () => {
     const managerJs = await Bun.file(PINNED_MANAGER).text();
     expect(missingExternalViewGuardAnchors(managerJs)).toEqual([]);
-    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(8);
+    expect(EXTERNAL_VIEW_GUARD_ANCHORS.length).toBe(10);
 
     const moved = managerJs.replace('"external-view"', '"external"');
     expect(missingExternalViewGuardAnchors(moved)).toContain('"external-view"');
@@ -811,6 +811,129 @@ describe("security seam preload: module allowlist", () => {
     expect(seen!["Id"]).toBe("A&B");
     // The caller's data object is restored after the synchronous call.
     expect(event.info.data.Message).toBe("</div><script>");
+  });
+
+  test("searchCustomer escapes Login/Password/NameFirst and leaves CustomerID raw", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    const rendered: Array<Record<string, unknown>> = [];
+    class Manager {
+      searchCustomer(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "searchCustomerAdmin" },
+          success: (response: { LIST: Array<Record<string, unknown>> }) => {
+            const row = response.LIST[0] as {
+              Login: string;
+              CustomerID: string;
+              info: { Password: string; NameFirst: string };
+            };
+            rendered.push({
+              Login: row.Login,
+              CustomerID: row.CustomerID,
+              Password: row.info.Password,
+              NameFirst: row.info.NameFirst,
+            });
+          },
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    new Manager().searchCustomer();
+    expect(captured).not.toBeNull();
+    (captured as unknown as { success: (r: unknown) => void }).success({
+      LIST: [
+        {
+          CustomerID: "c1",
+          Login: 'a"b',
+          info: { Password: "</span><script>", NameFirst: "<b>n</b>" },
+        },
+      ],
+    });
+    expect(rendered[0]!["Login"]).toContain("&quot;");
+    expect(rendered[0]!["Password"]).toContain("&lt;script&gt;");
+    expect(rendered[0]!["NameFirst"]).toContain("&lt;b&gt;");
+    expect(rendered[0]!["CustomerID"]).toBe("c1");
+  });
+
+  test("getCommunicationMessages preserves the first <BR> strip then escapes both paths", async () => {
+    const source = await preloadSource();
+    const context = runPreload(source, "https://x/");
+    const defined = withRegistry(context);
+    class Security {
+      logOut(): void {}
+    }
+    defined["system/security"] = Security;
+    decorateNamed(
+      context,
+      "system/security",
+      Security as unknown as Record<string, unknown>,
+    );
+    let captured: Record<string, unknown> | null = null;
+    context.window["jQuery"] = {
+      ajax(options: Record<string, unknown>): void {
+        captured = options;
+      },
+    };
+    let seen: Record<string, unknown> | null = null;
+    class Manager {
+      accountInfo: Record<string, unknown> = {
+        CommentsForCustomer: "<BR>Hello<BR><script>",
+      };
+      getCommunicationMessages(): void {
+        (context.window["jQuery"] as { ajax: (o: unknown) => void }).ajax({
+          data: { operation: "getCommunicationMessages" },
+          success: () => {
+            const i = String(this.accountInfo["CommentsForCustomer"])
+              .trim()
+              .replace("<BR>", "");
+            seen = {
+              stamp: '<div class="stamp-message">' + i + "</div>",
+              popup: i,
+            };
+          },
+        });
+      }
+    }
+    defined["manager/manager"] = Manager;
+    decorateNamed(
+      context,
+      "manager/manager",
+      Manager as unknown as Record<string, unknown>,
+    );
+    const instance = new Manager();
+    instance.getCommunicationMessages();
+    expect(captured).not.toBeNull();
+    (captured as unknown as { success: () => void }).success();
+    expect(seen).not.toBeNull();
+    expect(seen!["stamp"]).toContain("Hello");
+    expect(seen!["stamp"]).toContain("&lt;BR&gt;");
+    expect(seen!["stamp"]).toContain("&lt;script&gt;");
+    expect(seen!["stamp"]).not.toContain("<BR>Hello");
+    expect(seen!["popup"]).toBe("Hello&lt;BR&gt;&lt;script&gt;");
+    expect(instance.accountInfo["CommentsForCustomer"]).toBe(
+      "<BR>Hello<BR><script>",
+    );
   });
 
   test("setHistory escapes only the title and leaves the getHistory argument raw", async () => {

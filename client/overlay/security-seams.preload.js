@@ -118,6 +118,9 @@
     if (manager) decorated = applyPopUpMessagesEscaper(manager) || decorated;
     if (manager)
       decorated = applySetCommunicationMessagesEscaper(manager) || decorated;
+    if (manager) decorated = applySearchCustomerEscaper(manager) || decorated;
+    if (manager)
+      decorated = applyGetCommunicationMessagesEscaper(manager) || decorated;
     return decorated;
   }
 
@@ -145,6 +148,12 @@
           communicationMessagesEscaperInstalled,
         communicationMessagesEscaperFailure:
           communicationMessagesEscaperFailure,
+        searchCustomerEscaperInstalled: searchCustomerEscaperInstalled,
+        searchCustomerEscaperFailure: searchCustomerEscaperFailure,
+        communicationMessagesListEscaperInstalled:
+          communicationMessagesListEscaperInstalled,
+        communicationMessagesListEscaperFailure:
+          communicationMessagesListEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -832,7 +841,171 @@
         try {
           return original.apply(this, arguments);
         } finally {
+          // Restore deliberately: callers (currently getCommunicationMessages) may re-read
+          // data.Message after this returns; the shallow copy means their object was never mutated.
           info.data = rawData;
+        }
+      },
+    });
+    return true;
+  }
+
+  // Sink migration for manager.searchCustomer (fullscreen search). The response is local to the
+  // synchronous success callback; escape info.Password/info.NameFirst/Login before the original
+  // template builder runs. CustomerID is left raw because the code uses it in a jQuery attribute
+  // selector ([data-customer="..."]), where escaping would break the lookup for special characters.
+  var searchCustomerEscaperInstalled = false;
+  var searchCustomerEscaperFailure = null;
+
+  function applySearchCustomerEscaper(Manager) {
+    if (searchCustomerEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      searchCustomerEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.searchCustomer;
+    if (typeof original !== "function") {
+      searchCustomerEscaperFailure = "searchCustomer-missing";
+      console.error(
+        "[f402-seam] searchCustomer escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    searchCustomerEscaperInstalled = true;
+    Object.defineProperty(proto, "searchCustomer", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          typeof jq.ajax !== "function"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var baseAjax = jq.ajax;
+        jq.ajax = function (options) {
+          if (
+            options &&
+            options.data &&
+            options.data.operation === "searchCustomerAdmin" &&
+            typeof options.success === "function"
+          ) {
+            var rawSuccess = options.success;
+            options.success = function (response) {
+              if (response && Array.isArray(response.LIST)) {
+                for (var i = 0; i < response.LIST.length; i += 1) {
+                  var row = response.LIST[i];
+                  if (!row || typeof row !== "object") continue;
+                  if (typeof row.Login === "string")
+                    row.Login = api.escHtml(row.Login);
+                  if (row.info && typeof row.info === "object") {
+                    if (typeof row.info.Password === "string") {
+                      row.info.Password = api.escHtml(row.info.Password);
+                    }
+                    if (typeof row.info.NameFirst === "string") {
+                      row.info.NameFirst = api.escHtml(row.info.NameFirst);
+                    }
+                  }
+                }
+              }
+              return rawSuccess.apply(this, arguments);
+            };
+          }
+          return baseAjax.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.ajax = baseAjax;
+        }
+      },
+    });
+    return true;
+  }
+
+  // Sink migration for manager.getCommunicationMessages. The success reads
+  // accountInfo.CommentsForCustomer and renders it in the Stamp path via .append() and the popup
+  // path via showMsg -> Lobibox.notify, which concatenates msg into HTML with no escaping. Apply
+  // the original first-occurrence <BR> strip, then escape, then let the original run on the escaped
+  // display value; restore the raw accountInfo value afterwards.
+  var communicationMessagesListEscaperInstalled = false;
+  var communicationMessagesListEscaperFailure = null;
+
+  function applyGetCommunicationMessagesEscaper(Manager) {
+    if (communicationMessagesListEscaperInstalled) return false;
+    if (!Manager || !Manager.prototype) {
+      communicationMessagesListEscaperFailure = "manager-invalid";
+      return false;
+    }
+    var proto = Manager.prototype;
+    var original = proto.getCommunicationMessages;
+    if (typeof original !== "function") {
+      communicationMessagesListEscaperFailure =
+        "getCommunicationMessages-missing";
+      console.error(
+        "[f402-seam] getCommunicationMessages escaper cannot install: method missing — update the overlay against the current manager.js",
+      );
+      return false;
+    }
+    communicationMessagesListEscaperInstalled = true;
+    Object.defineProperty(proto, "getCommunicationMessages", {
+      configurable: true,
+      writable: true,
+      value: function () {
+        var api = searchEscaperApi();
+        var jq = window.jQuery || window.$;
+        var self = this;
+        if (
+          !api ||
+          typeof api.escHtml !== "function" ||
+          !jq ||
+          typeof jq.ajax !== "function"
+        ) {
+          return original.apply(this, arguments);
+        }
+        var baseAjax = jq.ajax;
+        jq.ajax = function (options) {
+          if (
+            options &&
+            options.data &&
+            options.data.operation === "getCommunicationMessages" &&
+            typeof options.success === "function"
+          ) {
+            var rawSuccess = options.success;
+            options.success = function () {
+              var account = self.accountInfo;
+              var rawComment =
+                account && account.CommentsForCustomer !== undefined
+                  ? account.CommentsForCustomer
+                  : undefined;
+              if (rawComment === undefined || rawComment === null) {
+                return rawSuccess.apply(this, arguments);
+              }
+              // Preserve the original single, case-sensitive, first-occurrence strip. Escape only
+              // after it; the original then runs on the escaped display value (its own strip is a
+              // no-op because "<BR>" is already gone).
+              var display = api.escHtml(
+                rawComment.toString().trim().replace("<BR>", ""),
+              );
+              account.CommentsForCustomer = display;
+              try {
+                return rawSuccess.apply(this, arguments);
+              } finally {
+                account.CommentsForCustomer = rawComment;
+              }
+            };
+          }
+          return baseAjax.apply(this, arguments);
+        };
+        try {
+          return original.apply(this, arguments);
+        } finally {
+          jq.ajax = baseAjax;
         }
       },
     });
@@ -878,6 +1051,8 @@
         applyMessageInitEscaper(defined);
         applyPopUpMessagesEscaper(defined);
         applySetCommunicationMessagesEscaper(defined);
+        applySearchCustomerEscaper(defined);
+        applyGetCommunicationMessagesEscaper(defined);
       }
       if (typeof previous === "function") {
         return previous.apply(this, arguments);

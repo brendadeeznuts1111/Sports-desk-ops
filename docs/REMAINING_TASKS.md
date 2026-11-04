@@ -201,10 +201,11 @@ so an id resolves without guessing which artifact it came from.
     the migrated path. **Not blocked by the external-view canary.**
   - **Unpaused 2026-11-04 as hygiene:** escaping is correct regardless of the Bearer verdict; the
     overlay now escapes `NameFirst`/`Login`/`Password` on `manager/manager.searchComponent` rows.
-    Order: `searchComponent`, `setHistory`, `getMessageInit`, `getPopUpMessages` and
-    `setCommunicationMessages` landed. Remaining: `searchCustomer` when reachable, then the sixth
-    sink `getCommunicationMessages` (Stamp `CommentsForCustomer` append is confirmed; popup
-    `showMsg`/Lobibox path is suspected until the library's escaping is verified). `searchCustomer` (fullscreen) is the fifth sink,
+    All tracked sinks landed: `searchComponent`, `setHistory`, `getMessageInit`, `getPopUpMessages`,
+    `setCommunicationMessages`, `searchCustomer` (defensive, independent of reachability), and
+    `getCommunicationMessages` (Stamp + popup; Lobibox confirmed to concatenate `msg` without
+    escaping). `<BR>` strip preserved before escape. Next: broader `.html()`-sink census, if wanted;
+    the tracked sink class is closed. `searchCustomer` (fullscreen) is the fifth sink,
     scheduled once reachability is confirmed: live in the pinned controller, trigger markup
     absent/commented.
 
