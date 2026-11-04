@@ -519,8 +519,9 @@ but got 2`. Repo code therefore uses the object form exclusively, and `lib/secre
   `underline`, `latexMath`, …); `html` callbacks receive `html` — "Raw HTML content"; `tagFilter` is
   the GFM tag filter; `react(..., undefined, { reactVersion: 18 })` is the React 18 element symbol;
   the API is marked "Unstable API" — https://bun.com/docs/runtime/markdown
-- `Bun.markdown.react()` SSR lives in `lib/markdown_react_ssr.ts` (React 19 `renderToString` + the
-  repo GFM preset). A React 18 client must render with React 18's `react-dom/server` and pass
+- `Bun.markdown.react()` SSR lives in `lib/markdown_react_ssr.ts`: `renderMarkdownSsr(markdownText(s))`
+  returns a `RenderedHtml` brand, so Markdown input and rendered HTML cannot be passed in the wrong
+  direction. React 18 clients must render with React 18's `react-dom/server` and pass
   `reactVersion: 18`; React 19's renderer rejects the legacy element symbol.
 - Child processes expose `.terminal.close()` and `exited` —
   https://bun.com/docs/runtime/child-process#reusable-terminal
