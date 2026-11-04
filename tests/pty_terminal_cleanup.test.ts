@@ -68,9 +68,10 @@ describe("closePtyProcess", () => {
         },
       );
       expect(proc.exitCode).toBeNull();
+      expect(proc.signalCode).toBeNull();
 
       await expect(closePtyProcess(proc)).resolves.toBeUndefined();
-      expect(proc.exitCode).not.toBeNull();
+      expect(proc.exitCode !== null || proc.signalCode !== null).toBe(true);
       expect(proc.terminal?.closed).toBe(true);
     },
   );

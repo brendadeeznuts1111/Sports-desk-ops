@@ -93,6 +93,10 @@ async function probeCdp(): Promise<CapabilityDiagnostics["cdp"]> {
  * Release a PTY-backed child completely: close the terminal master (`/dev/ptmx` fd), signal the
  * child only while it is still running, and reap it before the next probe. A probe that only kills
  * the child leaves the PTY master open, leaking one descriptor per run. Cleanup never throws.
+ *
+ * Bun distinguishes normal termination from signal termination: `exitCode` is `null` when the
+ * process was killed by a signal, while `signalCode` names that signal. Therefore a still-running
+ * process is one with neither value, not merely one without an exit code.
  */
 export async function closePtyProcess(
   proc: ReturnType<typeof Bun.spawn> | undefined,
@@ -103,11 +107,11 @@ export async function closePtyProcess(
   } catch {
     /* the terminal was never allocated, or was already closed */
   }
-  if (proc.exitCode === null) {
+  if (proc.exitCode === null && proc.signalCode === null) {
     try {
       proc.kill();
     } catch {
-      /* exited between the exitCode check and the signal */
+      /* exited between the state check and the signal */
     }
   }
   try {
