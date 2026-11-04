@@ -1,5 +1,5 @@
 /** Resolve the latest f402-weblog rollup: local pointer/rollup first, then the R2 public pointer. */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const DEFAULT_PUBLIC_BASE =

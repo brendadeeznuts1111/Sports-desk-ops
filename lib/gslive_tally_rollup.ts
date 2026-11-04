@@ -17,7 +17,7 @@
  * bounded labels and integer aggregates.
  */
 
-import { open, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 
 import { sha256Hex, stableJson } from "./f402_bet_ticker_delta.ts";
 import {
@@ -147,7 +147,8 @@ export async function* streamBetReportBets(
   path: string,
   options: { readonly chunkBytes?: number } = {},
 ): AsyncGenerator<Record<string, unknown>> {
-  const chunkBytes =
+  // Reserved for a size-aware stream; the reader currently pulls default-size chunks.
+  const _chunkBytes =
     options.chunkBytes !== undefined &&
     Number.isSafeInteger(options.chunkBytes) &&
     options.chunkBytes > 0

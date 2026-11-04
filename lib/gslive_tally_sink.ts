@@ -28,7 +28,7 @@ export async function publishGsliveTallyRollup(
   rollup: GsliveTallyRollup,
   options: { readonly r2Client?: R2S3Client | null } = {},
 ): Promise<GsliveTallyPublishResult> {
-  const text = assertSanitizedGsliveTallyArtifact(rollup);
+  assertSanitizedGsliveTallyArtifact(rollup);
   const body = new TextEncoder().encode(`${JSON.stringify(rollup, null, 2)}\n`);
   if (
     body.byteLength !==

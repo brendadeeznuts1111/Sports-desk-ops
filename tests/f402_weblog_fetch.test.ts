@@ -69,8 +69,8 @@ describe("f402 weblog fetch", () => {
         },
       });
       expect(seen.url).toBe("https://mock.test/cloud/api/Manager/getWebLog");
-      expect((seen.init?.headers as Record<string, string>).authorization).toBe(
-        `Bearer ${"t".repeat(32)}`,
+      expect(seen.init?.headers).toEqual(
+        expect.objectContaining({ authorization: `Bearer ${"t".repeat(32)}` }),
       );
       expect(JSON.parse(String(seen.init?.body)).type).toBe(mode);
       expect(result.rows).toHaveLength(1);

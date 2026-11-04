@@ -46,8 +46,8 @@ describe("F402 getPending fetch", () => {
       },
     });
     expect(seen.url).toBe("https://mock.test/cloud/api/Manager/getPending");
-    expect((seen.init?.headers as Record<string, string>).authorization).toBe(
-      `Bearer ${"t".repeat(32)}`,
+    expect(seen.init?.headers).toEqual(
+      expect.objectContaining({ authorization: `Bearer ${"t".repeat(32)}` }),
     );
     const body = JSON.parse(String(seen.init?.body)) as Record<string, unknown>;
     expect(body).toEqual({
