@@ -107,6 +107,15 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
 - `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
   it `policy`-based scripts fail. Say so instead of disabling them.
 
+### Data-handling budgets
+
+- Live captures `data/live-bets.json` and `data/live-wagers.json` stay **untracked**; `positions:cron` rewrites them with customer logins. Tests use `tests/fixtures/fraud/live-*.json` or `tests/fixtures/live-wagers.partial.json`. `tests/data_artifacts_tracking.test.ts` fails if either path is tracked again.
+- Hot aggregation over roughly 10k+ rows uses fixed-capacity TypedArray arenas: no `Map`, `Set`, `boolean[]`, or growing `T[]` on the aggregation path. Reference: `lib/gslive_tally_rollup.ts`; ratchet: `tests/tally_allocation_invariant.test.ts` (0 collection allocations).
+- Dense flags are `Uint32Array` bitsets. Do not add `boolean[]` to runtime aggregation; `lib/fraud_model.ts` is the remaining known exception and is marked for replacement in the audit.
+- DOD6 reader: `lookupInto(login, target)` in per-row loops; `lookup()` allocates a result and handle union per call. Handles are opaque; use `rowOfHandle`, never sort by handle.
+- Large fixtures (for example the 12 MB `tests/fixtures/f402-general-oracle-production.json`) must not be read whole in a request path; stream them or crop a test slice.
+- Run `bun run audit:data-handling` before adding a collection or a >1 MB artifact to a hot path. The audit is advisory; the tests above are the contracts.
+
 ## Doc ownership
 
 `README.md` = orientation + the runbook tree · the seven root runbooks = operational procedure ·
