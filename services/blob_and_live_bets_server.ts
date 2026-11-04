@@ -490,6 +490,19 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               "Event is not serializable",
             );
           }
+          if (published === -1) {
+            return jsonError(
+              503,
+              "backpressure",
+              "Live-bets subscriber queue is full",
+            );
+          }
+          if (published === 0) {
+            return Response.json(
+              { channel: parsed.data.channel, published, delivered: false },
+              { status: 202 },
+            );
+          }
           return Response.json({
             channel: parsed.data.channel,
             published,

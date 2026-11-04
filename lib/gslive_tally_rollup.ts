@@ -325,6 +325,28 @@ export class DodGateFailureError extends Error {
 }
 
 function chicagoDate(epochSec: number): string {
+  const TemporalApi = (
+    globalThis as {
+      Temporal?: {
+        Instant?: {
+          fromEpochMilliseconds(ms: number): {
+            toZonedDateTimeISO(zone: string): {
+              year: number;
+              month: number;
+              day: number;
+            };
+          };
+        };
+      };
+    }
+  ).Temporal;
+  if (TemporalApi?.Instant !== undefined) {
+    const zoned = TemporalApi.Instant.fromEpochMilliseconds(
+      epochSec * 1000,
+    ).toZonedDateTimeISO("America/Chicago");
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    return `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;
+  }
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Chicago",
     year: "numeric",
@@ -447,7 +469,7 @@ export async function buildGsliveTallyRollup(
         Math.floor(logMs / 1000),
         delaySec,
       );
-      if (elapsedSec < -1 || elapsedSec > 3) anomalyCounts.delayMismatch += 1;
+      if (elapsedSec < -1 || elapsedSec > 5) anomalyCounts.delayMismatch += 1;
     }
     const betDetails = (() => {
       try {

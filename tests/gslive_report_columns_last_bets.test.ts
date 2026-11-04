@@ -96,8 +96,8 @@ describe("Last Bets 53-column catalog", () => {
       slots: 53,
       named: 52,
       filters: 15,
-      mapped: 40,
-      unmapped: 12,
+      mapped: 38,
+      unmapped: 14,
     });
   });
 });

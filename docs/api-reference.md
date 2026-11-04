@@ -1234,7 +1234,7 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:499-582` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:512-595` · response not captured
 
 **Presigned download URL for one blob**
 
@@ -1280,7 +1280,7 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:499-582` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:512-595` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
@@ -1350,7 +1350,7 @@ No declared fields.
 
 ### `DELETE /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:583-601` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:596-614` · response not captured
 
 **Delete one stored blob**
 
@@ -1582,7 +1582,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:602-631` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:615-644` · response not captured
 
 **Live-bets WebSocket upgrade**
 

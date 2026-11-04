@@ -240,6 +240,32 @@ export function deskClock(polledAt: string): {
   if (Number.isNaN(date.getTime())) {
     throw new Error(`projectF402TickerDelta: invalid polledAt ${polledAt}`);
   }
+  const TemporalApi = (
+    globalThis as {
+      Temporal?: {
+        Instant?: {
+          fromEpochMilliseconds(ms: number): {
+            toZonedDateTimeISO(zone: string): {
+              year: number;
+              month: number;
+              day: number;
+              hour: number;
+            };
+          };
+        };
+      };
+    }
+  ).Temporal;
+  if (TemporalApi?.Instant !== undefined) {
+    const zoned = TemporalApi.Instant.fromEpochMilliseconds(
+      date.getTime(),
+    ).toZonedDateTimeISO("America/Chicago");
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    return {
+      deskDate: `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`,
+      deskHour: zoned.hour,
+    };
+  }
   const parts = DESK_FORMAT.formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes): string =>
     parts.find((candidate) => candidate.type === type)?.value ?? "";

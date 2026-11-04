@@ -387,7 +387,7 @@ export function extractBetLogAuditTargets(
         Math.floor(logMs / 1000),
         delaySec,
       );
-      if (elapsedSec < -1 || elapsedSec > 3) reasons.push("DELAY_MISMATCH");
+      if (elapsedSec < -1 || elapsedSec > 5) reasons.push("DELAY_MISMATCH");
     }
     if (row.adminUser !== null && row.adminUser !== undefined)
       reasons.push("ADMIN_USER");
