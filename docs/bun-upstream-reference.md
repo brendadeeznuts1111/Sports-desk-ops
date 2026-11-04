@@ -258,6 +258,33 @@ Two consequences for code here:
 - **Each row carries its own style codes.** An open SGR style is closed with that style's matching reset at the end of every row (`ESC[31m`→`ESC[39m`, `ESC[1m`→`ESC[22m`, `ESC[4m`→`ESC[24m` in the probes above) and re-opened at the start of the next; only the final row keeps the original closing code. Exact bytes therefore depend on per-row style bookkeeping — do not hash or byte-snapshot wrapped output as evidence; compare the rendered text or per-row `Bun.stringWidth()`.
 - **Width is not `.length`.** Use `Bun.stringWidth()` for any column math (padding, table alignment, `Bun.inspect.table` widths); `.length` counts UTF-16 units, not columns.
 
+## Bun Shell (`Bun.$`) — measured 2026-11-04
+
+`Bun.$` is a lazy template tag: a command starts no process until the promise is awaited or an
+output method is called. Measured: a command's marker file was absent before the first `await`
+and present after it.
+
+- **Awaited → `ShellOutput`**, with **synchronous** `text(encoding?)`, `json()`, `bytes()`,
+  `arrayBuffer()` and `blob()`.
+- **Un-awaited → `ShellPromise`**, with the same names returning promises plus `.lines()` (an
+  async iterable), `.quiet()`, `.nothrow()`, `.throws(bool)`, `.cwd(str)` and `.env(obj)`.
+  Iterating the promise itself throws (`iterable should have an iterator symbol`); iterate
+  `.lines()`. bun-types 1.4.4 declares `text()` on the promise but **not** `bytes()`; await the
+  output first (or cast) when reading bytes.
+- **Bytes over text, lines over split.** Use `.bytes()` for byte-level work and `.lines()` for
+  line scanning. `printf 'one\ntwo\nthree\n'` through `.lines()` yields
+  `["one", "two", "three", ""]` — the trailing newline is a final empty line.
+- **Output methods quietly capture.** A bare `await` of the tag echoes the process stdout
+  (measured: `BARE-ECHO` appeared before the next `console.log`); call `.quiet()` when that is
+  unwanted. Calling an output method already implies quiet.
+- **Failures still yield bytes.** `ShellError` carries `exitCode`, `stdout` and `stderr` as
+  `Buffer`s; the stderr bytes are available even though the promise rejected.
+- **Do not copy the `T[P<P>]` generic signatures** from the reference page; they are malformed.
+
+The repo does not use `Bun.$` in production: interpolation routes bytes through a shell parser
+(`lib/f402_credentials_policy.ts`), so subprocess work uses `Bun.spawn` with an argv array.
+`tests/bun_shell_contract.test.ts` pins the semantics above and the production-source ban.
+
 ## Live docs and reference (check behavior on 1.4.4)
 
 - Docs: [bun.com/docs](https://bun.com/docs)
