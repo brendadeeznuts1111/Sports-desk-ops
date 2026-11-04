@@ -474,3 +474,54 @@ The rollup is gated by GATE-WL-01 (row/grammar conservation, 523,632 rows), GATE
 wager conservation), GATE-WL-03 (negative/positive controls), and GATE-WL-04 (byte-level raw
 LoginID/IP leak scan). Publications: `f402-weblog/<desk-date>/rollup.json` + `f402-weblog/latest.json`;
 WS channel `f402-weblog` when the live-bets gateway is running.
+
+## bun-docs MCP probe (2026-11-04)
+
+Probe method: `https://bun.com/docs/mcp` speaks JSON-RPC 2.0 (protocol `2025-06-18`) and exposes
+`search_bun`, `read_bun_page`, `list_bun_pages`, `grep_bun`. It matches the shape recorded in
+[`bun-mcp.md`](./bun-mcp.md). Note that `/reference/**` is not indexed, and in the DSH session this
+server is not registered (only `chrome` is), so the probe spoke JSON-RPC directly over HTTP.
+
+**Usage census:** 77 distinct `Bun.*` surfaces are used in non-test source; all 77 are declared and
+evidenced in `lib/bun_shapes.ts` (78 catalog entries, 1 unused). `tests/bun_shapes_coverage.test.ts`
+enforces that with no undocumented surface.
+
+**Confirmed by the published docs (bun.com URLs):**
+
+- `Bun.JSONL.parseChunk`: `read` is "Number of bytes (for `Uint8Array`) or characters (for strings)
+  consumed" and, for `Uint8Array`, "always a byte offset into the original buffer. Use it with
+  `TypedArray.subarray()`" — https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+- `server.publish()` / `ws.publish()` return `0` (dropped) or `-1` (backpressure), "honoring the
+  same contract as `ws.send()`" — https://bun.com/blog/bun-v1.4
+- `subscriberCount(topic: string)` counts subscribers for a topic —
+  https://bun.com/blog/bun-v1.1.26
+- `Bun.cron(schedule, handler, { tz?: string })` is the in-process form; schedules default to the
+  system local time zone, `tz` is an IANA name, and the docs carry a **No-overlap guarantee**
+  section — https://bun.com/docs/runtime/cron#time-zone and
+  https://bun.com/docs/runtime/cron#no-overlap-guarantee
+- `Bun.secrets`: `get` returns `string | null`, `delete` returns `boolean`, and `set` takes
+  `{ service, name, value, persist?: "local" | "enterprise" }` (persist is Windows-only, default
+  `"enterprise"`) — https://bun.com/docs/runtime/secrets
+- `Bun.markdown`: `html` callbacks receive `html` — "Raw HTML content"; `tagFilter` is the GFM tag
+  filter, `noHtmlBlocks`/`noHtmlSpans` disable HTML, and the API is marked "Unstable API" —
+  https://bun.com/docs/runtime/markdown
+- Child processes expose `.terminal.close()` and `exited` —
+  https://bun.com/docs/runtime/child-process#reusable-terminal
+- `--no-env-file` disables automatic `.env` loading —
+  https://bun.com/docs/runtime/environment-variables#disabling-automatic-env-loading
+- `--no-orphans` exits when the parent dies (bunfig equivalent `run.noOrphans`) —
+  https://bun.com/blog/bun-v1.3.14#no-orphans-exit-when-the-parent-process-dies and
+  https://bun.com/docs/runtime/bunfig#run-noorphans-don-t-leave-orphan-processes-behind
+- `ServerWebSocket.cork(callback)` passes the socket as the callback's first argument (v1.4) —
+  https://bun.com/blog/bun-v1.4
+
+**Measured here, NOT stated by the indexed corpus — do not cite bun.com for these:**
+
+- `parseChunk(...).read` excludes the newline that terminates the last parsed record (byte-level
+  probe; see `tests/bun_jsonl_chunking.test.ts` / `tests/f402_weblog.test.ts`).
+- `ws.subscriptions` is returned in hash order, not insertion order (black-box probe; tests sort
+  before comparing).
+- `open`/`message` are automatically corked (from the `/reference` docs, which this MCP does not
+  index).
+- `ws.publish()` excludes the sender and `publishToSelf` changes that (0.6.3 change; not present in
+  the indexed corpus).
