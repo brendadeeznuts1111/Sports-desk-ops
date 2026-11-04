@@ -2,14 +2,16 @@
  * Pins the credential-read contract for the F402 readers after audit Finding 2:
  * the writer stores canonical (`com.bookdeskops.sportsdesk`), so readers must try
  * canonical first and fall back to the legacy `sportsdesk-ops` copy (which is the
- * live one today). Player credentials are env-only because nothing writes
- * `f402-player-*`.
+ * live one today). Player-tier credentials follow the same rule: `secrets:f402 set-player`
+ * writes canonical `f402-player-*`, with env (`F402_PLAYER_ID`/`F402_PLAYER_PASSWORD`) as the
+ * fallback when no pair is stored.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   CANONICAL_SECRETS_SERVICE,
   F402_KEYCHAIN_NAMES,
+  F402_PLAYER_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
   setSecretsProviderForTests,
   type SecretsProvider,
@@ -112,37 +114,102 @@ describe("F402 agent id is canonical-first", () => {
   });
 });
 
-describe("player credentials are env-only", () => {
-  test("env pair resolves without a keychain read", async () => {
+describe("player credentials: canonical keychain first, then env", () => {
+  test("a canonical keychain pair wins over env", async () => {
+    const { provider, reads } = fakeSecrets({
+      [`${CANONICAL_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.playerId}`]:
+        "canonical-player",
+      [`${CANONICAL_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.password}`]:
+        "canonical-secret",
+      [`${LEGACY_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.playerId}`]:
+        "legacy-player",
+    });
+    setSecretsProviderForTests(provider);
+
+    expect(
+      await loadF402PlayerCredentials(
+        { F402_PLAYER_ID: "env-player", F402_PLAYER_PASSWORD: "env-secret" },
+        provider,
+      ),
+    ).toEqual({
+      loginId: "canonical-player",
+      password: "canonical-secret",
+      kind: "player",
+    });
+    expect(reads[0]).toBe(
+      `${CANONICAL_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.playerId}`,
+    );
+    expect(reads.join("\n")).not.toContain("env-player");
+  });
+
+  test("legacy fallback resolves when the canonical pair is absent", async () => {
+    const { provider } = fakeSecrets({
+      [`${LEGACY_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.playerId}`]:
+        "legacy-player",
+      [`${LEGACY_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.password}`]:
+        "legacy-secret",
+    });
+    expect(await loadF402PlayerCredentials({}, provider)).toEqual({
+      loginId: "legacy-player",
+      password: "legacy-secret",
+      kind: "player",
+    });
+  });
+
+  test("env is used when the keychain has no player pair", async () => {
     const { provider, reads } = fakeSecrets({});
     setSecretsProviderForTests(provider);
 
     expect(
-      await loadF402PlayerCredentials({
-        F402_PLAYER_ID: "player-1",
-        F402_PLAYER_PASSWORD: "player-secret",
-      }),
+      await loadF402PlayerCredentials(
+        { F402_PLAYER_ID: "env-player", F402_PLAYER_PASSWORD: "env-secret" },
+        provider,
+      ),
     ).toEqual({
-      loginId: "player-1",
-      password: "player-secret",
+      loginId: "env-player",
+      password: "env-secret",
       kind: "player",
     });
-    expect(reads).toEqual([]);
+    expect(reads.length).toBeGreaterThan(0);
   });
 
-  test("a missing pair fails closed and never reads a keychain", async () => {
+  test("a locked keychain falls back to env", async () => {
+    const provider: SecretsProvider = {
+      async get() {
+        throw new Error("keychain locked");
+      },
+    };
+    expect(
+      await loadF402PlayerCredentials(
+        { F402_PLAYER_ID: "env-player", F402_PLAYER_PASSWORD: "env-secret" },
+        provider,
+      ),
+    ).toEqual({
+      loginId: "env-player",
+      password: "env-secret",
+      kind: "player",
+    });
+  });
+
+  test("missing everywhere fails closed after keychain attempts", async () => {
     const { provider, reads } = fakeSecrets({});
-    setSecretsProviderForTests(provider);
-
-    await expect(loadF402PlayerCredentials({})).rejects.toBeInstanceOf(
-      MissingF402CredentialsError,
-    );
-    expect(reads).toEqual([]);
+    await expect(
+      loadF402PlayerCredentials({}, provider),
+    ).rejects.toBeInstanceOf(MissingF402CredentialsError);
+    expect(reads.length).toBeGreaterThan(0);
   });
 
-  test("the player login kind routes through the env-only loader", async () => {
-    await expect(loadF402LoginIdentity({}, "player")).rejects.toBeInstanceOf(
-      MissingF402CredentialsError,
-    );
+  test("the player login kind routes through the player loader", async () => {
+    const { provider } = fakeSecrets({
+      [`${CANONICAL_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.playerId}`]:
+        "canonical-player",
+      [`${CANONICAL_SECRETS_SERVICE}/${F402_PLAYER_KEYCHAIN_NAMES.password}`]:
+        "canonical-secret",
+    });
+    expect(await loadF402LoginIdentity({}, "player", provider)).toEqual({
+      loginId: "canonical-player",
+      password: "canonical-secret",
+      kind: "player",
+    });
   });
 });

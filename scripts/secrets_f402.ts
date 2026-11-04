@@ -3,10 +3,10 @@
  * @file scripts/secrets_f402.ts
  * @description Keep the F402 credentials in the OS credential store instead of `.env`.
  *
- * Values are never printed and never accepted on argv. `set` writes the canonical service
- * (`com.bookdeskops.sportsdesk`); reads are canonical-first with the legacy `sportsdesk-ops`
+ * Values are never printed and never accepted on argv. `set` / `set-player` write the canonical
+ * service (`com.bookdeskops.sportsdesk`); reads are canonical-first with the legacy `sportsdesk-ops`
  * service as a fallback, and `status` reports which service actually holds each entry.
- * `delete` removes both services so a stale legacy copy cannot resurface after a rotation.
+ * `delete` / `delete-player` remove both services so a stale legacy copy cannot resurface.
  *
  * `set` reads the password from stdin, so it composes with a password manager:
  * `op read ... | bun run secrets:f402 set --agent-id 118`.
@@ -21,6 +21,7 @@ import {
 import {
   CANONICAL_SECRETS_SERVICE,
   F402_KEYCHAIN_NAMES,
+  F402_PLAYER_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
   SECRET_ENTRIES,
   deleteSecret,
@@ -42,15 +43,19 @@ secrets:f402 — store the F402 credentials in the OS credential store
 Usage:
   bun run secrets:f402 status
   <password-source> | bun run secrets:f402 set --agent-id <id>
+  <password-source> | bun run secrets:f402 set-player --player-id <id>
   bun run secrets:f402 delete
+  bun run secrets:f402 delete-player
 
 Options:
-  --agent-id <id>   Manager agent id (not secret)
-  -h, --help        This text
+  --agent-id <id>    Manager agent id (not secret)
+  --player-id <id>   Optional player-tier login id (not secret)
+  -h, --help         This text
 
 Examples:
   bun run secrets:f402 status
   op read "op://Private/f402/password" | bun run secrets:f402 set --agent-id 118
+  op read "op://Private/f402/player-password" | bun run secrets:f402 set-player --player-id <id>
   bun run secrets:f402 delete
 
 Reads are canonical-first (${CANONICAL_SECRETS_SERVICE}) with the legacy
@@ -73,6 +78,8 @@ async function status(): Promise<void> {
   for (const [label, name] of [
     ["agent id", F402_KEYCHAIN_NAMES.agentId],
     ["password", F402_KEYCHAIN_NAMES.password],
+    ["player id", F402_PLAYER_KEYCHAIN_NAMES.playerId],
+    ["player password", F402_PLAYER_KEYCHAIN_NAMES.password],
   ] as const) {
     const found = await readSecretWithSource(name);
     if (found === null) {
@@ -85,6 +92,9 @@ async function status(): Promise<void> {
   if (absent > 0) {
     console.error(
       "  printf '%s\\n' \"$F402_PASSWORD\" | bun run secrets:f402 set --agent-id <id>",
+    );
+    console.error(
+      "  printf '%s\\n' \"$F402_PLAYER_PASSWORD\" | bun run secrets:f402 set-player --player-id <id>",
     );
   }
 }
@@ -130,9 +140,44 @@ async function remove(): Promise<void> {
   );
 }
 
+async function storePlayer(playerId: string): Promise<void> {
+  if (playerId === "") {
+    console.error("secrets:f402: --player-id is required.");
+    console.error(
+      "  printf '%s\\n' \"$F402_PLAYER_PASSWORD\" | bun run secrets:f402 set-player --player-id <id>",
+    );
+    process.exit(2);
+  }
+  if (process.stdin.isTTY) {
+    console.error(
+      "secrets:f402: pipe the player password on stdin; it is not accepted on argv.",
+    );
+    process.exit(2);
+  }
+  const password = await readLine();
+  if (password === "") {
+    console.error("secrets:f402: stdin was empty; nothing stored.");
+    process.exit(2);
+  }
+  await writeSecret(SECRET_ENTRIES.f402PlayerId, playerId);
+  await writeSecret(SECRET_ENTRIES.f402PlayerPassword, password);
+  console.error(
+    `secrets:f402: stored player id and password under service ${CANONICAL_SECRETS_SERVICE}`,
+  );
+}
+
+async function removePlayer(): Promise<void> {
+  const removed =
+    (await deleteSecret(SECRET_ENTRIES.f402PlayerId)) +
+    (await deleteSecret(SECRET_ENTRIES.f402PlayerPassword));
+  console.error(
+    `secrets:f402: removed ${removed} F402 player credential entr${removed === 1 ? "y" : "ies"} from ${SERVICES.join(", ")}`,
+  );
+}
+
 async function main(): Promise<void> {
   const parsed = parseCliArgs(process.argv.slice(2), {
-    valueFlags: ["--agent-id"],
+    valueFlags: ["--agent-id", "--player-id"],
   });
   if (wantsHelp(parsed)) {
     printHelp(HELP);
@@ -148,12 +193,18 @@ async function main(): Promise<void> {
     case "set":
       await store(flagValue(parsed, "--agent-id", ""));
       break;
+    case "set-player":
+      await storePlayer(flagValue(parsed, "--player-id", ""));
+      break;
     case "delete":
       await remove();
       break;
+    case "delete-player":
+      await removePlayer();
+      break;
     default:
       console.error(
-        `secrets:f402: unknown command "${command}" (status|set|delete).`,
+        `secrets:f402: unknown command "${command}" (status|set|set-player|delete|delete-player).`,
       );
       console.error("  bun run secrets:f402 status");
       process.exit(2);

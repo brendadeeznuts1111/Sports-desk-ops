@@ -45,6 +45,15 @@ export const F402_KEYCHAIN_NAMES = {
   password: "f402-password",
 } as const;
 
+/**
+ * Optional player-tier pair (used by `capture:f402 --login-as-player` / getTicketDetailPrint).
+ * Written by `secrets:f402 set-player`; readers are canonical-first with the legacy fallback.
+ */
+export const F402_PLAYER_KEYCHAIN_NAMES = {
+  playerId: "f402-player-id",
+  password: "f402-player-password",
+} as const;
+
 export const GSID_KEYCHAIN_NAME = "GSID" as const;
 
 export interface SecretEntry {
@@ -63,6 +72,14 @@ export const SECRET_ENTRIES = {
   },
   f402Password: {
     name: F402_KEYCHAIN_NAMES.password,
+    services: [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
+  },
+  f402PlayerId: {
+    name: F402_PLAYER_KEYCHAIN_NAMES.playerId,
+    services: [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
+  },
+  f402PlayerPassword: {
+    name: F402_PLAYER_KEYCHAIN_NAMES.password,
     services: [CANONICAL_SECRETS_SERVICE, LEGACY_SECRETS_SERVICE],
   },
   gsid: { name: GSID_KEYCHAIN_NAME, services: GSID_SERVICES },

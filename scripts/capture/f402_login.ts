@@ -15,6 +15,8 @@ import {
   F402_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
   MissingF402CredentialsError,
+  SECRET_ENTRIES,
+  readSecretEntry,
   type F402Credentials,
   type SecretsReader,
 } from "../../lib/secrets.ts";
@@ -52,30 +54,41 @@ export async function loadF402Credentials(
 }
 
 /**
- * Player credentials are env-only: nothing in the repo writes `f402-player-*` to
- * the keychain, so the old legacy-only read could never succeed and made a
- * missing-writer look like a missing-credential. `--login-as-player` still works
- * with `F402_PLAYER_ID` / `F402_PLAYER_PASSWORD`.
+ * Player-tier credentials: canonical-first keychain (`secrets:f402 set-player` writes
+ * `f402-player-*` to `com.bookdeskops.sportsdesk`), legacy fallback, then env
+ * (`F402_PLAYER_ID` / `F402_PLAYER_PASSWORD`). All-or-nothing per source: a keychain id never
+ * pairs with an env password.
  */
 export async function loadF402PlayerCredentials(
   env: Env = process.env,
+  secrets: SecretsReader | null = guardedSecrets,
 ): Promise<F402LoginIdentity> {
-  const loginId = env["F402_PLAYER_ID"]?.trim() ?? "";
-  const password = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";
-  if (loginId === "" || password === "") {
-    throw new MissingF402CredentialsError();
+  if (secrets !== null) {
+    const storedId =
+      (await readSecretEntry(SECRET_ENTRIES.f402PlayerId, secrets)) ?? "";
+    const storedPassword =
+      (await readSecretEntry(SECRET_ENTRIES.f402PlayerPassword, secrets)) ?? "";
+    if (storedId !== "" && storedPassword !== "") {
+      return { loginId: storedId, password: storedPassword, kind: "player" };
+    }
   }
-  return { loginId, password, kind: "player" };
+  const envId = env["F402_PLAYER_ID"]?.trim() ?? "";
+  const envPassword = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";
+  if (envId !== "" && envPassword !== "") {
+    return { loginId: envId, password: envPassword, kind: "player" };
+  }
+  throw new MissingF402CredentialsError();
 }
 
 export async function loadF402LoginIdentity(
   env: Env = process.env,
   kind: F402LoginKind = "agent",
+  secrets: SecretsReader | null = guardedSecrets,
 ): Promise<F402LoginIdentity> {
   if (kind === "player") {
-    return loadF402PlayerCredentials(env);
+    return loadF402PlayerCredentials(env, secrets);
   }
-  const agent = await loadF402Credentials(env);
+  const agent = await loadF402Credentials(env, secrets);
   return { loginId: agent.agentId, password: agent.password, kind: "agent" };
 }
 

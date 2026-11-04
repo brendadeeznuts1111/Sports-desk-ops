@@ -8,6 +8,7 @@ import {
   CANONICAL_SECRETS_SERVICE,
   GSLIVE_LEGACY_SECRETS_SERVICE,
   GSID_SERVICES,
+  F402_PLAYER_KEYCHAIN_NAMES,
   LEGACY_SECRETS_SERVICE,
   MissingF402CredentialsError,
   SECRET_ENTRIES,
@@ -40,12 +41,23 @@ describe("secret entries", () => {
     expect(GSID_SERVICES).toEqual(SECRET_ENTRIES.gsid.services);
   });
 
-  test("F402 falls back to the legacy service and the player names are gone", () => {
+  test("F402 agent and player-tier entries are canonical-first with the legacy fallback", () => {
     expect(SECRET_ENTRIES.f402AgentId.services).toEqual([
       CANONICAL_SECRETS_SERVICE,
       LEGACY_SECRETS_SERVICE,
     ]);
-    expect(Object.keys(SECRET_ENTRIES)).not.toContain("f402PlayerId");
+    // Player-tier entries are optional (written by `secrets:f402 set-player`) but follow the same
+    // read/write contract.
+    expect(SECRET_ENTRIES.f402PlayerId.services).toEqual([
+      CANONICAL_SECRETS_SERVICE,
+      LEGACY_SECRETS_SERVICE,
+    ]);
+    expect(SECRET_ENTRIES.f402PlayerId.name).toBe(
+      F402_PLAYER_KEYCHAIN_NAMES.playerId,
+    );
+    expect(SECRET_ENTRIES.f402PlayerPassword.name).toBe(
+      F402_PLAYER_KEYCHAIN_NAMES.password,
+    );
     expect(new MissingF402CredentialsError()).toBeInstanceOf(Error);
   });
 });
