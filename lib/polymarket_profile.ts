@@ -142,9 +142,7 @@ async function requestJson(
 }
 
 const sleep = (ms: number): Promise<void> =>
-  ms <= 0
-    ? Promise.resolve()
-    : new Promise((resolve) => setTimeout(resolve, ms));
+  ms <= 0 ? Promise.resolve() : Bun.sleep(ms);
 
 /**
  * Resolves a 0x address, or a leaderboard username → wallet (3 cursor pages, 1500 users).

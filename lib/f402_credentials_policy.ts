@@ -7,9 +7,10 @@
  *
  * **Child-process rules (the only places a plaintext password crosses a process boundary):**
  * 1. **Keychain read** — `Bun.spawn(["security","find-generic-password",…])` with an **argv array**
- *    (no shell). Never `Bun.$` — interpolation routes bytes through a shell parser.
+ *    (no shell) and an explicit minimal environment allowlist (`buildMinimalSpawnEnv()`). Never `Bun.$` —
+ *    interpolation routes bytes through a shell parser.
  * 2. **TTY hidden read** — no native no-echo on `Bun.stdin`; uses `Bun.spawn(["bash","-c",
- *    "read -rs …"])` with stdin inherited from the TTY (same constraint: named spawn, not `$`).
+ *    "read -rs …"])` with stdin inherited from the TTY and `env: buildMinimalSpawnEnv()`.
  * 3. **Keychain store** (`secrets:f402 set`) — password only via **stdin**; the macOS write path
  *    may use `security add-generic-password -w` and remains the sole argv-leak surface on store.
  */
@@ -35,6 +36,25 @@ export type SecureF402Credentials = F402Credentials & {
 };
 
 type Env = Record<string, string | undefined>;
+
+/**
+ * Explicit minimal child-process environment allowlist (`GATE-SEC-01`).
+ * Prevents spawned child processes from inheriting `Bun.spawn`'s launch-time `process.env` snapshot.
+ */
+export function buildMinimalSpawnEnv(
+  extraAllowed?: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const home = Bun.env.HOME ?? "/Users/nolarose";
+  return {
+    PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    HOME: home,
+    XDG_CONFIG_HOME: `${home}/.config`,
+    OP_CONFIG_DIR: `${home}/.config/op`,
+    LANG: "en_US.UTF-8",
+    TERM: "xterm-256color",
+    ...extraAllowed,
+  };
+}
 
 function warnDeprecatedEnvCredentials(): void {
   console.warn(
@@ -81,7 +101,7 @@ async function readMacOsKeychainValue(account: string): Promise<string> {
       account,
       "-w",
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    { stdout: "pipe", stderr: "pipe", env: buildMinimalSpawnEnv() },
   );
   const out = await new Response(proc.stdout).text();
   const exit = await proc.exited;
@@ -119,7 +139,12 @@ async function readPasswordHidden(): Promise<string> {
   output.write("F402 password (hidden): ");
   const proc = Bun.spawn(
     ["bash", "-c", 'read -rs _P < /dev/tty && printf "%s" "$_P"'],
-    { stdin: "inherit", stdout: "pipe", stderr: "inherit" },
+    {
+      stdin: "inherit",
+      stdout: "pipe",
+      stderr: "inherit",
+      env: buildMinimalSpawnEnv(),
+    },
   );
   const bytes = await new Response(proc.stdout).arrayBuffer();
   await proc.exited;
@@ -150,7 +175,7 @@ export async function promptF402CredentialsTTY(): Promise<SecureF402Credentials>
  * Never reads F402_PASSWORD from env otherwise.
  */
 export async function loadF402CredentialsSecure(
-  env: Env = process.env,
+  env: Env = Bun.env,
   secrets: SecretsReader | null = Bun.secrets as SecretsReader,
 ): Promise<SecureF402Credentials> {
   const agentId = await readKeychain(secrets, SECRET_NAMES.agentId);

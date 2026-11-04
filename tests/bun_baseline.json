@@ -1,0 +1,394 @@
+{
+  "_bun": {
+    "note": "runtime",
+    "stdout": "v1.4.4 (38afee6c8)",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "ns.own": {
+    "note": "typeof and own property names per Bun member",
+    "stdout": "[{\"k\":\"$\",\"t\":\"function\",\"own\":[\"Shell\",\"ShellError\",\"ShellPromise\",\"braces\",\"escape\",\"length\",\"name\"]},{\"k\":\"Build\",\"t\":\"undefined\",\"own\":null},{\"k\":\"CSRF\",\"t\":\"object\",\"own\":[\"generate\",\"verify\"]},{\"k\":\"dns\",\"t\":\"object\",\"own\":[\"ADDRCONFIG\",\"ALL\",\"V4MAPPED\",\"getCacheStats\",\"getServers\",\"lookup\",\"lookupService\",\"prefetch\",\"resolve\",\"resolveAny\",\"resolveCaa\",\"resolveCname\",\"resolveMx\",\"resolveNaptr\",\"resolveNs\",\"resolvePtr\",\"resolveSoa\",\"resolveSrv\",\"resolveTxt\",\"reverse\",\"setServers\"]},{\"k\":\"Image\",\"t\":\"function\",\"own\":[\"backend\",\"clipboardChangeCount\",\"fromClipboard\",\"hasClipboardImage\",\"length\",\"name\",\"prototype\"]},{\"k\":\"inspect\",\"t\":\"function\",\"own\":[\"custom\",\"length\",\"name\",\"table\"]},{\"k\":\"JSON5\",\"t\":\"object\",\"own\":[\"parse\",\"stringify\"]},{\"k\":\"JSONC\",\"t\":\"object\",\"own\":[\"parse\"]},{\"k\":\"JSONL\",\"t\":\"object\",\"own\":[\"parse\",\"parseChunk\"]},{\"k\":\"markdown\",\"t\":\"object\",\"own\":[\"ansi\",\"html\",\"react\",\"render\"]},{\"k\":\"Password\",\"t\":\"undefined\",\"own\":null},{\"k\":\"peek\",\"t\":\"function\",\"own\":[\"length\",\"name\",\"status\"]},{\"k\":\"RedisClient\",\"t\":\"function\",\"own\":[\"length\",\"name\",\"prototype\"]},{\"k\":\"Security\",\"t\":\"undefined\",\"own\":null},{\"k\":\"semver\",\"t\":\"object\",\"own\":[\"order\",\"satisfies\"]},{\"k\":\"Serve\",\"t\":\"undefined\",\"own\":null},{\"k\":\"Spawn\",\"t\":\"undefined\",\"own\":null},{\"k\":\"SQL\",\"t\":\"function\",\"own\":[\"MySQLError\",\"PostgresError\",\"SQLError\",\"SQLiteError\",\"camel\",\"fromCamel\",\"fromKebab\",\"fromPascal\",\"kebab\",\"length\",\"name\",\"pascal\",\"prototype\",\"toCamel\",\"toKebab\",\"toPascal\"]},{\"k\":\"TOML\",\"t\":\"object\",\"own\":[\"parse\",\"stringify\"]},{\"k\":\"udp\",\"t\":\"undefined\",\"own\":null},{\"k\":\"unsafe\",\"t\":\"object\",\"own\":[\"arrayBufferToString\",\"gcAggressionLevel\",\"memoryFootprint\",\"mimallocDump\",\"setJITPolicy\"]},{\"k\":\"WebAssembly\",\"t\":\"undefined\",\"own\":null},{\"k\":\"WebView\",\"t\":\"function\",\"own\":[\"closeAll\",\"length\",\"name\",\"prototype\"]},{\"k\":\"XML\",\"t\":\"object\",\"own\":[\"parse\",\"stringify\"]},{\"k\":\"YAML\",\"t\":\"object\",\"own\":[\"parse\",\"stringify\"]}]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "ns.ctor": {
+    "note": "usable with new, checked without invoking the constructor",
+    "stdout": "[[\"Image\",\"new\"],[\"WebView\",\"new\"],[\"inspect\",\"no-new\"],[\"SQL\",\"new\"]]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "ns.pw": {
+    "note": "Bun.Password is not a runtime alias of Bun.password",
+    "stdout": "[\"undefined\",\"object\",false]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.obj.p": {
+    "note": "-p with a bare object literal",
+    "stdout": "1",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.obj.repl": {
+    "note": "repl -p with a bare object literal",
+    "stdout": "{\n  a: 1,\n}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.argv": {
+    "note": "Bun.argv in an eval",
+    "stdout": "[\"<bun>\",\"x\",\"y\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.argv.dashdash": {
+    "note": "Bun.argv after --",
+    "stdout": "[\"<bun>\",\"-n\",\"5\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.main": {
+    "note": "import.meta.main in an eval",
+    "stdout": "true",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.req": {
+    "note": "typeof require alone",
+    "stdout": "function",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.mix": {
+    "note": "require and import.meta together",
+    "stdout": "",
+    "stderr": "SyntaxError: import.meta is only valid inside modules.\n      at /private<cwd>/[eval]:1\n\nBun v1.4.4 (macOS arm64)",
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.str": {
+    "note": "the word require inside a string, with import.meta",
+    "stdout": "require string",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.cmt": {
+    "note": "the word require inside a comment, with import.meta",
+    "stdout": "string",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.meta.require": {
+    "note": "import.meta.require keeps ESM",
+    "stdout": "function string",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "eval.print.str": {
+    "note": "-p prints strings unquoted",
+    "stdout": "hi",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "stdin.lf": {
+    "note": "console iterator, LF input",
+    "stdout": "\"a\"\n\"b\"\n\"\"",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "stdin.crlf": {
+    "note": "console iterator, CRLF input",
+    "stdout": "\"a\\r\"\n\"b\\r\"\n\"\"",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "stdin.noeol": {
+    "note": "console iterator, no final newline",
+    "stdout": "\"a\"\n\"b\"",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "archive.files": {
+    "note": ".files() on a real tgz built in the scratch dir",
+    "stdout": "[\"f.txt\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "archive.extract.nopath": {
+    "note": ".extract() without a path",
+    "stdout": "TypeError ERR_INVALID_ARG_TYPE Archive.extract requires a path argument",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "archive.bunfile": {
+    "note": "constructor given a BunFile instead of bytes",
+    "stdout": "Error Unrecognized archive format",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.desc": {
+    "note": "enableANSIColors property descriptor",
+    "stdout": "{\"value\":false,\"writable\":true,\"enumerable\":true,\"configurable\":false}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.set": {
+    "note": "assigning enableANSIColors in an ESM eval",
+    "stdout": "assigned\nfalse true",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.default": {
+    "note": "piped, no colour env",
+    "stdout": "false",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.no1": {
+    "note": "piped, NO_COLOR=1",
+    "stdout": "false",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.force1": {
+    "note": "piped, FORCE_COLOR=1",
+    "stdout": "true",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "colors.both": {
+    "note": "piped, NO_COLOR=1 FORCE_COLOR=1",
+    "stdout": "true",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "spawn.stdin.end": {
+    "note": "pipe stdin, write, end(): the child exits",
+    "stdout": "\"hi\\n\" 0",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "sql.bare.path": {
+    "note": "adapter chosen for a bare path",
+    "stdout": "postgres",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.shell": {
+    "note": "Bun.$, argv, env, main are runtime values",
+    "stdout": "{\"dollar\":\"function\",\"argv\":1,\"env\":\"object\",\"envHasKeys\":true,\"main\":\"string\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.stdio": {
+    "note": "stdin/stdout exist with the Blob text() method",
+    "stdout": "{\"stdin\":\"object\",\"stdout\":\"object\",\"stdinText\":\"function\",\"stdoutText\":\"function\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.timing": {
+    "note": "nanoseconds is monotonic and sleepSync blocks",
+    "stdout": "{\"monotonic\":true,\"sleptAtLeast5ms\":true,\"sleep\":\"function\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.spawn": {
+    "note": "spawnSync returns stdout/exitCode and gc returns undefined",
+    "stdout": "{\"out\":\"ok\",\"code\":0,\"gc\":false}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.paths": {
+    "note": "which/resolveSync/fileURLToPath/openInEditor shapes",
+    "stdout": "",
+    "stderr": "error: Cannot find module './package.json' from '/private<cwd>'\n\nBun v1.4.4 (macOS arm64)",
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.meta": {
+    "note": "version, revision and version_with_sha shapes",
+    "stdout": "{\"version\":\"1.4.4\",\"revisionLen\":40,\"sha\":\"v1.4.4 (38afee6c8)\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "proc.terminal": {
+    "note": "Terminal is a value; FileSink is a type only",
+    "stdout": "{\"terminal\":\"function\",\"terminalArity\":0,\"fileSink\":\"undefined\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.width": {
+    "note": "stringWidth and wrapAnsi agree on wide and ANSI input",
+    "stdout": "[2,2,\"a b\\nc\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.ansi": {
+    "note": "color, enableANSIColors and escapeHTML shapes",
+    "stdout": "[\"#ff0000\",\"\",\"boolean\",\"&lt;b&gt;&amp;\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.json": {
+    "note": "JSONC.parse reads JSON with comments",
+    "stdout": "[[1,2],[1,2],\"function\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.glob": {
+    "note": "Glob.match respects the pattern",
+    "stdout": "[true,false]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.compare": {
+    "note": "deepEquals compares structure, not identity",
+    "stdout": "[true,false]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.cookies": {
+    "note": "Cookie and CookieMap parse the same header pair",
+    "stdout": "[\"a\",\"b\",\"b\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "crypto.hash": {
+    "note": "CryptoHasher digest, Bun.hash and UUID v7 shapes",
+    "stdout": "[64,\"bigint\",36,\"7\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "crypto.compress": {
+    "note": "zstd and gzip round-trip; sink and concat shapes",
+    "stdout": "[\"hello\",\"hello\",\"function\",\"function\",\"object\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.parse": {
+    "note": "JSONL, JSON5, TOML, YAML and XML parse inline",
+    "stdout": "[[1,2],{\"a\":1},{\"a\":1},{\"a\":1},{\"a\":\"1\"}]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "data.semver": {
+    "note": "semver.satisfies and semver.order answer version questions",
+    "stdout": "[true,-1]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "text.inspect": {
+    "note": "inspect renders a stable multi-line form",
+    "stdout": "[\"{\\n  a: [ 1 ],\\n}\",\"\\\"x\\\"\"]",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  },
+  "storage.archive": {
+    "note": "Archive round-trips through bytes and files()",
+    "stdout": "",
+    "stderr": "1 | (async()=>{const b=await new Bun.Archive({\"a.txt\":\"hi\"}).bytes();const f=await new Bun.Archive(b).files();console.log(JSON.stringify([b.length>0,[...f.keys()],new TextDecoder().decode(f.get(\"a.txt\"))]))})()\n                                                                                                                                                                                     ^\nTypeError: TextDecoder.decode expects an ArrayBuffer or TypedArray\n code: \"ERR_INVALID_ARG_TYPE\"\n\n      at <anonymous> (/private<cwd>/[eval]:1:178)\n\nBun v1.4.4 (macOS arm64)",
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  },
+  "image.metadata": {
+    "note": "Image.metadata reads a 1x1 PNG header",
+    "stdout": "{\"width\":1,\"height\":1,\"format\":\"png\"}",
+    "stderr": "",
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  }
+}

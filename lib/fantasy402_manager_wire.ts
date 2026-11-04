@@ -19,6 +19,7 @@
  *     - POST /cloud/api/Manager/getWebLog across modes A, B, C, I
  */
 
+import { z } from "zod";
 import { SPORT_FIELD_WIDTH, padField } from "./f402_field_widths.ts";
 import {
   type PaddedCustomerId,
@@ -152,17 +153,23 @@ export interface WebLogQueryResult {
   readonly rawResponse?: unknown;
 }
 
-/**
- * Deep equality helper matching Bun.deepEquals semantics across runtimes.
- */
-export function deepEqualsNormalized(a: unknown, b: unknown): boolean {
-  if (
-    typeof Bun !== "undefined" &&
-    typeof (Bun as any).deepEquals === "function"
-  ) {
-    return (Bun as any).deepEquals(a, b);
-  }
-  return JSON.stringify(a) === JSON.stringify(b);
+const ResultEnvelopeSchema = z.looseObject({ Result: z.unknown().optional() });
+const PlayerInfoEnvelopeSchema = z.looseObject({
+  Result: z.unknown().optional(),
+  data: z.unknown().optional(),
+});
+const PlayerInfoSchema = z.looseObject({});
+const VigSetupRowSchema = z.looseObject({ VigSpread: z.unknown().optional() });
+const WebLogEnvelopeSchema = z.looseObject({
+  LIST: z.unknown().optional(),
+  data: z.unknown().optional(),
+  rows: z.unknown().optional(),
+});
+const WebLogRowsSchema = z.array(z.unknown()).catch(() => []);
+
+function wireResultCode(json: unknown): unknown {
+  const result = ResultEnvelopeSchema.safeParse(json).data?.Result;
+  return ResultEnvelopeSchema.safeParse(result).data?.Result ?? result;
 }
 
 /**
@@ -251,15 +258,16 @@ export async function executePlayerColumnMutation(
       signal,
       referrerPolicy: "no-referrer",
     });
-  } catch (err: any) {
-    if (err?.name === "TimeoutError") {
+  } catch (err) {
+    const errorName = err instanceof Error ? err.name : undefined;
+    if (errorName === "TimeoutError") {
       throw new WirePayloadError(
         WirePayloadErrorClassification.TRANSPORT_TIMEOUT,
         `updateByColumn timed out after ${timeoutMs}ms`,
         75,
       );
     }
-    if (err?.name === "AbortError") {
+    if (errorName === "AbortError") {
       throw new WirePayloadError(
         WirePayloadErrorClassification.CALLER_ABORTED,
         "updateByColumn request aborted by caller",
@@ -303,7 +311,7 @@ export async function executePlayerColumnMutation(
     };
   }
 
-  let json: any;
+  let json: unknown;
   try {
     json = await response.json();
   } catch {
@@ -314,7 +322,7 @@ export async function executePlayerColumnMutation(
     );
   }
 
-  const rawResult = json?.Result?.Result ?? json?.Result;
+  const rawResult = wireResultCode(json);
   let resultCode: PlayerMutationResultCode;
 
   if (rawResult === 1 || rawResult === "1") {
@@ -447,8 +455,11 @@ export async function fetchPlayerInfo(options: {
   });
 
   if (!res.ok) return null;
-  const json: any = await res.json();
-  return json?.Result ?? json?.data ?? json ?? null;
+  const json: unknown = await res.json();
+  const body = PlayerInfoEnvelopeSchema.safeParse(json).data;
+  return (
+    PlayerInfoSchema.safeParse(body?.Result ?? body?.data ?? json).data ?? null
+  );
 }
 
 /**
@@ -516,8 +527,8 @@ export async function executeVigSetupInsert(
     };
   }
 
-  const json: any = await res.json();
-  const rawResult = json?.Result?.Result ?? json?.Result;
+  const json: unknown = await res.json();
+  const rawResult = wireResultCode(json);
   const committed = rawResult === 1 || rawResult === "1";
 
   let readBackVerified = false;
@@ -546,9 +557,12 @@ export async function executeVigSetupInsert(
       );
 
       if (readRes.ok) {
-        const readJson: any = await readRes.json();
-        const rData = readJson?.Result ?? readJson;
-        if (rData && String(rData.VigSpread) === vigSpread) {
+        const readJson: unknown = await readRes.json();
+        const rData =
+          ResultEnvelopeSchema.safeParse(readJson).data?.Result ?? readJson;
+        const readVigSpread =
+          VigSetupRowSchema.safeParse(rData).data?.VigSpread;
+        if (rData && String(readVigSpread) === vigSpread) {
           readBackVerified = true;
         }
       }
@@ -633,10 +647,11 @@ export async function queryIpTrackerWebLog(
     );
   }
 
-  const json: any = await res.json();
-  const rows = Array.isArray(json)
-    ? json
-    : (json?.LIST ?? json?.data ?? json?.rows ?? []);
+  const json: unknown = await res.json();
+  const body = WebLogEnvelopeSchema.safeParse(json).data;
+  const rows = WebLogRowsSchema.parse(
+    Array.isArray(json) ? json : (body?.LIST ?? body?.data ?? body?.rows),
+  );
 
   return {
     mode: options.mode,

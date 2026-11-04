@@ -2,9 +2,16 @@
  * Proxy handling for the capture data path.
  *
  * Bun 1.4.4 honors `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` environment
- * variables, but *silently ignores* an explicit `proxy:` option in fetch init.
- * So the only reliable control surface is the environment: this module reads it,
- * reports it safely, and sets/restores it for a capture run.
+ * variables, and it also accepts an explicit `proxy:` option — on `fetch()` and
+ * on `Bun.FetchSession` — as a URL string, a `URL`, a `{ url, headers,
+ * respectNoProxy }` object, or `false` for a direct connection. Measured in
+ * tests/fetch_proxy_isolation.test.ts and tests/fetch_session_pool.test.ts.
+ *
+ * This module is the environment view: it reads the variables, applies the
+ * `NO_PROXY` matcher itself so a bypass can be explained, and sets/restores the
+ * environment for the callers that still need a process-global override. New
+ * code should pass the option instead — it is scoped to one request or one
+ * session rather than to the whole process.
  *
  * Known limitations (documented, not papered over):
  *   - Bun.WebView does not honor these variables or a proxy constructor option;
@@ -315,8 +322,12 @@ export function proxyForUrl(
 
 /**
  * Point the process environment at one proxy (or clear it) for a run and return
- * a restore function. Explicit `proxy:` init options are ignored by Bun, so the
- * environment is the only lever.
+ * a restore function.
+ *
+ * Process-global by construction: it also affects anything else in this process
+ * that reads the environment, including a spawned child. Prefer passing `proxy`
+ * to `fetch()` or `Bun.FetchSession`; keep this for the cases that genuinely
+ * need the environment (a subprocess, or a library that only reads it).
  */
 export function setProxyEnv(
   proxy: string | null,

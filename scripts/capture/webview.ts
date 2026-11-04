@@ -29,6 +29,7 @@ import {
 } from "../../lib/screenshot_encode.ts";
 import { parseCdpCookies, type CdpCookie } from "./cookies.ts";
 import { sha256Hex } from "./json.ts";
+import { imageErrorCode } from "../../lib/image_errors.ts";
 import { redactError, redactString, redactUrlForLog } from "./redact.ts";
 
 export type WebViewErrorCode =
@@ -36,6 +37,7 @@ export type WebViewErrorCode =
   | "unsupported-backend"
   | "invalid-url"
   | "invalid-selector"
+  | "invalid-size"
   | "navigate-failed"
   | "load-timeout"
   | "selector-timeout"
@@ -52,11 +54,21 @@ export type WebViewErrorCode =
 export class WebViewError extends Error {
   readonly code: WebViewErrorCode;
 
-  constructor(code: WebViewErrorCode, message: string) {
-    super(message);
+  constructor(code: WebViewErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "WebViewError";
     this.code = code;
   }
+}
+
+/** Keeps the `Bun.Image` code in the message and the original error as `cause`. */
+function screenshotFailed(what: string, error: unknown): WebViewError {
+  const image = imageErrorCode(error);
+  return new WebViewError(
+    "screenshot-failed",
+    `${what} failed${image === undefined ? "" : ` (${image})`}: ${redactError(error)}`,
+    { cause: error },
+  );
 }
 
 export interface WebViewLaunchOptions {
@@ -64,8 +76,25 @@ export interface WebViewLaunchOptions {
   height?: number;
   /** CDP requires the Chrome backend; webkit has no `cdp()`. */
   backend?: "chrome" | "webkit";
-  /** Persist cookies/storage across runs. WebKit needs macOS 15.2+. */
+  /**
+   * Persist cookies/storage across runs. WebKit needs macOS 15.2+.
+   *
+   * Chrome routes this through `--user-data-dir`, which is process-wide: the
+   * first view's directory wins and later views reuse it (Bun logs a one-time
+   * warning when a later launch asks for a different directory). WebKit keeps
+   * storage per view, so a second view really does get its own directory.
+   */
   dataStoreDir?: string;
+  /**
+   * Chrome backend: let Bun auto-connect to an already-running Chrome (a new tab in the existing
+   * browser) instead of forcing a spawn. Requires Chrome's remote-debugging toggle; without it Bun
+   * falls back to spawning, so the caller still fails closed on a missing session.
+   */
+  attachToExistingChrome?: boolean;
+  /** Route the browser subprocess's stdout to Bun's (Chrome: `"ignore"` by default). */
+  stdout?: "inherit" | "ignore";
+  /** Route the browser subprocess's stderr to Bun's (Chrome is chatty; useful when it dies silently). */
+  stderr?: "inherit" | "ignore";
   navigateTimeoutMs?: number;
   pollMs?: number;
   consoleLimit?: number;
@@ -103,18 +132,24 @@ export type ScreenshotOptions =
       format: "png";
       palette?: boolean;
       resize?: ResizeSpec;
+      /** Clockwise rotation in degrees (applied after resize, before encode). */
+      rotate?: number;
     }
   | {
       format: "jpeg";
       quality?: number;
       progressive?: boolean;
       resize?: ResizeSpec;
+      /** Clockwise rotation in degrees (applied after resize, before encode). */
+      rotate?: number;
     }
   | {
       format: "webp";
       quality?: number;
       lossless?: boolean;
       resize?: ResizeSpec;
+      /** Clockwise rotation in degrees (applied after resize, before encode). */
+      rotate?: number;
     };
 
 /** Read-side contract used by the pure load-wait helper (fake in tests). */
@@ -134,8 +169,9 @@ export interface LoadWaitOptions {
   allowDataUrl?: boolean;
   /**
    * Allow an opaque bootstrap URL (`about:blank` / empty) to count as settled
-   * once the document has loaded and has a title. Some portals (fantasy402)
-   * serve their SPA while the native view still reports `about:blank`.
+   * once it has loaded. The native title is not required: WebKit reports
+   * `view.title === ""` on every navigation. Some portals (fantasy402) serve
+   * their SPA while the native view still reports `about:blank`.
    */
   allowOpaqueUrl?: boolean;
 }
@@ -144,6 +180,7 @@ export const DEFAULT_NAVIGATE_TIMEOUT_MS = 15_000;
 export const DEFAULT_POLL_MS = 100;
 const DEFAULT_CONSOLE_LIMIT = 200;
 const MAX_CONSOLE_TEXT = 500;
+const MAX_VIEWPORT_DIMENSION = 16_384;
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -187,7 +224,9 @@ export async function waitForLoadState(
       isSettledUrl(
         state.url,
         options.allowDataUrl === true,
-        options.allowOpaqueUrl === true && state.title.length > 0,
+        // WebKit reports view.title === "" on every navigation, so an opaque
+        // bootstrap page must not require a title to count as settled.
+        options.allowOpaqueUrl === true,
       )
     ) {
       return { url: state.url, title: state.title };
@@ -241,6 +280,31 @@ export function registerExitCleanup(): void {
 
 type BunWebViewInstance = InstanceType<typeof Bun.WebView>;
 
+/**
+ * Chrome's `--user-data-dir` is process-wide: the first view's
+ * `dataStore.directory` wins and every later view reuses it. Remember the
+ * directory that actually won so a conflicting request is reported once
+ * instead of pretending it applied. Only a *successful* launch pins the
+ * directory: a launch that throws never created a view, so it must not consume
+ * the warning. WebKit storage is per view and never consults this.
+ */
+let chromeDataStoreDir: string | undefined;
+let chromeDataStoreDirWarned = false;
+
+function noteChromeDataStoreDir(requested: string): void {
+  if (chromeDataStoreDir === undefined) {
+    chromeDataStoreDir = requested;
+    return;
+  }
+  if (chromeDataStoreDir === requested || chromeDataStoreDirWarned) return;
+  chromeDataStoreDirWarned = true;
+  // A profile path is operator input; redactString keeps it from echoing a
+  // cookie/token-shaped value. Directory names only, never cookie contents.
+  console.warn(
+    `[webview] chrome dataStore: ignoring ${redactString(requested)} — the first view already pinned --user-data-dir to ${redactString(chromeDataStoreDir)} (Chrome's profile directory is process-wide, first view wins)`,
+  );
+}
+
 /** Owns exactly one Bun.WebView; use `launch()` then `close()` in a finally. */
 export class ManagedWebView {
   private readonly view: BunWebViewInstance;
@@ -249,7 +313,28 @@ export class ManagedWebView {
   private readonly consoleLimit: number;
   private readonly navigateTimeoutMs: number;
   private readonly pollMs: number;
+  /**
+   * Launch-ordering seam: every page operation awaits it before touching the
+   * view. It resolves immediately — the viewport is NOT applied here, because
+   * Chrome cannot `Emulation.setDeviceMetricsOverride` until a CDP session exists
+   * (i.e. after the first navigation).
+   */
+  private readyPromise: Promise<void> = Promise.resolve();
+  /** Viewport requested at launch (or by the last `resize()`), in CSS pixels. */
+  private viewportWidth: number;
+  private viewportHeight: number;
+  /** True once `view.resize()` has succeeded against a live CDP session. */
+  private viewportApplied = false;
+  /**
+   * True once a `view.navigate()` call has succeeded. Before that Chrome has no
+   * CDP session, so a native resize fails with a wrapped `Emulation...` error
+   * even though the requested dims are still valid for the next navigation.
+   */
+  private hasNavigated = false;
   private lastNavigatedUrl: string | null = null;
+  private navigatedListener: ((url: string, title: string) => void) | null =
+    null;
+  private navigationFailedListener: ((error: Error) => void) | null = null;
   private closed = false;
 
   private constructor(
@@ -265,23 +350,54 @@ export class ManagedWebView {
     this.navigateTimeoutMs =
       options.navigateTimeoutMs ?? DEFAULT_NAVIGATE_TIMEOUT_MS;
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS;
+    this.viewportWidth = options.width ?? 1440;
+    this.viewportHeight = options.height ?? 900;
   }
 
   /** Launch a headless WebView and wire navigation/console capture. */
   static launch(options: WebViewLaunchOptions = {}): ManagedWebView {
     registerExitCleanup();
     const backend = options.backend ?? "chrome";
+    if (options.attachToExistingChrome === true && backend !== "chrome") {
+      throw new WebViewError(
+        "unsupported-backend",
+        "attachToExistingChrome is only available on the chrome backend",
+      );
+    }
+    if (
+      options.attachToExistingChrome === true &&
+      options.dataStoreDir !== undefined
+    ) {
+      throw new WebViewError(
+        "launch-failed",
+        "attachToExistingChrome uses the running browser's profile; dataStoreDir cannot be pinned too",
+      );
+    }
     const consoleLines: ConsoleLine[] = [];
     const consoleLimit = options.consoleLimit ?? DEFAULT_CONSOLE_LIMIT;
+    // Both backends accept the object form, so stdout/stderr reach the Chrome
+    // subprocess (and the WebKit host) instead of being dropped on the floor.
+    const browserBackend: Bun.WebView.Backend =
+      backend === "chrome"
+        ? {
+            type: "chrome",
+            // Unattended automation forces a fresh headless spawn (`url:false`); attach mode
+            // omits it so Bun auto-connects via DevToolsActivePort instead.
+            ...(options.attachToExistingChrome === true ? {} : { url: false }),
+            ...(options.stdout === undefined ? {} : { stdout: options.stdout }),
+            ...(options.stderr === undefined ? {} : { stderr: options.stderr }),
+          }
+        : {
+            type: "webkit",
+            ...(options.stdout === undefined ? {} : { stdout: options.stdout }),
+            ...(options.stderr === undefined ? {} : { stderr: options.stderr }),
+          };
     let view: BunWebViewInstance;
     try {
       view = new Bun.WebView({
         width: options.width ?? 1440,
         height: options.height ?? 900,
-        // For unattended Chrome automation, pass `url: false` so Bun always spawns a fresh
-        // headless instance instead of auto-connecting via DevToolsActivePort.
-        backend:
-          backend === "chrome" ? { type: "chrome", url: false } : "webkit",
+        backend: browserBackend,
         ...(options.dataStoreDir === undefined
           ? {}
           : { dataStore: { directory: options.dataStoreDir } }),
@@ -296,16 +412,37 @@ export class ManagedWebView {
         `failed to launch ${backend} WebView: ${redactError(error)}`,
       );
     }
+    // Pin the directory only after the view exists. A throwing constructor
+    // never created a view, so it must not make a later successful launch's
+    // different directory look like an ignored conflict.
+    if (
+      backend === "chrome" &&
+      options.attachToExistingChrome !== true &&
+      options.dataStoreDir !== undefined
+    ) {
+      noteChromeDataStoreDir(options.dataStoreDir);
+    }
     const managed = new ManagedWebView(view, backend, consoleLines, options);
+    // No eager resize here: on Chrome the constructor sizes the *outer* window
+    // (inner height = height - 87, inner width = max(500, width)) and
+    // `Emulation.setDeviceMetricsOverride` fails until the first navigation
+    // creates a CDP session. `applyViewport()` runs after navigation instead.
     view.onNavigated = (url: string, title: string) => {
+      // Chrome calls this with an undefined title in some cases; normalize so
+      // the public callback keeps the documented string signature.
+      const normalizedTitle = typeof title === "string" ? title : "";
       managed.lastNavigatedUrl = url;
       managed.pushConsole(
         "log",
-        `navigated: ${redactUrlForLog(url)} (${title})`,
+        `navigated: ${redactUrlForLog(url)} (${normalizedTitle})`,
       );
+      managed.navigatedListener?.(url, normalizedTitle);
     };
     view.onNavigationFailed = (error: unknown) => {
       managed.pushConsole("error", `navigation failed: ${redactError(error)}`);
+      managed.navigationFailedListener?.(
+        error instanceof Error ? error : new Error(String(error)),
+      );
     };
     return managed;
   }
@@ -324,6 +461,28 @@ export class ManagedWebView {
 
   get isClosed(): boolean {
     return this.closed;
+  }
+
+  /**
+   * Observe every successful navigation (including redirects). Fires before
+   * the corresponding `navigate()` promise settles, matching `Bun.WebView`.
+   * Chrome may pass an undefined title at callback time; it is normalized to "".
+   */
+  get onNavigated(): ((url: string, title: string) => void) | null {
+    return this.navigatedListener;
+  }
+
+  set onNavigated(listener: ((url: string, title: string) => void) | null) {
+    this.navigatedListener = listener;
+  }
+
+  /** Observe failed navigations before `navigate()` rejects. */
+  get onNavigationFailed(): ((error: Error) => void) | null {
+    return this.navigationFailedListener;
+  }
+
+  set onNavigationFailed(listener: ((error: Error) => void) | null) {
+    this.navigationFailedListener = listener;
   }
 
   get pageState(): PageState {
@@ -351,11 +510,86 @@ export class ManagedWebView {
     if (this.closed) throw new WebViewError("closed", "WebView is closed");
   }
 
+  /**
+   * Await launch ordering before touching the view. The promise resolves
+   * immediately; it is the seam that keeps page operations behind view creation
+   * without deadlocking on a native resize that cannot run before navigation.
+   */
+  private async awaitReady(): Promise<void> {
+    await this.readyPromise;
+  }
+
+  /**
+   * Apply the requested viewport. Chrome rejects
+   * `Emulation.setDeviceMetricsOverride` until a CDP session exists, so this runs
+   * after the first successful navigation. A failure leaves the flag false so the
+   * next navigation retries; it never fails the navigation itself.
+   */
+  private async applyViewport(): Promise<void> {
+    if (this.viewportApplied) return;
+    try {
+      await this.view.resize(this.viewportWidth, this.viewportHeight);
+      this.viewportApplied = true;
+    } catch {
+      // No CDP session yet (or the view is closing): retried after the next navigation.
+    }
+  }
+
+  /**
+   * Resize the viewport and remember it for later navigations.
+   * `Bun.WebView.resize()` sets the exact inner viewport, unlike the
+   * constructor's outer-window sizing on Chrome. Requires a live CDP session.
+   *
+   * Before the first navigation the native call cannot work yet, so a failure
+   * there is silent: the dims are stored and `applyViewport()` applies them
+   * right after the next navigation. After a navigation the same failure is a
+   * real error.
+   */
+  async resize(width: number, height: number): Promise<void> {
+    assertViewportDimension(width, "width");
+    assertViewportDimension(height, "height");
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+    await this.awaitReady();
+    this.assertOpen();
+    try {
+      await this.view.resize(width, height);
+    } catch (error) {
+      if (!this.hasNavigated) {
+        // No CDP session yet: the next navigate() applies the stored dims.
+        return;
+      }
+      // The stored dims no longer match the viewport; let the next navigation
+      // retry them (applyViewport swallows its own failure).
+      this.viewportApplied = false;
+      throw new WebViewError(
+        "invalid-size",
+        `resize to ${width}x${height} failed: ${redactError(error)}`,
+      );
+    }
+    this.viewportApplied = true;
+  }
+
+  /**
+   * Establish the Chrome CDP session. The first navigation creates it, so
+   * `cdp()` (and `screenshot()`) reject until then; `navigate()` is http(s)-only,
+   * so the prime uses the one opaque URL Chrome accepts.
+   */
+  async primeCdpSession(): Promise<void> {
+    if (this.backend !== "chrome") return;
+    await this.awaitReady();
+    this.assertOpen();
+    await this.view.navigate("about:blank");
+    this.hasNavigated = true;
+    await this.applyViewport();
+  }
+
   /** Navigate and resolve once the page has settled. */
   async navigate(
     url: string,
     options: LoadWaitOptions = {},
   ): Promise<PageState> {
+    await this.awaitReady();
     this.assertOpen();
     let parsed: URL;
     try {
@@ -366,10 +600,15 @@ export class ManagedWebView {
         `navigate requires an absolute URL (got ${redactUrlForLog(url)})`,
       );
     }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:" &&
+      !(options.allowDataUrl === true && parsed.protocol === "data:") &&
+      !(options.allowOpaqueUrl === true && url === "about:blank")
+    ) {
       throw new WebViewError(
         "invalid-url",
-        `navigate only supports http(s) URLs (got ${parsed.protocol})`,
+        `navigate only supports http(s) URLs (got ${parsed.protocol}) unless allowDataUrl/allowOpaqueUrl is set`,
       );
     }
     try {
@@ -380,12 +619,18 @@ export class ManagedWebView {
         `navigation to ${redactUrlForLog(url)} failed: ${redactError(error)}`,
       );
     }
+    this.hasNavigated = true;
+    // Chrome only accepts the viewport override once this navigation has created
+    // the CDP session; applying it before `waitForLoad` means the settled page is
+    // already laid out at the requested size.
+    await this.applyViewport();
     await this.waitForLoad(options);
     return this.pageState;
   }
 
   /** Wait for a settled page (post-navigation, submit or reload). */
   async waitForLoad(options: LoadWaitOptions = {}): Promise<PageState> {
+    await this.awaitReady();
     this.assertOpen();
     await waitForLoadState(
       () => ({
@@ -421,6 +666,7 @@ export class ManagedWebView {
     selector: string,
     options: { timeoutMs?: number; pollMs?: number } = {},
   ): Promise<void> {
+    await this.awaitReady();
     this.assertOpen();
     const timeoutMs = options.timeoutMs ?? this.navigateTimeoutMs;
     const pollMs = options.pollMs ?? this.pollMs;
@@ -449,6 +695,7 @@ export class ManagedWebView {
 
   /** Evaluate one expression or IIFE (multi-statement strings are invalid). */
   async evaluate(expression: string): Promise<unknown> {
+    await this.awaitReady();
     this.assertOpen();
     if (expression.trim().length === 0) {
       throw new WebViewError(
@@ -475,12 +722,17 @@ export class ManagedWebView {
     selector: string,
     options?: Bun.WebView.ClickSelectorOptions,
   ): Promise<void> {
+    await this.awaitReady();
     this.assertOpen();
     assertSelector(selector, "click");
+    // Default to the wrapper's timeout: the native default is 30s, which hides
+    // covered/occluded elements behind a much longer wait than `navigateTimeoutMs`.
+    const clickOptions: Bun.WebView.ClickSelectorOptions = {
+      ...options,
+      timeout: options?.timeout ?? this.navigateTimeoutMs,
+    };
     try {
-      await (options === undefined
-        ? this.view.click(selector)
-        : this.view.click(selector, options));
+      await this.view.click(selector, clickOptions);
     } catch (error) {
       throw new WebViewError(
         "click-failed",
@@ -490,6 +742,7 @@ export class ManagedWebView {
   }
 
   async press(key: string, options?: Bun.WebView.PressOptions): Promise<void> {
+    await this.awaitReady();
     this.assertOpen();
     if (key.trim().length === 0) {
       throw new WebViewError("press-failed", "press requires a key name");
@@ -510,6 +763,7 @@ export class ManagedWebView {
     selector: string,
     options?: Bun.WebView.ScrollToOptions,
   ): Promise<void> {
+    await this.awaitReady();
     this.assertOpen();
     assertSelector(selector, "scrollTo");
     try {
@@ -526,9 +780,16 @@ export class ManagedWebView {
 
   /**
    * Fill one input: click, clear+focus via IIFE, then type into the focused
-   * element. The typed value never appears in an evaluate expression or error.
+   * element. Focus is kept by default so a following `press("Enter")` submits
+   * the form the input belongs to; pass `{ blur: true }` to blur afterwards.
+   * The typed value never appears in an evaluate expression or error.
    */
-  async fill(selector: string, text: string): Promise<void> {
+  async fill(
+    selector: string,
+    text: string,
+    options?: { blur?: boolean },
+  ): Promise<void> {
+    await this.awaitReady();
     this.assertOpen();
     assertSelector(selector, "fill");
     await this.click(selector);
@@ -547,9 +808,11 @@ export class ManagedWebView {
         `typing into ${selector} failed: ${redactError(error)}`,
       );
     }
-    await this.evaluate(
-      "(() => { if (document.activeElement) document.activeElement.blur(); return true; })()",
-    );
+    if (options?.blur === true) {
+      await this.evaluate(
+        "(() => { if (document.activeElement) document.activeElement.blur(); return true; })()",
+      );
+    }
   }
 
   private needsBunImageTransform(options?: ScreenshotOptions): boolean {
@@ -557,6 +820,7 @@ export class ManagedWebView {
       options !== undefined &&
       ((this.backend === "webkit" && options.format === "webp") ||
         options.resize !== undefined ||
+        options.rotate !== undefined ||
         (options.format === "png" && options.palette === true) ||
         (options.format === "jpeg" && options.progressive === true) ||
         (options.format === "webp" && options.lossless === true))
@@ -569,6 +833,7 @@ export class ManagedWebView {
    * `new Response(blob)`, or `new Bun.Image(blob)`.
    */
   async screenshotBlob(options?: ScreenshotOptions): Promise<Blob> {
+    await this.awaitReady();
     this.assertOpen();
     const format = options?.format ?? "png";
     try {
@@ -588,6 +853,7 @@ export class ManagedWebView {
           lossless?: boolean;
           palette?: boolean;
           resize?: ResizeSpec;
+          rotate?: number;
         } = { format: options.format };
         if (options.format === "png") {
           if (options.palette !== undefined)
@@ -605,6 +871,7 @@ export class ManagedWebView {
             encodeOptions.lossless = options.lossless;
         }
         if (options.resize !== undefined) encodeOptions.resize = options.resize;
+        if (options.rotate !== undefined) encodeOptions.rotate = options.rotate;
         return await encodeScreenshotBlob(input, encodeOptions);
       }
 
@@ -634,10 +901,7 @@ export class ManagedWebView {
           : new Uint8Array(raw as ArrayBufferLike);
       return new Blob([bytes], { type: mimeTypeForFormat(format) });
     } catch (error) {
-      throw new WebViewError(
-        "screenshot-failed",
-        `screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("screenshot", error);
     }
   }
 
@@ -648,6 +912,7 @@ export class ManagedWebView {
   async screenshotBase64(
     options?: ScreenshotOptions,
   ): Promise<Base64ScreenshotResult> {
+    await this.awaitReady();
     this.assertOpen();
     const format = options?.format ?? "png";
     const mimeType = mimeTypeForFormat(format);
@@ -705,6 +970,7 @@ export class ManagedWebView {
         lossless?: boolean;
         palette?: boolean;
         resize?: ResizeSpec;
+        rotate?: number;
       } = { format: options?.format ?? "png" };
       if (options?.format === "png") {
         if (options.palette !== undefined)
@@ -722,13 +988,11 @@ export class ManagedWebView {
           dataOptions.lossless = options?.lossless;
       }
       if (options?.resize !== undefined) dataOptions.resize = options.resize;
+      if (options?.rotate !== undefined) dataOptions.rotate = options.rotate;
       return await encodeScreenshotDataUrl(input, dataOptions);
     } catch (error) {
       if (error instanceof WebViewError) throw error;
-      throw new WebViewError(
-        "screenshot-failed",
-        `screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("screenshot", error);
     }
   }
 
@@ -737,16 +1001,14 @@ export class ManagedWebView {
    * from the current viewport off the main thread via `Bun.Image.prototype.placeholder()`.
    */
   async screenshotPlaceholder(): Promise<string> {
+    await this.awaitReady();
     this.assertOpen();
     try {
       const blob = await this.screenshotBlob({ format: "png" });
       return await computeImagePlaceholder(blob);
     } catch (error) {
       if (error instanceof WebViewError) throw error;
-      throw new WebViewError(
-        "screenshot-failed",
-        `placeholder screenshot failed: ${redactError(error)}`,
-      );
+      throw screenshotFailed("placeholder screenshot", error);
     }
   }
 
@@ -756,7 +1018,16 @@ export class ManagedWebView {
    * Note: the caller or Kitty terminal must `shm_unlink` the returned segment `name`.
    */
   async screenshotShmem(): Promise<ShmemGraphicSegment> {
+    await this.awaitReady();
     this.assertOpen();
+    if (process.platform === "win32") {
+      // POSIX shared memory does not exist on Windows; fail before the native
+      // call so the caller gets the reason instead of a spawn-level error.
+      throw new WebViewError(
+        "screenshot-failed",
+        "shmem screenshots are not supported on Windows",
+      );
+    }
     try {
       const seg = await this.view.screenshot({ encoding: "shmem" });
       return formatKittyShmemEscape(seg);
@@ -770,17 +1041,24 @@ export class ManagedWebView {
 
   /**
    * Screenshot to a file using `screenshotBlob` (`encoding: "blob"` mmap-backed on WebKit
-   * + `Bun.Image` when `webp`, `resize`, `palette`, `lossless`, or `progressive` is requested).
+   * + `Bun.Image` when `webp`, `resize`, `rotate`, `palette`, `lossless`, or `progressive` is requested).
+   *
+   * The ThumbHash placeholder is opt-in (`{ placeholder: true }`): computing it
+   * costs a decode and most callers ignore it.
    */
   async screenshotToFile(
     path: string,
     options?: ScreenshotOptions,
+    behavior?: { placeholder?: boolean },
   ): Promise<ScreenshotResult> {
+    await this.awaitReady();
     const format = options?.format ?? "png";
     const blob = await this.screenshotBlob(options);
     const [ab, placeholder] = await Promise.all([
       blob.arrayBuffer(),
-      computeImagePlaceholder(blob).catch(() => undefined),
+      behavior?.placeholder === true
+        ? computeImagePlaceholder(blob).catch(() => undefined)
+        : Promise.resolve(undefined),
     ]);
     const bytes = new Uint8Array(ab);
     try {
@@ -806,6 +1084,7 @@ export class ManagedWebView {
     method: string,
     params?: Record<string, unknown>,
   ): Promise<unknown> {
+    await this.awaitReady();
     this.assertOpen();
     if (this.backend !== "chrome") {
       throw new WebViewError(
@@ -857,6 +1136,7 @@ export class ManagedWebView {
 
   /** Read HttpOnly cookies via CDP (values are memory-only, never persisted). */
   async getAllCookies(): Promise<CdpCookie[]> {
+    await this.awaitReady();
     this.assertOpen();
     const result = await this.cdp("Network.getAllCookies");
     try {
@@ -883,11 +1163,10 @@ export class ManagedWebView {
     try {
       this.view.close();
     } catch {
-      try {
-        Bun.WebView.closeAll();
-      } catch {
-        // Nothing else to do.
-      }
+      // Per-view close is the teardown. Never escalate to Bun.WebView.closeAll()
+      // here: it SIGKILLs every browser in the process, and a view launched
+      // immediately afterwards fails with "Chrome process closed the pipe".
+      // The process-exit net in registerExitCleanup() is the only escalation.
     }
   }
 
@@ -916,9 +1195,19 @@ function assertSelector(selector: string, action: string): void {
   }
 }
 
+function assertViewportDimension(value: number, name: string): void {
+  if (!Number.isInteger(value) || value < 1 || value > MAX_VIEWPORT_DIMENSION) {
+    throw new WebViewError(
+      "invalid-size",
+      `${name} must be an integer in 1..${MAX_VIEWPORT_DIMENSION} (got ${value})`,
+    );
+  }
+}
+
 /**
  * Normalize a `Bun.WebView` `console: (type, ...args) => void` callback into a
- * redacted `ConsoleLine`. `type` is the first parameter (`"log" | "warn" | "error" | ...`).
+ * redacted `ConsoleLine`. `type` is the first parameter (`"log" | "warn" | "error" | ...`);
+ * Chrome reports warnings as `"warning"`, WebKit as `"warn"`, so both map to `"warn"`.
  */
 export function formatConsoleEntry(
   type: string,
@@ -926,7 +1215,11 @@ export function formatConsoleEntry(
 ): ConsoleLine {
   const normalized = type.trim().toLowerCase();
   const level: ConsoleLine["level"] =
-    normalized === "error" ? "error" : normalized === "warn" ? "warn" : "log";
+    normalized === "error"
+      ? "error"
+      : normalized === "warn" || normalized === "warning"
+        ? "warn"
+        : "log";
   return {
     level,
     text: formatConsoleArgs(args),

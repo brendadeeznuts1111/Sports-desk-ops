@@ -93,6 +93,26 @@ describe("catalog probe — pure helpers", () => {
     );
   });
 
+  test("parseCatalogArgs maps --proxy and --no-proxy to one option", () => {
+    expect(parseCatalogArgs([]).proxy).toBeUndefined();
+    expect(parseCatalogArgs(["--no-proxy"]).proxy).toBe(false);
+    expect(parseCatalogArgs(["--proxy", "proxy.example:8080"]).proxy).toBe(
+      "http://proxy.example:8080",
+    );
+    // An empty value means "read the environment" to Bun; the flag must not
+    // quietly degrade into that, so it is rejected at parse time.
+    expect(() => parseCatalogArgs(["--proxy", ""])).toThrow(/empty/);
+    expect(() =>
+      parseCatalogArgs(["--proxy", "ftp://proxy.example:8080"]),
+    ).toThrow(/unsupported proxy protocol/);
+    expect(() =>
+      parseCatalogArgs(["--proxy", "http://proxy.example:8080", "--no-proxy"]),
+    ).toThrow(/mutually exclusive/);
+    expect(() =>
+      parseCatalogArgs(["--no-proxy", "--proxy", "http://proxy.example:8080"]),
+    ).toThrow(/mutually exclusive/);
+  });
+
   test("renderCatalogReport includes counts, diff and sub-sport/period inventory", () => {
     const fixture = FIXTURE_RAW;
     const md = renderCatalogReport({

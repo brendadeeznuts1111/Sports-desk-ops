@@ -32,7 +32,8 @@ describe("fantasy402_settlement_ingest", () => {
     );
     const obs = normalizeHistoryWagerRow(row)!;
     expect(obs.ticketId).toBe(fantasy402TicketId("CUST001", 42));
-    expect(obs.wagerStatus).toBe("S");
+    expect(obs.lifecycle).toBe("S");
+    expect(obs.outcome).toBeNull();
   });
 
   test("fixture batch ingests append-only with run_id", () => {
@@ -118,6 +119,122 @@ describe("fantasy402_settlement_ingest", () => {
       runAt: auditRunAt("2026-10-21T09:00:00.000Z"),
     });
     expect(store.runStoreInvariants().ok).toBe(false);
+  });
+
+  test("outcome and lifecycle are separate axes; bare P is pending", () => {
+    const win = normalizeHistoryWagerRow({
+      Login: "A",
+      WagerNumber: 1,
+      WagerStatus: "W",
+    })!;
+    expect(win.outcome).toBe("W");
+    expect(win.lifecycle).toBeNull();
+
+    const lost = normalizeHistoryWagerRow({
+      Login: "A",
+      WagerNumber: 2,
+      WagerStatus: "Lost",
+    })!;
+    expect(lost.outcome).toBe("L");
+
+    const push = normalizeHistoryWagerRow({
+      Login: "A",
+      WagerNumber: 3,
+      WagerStatus: "Push",
+    })!;
+    expect(push.outcome).toBe("P");
+    expect(push.lifecycle).toBeNull();
+
+    // Bare `P` is lifecycle pending — a push must arrive spelled PUSH.
+    const pending = normalizeHistoryWagerRow({
+      Login: "A",
+      WagerNumber: 4,
+      WagerStatus: "P",
+    })!;
+    expect(pending.lifecycle).toBe("P");
+    expect(pending.outcome).toBeNull();
+
+    const cancelled = normalizeHistoryWagerRow({
+      Login: "A",
+      WagerNumber: 5,
+      WagerStatus: "C",
+    })!;
+    expect(cancelled.lifecycle).toBe("C");
+  });
+
+  test("GSLIVE sentinels are absent values, and null refund stays null", () => {
+    const gslive = normalizeHistoryWagerRow({
+      Login: "LG236",
+      WagerNumber: 1073345097,
+      WagerStatus: "L",
+      PlacedOn: "GSLIVE",
+      TicketWriter: "GSLIVE",
+      GameDateTime: "1900-01-01",
+      AcceptedDateTime: "2026-11-01T13:23:00-06:00",
+      AmountRefunded: null,
+      Amount: -728613,
+      Risk: 728613,
+      ToWin: 500000,
+    })!;
+    expect(gslive.source).toBe("gslive");
+    expect(gslive.validTime).toBe(
+      new Date("2026-11-01T13:23:00-06:00").toISOString(),
+    );
+    expect(gslive.amountRefundedCents).toBeNull();
+
+    const internet = normalizeHistoryWagerRow({
+      Login: "X",
+      WagerNumber: 1,
+      WagerStatus: "L",
+      PlacedOn: "Internet",
+      AmountRefunded: 0,
+    })!;
+    expect(internet.source).toBe("internet");
+    expect(internet.amountRefundedCents).toBe(0);
+  });
+
+  test("stored risk and to-win are preserved, never recomputed", () => {
+    const obs = normalizeHistoryWagerRow({
+      Login: "LG236",
+      WagerNumber: 1073345097,
+      WagerStatus: "L",
+      Risk: 728613,
+      ToWin: 500000,
+    })!;
+    expect(obs.riskCents).toBe(728613);
+    expect(obs.toWinCents).toBe(500000);
+    // 728613 × 100/146 = 499050. The schema must not "fix" the stored 500000.
+    expect(obs.toWinCents).not.toBe(Math.round((obs.riskCents! * 100) / 146));
+  });
+
+  test("rows without an identity or wager number are rejected", () => {
+    expect(normalizeHistoryWagerRow({ WagerStatus: "S" })).toBeNull();
+    expect(normalizeHistoryWagerRow({ Login: "X" })).toBeNull();
+  });
+
+  test("store counts the two axes independently", () => {
+    const store = createWagerSettlementStore();
+    store.ingestBatch(
+      {
+        feed: "getHistory",
+        polledAt: "2026-11-02T08:00:00.000Z",
+        rows: [
+          { Login: "A", WagerNumber: 1, WagerStatus: "W" },
+          { Login: "A", WagerNumber: 2, WagerStatus: "L" },
+          { Login: "A", WagerNumber: 3, WagerStatus: "C" },
+        ],
+      },
+      auditRunId("axes"),
+    );
+    expect(store.countByOutcome("W")).toBe(1);
+    expect(store.countByOutcome("L")).toBe(1);
+    expect(store.countByLifecycle("C")).toBe(1);
+    expect(store.summarizeOutcomeRates()).toMatchObject({
+      settled: 2,
+      canceled: 1,
+      wins: 1,
+      losses: 1,
+    });
   });
 
   test("CLI ingest subcommand", async () => {

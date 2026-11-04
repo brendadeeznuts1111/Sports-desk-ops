@@ -1755,7 +1755,7 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
     tags: [TAG_DAEMON],
     summary: "Trigger a scheduled Telegram report",
     description:
-      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).",
+      "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:80-84). Admin-token gated (services/sportsdesk_webview_server.ts).",
     operationId: operationIdFor(operation.method, operation.path),
     security: [{ daemonBearer: [] }],
     parameters: [
@@ -1800,6 +1800,40 @@ function telegramReportOperation(operation: LedgerOperation): JsonObject {
   };
 }
 
+/** Tier B builders for the blob/live-bets gateway: handler-verified, no live capture. */
+function blobGatewayOperation(operation: LedgerOperation): JsonObject {
+  const specs = blobLiveBetsSurfaceSpecs();
+  const method = operation.method.toUpperCase();
+  const spec = specs.find(
+    (candidate) =>
+      candidate.path === operation.path &&
+      candidate.httpMethod.toUpperCase() === method,
+  );
+  if (spec === undefined) {
+    fail(
+      `no blob gateway builder for ${operation.method.toUpperCase()} ${operation.path}`,
+    );
+  }
+  const httpMethod: SurfaceHttpMethod =
+    method === "GET" || method === "POST" || method === "PUT"
+      ? method
+      : fail(`unsupported gateway method "${method}"`);
+  return {
+    tags: [spec.tag],
+    summary: spec.summary,
+    description: spec.description,
+    operationId: operationIdFor(pathItemMethod(httpMethod), spec.path),
+    ...(spec.parameters === undefined
+      ? {}
+      : { parameters: [...spec.parameters] }),
+    ...(spec.requestBody === undefined
+      ? {}
+      : { requestBody: spec.requestBody }),
+    responses: spec.responses,
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
 const B_OPERATION_BUILDERS: Readonly<
   Record<string, (operation: LedgerOperation) => JsonObject>
 > = {
@@ -1809,16 +1843,106 @@ const B_OPERATION_BUILDERS: Readonly<
   "/health": healthOperation,
   "/api/watchlist": watchlistOperation,
   "/cloud/api/Manager/getScores": getScoresOperation,
+  "/cloud/api/Manager/getConfigWebReports": getConfigWebReportsOperation,
+  "/cloud/api/Manager/getAuthorizations": getAuthorizationsOperation,
   "/api/telegram/alert": telegramAlertOperation,
   "/api/telegram/report": telegramReportOperation,
+  "/api/v1/blobs/{key}": blobGatewayOperation,
+  "/api/v1/ws-tickets": blobGatewayOperation,
+  "/api/v1/live-bets": blobGatewayOperation,
+  "/ws/live-bets": blobGatewayOperation,
 };
+
+/**
+ * Manager boot operations whose wire body was observed in the redacted boot HAR
+ * (2026-11-01, portal 1.0.280) and whose client-JS call site is recorded in
+ * `lib/f402_probe.ts` (MANAGER_BOOT_OPS). The request is observed; the response envelope was
+ * not promoted to a hashed capture, so no response schema is published.
+ */
+function bootFormOperation(
+  operation: LedgerOperation,
+  spec: {
+    readonly summary: string;
+    readonly description: string;
+    readonly note: string;
+    readonly fields: readonly string[];
+  },
+): JsonObject {
+  const properties: JsonObject = {
+    operation: {
+      type: "string",
+      const: operation.path.split("/").at(-1) ?? "",
+    },
+  };
+  for (const field of spec.fields) {
+    if (field === "operation") continue;
+    properties[field] = {
+      type: field === "RRO" ? "integer" : "string",
+      example: field === "RRO" ? 1 : undefined,
+      description:
+        field === "agentID" || field === "agentOwner"
+          ? "Logged-in account; the observed value was the master agent."
+          : "Observed in the 2026-11-01 boot HAR." +
+            (field === "RRO" ? " Always 1 in the observed calls." : ""),
+    };
+  }
+  const required = [...spec.fields];
+  return {
+    tags: [TAG_DOWNLINE],
+    summary: spec.summary,
+    description: `${spec.description} ${spec.note}`,
+    operationId: operationIdFor(operation.method, operation.path),
+    requestBody: {
+      required: true,
+      content: {
+        "application/x-www-form-urlencoded; charset=UTF-8": {
+          schema: {
+            type: "object",
+            required,
+            properties,
+          },
+        },
+      },
+    },
+    security: [{ fantasy402Cookie: [] }],
+    responses: {
+      "200": {
+        description:
+          "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published.",
+      },
+    },
+    "x-evidence": evidenceOf(operation),
+  };
+}
+
+function getConfigWebReportsOperation(operation: LedgerOperation): JsonObject {
+  return bootFormOperation(operation, {
+    summary:
+      "Boot web-report configuration (request observed 2026-11-01; no response schema)",
+    description:
+      "manager.js:35023 boot report-configuration read. The form body is the one the 2026-11-01 boot HAR recorded: agentID, operation, RRO and agentOwner (agentID and agentOwner were the same master account).",
+    note: "The portal consumes the reply as an INFO envelope; its keys are not published because no capture record holds them.",
+    fields: ["agentID", "operation", "RRO", "agentOwner"],
+  });
+}
+
+function getAuthorizationsOperation(operation: LedgerOperation): JsonObject {
+  return bootFormOperation(operation, {
+    summary:
+      "Boot agent permissions (request observed 2026-11-01; no response schema)",
+    description:
+      "manager.js:37628 boot permissions and distribution read. The recorded form body is agentID, agentOwner, operation and RRO; the portal assigns the reply to a.INFO and a.DISTRIBUTION.",
+    note: "Neither INFO nor DISTRIBUTION fields are published because no capture record holds the response.",
+    fields: ["agentID", "agentOwner", "operation", "RRO"],
+  });
+}
 
 /* -------------------------------------------------------------------------- */
 /* Tier D surface operations                                                  */
 /* -------------------------------------------------------------------------- */
 
 /** Uppercase HTTP method on a surface spec; mapped to the lowercase path-item key at build time. */
-type SurfaceHttpMethod = "GET" | "POST";
+type SurfaceHttpMethod = "GET" | "POST" | "PUT";
 
 /** Map an uppercase surface method to its OpenAPI path-item key (always lowercase). */
 function pathItemMethod(httpMethod: SurfaceHttpMethod): HttpMethod {
@@ -1827,6 +1951,8 @@ function pathItemMethod(httpMethod: SurfaceHttpMethod): HttpMethod {
       return "get";
     case "POST":
       return "post";
+    case "PUT":
+      return "put";
     default:
       return fail(`unsupported surface HTTP method "${String(httpMethod)}"`);
   }
@@ -1877,6 +2003,187 @@ function jsonSurfaceResponse(
   };
 }
 
+const BLOB_LIVE_BETS_SURFACE_ID = "surface.blob-live-bets";
+
+/** Gateway routes (services/blob_and_live_bets_server.ts) with handler-verified contracts. */
+function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
+  const authResponses = {
+    "401": jsonSurfaceResponse("Missing or wrong bearer token.", {
+      error: { type: "object" },
+    }),
+  };
+  const keyParameter = {
+    name: "key",
+    in: "path",
+    required: true,
+    schema: { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    description: "Validated blob key; `..` and leading dots are refused.",
+  };
+  return [
+    {
+      path: "/api/v1/blobs/{key}",
+      httpMethod: "GET",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Presigned download URL for one blob",
+      description:
+        "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of a presigned redirect (route is handler-verified only; no response was captured).",
+      parameters: [keyParameter],
+      responses: {
+        "302": {
+          description: "Redirect to a short-lived presigned URL.",
+          headers: { location: { schema: { type: "string" } } },
+        },
+        "400": jsonSurfaceResponse("Invalid blob key.", {
+          error: { type: "object" },
+        }),
+        ...authResponses,
+        "502": jsonSurfaceResponse("Presign failed.", {
+          error: { type: "object" },
+        }),
+      },
+    },
+    {
+      path: "/api/v1/blobs/{key}",
+      httpMethod: "PUT",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Bounded image upload, transcoded to WebP",
+      description:
+        'Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = "bun"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).',
+      requiredCapture:
+        "HTTP capture of a successful upload (route is handler-verified only; no response was captured).",
+      parameters: [keyParameter],
+      requestBody: {
+        required: true,
+        content: {
+          "image/png": { schema: { type: "string", format: "binary" } },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse("Stored WebP metadata.", {
+          key: { type: "string" },
+          bytesWritten: { type: "integer" },
+          bytes: { type: "integer" },
+          width: { type: "integer" },
+          height: { type: "integer" },
+        }),
+        "400": jsonSurfaceResponse("Invalid blob key.", {
+          error: { type: "object" },
+        }),
+        ...authResponses,
+        "413": jsonSurfaceResponse("Body or decoded pixel count too large.", {
+          error: { type: "object" },
+        }),
+        "415": jsonSurfaceResponse("Unsupported image content type.", {
+          error: { type: "object" },
+        }),
+        "422": jsonSurfaceResponse("Image could not be decoded.", {
+          error: { type: "object" },
+        }),
+        "502": jsonSurfaceResponse("Store failed.", {
+          error: { type: "object" },
+        }),
+      },
+    },
+    {
+      path: "/api/v1/ws-tickets",
+      httpMethod: "POST",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Short-lived one-time WebSocket ticket",
+      description:
+        "Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over {exp, nonce}; issued nonces are kept in a pending allowlist capped at 4096 (429 when full), deleted on the first successful upgrade, and replayed/unissued tickets are rejected. Surface: surface.blob-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of a ticket response (route is handler-verified only).",
+      responses: {
+        "200": jsonSurfaceResponse("Ticket and TTL.", {
+          ticket: { type: "string" },
+          expiresInSec: { type: "integer" },
+        }),
+        "429": jsonSurfaceResponse("Active-ticket cap reached.", {
+          error: { type: "object" },
+        }),
+        ...authResponses,
+      },
+    },
+    {
+      path: "/api/v1/live-bets",
+      httpMethod: "POST",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Publish a live-bets event to subscribers",
+      description:
+        "Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of a publish result (route is handler-verified only).",
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["channel", "event"],
+              properties: {
+                channel: { type: "string", pattern: "^[a-z0-9-]{1,32}$" },
+                event: { description: "JSON-serializable event payload." },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": jsonSurfaceResponse("Subscriber count.", {
+          channel: { type: "string" },
+          published: { type: "integer" },
+        }),
+        "400": jsonSurfaceResponse("Invalid JSON, channel or body.", {
+          error: { type: "object" },
+        }),
+        "401": jsonSurfaceResponse("Missing or wrong bearer token.", {
+          error: { type: "object" },
+        }),
+        "413": jsonSurfaceResponse("Body too large.", {
+          error: { type: "object" },
+        }),
+        "422": jsonSurfaceResponse("Event is not serializable.", {
+          error: { type: "object" },
+        }),
+      },
+    },
+    {
+      path: "/ws/live-bets",
+      httpMethod: "GET",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Live-bets WebSocket upgrade",
+      description:
+        "Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.<token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of the 101 upgrade and a PING/PONG frame (handler-verified only).",
+      parameters: [
+        {
+          name: "ticket",
+          in: "query",
+          required: false,
+          schema: { type: "string" },
+          description:
+            "One-time HMAC ticket; the subprotocol form is preferred for browsers.",
+        },
+      ],
+      responses: {
+        "101": { description: "Switching Protocols." },
+        ...authResponses,
+        "426": jsonSurfaceResponse("Upgrade required.", {
+          error: { type: "object" },
+        }),
+      },
+    },
+  ];
+}
+
 function surfaceOperationSpecs(
   ledger: Ledger,
 ): readonly SurfaceOperationSpec[] {
@@ -1890,13 +2197,13 @@ function surfaceOperationSpecs(
       summary:
         "Manager getHistory (wired settlement-history poll; no response capture)",
       description:
-        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:347-368). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:369-387). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
       requiredCapture:
         "Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance.",
       responses: {
         "200": {
           description:
-            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:374-387). Row fields are not captured, so only raw/unknown objects are described.",
+            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
           content: {
             "application/json": {
               schema: {
@@ -1932,7 +2239,7 @@ function surfaceOperationSpecs(
         },
         default: {
           description:
-            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:369-371).",
+            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571).",
         },
       },
     },
@@ -2407,6 +2714,205 @@ function surfaceOperationSpecs(
             "The body exceeded the daemon's 1 MiB maxRequestBodySize. Bun refuses it before the handler runs, so the body is empty (measured on 1.4.4: status 413, no content-type) rather than the daemon's JSON error shape.",
           headers: daemonHeaders(),
         },
+      },
+    },
+    {
+      path: "/api/parse-xml",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "XML parse probe (POST /api/parse-xml)",
+      description:
+        "Parses one XML body with Bun.XML.parse and returns the compact tree (services/sportsdesk_webview_server.ts#/api/parse-xml). Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-xml round trip (well-formed XML).",
+      responses: {
+        "200": {
+          description: "The parsed XML as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-customer-profile",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Customer profile XML parse (POST /api/parse-customer-profile)",
+      description:
+        "Parses one customer-profile XML document via parseCustomerProfileXml (lib/customer_profile.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-customer-profile round trip.",
+      responses: {
+        "200": {
+          description: "The parsed profile as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-bet-ticker",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Bet-ticker XML parse (POST /api/parse-bet-ticker)",
+      description:
+        "Parses one bet-ticker XML feed via parseBetTickerXml (lib/live_wagers.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-bet-ticker round trip.",
+      responses: {
+        "200": {
+          description: "The parsed feed as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-customer-performance",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary:
+        "Customer performance XML parse (POST /api/parse-customer-performance)",
+      description:
+        "Parses one customer-performance XML document via parseCustomerPerformanceXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-customer-performance round trip.",
+      responses: {
+        "200": {
+          description: "The parsed document as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-transactions",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Transactions XML parse (POST /api/parse-transactions)",
+      description:
+        "Parses one transactions XML document via parseTransactionsXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-transactions round trip.",
+      responses: {
+        "200": {
+          description: "The parsed document as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-ajax-xml",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "AJAX XML parse (POST /api/parse-ajax-xml)",
+      description:
+        "Parses one AJAX-delivered XML response via parseAjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture: "HTTP capture of a POST /api/parse-ajax-xml round trip.",
+      responses: {
+        "200": {
+          description: "The parsed document as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-fantasy402-ajax",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Fantasy402 AJAX XML parse (POST /api/parse-fantasy402-ajax)",
+      description:
+        "Parses one Fantasy402 AJAX XML response via parseFantasy402AjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture:
+        "HTTP capture of a POST /api/parse-fantasy402-ajax round trip.",
+      responses: {
+        "200": {
+          description: "The parsed document as a compact object tree.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as XML.", {
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/parse-toml",
+      httpMethod: "POST",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "TOML parse (POST /api/parse-toml)",
+      description:
+        "Parses one TOML document via parseToml and returns the result. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+      requiredCapture: "HTTP capture of a POST /api/parse-toml round trip.",
+      responses: {
+        "200": {
+          description: "The parsed document.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+        "400": jsonSurfaceResponse("The body is not parseable as TOML.", {
+          error: { type: "string" },
+        }),
       },
     },
     {

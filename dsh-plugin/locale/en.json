@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk ops",
+    "description": "Read-only tools over the SportsDesk/Fantasy402 desk: checkout and service status, dataset freshness and record counts, downline and customer questions, canonical GSLive Manager deep links (canceled bet-history view and its URL-expressible Filters values), the snapshot wager-state table (legs vs wagers, deduped wagerRisk, spanning wagers, computed quality) with capture-automation health (journal, alerts, artifact freshness) and capture trends from the append-only history, endpoint evidence coverage, secrets/redaction/identifier scans, sharp-money scans, getWebLog evidence, and the repo's verification gates reported as not_run until executed."
+  }
+}

@@ -91,7 +91,6 @@ async function loadGeneralProbe(): Promise<{
   const t0 = Bun.nanoseconds();
   const probe = await fetchListAgentsGeneralProbe({
     account,
-    profileDir: Bun.env.F402_WEBVIEW_PROFILE,
     proxyUrl: Bun.env.F402_REPLAY_PROXY_URL,
   });
   emit({

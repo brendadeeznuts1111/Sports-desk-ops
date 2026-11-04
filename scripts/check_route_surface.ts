@@ -19,13 +19,23 @@ const root = resolve(import.meta.dir, "..");
 // The table is the source. `readRouteSurfaceInputs` still reads the chain, but only so the test
 // can compare it with the table; its `served` set is deliberately not used here, or a prefix arm
 // the extractor cannot see would silently drop out of the comparison again.
-const { declared, spec } = readRouteSurfaceInputs(root);
+const { declared, spec } = await readRouteSurfaceInputs(root);
 const served = new Set([...DAEMON_PATHS, ...DAEMON_PREFIX_PATHS]);
 const findings = compareRouteSurfaces({ served, declared, spec });
 
 if (findings.length === 0) {
+  let localDeclaredCount = 0;
+  let upstreamDeclaredCount = 0;
+  let unimplementedDeclaredCount = 0;
+  for (const d of declared.values()) {
+    if (d.category === "local-route") localDeclaredCount++;
+    else if (d.category === "upstream-route") upstreamDeclaredCount++;
+    else if (d.category === "documented-not-implemented")
+      unimplementedDeclaredCount++;
+  }
+  const uiAliasCount = served.size - localDeclaredCount;
   console.log(
-    `check:route-surface: ok — ${served.size} served path(s), ${declared.size} declared`,
+    `check:route-surface: ok — ${served.size} served path(s) (${localDeclaredCount}/${localDeclaredCount} local-route + ${uiAliasCount} UI aliases), ${declared.size} declared (${localDeclaredCount} local-route, ${upstreamDeclaredCount} upstream-route, ${unimplementedDeclaredCount} documented-not-implemented)`,
   );
   process.exit(0);
 }

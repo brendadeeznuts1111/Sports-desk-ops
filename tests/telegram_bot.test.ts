@@ -10,13 +10,20 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import {
   SportsDeskTelegramService,
+  type TelegramSendMessageOptions,
   type TelegramUpdate,
 } from "../services/sportsdesk_telegram_bot.ts";
 import { ReportingSchedulerService } from "../services/reporting_scheduler_service.ts";
 
+interface ApiCallBody extends TelegramSendMessageOptions {
+  readonly chat_id?: string;
+  readonly callback_query_id?: string;
+  readonly text: string;
+}
+
 interface ApiCall {
   readonly method: string;
-  readonly body: Record<string, any>;
+  readonly body: ApiCallBody;
 }
 
 const calls: ApiCall[] = [];
@@ -28,7 +35,7 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     async fetch(req) {
       const method = new URL(req.url).pathname.split("/").pop()!;
-      calls.push({ method, body: (await req.json()) as Record<string, any> });
+      calls.push({ method, body: (await req.json()) as ApiCallBody });
       return Response.json({ ok: true, result: { message_id: 1 } });
     },
   });
@@ -117,13 +124,13 @@ describe("Telegram mini app buttons", () => {
     await bot.dispatchTestAlert("RF2003", "-100200");
     await bot.dispatchTestAlert("RF2003", "555");
     const [group, priv] = calls.map(
-      (c) => c.body.reply_markup.inline_keyboard[0][0],
+      (c) => c.body.reply_markup?.inline_keyboard?.[0]?.[0],
     );
-    expect(group.web_app).toBeUndefined();
-    expect(group.url).toBe(
+    expect(group?.web_app).toBeUndefined();
+    expect(group?.url).toBe(
       "https://desk.example/miniapp?tab=forensics&agent=FAKEMONEY&customer=RF2003",
     );
-    expect(priv.web_app.url).toBe(group.url);
+    expect(priv?.web_app?.url).toBe(group?.url);
   });
 });
 

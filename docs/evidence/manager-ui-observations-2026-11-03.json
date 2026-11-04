@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "kind": "operator-ui-observation",
+  "tier": "operator-observation (not wire evidence)",
+  "observedAtLocal": {
+    "timeZone": "America/Chicago",
+    "date": "2026-11-03",
+    "first": "2026-11-03T12:50:40-06:00",
+    "last": "2026-11-03T12:52:20-06:00"
+  },
+  "source": {
+    "suppliedBy": "operator (chat attachments)",
+    "form": "normalized WebP copies of macOS screenshots; originals not in the repo",
+    "note": "Images are read-only evidence. They contain customer and agent logins/ids; they are internal evidence and must never be staged to dist/ or published to R2."
+  },
+  "doesNotEstablish": [
+    "no HTTP method, URL transport, request body, headers, auth mechanism or response body",
+    "not a capture of POST /manager-tools/ajax.php; that remains blocked_contract",
+    "an empty grid means zero rows for the selected filters at that time, not that no wagers exist"
+  ],
+  "aggregates": {
+    "agentProfiles": 190,
+    "playerProfiles": 2964,
+    "reportedBy": "Manage Players footer 'Total records' in screenshots 01 and 02"
+  },
+  "uiVocabulary": {
+    "lastBets": {
+      "dateRange": { "from": "2026-11-03", "to": "2026-11-03" },
+      "dateFilterChoice": ["Grade time", "Bet time"],
+      "stateSelector": "All",
+      "sports": "All sports",
+      "markets": "All Markets",
+      "fields": [
+        "Player",
+        "Agent",
+        "Event Id",
+        "Bet Id",
+        "Bet Group Id",
+        "Group Kind",
+        "Group Name",
+        "Free Bet Id",
+        "Period",
+        "Min Wager",
+        "Max Time Until Score"
+      ],
+      "toolbar": [
+        "Group by",
+        "Auto-resize columns",
+        "Select all",
+        "Bulk Actions",
+        "Filters",
+        "Table settings"
+      ],
+      "gridColumns": [
+        "Bet Group",
+        "Id",
+        "Player",
+        "Player Id",
+        "Profile",
+        "Agent",
+        "Ticket",
+        "If bet",
+        "Risk",
+        "To Win",
+        "Then bet",
+        "Premium",
+        "Result",
+        "Free bet",
+        "Sport/League",
+        "Sport(SportId)",
+        "League(LeagueId)",
+        "Event Id",
+        "Event Details"
+      ],
+      "result": "No data for current selection."
+    },
+    "reports": {
+      "pages": [
+        "Summary report",
+        "Event report",
+        "Player report",
+        "Open bet report",
+        "Bettor report"
+      ],
+      "dateRanges": [
+        "2026-10-23..2026-10-30 (summary)",
+        "2026-10-27..2026-11-03 (other pages)"
+      ],
+      "summaryMetrics": [
+        "Profit",
+        "Bet",
+        "Hold %",
+        "To win",
+        "Wager Count",
+        "Player Count",
+        "Event Count",
+        "Bettor Count"
+      ],
+      "groupColumns": [
+        "Group",
+        "Profit",
+        "Bet",
+        "Hold %",
+        "Wager Count",
+        "Leg Count",
+        "To Win",
+        "Avg Odds",
+        "Start",
+        "Player",
+        "Bot?"
+      ],
+      "exportControls": ["To Excel", "To CSV", "Report History"],
+      "result": "all five report pages empty for the selected filters"
+    },
+    "managePlayers": {
+      "tabs": ["Agent", "Player"],
+      "profileColumns": [
+        "Name",
+        "Kind",
+        "Delay (sec)",
+        "Event Limit",
+        "Min Straight",
+        "Max Straight",
+        "Min Odds",
+        "Max Odds",
+        "Max Event Win",
+        "Min Parlay",
+        "Max Parlay",
+        "Max Same Game Parlay",
+        "Wager Cool-off (sec)",
+        "Max Bet Win",
+        "Max Wager Type Max",
+        "Supplemental Time Window (sec)",
+        "Bets",
+        "View profile players"
+      ],
+      "actions": [
+        "Find Profile",
+        "Add new profile",
+        "Refresh",
+        "Apply settings to multiple profiles"
+      ]
+    },
+    "spaHashRoutes": [
+      "#/reports/users?t=1793731912416",
+      "#/reports/summ… (truncated in the status bar)"
+    ]
+  },
+  "images": [
+    {
+      "file": "01-manage-players-agent-profiles.webp",
+      "sha256": "e56081b42e973ce72c6955fe54259ce50d4dbe7b4d5ec1b73ca0c9a46b8a8f62",
+      "width": 2252,
+      "height": 714,
+      "screen": "Manage Players — Agent tab"
+    },
+    {
+      "file": "02-manage-players-player-profiles.webp",
+      "sha256": "99c71fda7b66d96ab27b90bf70e836d5fe1d1987a6cd6f7169e0396821c82958",
+      "width": 2260,
+      "height": 712,
+      "screen": "Manage Players — Player tab"
+    },
+    {
+      "file": "03-find-player.webp",
+      "sha256": "22f030131d2796bf95899093b0a43d6a0b6c50a7ba0119b0738b74cd85cbc5b7",
+      "width": 2268,
+      "height": 736,
+      "screen": "Manage Players — Find Player"
+    },
+    {
+      "file": "04-events-last-bets-empty.webp",
+      "sha256": "bc8d19d37156795f24070d34a7e8c51c118d388587e068a5d9bde47b0cdbdeb6",
+      "width": 2262,
+      "height": 776,
+      "screen": "Events — Last Bets (empty result)"
+    },
+    {
+      "file": "05-reports-summary-empty.webp",
+      "sha256": "cb77714390aae1e635af4258a578e6365f7c8740af60a1e0eb4b1774b25d1c7b",
+      "width": 2298,
+      "height": 782,
+      "screen": "Reports — Summary report (empty result)"
+    },
+    {
+      "file": "06-reports-bettor-empty.webp",
+      "sha256": "84c03c657ebe997e9be35288c011293b3f9ca490ff3f4179888f2f86f0c09116",
+      "width": 2226,
+      "height": 816,
+      "screen": "Reports — Bettor report (empty result)"
+    },
+    {
+      "file": "07-reports-open-bet-empty.webp",
+      "sha256": "34b2a9bbc9e9354b164ca7f4a38dea276012544173a811c9c985851de2adf693",
+      "width": 2254,
+      "height": 806,
+      "screen": "Reports — Open bet report (empty result)"
+    },
+    {
+      "file": "08-reports-player-empty.webp",
+      "sha256": "10325797e954e072bfcdc515667f09b0492a03de5deabffd7eab410adcd77948",
+      "width": 2320,
+      "height": 722,
+      "screen": "Reports — Player report (empty result)"
+    },
+    {
+      "file": "09-reports-event-empty.webp",
+      "sha256": "cbef385f3fb7e04ac44d361bdcebad5a357aea97d7c55a75a244deb6410ce504",
+      "width": 2340,
+      "height": 796,
+      "screen": "Reports — Event report (empty result)"
+    }
+  ]
+}

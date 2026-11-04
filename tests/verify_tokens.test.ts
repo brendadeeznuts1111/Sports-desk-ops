@@ -217,7 +217,7 @@ describe("4. Discriminated Union Type Guardrails", () => {
     expect(blocked.sla.kind).toBe("sentinel_drop");
 
     // Negative check: ensure no raw polymorphic latency number was set to 0
-    expect((blocked.sla as any).latencySlaMs).toBeUndefined();
+    expect(blocked.sla).not.toHaveProperty("latencySlaMs");
   });
 
   it("test_assert_latency_channels_use_latency_kind_with_positive_ms", () => {

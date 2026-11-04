@@ -5,15 +5,16 @@ if (!file) {
   process.exit(1);
 }
 
-let image: Bun.Image;
-if (file === "-") {
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of Bun.stdin.stream()) chunks.push(chunk);
-  const buf = Buffer.concat(chunks);
-  image = new Bun.Image(buf);
-} else {
-  image = Bun.file(file).image();
-}
+const image = file === "-" ? Bun.stdin.image() : Bun.file(file).image();
 
-const meta = await image.metadata();
-console.log(JSON.stringify(meta, null, 2));
+try {
+  const meta = await image.metadata();
+  console.log(JSON.stringify(meta, null, 2));
+} catch (error) {
+  const code =
+    error instanceof Error && "code" in error ? String(error.code) : "";
+  const message = error instanceof Error ? error.message : String(error);
+  const prefix = code === "" || message.startsWith(code) ? "" : `${code}: `;
+  console.error(`image-meta: ${prefix}${message}`);
+  process.exit(1);
+}

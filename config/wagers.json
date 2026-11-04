@@ -1,0 +1,178 @@
+{
+  "$schema": "wagers.config.json",
+  "version": 8,
+  "description": "Data-driven configuration for wagers-by-state reports",
+  "default": {
+    "days": 14,
+    "csvPath": "/Users/nolarose/code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv",
+    "format": "table",
+    "groupBy": "state"
+  },
+  "columns": {
+    "ticket": 4,
+    "betGroup": 5,
+    "state": 40,
+    "risk": 8,
+    "toWin": 9,
+    "result": 18,
+    "betTime": 10,
+    "player": 2,
+    "agent": 3,
+    "eventDetails": 7
+  },
+  "states": {
+    "pending": {
+      "label": "pending",
+      "sortOrder": 0
+    },
+    "win": {
+      "label": "win",
+      "sortOrder": 1
+    },
+    "lose": {
+      "label": "lose",
+      "sortOrder": 2
+    },
+    "push": {
+      "label": "push",
+      "sortOrder": 3
+    },
+    "cashout": {
+      "label": "cashout",
+      "sortOrder": 4
+    },
+    "half win": {
+      "label": "half win",
+      "sortOrder": 5
+    },
+    "half lose": {
+      "label": "half lose",
+      "sortOrder": 6
+    },
+    "cancel": {
+      "label": "cancel",
+      "sortOrder": 7
+    },
+    "cancel after confirmation": {
+      "label": "cancel after confirmation",
+      "sortOrder": 8
+    }
+  },
+  "dateFormats": {
+    "betTime": "^(\\d{1,2}):(\\d{2}):(\\d{2})\\s+(\\d{1,2})/(\\d{1,2})/(\\d{4})$",
+    "cli": ["M/D/YYYY", "YYYY-MM-DD"]
+  },
+  "live": {
+    "url": "https://plive.sportswidgets.pro/manager-tools/ajax.php",
+    "action": "getBetReport",
+    "dateFilterBy": "logTime",
+    "fromTime": 0,
+    "toTime": 86399,
+    "retry": {
+      "attempts": 4,
+      "baseMs": 500
+    }
+  },
+  "output": {
+    "columns": [
+      {
+        "key": "state",
+        "label": "State",
+        "align": "left",
+        "width": 0
+      },
+      {
+        "key": "count",
+        "label": "Count",
+        "align": "right",
+        "width": 7
+      },
+      {
+        "key": "legs",
+        "label": "Legs",
+        "align": "right",
+        "width": 6
+      },
+      {
+        "key": "riskDollars",
+        "label": "Risk ($)",
+        "align": "right",
+        "width": 14
+      },
+      {
+        "key": "toWinDollars",
+        "label": "To Win ($)",
+        "align": "right",
+        "width": 14
+      },
+      {
+        "key": "resultDollars",
+        "label": "Result ($)",
+        "align": "right",
+        "width": 14
+      }
+    ],
+    "sort": {
+      "key": "sortOrder",
+      "direction": "asc"
+    },
+    "unknownStateLabel": "unknown",
+    "formats": [
+      "table",
+      "json",
+      "csv",
+      "summary",
+      "inspect",
+      "columns",
+      "grid"
+    ],
+    "csvDelimiter": ","
+  },
+  "groups": {
+    "state": {
+      "label": "State",
+      "field": "state",
+      "sort": "config-order"
+    },
+    "day": {
+      "label": "Day",
+      "field": "day",
+      "sort": "key-asc"
+    },
+    "event": {
+      "label": "Event",
+      "field": "event",
+      "sort": "risk-desc"
+    },
+    "player": {
+      "label": "Player",
+      "field": "player",
+      "sort": "risk-desc"
+    },
+    "agent": {
+      "label": "Agent",
+      "field": "agent",
+      "sort": "risk-desc"
+    }
+  },
+  "filters": {
+    "state": {
+      "arg": "--state",
+      "description": "Filter to one state",
+      "type": "string",
+      "field": "stateFilter"
+    },
+    "legs": {
+      "arg": "--nlegs",
+      "description": "Filter to N-leg parlay groups",
+      "type": "number",
+      "field": "legsFilter"
+    },
+    "wagerNumber": {
+      "arg": "--wager-number",
+      "description": "Filter to a specific Ticket/wager number",
+      "type": "string",
+      "field": "wagerNumberFilter"
+    }
+  }
+}

@@ -8,9 +8,12 @@ Evidence ledger and OpenAPI citations use **filename only** (for example `operat
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [operational_guardrails_runbook.md](./operational_guardrails_runbook.md)                           | Fantasy402 Manager wire evidence, capture guardrails, getWebLog modes |
 | [bun_server_runtime_shapes_runbook.md](./bun_server_runtime_shapes_runbook.md)                     | Bun `Server`, WebSocket handlers, TLS, replay shapes                  |
+| [bun_shape_contracts_runbook.md](./bun_shape_contracts_runbook.md)                                 | The 70 `Bun.*` shapes this repo calls: source, evidence, gate         |
+| [bun-pm-policy.md](./bun-pm-policy.md)                                                             | `bun install`, `bun.lock`, machine bunfig, `bun-deps`, `pm:doctor`    |
 | [token_architecture_and_verification_runbook.md](./token_architecture_and_verification_runbook.md) | Design tokens, CIEDE2000, WCAG, `gen:tokens`                          |
 | [cloudflare_r2_and_api_runbook.md](./cloudflare_r2_and_api_runbook.md)                             | R2 sync, API tokens, reporting pipeline archive                       |
 | [os_bun_cron_integration_guide.md](./os_bun_cron_integration_guide.md)                             | Crontab / systemd schedules for `bun run reports`                     |
 | [vps_domain_setup_runbook.md](./vps_domain_setup_runbook.md)                                       | `scripts/deploy/deploy_to_vps.sh` production install                  |
+| [wagers_live_capture_runbook.md](./wagers_live_capture_runbook.md)                                 | `wagers:capture` / `wagers:watch`: ajax.php artifact + journal        |
 
 Day-1 desk workflow remains in [../OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md](../OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md).

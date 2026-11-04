@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  GSLIVE_BET_HISTORY_STATES,
   addDaysYmd,
   buildGsLiveBetHistorySidecarUrl,
   buildGsLiveDualSurfaceDescriptor,
@@ -87,6 +88,130 @@ describe("GSLive Manager 7-Param Deep-Link Builder & Live Bet-History Sidecar", 
     expect(desc.getBetReportObservedPayload.from).toBe(1793422800);
     expect(desc.getBetReportObservedPayload.toTime).toBe(86399);
     expect(desc.getBetReportObservedPayload.partnerUserId).toBe("CHURN_003");
+  });
+
+  test("test_build_canceled_bet_history_link_reproduces_the_observed_7_day_window", () => {
+    // Observed in the operator console (2026-11-03) for partnerUserId=ccc107 over 7 desk days:
+    // #/events/bet-history?partnerUserId=ccc107&state=canceled&…&from=1793163600&to=1793685600&toTime=86399
+    expect(computeDeskDayStartEpochSeconds("2026-10-28")).toBe(1793163600);
+    expect(computeDeskDayStartEpochSeconds("2026-11-03")).toBe(1793685600);
+
+    const url = buildGsLiveBetHistorySidecarUrl({
+      customerLogin: "ccc107",
+      state: "canceled",
+      fromEpochSec: computeDeskDayStartEpochSeconds("2026-10-28"),
+      toEpochSec: computeDeskDayStartEpochSeconds("2026-11-03"),
+      toTimeSec: computeDeskDayToTimeSeconds("2026-11-03"),
+      dateFilterBy: "calcTime",
+      tickEpochMs: FIXED_TICK,
+    });
+
+    for (const expected of [
+      "#/events/bet-history?",
+      "partnerUserId=CCC107",
+      "state=canceled",
+      "from=1793163600",
+      "to=1793685600",
+      "toTime=86399",
+      `t=${FIXED_TICK}`,
+    ]) {
+      expect(url).toContain(expected);
+    }
+    // The observed URL was typed with a lowercase login; links are canonicalised.
+    expect(url).not.toContain("partnerUserId=ccc107");
+  });
+
+  test("test_build_bet_history_link_serialises_the_spa_filter_vocabulary", () => {
+    // Serialisation read from the shipped bundle (assets/index-DB17VVxN.js, 2026-11-03):
+    // b/g bet-id prefixes stripped, id lists space-joined, market ids comma-joined, the
+    // period's first "-" segment kept, and the sport's "-1" sentinel meaning "all".
+    const url = buildGsLiveBetHistorySidecarUrl({
+      customerLogin: "ccc107",
+      state: "payment-failed",
+      fromEpochSec: 1793685600,
+      toEpochSec: 1793685600,
+      toTimeSec: 86399,
+      filters: {
+        agent: "AG1",
+        betId: "b123, b456 789",
+        betGroupId: "g777, 888",
+        freeBetId: "FB9",
+        kind: "player",
+        groupName: "Group A",
+        period: "s3-live",
+        sportId: 2,
+        marketIds: ["m1", "m2", "m1"],
+      },
+      tickEpochMs: FIXED_TICK,
+    });
+
+    for (const expected of [
+      "state=payment-failed",
+      "agent=AG1",
+      "betId=123%20456%20789",
+      "betGroupId=777%20888",
+      "freeBetId=FB9",
+      "kind=player",
+      "groupName=Group%20A",
+      "period=s3",
+      "sId=2",
+      "mId=m1%2Cm2",
+    ]) {
+      expect(url).toContain(expected);
+    }
+
+    const allSports = buildGsLiveBetHistorySidecarUrl({
+      filters: { sportId: "-1" },
+      tickEpochMs: FIXED_TICK,
+    });
+    expect(allSports).not.toContain("sId=");
+  });
+
+  test("test_every_observed_state_is_accepted_and_encodes_its_own_value", () => {
+    for (const state of GSLIVE_BET_HISTORY_STATES) {
+      const url = buildGsLiveBetHistorySidecarUrl({
+        state,
+        tickEpochMs: FIXED_TICK,
+      });
+      if (state === "") expect(url).not.toContain("state=");
+      else expect(url).toContain(`state=${state}`);
+    }
+    expect(GSLIVE_BET_HISTORY_STATES).toContain("canceled");
+    expect(GSLIVE_BET_HISTORY_STATES.length).toBe(11);
+  });
+
+  test("test_descriptor_exposes_a_windowed_canceled_link_and_leaves_payload_state_unverified", () => {
+    const desc = buildGsLiveDualSurfaceDescriptor("ccc107", {
+      dateYmd: "2026-11-03",
+      windowDays: 7,
+      tickEpochMs: FIXED_TICK,
+    });
+
+    expect(desc.playerBetHistoryWindowDays).toBe(7);
+    expect(desc.playerBetHistoryDeepLinkUrl).toContain("from=1793163600");
+    expect(desc.playerBetHistoryDeepLinkUrl).toContain("to=1793685600");
+    expect(desc.playerCanceledBetHistoryDeepLinkUrl).toContain(
+      "state=canceled",
+    );
+    expect(desc.playerCanceledBetHistoryDeepLinkUrl).toContain(
+      "partnerUserId=CCC107",
+    );
+    // The hash-route state filter is observed; the getBetReport payload's state is not.
+    expect(desc.getBetReportObservedPayload.state).toBe("");
+  });
+
+  test("test_default_descriptor_keeps_the_single_day_link_and_sends_no_state", () => {
+    const desc = buildGsLiveDualSurfaceDescriptor("MJ102", {
+      dateYmd: "2026-11-03",
+      tickEpochMs: FIXED_TICK,
+    });
+
+    expect(desc.playerBetHistoryWindowDays).toBe(1);
+    expect(desc.playerBetHistoryDeepLinkUrl).not.toContain("state=");
+    expect(desc.playerBetHistoryDeepLinkUrl).toContain("from=1793685600");
+    expect(desc.playerCanceledBetHistoryDeepLinkUrl).toContain(
+      "state=canceled",
+    );
   });
 
   test("test_desk_day_windows_roll_and_follow_chicago_calendar", () => {

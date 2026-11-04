@@ -824,6 +824,35 @@ const RAW_BRIDGED_WATCHLIST: ReadonlyArray<{
     openBetsSummary: "NBA Props & Derivative Spreads ($6.4K)",
     enforcementStatus: "Beard Bridge Clamped",
   },
+  {
+    rank: 50,
+    proxyWallet: null,
+    customerLogin: "CCC107",
+    agentId: "ROYAL",
+    category: "INTERNAL_F402_SHARP",
+    archetype: "Trojan Step-Up Donor (ROYAL/CCC107 • +$295.8K House Net)",
+    openVolumeUsd: 3413,
+    openLegsCount: 4,
+    primaryRotations: ["ROT 315", "ROT 501"],
+    openBetsSummary:
+      "Base Sport -$12,037.64 vs Step-Up/Derivative +$3,412.62 (+22.96% ROI)",
+    enforcementStatus: "ACTIVE_CLAMPED ($500 Cap + 10s Delay; Base Open)",
+  },
+  {
+    rank: 51,
+    proxyWallet: null,
+    customerLogin: "LG404",
+    agentId: "COWBOY100",
+    category: "INTERNAL_F402_SHARP",
+    archetype:
+      "Pre-Bet Clinched Goal & 23.77s Confirm-Window Bypass (COWBOY100/LG404 • IP 70.114.33.189)",
+    openVolumeUsd: 0,
+    openLegsCount: 0,
+    primaryRotations: ["ROT 9901"],
+    openBetsSummary:
+      "Ticket #1071991685: Over 3.5 placed at 4-1 (-33s post-goal) & settled in 23,770ms",
+    enforcementStatus: "CLOSED_FRAUD (Revoked & Terminally Closed)",
+  },
 ];
 
 export function getUnifiedWatchlistRegistry(): readonly WatchlistUnifiedEntry[] {

@@ -2,7 +2,12 @@
  * Graphviz DOT emission + build-time rendering (never called from an HTTP handler).
  */
 
-import type { LaidOutGraph, LaidOutNode } from "./f402_agent_graph_metrics.ts";
+import {
+  laidOutGraph,
+  type LaidOutGraph,
+  type LaidOutNode,
+  type LaidOutWireEdge,
+} from "./f402_agent_graph_metrics.ts";
 
 /** Okabe–Ito palette (color-blind safe), assigned to branches by size. */
 export const BRANCH_PALETTE = [
@@ -211,7 +216,7 @@ interface Json0 {
 export async function graphvizLayout(
   engine: GraphvizEngine,
   dot: string,
-  edges: LaidOutGraph["edges"],
+  wire: readonly LaidOutWireEdge[],
   fontSize: number,
 ): Promise<LaidOutGraph> {
   const json = JSON.parse(
@@ -230,5 +235,5 @@ export async function graphvizLayout(
       h: Number(o.height ?? 0) * 72,
     });
   }
-  return { nodes, edges, fontSize };
+  return laidOutGraph(nodes, wire, fontSize);
 }

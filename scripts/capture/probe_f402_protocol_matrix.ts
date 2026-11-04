@@ -16,6 +16,7 @@ import {
   redactedRequestHeaderProtocolVariants,
 } from "../../lib/f402_in_page_fetch.ts";
 import { buildProbeBody, PROBE_OPS } from "../../lib/f402_probe.ts";
+import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import {
   buildReportCustomerContextExpression,
   reportCustomerContextUrl,
@@ -84,6 +85,10 @@ export async function main(): Promise<number> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outDir = join(root, outRoot, `protocol-matrix-${stamp}`);
   await mkdir(outDir, { recursive: true });
+
+  // Fails fast when another capture still holds this Chrome profile.
+  using _lock =
+    profile.trim() === "" ? null : acquireProfileLock(join(root, profile));
 
   await using view = ManagedWebView.launch({
     backend,

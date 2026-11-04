@@ -4,16 +4,19 @@
  *
  * The WebKit backend can only produce png/jpeg, so webp/avif/heic and resizing are done after the fact
  * rather than by forcing the Chrome backend. `Bun.Image` is mutable: `resize()`, `rotate()`, and `webp()`
- * return the same instance, and all processing runs off the main thread (except `metadata()`).
+ * return the same instance, and nothing runs until a terminal is awaited, off the JS thread.
  *
- * Canonical Bun 1.4.4 `Bun.Image` & `Bun.WebView` contract:
- * - Off-thread terminal methods: `.bytes()`, `.buffer()`, `.blob()`, `.toBase64()`, `.dataurl()`,
- *   `.placeholder()` (ThumbHash data URL for blur-up), `.metadata()`, and `.write(dest)`.
+ * Bun 1.4.4 `Bun.Image` contract (https://bun.com/docs/runtime/image):
+ * - Terminals: `.bytes()`, `.buffer()`, `.blob()`, `.toBase64()`, `.dataurl()`, `.write(dest)`,
+ *   `.placeholder()` (ThumbHash blur-up). `.metadata()` reads only the header, so it can resolve for a
+ *   file whose pixel data a terminal rejects.
  * - `Bun.file(path).image()` loads a `BunFile` directly into a `Bun.Image` pipeline (`await Bun.file(p).image().placeholder()`).
- * - Body integration: `new Response(buildConfiguredImage(input, options))` streams the encoded image
- *   with automatic `Content-Type` header (`image/png`, `image/jpeg`, `image/webp`, `image/avif`, `image/heic`).
- * - Platform codecs: JPEG/PNG/WebP/GIF/BMP are statically linked across all OSes; HEIC and AVIF use
- *   ImageIO + vImage on macOS (Apple Silicon) with zero startup cost via lazy symbol resolution.
+ * - Body integration: `new Response(buildConfiguredImage(input, options))` sets `Content-Type` but encodes
+ *   synchronously during body init; in a request handler await `.blob()` first.
+ * - `rotate()` takes multiples of 90 only.
+ * - Codecs: JPEG/PNG/WebP are statically linked and byte-identical across OSes. BMP/GIF/TIFF decode and
+ *   HEIC/AVIF use ImageIO on macOS (AVIF encode needs an M3 or later). Resize with the default
+ *   `lanczos3` uses vImage on macOS, so resized bytes differ from Linux unless `Bun.Image.backend = "bun"`.
  * - `view.screenshot({ encoding: "blob" })` (default) returns a zero-copy mmap-backed `Blob` on WebKit.
  * - `view.screenshot({ encoding: "base64" })` is zero-decode on Chrome (CDP returns base64 natively).
  * - `view.screenshot({ encoding: "shmem" })` writes the PNG to a POSIX shared-memory segment for Kitty (`t=s`).
@@ -44,7 +47,7 @@ export interface EncodeOptions {
   /** Quantize PNG to a <=256-color indexed palette (3-5x smaller for UI screenshots). */
   readonly palette?: boolean;
   readonly resize?: ResizeSpec;
-  /** Clockwise rotation in degrees (applied after resize, before encode). */
+  /** Clockwise rotation in degrees, a multiple of 90 (applied after resize, before encode). */
   readonly rotate?: number;
   /** Maximum allowed source/target pixel count (`width * height`, default 16384 * 16384). */
   readonly maxPixels?: number;
@@ -125,7 +128,7 @@ function inputByteLength(input: ImageBinaryInput): number {
   return input.byteLength;
 }
 
-/** Read `width`, `height`, and `format` from the image header (~0.004 ms, 70x faster than sharp). */
+/** Read `width`, `height`, and `format` from the image header; the pixel data is not decoded. */
 export async function readImageMetadata(
   input: ImageBinaryInput,
   maxPixels: number = DEFAULT_MAX_PIXELS,
@@ -188,11 +191,7 @@ export function buildConfiguredImage(
   }
 
   if (options.rotate !== undefined) {
-    const angle = options.rotate;
-    if (!Number.isFinite(angle)) {
-      throw new Error(`rotate angle must be finite: ${angle}`);
-    }
-    image.rotate(angle);
+    image.rotate(assertQuarterTurn(options.rotate));
   }
 
   const quality = options.quality ?? 80;
@@ -231,11 +230,7 @@ export async function encodeScreenshot(
   input: ImageBinaryInput,
   options: EncodeOptions,
 ): Promise<Uint8Array> {
-  const encoded = buildConfiguredImage(input, options);
-  const bytes =
-    typeof encoded.bytes === "function"
-      ? await encoded.bytes()
-      : new Uint8Array(await encoded.toBuffer());
+  const bytes = await buildConfiguredImage(input, options).bytes();
   if (!looksLike(options.format, bytes)) {
     throw new Error(
       `encoder produced ${options.format} bytes with the wrong magic`,
@@ -252,12 +247,7 @@ export async function encodeScreenshotBlob(
   input: ImageBinaryInput,
   options: EncodeOptions,
 ): Promise<Blob> {
-  const encoded = buildConfiguredImage(input, options);
-  if (typeof encoded.blob === "function") {
-    return await encoded.blob();
-  }
-  const bytes = await encodeScreenshot(input, options);
-  return new Blob([bytes], { type: mimeTypeForFormat(options.format) });
+  return await buildConfiguredImage(input, options).blob();
 }
 
 /**
@@ -333,12 +323,23 @@ export function parseResize(spec: string): { width: number; height?: number } {
   return height === undefined ? { width } : { width, height };
 }
 
-/** Parse integer degrees from a CLI flag (`90`, `90deg`). */
+/**
+ * `Bun.Image.rotate()` throws for 45 but truncates 90.5 to 90 without a word, so a fractional
+ * angle is refused here rather than silently rotated by a different amount.
+ */
+function assertQuarterTurn(angle: number): number {
+  if (!Number.isInteger(angle) || angle % 90 !== 0) {
+    throw new Error(`rotate angle must be a multiple of 90 (got ${angle})`);
+  }
+  return angle;
+}
+
+/** Parse degrees from a CLI flag (`90`, `90deg`); a multiple of 90. */
 export function parseRotate(spec: string): number {
   const trimmed = spec.trim().replace(/deg$/i, "").trim();
-  const angle = Number(trimmed);
+  const angle = trimmed === "" ? Number.NaN : Number(trimmed);
   if (!Number.isFinite(angle)) {
     throw new Error(`--rotate expects degrees (got "${spec}")`);
   }
-  return angle;
+  return assertQuarterTurn(angle);
 }

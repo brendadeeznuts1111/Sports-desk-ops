@@ -1,9 +1,9 @@
 /**
- * Layout engines → common `LaidOutGraph` coordinates for readability scoring.
+ * Run layout engines and produce coordinates in the shared scoring contract (`LaidOutGraph`).
  */
 
 import cytoscape from "cytoscape";
-import ELK from "elkjs/lib/elk.bundled.js";
+import ELK from "elkjs/lib/elk-api.js";
 
 import type { CytoscapeGraphExport } from "./f402_agent_graph.ts";
 import {
@@ -11,7 +11,11 @@ import {
   graphvizLayout,
   renderViewDot,
 } from "./f402_agent_graph_dot.ts";
-import type { LaidOutGraph } from "./f402_agent_graph_metrics.ts";
+import {
+  laidOutGraph,
+  type LaidOutGraph,
+  type LaidOutWireEdge,
+} from "./f402_agent_graph_metrics.ts";
 import { layoutLevelRows } from "./f402_agent_graph_svg.ts";
 
 export type LayoutEngineName =
@@ -41,11 +45,16 @@ const CAPTURE_FONT = 11;
 const BOX_H = 28;
 const BOX_FONT = 11;
 
+const ELK_WORKER = Bun.resolveSync(
+  "elkjs/lib/elk-worker.min.js",
+  import.meta.dir,
+);
+
 function boxWidth(label: string): number {
   return Math.max(48, label.length * 7 + 16);
 }
 
-function edgesOf(graph: CytoscapeGraphExport): LaidOutGraph["edges"] {
+function wireEdgesOf(graph: CytoscapeGraphExport): LaidOutWireEdge[] {
   return graph.edges.map((e) => ({
     source: e.data.source,
     target: e.data.target,
@@ -59,18 +68,14 @@ function rootsOf(graph: CytoscapeGraphExport): string[] {
 
 function levelRows(graph: CytoscapeGraphExport): LaidOutGraph {
   const { pos, nodeW, nodeH } = layoutLevelRows(graph);
-  return {
-    nodes: [...pos].map(([id, p]) => ({
-      id,
-      x: p.x + nodeW / 2,
-      y: p.y + nodeH / 2,
-      w: nodeW,
-      h: nodeH,
-    })),
-    edges: edgesOf(graph),
-    fontSize: 11,
-    flow: "down",
-  };
+  const nodes = [...pos].map(([id, p]) => ({
+    id,
+    x: p.x + nodeW / 2,
+    y: p.y + nodeH / 2,
+    w: nodeW,
+    h: nodeH,
+  }));
+  return laidOutGraph(nodes, wireEdgesOf(graph), 11, "down");
 }
 
 function cytoscapeHeadless(
@@ -106,14 +111,17 @@ function cytoscapeHeadless(
     return { id: n.id(), x: p.x, y: p.y, w: s.w, h: s.h };
   });
   cy.destroy();
-  return { nodes, edges: edgesOf(graph), fontSize, flow };
+  return laidOutGraph(nodes, wireEdgesOf(graph), fontSize, flow);
 }
 
 async function elkLayout(
   graph: CytoscapeGraphExport,
   algorithm: "mrtree" | "layered",
 ): Promise<LaidOutGraph> {
-  const elk = new ELK();
+  // A real Worker, terminated when done: elk.bundled.js runs ELK in-thread, and its scheduler
+  // re-arms a timer that keeps the process alive after the last layout.
+  const elk = new ELK({ workerFactory: () => new Worker(ELK_WORKER) });
+  using _worker = { [Symbol.dispose]: () => elk.terminateWorker() };
   const res = await elk.layout({
     id: "root",
     layoutOptions: {
@@ -134,18 +142,14 @@ async function elkLayout(
       targets: [e.data.target],
     })),
   });
-  return {
-    nodes: (res.children ?? []).map((c) => ({
-      id: c.id,
-      x: (c.x ?? 0) + (c.width ?? 0) / 2,
-      y: (c.y ?? 0) + (c.height ?? 0) / 2,
-      w: c.width ?? 0,
-      h: c.height ?? 0,
-    })),
-    edges: edgesOf(graph),
-    fontSize: BOX_FONT,
-    flow: "down",
-  };
+  const nodes = (res.children ?? []).map((c) => ({
+    id: c.id,
+    x: (c.x ?? 0) + (c.width ?? 0) / 2,
+    y: (c.y ?? 0) + (c.height ?? 0) / 2,
+    w: c.width ?? 0,
+    h: c.height ?? 0,
+  }));
+  return laidOutGraph(nodes, wireEdgesOf(graph), BOX_FONT, "down");
 }
 
 function plainView(graph: CytoscapeGraphExport): GraphView {
@@ -163,7 +167,7 @@ function plainView(graph: CytoscapeGraphExport): GraphView {
       hiddenDescendants: 0,
       overflowCount: 0,
     })),
-    edges: edgesOf(graph),
+    edges: wireEdgesOf(graph),
     branchColors: {},
   };
 }
@@ -217,7 +221,7 @@ export async function runLayoutEngine(
         legend: false,
         rankdir,
       });
-      const laid = await graphvizLayout(gv, dot, edgesOf(graph), 12);
+      const laid = await graphvizLayout(gv, dot, wireEdgesOf(graph), 12);
       return {
         ...laid,
         flow:

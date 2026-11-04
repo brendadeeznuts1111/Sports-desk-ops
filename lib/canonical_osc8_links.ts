@@ -150,33 +150,16 @@ export function renderAnsiMarkdown(
       ? options.columns
       : process.stdout?.columns || 80;
 
-  // 1. Primary path: Native Bun.markdown.ansi()
-  if (
-    typeof Bun !== "undefined" &&
-    typeof (Bun as any).markdown?.ansi === "function"
-  ) {
-    return (Bun as any).markdown.ansi(markdown, {
-      colors: useColors,
-      hyperlinks: useHyperlinks,
-      columns:
-        options?.columns !== undefined
-          ? options.columns
-          : Math.min(terminalWidth, 130),
-      light: options?.light,
-      kittyGraphics: options?.kittyGraphics ?? false,
-    });
-  }
-
-  // 2. Fallback: manual OSC 8 substitution if running in Node or older Bun
-  if (useHyperlinks) {
-    const osc8Regex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    return markdown.replace(
-      osc8Regex,
-      (_, text, url) => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`,
-    );
-  }
-
-  return markdown;
+  return Bun.markdown.ansi(markdown, {
+    colors: useColors,
+    hyperlinks: useHyperlinks,
+    columns:
+      options?.columns !== undefined
+        ? options.columns
+        : Math.min(terminalWidth, 130),
+    ...(options?.light !== undefined ? { light: options.light } : {}),
+    kittyGraphics: options?.kittyGraphics ?? false,
+  });
 }
 
 /**

@@ -36,7 +36,6 @@ export function generalProbeFromWireText(text: string): ListAgentsGeneralProbe {
 
 export async function fetchListAgentsGeneralProbe(options: {
   readonly account: AccountInfoOwnerFixture;
-  readonly profileDir?: string | undefined;
   readonly proxyUrl?: string | undefined;
   readonly host?: string | undefined;
 }): Promise<ListAgentsGeneralProbe> {
@@ -46,7 +45,6 @@ export async function fetchListAgentsGeneralProbe(options: {
     { host: options.host },
   );
   const transport = await createF402ReplayTransport({
-    profileDir: options.profileDir,
     proxyUrl: options.proxyUrl,
   });
   try {

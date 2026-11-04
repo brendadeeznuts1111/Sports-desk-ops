@@ -160,7 +160,7 @@ echo -e "      Production configuration saved to ${APP_DIR}/.env"
 echo -e "${GREEN}[4/7] Configuring systemd daemon (${SERVICE_NAME}.service)...${NC}"
 cat <<EOF > "/etc/systemd/system/${SERVICE_NAME}.service"
 [Unit]
-Description=SportsDesk & Fantasy402 Ops Daemon (Telegram Bot, MiniApp & Webview Server)
+Description=SportsDesk & Fantasy402 Ops Daemon (supervisor: Webview + Blob/Live-Bets)
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -178,7 +178,7 @@ Environment="BUN_SOCKET=/run/sportsdesk/webview.sock"
 # below) and accept that the daemon then trusts anybody the proxy forwards.
 RuntimeDirectory=sportsdesk
 RuntimeDirectoryMode=0755
-ExecStart=${BUN_BIN} run services/sportsdesk_webview_server.ts
+ExecStart=${BUN_BIN} run services/supervisor.ts
 Restart=always
 RestartSec=5s
 KillMode=process

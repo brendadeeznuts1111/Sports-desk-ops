@@ -45,7 +45,10 @@ export function resolveF402SessionPath(
   return join(homedir(), ".cache", "sportsdesk", "f402-session.json");
 }
 
-function ttlMinutesFromEnv(env: NodeJS.ProcessEnv): number {
+/** Session TTL from `F402_SESSION_TTL_MIN` (minutes), falling back to the 30-minute default. */
+export function f402SessionTtlMinutesFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
   const raw = Number(env["F402_SESSION_TTL_MIN"] ?? DEFAULT_TTL_MINUTES);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TTL_MINUTES;
 }
@@ -133,7 +136,10 @@ export function sessionFromAuth(
 
 export interface RefreshF402SessionOptions {
   readonly env?: NodeJS.ProcessEnv;
+  /** Login timeout for the WebView flow; unrelated to the session TTL. */
   readonly timeoutMs?: number;
+  /** Session TTL in minutes; defaults to `F402_SESSION_TTL_MIN` then 30. */
+  readonly ttlMinutes?: number;
 }
 
 /**
@@ -162,7 +168,9 @@ export async function refreshF402Session(
     timeoutMs: options?.timeoutMs ?? 60_000,
   });
   try {
-    return sessionFromAuth(auth, { ttlMinutes: ttlMinutesFromEnv(env) });
+    return sessionFromAuth(auth, {
+      ttlMinutes: options?.ttlMinutes ?? f402SessionTtlMinutesFromEnv(env),
+    });
   } finally {
     await auth.close();
   }

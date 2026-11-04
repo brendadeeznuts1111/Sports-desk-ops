@@ -1,43 +1,32 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { resolve, join, extname } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, extname, join, resolve } from "node:path";
 
 describe("Fetch Security & URL Credentials Audit", () => {
   const repoRoot = resolve(import.meta.dir, "..");
 
-  function getAllSourceFiles(dir: string, fileList: string[] = []): string[] {
-    const entries = readdirSync(dir);
-    for (const entry of entries) {
-      if (
-        entry === ".git" ||
-        entry === "node_modules" ||
-        entry === ".DS_Store" ||
-        // Local audit artifacts / detached worktrees are gitignored evidence,
-        // not shipped source. `.gitignore` lists `scratch/`, and the working tree can spell
-        // it `Scratch` (case-insensitive macOS volumes), so compare case-insensitively —
-        // otherwise the walk enters a live WebView profile and follows dangling symlinks.
-        entry.toLowerCase() === "scratch" ||
-        entry === "reports" ||
-        entry === "dist" ||
-        entry === ".worktrees"
-      ) {
-        continue;
-      }
-      const fullPath = join(dir, entry);
-      const stat = statSync(fullPath);
-      if (stat.isDirectory()) {
-        getAllSourceFiles(fullPath, fileList);
-      } else {
-        const ext = extname(entry);
-        if (
-          [".ts", ".sh", ".json", ".md", ".html", ".toml"].includes(ext) ||
-          entry.startsWith(".env")
-        ) {
-          fileList.push(fullPath);
-        }
-      }
-    }
-    return fileList;
+  // Tracked files only: the untracked `.env` is a 1Password Environments FIFO, so reading it
+  // blocks until 1Password answers and then pulls live secrets into the test output.
+  function gitFiles(dir: string, ...flags: string[]): string[] {
+    const { stdout } = Bun.spawnSync(["git", "ls-files", "-z", ...flags], {
+      cwd: dir,
+    });
+    return stdout.toString().split("\0");
+  }
+
+  // A tracked file deleted in the working tree is still in the index; there is nothing to read.
+  function getAllSourceFiles(dir: string): string[] {
+    const deleted = new Set(gitFiles(dir, "--deleted"));
+    return gitFiles(dir)
+      .filter(
+        (rel) =>
+          !deleted.has(rel) &&
+          ([".ts", ".sh", ".json", ".md", ".html", ".toml"].includes(
+            extname(rel),
+          ) ||
+            basename(rel).startsWith(".env")),
+      )
+      .map((rel) => join(dir, rel));
   }
 
   test("test_assert_no_embedded_url_credentials_across_codebase", () => {

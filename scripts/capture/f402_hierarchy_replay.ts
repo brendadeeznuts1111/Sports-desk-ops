@@ -5,9 +5,10 @@
  *   bun run scripts/capture/f402_hierarchy_replay.ts --mode dry \\
  *     --account tests/fixtures/f402-get-account-info-owner-fixture.json
  *
- *   F402_COOKIE=... bun run scripts/capture/f402_hierarchy_replay.ts --mode replay --account ...
+ *   bun run session:login --from-profile <dir>
+ *   bun run scripts/capture/f402_hierarchy_replay.ts --mode replay --account ...
  *
- *   F402_COOKIE=... bun run scripts/capture/f402_hierarchy_replay.ts --mode oracle --account ...
+ *   F402_REPLAY_PROXY_URL=http://127.0.0.1:PORT bun run scripts/capture/f402_hierarchy_replay.ts --mode oracle --account ...
  */
 
 import { parseArgs } from "node:util";
@@ -41,9 +42,9 @@ if (values.help) {
   --body      Optional POST field overrides (agentID, agentType, agentOwner, RRO)
   --mode      dry (default): print URL + form body only
   --host      default F402_PROBE_HOST / ${PROBE_HOST}
-  --profile   WebView dataStore dir (default F402_WEBVIEW_PROFILE) — primary auth
+  --profile   Deprecated/ignored by the transport; use \`bun run session:login --from-profile <dir>\`
   --proxy     localhost replay proxy (F402_REPLAY_PROXY_URL) — secondary
-  --cookie    deprecated (F402_COOKIE); use profile + login
+  --cookie    deprecated (F402_COOKIE); use the session file
 `);
   process.exit(0);
 }
@@ -70,12 +71,17 @@ const bodyFixture =
     ? loadListAgentsRequestFixture(await Bun.file(values.body).json())
     : {};
 
+if (values.profile !== undefined && values.profile.trim() !== "") {
+  console.error(
+    `--profile is ignored: the replay transport does not read WebView profiles. Mint a session with \`bun run session:login --from-profile ${values.profile.trim()}\`.`,
+  );
+}
+
 const outcome = await runHierarchyReplay({
   mode,
   account,
   bodyFixture,
   host: values.host,
-  profileDir: values.profile ?? Bun.env.F402_WEBVIEW_PROFILE,
   proxyUrl: values.proxy ?? Bun.env.F402_REPLAY_PROXY_URL,
 });
 

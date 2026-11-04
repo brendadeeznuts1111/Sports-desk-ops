@@ -1,22 +1,27 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   auditCitations,
+  citationKey,
+  collectDocCitations,
   extractCitations,
+  parseCitationAnchors,
+  unusedAnchors,
   type Citation,
 } from "../scripts/check_spec_citations.ts";
 
 /**
- * Prose citations in docs/openapi.json rot silently.
+ * Prose citations in the evidence docs rot silently.
  *
- * They are hand-written strings like `services/sportsdesk_webview_server.ts:114-131`, so moving
- * code does not update them and the docs gate cannot see them. Measured 2026-11-01: 18 of 110
- * no longer pointed at code — nine named a file that had moved under docs/runbooks/, and five
- * landed on a bare `}`, `);` or `},`.
+ * They are hand-written strings like `services/sportsdesk_webview_server.ts:1007-1026`, so moving
+ * code does not update them. Measured 2026-11-01: 18 of 110 in docs/openapi.json no longer
+ * pointed at code. Measured 2026-11-02: about 40 citations into the webview server landed on
+ * unrelated, non-blank code and passed a check that only rejected blank or punctuation lines.
  *
- * The audit cannot know what a sentence meant, so it only reports anchors that are objectively
- * gone: file missing, line out of range, blank, or nothing but closing punctuation.
+ * So each citation carries a content anchor that must sit on its first cited line; a shifted
+ * range fails and names the line the anchor moved to.
  */
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -26,7 +31,30 @@ const citation = (file: string, start: number, end = start): Citation => ({
   start,
   end,
   context: "test",
+  external: false,
 });
+
+const NO_ANCHORS = new Map<string, string>();
+
+/** A throwaway repo whose one file has known line numbers, so drift tests pin nothing in the tree. */
+const FIXTURE_ROOT = mkdtempSync(join(tmpdir(), "spec-citations-"));
+const FIXTURE = "handler.ts";
+await Bun.write(
+  join(FIXTURE_ROOT, FIXTURE),
+  [
+    'import { serve } from "bun";', // 1
+    "", // 2
+    'if (pathname === "/health") {', // 3
+    "  return Response.json({ ok: true });", // 4
+    "}", // 5
+    'if (pathname === "/api/status") {', // 6
+    "  return Response.json({ up: 1 });", // 7
+    "}", // 8
+  ].join("\n"),
+);
+afterAll(() => rmSync(FIXTURE_ROOT, { recursive: true, force: true }));
+
+const HEALTH = new Map([[`${FIXTURE}:3-5`, 'pathname === "/health"']]);
 
 describe("extractCitations", () => {
   test("finds single lines and ranges", () => {
@@ -39,36 +67,124 @@ describe("extractCitations", () => {
   test("ignores text that is not a file:line citation", () => {
     expect(extractCitations("version 1.4.4 and 12:30")).toEqual([]);
   });
-});
 
-describe("auditCitations", () => {
-  /**
-   * A line that is code, found rather than hardcoded: a literal here (1327) rotted the moment the
-   * handler above it grew, and the failure looked like a checker bug rather than a fixture one.
-   */
-  const codeLine =
-    readFileSync(resolve(ROOT, "services/sportsdesk_webview_server.ts"), "utf8")
-      .split("\n")
-      .findIndex((line) => line.includes("export function startServer")) + 1;
-
-  test("the fixture resolved to a real line", () => {
-    expect(codeLine).toBeGreaterThan(1);
+  test("a comma list is one citation per range", () => {
+    expect(
+      extractCitations("design/types.ts:9,136-154").map(citationKey),
+    ).toEqual(["design/types.ts:9", "design/types.ts:136-154"]);
   });
 
-  test("a citation pointing at real code passes", () => {
+  test("ledger prefixes are stripped; only zip: is external", () => {
+    const found = extractCitations(
+      "main:lib/a.ts:1 fixture:tests/b.json:2-3 zip:customer/report.ts:4",
+    );
+    expect(found.map((c) => [citationKey(c), c.external])).toEqual([
+      ["lib/a.ts:1", false],
+      ["tests/b.json:2-3", false],
+      ["customer/report.ts:4", true],
+    ]);
+  });
+});
+
+describe("auditCitations: the content anchor", () => {
+  test("a citation whose anchor heads the range passes", () => {
     expect(
-      auditCitations(
-        [citation("services/sportsdesk_webview_server.ts", codeLine)],
-        ROOT,
-      ),
+      auditCitations([citation(FIXTURE, 3, 5)], FIXTURE_ROOT, HEALTH),
     ).toEqual([]);
   });
 
+  test("a range shifted down fails and names the corrected range", () => {
+    // The pre-anchor check passed this: line 6 is real, non-blank code — the wrong handler.
+    const shifted = citation(FIXTURE, 6, 8);
+    const problems = auditCitations(
+      [shifted],
+      FIXTURE_ROOT,
+      new Map([[citationKey(shifted), 'pathname === "/health"']]),
+    );
+    expect(problems.map((p) => p.reason)).toEqual(["anchor-drift"]);
+    expect(problems[0]?.detail).toContain("it is at line 3");
+    expect(problems[0]?.detail).toContain(`cite ${FIXTURE}:3-5`);
+  });
+
+  test("a range shifted up fails even though it still contains the anchor", () => {
+    // Code inserted above a cited block leaves the stale range starting early: lines 1-3 still
+    // hold the anchor, which is why it must be on the first line rather than anywhere in range.
+    const early = citation(FIXTURE, 1, 3);
+    const problems = auditCitations(
+      [early],
+      FIXTURE_ROOT,
+      new Map([[citationKey(early), 'pathname === "/health"']]),
+    );
+    expect(problems.map((p) => p.reason)).toEqual(["anchor-drift"]);
+    expect(problems[0]?.detail).toContain(`cite ${FIXTURE}:3-5`);
+  });
+
+  test("an anchor that is gone from the file says the claim needs re-verifying", () => {
+    const gone = citation(FIXTURE, 3, 5);
+    const problems = auditCitations(
+      [gone],
+      FIXTURE_ROOT,
+      new Map([[citationKey(gone), 'pathname === "/healthz"']]),
+    );
+    expect(problems.map((p) => p.reason)).toEqual(["anchor-drift"]);
+    expect(problems[0]?.detail).toContain("not anywhere in");
+  });
+
+  test("an anchor on several lines is reported without guessing a range", () => {
+    const ambiguous = citation(FIXTURE, 1);
+    const problems = auditCitations(
+      [ambiguous],
+      FIXTURE_ROOT,
+      new Map([[citationKey(ambiguous), "return Response.json"]]),
+    );
+    expect(problems[0]?.detail).toContain("it is at line 4, 7");
+    expect(problems[0]?.detail).not.toContain("cite ");
+  });
+
+  test("a citation with no anchor fails closed", () => {
+    const problems = auditCitations(
+      [citation(FIXTURE, 3, 5)],
+      FIXTURE_ROOT,
+      NO_ANCHORS,
+    );
+    expect(problems.map((p) => p.reason)).toEqual(["no-anchor"]);
+  });
+
+  test("an anchor no citation uses is reported", () => {
+    expect(
+      unusedAnchors(
+        [citation(FIXTURE, 3, 5)],
+        new Map([...HEALTH, [`${FIXTURE}:6-8`, "/api/status"]]),
+      ),
+    ).toEqual([`${FIXTURE}:6-8`]);
+  });
+
+  test("zip: citations are skipped, not resolved", () => {
+    const external: Citation = {
+      ...citation("customer/report/report.ts", 1),
+      external: true,
+    };
+    expect(auditCitations([external], FIXTURE_ROOT, NO_ANCHORS)).toEqual([]);
+  });
+
+  test("a registry with no object, or an empty or punctuation anchor, is refused", () => {
+    expect(() => parseCitationAnchors({})).toThrow("citationAnchors");
+    expect(() =>
+      parseCitationAnchors({ citationAnchors: { "a.ts:1": "" } }),
+    ).toThrow("more than punctuation");
+    expect(() =>
+      parseCitationAnchors({ citationAnchors: { "a.ts:1": "});" } }),
+    ).toThrow("more than punctuation");
+  });
+});
+
+describe("auditCitations: objective checks", () => {
   test("a bare module name that no longer exists is reported", () => {
     // The module moved under services/; the published citation still said otherwise.
     const problems = auditCitations(
       [citation("sportsdesk_webview_server.ts", 27)],
       ROOT,
+      NO_ANCHORS,
     );
     expect(problems.map((p) => p.reason)).toEqual(["file-missing"]);
   });
@@ -78,6 +194,7 @@ describe("auditCitations", () => {
     const problems = auditCitations(
       [citation("operational_guardrails_runbook.md", 153)],
       ROOT,
+      NO_ANCHORS,
     );
     expect(problems.map((p) => p.reason)).toEqual(["file-missing"]);
   });
@@ -86,15 +203,26 @@ describe("auditCitations", () => {
     const problems = auditCitations(
       [citation("docs/EVIDENCE.md", 999999)],
       ROOT,
+      NO_ANCHORS,
     );
     expect(problems.map((p) => p.reason)).toEqual(["out-of-range"]);
   });
 
-  test("the punctuation anchor is the signal that code moved under the citation", () => {
-    // Find a punctuation-only line at runtime rather than pinning one: a hardcoded line number in
-    // the test rots exactly like the citations it is testing for.
+  test("a blank first line is reported, with where the anchor went", () => {
+    const blank = citation(FIXTURE, 2, 4);
+    const problems = auditCitations(
+      [blank],
+      FIXTURE_ROOT,
+      new Map([[citationKey(blank), 'pathname === "/health"']]),
+    );
+    expect(problems.map((p) => p.reason)).toEqual(["blank-anchor"]);
+    expect(problems[0]?.detail).toContain(`cite ${FIXTURE}:3-5`);
+  });
+
+  test("the punctuation anchor is the signal that code moved under the citation", async () => {
+    // Found at runtime rather than pinned: a hardcoded line number rots like the citations do.
     const file = "services/sportsdesk_webview_server.ts";
-    const lines = readFileSync(resolve(ROOT, file), "utf8").split("\n");
+    const lines = (await Bun.file(resolve(ROOT, file)).text()).split("\n");
     const punctuationLine = lines.findIndex(
       (line) => line.trim() !== "" && /^[\s)}\];,]*$/.test(line.trim()),
     );
@@ -102,16 +230,41 @@ describe("auditCitations", () => {
     const problems = auditCitations(
       [citation(file, punctuationLine + 1)],
       ROOT,
+      NO_ANCHORS,
     );
     expect(problems.map((p) => p.reason)).toEqual(["punctuation-anchor"]);
   });
 });
 
-describe("the committed spec", () => {
-  test("every prose citation resolves to code", () => {
-    const spec = readFileSync(resolve(ROOT, "docs/openapi.json"), "utf8");
-    const citations = extractCitations(spec);
-    expect(citations.length).toBeGreaterThan(50);
-    expect(auditCitations(citations, ROOT)).toEqual([]);
+describe("the committed docs", () => {
+  const { citations, anchors } = collectDocCitations(ROOT);
+
+  test("every citation resolves and holds its anchor", () => {
+    expect(citations.length).toBeGreaterThan(300);
+    expect(auditCitations(citations, ROOT, anchors)).toEqual([]);
+  });
+
+  test("every anchor is cited somewhere", () => {
+    expect(unusedAnchors(citations, anchors)).toEqual([]);
+  });
+
+  test("shifting any webview-server citation by three lines fails", () => {
+    const webview = citations.filter(
+      (c) => c.file === "services/sportsdesk_webview_server.ts",
+    );
+    expect(webview.length).toBeGreaterThan(30);
+    for (const delta of [-3, 3]) {
+      for (const original of webview) {
+        const shifted = {
+          ...original,
+          start: original.start + delta,
+          end: original.end + delta,
+        };
+        const moved = new Map([
+          [citationKey(shifted), anchors.get(citationKey(original)) ?? ""],
+        ]);
+        expect(auditCitations([shifted], ROOT, moved)).not.toEqual([]);
+      }
+    }
   });
 });

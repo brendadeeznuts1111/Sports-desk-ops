@@ -7,7 +7,7 @@ account.
 
 **Status of the release:** no operation has a captured response body. The only real wire artifact is the
 2026-10-28 Manager HAR (portal `v1.0.279`), which recorded request headers and bodies for the Manager
-calls but no response bodies. See `operational_guardrails_runbook.md:127-153`.
+calls but no response bodies. See `docs/runbooks/operational_guardrails_runbook.md:127-153`.
 
 **Redaction rules (apply to every capture):** keep request/response _shape_; replace credentials, tokens,
 cookies, IPs and customer IDs with stable placeholders. Never store `Authorization`, `Cookie`,
@@ -43,9 +43,9 @@ Preserve scalar types when redaction changes a value (write `"customerID": "<PLA
 Ledger row: `POST /cloud/api/Manager/getWebLog` (tier B, **contradicted**). Mode B is the only mode ever
 observed, and no response was captured, so:
 
-- modes A / C / I are inferred from the form (`operational_guardrails_runbook.md:131`);
-- the response row schema is unpublished (`operational_guardrails_runbook.md:153`);
-- the spec requires an `Authorization` header the capture never had (`docs/openapi.json:386`).
+- modes A / C / I are inferred from the form (`docs/runbooks/operational_guardrails_runbook.md:131`);
+- the response row schema is unpublished (`docs/runbooks/operational_guardrails_runbook.md:153`);
+- the spec requires an `Authorization` header the capture never had. **Contradicted, re-read 2026-11-02:** `docs/openapi.json` now gives this operation `fantasy402Cookie` security and only the `XRequestedWith` parameter, so the spec no longer requires `Authorization`.
 
 **Observed mode-B request (baseline that is verified — do not re-derive it):**
 
@@ -70,7 +70,7 @@ agentID=<sessionAgent>&customerID=0&start=10%2F28%2F2026&end=10%2F28%2F2026&type
 
 Also record: `Content-Type` of the response, whether the body is an array or an envelope, whether the
 four published fields (`customerID`, `ipAddress`, `timestamp`, `agentOwner`) actually appear, whether a
-`path` field appears (it is deliberately omitted per `simulate_bettor_churn_suite.ts:122`), and whether
+`path` field appears (it is deliberately omitted per `services/simulate_bettor_churn_suite.ts:135`), and whether
 `Authorization` is accepted at all.
 
 **Upgrades:** modes A/C/I from C→A; the response schema and auth claim move from _contradicted_ to
@@ -82,10 +82,10 @@ forensic endpoint the runbooks, the code and the spec all point at.
 ## P2 — `updateByColumn` mutation + `getInfoPlayer` read-back
 
 Ledger rows: `POST /cloud/api/Manager/updateByColumn` (C), `POST /cloud/api/Manager/getInfoPlayer` (B,
-tier A since 2026-10-31, so the example is superseded rather than contradictory). `operational_guardrails_runbook.md:215` states the only HAR does **not**
+tier A since 2026-10-31, so the example is superseded rather than contradictory). `docs/runbooks/operational_guardrails_runbook.md:215` states the only HAR does **not**
 include `updateByColumn`, that the only observed padded ID is `Log/write`'s at **10** characters, and that
 the **11**-character width must be confirmed by capture before anyone relies on it. The spec
-(`docs/openapi.json:609-754`) publishes a 9-field body and `Result` 1/0/-1 semantics on no evidence.
+publishes a 9-field body and `Result` 1/0/-1 semantics on no evidence. **Contradicted, re-read 2026-11-02:** `docs/openapi.json` now publishes no request body and only a `default` response for `updateByColumn`.
 
 **Padding note, corrected 2026-11-01.** `Log/writeDetail`, `Log/write` and `vipListInsert` were observed
 sending `customerID`/`agentID`/`agentOwner` as the bare 7-character login, so the "padded to 10
@@ -212,7 +212,7 @@ their spec bodies exist only because the spec or `scripts/enhance_docs.mjs` auth
 once read-only where possible; the mutations need a controlled test account.
 
 Expected auth: the Manager portal session cookie observed in the 2026-10-28 HAR (no `Authorization` header;
-`operational_guardrails_runbook.md:153`) — record the actual `Cookie` header names plus the
+`docs/runbooks/operational_guardrails_runbook.md:153`) — record the actual `Cookie` header names plus the
 `X-Requested-With` / `Referer` values (redacted), and note if any call accepts Bearer instead.
 
 | #   | Operation               | Candidate URL / content type                                                                           | What to capture                                                                                                                                                                                                                                                         | Upgrades                              |
@@ -267,7 +267,7 @@ one.
 
 Ledger row: `POST /cloud/api/Manager/getAgentPerformance` (tier B — request observed, **response never**).
 The 2026-11-01 observation also contradicts the repo's earlier inferred path
-`/cloud/api/Report/getAgentPerformance` (`docs/evidence/ledger.json:556-579`).
+`/cloud/api/Report/getAgentPerformance` (`docs/evidence/ledger.json:557-580`).
 
 **The request side is closed.** Three bodies are recorded in
 `tests/fixtures/f402-report-requests-observed-2026-11-01.json`: the all-periods CP call, the same call
@@ -291,7 +291,7 @@ capture operator can generate the request instead of hand-building a curl. Field
 
 **The response side is empty.** No response body has ever been seen — not a status, response
 `Content-Type`, envelope or row — so no column set is documented, which is what the ledger row says too
-(`docs/evidence/ledger.json:574,2118`). The module deliberately describes no response either.
+(`docs/evidence/ledger.json:575,2338`). The module deliberately describes no response either.
 
 **What to capture.** One CP call and one CPS call with the fixtures' agent and date range, recording the
 full response (status, content type, body), plus a zero-row case if the filter can produce one. Reconcile
@@ -299,7 +299,7 @@ against the screen's own grid header, not against a guess:
 `tests/fixtures/portal-agent-performance-filterbar-2026-11-01.html:282-300` names **All Players and
 Agents · Won · Lost · # of Bets · Risk · Net · Hold %age**. Those seven labels are markup, not a schema:
 the JSON keys, their nesting, whether `holdPct` is computed server-side and how `BranchGrade` is applied
-are all unknown until a body exists (`docs/evidence/ledger.json:574`). The 2026-11-01 workbook export is
+are all unknown until a body exists (`docs/evidence/ledger.json:575`). The 2026-11-01 workbook export is
 not a substitute — it is wager-level with five columns (`data/graded-wagers-export-2026-11-01.json`).
 
 **Upgrades:** B→A. Until then no markdown may publish a result column set for this report.
@@ -311,7 +311,7 @@ and both mutate live state — one VIP-list entry on a customer, one desk settin
 wire shape is not lost and a future capture has a target; they are not calls this repo makes.
 
 **A Vip List save is three requests, and all three are mutations.** The `show-vip` panel
-(`docs/evidence/surfaces.md:303-326`) sends, in order:
+(`docs/evidence/surfaces.md:410-417`) sends, in order:
 
 1. **`vipListInsert`** — `POST /cloud/api/Manager/vipListInsert`, `application/json`:
    `{"list":[{"agentID":"<agent>","player":"<player>"}],"operation":"vipListInsert","agentID":"<agent>","agentOwner":"<agent>"}`.
@@ -324,16 +324,16 @@ wire shape is not lost and a future capture has a target; they are not calls thi
    `agentOwner`. The description arrives in the request body and names both the screen and the portal
    version, so an audit row records what the UI called the action.
 
-The sequence is pinned in `tests/f402_observed_requests.test.ts:401-468`. Its point is that one save uses
+The sequence is pinned in `tests/f402_observed_requests.test.ts:401-501`. Its point is that one save uses
 two encodings — JSON, form, JSON — so a client assuming one content type breaks on the middle call.
 
 **None of the three is replayed in this repo.** No code path sends the recorded bodies: production is
 read-only unless the task is explicitly a deploy, and a VIP entry is live customer state
 (`tests/f402_observed_requests.test.ts:402-408`,
 `tests/fixtures/f402-report-requests-observed-2026-11-01.json:188`). One caveat keeps that claim exact:
-`lib/f402_probe.ts:371-386` registers `Log/write` as a non-read-only probe, selected only under
+`lib/f402_probe.ts:372-386` registers `Log/write` as a non-read-only probe, selected only under
 `--include-unconfirmed`, which the capture CLI also gates behind `--i-understand-mutations`
-(`scripts/capture/f402_probe.ts:369-371`). That probe builds its own body; it never replays the observed
+(`scripts/capture/f402_probe.ts:370-375`). That probe builds its own body; it never replays the observed
 one.
 
 **The acknowledgement `{"INFO":""}` was observed, and it is an empty string.** The paste recorded the
@@ -341,7 +341,7 @@ body but not which of the three calls answered it, so all three remain candidate
 only that the write ack carries no payload; it is **not evidence of success**. The portal acknowledges
 writes without inspecting results elsewhere (`updateBasicSettings` assigns local state from the values it
 sent), and this is a different envelope from the ticker config's `INFO` object under the same key
-(`docs/evidence/surfaces.md:319-326`). Success semantics are unestablished — a capture that shows a
+(`docs/evidence/surfaces.md:425-432`). Success semantics are unestablished — a capture that shows a
 _rejected_ save is what would separate the two.
 
 **Unledgered but observed: four operations, each a write on live customer or desk state.** None has a
@@ -359,7 +359,7 @@ the response body and the success/failure signal.
 write (`play499`, `color499`) and by range in the read (`play1-499`, `color1-499`); an enabled flag reads
 `"on "` with a trailing space while a disabled one reads `"off"` without; `AgentID` is unpadded in the
 request and padded to 50 characters in the response
-(`tests/fixtures/f402-bet-ticker-config-2026-11-01.json`; `lib/f402_bet_ticker_config.ts:1-20`). The read
+(`tests/fixtures/f402-bet-ticker-config-2026-11-01.json`; `lib/f402_bet_ticker_config.ts:2-20`). The read
 is the tier-A row #1 in §P5; the `INFO:false` misconfigured variant is still unobserved, and a write
 capture is not that. Sending this write changes the desk's ticker, so it needs an operator-approved
 change on a controlled account — the repo's builder deliberately never calls it
@@ -369,11 +369,11 @@ change on a controlled account — the repo's builder deliberately never calls i
 
 Ledger rows: the 11 `POST /cloud/api/...` operations tagged `Tracked Operational Domains` (all tier C,
 `candidate_url: true`, `ui_observed: true`). Their path+method come from hand-authored constants in
-`scripts/portal_tile_crawler.ts:40-162`; the crawler's CLI
-entry runs the `offline` branch (`portal_tile_crawler.ts:670,680`) and never records network traffic.
+`scripts/portal_tile_crawler.ts:55-206`; the crawler's CLI
+entry runs the `offline` branch (`scripts/portal_tile_crawler.ts:693,777`) and never records network traffic.
 The former post-processor draft (`append_tracked_domains.mjs`) was removed: it mutated the generated
 spec and reference outside the ledger, duplicated this table, and failed the docs gate.
-The markdown table calls them "Target Wire Endpoint" (`docs/api-reference.md:693`), which is an overclaim.
+The markdown table calls them "Target Wire Endpoint", which is an overclaim. **Contradicted, re-read 2026-11-02:** `docs/api-reference.md` no longer contains that label.
 
 For each tile: open the Manager dashboard, click the tile, and capture the network request it actually
 fires (URL incl. `/Manager` vs `/Report` vs another model prefix, method, content type, body, auth) plus a
@@ -564,16 +564,20 @@ not 100 calls.
 
 **A WebView profile is not a session.** This machine has neither, so nothing portal-facing can run —
 but the distinction matters for the next one. `F402_WEBVIEW_PROFILE` names a `Bun.WebView` `dataStore`
-directory, and after a sign-in it does hold the cookies; `createF402ReplayTransport()` never reads it
-(`lib/f402_replay_transport.ts:2-3`), because `Bun.FetchSession` has no dataStore. So a profile alone
-sends a cookie-less request, and `capture_pending_full.ts` used to count it as configured — silencing
-its own "no session" guard and then 401ing upstream. That guard now requires a session file or the
-replay proxy.
+directory, and after a sign-in it does hold the cookies; `createF402ReplayTransport()` still never
+reads it (`lib/f402_replay_transport.ts:2-3`), because `Bun.FetchSession` has no dataStore. So a
+profile alone sends a cookie-less request, and `capture_pending_full.ts` used to count it as
+configured — silencing its own "no session" guard and then 401ing upstream. That guard now requires a
+session file or the replay proxy.
 
-`bun run session:login` is the bridge: one WebView login (`F402_LIVE_LOGIN=1`, `F402_AGENT_ID`,
-`F402_PASSWORD`) writes the 0600 session file the transport reads, and `bun run session:status`
-reports what the transport would use without printing a cookie value. That is the step that turns a
-signed-in WebView into the auth every capture and crawl needs.
+The bridge now exists as **`bun run session:login --from-profile <dir>`**: it opens that profile in a
+headless WebView, reads the cookies over CDP (`Network.getAllCookies`), and writes the 0600 session
+file the transport reads (`lib/f402_profile_session.ts`). A credential login (`F402_LIVE_LOGIN=1`,
+`F402_AGENT_ID`, `F402_PASSWORD`) still works for a profile-less machine, and `bun run session:status`
+reports what the transport would use without printing a cookie value. The hierarchy CLIs' `--profile`
+is now deprecated and ignored — they warn and name the bridge instead — and their 401 hint points at
+`session:login --from-profile <dir>` rather than at `F402_WEBVIEW_PROFILE`. That is the step that turns
+a signed-in WebView into the auth every capture and crawl needs.
 
 **Provenance: this account is not in the tree.** `BILLY666` is absent from `data/agent-tree.json`
 entirely, and so is its office `NOLAROSE`; the tree's roots are `BILLY667`, `NOLAWOLF`, `RTEST5`
@@ -752,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `sportsdesk_webview_server.ts:815-835`                               | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:1180-1199`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `sportsdesk_webview_server.ts:1713-1738`                             | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `sportsdesk_webview_server.ts:1741-1761`                             | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:2202-2227`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:2230-2250`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -763,12 +767,14 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `:299-307`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:2252-2260`).
 
 ## P7 — the customer report surface (7 candidates)
 
-`lib/combo_identity.ts:24-40` names these from the deobfuscated `customer/report/report.js`. None has a
-capture; they are published as tier C with no request or response content.
+`lib/combo_identity.ts:30-48` names these from the deobfuscated `customer/report/report.js`. None has a
+capture; they are published as tier C with no request or response content. **Contradicted, re-read
+2026-11-02:** `Report/Pending`, `Report/getGrading` and `Manager/getTransactions` are now tier A on
+committed captures; the other four are still tier C.
 
 | Endpoint                                           | Used by                  | Required capture                                         |
 | :------------------------------------------------- | :----------------------- | :------------------------------------------------------- |

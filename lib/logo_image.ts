@@ -13,8 +13,7 @@
  * format.
  */
 
-export type LogoFormat =
-  "jpeg" | "png" | "webp" | "heic" | "avif" | "bmp" | "tiff" | "gif";
+export type LogoFormat = Bun.Image.Format;
 
 export interface LogoMetadata {
   readonly width: number;
@@ -50,13 +49,14 @@ export async function inspectLogo(
 ): Promise<LogoMetadata> {
   const image = new Bun.Image(bytes, { maxPixels: MAX_PIXELS });
   const metadata = await image.metadata();
-  const format = metadata.format as LogoFormat;
+  // metadata() reads only the header; a terminal decodes every row, so a truncated body rejects.
+  await image.resize(1, 1, { fit: "fill" }).png().bytes();
   return {
     width: metadata.width,
     height: metadata.height,
-    format,
+    format: metadata.format,
     bytes: bytes.byteLength,
-    contentType: contentTypeFor(format),
+    contentType: contentTypeFor(metadata.format),
   };
 }
 

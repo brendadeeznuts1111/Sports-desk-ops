@@ -5,8 +5,9 @@
  *   - one `Bun.FetchSession` per capture run (connection pooling), closed in a
  *     `finally`;
  *   - TLS verification is never bypassed (`rejectUnauthorized: true`);
- *   - proxies are honored from the environment only (Bun ignores `proxy:` in
- *     init); `direct: true` maps to `proxy: false` for loopback probes;
+ *   - a session-level `proxy` overrides the environment for every request on
+ *     this pool; `direct: true` maps to `proxy: false` and wins over both (the
+ *     request option takes precedence over the session's);
  *   - retries are limited to read-only requests on 429/5xx (max two), honoring
  *     `Retry-After`;
  *   - thrown errors are redacted before they can reach a log or the CLI.
@@ -46,21 +47,37 @@ export interface SessionOptions {
   maxRetries?: number;
   backoffMs?: number;
   maxResponseBytes?: number;
+  /**
+   * Session-level proxy for every request on this pool.
+   *
+   * - `false` connects directly even when `HTTP_PROXY` / `HTTPS_PROXY` /
+   *   `ALL_PROXY` are set;
+   * - a string, `URL`, or `{ url, headers, respectNoProxy }` selects that proxy;
+   * - omitted reads the environment on every request.
+   *
+   * A request's own `direct: true` still wins (it sends `proxy: false`).
+   */
+  proxy?: Bun.FetchProxyOption | undefined;
   /** Injectable transport constructor; defaults to `Bun.FetchSession`. */
   sessionFactory?: FetchSessionFactory;
   /** Injectable sleep for retry tests. */
   sleep?: (ms: number) => Promise<void>;
 }
 
-const defaultFactory: FetchSessionFactory = () => {
-  const session = new Bun.FetchSession({ tls: { rejectUnauthorized: true } });
-  return {
-    fetch: (url: string, init?: RequestInit) => session.fetch(url, init),
-    close: async () => {
-      await session.close();
-    },
+const makeDefaultFactory =
+  (proxy?: Bun.FetchProxyOption): FetchSessionFactory =>
+  () => {
+    const session = new Bun.FetchSession({
+      tls: { rejectUnauthorized: true },
+      proxy,
+    });
+    return {
+      fetch: (url: string, init?: RequestInit) => session.fetch(url, init),
+      close: async () => {
+        await session.close();
+      },
+    };
   };
-};
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,7 +156,8 @@ export class HttpSession {
     this.maxResponseBytes =
       options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
     this.sleep = options.sleep ?? defaultSleep;
-    this.sessionFactory = options.sessionFactory ?? defaultFactory;
+    this.sessionFactory =
+      options.sessionFactory ?? makeDefaultFactory(options.proxy);
   }
 
   private readonly sessionFactory: FetchSessionFactory;

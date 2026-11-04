@@ -39,7 +39,7 @@ surface rules in [`docs/report-surfaces.md`](../../../../docs/report-surfaces.md
 # F402 manager after one login (opt-in; never prints credentials)
 F402_LIVE_LOGIN=1 ./bin/dx shot --f402-login --f402-page /manager --out scratch/shots/f402.png
 
-# webp requires the chrome backend
+# webp works on both backends: WebKit captures PNG and the CLI re-encodes it with Bun.Image
 ./bin/dx shot <url> --format webp --quality 82 --out scratch/shots/page.webp
 ```
 

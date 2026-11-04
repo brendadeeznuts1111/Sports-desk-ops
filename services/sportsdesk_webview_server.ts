@@ -112,6 +112,7 @@ import {
   type RawHierarchyTree,
 } from "../lib/hierarchy_view.ts";
 import { encodedResponse, negotiateEncoding } from "../lib/http_compression.ts";
+import { imageErrorCode, type ImageErrorCode } from "../lib/image_errors.ts";
 import {
   contentTypeFor,
   inspectLogo,
@@ -553,10 +554,38 @@ interface CachedLogo {
 
 const logoCache = new Map<string, CachedLogo>();
 
+/**
+ * Codes that describe the upstream bytes. `ERR_OUT_OF_MEMORY`, `ERR_IMAGE_ENCODE_FAILED` and
+ * `ERR_INVALID_STATE` are this process's failures and must not be reported as a bad upstream image.
+ */
+type UpstreamImageFault = Extract<
+  ImageErrorCode,
+  | "ERR_IMAGE_FORMAT_UNSUPPORTED"
+  | "ERR_IMAGE_TOO_MANY_PIXELS"
+  | "ERR_IMAGE_DECODE_FAILED"
+  | "ERR_IMAGE_UNKNOWN_FORMAT"
+>;
+
+function isUpstreamImageFault(
+  code: ImageErrorCode,
+): code is UpstreamImageFault {
+  switch (code) {
+    case "ERR_IMAGE_FORMAT_UNSUPPORTED":
+    case "ERR_IMAGE_TOO_MANY_PIXELS":
+    case "ERR_IMAGE_DECODE_FAILED":
+    case "ERR_IMAGE_UNKNOWN_FORMAT":
+      return true;
+    case "ERR_IMAGE_ENCODE_FAILED":
+    case "ERR_OUT_OF_MEMORY":
+    case "ERR_INVALID_STATE":
+      return false;
+  }
+}
+
 type LogoResult =
   | ({ readonly kind: "ok" } & CachedLogo)
   | { readonly kind: "upstream"; readonly status: number }
-  | { readonly kind: "undecodable"; readonly code: string }
+  | { readonly kind: "undecodable"; readonly code: UpstreamImageFault }
   | { readonly kind: "too-large"; readonly bytes: number };
 
 function logoBaseUrl(): string {
@@ -594,10 +623,8 @@ async function fetchLogo(
   try {
     metadata = await inspectLogo(raw);
   } catch (error) {
-    const code =
-      typeof error === "object" && error !== null && "code" in error
-        ? String((error as { code: unknown }).code)
-        : "ERR_IMAGE_DECODE_FAILED";
+    const code = imageErrorCode(error);
+    if (code === undefined || !isUpstreamImageFault(code)) throw error;
     return { kind: "undecodable", code };
   }
 
@@ -675,6 +702,7 @@ export function startServer(options?: ServerOptions) {
       "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Language": "en",
     // Unconditional, not conditional on an `Origin` header being present. The same URL answers
     // differently per origin (grant or refusal), and the no-`Origin` variant is the one a cache is
     // most likely to store first; without `Vary` it would then be replayed — a refusal as often as
@@ -703,7 +731,7 @@ export function startServer(options?: ServerOptions) {
     trustProxy: (Bun.env.SPORTSDESK_TRUST_PROXY ?? "") === "1",
   };
 
-  const serveConfig: Parameters<typeof Bun.serve>[0] = {
+  const serveConfig = {
     development: isDevelopment,
     // Bodies here are small JSON documents and one 1 MiB form probe. Without a cap a chunked
     // request is buffered in full by `req.json()` / `arrayBuffer()` (measured: a 6 MiB POST to
@@ -746,6 +774,178 @@ export function startServer(options?: ServerOptions) {
             else out[k] = [out[k] as string, String(v)];
           }
           return Response.json(out, { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2d. Bet-ticker XML: parse one feed document and echo the compact tree.
+      if (pathname === "/api/parse-bet-ticker" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseBetTickerXml } = await import("../lib/live_wagers.ts");
+          return Response.json(parseBetTickerXml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2i. TOML parse: parse one TOML document and echo the result.
+      if (pathname === "/api/parse-toml" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseToml } = await import("../lib/toml_parse.ts");
+          return Response.json(parseToml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2h. Fantasy402 AJAX XML: parse one Fantasy402 AJAX XML response and echo the compact tree.
+      if (pathname === "/api/parse-fantasy402-ajax" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseFantasy402AjaxXml } =
+            await import("../lib/customer_profile.ts");
+          return Response.json(parseFantasy402AjaxXml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2g. AJAX XML: parse one AJAX-delivered XML response and echo the compact tree.
+      if (pathname === "/api/parse-ajax-xml" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseAjaxXml } = await import("../lib/customer_profile.ts");
+          return Response.json(parseAjaxXml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2f. Transactions XML: parse one transactions document and echo the compact tree.
+      if (pathname === "/api/parse-transactions" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseTransactionsXml } =
+            await import("../lib/customer_profile.ts");
+          return Response.json(parseTransactionsXml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2e. Customer performance XML: parse one performance document and echo the compact tree.
+      if (
+        pathname === "/api/parse-customer-performance" &&
+        req.method === "POST"
+      ) {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { parseCustomerPerformanceXml } =
+            await import("../lib/customer_profile.ts");
+          return Response.json(parseCustomerPerformanceXml(text), {
+            headers: cors,
+          });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2c. Customer profile XML: parse one profile document and echo the compact tree.
+      if (pathname === "/api/parse-customer-profile" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const { customerRowFromXml } =
+            await import("../lib/customer_profile.ts");
+          return Response.json(customerRowFromXml(text), { headers: cors });
+        } catch (err) {
+          return Response.json(
+            { error: String(err) },
+            { status: 400, headers: cors },
+          );
+        }
+      }
+
+      // 2b. XML parse debug: parse one XML body with Bun.XML and echo the compact tree.
+      if (pathname === "/api/parse-xml" && req.method === "POST") {
+        try {
+          const text = await req.text();
+          if (text.trim() === "") {
+            return Response.json(
+              { error: "empty body" },
+              { status: 400, headers: cors },
+            );
+          }
+          const compact = url.searchParams.get("compact") !== "false";
+          const parsed = compact
+            ? Bun.XML.parse(text)
+            : Bun.XML.parse(text, { compact: false });
+          return Response.json(parsed, { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1879,9 +2079,22 @@ export function startServer(options?: ServerOptions) {
             },
           );
         }
-        return new Response(Bun.file(contained), {
-          headers: { ...cors, "Cache-Control": "public, max-age=3600" },
-        });
+        const FONT_MIME = {
+          woff: "font/woff",
+          woff2: "font/woff2",
+          ttf: "font/ttf",
+          otf: "font/otf",
+          eot: "application/vnd.ms-fontobject",
+        } as const;
+        type FontExt = keyof typeof FONT_MIME;
+        const ext = contained.split(".").pop()?.toLowerCase() ?? "";
+        const headers: Record<string, string> = {
+          ...cors,
+          "Cache-Control": "public, max-age=3600",
+        };
+        if (ext in FONT_MIME)
+          headers["Content-Type"] = FONT_MIME[ext as FontExt];
+        return new Response(Bun.file(contained), { headers });
       }
 
       // Telegram webhook: Telegram echoes the secret registered by setWebhook in this header
@@ -2001,12 +2214,12 @@ export function startServer(options?: ServerOptions) {
             },
             { headers: cors },
           );
-        } catch (err: any) {
+        } catch (err) {
           return Response.json(
             {
               success: false,
               ok: false,
-              error: err?.message || String(err),
+              error: err instanceof Error ? err.message : String(err),
             },
             { status: 500, headers: cors },
           );
@@ -2065,20 +2278,19 @@ export function startServer(options?: ServerOptions) {
         { status: 500, headers: baseHeaders },
       );
     },
-  };
+  } satisfies Parameters<typeof Bun.serve>[0];
 
-  if (unixSocket) {
-    (serveConfig as any).unix = unixSocket;
-  } else {
-    if (options?.port !== undefined) {
-      serveConfig.port = options.port;
-    }
-    if (options?.hostname !== undefined) {
-      serveConfig.hostname = options.hostname;
-    }
-  }
-
-  const server = Bun.serve(serveConfig);
+  const server: Bun.Server<undefined> = Bun.serve(
+    unixSocket
+      ? { ...serveConfig, unix: unixSocket }
+      : {
+          ...serveConfig,
+          ...(options?.port !== undefined && { port: options.port }),
+          ...(options?.hostname !== undefined && {
+            hostname: options.hostname,
+          }),
+        },
+  );
   return server;
 }
 

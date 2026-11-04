@@ -38,9 +38,12 @@ describe("Outbound Fetch Timeout Hardening (AbortSignal.timeout)", () => {
       await fetch(`http://127.0.0.1:${slowServer.port}/api`, {
         signal: AbortSignal.timeout(50),
       });
-    } catch (caughtError: any) {
+    } catch (caughtError) {
       hasTimedOut = true;
-      expect(caughtError.name).toMatch(/TimeoutError|AbortError/);
+      expect(caughtError).toHaveProperty(
+        "name",
+        expect.stringMatching(/TimeoutError|AbortError/),
+      );
     }
 
     const elapsedMs = performance.now() - startedAt;
@@ -54,8 +57,7 @@ describe("Outbound Fetch Timeout Hardening (AbortSignal.timeout)", () => {
     });
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as any;
-    expect(body.status).toBe("immediate");
+    expect(await response.json()).toHaveProperty("status", "immediate");
   });
 
   test("test_telegram_service_sendMessage_handles_offline_and_timeout_parameters", async () => {

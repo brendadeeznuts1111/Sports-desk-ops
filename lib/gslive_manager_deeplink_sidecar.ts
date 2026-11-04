@@ -29,6 +29,14 @@
  *        • `minVolume=0` & `maxTimeUntilScore=0` = zero volume/score-time filtering so all live wagers appear immediately
  *        • `dateFilterBy=calcTime` (live settling/populating events) or `betTime` (live placement stream)
  *        • `t=<epochMs>` = monotonic cache-buster timestamp; defaults to `Date.now()` (never a constant).
+ *
+ * 3. Canceled-ticket view (observed 2026-11-03 in the operator console):
+ *    `#/events/bet-history?partnerUserId=ccc107&state=canceled&minVolume=0&maxTimeUntilScore=0&from=1793163600&to=1793685600&toTime=86399&dateFilterBy=calcTime&t=…`
+ *    `from`/`to` are the starts of two desk days 6 days apart (Oct 28 05:00Z → Nov 3 06:00Z, i.e.
+ *    the window spans the CDT→CST change), `toTime` is the last second of the end day, and
+ *    `state` is the hash route's filter. Only `""` and `canceled` have been observed; the
+ *    `getBetReport` payload's `state` field is left `""` because that payload was not observed
+ *    carrying a state filter.
  */
 
 export const GSLIVE_MANAGER_BASE_URL =
@@ -53,6 +61,59 @@ export interface GsLiveUsersReportDeepLinkOptions {
   readonly searchBy?: "player" | "agent"; // default: "player"
 }
 
+/**
+ * `state` filter on the GSLive Manager `#/events/bet-history` SPA route. The values are the
+ * shipped bundle's `state-select` options (`assets/index-DB17VVxN.js`, read 2026-11-03) — the
+ * set is the SPA's own vocabulary rather than a guess, and `""` is "All".
+ */
+export const GSLIVE_BET_HISTORY_STATES = [
+  "",
+  "pending",
+  "win",
+  "lose",
+  "action",
+  "canceled",
+  "rejected",
+  "bad-credit",
+  "payment-failed",
+  "eco",
+  "unknown",
+] as const;
+export type GsLiveBetHistoryState = (typeof GSLIVE_BET_HISTORY_STATES)[number];
+
+/** "Group Kind" options from the same bundle's `group-kind-select`. */
+export const GSLIVE_GROUP_KINDS = [
+  "player",
+  "agent",
+  "custom",
+  "line-type",
+] as const;
+export type GsLiveGroupKind = (typeof GSLIVE_GROUP_KINDS)[number];
+
+/**
+ * URL-expressible `#/events/bet-history` filters beyond date/state/player. Read from the same
+ * shipped bundle: the route parses only the whitelisted query names, and the grid's "Filters"
+ * tool panel is client-side AG Grid state with no URL representation — "Bet price" is a hidden
+ * AG Grid column (`agNumberColumnFilter` over `fVal_new`), so it cannot be a deep-link filter.
+ */
+export interface GsLiveBetHistoryUrlFilters {
+  readonly agent?: string;
+  /** Bet ids; the SPA strips a leading `b` from each id and space-joins them. */
+  readonly betId?: string;
+  /** Bet-group ids; the SPA strips a leading `g` from each id and space-joins them. */
+  readonly betGroupId?: string;
+  readonly freeBetId?: string;
+  /** "Group Kind", serialised as the SPA's `kind` query name. */
+  readonly kind?: GsLiveGroupKind;
+  readonly groupName?: string;
+  /** Period id; the SPA keeps the first `-`-separated segment (e.g. `s3`). */
+  readonly period?: string;
+  /** Sport id (`sId`); `"-1"` is "all sports" and serialises to no filter. */
+  readonly sportId?: string | number;
+  /** Market ids (`mId`); the SPA comma-joins them. */
+  readonly marketIds?: string | readonly string[];
+}
+
 export interface GsLiveBetHistorySidecarOptions {
   readonly minVolume?: number; // default: 0
   readonly maxTimeUntilScore?: number; // default: 0
@@ -63,7 +124,9 @@ export interface GsLiveBetHistorySidecarOptions {
   readonly dateFilterBy?: "calcTime" | "betTime"; // default: "calcTime"
   readonly tickEpochMs?: number; // default: Date.now() — always pass a fresh tick in loops
   readonly customerLogin?: string; // optional per-player filter
+  readonly state?: GsLiveBetHistoryState; // optional SPA state filter; default "" (all)
   readonly eventId?: string; // optional eventId filter
+  readonly filters?: GsLiveBetHistoryUrlFilters; // the remaining URL-expressible Filters-panel values
 }
 
 /**
@@ -239,6 +302,31 @@ export function buildGsLiveUsersReportDeepLink(
 }
 
 /**
+ * Bet-id list the way the SPA serialises it: whitespace/comma separated tokens, a leading `b`
+ * (betId) or `g` (betGroupId) stripped when the rest is numeric, de-duplicated, space-joined.
+ */
+function normalizeGsLiveBetIdList(raw: string, prefix: "b" | "g"): string {
+  const strip = new RegExp(`^${prefix}(?=[0-9]*$)`, "i");
+  return Array.from(
+    new Set(
+      String(raw)
+        .split(/[\s,]+/)
+        .map((token) => token.trim())
+        .filter((token) => token !== "")
+        .map((token) => token.replace(strip, "")),
+    ),
+  ).join(" ");
+}
+
+/** Market-id list the way the SPA serialises it: de-duplicated, comma-joined. */
+function normalizeGsLiveMarketIds(raw: string | readonly string[]): string {
+  const parts = typeof raw === "string" ? raw.split(/[\s,]+/) : raw.map(String);
+  return Array.from(
+    new Set(parts.map((part) => part.trim()).filter((part) => part !== "")),
+  ).join(",");
+}
+
+/**
  * Builds the `#/events/bet-history` Live Populating Stream Sidecar URL:
  * `https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&maxTimeUntilScore=0&from=1793422800&to=1793422800&toTime=86399&dateFilterBy=calcTime&t=1793469958152`
  */
@@ -270,8 +358,59 @@ export function buildGsLiveBetHistorySidecarUrl(
       `partnerUserId=${encodeURIComponent(formatGsLivePartnerUserId(options.customerLogin))}`,
     );
   }
+  if (options?.state) {
+    params.push(`state=${encodeURIComponent(options.state)}`);
+  }
   if (options?.eventId) {
     params.push(`eventId=${encodeURIComponent(options.eventId)}`);
+  }
+
+  const filters = options?.filters;
+  if (filters) {
+    if (filters.agent?.trim()) {
+      params.push(`agent=${encodeURIComponent(filters.agent.trim())}`);
+    }
+    if (filters.betId !== undefined) {
+      const betId = normalizeGsLiveBetIdList(filters.betId, "b");
+      if (betId !== "") params.push(`betId=${encodeURIComponent(betId)}`);
+    }
+    if (filters.betGroupId !== undefined) {
+      const betGroupId = normalizeGsLiveBetIdList(filters.betGroupId, "g");
+      if (betGroupId !== "") {
+        params.push(`betGroupId=${encodeURIComponent(betGroupId)}`);
+      }
+    }
+    if (filters.freeBetId?.trim()) {
+      params.push(`freeBetId=${encodeURIComponent(filters.freeBetId.trim())}`);
+    }
+    if (filters.kind !== undefined) {
+      if (!GSLIVE_GROUP_KINDS.includes(filters.kind)) {
+        throw new Error(
+          `filters.kind must be one of ${GSLIVE_GROUP_KINDS.join(", ")}, got ${JSON.stringify(filters.kind)}`,
+        );
+      }
+      params.push(`kind=${encodeURIComponent(filters.kind)}`);
+    }
+    if (filters.groupName?.trim()) {
+      params.push(`groupName=${encodeURIComponent(filters.groupName.trim())}`);
+    }
+    if (filters.period?.trim()) {
+      const period = filters.period.trim().split("-")[0] ?? "";
+      if (period !== "") params.push(`period=${encodeURIComponent(period)}`);
+    }
+    if (filters.sportId !== undefined) {
+      const sportId = String(filters.sportId).trim();
+      // "-1" is the SPA's "all sports" sentinel; omit the filter rather than encode it.
+      if (sportId !== "" && sportId !== "-1") {
+        params.push(`sId=${encodeURIComponent(sportId)}`);
+      }
+    }
+    if (filters.marketIds !== undefined) {
+      const marketIds = normalizeGsLiveMarketIds(filters.marketIds);
+      if (marketIds !== "") {
+        params.push(`mId=${encodeURIComponent(marketIds)}`);
+      }
+    }
   }
 
   return `${GSLIVE_MANAGER_BASE_URL}#/events/bet-history?${params.join("&")}`;
@@ -349,6 +488,10 @@ export interface GsLiveDualSurfaceDescriptor {
   readonly liveBetHistorySidecarCalcTimeUrl: string;
   readonly liveBetHistorySidecarBetTimeUrl: string;
   readonly playerBetHistoryDeepLinkUrl: string;
+  /** Desk days in the per-player bet-history window that `playerBetHistoryDeepLinkUrl` covers. */
+  readonly playerBetHistoryWindowDays: number;
+  /** Same window with `state=canceled`: the observed canceled-ticket view (2026-11-03). */
+  readonly playerCanceledBetHistoryDeepLinkUrl: string;
   readonly getBetReportObservedPayload: {
     readonly action: "getBetReport";
     readonly partnerUserId: string;
@@ -377,18 +520,34 @@ export interface GsLiveDualSurfaceDescriptor {
  * Builds the complete Dual-Surface GSLive descriptor for any account (e.g., `CHURN_003`, `MJ102`, `BGD101`),
  * combining the 7-parameter `#/reports/users` deep links with the `#/events/bet-history` live sidecar URLs.
  * The 7-day / 14-day windows are rolling and end on `dateYmd` (desk timezone, today by default).
+ * `windowDays` widens the per-player bet-history window (e.g. 7 for `from`=date-6 … `to`=date) and
+ * `state` filters it; `playerCanceledBetHistoryDeepLinkUrl` always carries `state=canceled`.
  */
 export function buildGsLiveDualSurfaceDescriptor(
   customerLogin: string,
   options?: {
     dateYmd?: string;
     tickEpochMs?: number;
+    /** Desk days in the per-player bet-history window, ending on `dateYmd` (1-31, default 1). */
+    windowDays?: number;
+    /** SPA state filter for the per-player bet-history links (default "" = all tickets). */
+    state?: GsLiveBetHistoryState;
+    /** Remaining URL-expressible Filters-panel values for the per-player links. */
+    filters?: GsLiveBetHistoryUrlFilters;
   },
 ): GsLiveDualSurfaceDescriptor {
   const gsLivePlayerId = formatGsLivePlayerToken(customerLogin);
   const cleanLogin = gsLivePlayerId.replace(/^player_/, "");
   const dateYmd = options?.dateYmd ?? resolveDeskDateYmd();
+  const windowDays = Math.min(
+    31,
+    Math.max(1, Math.trunc(options?.windowDays ?? 1)),
+  );
+  const betHistoryState = options?.state ?? "";
   const dayStartEpoch = computeDeskDayStartEpochSeconds(dateYmd);
+  const windowFromEpoch = computeDeskDayStartEpochSeconds(
+    addDaysYmd(dateYmd, -(windowDays - 1)),
+  );
   const dayEndEpoch =
     computeDeskDayStartEpochSeconds(addDaysYmd(dateYmd, 1)) - 1;
   const dayToTimeSeconds = computeDeskDayToTimeSeconds(dateYmd);
@@ -450,12 +609,28 @@ export function buildGsLiveDualSurfaceDescriptor(
       minVolume: 0,
       maxTimeUntilScore: 0,
       dateYmd,
-      fromEpochSec: dayStartEpoch,
+      fromEpochSec: windowFromEpoch,
       toEpochSec: dayStartEpoch,
       toTimeSec: dayToTimeSeconds,
       dateFilterBy: "calcTime",
       tickEpochMs: tickMs,
       customerLogin: cleanLogin,
+      state: betHistoryState,
+      ...(options?.filters ? { filters: options.filters } : {}),
+    }),
+    playerBetHistoryWindowDays: windowDays,
+    playerCanceledBetHistoryDeepLinkUrl: buildGsLiveBetHistorySidecarUrl({
+      minVolume: 0,
+      maxTimeUntilScore: 0,
+      dateYmd,
+      fromEpochSec: windowFromEpoch,
+      toEpochSec: dayStartEpoch,
+      toTimeSec: dayToTimeSeconds,
+      dateFilterBy: "calcTime",
+      tickEpochMs: tickMs,
+      customerLogin: cleanLogin,
+      state: "canceled",
+      ...(options?.filters ? { filters: options.filters } : {}),
     }),
     getBetReportObservedPayload: {
       action: "getBetReport",

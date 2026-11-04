@@ -17,6 +17,84 @@
 
 export type Channel = "GSLIVE" | "GSBUILDER" | "Internet" | string;
 
+/** Parse a customer-profile XML document with Bun's native parser (compact shape). */
+export function parseCustomerProfileXml(text: string): unknown {
+  return Bun.XML.parse(text);
+}
+
+/** Parse a customer-performance XML document with Bun's native parser (compact shape). */
+export function parseCustomerPerformanceXml(text: string): unknown {
+  return Bun.XML.parse(text);
+}
+
+/** Parse a transactions XML document with Bun's native parser (compact shape). */
+export function parseTransactionsXml(text: string): unknown {
+  return Bun.XML.parse(text);
+}
+
+/** Parse an AJAX-delivered XML response with Bun's native parser (compact shape). */
+export function parseAjaxXml(text: string): unknown {
+  return Bun.XML.parse(text);
+}
+
+/** Parse a Fantasy402 AJAX XML response with Bun's native parser (compact shape). */
+export function parseFantasy402AjaxXml(text: string): unknown {
+  return Bun.XML.parse(text);
+}
+
+/** Unwrap Bun.XML compact one-or-many values into a string (or null). */
+function xmlText(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (Array.isArray(v)) return v.length ? xmlText(v[0]) : null;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if ("#text" in o) return xmlText(o["#text"]);
+    return null;
+  }
+  return String(v).trim() || null;
+}
+
+/** Map a customer-profile XML document onto a CustomerRow (best-effort, field names are loose). */
+export function customerRowFromXml(text: string): CustomerRow {
+  const doc = parseCustomerProfileXml(text) as Record<string, unknown>;
+  // Accept <profile>, <customer>, or a bare root.
+  const root = (doc.profile ??
+    doc.customer ??
+    doc.Customer ??
+    doc.Profile ??
+    doc) as Record<string, unknown>;
+  const get = (k: string) => xmlText(root[k] ?? root[`@${k}`]);
+  const num = (k: string) => {
+    const t = get(k);
+    if (t === null) return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return {
+    customer_id: get("customer_id") ?? get("id") ?? get("customerId") ?? "",
+    ...((get("agent_id") ?? get("agentId"))
+      ? { agent_id: get("agent_id") ?? get("agentId") ?? undefined }
+      : {}),
+    ...((get("master_agent") ?? get("masterAgent"))
+      ? { master_agent: get("master_agent") ?? get("masterAgent") ?? undefined }
+      : {}),
+    ...(get("status") ? { status: get("status") ?? undefined } : {}),
+    ...((num("wager_limit_usd") ?? num("wagerLimit"))
+      ? { wager_limit_usd: num("wager_limit_usd") ?? num("wagerLimit") }
+      : {}),
+    ...((num("lifetime_volume_usd") ?? num("volume"))
+      ? { lifetime_volume_usd: num("lifetime_volume_usd") ?? num("volume") }
+      : {}),
+    ...((num("lifetime_net_usd") ?? num("net"))
+      ? { lifetime_net_usd: num("lifetime_net_usd") ?? num("net") }
+      : {}),
+    ...((num("hold_pct") ?? num("holdPct"))
+      ? { hold_pct: num("hold_pct") ?? num("holdPct") }
+      : {}),
+  } as CustomerRow;
+}
+
 export interface TicketRow {
   readonly wager_number?: number | string;
   readonly league?: string;

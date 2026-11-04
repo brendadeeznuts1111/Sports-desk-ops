@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   deriveCollisionsFromSports,
@@ -11,6 +13,8 @@ const FIXTURE = join(
 );
 
 const CLI = join(import.meta.dir, "../cli/sportsdesk_catalog_cli.ts");
+const TMP = mkdtempSync(join(tmpdir(), "sportsdesk-catalog-cli-"));
+afterAll(() => rmSync(TMP, { recursive: true, force: true }));
 
 async function runCatalog(
   args: string[],
@@ -69,7 +73,7 @@ describe("fantasy402_sport_catalog_cli", () => {
       0,
     );
 
-    const tmp = join(import.meta.dir, `.tmp-catalog-atp-${Date.now()}.json`);
+    const tmp = join(TMP, `catalog-atp-${Date.now()}.json`);
     await Bun.write(tmp, JSON.stringify(probe));
     try {
       const { exit, out } = await runCatalog([
@@ -95,7 +99,7 @@ describe("fantasy402_sport_catalog_cli", () => {
       { code: "NCAA Extra", sports: ["Basketball", "Hockey"] },
     ];
 
-    const tmp = join(import.meta.dir, `.tmp-catalog-badreg-${Date.now()}.json`);
+    const tmp = join(TMP, `catalog-badreg-${Date.now()}.json`);
     await Bun.write(tmp, JSON.stringify(probe));
     try {
       const { exit, err } = await runCatalog([
@@ -114,8 +118,8 @@ describe("fantasy402_sport_catalog_cli", () => {
   });
 
   test("refresh propose keeps collisions, writes proposedCollisions", async () => {
-    const tmpIn = join(import.meta.dir, `.tmp-catalog-in-${Date.now()}.json`);
-    const tmpOut = join(import.meta.dir, `.tmp-catalog-out-${Date.now()}.json`);
+    const tmpIn = join(TMP, `catalog-in-${Date.now()}.json`);
+    const tmpOut = join(TMP, `catalog-out-${Date.now()}.json`);
     const broken = await loadFantasy402SportCatalogFromFile(FIXTURE);
     broken.collisions = [];
     await Bun.write(tmpIn, JSON.stringify(broken));
@@ -140,11 +144,8 @@ describe("fantasy402_sport_catalog_cli", () => {
   });
 
   test("refresh default does not rewrite collisions", async () => {
-    const tmpIn = join(import.meta.dir, `.tmp-catalog-in2-${Date.now()}.json`);
-    const tmpOut = join(
-      import.meta.dir,
-      `.tmp-catalog-out2-${Date.now()}.json`,
-    );
+    const tmpIn = join(TMP, `catalog-in2-${Date.now()}.json`);
+    const tmpOut = join(TMP, `catalog-out2-${Date.now()}.json`);
     const src = await loadFantasy402SportCatalogFromFile(FIXTURE);
     src.collisions = [{ code: "Arena", sports: ["Football", "Horse Racing"] }];
     src.sportCount = 0;

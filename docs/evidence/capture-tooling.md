@@ -50,12 +50,22 @@ Three cooperating paths; each is used for exactly one job.
 returns the HttpOnly session cookies. Those cookies are replayed into `FetchSession`; they
 are never written to disk, logs, the capture record or argv.
 
-**Why a replay instead of intercepting the browser.** Bun 1.4.4's CDP surface is
-command-only: there is **no event subscription**, so `Network.responseReceived` cannot be
-observed. The capture therefore _issues_ the request with `FetchSession` and records the
-real response. Consequence, stated plainly: the recorded **request bytes are the replay's
-request**, not the portal's own JS request; the recorded **response bytes are the live
-service's response** to that authenticated request. Both go to the real upstream endpoint.
+**Why a replay instead of intercepting the browser.** `cdp()` itself is a command sender, but
+CDP **events** arrive through `Bun.WebView`'s `EventTarget` surface: the view dispatches each
+event with the CDP method name as `type` and the parsed `params` as `event.data`, and
+`scripts/capture/webview.ts` wraps that in `onCdpEvent()`. The repo already subscribes this
+way — the `Network.responseReceived` listener in
+`scripts/capture/f402_manager_boot_har.ts` and the `Network.requestWillBeSent` listener in
+`scripts/capture/f402_probe.ts`. Measured 2026-11-02 on Bun 1.4.4 (Chrome backend,
+`Network.enable`, a local `Bun.serve` page that makes one `fetch`): 3 `requestWillBeSent` and
+3 `responseReceived` events arrived through `onCdpEvent()`. So response interception is
+available; the replay design is chosen for a different reason.
+The capture has to record the **request** bytes, and a CDP event hands back the request a
+page happened to send, not a request the capture can issue and re-issue reproducibly. The
+capture therefore _issues_ the request with `FetchSession` and records the real response.
+Consequence, stated plainly: the recorded **request bytes are the replay's request**, not the
+portal's own JS request; the recorded **response bytes are the live service's response** to
+that authenticated request. Both go to the real upstream endpoint.
 A capture proves the endpoint, auth mode and response shape — it does not prove that the
 portal's own UI sends byte-identical parameters.
 
@@ -313,8 +323,10 @@ desk-navigation catalog data; their live capture still requires the Ticketwriter
 
 - **WebView ignores `HTTP(S)_PROXY`.** Proxy support exists only on the FetchSession data
   path; the login/DOM leg cannot be proxied through env vars.
-- **CDP has no network-event subscription.** Captures cannot come from browser intercepts;
-  they are authenticated replays, with the request-fidelity caveat above.
+- **CDP events need an explicit listener.** `Network.*` events are observable through
+  `Bun.WebView`'s `EventTarget` only after `Network.enable`; the capture still records an
+  authenticated replay, not the portal's own browser request, with the request-fidelity
+  caveat above.
 - **HTTPS proxying needs CONNECT.** A simple in-process forward proxy cannot tunnel TLS.
 - **No bodies in the store.** Only skeletons and hashes; debugging a bad capture means
   re-capturing, not inspecting stored payloads.

@@ -312,7 +312,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Pending wager legs snapshot",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:91-104 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: services/simulate_bettor_churn_suite.ts:104-117 (a consumer type declaration, not a capture). See the RawPendingLeg component; it records the field names only and is not used as a response schema here. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerGetPending",
         "responses": {
           "default": {
@@ -322,7 +322,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "services/simulate_bettor_churn_suite.ts:91-104",
+            "services/simulate_bettor_churn_suite.ts:104-117",
             "lib/fantasy402_wager_universe_scope.ts:13-21",
             "docs/openapi.json",
             "docs/evidence/captures/pending-500s/diagnostics.json"
@@ -459,7 +459,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "Padded-field customer mutation",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,140-158 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: design/domain-branded-types.ts:9,136-154 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiManagerUpdateByColumn",
         "responses": {
           "default": {
@@ -470,7 +470,7 @@
           "tier": "C",
           "sources": [
             "docs/runbooks/operational_guardrails_runbook.md:215",
-            "design/domain-branded-types.ts:9,140-158",
+            "design/domain-branded-types.ts:9,136-154",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -960,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:815-835",
+            "services/sportsdesk_webview_server.ts:1180-1199",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:815-835 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1180-1199 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },
@@ -1086,11 +1086,11 @@
           "tier": "B",
           "sources": [
             "services/sportsdesk_webview_server.ts#GET /api/watchlist",
-            "services/sportsdesk_webview_server.ts:170-189",
+            "services/sportsdesk_webview_server.ts:184-203",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:33-46)."
+          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:184-203)."
         }
       }
     },
@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1854-1879",
+            "services/sportsdesk_webview_server.ts:2202-2227",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1270,7 +1270,7 @@
       "post": {
         "tags": ["Local Desk & Telegram Gateway"],
         "summary": "Trigger a scheduled Telegram report",
-        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:77-81). Admin-token gated (services/sportsdesk_webview_server.ts).",
+        "description": "Report type is selected by the ?type= query parameter and defaults to EVENING_SETTLEMENT; the handler validates it with isReportType and returns {success, ok, reportType} (services/sportsdesk_webview_server.ts). REPORT_TYPES are MORNING_BRIEFING, MIDDAY_STEAM and EVENING_SETTLEMENT (services/sportsdesk_telegram_bot.ts:80-84). Admin-token gated (services/sportsdesk_webview_server.ts).",
         "operationId": "postApiTelegramReport",
         "security": [
           {
@@ -1432,7 +1432,7 @@
           "tier": "B",
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /api/telegram/report",
-            "services/sportsdesk_telegram_bot.ts:77-81",
+            "services/sportsdesk_telegram_bot.ts:80-84",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1590,8 +1590,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:41",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:57-66",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1624,8 +1624,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:52",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:68-77",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1658,8 +1658,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:63",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:79-89",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1692,8 +1692,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:74",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:91-107",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:213"
           ],
@@ -1728,8 +1728,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:85",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:109-120",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -1757,8 +1757,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:96",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:122-132",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:166"
           ],
@@ -1981,8 +1981,8 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:55-108",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:134-149",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/evidence/capture-requests.md"
           ],
@@ -2006,8 +2006,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:118",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:151-161",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2039,8 +2039,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:129",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:163-172",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2072,8 +2072,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:140",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:174-188",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -2105,8 +2105,8 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:scripts/portal_tile_crawler.ts:151",
-            "main:scripts/portal_tile_crawler.ts:164-245",
+            "main:scripts/portal_tile_crawler.ts:190-205",
+            "main:scripts/portal_tile_crawler.ts:545-670",
             "docs/openapi.json",
             "docs/runbooks/operational_guardrails_runbook.md:167"
           ],
@@ -2418,45 +2418,135 @@
     },
     "/cloud/api/Report/PendingDelete": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "POST /cloud/api/Report/PendingDelete",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
-        "operationId": "postCloudApiReportPendingDelete",
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Report/PendingDelete (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-11-01/PendingDelete.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/PendingDelete at 2026-11-01T04:19:29.720Z with a 200 response (response body sha256 af7ff3397ceee92fbfe8142bbcfee14c72b8cb94adc897af19555235dfbad335). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
         "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-11-01/PendingDelete.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Pending": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Other status codes were not captured by this record."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "A",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
-            "docs/evidence/captures/pending-500s/diagnostics.json"
+            "capture:2026-11-01/PendingDelete.post.json",
+            "sha256:c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e"
           ],
-          "capturedResponse": false,
-          "requiredCapture": "Confirmed read-only modal lookup in customer/report/report.js:8578 (setDeleteWager -> getPendingWagers({deleteWagers:true, ticketNumber}) sends {customerID, ticketNumber, operation: \"PendingDelete\"} and renders e.Pending[]). Probe POST /cloud/api/Report/PendingDelete with sentinel ticketNumber=-1 then a valid ticketNumber to upgrade C->A."
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-11-01/PendingDelete.post.json",
+          "sha256": "c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e",
+          "capturedAt": "2026-11-01T04:19:29.720Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerID": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  },
+                  "ticketNumber": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
     "/cloud/api/Report/getDailyFiguresByCustomer": {
       "post": {
-        "tags": ["Inferred (Unverified)"],
-        "summary": "POST /cloud/api/Report/getDailyFiguresByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
-        "operationId": "postCloudApiReportGetDailyFiguresByCustomer",
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Report/getDailyFiguresByCustomer (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-11-01/getDailyFiguresByCustomer.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Report/getDailyFiguresByCustomer at 2026-11-01T04:05:20.098Z with a 200 response (response body sha256 b072a7a032394c3c24182b89587d8881878cb077a6a2690279d3f66eb00e54df). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
         "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-11-01/getDailyFiguresByCustomer.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "INFO": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "default": {
-            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+            "description": "Other status codes were not captured by this record."
           }
         },
         "x-evidence": {
-          "tier": "C",
+          "tier": "A",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
-            "docs/evidence/captures/pending-500s/diagnostics.json"
+            "capture:2026-11-01/getDailyFiguresByCustomer.post.json",
+            "sha256:2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6"
           ],
-          "capturedResponse": false,
-          "requiredCapture": "Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when sent form-urlencoded. Client JS (customer/report/report.js:25633) sends contentType: \"application/json\" with JSON.stringify({agentID, customerID, week: 0, operation: \"getDailyFiguresByCustomer\"}). 1. Retrieve upstream 500 error log; 2. Re-probe with application/json (wired in lib/f402_probe.ts)."
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-11-01/getDailyFiguresByCustomer.post.json",
+          "sha256": "2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6",
+          "capturedAt": "2026-11-01T04:05:20.098Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "customerID": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  },
+                  "week": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2464,7 +2554,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getGradedWagerByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetGradedWagerByCustomer",
         "responses": {
           "default": {
@@ -2474,7 +2564,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2620,7 +2710,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getTicketDetailPrint",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:24-40 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetTicketDetailPrint",
         "responses": {
           "default": {
@@ -2630,7 +2720,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:24-40",
+            "main:lib/combo_identity.ts:30-48",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2638,15 +2728,921 @@
         }
       }
     },
+    "/cloud/api/Manager/getSportsType": {
+      "post": {
+        "tags": ["Live-captured (request unverified)"],
+        "summary": "Live-captured /cloud/api/Manager/getSportsType (request template unverified)",
+        "parameters": [],
+        "description": "Live-captured contract: 2026-10-31/getSportsType.post.json (schemaVersion 1, mode live) recorded POST /cloud/api/Manager/getSportsType at 2026-10-31T00:21:29.359Z with a 200 response (response body sha256 105edc9c5766b3d5f0e896d3267286ce404cf2c6ef755a3ed92bcbba3c5f4221). Request and response were captured live with redaction clean (policy v1). The response schema is derived from the captured body skeleton and the request schema from the captured request skeleton; no field values are published. The endpoint path/method were previously inferred (tier C); the live capture now evidences both, while the request field template remains unverified.",
+        "responses": {
+          "200": {
+            "description": "Captured live 200 response from 2026-10-31/getSportsType.post.json; schema derived from the captured body skeleton.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "LIST": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "0": {
+                            "type": "string"
+                          },
+                          "sportType": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Other status codes were not captured by this record."
+          }
+        },
+        "x-evidence": {
+          "tier": "A",
+          "sources": [
+            "capture:2026-10-31/getSportsType.post.json",
+            "sha256:436e1cc17b831c747b322ac900146da22fe229dcaec685f3751ab38b7d92396d"
+          ],
+          "capturedResponse": true
+        },
+        "x-capture": {
+          "file": "2026-10-31/getSportsType.post.json",
+          "sha256": "436e1cc17b831c747b322ac900146da22fe229dcaec685f3751ab38b7d92396d",
+          "capturedAt": "2026-10-31T00:21:29.359Z",
+          "status": 200,
+          "samples": 1
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "RRO": {
+                    "type": "string"
+                  },
+                  "agentID": {
+                    "type": "string"
+                  },
+                  "agentOwner": {
+                    "type": "string"
+                  },
+                  "operation": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cloud/api/Manager/getConfigWebReports": {
+      "post": {
+        "tags": ["Downline Accounting"],
+        "summary": "Boot web-report configuration (request observed 2026-11-01; no response schema)",
+        "description": "manager.js:35023 boot report-configuration read. The form body is the one the 2026-11-01 boot HAR recorded: agentID, operation, RRO and agentOwner (agentID and agentOwner were the same master account). The portal consumes the reply as an INFO envelope; its keys are not published because no capture record holds them.",
+        "operationId": "postCloudApiManagerGetConfigWebReports",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded; charset=UTF-8": {
+              "schema": {
+                "type": "object",
+                "required": ["agentID", "operation", "RRO", "agentOwner"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getConfigWebReports"
+                  },
+                  "agentID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1,
+                    "description": "Observed in the 2026-11-01 boot HAR. Always 1 in the observed calls."
+                  },
+                  "agentOwner": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published."
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": [
+            "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+            "lib/f402_probe.ts"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the response envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A."
+        }
+      }
+    },
+    "/cloud/api/Manager/getAuthorizations": {
+      "post": {
+        "tags": ["Downline Accounting"],
+        "summary": "Boot agent permissions (request observed 2026-11-01; no response schema)",
+        "description": "manager.js:37628 boot permissions and distribution read. The recorded form body is agentID, agentOwner, operation and RRO; the portal assigns the reply to a.INFO and a.DISTRIBUTION. Neither INFO nor DISTRIBUTION fields are published because no capture record holds the response.",
+        "operationId": "postCloudApiManagerGetAuthorizations",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded; charset=UTF-8": {
+              "schema": {
+                "type": "object",
+                "required": ["agentID", "agentOwner", "operation", "RRO"],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "const": "getAuthorizations"
+                  },
+                  "agentID": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "agentOwner": {
+                    "type": "string",
+                    "description": "Logged-in account; the observed value was the master agent."
+                  },
+                  "RRO": {
+                    "type": "integer",
+                    "example": 1,
+                    "description": "Observed in the 2026-11-01 boot HAR. Always 1 in the observed calls."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "fantasy402Cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 observed in the redacted boot HAR (2026-11-01). The response envelope was not promoted to a hashed capture, so no response schema is published."
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": [
+            "docs/evidence/captures/har/manager-boot-pipeline-proven.redacted.har.json",
+            "lib/f402_probe.ts"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "The request is observed in the boot HAR and the call returns 200; only the INFO/DISTRIBUTION envelope keys are missing. Capture one live call and promote it with scripts/apply_captures.ts to upgrade B->A."
+        }
+      }
+    },
+    "/cloud/api/Manager/getConfigWebReportsPending": {
+      "post": {
+        "tags": ["Inferred (Unverified)"],
+        "summary": "POST /cloud/api/Manager/getConfigWebReportsPending",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "operationId": "postCloudApiManagerGetConfigWebReportsPending",
+        "responses": {
+          "default": {
+            "description": "Unknown — no response was captured, so no status code or body schema is documented."
+          }
+        },
+        "x-evidence": {
+          "tier": "C",
+          "sources": ["lib/f402_probe.ts"],
+          "capturedResponse": false,
+          "requiredCapture": "No request or response was captured for this operation. Capture one boot call (the parameter set is in MANAGER_BOOT_OPS) and promote it with scripts/apply_captures.ts."
+        }
+      }
+    },
+    "/api/v1/blobs/{key}": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Presigned download URL for one blob",
+        "description": "Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_live_bets_server.ts). The key is validated before presigning; unknown keys are not probed, and a presign failure is 502. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "getApiV1BlobsKey",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to a short-lived presigned URL.",
+            "headers": {
+              "location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid blob key.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Presign failed.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      },
+      "put": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bounded image upload, transcoded to WebP",
+        "description": "Bearer-auth PUT accepts image/jpeg|png|webp|avif|heic up to maxUploadBytes (default 5 MiB), rejects oversized bodies with 413 from both Content-Length and a streaming cap, decodes with Bun.Image under maxPixels (413), resizes inside 1280x1280 and encodes deterministic WebP (Bun.Image.backend = \"bun\"), then stores it. Response carries bytesWritten, bytes, width and height. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "putApiV1BlobsKey",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored WebP metadata.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "bytesWritten": {
+                      "type": "integer"
+                    },
+                    "bytes": {
+                      "type": "integer"
+                    },
+                    "width": {
+                      "type": "integer"
+                    },
+                    "height": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid blob key.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body or decoded pixel count too large.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported image content type.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Image could not be decoded.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Store failed.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      }
+    },
+    "/api/v1/ws-tickets": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Short-lived one-time WebSocket ticket",
+        "description": "Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over {exp, nonce}; issued nonces are kept in a pending allowlist capped at 4096 (429 when full), deleted on the first successful upgrade, and replayed/unissued tickets are rejected. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "postApiV1WsTickets",
+        "responses": {
+          "200": {
+            "description": "Ticket and TTL.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "string"
+                    },
+                    "expiresInSec": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Active-ticket cap reached.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:336-360"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      }
+    },
+    "/api/v1/live-bets": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Publish a live-bets event to subscribers",
+        "description": "Bearer-auth POST {channel, event} validates the channel, serializes the event and calls Server.publish; it returns the number of subscribers reached. Publishing is also exposed programmatically as publish(channel, event) on the server factory. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "postApiV1LiveBets",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["channel", "event"],
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]{1,32}$"
+                  },
+                  "event": {
+                    "description": "JSON-serializable event payload."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscriber count.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string"
+                    },
+                    "published": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, channel or body.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Event is not serializable.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:361-407"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      }
+    },
+    "/ws/live-bets": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Live-bets WebSocket upgrade",
+        "description": "Upgrade requires a valid unused ticket, via ?ticket= or Sec-WebSocket-Protocol: live-bets.v1, ticket.<token> (the server echoes live-bets.v1). Messages are capped (1009), JSON-validated and limited to PING/SUBSCRIBE/UNSUBSCRIBE with channel regex checks. Surface: surface.blob-live-bets (tier D).",
+        "operationId": "getWsLiveBets",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "One-time HMAC ticket; the subprotocol form is preferred for browsers."
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols."
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Upgrade required.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:485-514"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      }
+    },
     "/cloud/api/Manager/getHistory": {
       "post": {
         "tags": ["Settlement History"],
         "summary": "Manager getHistory (wired settlement-history poll; no response capture)",
-        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:347-368). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:369-387). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
         "operationId": "postCloudApiManagerGetHistory",
         "responses": {
           "200": {
-            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:374-387). Row fields are not captured, so only raw/unknown objects are described.",
+            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2679,15 +3675,15 @@
             }
           },
           "default": {
-            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:369-371)."
+            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571)."
           }
         },
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "lib/fantasy402_settlement_ingest.ts:347-357",
+            "lib/fantasy402_settlement_ingest.ts:547-557",
             "lib/fantasy402_wager_universe_scope.ts:22-31",
-            "fixture:tests/fixtures/fantasy402-history-poll.json:1-25"
+            "fixture:tests/fixtures/fantasy402-history-poll.json:2-24"
           ],
           "capturedResponse": false,
           "requiredCapture": "Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance."
@@ -2728,8 +3724,8 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:184-191",
-            "services/sportsdesk_webview_server.ts:661-663"
+            "services/sportsdesk_webview_server.ts:1291-1298",
+            "services/sportsdesk_webview_server.ts:701-702"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured)."
@@ -2769,7 +3765,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -3087,7 +4083,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1563-1575"],
+          "sources": ["services/sportsdesk_webview_server.ts:1893-1905"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -3741,7 +4737,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:358-359"],
+          "sources": ["services/sportsdesk_webview_server.ts:1654-1728"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },
@@ -3990,7 +4986,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4058,7 +5054,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -4149,9 +5145,529 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:174-181"],
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-xml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "XML parse probe (POST /api/parse-xml)",
+        "description": "Parses one XML body with Bun.XML.parse and returns the compact tree (services/sportsdesk_webview_server.ts#/api/parse-xml). Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseXml",
+        "responses": {
+          "200": {
+            "description": "The parsed XML as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-xml round trip (well-formed XML)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-customer-profile": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Customer profile XML parse (POST /api/parse-customer-profile)",
+        "description": "Parses one customer-profile XML document via parseCustomerProfileXml (lib/customer_profile.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseCustomerProfile",
+        "responses": {
+          "200": {
+            "description": "The parsed profile as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-customer-profile round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-bet-ticker": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bet-ticker XML parse (POST /api/parse-bet-ticker)",
+        "description": "Parses one bet-ticker XML feed via parseBetTickerXml (lib/live_wagers.ts) and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseBetTicker",
+        "responses": {
+          "200": {
+            "description": "The parsed feed as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-bet-ticker round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-customer-performance": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Customer performance XML parse (POST /api/parse-customer-performance)",
+        "description": "Parses one customer-performance XML document via parseCustomerPerformanceXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseCustomerPerformance",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-customer-performance round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-transactions": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Transactions XML parse (POST /api/parse-transactions)",
+        "description": "Parses one transactions XML document via parseTransactionsXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseTransactions",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-transactions round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-ajax-xml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "AJAX XML parse (POST /api/parse-ajax-xml)",
+        "description": "Parses one AJAX-delivered XML response via parseAjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseAjaxXml",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-ajax-xml round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-fantasy402-ajax": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Fantasy402 AJAX XML parse (POST /api/parse-fantasy402-ajax)",
+        "description": "Parses one Fantasy402 AJAX XML response via parseFantasy402AjaxXml and returns the compact tree. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseFantasy402Ajax",
+        "responses": {
+          "200": {
+            "description": "The parsed document as a compact object tree.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as XML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-fantasy402-ajax round trip."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/parse-toml": {
+      "post": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "TOML parse (POST /api/parse-toml)",
+        "description": "Parses one TOML document via parseToml and returns the result. Body bounded by the daemon's 1 MiB maxRequestBodySize. Public.",
+        "operationId": "postApiParseToml",
+        "responses": {
+          "200": {
+            "description": "The parsed document.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not parseable as TOML.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1271-1278"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of a POST /api/parse-toml round trip."
         },
         "x-surface-id": "surface.daemon-dashboard"
       }
@@ -4235,7 +5751,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:701-799"],
+          "sources": ["services/sportsdesk_webview_server.ts:1067-1163"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
         },
@@ -4398,7 +5914,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1180-1201",
+            "services/sportsdesk_webview_server.ts:1393-1423",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -4524,7 +6040,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:570-572,390-396"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
@@ -4640,7 +6156,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:570-572,390-396"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
@@ -4818,7 +6334,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:570-572,390-396"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
@@ -4890,7 +6406,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:570-572,390-396"
+            "services/sportsdesk_webview_server.ts:757-759,750-754"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."

@@ -14,6 +14,7 @@
 
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { listSourceFiles } from "../lib/source_files.ts";
 
 const { values, positionals } = parseArgs({
   options: { verbose: { type: "boolean", default: false } },
@@ -22,20 +23,15 @@ const { values, positionals } = parseArgs({
 const ROOT = path.resolve(positionals[0] ?? path.join(import.meta.dir, ".."));
 const isVerbose = values.verbose;
 
-const IGNORE_SUBSTRINGS = [
-  "/.git/",
-  "/node_modules/",
-  "/archive/",
-  "/opencode/",
-  "/vscode/",
-];
-
 const FETCH_CALL_RE = /\bfetch\s*\(/g;
 const METHOD_LOWERCASE_RE =
   /\bmethod\s*:\s*["'](delete|get|head|options|post|put|patch)["']/;
 const URL_CREDENTIALS_RE = /https?:\/\/[^"'\s/:]+:[^"'\s/@]+@[^"'\s/]+/;
 const OBJECT_BODY_PROPERTY_RE =
   /(?<!let\s)(?<!const\s)(?<!var\s)(?<!interface\s)(?<!type\s)\bbody\s*:\s*\{[^}]*\}/;
+// A `--body` flag declared in a util.parseArgs options table, not a RequestInit body.
+const PARSE_ARGS_OPTION_RE =
+  /\bbody\s*:\s*\{\s*type\s*:\s*["'](?:string|boolean)["']/;
 const BUFFER_BODY_RE =
   /\bbody\s*:\s*(?:new\s+(?:Uint8Array|ArrayBuffer|DataView)|Buffer\.from)/;
 
@@ -116,7 +112,11 @@ function auditContent(content: string, relPath: string): AuditResult {
     }
 
     // 4. Plain object body in fetch init
-    if (buildsRequests && OBJECT_BODY_PROPERTY_RE.test(line)) {
+    if (
+      buildsRequests &&
+      OBJECT_BODY_PROPERTY_RE.test(line) &&
+      !PARSE_ARGS_OPTION_RE.test(line)
+    ) {
       if (
         !stripped.endsWith(";") &&
         !line.toLowerCase().includes("json.stringify") &&
@@ -134,18 +134,12 @@ function auditContent(content: string, relPath: string): AuditResult {
 }
 
 async function main(): Promise<void> {
-  const glob = new Bun.Glob("**/*.{ts,tsx,js,mjs}");
   let scannedCount = 0;
   let totalFetchCalls = 0;
   let filesWithFetch = 0;
   let totalViolations = 0;
 
-  for await (const file of glob.scan({ cwd: ROOT, onlyFiles: true })) {
-    const norm = `/${file.replace(/\\/g, "/")}`;
-    if (IGNORE_SUBSTRINGS.some((ig) => norm.includes(ig))) {
-      continue;
-    }
-
+  for (const file of await listSourceFiles(ROOT, ["ts", "tsx", "js", "mjs"])) {
     scannedCount++;
     const fullPath = path.join(ROOT, file);
     const content = await Bun.file(fullPath).text();

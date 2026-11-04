@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "appliedAt": "2026-11-03T07:16:20.495Z",
+  "tool": "scripts/apply_captures.ts",
+  "capturesDir": "docs/evidence/captures",
+  "ledgerCountsBefore": {
+    "A": 9,
+    "B": 9,
+    "C": 31,
+    "D": 0,
+    "E": 10,
+    "total": 59
+  },
+  "ledgerCountsAfter": {
+    "A": 11,
+    "B": 9,
+    "C": 29,
+    "D": 0,
+    "E": 10,
+    "total": 59
+  },
+  "upgrades": [
+    {
+      "file": "2026-11-01/PendingDelete.post.json",
+      "operation": "PendingDelete",
+      "path": "/cloud/api/Report/PendingDelete",
+      "method": "POST",
+      "digest": "c1aa1efea5f537c2db2d036c07d9a0423e5f5f1bd9fb53d62ef308cde9aef59e",
+      "capturedAt": "2026-11-01T04:19:29.720Z",
+      "evidenceSource": "capture:2026-11-01/PendingDelete.post.json",
+      "responseStatus": 200,
+      "responseBodySha256": "af7ff3397ceee92fbfe8142bbcfee14c72b8cb94adc897af19555235dfbad335",
+      "responseBytes": 14,
+      "emptyEnvelope": false,
+      "tierReason": "body is populated with minimal request and read-inferred mutation",
+      "resolvesContradiction": false,
+      "previousContradictionReason": null
+    },
+    {
+      "file": "2026-11-01/getDailyFiguresByCustomer.post.json",
+      "operation": "getDailyFiguresByCustomer",
+      "path": "/cloud/api/Report/getDailyFiguresByCustomer",
+      "method": "POST",
+      "digest": "2d93abcd22ea99b329d417e0771c82efa912f80b291cb0b59194726ad3a7a3b6",
+      "capturedAt": "2026-11-01T04:05:20.098Z",
+      "evidenceSource": "capture:2026-11-01/getDailyFiguresByCustomer.post.json",
+      "responseStatus": 200,
+      "responseBodySha256": "b072a7a032394c3c24182b89587d8881878cb077a6a2690279d3f66eb00e54df",
+      "responseBytes": 14,
+      "emptyEnvelope": false,
+      "tierReason": "body is populated-shell (server-rendered layout chrome/metadata, dynamic content unpopulated)",
+      "resolvesContradiction": false,
+      "previousContradictionReason": null
+    }
+  ],
+  "skips": [
+    {
+      "file": "2026-10-31/getBetTicker.post.json",
+      "operation": "getBetTicker",
+      "path": "/cloud/api/Manager/getBetTicker",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-10-31/getBetTickerConfig.post.json",
+      "operation": "getBetTickerConfig",
+      "path": "/cloud/api/Manager/getBetTickerConfig",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-10-31/getInfoPlayer.post.json",
+      "operation": "getInfoPlayer",
+      "path": "/cloud/api/Manager/getInfoPlayer",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-10-31/getSportsType.post.json",
+      "operation": "getSportsType",
+      "path": "/cloud/api/Manager/getSportsType",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-10-31/getSportsVigSetup.post.json",
+      "operation": "getSportsVigSetup",
+      "path": "/cloud/api/Manager/getSportsVigSetup",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-10-31/getWebLog.post.json",
+      "operation": "getWebLog",
+      "path": "/cloud/api/Manager/getWebLog",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-11-01/Pending.post.json",
+      "operation": "Pending",
+      "path": "/cloud/api/Report/Pending",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-11-01/getGrading.post.json",
+      "operation": "getGrading",
+      "path": "/cloud/api/Report/getGrading",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    },
+    {
+      "file": "2026-11-01/getTransactions.post.json",
+      "operation": "getTransactions",
+      "path": "/cloud/api/Manager/getTransactions",
+      "reason": "row already has capturedResponse:true (idempotent no-op)"
+    }
+  ],
+  "rejections": [
+    {
+      "file": "2026-10-31/getCustomerNotes.post.json",
+      "operation": "/cloud/api/Manager/getCustomerNotes",
+      "code": "E_RESPONSE_STATUS",
+      "message": "response.status must be a 2xx integer (found 500)"
+    },
+    {
+      "file": "2026-10-31/getInfoManager.post.json",
+      "operation": "/cloud/api/Manager/getInfoManager",
+      "code": "E_RESPONSE_STATUS",
+      "message": "response.status must be a 2xx integer (found 500)"
+    },
+    {
+      "file": "2026-10-31/getPending.post.json",
+      "operation": "/cloud/api/Manager/getPending",
+      "code": "E_RESPONSE_STATUS",
+      "message": "response.status must be a 2xx integer (found 500)"
+    },
+    {
+      "file": "2026-11-01/getGradedWagerByCustomer.post.json",
+      "operation": "/cloud/api/Report/getGradedWagerByCustomer",
+      "code": "E_RESPONSE_STATUS",
+      "message": "response.status must be a 2xx integer (found 500)"
+    },
+    {
+      "file": "har/manager-boot-pipeline-proven.redacted.har.json",
+      "operation": null,
+      "code": "E_SCHEMA_VERSION",
+      "message": "schemaVersion must be 1 (found undefined); mode must be \"live\" (found undefined); mock/offline captures never upgrade evidence \u2014 re-capture with the live gate; capturedAt must be an ISO-8601 timestamp; operation must be an object with {path, method}; request is required (url, method, bodySha256); a response without its request cannot prove the wire contract; response is missing; tier A requires a real captured response (2xx with bodySkeleton); redaction report is required; captures must document what was redacted before persist; provenance is required (portalHost, proxy, auth, bunVersion)"
+    },
+    {
+      "file": "har/manager-boot-pipeline-proven.redaction-proof.json",
+      "operation": null,
+      "code": "E_MODE_NOT_LIVE",
+      "message": "mode must be \"live\" (found undefined); mock/offline captures never upgrade evidence \u2014 re-capture with the live gate; operation must be an object with {path, method}; request is required (url, method, bodySha256); a response without its request cannot prove the wire contract; response is missing; tier A requires a real captured response (2xx with bodySkeleton); redaction report is required; captures must document what was redacted before persist; provenance is required (portalHost, proxy, auth, bunVersion)"
+    },
+    {
+      "file": "har/manager-boot-variance-index.json",
+      "operation": null,
+      "code": "E_MODE_NOT_LIVE",
+      "message": "mode must be \"live\" (found undefined); mock/offline captures never upgrade evidence \u2014 re-capture with the live gate; capturedAt must be an ISO-8601 timestamp; operation must be an object with {path, method}; request is required (url, method, bodySha256); a response without its request cannot prove the wire contract; response is missing; tier A requires a real captured response (2xx with bodySkeleton); redaction report is required; captures must document what was redacted before persist; provenance is required (portalHost, proxy, auth, bunVersion)"
+    }
+  ],
+  "verify": {
+    "ok": true,
+    "exitCode": 0
+  }
+}

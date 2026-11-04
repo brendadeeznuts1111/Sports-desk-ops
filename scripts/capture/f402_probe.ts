@@ -85,6 +85,7 @@ import {
   probeUrl,
   selectProbeOps,
 } from "../../lib/f402_probe.ts";
+import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { preflight, warmCaptureNetwork } from "../../lib/preflight.ts";
 import { buildDnsPrefetchExpression } from "../../lib/f402_report_context.ts";
 import {
@@ -565,6 +566,9 @@ async function main(): Promise<number> {
     );
   }
 
+  // Fails fast when another capture still holds this Chrome profile.
+  using _lock = profile.trim() === "" ? null : acquireProfileLock(profile);
+
   await using view = ManagedWebView.launch({
     backend,
     dataStoreDir: profile,
@@ -578,27 +582,6 @@ async function main(): Promise<number> {
   let unsubscribeSniffer: (() => void) | null = null;
 
   try {
-    if (sniffRequests && backend === "chrome") {
-      await view.cdp("Network.enable");
-      unsubscribeSniffer = view.onCdpEvent<CdpRequestWillBeSent>(
-        "Network.requestWillBeSent",
-        (event) => {
-          const reqUrl = event.request?.url ?? "";
-          if (!reqUrl.includes("/cloud/api/")) return;
-          try {
-            const parsedUrl = new URL(reqUrl);
-            cdpSniffed.push({
-              path: parsedUrl.pathname,
-              method: (event.request?.method ?? "POST").toUpperCase(),
-              formKeys: extractFormKeys(event.request?.postData),
-            });
-          } catch {
-            // Ignore malformed URLs.
-          }
-        },
-      );
-    }
-
     let authMode: "env-login" | "selector" | "interactive";
 
     if (autoLogin) {
@@ -679,6 +662,30 @@ async function main(): Promise<number> {
       if (sniffRequests) {
         await view.evaluate(buildInstallRequestSnifferExpression());
       }
+    }
+
+    // Chrome only creates the CDP session on the first navigation, so `Network.enable`
+    // must run after the auth block above (login / `navigate(base)`) and before the
+    // probe ops. The in-page XHR/fetch sniffer already covered the login request.
+    if (sniffRequests && backend === "chrome") {
+      await view.cdp("Network.enable");
+      unsubscribeSniffer = view.onCdpEvent<CdpRequestWillBeSent>(
+        "Network.requestWillBeSent",
+        (event) => {
+          const reqUrl = event.request?.url ?? "";
+          if (!reqUrl.includes("/cloud/api/")) return;
+          try {
+            const parsedUrl = new URL(reqUrl);
+            cdpSniffed.push({
+              path: parsedUrl.pathname,
+              method: (event.request?.method ?? "POST").toUpperCase(),
+              formKeys: extractFormKeys(event.request?.postData),
+            });
+          } catch {
+            // Ignore malformed URLs.
+          }
+        },
+      );
     }
 
     // Bootstrap state axis: establish a known view-mode before capturing.

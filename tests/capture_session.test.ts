@@ -117,6 +117,29 @@ describe("HttpSession", () => {
     await session.close();
   });
 
+  test("a session-level proxy stays on the session, not in each init", async () => {
+    const proxied = fakeSession([jsonResponse({ ok: true })]);
+    const session = new HttpSession({
+      sessionFactory: proxied.factory,
+      proxy: "http://proxy.internal:8080",
+    });
+    await session.fetch(REQUEST);
+    expect(
+      initRecord(proxied.state.calls[0]?.init ?? {})["proxy"],
+    ).toBeUndefined();
+    await session.close();
+
+    // direct:true is per-request and must still win over the session setting.
+    const forced = fakeSession([jsonResponse({ ok: true })]);
+    const withProxy = new HttpSession({
+      sessionFactory: forced.factory,
+      proxy: "http://proxy.internal:8080",
+    });
+    await withProxy.fetch({ ...REQUEST, direct: true });
+    expect(initRecord(forced.state.calls[0]?.init ?? {})["proxy"]).toBe(false);
+    await withProxy.close();
+  });
+
   test("retries read-only 429/5xx responses up to maxRetries and honors Retry-After", async () => {
     const { factory, state } = fakeSession([
       jsonResponse({ error: "boom" }, 500, { "retry-after": "1" }),

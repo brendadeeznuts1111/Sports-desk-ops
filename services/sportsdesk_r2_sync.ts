@@ -80,8 +80,13 @@ export async function verifyR2Connection(
         signal: AbortSignal.timeout(timeoutMs),
       },
     );
-    const json = (await res.json()) as any;
-    if (json.success) {
+    const json: unknown = await res.json();
+    if (
+      typeof json === "object" &&
+      json !== null &&
+      "success" in json &&
+      json.success === true
+    ) {
       console.log(
         `[Cloudflare API] Token verification SUCCESS: status = active`,
       );

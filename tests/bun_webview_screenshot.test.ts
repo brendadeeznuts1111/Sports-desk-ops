@@ -1,3 +1,4 @@
+import { dlopen, FFIType, ptr } from "bun:ffi";
 import { describe, expect, test } from "bun:test";
 
 /**
@@ -8,6 +9,22 @@ import { describe, expect, test } from "bun:test";
  * encoding they request.
  */
 const darwin = process.platform === "darwin";
+
+/**
+ * A segment outlives the process that made it (until shm_unlink or reboot), and its name is only
+ * pid + sequence, so a leaked one fails a later worker that reuses the pid with
+ * `shm_open: File exists`.
+ */
+function shmUnlink(name: string): number {
+  const libc = dlopen("libc.dylib", {
+    shm_unlink: { args: [FFIType.ptr], returns: FFIType.i32 },
+  });
+  try {
+    return libc.symbols.shm_unlink(ptr(Buffer.from(`${name}\0`)));
+  } finally {
+    libc.close();
+  }
+}
 
 describe.skipIf(!darwin)("WebKit screenshots", () => {
   const withView = async (
@@ -69,12 +86,18 @@ describe.skipIf(!darwin)("WebKit screenshots", () => {
 
   test("shmem follows the documented name pattern and size", async () => {
     await withView(async (view) => {
-      const first = await view.screenshot({ encoding: "shmem" });
-      const second = await view.screenshot({ encoding: "shmem" });
-      expect(first.name).toMatch(/^\/bun-webview-\d+-\d+$/);
-      expect(first.size).toBeGreaterThan(0);
-      // Each call allocates a new segment; callers must unlink or the segment lives until exit.
-      expect(second.name).not.toBe(first.name);
+      const names: string[] = [];
+      try {
+        const first = await view.screenshot({ encoding: "shmem" });
+        names.push(first.name);
+        const second = await view.screenshot({ encoding: "shmem" });
+        names.push(second.name);
+        expect(first.name).toMatch(/^\/bun-webview-\d+-\d+$/);
+        expect(first.size).toBeGreaterThan(0);
+        expect(second.name).not.toBe(first.name);
+      } finally {
+        expect(names.map(shmUnlink)).toEqual(names.map(() => 0));
+      }
     });
   });
 });

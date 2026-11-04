@@ -44,6 +44,15 @@ declare module "bun" {
     readonly PRETEST_SKIP?: string;
     readonly DEBUG_TRACE?: string;
 
+    // Manager Tools partner config (white-label) — GSID session cookie, see fetch-config.ts
+    readonly GSID?: string;
+    /** Optional second gate for GSLive `ajax.php`; sent as `x-gs-session`, see fetch-bet-tally.ts */
+    readonly GS_SESSION?: string;
+    /** Chrome `--user-data-dir` signed in to Manager Tools; preferred over stored secrets */
+    readonly GSLIVE_WEBVIEW_PROFILE?: string;
+    /** Optional Google Analytics cookie fragment appended to the GSID cookie header */
+    readonly GA?: string;
+
     // Cloudflare API & R2 Storage
     readonly CLOUDFLARE_ACCOUNT_ID?: string;
     readonly CLOUDFLARE_API_TOKEN?: string;
@@ -52,6 +61,15 @@ declare module "bun" {
     readonly R2_ENDPOINT?: string;
     readonly R2_BUCKET_NAME?: string;
     readonly R2_PUBLIC_URL?: string;
+    /** Bearer token for the hardened blob/live-bets gateway. */
+    readonly BLOB_API_TOKEN?: string;
+    /** HMAC secret for short-lived WebSocket tickets. */
+    readonly BLOB_TICKET_SECRET?: string;
+    readonly BLOB_MAX_UPLOAD_BYTES?: string;
+    readonly BLOB_MAX_PIXELS?: string;
+    readonly BLOB_PORT?: string;
+    readonly BLOB_HEALTH_URL?: string;
+    readonly WEBVIEW_HEALTH_URL?: string;
 
     // Telegram Bot & Mini App Integration
     readonly TELEGRAM_BOT_TOKEN?: string;

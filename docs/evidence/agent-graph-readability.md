@@ -1,5 +1,9 @@
 # Agent graph readability — measured, judged, hierarchical
 
+**Layout scoring (definitions, rasters, gates, reproduction):** see the standalone reference
+[agent-graph-scoring-contract.md](agent-graph-scoring-contract.md). The sections below interpret
+measured outcomes; they do not redefine the rubric.
+
 Every number below comes from the envelope `scratch/raw-f402-list-agents.json`,
 SHA-256 `abeccc656c9ea6a248af7fba62d001495b276a01303d889fc5138cd2ae7b7dfd` (2,466 GENERAL rows;
 2,277 agents at levels 1–12; 189 overflow agents at levels 13–19). Reproduce with:
@@ -56,8 +60,9 @@ only when the manifest says views match the envelope.
 
 ## Baseline vs benchmark (whole tree, fit to 1920×1080)
 
-Edges scored as straight center-to-center segments so every engine is compared on equal terms.
-`againstFlow` is the share of parent→child edges not pointing in the layout's direction.
+Metric definitions and edge sources (portal vs structural) are in
+[agent-graph-scoring-contract.md](agent-graph-scoring-contract.md). Table columns match
+`ReadabilityMetrics` from `scoreLayout` at 1920×1080.
 
 | layout                    | edges      | crossings   | overlaps | bounds (layout units) | widest row | againstFlow | label px |
 | ------------------------- | ---------- | ----------- | -------- | --------------------- | ---------- | ----------- | -------- |
@@ -101,7 +106,7 @@ worst view is **12.49 px** (after the judge-driven label changes below).
 ## What ships
 
 - `lib/f402_agent_tree.ts` — envelope-structural tree, subtree sizes, overflow owners, divergence.
-- `lib/f402_agent_graph_metrics.ts` — crossings, overlaps, widest row, flow, effective label px.
+- `lib/f402_agent_graph_metrics.ts` — scoring rubric ([contract](agent-graph-scoring-contract.md)).
 - `lib/f402_agent_graph_layouts.ts` — adapters for every engine in the table above.
 - `lib/f402_agent_graph_dot.ts` — DOT emitter (Okabe–Ito branch palette, log-size boxes,
   `+N below` double border, orange overflow border, leaf tables, legend) and the Graphviz runner.
@@ -115,8 +120,9 @@ worst view is **12.49 px** (after the judge-driven label changes below).
 
 ## Gate (strict verify)
 
-Thresholds live in `AGENT_GRAPH_READABILITY_THRESHOLDS` (`lib/f402_agent_graph_artifacts.ts`):
-worst label ≥ **9 px**, crossings ≤ **0**, overlaps ≤ **0** — provisional, set from this baseline.
+Thresholds and manifest fields are specified in
+[agent-graph-scoring-contract.md](agent-graph-scoring-contract.md#gate-thresholds-strict-verify)
+(worst label ≥ **9 px**, crossings ≤ **0**, overlaps ≤ **0** — provisional, from this baseline).
 Strict verify also requires full coverage, reconciliation (shown + `+N` badges = subtree, per view),
 overflow markers = `skippedOverflowCount`, every view WebP on disk, the index envelope SHA matching
 the manifest, and the SQLite recursive CTE agreeing with the envelope tree on per-root sizes.

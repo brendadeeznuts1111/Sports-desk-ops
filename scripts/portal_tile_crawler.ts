@@ -392,33 +392,37 @@ async function withTimeout<T>(
   });
 }
 
-async function closeAllWebViews(): Promise<void> {
-  const webViewClass = (
-    Bun as unknown as {
-      WebView?: { closeAll?: () => void | Promise<void> };
-    }
-  ).WebView;
-  const closeAll = webViewClass?.closeAll;
-  if (typeof closeAll !== "function") return;
-  try {
-    await closeAll();
-  } catch {
-    // Best-effort safety net; runLiveCrawl also closes its own view.
-  }
-}
-
+/**
+ * Poll until the portal reports a rendered document title and URL. WebKit's
+ * `view.title` is always "" on Bun 1.4.4, so the title comes from
+ * `evaluate("document.title")`; evaluate errors count as "not ready".
+ */
 async function waitForPortalRender(
   view: WebViewHandle,
   timeoutMs = RENDER_TIMEOUT_MS,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const title = view.title;
+    const title = await readPortalTitle(view);
     const url = view.url;
-    if (title.trim() !== "" && url.trim() !== "") return true;
+    if (title !== "" && url.trim() !== "") return true;
     await sleep(250);
   }
-  return view.title.trim() !== "" && view.url.trim() !== "";
+  return (await readPortalTitle(view)) !== "" && view.url.trim() !== "";
+}
+
+/**
+ * Read the document title through evaluate(). Kept local (and below the
+ * catalog) so the tile citation line numbers in docs/api-reference.md do not
+ * shift; WebKit's `view.title` is always "" on Bun 1.4.4.
+ */
+async function readPortalTitle(view: WebViewHandle): Promise<string> {
+  try {
+    const raw = await view.evaluate("document.title");
+    return typeof raw === "string" ? raw.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 /** The real Bun.WebView crawl surface adds click()/scrollTo() (CSS selectors). */
@@ -474,6 +478,15 @@ async function launchCrawlWebView(
         NAVIGATION_TIMEOUT_MS,
         `${backend} navigate`,
       );
+      // Chrome treats the constructor size as the outer window; resize after
+      // navigation so the tile screenshots use the requested 1440x900 viewport.
+      if (typeof view.resize === "function") {
+        try {
+          await view.resize(1440, 900);
+        } catch {
+          // Best-effort: an un-resizable backend still renders.
+        }
+      }
       if (!(await waitForPortalRender(view))) {
         throw new Error(`portal never rendered a title/url with ${backend}`);
       }
@@ -628,6 +641,8 @@ async function runLiveCrawl(
       });
     }
   } finally {
+    // No Bun.WebView.closeAll(): it SIGKILLs the shared browser and the next
+    // launch races the respawn ("Chrome process closed the pipe").
     try {
       await launched.view.close();
     } catch (error) {
@@ -638,7 +653,6 @@ async function runLiveCrawl(
         message: `WebView close failed: ${describeError(error)}`,
       });
     }
-    await closeAllWebViews();
   }
 
   const consoleErrors = consoleMessages.filter((message) =>

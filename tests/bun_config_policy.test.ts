@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import {
+  FOREIGN_LOCKFILES,
+  globalBunfigPath,
+  lockWorkspaceNames,
+  lockWorkspaceVersions,
+  MACHINE_OWNED_INSTALL_KEYS,
+  patchState,
+} from "../lib/pm_policy.ts";
 
 /**
  * Package-manager policy, from the machine config and Bun's docs.
@@ -11,13 +19,6 @@ import { readFileSync } from "node:fs";
  * `trustedDependencies` is pinned to an empty list so lifecycle scripts never run on install, rather
  * than inheriting Bun's built-in allow list (docs/pm/lifecycle: omitted = default list).
  */
-const MACHINE_OWNED_INSTALL_KEYS = [
-  "linker",
-  "globalStore",
-  "cache",
-  "frozenLockfile",
-  "minimumReleaseAge",
-] as const;
 
 describe("package manager policy", () => {
   test("the project bunfig does not set machine-owned install keys", () => {
@@ -48,14 +49,35 @@ describe("package manager policy", () => {
 
   test("the lockfile is the text format and is the only one", async () => {
     expect(await Bun.file("bun.lock").exists()).toBe(true);
-    for (const other of [
-      "package-lock.json",
-      "yarn.lock",
-      "pnpm-lock.yaml",
-      "bun.lockb",
-    ]) {
+    for (const other of FOREIGN_LOCKFILES) {
       expect(await Bun.file(other).exists()).toBe(false);
     }
+  });
+
+  test("the lockfile's workspaces match the package.json files", async () => {
+    const { expected, locked } = await lockWorkspaceNames(".");
+    expect(locked).toEqual(expected);
+  });
+
+  test("the lockfile's workspace versions match the package.json files", async () => {
+    const { expected, locked } = await lockWorkspaceVersions(".");
+    expect(locked).toEqual(expected);
+  });
+
+  test("every declared patch is in the lockfile and on disk", async () => {
+    const { declared, locked, missing } = await patchState(".");
+    expect(locked).toEqual(declared);
+    expect(missing).toEqual([]);
+  });
+
+  test("the global bunfig path follows XDG_CONFIG_HOME only when it is absolute", () => {
+    expect(globalBunfigPath({ HOME: "/h", XDG_CONFIG_HOME: "/x" })).toBe(
+      "/x/.bunfig.toml",
+    );
+    expect(globalBunfigPath({ HOME: "/h", XDG_CONFIG_HOME: "rel" })).toBe(
+      "/h/.bunfig.toml",
+    );
+    expect(globalBunfigPath({ HOME: "/h" })).toBe("/h/.bunfig.toml");
   });
 
   test("the registry scope is declared without a token", async () => {
