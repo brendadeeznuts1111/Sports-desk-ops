@@ -89,6 +89,13 @@ reversedCreditTime, rrSizeMap, sID, sequenceNumber, state, supplementalConfirmat
 team1, team2, teaserName, ticketNumber, type, userGroupId, userID
 ```
 
+**Runtime boundary — Bun service, Node Harness:** Bridge 3 executes entirely under Bun in
+`sportsdesk-ops` (`:4020`). The Harness host is Node (`:3080`) and has no `Bun` global. Any
+Harness-facing view of Bridge 3 (gates, freshness, census) must be a thin HTTP client against
+`:4020`, not an import of Bun-only modules — the same class of failure `dsh-plugin/verify-runtime.mjs`
+exists to catch. `Bun.secrets` access is confined to the service; the Host receives credentials only
+via the service's HTTP surface.
+
 ## Section 2 — Census-derived SoA layout, allocation boundary, overflow
 
 - **C_max=22,611** ⇒ `4×C_max=90,444` ⇒ radix **2^17 = 131,072**; load factor 0.172 ≤ 0.25.
@@ -165,6 +172,15 @@ Branded types only: `Cents`, `SettledCents`, `BasisPoints`, `LineHundredths`,
   `3c.openExposureCents ≈ 3b.definedLiabilityCents[GSLIVE+GSBUILDER]`, with exactly three
   divergence buckets: UTC-vs-desk-date cutoff, widget-rejected/cancelled bets, unsettled
   cross-window carry. Residual beyond tolerance fails GATE-08.
+
+**Idempotency and restartability (launchd restart is the normal case):** `:4020` runs under Bun as a
+child of the Harness host, so a launchd `KeepAlive` cycle or a job kill can land mid-rollup.
+Re-running one `(stream=3c, desk-date)` must reproduce byte-identical artifacts: deterministic
+cell/row ordering, including the `roundingResidualCents` accumulation folded in a fixed cell order,
+and any `generatedAt` records the **capture** time, never the run time. The sink never publishes a
+partial artifact — `writeWithMetadata` either completes or aborts — and `latest.json` advances only
+after the full artifact and its metadata commit. This is the same never-discard, fail-closed rule as
+Bridge 1, stated per stream because restart is the normal case here rather than the exception.
 
 ## Section 4 — Complete GATE-01..08 catalog
 
@@ -246,6 +262,13 @@ new DodGateFailureError({
 | GATE-03 external totals fail | no write; variance report                                                                  | existing `latest.json` untouched |
 | GATE-07 unsigned             | free-play money effects disabled; counts only                                              | merge-blocked                    |
 | Sign-off                     | Engineering/CI GATE-01..08; Finance GATE-07; Compliance/SDC GATE-03                        | required before public R2        |
+
+**`B_max` is per-fixture; the artifact bound is deploy-time:** `B_max` in Section 1 is the
+**per-fixture** measured cardinality. `ROLLUP_MAX_ARTIFACT_BYTES` is a **deploy-time** bound derived
+from `B_max_production`, measured from the first real capture of each stream, not from the census
+fixture. The census-derived default (64 KiB for 3b/3d, 86 KiB for 3c) is a floor; it must be raised
+at deploy time if the first real capture exceeds it. GATE-05 failure on a correct rollup is a signal
+to measure, not to widen the bound.
 
 **Gaming-audit scope:** GATE-03 is a tie-out to an external vendor report, not independent
 validation. Third-source validation (GL entries, bank settlement, or customer-level statements) is

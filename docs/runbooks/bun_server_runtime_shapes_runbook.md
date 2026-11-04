@@ -401,6 +401,12 @@ A critical design decision in SportsDesk is **where** TLS termination occurs:
 | **WebSocket Ticker (Roadmap)** | `fantasy402-ticker-watch`                                  | Implements `WebSocketHandler<TickerSessionContext>` with `perMessageDeflate: true`, `backpressureLimit: 16MB`, and topic pub/sub (`ticker:steam`, `ticker:whale`).   |
 | **TLS Policy**                 | `deploy_to_vps.sh`                                         | Nginx terminates TLS 1.3 at port 443; Bun listens on Unix socket or plaintext loopback.                                                                              |
 
+**Startup wiring (`PORT`, `SPORTSDESK_ALLOWED_ORIGINS`):** both must be in the service's environment,
+not only in `.env`. When the `.env` pipe is absent (launchd, a bare shell), the port cascade falls to
+`3000` and the server sends no `Access-Control-Allow-Origin` at all. Start it with
+`PORT=4020 SPORTSDESK_ALLOWED_ORIGINS=https://dsh.bookdeskops.com bun run serve`; the latter is the
+Harness Web UI origin allowed to read `:4020` from a browser.
+
 ---
 
 ## 7. Outbound Fetch Hardening & Network Isolation Specification

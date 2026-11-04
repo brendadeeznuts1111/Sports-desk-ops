@@ -41,6 +41,13 @@ the raw string. Unknown channel/type maps to `other`/`unknown` (never emitted as
   watermark, row/leg counts, source hash.
 - Timestamps coarsen to `deskDate` and `deskHour`; no exact `insertedAt`.
 
+**Runtime boundary — Bun service, Node Harness:** Bridge 3 executes entirely under Bun in
+`sportsdesk-ops` (`:4020`). The Harness host is Node (`:3080`) and has no `Bun` global. Any
+Harness-facing view of Bridge 3 (gates, freshness, census) must be a thin HTTP client against
+`:4020`, not an import of Bun-only modules — the same class of failure `dsh-plugin/verify-runtime.mjs`
+exists to catch. `Bun.secrets` access is confined to the service; the Host receives credentials only
+via the service's HTTP surface.
+
 ## Locked accounting rules
 
 ### ALERT rows are not handle
