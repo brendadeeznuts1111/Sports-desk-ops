@@ -55,6 +55,20 @@ they were unpinned. Fixed by adding `DYNAMIC_APP_MODULES` to the coverage list; 
 - Select2 demo (`escapeMarkup` identity, `http://api.github.com`) — cached `transaction-history-main`
   fragment, absent from `manager.html` and the pinned graph; cleanup-only/latent.
 
+## Far-window check (700 vs 2000)
+
+The `.html(`/`.append(` → field window was widened from 700 to 2,000 characters to look for
+field/sink pairs separated by more than the original window. The command against
+`verification/manager-boot-oracle/pinned` returns nothing (modules are pinned by hash, not copied);
+against the 31 live module bodies it yields **13 matches at 700 and 14 at 2,000**. The single delta
+is `agent-management-thin.js` `showAccountingDetailsPlayerCount`, where the field is a **static
+`<th>Password</th>` column header** in a modal template — not a sink. No new sink was hidden by the
+700-character window in this set.
+
+The widened regex is still heuristic: `[^)]` stops at the first closing parenthesis, so nested calls,
+template literals, `.text()`, direct `innerHTML`, and fields separated by more than 2,000 characters
+remain outside it. The earlier blind-spot list stands.
+
 ## Census scope — what it does not catch
 
 This counts `.html()`/`.append()`/`.prepend()` calls where a player-adjacent field appears in a
