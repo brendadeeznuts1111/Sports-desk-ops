@@ -111,6 +111,14 @@ function toOverUnder(value: string | null | undefined): OverUnder | null {
   return null;
 }
 
+/**
+ * A JSON text field. The captures are untyped JSON at the boundary; `String(unknown)` silently
+ * produces `[object Object]` for a non-string, so a non-string is treated as absent instead.
+ */
+function textField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 /** `-750`/`+150`/`5450` (hundredths) → `-7.5`/`+1.5`/`54.5`; decimal strings pass through. */
 function parseLineToken(token: string | undefined): number | null {
   if (token === undefined) return null;
@@ -432,9 +440,9 @@ function parseLineExpression(token: string): number | null {
  * a parlay, so it is only a fallback and is cut down to its first leg.
  */
 function liveBetsSelectionText(row: Record<string, unknown>): string {
-  const chosen = String(row["chosenTeam"] ?? "").trim();
+  const chosen = textField(row["chosenTeam"]).trim();
   if (chosen !== "") return chosen;
-  const description = String(row["description"] ?? "");
+  const description = textField(row["description"]);
   const firstLeg =
     (description.split("|")[0] ?? "").split(
       /\s+-\s+For\s+(?:Game|1st Half|2nd Half)/i,
@@ -579,14 +587,14 @@ function parseSoccerSelection(text: string): LiveBetsSelection | null {
 export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
   if (typeof value !== "object" || value === null) return null;
   const row = value as Record<string, unknown>;
-  const sport = String(row["sport"] ?? "").toUpperCase();
+  const sport = textField(row["sport"]).toUpperCase();
   const league = LIVE_BETS_SPORT_TO_LEAGUE[sport] ?? "UNKNOWN";
   const teamName = (side: unknown): string => {
     if (typeof side !== "object" || side === null) return "";
-    return String((side as Record<string, unknown>)["shortName"] ?? "").trim();
+    return textField((side as Record<string, unknown>)["shortName"]).trim();
   };
-  const description = String(row["description"] ?? "");
-  const periodText = String(row["period"] ?? "");
+  const description = textField(row["description"]);
+  const periodText = textField(row["period"]);
   const periodToken = /^1st Quarter/i.test(periodText)
     ? "1q"
     : /^1st Half/i.test(periodText)
@@ -617,9 +625,7 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
   const teams = [teamName(row["team1"]), teamName(row["team2"])]
     .filter((name) => name !== "")
     .map((name) => name.toUpperCase());
-  const chosen = String(row["chosenTeam"] ?? "")
-    .trim()
-    .toUpperCase();
+  const chosen = textField(row["chosenTeam"]).trim().toUpperCase();
   // A spread line carries a decimal (`-1.5`); a moneyline price is a whole number (`-110`).
   const kind = /total/i.test(description)
     ? "total"
@@ -951,11 +957,9 @@ function rowsFromFeed(
   for (const raw of pending) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["f402CustomerId"] ?? "")
-      .trim()
-      .toUpperCase();
+    const login = textField(row["f402CustomerId"]).trim().toUpperCase();
     if (login === "") continue;
-    const parsed = parseCanonicalMarket(String(row["canonicalMarket"] ?? ""));
+    const parsed = parseCanonicalMarket(textField(row["canonicalMarket"]));
     const risk = Number(row["riskUsd"]);
     const riskUsd = Number.isFinite(risk) ? Math.max(0, risk) : 0;
     const entry = registry.get(login);
@@ -973,7 +977,7 @@ function rowsFromFeed(
     if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
-      agentId: String(row["agentOwner"] ?? entry.agentId),
+      agentId: textField(row["agentOwner"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
       riskUsd,
@@ -1018,11 +1022,11 @@ function rowsFromWagers(
   for (const raw of list) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["Login"] ?? row["CustomerID"] ?? "")
+    const login = textField(row["Login"] ?? row["CustomerID"])
       .trim()
       .toUpperCase();
     if (login === "") continue;
-    const parsed = parseWagerShortDesc(String(row["ShortDesc"] ?? ""));
+    const parsed = parseWagerShortDesc(textField(row["ShortDesc"]));
     const wageredCents = Number(row["AmountWagered"]);
     const riskUsd = Number.isFinite(wageredCents)
       ? Math.max(0, wageredCents / 100)
@@ -1045,12 +1049,12 @@ function rowsFromWagers(
     if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
-      agentId: String(row["AgentID"] ?? entry.agentId),
+      agentId: textField(row["AgentID"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
       riskUsd,
       oddsAmerican: parseAmericanOdds(
-        /([+-]\d{3,4})\b/.exec(String(row["ShortDesc"] ?? ""))?.[1] ?? null,
+        /([+-]\d{3,4})\b/.exec(textField(row["ShortDesc"]))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
@@ -1085,9 +1089,7 @@ function rowsFromLiveBets(
   for (const raw of games) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["customerID"] ?? "")
-      .trim()
-      .toUpperCase();
+    const login = textField(row["customerID"]).trim().toUpperCase();
     if (login === "") continue;
     const parsed = parseLiveBetsGame(raw);
     const wageredCents = Number(row["wagered"]);
@@ -1115,7 +1117,7 @@ function rowsFromLiveBets(
       sourceCategory: entry.sourceCategory,
       riskUsd,
       oddsAmerican: parseAmericanOdds(
-        /([+-]\d{3,4})\b/.exec(String(row["description"] ?? ""))?.[1] ?? null,
+        /([+-]\d{3,4})\b/.exec(textField(row["description"]))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
@@ -1436,7 +1438,7 @@ const LIVE_BETS_PATH = "data/live-bets.json";
  * `/api/kpis` arm then read `provenance` off a raw object and 500'd). These are small,
  * per-request reads; correctness over an 0.1 ms saving.
  */
-async function readArtifact(path: string): Promise<unknown | null> {
+async function readArtifact(path: string): Promise<unknown> {
   try {
     return await Bun.file(path).json();
   } catch {
