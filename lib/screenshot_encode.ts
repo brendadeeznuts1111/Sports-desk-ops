@@ -313,6 +313,41 @@ export function formatKittyShmemEscape(segment: {
   };
 }
 
+/** The Kitty graphics protocol caps each direct-transmission escape at 4096 base64 bytes. */
+export const KITTY_DIRECT_CHUNK = 4096;
+
+/**
+ * Kitty `t=d` direct transmission: the PNG travels inline in the escapes, so unlike `t=s` it works
+ * when the terminal is on another machine (SSH) or has no POSIX shared memory (Windows). Every
+ * chunk but the last carries `m=1`; only the first carries the format and action keys.
+ */
+export function formatKittyDirectEscape(base64Png: string): string {
+  if (base64Png.length === 0) throw new Error("empty PNG payload");
+  const chunks: string[] = [];
+  for (let at = 0; at < base64Png.length; at += KITTY_DIRECT_CHUNK) {
+    chunks.push(base64Png.slice(at, at + KITTY_DIRECT_CHUNK));
+  }
+  return chunks
+    .map((chunk, index) => {
+      const more = index < chunks.length - 1 ? 1 : 0;
+      const keys = index === 0 ? `f=100,t=d,a=T,m=${more}` : `m=${more}`;
+      return `\x1b_G${keys};${chunk}\x1b\\`;
+    })
+    .join("");
+}
+
+export type KittyTransmission = "shmem" | "direct";
+
+/** Shared memory only works when the terminal shares this machine's POSIX shm. */
+export function kittyTransmission(
+  platform: NodeJS.Platform,
+  env: Readonly<Record<string, string | undefined>>,
+): KittyTransmission {
+  if (platform === "win32") return "direct";
+  if ((env["SSH_CONNECTION"] ?? env["SSH_TTY"] ?? "") !== "") return "direct";
+  return "shmem";
+}
+
 /** Parse `WxH` or `W` from a CLI flag. */
 export function parseResize(spec: string): { width: number; height?: number } {
   const match = /^(\d+)(?:x(\d+))?$/.exec(spec.trim());

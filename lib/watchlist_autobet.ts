@@ -1533,8 +1533,8 @@ export function ledgerPathFor(root: string, config: AutobetConfig): string {
       { ledgerPath: config.ledgerPath },
     );
   }
-  // The lexical check above does not follow symlinks. When the directory already exists, compare
-  // real paths too, so a symlinked component inside the root cannot redirect the writer outside it.
+  // The lexical check above does not follow symlinks. When the directory or ledger file already
+  // exists, compare real paths too, so a symlinked component cannot redirect the writer outside.
   try {
     const rootReal = realpathSync(rootAbsolute);
     const parentReal = realpathSync(dirname(absolute));
@@ -1545,9 +1545,20 @@ export function ledgerPathFor(root: string, config: AutobetConfig): string {
         { ledgerPath: config.ledgerPath },
       );
     }
+    // A ledger file that is itself a symlink is followed by `open(..., "a")`, so check the file
+    // too when it exists. ENOENT is expected before the first append.
+    const fileReal = realpathSync(absolute);
+    if (fileReal !== rootReal && !fileReal.startsWith(`${rootReal}/`)) {
+      throw new AutobetError(
+        "internal_error",
+        `ledger file escapes the autobet root through a symlink: ${config.ledgerPath}`,
+        { ledgerPath: config.ledgerPath },
+      );
+    }
   } catch (error) {
     if (error instanceof AutobetError) throw error;
-    // ENOENT: the ledger directory does not exist yet; `appendLedgerEvent` creates it under the root.
+    // ENOENT: the ledger directory/file does not exist yet; `appendLedgerEvent` creates it under
+    // the root and the next command re-checks the real paths before writing.
   }
   return absolute;
 }

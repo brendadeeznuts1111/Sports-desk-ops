@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -30,6 +31,7 @@ import {
   evaluateSignalGates,
   intentCreatedEventData,
   ledgerLockPathFor,
+  ledgerPathFor,
   loadAutobetConfig,
   parseAutobetConfig,
   readLedger,
@@ -584,6 +586,28 @@ describe("autobet config", () => {
     expect(parsed.ok).toBe(false);
     if (parsed.ok) return;
     expect(parsed.errors.map((error) => error.path)).toContain("ledgerPath");
+  });
+
+  test("rejects a ledger file symlink that resolves outside the root", () => {
+    const root = makeTemporaryRoot();
+    const outside = makeTemporaryRoot();
+    mkdirSync(join(root, "Scratch", "watchlist-autobet"), { recursive: true });
+    const outsideLedger = join(outside, "outside-ledger.jsonl");
+    writeFileSync(outsideLedger, "");
+    symlinkSync(
+      outsideLedger,
+      join(root, "Scratch", "watchlist-autobet", "ledger.jsonl"),
+    );
+
+    let error: unknown = null;
+    try {
+      ledgerPathFor(root, baseConfig());
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(AutobetError);
+    expect((error as AutobetError).code).toBe("internal_error");
+    expect((error as AutobetError).message).toContain("symlink");
   });
 
   test("a missing config file is config_missing, not defaults", async () => {

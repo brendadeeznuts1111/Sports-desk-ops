@@ -2,11 +2,12 @@
 # ==============================================================================
 # SportsDesk & Dotfiles Zero-Friction DX Runner (bin/dx)
 # Eliminates macOS sandbox & shell friction across Git, 1Password, Bun & Cloudflare:
-#   1. Re-anchors inherited host XDG_CONFIG_HOME (/Users/nolarose/.config) to
-#      sandbox $HOME/.config (/Users/nolarose/.gemini/users/user1/.config)
-#   2. Configures $HOME/.gitconfig with [include] to /Users/nolarose/dotfiles/git/gitconfig
-#      plus explicit sandbox-safe core.excludesFile and core.attributesFile so Git
-#      runs with ZERO "Operation not permitted" warnings.
+#   1. Re-anchors an inherited host XDG_CONFIG_HOME to the current $HOME/.config
+#      (inside the Gemini sandbox $HOME is <host home>/.gemini/users/<id>).
+#   2. Links $HOME/.gitconfig, shell config and bunfig to the dotfiles checkout so Git
+#      runs with ZERO "Operation not permitted" warnings. Linking is NON-DESTRUCTIVE:
+#      a correct link is left alone, a stale symlink is repointed, and a real file or
+#      directory is never replaced (see link_managed; `dx setup --replace` backs it up).
 #   3. Runs `graph_feed_poller_daemon.ts` (`--once`, `--cron`, or `bun --watch`)
 #      and publishes `graph.html`, `graph.js`, `graph-live-feed.json`, `index.html`,
 #      and `openapi.json` to the live Cloudflare R2 public edge gateway via SigV4.
@@ -14,9 +15,54 @@
 set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOTFILES_DIR="/Users/nolarose/dotfiles"
 
-# 1. Re-anchor XDG & 1Password directories to current $HOME (overrides inherited host /Users/nolarose/.config!)
+# Host home: inside the sandbox $HOME is <host home>/.gemini/users/<id>; elsewhere it is $HOME.
+HOST_HOME="${HOME%%/.gemini/users/*}"
+ORIG_XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}"
+
+# Dotfiles checkout: explicit override, then $HOME/dotfiles, then the host home's.
+DOTFILES_DIR="${DX_DOTFILES_DIR:-${DOTFILES_ROOT:-}}"
+if [[ -z "$DOTFILES_DIR" ]]; then
+  for candidate in "$HOME/dotfiles" "$HOST_HOME/dotfiles"; do
+    if [[ -d "$candidate" ]]; then
+      DOTFILES_DIR="$candidate"
+      break
+    fi
+  done
+fi
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+
+# `dx setup --replace` is the only way a real file/directory at a link destination is replaced
+# (it is moved to <dest>.dx-backup-<epoch> first). Decided here, before any linking runs.
+DX_SETUP_REPLACE=0
+if [[ "${1:-}" == "setup" && " $* " == *" --replace "* ]]; then
+  DX_SETUP_REPLACE=1
+fi
+DX_LINK_CONFLICTS=()
+
+# link_managed <source> <dest>: make <dest> a symlink to <source> without destroying data.
+#   - dest already links to source ........ nothing (no mtime churn)
+#   - dest is another symlink ............. repointed (a pointer holds no data)
+#   - dest is a real file or directory .... recorded as a conflict and left alone
+#   - dest is missing ..................... created
+link_managed() {
+  local src="$1" dst="$2"
+  [[ -e "$src" || -L "$src" ]] || return 0
+  if [[ -L "$dst" ]]; then
+    [[ "$(readlink "$dst")" == "$src" ]] && return 0
+    ln -sfn "$src" "$dst" 2>/dev/null || true
+  elif [[ -e "$dst" ]]; then
+    if [[ "$DX_SETUP_REPLACE" == "1" ]]; then
+      mv "$dst" "$dst.dx-backup-$(date +%s)" 2>/dev/null && ln -s "$src" "$dst" 2>/dev/null || true
+    else
+      DX_LINK_CONFLICTS+=("$dst")
+    fi
+  else
+    ln -s "$src" "$dst" 2>/dev/null || true
+  fi
+}
+
+# 1. Re-anchor XDG & 1Password directories to current $HOME (an inherited host value is overridden)
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_CACHE_HOME="$HOME/.cache"
 export XDG_DATA_HOME="$HOME/.local/share"
@@ -38,40 +84,61 @@ if [[ -d "$DOTFILES_DIR/git" ]]; then
     cp -f "$DOTFILES_DIR/git/config/ignore" "$XDG_CONFIG_HOME/git/ignore" 2>/dev/null || touch "$XDG_CONFIG_HOME/git/ignore"
     touch "$XDG_CONFIG_HOME/git/attributes"
     touch "$XDG_CONFIG_HOME/git/config"
-    ln -sfn "$DOTFILES_DIR/git/config/credential-gh-owner" "$XDG_CONFIG_HOME/git/credential-gh-owner" 2>/dev/null || true
-    ln -sfn "$DOTFILES_DIR/git/config/profiles" "$XDG_CONFIG_HOME/git/profiles" 2>/dev/null || true
+    link_managed "$DOTFILES_DIR/git/config/credential-gh-owner" "$XDG_CONFIG_HOME/git/credential-gh-owner"
+    link_managed "$DOTFILES_DIR/git/config/profiles" "$XDG_CONFIG_HOME/git/profiles"
   fi
 
   if [[ "$HOME" == *"/.gemini/users/"* ]]; then
-    rm -f "$HOME/.gitconfig"
-    cat > "$HOME/.gitconfig" <<EOF
-[include]
+    # Sandbox: ~/.gitconfig is a generated file (a symlink cannot carry the sandbox-safe
+    # excludes). It is rewritten only when it is ours: absent, a symlink, byte-identical to the
+    # generated body, or carrying the marker. Anything else is the user's and is left alone.
+    dx_marker="# managed by bin/dx"
+    dx_body="[include]
 	path = $DOTFILES_DIR/git/gitconfig
 [core]
 	excludesFile = $XDG_CONFIG_HOME/git/ignore
-	attributesFile = $XDG_CONFIG_HOME/git/attributes
-EOF
+	attributesFile = $XDG_CONFIG_HOME/git/attributes"
+    dx_full="$dx_marker"$'\n'"$dx_body"
+    dx_write=0
+    if [[ -L "$HOME/.gitconfig" || ! -e "$HOME/.gitconfig" ]]; then
+      dx_write=1
+    else
+      dx_current="$(cat "$HOME/.gitconfig" 2>/dev/null || true)"
+      if [[ "$dx_current" == "$dx_full" ]]; then
+        : # already current
+      elif [[ "$dx_current" == "$dx_body" || "$dx_current" == "$dx_marker"$'\n'* ]]; then
+        dx_write=1 # ours: the pre-marker generated body, or an older marked body
+      elif [[ "$DX_SETUP_REPLACE" == "1" ]]; then
+        cp "$HOME/.gitconfig" "$HOME/.gitconfig.dx-backup-$(date +%s)" && dx_write=1
+      else
+        DX_LINK_CONFLICTS+=("$HOME/.gitconfig")
+      fi
+    fi
+    if [[ "$dx_write" == "1" ]]; then
+      rm -f "$HOME/.gitconfig"
+      printf '%s\n' "$dx_full" > "$HOME/.gitconfig"
+    fi
   else
-    ln -sfn "$DOTFILES_DIR/git/gitconfig" "$HOME/.gitconfig" 2>/dev/null || true
+    link_managed "$DOTFILES_DIR/git/gitconfig" "$HOME/.gitconfig"
   fi
   export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
 fi
 
-# 3. Link shell config & bunfig from /Users/nolarose/dotfiles into $HOME
+# 3. Link shell config & bunfig from the dotfiles checkout into $HOME
 if [[ -d "$DOTFILES_DIR" ]]; then
   export DOTFILES_ROOT="$DOTFILES_DIR"
-  ln -sfn "$DOTFILES_DIR/shell/config" "$XDG_CONFIG_HOME/shell" 2>/dev/null || true
-  ln -sfn "$DOTFILES_DIR/bun/bunfig.toml" "$HOME/.bunfig.toml" 2>/dev/null || true
-  ln -sfn "$DOTFILES_DIR/shell/.zshenv" "$HOME/.zshenv" 2>/dev/null || true
-  ln -sfn "$DOTFILES_DIR/shell/.zshrc" "$HOME/.zshrc" 2>/dev/null || true
-  ln -sfn "$DOTFILES_DIR/shell/.bash_profile" "$HOME/.bash_profile" 2>/dev/null || true
+  link_managed "$DOTFILES_DIR/shell/config" "$XDG_CONFIG_HOME/shell"
+  link_managed "$DOTFILES_DIR/bun/bunfig.toml" "$HOME/.bunfig.toml"
+  link_managed "$DOTFILES_DIR/shell/.zshenv" "$HOME/.zshenv"
+  link_managed "$DOTFILES_DIR/shell/.zshrc" "$HOME/.zshrc"
+  link_managed "$DOTFILES_DIR/shell/.bash_profile" "$HOME/.bash_profile"
 fi
 
 # 4. Normalize PATH (Repo bin + User local bin + Dotfiles bin + Bun + Homebrew)
-export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:/Users/nolarose/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:$HOME/.bun/bin:$HOST_HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # 5. Load Cloudflare Pages credentials if present in repo or workspace
-for cf_env in "$REPO_ROOT/cloudflare.env" "$XDG_CONFIG_HOME/cloudflare/pages.env" "${GEMINI_WORKSPACE_DIR:-}/cloudflare.env" "/Users/nolarose/.gemini/tasks/c_2a80db0e3add6c28/workspace/cloudflare.env"; do
+for cf_env in "$REPO_ROOT/cloudflare.env" "$XDG_CONFIG_HOME/cloudflare/pages.env" "${GEMINI_WORKSPACE_DIR:-}/cloudflare.env"; do
   if [[ -n "$cf_env" && -r "$cf_env" ]]; then
     set -a
     # shellcheck source=/dev/null
@@ -80,6 +147,36 @@ for cf_env in "$REPO_ROOT/cloudflare.env" "$XDG_CONFIG_HOME/cloudflare/pages.env
     break
   fi
 done
+
+# Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
+# in tests/dx_cli.test.ts fails when they drift) and with `help`.
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live backtest poll watch pipeline stage deploy ship exec"
+
+# unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
+unknown_command() {
+  local bad="$1" hint
+  hint="$(bun -e '
+    const [bad, ...names] = process.argv.slice(1);
+    const dist = (a, b) => {
+      let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+      for (let i = 1; i <= a.length; i++) {
+        const cur = [i];
+        for (let j = 1; j <= b.length; j++)
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = cur;
+      }
+      return prev[b.length];
+    };
+    const best = names.map((n) => [n, dist(bad, n)]).sort((x, y) => x[1] - y[1])[0];
+    if (best && best[1] <= 2) console.log(best[0]);
+  ' "$bad" $DX_COMMANDS 2>/dev/null || true)"
+  echo "dx: unknown command '$bad'" >&2
+  if [[ -n "$hint" ]]; then
+    echo "    did you mean: ./bin/dx $hint" >&2
+  fi
+  echo "    ./bin/dx help lists the commands; ./bin/dx exec <program> [args] runs any program." >&2
+  exit 2
+}
 
 cmd="${1:-status}"
 shift || true
@@ -92,7 +189,10 @@ SportsDesk DX — operator commands (Bun 1.4.4)
 Usage: ./bin/dx <command> [args...]
 
   Environment / Diagnostics
-    ./bin/dx status                 Environment, git and R2 edge health
+    ./bin/dx status                 Measured environment: git, R2/Pages credentials, edge probe
+                                    (DX_STATUS_OFFLINE=1 skips the network probe)
+    ./bin/dx setup [--replace]      Report home links (~/.zshrc etc.); --replace backs up and links
+    ./bin/dx scripts [filter]       Group the package.json scripts by prefix; filter by substring
     ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
     ./bin/dx deps [add|remove|version|check]
                                     bun-deps (frozen-safe); version = pm version + lock refresh
@@ -120,10 +220,14 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx docs [gslive|--json]   Deployed API docs (Scalar, R2, local artifacts)
     ./bin/dx stale -i <export>      Stale-line / post-move bet cohort
     ./bin/dx profile <0x|user>      Polymarket PnL, win rate, positions, categories
-    ./bin/dx combo legs|price|wallet CFB combo legs and product-of-legs pricing
+    ./bin/dx combo legs|price|wallet|uniqueness|verify-subset|backtest
+                                    CFB combo legs, pricing, wallet positions, uniqueness, realized PnL
     ./bin/dx bridge coverage|value|match
                                     Cross-domain customer book ↔ Polymarket wallet join
-    ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login)
+    ./bin/dx pipeline               Docs/artifact verification gates (apply:captures … verify:docs)
+    ./bin/dx exec <program> [args]  Run any program with dx's environment (PATH programs also run directly)
+    ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login, --profile <dir>)
+    ./bin/dx session [status|login] Portal session file the replay transport reads (status is read-only)
     ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
     ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
 
@@ -136,81 +240,90 @@ Docs: README.md · docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md
 EOF
     ;;
   status)
+    # Every line below is measured now, or says what it could not measure. Nothing is hardcoded OK.
+    dx_ok() { echo "✅ $1"; }
+    dx_warn() { echo "⚠️  $1"; }
+    dx_bad() { echo "❌ $1"; }
     echo "================================================================================"
-    echo "  🛠️  SPORTSDESK & DOTFILES ZERO-FRICTION DX DIAGNOSTIC"
+    echo "  🛠️  SPORTSDESK & DOTFILES DX STATUS (measured $(date '+%Y-%m-%d %H:%M:%S %Z'))"
     echo "================================================================================"
-    echo "  • Sandbox \$HOME        : $HOME"
-    echo "  • XDG_CONFIG_HOME      : $XDG_CONFIG_HOME (✅ re-anchored from host)"
-    echo "  • DOTFILES_ROOT        : ${DOTFILES_ROOT:-unset} ($(test -d "${DOTFILES_ROOT:-}" && echo '✅ connected' || echo '❌ missing'))"
-    echo "  • Git Config & Ignore  : $HOME/.gitconfig ($(git status -s >/dev/null 2>&1 && echo '✅ zero git warnings' || echo '⚠️ warning'))"
-    echo "  • Bun / Wrangler       : $(bun -v 2>/dev/null || echo 'missing') / $(./wrangler --version 2>/dev/null || echo 'wrangler ready')"
-    echo "  • Git Branch & Tip     : $(git log -n 1 --oneline)"
+    echo "  • \$HOME                : $HOME"
+    if [[ -n "$ORIG_XDG_CONFIG_HOME" && "$ORIG_XDG_CONFIG_HOME" != "$XDG_CONFIG_HOME" ]]; then
+      echo "  • XDG_CONFIG_HOME      : $XDG_CONFIG_HOME (re-anchored from $ORIG_XDG_CONFIG_HOME)"
+    else
+      echo "  • XDG_CONFIG_HOME      : $XDG_CONFIG_HOME (unchanged)"
+    fi
+    if [[ -d "${DOTFILES_ROOT:-}" ]]; then
+      echo "  • DOTFILES_ROOT        : $DOTFILES_ROOT ($(dx_ok connected))"
+    else
+      echo "  • DOTFILES_ROOT        : ${DOTFILES_DIR} ($(dx_bad 'not found; set DX_DOTFILES_DIR'))"
+    fi
+    if git -C "$REPO_ROOT" status -s >/dev/null 2>&1; then
+      echo "  • git status           : $HOME/.gitconfig ($(dx_ok 'git status exits 0'))"
+    else
+      echo "  • git status           : $HOME/.gitconfig ($(dx_warn 'git status exits non-zero'))"
+    fi
+    if ((${#DX_LINK_CONFLICTS[@]})); then
+      echo "  • Home links           : $(dx_warn "${#DX_LINK_CONFLICTS[@]} real file(s) left in place, not linked")"
+      for dx_path in "${DX_LINK_CONFLICTS[@]}"; do echo "      - $dx_path   (./bin/dx setup --replace backs it up and links)"; done
+    else
+      echo "  • Home links           : $(dx_ok 'no conflicts')"
+    fi
+    if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
+      # Offline mode must not touch a tool that may bootstrap or hit the network.
+      dx_wrangler="not probed (DX_STATUS_OFFLINE=1)"
+    else
+      dx_wrangler="$(cd "$REPO_ROOT" && ./wrangler --version 2>/dev/null | head -n 1 || true)"
+    fi
+    echo "  • Bun / Wrangler       : $(bun -v 2>/dev/null || echo 'bun missing') / ${dx_wrangler:-wrangler missing}"
+    echo "  • Git Branch & Tip     : $(git -C "$REPO_ROOT" log -n 1 --oneline)"
     echo "  • Staged dist/ Assets  : $(ls -1 "$REPO_ROOT/dist" 2>/dev/null | tr '\n' ' ')"
-    echo "  • Live R2 Edge Portal  : https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html (✅ SigV4 Ready)"
+    if (cd "$REPO_ROOT" && bun scripts/publish_r2_graph.mjs --check-credentials >/dev/null 2>&1); then
+      echo "  • R2 S3 credentials    : $(dx_ok 'present (deploy signs with SigV4)')"
+    else
+      echo "  • R2 S3 credentials    : $(dx_warn 'missing; deploy falls back to Wrangler OAuth, without x-amz-meta-*')"
+    fi
+    if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+      echo "  • Pages token          : $(dx_ok 'CLOUDFLARE_API_TOKEN set')"
+    else
+      echo "  • Pages token          : $(dx_warn 'CLOUDFLARE_API_TOKEN unset; deploy skips the Pages step')"
+    fi
+    dx_portal="https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html"
+    if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
+      echo "  • R2 Edge Portal       : $dx_portal (not probed: DX_STATUS_OFFLINE=1)"
+    else
+      dx_code="$(curl -sS -o /dev/null -I -m 3 -w '%{http_code}' "$dx_portal" 2>/dev/null || true)"
+      if [[ "$dx_code" == "200" ]]; then
+        echo "  • R2 Edge Portal       : $dx_portal ($(dx_ok 'HTTP 200 (HEAD, 3s timeout)'))"
+      else
+        echo "  • R2 Edge Portal       : $dx_portal ($(dx_warn "HEAD returned '${dx_code:-no response}' within 3s"))"
+      fi
+    fi
     echo "  • Screenshot Output    : $REPO_ROOT/scratch/shots (Bun.WebView; dx shot <url>)"
     echo "================================================================================"
     ;;
+  setup)
+    # The home links were already (re)applied by the preamble; this reports what happened.
+    echo "dx setup: dotfiles $DOTFILES_DIR"
+    if ((${#DX_LINK_CONFLICTS[@]})); then
+      echo "These real files were left in place (nothing is overwritten automatically):"
+      for dx_path in "${DX_LINK_CONFLICTS[@]}"; do echo "  - $dx_path"; done
+      echo "Run ./bin/dx setup --replace to move each to <path>.dx-backup-<epoch> and link it."
+    else
+      echo "Home links are in place; no conflicts."
+    fi
+    ;;
+  scripts)
+    cd "$REPO_ROOT"
+    exec bun run scripts/dx_scripts.ts "$@"
+    ;;
   iptracker)
     cd "$REPO_ROOT"
-    bun -e '
-      const { PER_OFFICE_IP_TRACKER_CLUSTERS, buildPerOfficeIpMatcherPayload } = require("./lib/bet_ticker_ip_tracker_bridge.ts");
-      console.log("================================================================================================================");
-      console.log("  🌐 BET-TICKER <-> IP-TRACKER (getWebLog Modes A/B/C/I) PER-OFFICE & CROSS-OFFICE MATCH REPORT");
-      console.log("================================================================================================================");
-      for (const c of PER_OFFICE_IP_TRACKER_CLUSTERS) {
-        const payload = buildPerOfficeIpMatcherPayload({ officeAgentId: c.officeAgentId });
-        const cross = c.crossOfficeLogins.length ? " | Cross-Office: " + c.crossOfficeLogins.map(x => x.officeAgentId + "/" + x.loginId).join(", ") : "";
-        console.log(`  • Office: ${c.officeAgentId.padEnd(10)} [Mode B customerID="${payload.customerID}"] | ${c.matchClassification.padEnd(32)} | IP: ${c.sharedIpOrSubnet.padEnd(28)} | Dwell: ${c.modeASessionDwellSeconds}s | MFCS: ${c.mfcsCompositeScore}/100 | Logins: ${c.matchedLoginsInOffice.join(", ")}${cross}`);
-      }
-      console.log("================================================================================================================");
-    '
+    exec bun run scripts/dx_iptracker.ts "$@"
     ;;
   modes)
     cd "$REPO_ROOT"
-    bun -e '
-      const { buildTenModeLiveSnapshot } = require("./lib/forensic_diagnostic_modes.ts");
-      const snap = buildTenModeLiveSnapshot();
-      const filterMode = process.argv[1] ? Number(process.argv[1]) : null;
-      console.log("========================================================================================================================");
-      console.log("  🔬 10-MODE FORENSIC, RISK, CROSS-MARKET & DATA INTEGRITY MATRIX (Identity, Risk, Cross-Market, Reconciliation)");
-      console.log("========================================================================================================================");
-      for (const spec of snap.catalog) {
-        if (filterMode && spec.modeNumber !== filterMode) continue;
-        console.log(`  [${spec.domain.padEnd(18)}] ${spec.modeLabel.padEnd(25)} | Checks: ${spec.checksSummary.padEnd(55)} | Output: ${spec.outputSummary}`);
-      }
-      console.log("------------------------------------------------------------------------------------------------------------------------");
-      if (!filterMode || filterMode === 1) {
-        console.log("  [Mode 1 · Customer Overview]:", snap.mode1CustomerOverview.map(c => `${c.customerId} (${c.officeAgentId}): Net $${(c.validatedNetCents/100).toLocaleString()} | Liab $${(c.pendingDefinedLiabilityCents/100).toLocaleString()} | Warnings=${c.missingDataWarnings.length ? c.missingDataWarnings.join(",") : "NONE"}`).join(" || "));
-      }
-      if (!filterMode || filterMode === 2) {
-        console.log(`  [Mode 2 · Access Logs (${snap.mode2AccessLogs.customerId})]: ${snap.mode2AccessLogs.totalEvents} events across ${snap.mode2AccessLogs.distinctActorsCount} distinct actors (SELF_PLAYER + OFFICE_AGENT)`);
-      }
-      if (!filterMode || filterMode === 3) {
-        console.log(`  [Mode 3 · Shared-IP Overview]: ${snap.mode3SharedIpOverview.totalAccountGroups} account groups (${snap.mode3SharedIpOverview.dateWindowStartMdy}..${snap.mode3SharedIpOverview.dateWindowEndMdy})`);
-      }
-      if (!filterMode || filterMode === 4) {
-        console.log(`  [Mode 4 · Customer IP History (${snap.mode4CustomerIpHistory.customerId})]: ${snap.mode4CustomerIpHistory.ipTimeline.length} spans | Changes=${snap.mode4CustomerIpHistory.ipChangeCount} | Gaps=${snap.mode4CustomerIpHistory.collectionGapsCount}`);
-      }
-      if (!filterMode || filterMode === 5) {
-        console.log(`  [Mode 5 · Accounts by IP (${snap.mode5AccountsByIp.selectedIp})]: ${snap.mode5AccountsByIp.observedAccountCount} accounts (${snap.mode5AccountsByIp.accounts.map(a => a.accountId).join(", ")})`);
-      }
-      if (!filterMode || filterMode === 6) {
-        console.log("  [Mode 6 · Activity Overlap]:", snap.mode6ActivityOverlap.map(o => `${o.primaryWindow.accountId}<->${o.secondaryWindow.accountId}: ${o.distinctionVerdict} (overlap=${o.overlapDurationSeconds}s, gap=${o.gapBetweenWindowsSeconds}s)`).join(" || "));
-      }
-      if (!filterMode || filterMode === 7) {
-        console.log("  [Mode 7 · Wager Comparison]:", snap.mode7WagerComparisons.map(w => `${w.canonicalEventId} ${w.side}: F402=${w.f402EffectiveLineHundredths} vs PM=${w.polymarketEffectiveLineHundredths} (Δ=${w.lineDeltaHundredths}, Δt=${w.timestampDeltaSeconds}s)`).join(" || "));
-      }
-      if (!filterMode || filterMode === 8) {
-        console.log("  [Mode 8 · Settled Net]:", snap.mode8SettledNet.map(s => `${s.customerId}: P/L=$${(s.customerNetProfitLossCents/100).toLocaleString()} (FreePlay Saved=$${(s.freePlayLostPrincipalSavedCents/100).toLocaleString()}, Adj=$${(s.adjustmentsNetCents/100).toLocaleString()})`).join(" || "));
-      }
-      if (!filterMode || filterMode === 9) {
-        console.log("  [Mode 9 · Pending Exposure]:", snap.mode9PendingExposure.map(p => `${p.customerId}: ${p.uniquePendingTicketsCount} unique tix (${p.droppedNoiseOrAlertRowsCount} ALERT dropped) | Stake=$${(p.totalStakeCents/100).toLocaleString()} | Payout=$${(p.potentialPayoutCents/100).toLocaleString()} | Liability=$${(p.definedLiabilityCents/100).toLocaleString()}`).join(" || "));
-      }
-      if (!filterMode || filterMode === 10) {
-        console.log("  [Mode 10 · Reconciliation]:", snap.mode10Reconciliation.map(r => `${r.customerId}: ${r.reconciliationStatus} (Matched=$${(r.matchedTotalsCents/100).toLocaleString()}, Explained=$${(r.explainedDifferencesTotalCents/100).toLocaleString()}, UnresolvedGap=$${(r.unresolvedGapCents/100).toLocaleString()})`).join(" || "));
-      }
-      console.log("========================================================================================================================");
-    ' "$@"
+    exec bun run scripts/dx_modes.ts "$@"
     ;;
   gslive)
     cd "$REPO_ROOT"
@@ -239,6 +352,19 @@ EOF
   shot|screenshot)
     cd "$REPO_ROOT"
     exec bun run cli/sportsdesk_cli.ts shot "$@"
+    ;;
+  session)
+    cd "$REPO_ROOT"
+    sub="${1:-status}"
+    shift || true
+    case "$sub" in
+      status) exec bun run scripts/session_login.ts --status "$@" ;;
+      login) exec bun run scripts/session_login.ts "$@" ;;
+      *)
+        echo "usage: ./bin/dx session [status [--json] | login]" >&2
+        exit 2
+        ;;
+    esac
     ;;
   image-meta)
     cd "$REPO_ROOT"
@@ -371,17 +497,30 @@ VERSION_HELP
     fi
     if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
       ./wrangler pages deploy dist --project-name=fantasy402-docs --branch=main "$@"
+    else
+      echo "⚠️  Cloudflare Pages deploy SKIPPED: CLOUDFLARE_API_TOKEN is unset (R2 upload above is done)." >&2
+      echo "    Put a Pages-scoped CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in ./cloudflare.env or" >&2
+      echo "    \$XDG_CONFIG_HOME/cloudflare/pages.env (never .env), then re-run ./bin/dx deploy." >&2
     fi
     ;;
   ship)
     "$0" deploy "$@"
     cd "$REPO_ROOT"
-    git push origin main || echo "ℹ️  Local main tip updated; run 'git push origin main' in Ghostty to sync remote."
+    if ! git push origin main; then
+      echo "❌ ship: deploy finished but 'git push origin main' FAILED; the remote main is not updated." >&2
+      echo "   Run 'git push origin main' from a shell that can reach the remote, then re-check." >&2
+      exit 1
+    fi
     ;;
   exec)
     exec "$@"
     ;;
   *)
-    exec "$cmd" "$@"
+    # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies
+    # with "exec: stauts: not found" (exit 127): it gets a suggestion and exit 2.
+    if command -v "$cmd" >/dev/null 2>&1; then
+      exec "$cmd" "$@"
+    fi
+    unknown_command "$cmd"
     ;;
 esac

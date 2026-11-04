@@ -37,7 +37,7 @@ proc.terminal.write("echo Hello from PTY!\\n");`;
 
 test(BUN_TERMINAL_PTY_TEST_NAME.meta.v14BlogUrlAndSpawnSnippetPinned, () => {
   expect(BUN_TERMINAL_V14_BLOG_URL).toBe(
-    "https://bun.sh/blog/bun-v1.4#bun-terminal",
+    "https://bun.com/blog/bun-v1.4#bun-terminal",
   );
   expect(BUN_TERMINAL_SPAWN_PTY_EXAMPLE).toBe(
     BUN_V14_BLOG_SPAWN_PTY_EXAMPLE_VERBATIM,
@@ -54,7 +54,7 @@ test(BUN_TERMINAL_PTY_TEST_NAME.meta.v14BlogUrlAndSpawnSnippetPinned, () => {
 });
 
 const BUN_V14_BLOG_TERMINAL_CAPABILITIES_URL_VERBATIM =
-  "https://bun.sh/blog/bun-v1.4#bun-terminal:~:text=Pass%20terminal%20to%20Bun.spawn%2C%20write%20input%2C%20resize%2C%20and%20read%20the%20colored%20output.%20It%20works%20on%20Linux%2C%20macOS%2C%20and%20Windows.%20%2325415%20%2329522";
+  "https://bun.com/blog/bun-v1.4#bun-terminal:~:text=Pass%20terminal%20to%20Bun.spawn%2C%20write%20input%2C%20resize%2C%20and%20read%20the%20colored%20output.%20It%20works%20on%20Linux%2C%20macOS%2C%20and%20Windows.%20%2325415%20%2329522";
 
 test(BUN_TERMINAL_PTY_TEST_NAME.meta.v14BlogCapabilitiesShipNote, () => {
   expect(BUN_TERMINAL_V14_BLOG_CAPABILITIES_URL).toBe(

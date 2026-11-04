@@ -3,6 +3,7 @@
  * hardcoded. The expectations here are themselves computed from the book at run time, so a
  * changed book changes what the test expects — no literal customer id or count appears.
  */
+import { resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   buildCustomerRanking,
@@ -10,10 +11,15 @@ import {
   periodWindow,
 } from "../lib/customer_rankings.ts";
 
-const book = await loadCustomerBook();
+// The book is gitignored, so CI and fresh clones do not have it: skip then, as the other
+// book-backed suites do. A book that exists but fails to load still throws.
+const bookPresent = await Bun.file(
+  resolve(import.meta.dir, "..", "enriched_customers_full.json"),
+).exists();
+const book = bookPresent ? await loadCustomerBook() : [];
 const LIMIT = 3;
 
-describe("derived customer rankings", () => {
+describe.skipIf(!bookPresent)("derived customer rankings", () => {
   test("winners are the top positive 7d nets from the source rows", async () => {
     const rows = await buildCustomerRanking({
       direction: "winners",

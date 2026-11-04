@@ -120,6 +120,13 @@ const FUNCTION_INTERNALS = new Set([
   "propertyIsEnumerable",
   "toLocaleString",
   "__proto__",
+  // The legacy accessors are Object.prototype members too. A chain that ends in another realm's
+  // Object.prototype is not stopped by the identity check below, and reported them as "added"
+  // on Bun.s3 (CI, 2026-11-04).
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
 ]);
 
 /**

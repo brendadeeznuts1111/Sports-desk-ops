@@ -69,6 +69,16 @@ describe("session:status", () => {
     expect(result.out).not.toContain("def");
   });
 
+  test("without --json prints the same report through Bun.inspect, uncoloured off a terminal", () => {
+    const result = run(["--status"], { F402_SESSION_FILE: sessionPath });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain('transport: "session-file"');
+    expect(result.out).toContain('cookieNames: [ "agent", "cf_clearance" ]');
+    expect(result.out).not.toContain("\x1b[");
+    expect(result.out).not.toContain("abc");
+    expect(result.out).not.toContain("def");
+  });
+
   test("calls out a profile that the transport cannot use", () => {
     const result = run(["--status", "--json"], {
       F402_SESSION_FILE: join(dir, "absent.json"),

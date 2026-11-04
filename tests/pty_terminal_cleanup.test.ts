@@ -70,7 +70,8 @@ describe("closePtyProcess", () => {
       expect(proc.exitCode).toBeNull();
 
       await expect(closePtyProcess(proc)).resolves.toBeUndefined();
-      expect(proc.exitCode).not.toBeNull();
+      // A child killed by a signal has exitCode null and signalCode set; either means it was reaped.
+      expect(proc.exitCode !== null || proc.signalCode !== null).toBe(true);
       expect(proc.terminal?.closed).toBe(true);
     },
   );

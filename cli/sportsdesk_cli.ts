@@ -202,7 +202,7 @@ Usage: \`bun sportsdesk_cli.ts [command|option] [parameters...]\`
 * **combo** legs|price|wallet: CFB combo legs, product-of-legs pricing, wallet combo positions
 * **bridge** coverage|value|match: cross-domain join between the customer book and Polymarket wallets
 * **stale** \`-i\` FILE [\`--window-min\` N] [\`--json\`]: Stale-line / post-move bet cohort
-* **shot** <URL> [\`--out\` PATH] [\`--f402-login\`] [\`--format\` png|jpeg|webp]: Bun.WebView screenshot (default \`scratch/shots/\`)
+* **shot** <URL> [\`--out\` PATH] [\`--f402-login\`] [\`--profile\` DIR] [\`--format\` png|jpeg|webp]: Bun.WebView screenshot (default \`scratch/shots/\`)
 `;
   printAnsiMarkdown(helpMd);
   return;

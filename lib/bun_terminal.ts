@@ -7,21 +7,24 @@
  * @see tests/cli_terminal_automation.test.ts
  */
 
-export const BUN_TERMINAL_DOCS =
-  "https://bun.com/docs/runtime/child-process#terminal-pty-support" as const;
+import { bunUrl, textFragment } from "./bun_urls.ts";
 
-export const BUN_TERMINAL_V14_BLOG_URL =
-  "https://bun.sh/blog/bun-v1.4#bun-terminal" as const;
+export const BUN_TERMINAL_DOCS = bunUrl(
+  "/docs/runtime/child-process#terminal-pty-support",
+);
+
+export const BUN_TERMINAL_V14_BLOG_URL = bunUrl("/blog/bun-v1.4#bun-terminal");
 
 export const BUN_TERMINAL_V14_BLOG_SHIP_NOTE =
   "Bun.Terminal is a built-in pseudo-terminal, so you can drive bash, vim, or htop from JavaScript without node-pty. Pass terminal to Bun.spawn, write input, resize, and read the colored output. It works on Linux, macOS, and Windows." as const;
 
-/** v1.4 blog capability line (#25415, #29522) — must stay aligned with {@link BUN_TERMINAL_V14_BLOG_CAPABILITIES_URL}. */
+/** v1.4 blog capability line (#25415, #29522); {@link BUN_TERMINAL_V14_BLOG_CAPABILITIES_URL} links to it. */
 export const BUN_TERMINAL_V14_BLOG_CAPABILITIES_SHIP_NOTE =
   "Pass terminal to Bun.spawn, write input, resize, and read the colored output. It works on Linux, macOS, and Windows. #25415 #29522" as const;
 
-export const BUN_TERMINAL_V14_BLOG_CAPABILITIES_URL =
-  "https://bun.sh/blog/bun-v1.4#bun-terminal:~:text=Pass%20terminal%20to%20Bun.spawn%2C%20write%20input%2C%20resize%2C%20and%20read%20the%20colored%20output.%20It%20works%20on%20Linux%2C%20macOS%2C%20and%20Windows.%20%2325415%20%2329522" as const;
+export const BUN_TERMINAL_V14_BLOG_CAPABILITIES_URL = bunUrl(
+  `/blog/bun-v1.4#bun-terminal${textFragment({ start: BUN_TERMINAL_V14_BLOG_CAPABILITIES_SHIP_NOTE })}`,
+);
 
 /** Verbatim Bun v1.4 blog — {@link runBlogTerminalWriteHelloExample} implements the write line. */
 export const BUN_TERMINAL_SPAWN_PTY_EXAMPLE =

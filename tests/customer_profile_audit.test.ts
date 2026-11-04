@@ -3,6 +3,7 @@
  * ranking tests, every expectation here is computed from the book at run time — no literal
  * customer id, count or ranking is written down.
  */
+import { resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   buildSharpAudit,
@@ -11,9 +12,14 @@ import {
   summarizeSample,
 } from "../lib/customer_rankings.ts";
 
-const book = await loadCustomerBook();
+// The book is gitignored, so CI and fresh clones do not have it: skip then, as the other
+// book-backed suites do. A book that exists but fails to load still throws.
+const bookPresent = await Bun.file(
+  resolve(import.meta.dir, "..", "enriched_customers_full.json"),
+).exists();
+const book = bookPresent ? await loadCustomerBook() : [];
 
-describe("derived customer profile", () => {
+describe.skipIf(!bookPresent)("derived customer profile", () => {
   test("lookup is case-insensitive and derives the sample from the row", async () => {
     const first = book[0];
     if (first === undefined) throw new Error("customer book is empty");

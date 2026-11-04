@@ -2343,12 +2343,12 @@ export function startServer(options?: ServerOptions) {
       }
 
       if (GRAPH_DOCS_JSON.has(pathname)) {
-        return fileResponse(
-          req,
-          resolve(repoRoot, "docs", pathname.slice(1)),
-          "application/json; charset=utf-8",
-          { ...cors, "Cache-Control": "no-store" },
-        );
+        // Book-derived counts (customers in the book, linked wallets, combo gate totals): not
+        // identifiers, but not for an anonymous reader. Bearer token only, loopback or not.
+        // The guard is in serveGraphDocsJson at the end of this file so that this arm keeps its
+        // line count: the evidence citations below it pin line numbers.
+        // See docs/evidence/surfaces.md, surface.daemon-graph-data-plane.
+        return serveGraphDocsJson(req, pathname, cors);
       }
 
       // Which analysis reports have been transcribed, so a client can select one instead of
@@ -3657,4 +3657,25 @@ export async function getBridgeRelayStatus(
   const status: BridgeRelayStatus["status"] =
     token.trim() === "" ? "no_token" : open ? "connected" : "disconnected";
   return { ...base, status };
+}
+
+/** The graph page's companion JSON, behind the admin token (see the arm that calls this). */
+async function serveGraphDocsJson(
+  req: Request,
+  pathname: string,
+  cors: Record<string, string>,
+): Promise<Response> {
+  const rejected = adminRejection(req);
+  if (rejected !== null) {
+    return Response.json(
+      { success: false, error: rejected.error },
+      { status: rejected.status, headers: cors },
+    );
+  }
+  return fileResponse(
+    req,
+    resolve(repoRoot, "docs", pathname.slice(1)),
+    "application/json; charset=utf-8",
+    { ...cors, "Cache-Control": "no-store" },
+  );
 }

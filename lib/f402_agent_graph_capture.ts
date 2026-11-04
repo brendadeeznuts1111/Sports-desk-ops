@@ -48,7 +48,7 @@ export async function captureAgentGraphWebp(
   await view.navigate(options.captureUrl, { timeoutMs: 30_000 });
   await view.evaluate(AGENT_GRAPH_READY_EVAL);
   const pngBlob = await view.screenshotBlob({ format: "png" });
-  return webpBytesFromScreenshotBlob(pngBlob, options.webp);
+  return await webpBytesFromScreenshotBlob(pngBlob, options.webp);
 }
 
 export async function writeAgentGraphWebp(

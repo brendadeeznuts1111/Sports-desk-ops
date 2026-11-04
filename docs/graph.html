@@ -528,36 +528,136 @@
         text-underline-offset: 3px;
         cursor: help;
       }
+
+      /* Accessibility and state styling (see graph.js wireTabs / renderPollerState) */
+      :root {
+        color-scheme: dark;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skip-link {
+        position: absolute;
+        left: 0.75rem;
+        top: -3rem;
+        z-index: 100;
+        background: #0f172a;
+        color: #f8fafc;
+        border: 2px solid var(--accent-cyan);
+        border-radius: 0.4rem;
+        padding: 0.5rem 0.9rem;
+      }
+      .skip-link:focus {
+        top: 0.75rem;
+      }
+      a:focus-visible,
+      button:focus-visible,
+      summary:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid #38bdf8;
+        outline-offset: 2px;
+      }
+      main:focus {
+        outline: none;
+      }
+      .tab-btn:focus-visible {
+        outline-color: #f8fafc;
+        box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.45);
+      }
+      .pulse-dot-emerald {
+        background: #22c55e;
+        box-shadow: 0 0 8px #22c55e;
+      }
+      .pulse-dot-cyan {
+        background: #22d3ee;
+        box-shadow: 0 0 8px #22d3ee;
+      }
+      .pulse-dot-amber {
+        background: #f59e0b;
+        box-shadow: 0 0 8px #f59e0b;
+      }
+      .pulse-dot-rose {
+        background: #f43f5e;
+        box-shadow: 0 0 8px #f43f5e;
+      }
+      @media (max-width: 720px) {
+        header.topbar .sep {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition: none !important;
+          animation: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
     </style>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <noscript>
+      <p
+        style="
+          margin: 0;
+          padding: 0.6rem 1.25rem;
+          background: #3b0d0d;
+          color: #fecaca;
+        "
+      >
+        This page needs JavaScript for the tabs and the live feed. The tables
+        below show the values published with this build.
+      </p>
+    </noscript>
     <header class="topbar" aria-label="SportsDesk Surveillance Navigation">
       <strong
         >🕸️ INGESTION DATA PLANE + SURVEILLANCE GRAPH · HEAD
         <span id="head-commit">—</span></strong
       >
-      <span>•</span>
+      <span class="sep" aria-hidden="true">•</span>
       <span class="pill pill-emerald" id="bridge-counts">—</span>
       <span class="pill pill-amber" id="wss-state">—</span>
       <span class="spacer"></span>
       <a href="./graph-live-feed.json" download="graph-live-feed.json"
         >graph-live-feed.json</a
       >
-      <span>•</span>
+      <span class="sep" aria-hidden="true">•</span>
       <a href="./backtest-4wk-cfb-nba.json" download="backtest-4wk-cfb-nba.json"
         >backtest-4wk-cfb-nba.json</a
       >
-      <span>•</span>
+      <span class="sep" aria-hidden="true">•</span>
       <a href="./index.html">← API Reference Portal</a>
-      <span>•</span>
+      <span class="sep" aria-hidden="true">•</span>
       <a href="./openapi.json" download="openapi.json">openapi.json</a>
     </header>
 
     <!-- LIVE BUN.CRON & BUN --WATCH POLLER TELEMETRY BAR -->
-    <div class="sync-banner" role="status" aria-live="polite">
+    <!-- Announces feed-state CHANGES only; the age pill below ticks every second and is not live. -->
+    <div
+      id="live-status-announce"
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <div class="sync-banner">
       <div>
-        <span class="pulse-dot" aria-hidden="true"></span>
-        <strong>LIVE POLLER ACTIVE:</strong>
+        <span
+          class="pulse-dot pulse-dot-cyan"
+          id="live-poller-dot"
+          aria-hidden="true"
+        ></span>
+        <strong id="live-poller-state">AWAITING FEED</strong>
+        <span style="color: var(--text-muted)">poller:</span>
         <code>Bun.cron("* * * * *")</code> + <code>bun --watch</code> ·
         <span style="color: #fbbf24">WSS: not ingested</span>
         <span style="margin: 0 0.4rem; color: var(--text-muted)">|</span>
@@ -571,7 +671,7 @@
           style="margin-left: 0.35rem"
           class="pill pill-emerald"
           id="live-last-updated-age"
-          >0s ago</span
+          >—</span
         >
         <span
           style="margin-left: 0.35rem"
@@ -696,7 +796,7 @@
       </div>
     </div>
 
-    <main>
+    <main id="main" tabindex="-1">
       <!-- TOP KPI STRIP -->
       <section
         class="kpi-strip"

@@ -2,10 +2,10 @@
 /**
  * Mint or inspect the portal session the replay transport uses.
  *
- *   bun run session:login --from-profile <dir>           # export a bootstrapped WebView profile
- *   F402_LIVE_LOGIN=1 F402_AGENT_ID=… F402_PASSWORD=… bun run session:login
- *   F402_LIVE_LOGIN=1 bun run session:login --from-keychain   # read both from the OS keychain
- *   bun run session:status [--json]
+ *   ./bin/dx session login --from-profile <dir>          # export a bootstrapped WebView profile
+ *   F402_LIVE_LOGIN=1 F402_AGENT_ID=… F402_PASSWORD=… ./bin/dx session login
+ *   F402_LIVE_LOGIN=1 ./bin/dx session login --from-keychain   # read both from the OS keychain
+ *   ./bin/dx session [status] [--json]      (also: bun run session:login / session:status)
  *
  * `--ttl-min <minutes>` sets the session lifetime on both mint paths (default
  * `F402_SESSION_TTL_MIN`, then 30); it is not a login timeout.
@@ -34,6 +34,7 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
+import { inspectReport } from "../lib/cli_inspect.ts";
 import { sessionFromWebViewProfile } from "../lib/f402_profile_session.ts";
 import {
   CANONICAL_SECRETS_SERVICE,
@@ -173,6 +174,21 @@ function parseTtlMinutes(raw: string | undefined): number | undefined {
   return minutes;
 }
 
+type SessionTransport =
+  | "proxy (F402_REPLAY_PROXY_URL)"
+  | "session-file"
+  | "anonymous (no session file: the transport will send no cookie)";
+
+interface SessionStatusReport {
+  readonly sessionPath: string;
+  readonly session: string;
+  readonly cookieNames?: readonly string[];
+  readonly expiresAt?: string;
+  readonly transport: SessionTransport;
+  readonly env: Readonly<Record<string, boolean | string>>;
+  readonly profileNote: string | null;
+}
+
 async function main(): Promise<void> {
   const REPO = join(import.meta.dir, "..");
   const { values } = parseArgs({
@@ -203,7 +219,7 @@ async function main(): Promise<void> {
     const session = readF402Session(
       values.out === undefined ? undefined : { path: values.out },
     );
-    const report = {
+    const report: SessionStatusReport = {
       sessionPath: values.out ?? resolveF402SessionPath(),
       session: describeF402Session(session),
       ...(session === null
@@ -219,7 +235,7 @@ async function main(): Promise<void> {
           : "anonymous (no session file: the transport will send no cookie)",
       env: configured,
       profileNote: configured.profile
-        ? "F402_WEBVIEW_PROFILE is set but the transport does not read it — export it with `bun run session:login --from-profile <dir>`"
+        ? "F402_WEBVIEW_PROFILE is set but the transport does not read it — export it with `./bin/dx session login --from-profile <dir>`, or check it with `./bin/dx shot --profile <dir>`"
         : null,
     };
     const chrome = values.diagnose
@@ -228,19 +244,15 @@ async function main(): Promise<void> {
     const fullReport = chrome === null ? report : { ...report, chrome };
     if (values.json) console.log(JSON.stringify(fullReport, null, 2));
     else {
-      console.log(`session:status: ${report.session}`);
-      console.log(`  file: ${report.sessionPath}`);
-      console.log(`  transport would use: ${report.transport}`);
-      if (report.profileNote !== null)
-        console.log(`  note: ${report.profileNote}`);
+      console.log(inspectReport(report));
       if (chrome !== null) {
         console.log(
-          `  chrome: ${chrome.available ? "available" : "UNAVAILABLE"} — ${chrome.reason}`,
+          `chrome: ${chrome.available ? "available" : "UNAVAILABLE"} — ${chrome.reason}`,
         );
         if (chrome.binary !== null)
-          console.log(`  chrome binary: ${chrome.binary}`);
+          console.log(`chrome binary: ${chrome.binary}`);
         for (const line of chromeFailureAdvice(chrome)) {
-          console.log(`  fix: ${line}`);
+          console.log(`fix: ${line}`);
         }
       }
     }
