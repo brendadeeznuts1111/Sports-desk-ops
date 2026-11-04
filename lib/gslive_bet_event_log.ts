@@ -262,6 +262,42 @@ export function auditEventTimeline(
     anomalies,
   };
 }
+/** Parse GS Manager timestamps: epoch seconds/ms or "YYYY-MM-DD HH:mm:ss(.SSS)" in desk time. */
+export function parseGsliveTimestampMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value))
+    return value < 1e12 ? value * 1000 : value;
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") return null;
+  if (/^\d+$/.test(text)) {
+    const n = Number(text);
+    return n < 1e12 ? n * 1000 : n;
+  }
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(
+      text,
+    );
+  if (m === null) return null;
+  const wallUtc = Date.UTC(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+    Number(m[6]),
+    Number((m[7] ?? "0").padEnd(3, "0")),
+  );
+  const offsetPart =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(new Date(wallUtc))
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT-6";
+  const om = /GMT([+-])(\d{1,2})/.exec(offsetPart);
+  const offsetMinutes =
+    om === null ? -360 : (om[1] === "-" ? -1 : 1) * Number(om[2]) * 60;
+  return wallUtc - offsetMinutes * 60_000;
+}
 export interface BetLogAuditTarget {
   readonly betId: string;
   readonly eventId: string;
@@ -287,17 +323,16 @@ export function extractBetLogAuditTargets(
     const reasons: string[] = [];
     if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
       reasons.push("ODDS_DRIFT");
-    const acceptSeconds = Number(row.acceptTime);
+    const acceptMs = parseGsliveTimestampMs(row.acceptTime);
+    const logMs = parseGsliveTimestampMs(row.logTime);
     const delaySec = Number(row.delay);
-    const logSeconds = Number(row.logTime);
     if (
-      Number.isFinite(acceptSeconds) &&
+      acceptMs !== null &&
+      logMs !== null &&
       Number.isFinite(delaySec) &&
-      Number.isFinite(logSeconds)
+      Math.abs(acceptMs - logMs - delaySec * 1000) > 1500
     ) {
-      if (Math.abs(acceptSeconds - logSeconds - delaySec) > 1) {
-        reasons.push("DELAY_MISMATCH");
-      }
+      reasons.push("DELAY_MISMATCH");
     }
     if (row.adminUser !== null && row.adminUser !== undefined)
       reasons.push("ADMIN_USER");

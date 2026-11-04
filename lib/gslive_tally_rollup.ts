@@ -20,6 +20,7 @@
 import { open, stat } from "node:fs/promises";
 
 import { sha256Hex, stableJson } from "./f402_bet_ticker_delta.ts";
+import { parseGsliveTimestampMs } from "./gslive_bet_event_log.ts";
 
 export const GSLIVE_TALLY_KIND = "gslive-tally";
 export const GSLIVE_TALLY_SCHEMA_VERSION = 1;
@@ -282,6 +283,14 @@ export interface GsliveTallyRollup {
     readonly roundingResidualCents: number;
     readonly openExposureCents: number;
     readonly freePlayTickets: number;
+    readonly anomalyCounts: {
+      readonly oddsDrift: number;
+      readonly reversedCredit: number;
+      readonly manualLog: number;
+      readonly suspectedBot: number;
+      readonly adminUser: number;
+      readonly delayMismatch: number;
+    };
   };
   readonly suppressed: {
     readonly cellCount: number;
@@ -377,6 +386,14 @@ export async function buildGsliveTallyRollup(
     clvSum: bigint;
     clvEligible: number;
   }
+  const anomalyCounts = {
+    oddsDrift: 0,
+    reversedCredit: 0,
+    manualLog: 0,
+    suspectedBot: 0,
+    adminUser: 0,
+    delayMismatch: 0,
+  };
   const groups = new Map<string, Group>();
   let rowCount = 0;
   let malformedRowCount = 0;
@@ -408,6 +425,26 @@ export async function buildGsliveTallyRollup(
     }
     maxGroupId = Math.max(maxGroupId, Number(gid) || 0);
     maxTicket = Math.max(maxTicket, ticket);
+    const acceptMs = parseGsliveTimestampMs(row.acceptTime);
+    const logMs = parseGsliveTimestampMs(row.logTime);
+    const delaySec = Number(row.delay);
+    if (String(row.fVal ?? "") !== String(row.fVal_new ?? ""))
+      anomalyCounts.oddsDrift += 1;
+    if (row.reversedCredit !== null && row.reversedCredit !== undefined)
+      anomalyCounts.reversedCredit += 1;
+    if (String(row.manualLogExists ?? "0") !== "0")
+      anomalyCounts.manualLog += 1;
+    if (String(row.isSuspectedBot ?? "0") !== "0")
+      anomalyCounts.suspectedBot += 1;
+    if (row.adminUser !== null && row.adminUser !== undefined)
+      anomalyCounts.adminUser += 1;
+    if (
+      acceptMs !== null &&
+      logMs !== null &&
+      Number.isFinite(delaySec) &&
+      Math.abs(acceptMs - logMs - delaySec * 1000) > 1500
+    )
+      anomalyCounts.delayMismatch += 1;
     const betDetails = (() => {
       try {
         const parsed: unknown = JSON.parse(String(row.betDetails ?? "{}"));
@@ -754,6 +791,7 @@ export async function buildGsliveTallyRollup(
       roiBps: roiBps === null ? null : Number(roiBps),
       roundingResidualCents: Number(roundingResidualCents),
       openExposureCents: Number(openExposure),
+      anomalyCounts,
       freePlayTickets,
     },
     suppressed: {

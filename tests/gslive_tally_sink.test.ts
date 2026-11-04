@@ -27,6 +27,14 @@ function rollup(): GsliveTallyRollup {
       roundingResidualCents: 0,
       freePlayTickets: 0,
       openExposureCents: 0,
+      anomalyCounts: {
+        oddsDrift: 0,
+        reversedCredit: 0,
+        manualLog: 0,
+        suspectedBot: 0,
+        adminUser: 0,
+        delayMismatch: 0,
+      },
     },
     suppressed: {
       cellCount: 0,
