@@ -2,33 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   createBlobLiveBetsServer,
+  MemoryBlobStore,
   type BlobLiveBetsOptions,
-  type BlobStore,
 } from "../services/blob_and_live_bets_server.ts";
 
 const API_TOKEN = "test-api-token";
 const TICKET_SECRET = "test-ticket-secret";
 const PNG_1X1_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-
-class MemoryBlobStore implements BlobStore {
-  readonly blobs = new Map<
-    string,
-    { bytes: Uint8Array; contentType: string }
-  >();
-  readonly presigns: string[] = [];
-
-  async put(key: string, bytes: Uint8Array, contentType: string) {
-    this.blobs.set(key, { bytes, contentType });
-    return { bytesWritten: bytes.byteLength };
-  }
-
-  presignGet(key: string, expiresInSec: number): string {
-    const url = `https://r2.test/blobs/${key}.webp?expires=${expiresInSec}`;
-    this.presigns.push(url);
-    return url;
-  }
-}
 
 interface Harness {
   readonly url: string;
@@ -304,6 +285,47 @@ describe("blob + live-bets gateway", () => {
     } finally {
       ws.close();
     }
+  });
+
+  test("PUT then DELETE removes a blob; unknown DELETE is 404", async () => {
+    const h = start();
+    const created = await fetch(`${h.url}/api/v1/blobs/delete-me`, {
+      method: "PUT",
+      headers: { ...auth(), "content-type": "image/png" },
+      body: pngBytes(),
+    });
+    expect(created.status).toBe(200);
+
+    const unauthorized = await fetch(`${h.url}/api/v1/blobs/delete-me`, {
+      method: "DELETE",
+    });
+    expect(unauthorized.status).toBe(401);
+
+    const deleted = await fetch(`${h.url}/api/v1/blobs/delete-me`, {
+      method: "DELETE",
+      headers: auth(),
+    });
+    expect(deleted.status).toBe(204);
+    expect(await h.store.exists("delete-me")).toBe(false);
+
+    const missing = await fetch(`${h.url}/api/v1/blobs/missing`, {
+      method: "DELETE",
+      headers: auth(),
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  test("MemoryBlobStore exposes exists, stat and delete", async () => {
+    const store = new MemoryBlobStore();
+    expect(await store.exists("x")).toBe(false);
+    await store.put("x", new Uint8Array([1, 2, 3]), "image/webp");
+    expect(await store.exists("x")).toBe(true);
+    expect(await store.stat("x")).toEqual({
+      size: 3,
+      contentType: "image/webp",
+    });
+    await store.delete("x");
+    expect(await store.exists("x")).toBe(false);
   });
 
   test("unknown paths return a JSON 404", async () => {

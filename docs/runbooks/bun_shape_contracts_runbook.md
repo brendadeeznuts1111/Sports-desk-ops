@@ -348,6 +348,34 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `bin/bun_surface.ts`, `scripts/r2_verify.ts`
 - **Evidence:** `surface:S3Client`
 
+#### Bun.s3
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/s3)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Here:** `lib/r2_s3_client.ts`
+- **Evidence:** `surface:s3`, `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3File (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3File)
+- **Shape:** type · declared in bun-types; used in type positions only
+- **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3Options (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3Options)
+- **Shape:** type · declared in bun-types; used in type positions only
+- **Here:** `lib/r2_s3_client.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3Stats (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3Stats)
+- **Shape:** type · declared in bun-types; used in type positions only
+- **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
 #### Bun.SQL
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/SQL)

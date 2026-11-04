@@ -57,6 +57,17 @@
       "unlink",
       "write"
     ],
+    "s3": [
+      "delete",
+      "exists",
+      "file",
+      "list",
+      "presign",
+      "size",
+      "stat",
+      "unlink",
+      "write"
+    ],
     "SQL": [
       "MySQLError",
       "PostgresError",

@@ -4,11 +4,11 @@ Evidence-labelled reference generated from `docs/openapi.json` (version `2026.10
 
 ## What is verified vs inferred
 
-1. **Verified (tier B, 13 of 88 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
+1. **Verified (tier B, 14 of 89 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
 2. **Inferred (tier C, 29 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
 3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 35):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
 
-Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 14 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
+Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 15 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](./EVIDENCE.md).
 
 ## GSLive Manager (Partner 118): operator deep links
 
@@ -65,7 +65,7 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 | ---------------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Forensic Surveillance              | 2          | A 1 · B 1      | Cloud Manager surveillance operations with first-party evidence; tier-A rows carry a live request+response capture.                                                            |
 | Customer State Mutations           | 1          | A 1            | Cloud Manager customer state operations with first-party evidence; tier-A rows carry a live request+response capture.                                                          |
-| Local Desk &amp; Telegram Gateway  | 43         | B 9 · D 34     | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
+| Local Desk &amp; Telegram Gateway  | 44         | B 10 · D 34    | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
 | Downline Accounting                | 3          | B 3            | Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.  |
 | Settlement History                 | 1          | D 1            | Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured.                                                                         |
 | Inferred (Unverified)              | 29         | C 29           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
@@ -1234,7 +1234,7 @@ Throws a string so the server's error boundary runs; `?trigger_error=non_error` 
 
 ### `GET /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-484` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:455-531` · response not captured
 
 **Presigned download URL for one blob**
 
@@ -1274,7 +1274,7 @@ Bearer-auth GET redirects (302) to a presigned S3/R2 GET URL (services/blob_and_
 
 ### `PUT /api/v1/blobs/{key}`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-484` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:455-531` · response not captured
 
 **Bounded image upload, transcoded to WebP**
 
@@ -1342,9 +1342,54 @@ No declared fields.
   - content `application/json`: **authored response schema — no response body was captured**
     - `error` (object) — no description
 
+### `DELETE /api/v1/blobs/{key}`
+
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:531-548` · response not captured
+
+**Delete one stored blob**
+
+Bearer-auth DELETE validates the key, returns 404 when the blob is absent, removes the stored object and returns 204; a store failure is 502. Surface: surface.blob-live-bets (tier B).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `deleteApiV1BlobsKey`
+- **Required capture:** No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A.
+
+**Parameters**
+
+| Name  | In   | Required | Type   | Description                                            |
+| ----- | ---- | -------- | ------ | ------------------------------------------------------ |
+| `key` | path | yes      | string | Validated blob key; `..` and leading dots are refused. |
+
+**Responses**
+
+- **HTTP 204** — Blob deleted.
+- **HTTP 400** — Invalid blob key.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 401** — Missing or wrong bearer token.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 404** — Blob not found.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+- **HTTP 502** — Delete failed at the store.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `error` (object) — no description
+
 ### `POST /api/v1/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:361-407` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:408-454` · response not captured
 
 **Publish a live-bets event to subscribers**
 
@@ -1396,7 +1441,7 @@ Bearer-auth POST {channel, event} validates the channel, serializes the event an
 
 ### `POST /api/v1/ws-tickets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:336-360` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:383-407` · response not captured
 
 **Short-lived one-time WebSocket ticket**
 
@@ -1531,7 +1576,7 @@ Serves telegram-miniapp-dashboard.html as text/html (services/sportsdesk_webview
 
 ### `GET /ws/live-bets`
 
-> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:485-514` · response not captured
+> **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:550-579` · response not captured
 
 **Live-bets WebSocket upgrade**
 
@@ -2452,7 +2497,7 @@ Counts below are ledger totals (all recorded rows, including rows removed from t
 | Tier | Meaning                                                                                                                                                                                                             | Ledger surfaces | Spec operations |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | --------------- |
 | A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 11              |
-| B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 13              |
+| B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 14              |
 | C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 29              |
 | D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 35              |
 | E    | Documented operation with no implementation in this repository.                                                                                                                                                     | 1               | 0               |

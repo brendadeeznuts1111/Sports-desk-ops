@@ -1815,7 +1815,10 @@ function blobGatewayOperation(operation: LedgerOperation): JsonObject {
     );
   }
   const httpMethod: SurfaceHttpMethod =
-    method === "GET" || method === "POST" || method === "PUT"
+    method === "GET" ||
+    method === "POST" ||
+    method === "PUT" ||
+    method === "DELETE"
       ? method
       : fail(`unsupported gateway method "${method}"`);
   return {
@@ -1942,7 +1945,7 @@ function getAuthorizationsOperation(operation: LedgerOperation): JsonObject {
 /* -------------------------------------------------------------------------- */
 
 /** Uppercase HTTP method on a surface spec; mapped to the lowercase path-item key at build time. */
-type SurfaceHttpMethod = "GET" | "POST" | "PUT";
+type SurfaceHttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 /** Map an uppercase surface method to its OpenAPI path-item key (always lowercase). */
 function pathItemMethod(httpMethod: SurfaceHttpMethod): HttpMethod {
@@ -1953,6 +1956,8 @@ function pathItemMethod(httpMethod: SurfaceHttpMethod): HttpMethod {
       return "post";
     case "PUT":
       return "put";
+    case "DELETE":
+      return "delete";
     default:
       return fail(`unsupported surface HTTP method "${String(httpMethod)}"`);
   }
@@ -2084,6 +2089,31 @@ function blobLiveBetsSurfaceSpecs(): readonly SurfaceOperationSpec[] {
           error: { type: "object" },
         }),
         "502": jsonSurfaceResponse("Store failed.", {
+          error: { type: "object" },
+        }),
+      },
+    },
+    {
+      path: "/api/v1/blobs/{key}",
+      httpMethod: "DELETE",
+      surfaceId: BLOB_LIVE_BETS_SURFACE_ID,
+      tag: TAG_DAEMON,
+      summary: "Delete one stored blob",
+      description:
+        "Bearer-auth DELETE validates the key, returns 404 when the blob is absent, removes the stored object and returns 204; a store failure is 502. Surface: surface.blob-live-bets (tier B).",
+      requiredCapture:
+        "No live HTTP capture exists; the handler is the contract. Capture a delete to promote this operation to tier A.",
+      parameters: [keyParameter],
+      responses: {
+        "204": { description: "Blob deleted." },
+        "400": jsonSurfaceResponse("Invalid blob key.", {
+          error: { type: "object" },
+        }),
+        ...authResponses,
+        "404": jsonSurfaceResponse("Blob not found.", {
+          error: { type: "object" },
+        }),
+        "502": jsonSurfaceResponse("Delete failed at the store.", {
           error: { type: "object" },
         }),
       },

@@ -23,13 +23,24 @@ const PNG_1X1 =
 const OUT = "tests/fixtures/captures/blob-live-bets/loopback-trace.json";
 
 class MemoryStore implements BlobStore {
-  readonly keys = new Set<string>();
+  readonly objects = new Map<string, Uint8Array>();
   async put(key: string, bytes: Uint8Array) {
-    this.keys.add(key);
+    this.objects.set(key, bytes);
     return { bytesWritten: bytes.byteLength };
   }
   presignGet(key: string, expiresInSec: number): string {
     return `https://r2.example.invalid/blobs/${key}.webp?expires=${expiresInSec}`;
+  }
+  async exists(key: string): Promise<boolean> {
+    return this.objects.has(key);
+  }
+  async stat(key: string): Promise<{ size: number; contentType: string }> {
+    const bytes = this.objects.get(key);
+    if (bytes === undefined) throw new Error("blob not found");
+    return { size: bytes.byteLength, contentType: "image/webp" };
+  }
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
   }
 }
 

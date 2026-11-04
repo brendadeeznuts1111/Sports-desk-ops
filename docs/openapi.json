@@ -3049,7 +3049,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
+          "sources": ["services/blob_and_live_bets_server.ts:455-531"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3280,7 +3280,140 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:408-484"],
+          "sources": ["services/blob_and_live_bets_server.ts:455-531"],
+          "capturedResponse": false,
+          "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
+        }
+      },
+      "delete": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Delete one stored blob",
+        "description": "Bearer-auth DELETE validates the key, returns 404 when the blob is absent, removes the stored object and returns 204; a store failure is 502. Surface: surface.blob-live-bets (tier B).",
+        "operationId": "deleteApiV1BlobsKey",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            },
+            "description": "Validated blob key; `..` and leading dots are refused."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Blob deleted."
+          },
+          "400": {
+            "description": "Invalid blob key.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong bearer token.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Blob not found.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Delete failed at the store.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "B",
+          "sources": ["services/blob_and_live_bets_server.ts:531-548"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3377,7 +3510,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:336-360"],
+          "sources": ["services/blob_and_live_bets_server.ts:383-407"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3546,7 +3679,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:361-407"],
+          "sources": ["services/blob_and_live_bets_server.ts:408-454"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
@@ -3628,7 +3761,7 @@
         },
         "x-evidence": {
           "tier": "B",
-          "sources": ["services/blob_and_live_bets_server.ts:485-514"],
+          "sources": ["services/blob_and_live_bets_server.ts:550-579"],
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }

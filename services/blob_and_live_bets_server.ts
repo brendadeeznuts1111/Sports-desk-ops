@@ -12,11 +12,16 @@
  * Run: BLOB_API_TOKEN=… BLOB_TICKET_SECRET=… R2_* env bun services/blob_and_live_bets_server.ts
  */
 
-import { S3Client } from "bun";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { imageErrorCode } from "../lib/image_errors.ts";
+import { R2S3Client } from "../lib/r2_s3_client.ts";
+
+export interface BlobStat {
+  readonly size: number;
+  readonly contentType: string;
+}
 
 export interface BlobStore {
   put(
@@ -25,6 +30,47 @@ export interface BlobStore {
     contentType: string,
   ): Promise<{ readonly bytesWritten: number }>;
   presignGet(key: string, expiresInSec: number): string;
+  exists(key: string): Promise<boolean>;
+  stat(key: string): Promise<BlobStat>;
+  delete(key: string): Promise<void>;
+}
+
+/** In-memory BlobStore used by tests and local development; no R2 credentials. */
+export class MemoryBlobStore implements BlobStore {
+  readonly blobs = new Map<
+    string,
+    { readonly bytes: Uint8Array; readonly contentType: string }
+  >();
+  readonly presigns: string[] = [];
+
+  async put(
+    key: string,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<{ readonly bytesWritten: number }> {
+    this.blobs.set(key, { bytes, contentType });
+    return { bytesWritten: bytes.byteLength };
+  }
+
+  presignGet(key: string, expiresInSec: number): string {
+    const url = `https://r2.test/blobs/${key}.webp?expires=${expiresInSec}`;
+    this.presigns.push(url);
+    return url;
+  }
+
+  async exists(key: string): Promise<boolean> {
+    return this.blobs.has(key);
+  }
+
+  async stat(key: string): Promise<BlobStat> {
+    const stored = this.blobs.get(key);
+    if (stored === undefined) throw new Error("blob not found");
+    return { size: stored.bytes.byteLength, contentType: stored.contentType };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.blobs.delete(key);
+  }
 }
 
 export interface BlobLiveBetsOptions {
@@ -302,6 +348,7 @@ export const BLOB_LIVE_BETS_ROUTES = [
   { method: "POST", path: "/api/v1/live-bets", auth: "bearer" },
   { method: "GET", path: "/api/v1/blobs/{key}", auth: "bearer" },
   { method: "PUT", path: "/api/v1/blobs/{key}", auth: "bearer" },
+  { method: "DELETE", path: "/api/v1/blobs/{key}", auth: "bearer" },
   { method: "GET", path: "/ws/live-bets", auth: "bearer" },
 ] as const;
 
@@ -481,6 +528,24 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             return jsonError(502, "store_failed", "Could not store the blob");
           }
         },
+        DELETE: async (request: KeyedRequest) => {
+          if (!authorized(request, options.apiToken)) {
+            return jsonError(401, "unauthorized", "Bearer token required");
+          }
+          const key = request.params.key;
+          if (!validKey(key)) {
+            return jsonError(400, "invalid_key", "Invalid blob key");
+          }
+          try {
+            if (!(await options.blobs.exists(key))) {
+              return jsonError(404, "not_found", "Blob not found");
+            }
+            await options.blobs.delete(key);
+            return new Response(null, { status: 204 });
+          } catch {
+            return jsonError(502, "delete_failed", "Could not delete the blob");
+          }
+        },
       },
       "/ws/live-bets": (request: Request, srv: Bun.Server<SocketData>) => {
         const extracted = ticketFromRequest(request);
@@ -586,19 +651,28 @@ export function createS3BlobStore(config: {
   readonly bucket: string;
   readonly endpoint: string;
 }): BlobStore {
-  const client = new S3Client(config);
+  const client = R2S3Client.fromOptions({
+    ...config,
+    publicBase: "https://r2.invalid",
+  });
+  const path = (key: string): string => `blobs/${key}.webp`;
   return {
     async put(key, bytes, contentType) {
-      const file = client.file(`blobs/${key}.webp`);
-      const written = await file.write(bytes, { type: contentType });
-      return {
-        bytesWritten: typeof written === "number" ? written : bytes.byteLength,
-      };
+      const bytesWritten = await client.write(path(key), bytes, contentType);
+      return { bytesWritten };
     },
     presignGet(key, expiresInSec) {
-      return client
-        .file(`blobs/${key}.webp`)
-        .presign({ expiresIn: expiresInSec });
+      return client.presign(path(key), { expiresIn: expiresInSec });
+    },
+    async exists(key) {
+      return client.exists(path(key));
+    },
+    async stat(key) {
+      const stat = await client.stat(path(key));
+      return { size: stat.size, contentType: stat.type };
+    },
+    async delete(key) {
+      await client.delete(path(key));
     },
   };
 }

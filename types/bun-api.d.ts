@@ -19,3 +19,7 @@ export type BunReadableStream = ReadableStream<Uint8Array>;
 export type BunUint8Array = Uint8Array<ArrayBufferLike>;
 export type BunReadableStreamDefaultReader =
   ReadableStreamDefaultReader<Uint8Array>;
+export type BunS3Client = Bun.S3Client;
+export type BunS3File = Bun.S3File;
+export type BunS3Options = Bun.S3Options;
+export type BunS3Stats = Bun.S3Stats;
