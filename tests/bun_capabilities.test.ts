@@ -183,4 +183,21 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(shortSha).toBeDefined();
     expect(Bun.revision.startsWith(shortSha as string)).toBe(true);
   });
+
+  test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
+    // bun.com/reference/globals/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
+    // because the bytes are not zeroed. The two production call sites
+    // (lib/f402_bet_ticker_jsonl.ts, scripts/live_positions_cron.ts) are safe because each one
+    // immediately reads exactly `read` bytes from the file and then uses `subarray(0, read)` to
+    // expose only the filled prefix — the unfilled tail is never read. See
+    // docs/bun-upstream-reference.md "When to use `Bun.allocUnsafe` (and when NOT to)".
+    expect(typeof Bun.allocUnsafe).toBe("function");
+    const buf = Bun.allocUnsafe(1024);
+    expect(buf).toBeInstanceOf(Uint8Array);
+    expect(buf.byteLength).toBe(1024);
+    // Round-trip: fill fully, then read — proves the buffer is a usable Uint8Array.
+    buf.fill(0x61);
+    expect(buf[0]).toBe(0x61);
+    expect(buf[1023]).toBe(0x61);
+  });
 });

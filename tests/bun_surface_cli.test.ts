@@ -91,14 +91,15 @@ describe("dx bun", () => {
     const compat = report.checks.filter((check) => check.group === "compat");
     expect(compat.map((check) => check.name).sort()).toEqual([
       "WebSocket.pause",
+      "allocUnsafe",
       "node:crypto.argon2Sync",
     ]);
     expect(compat.every((check) => check.ok)).toBe(true);
 
-    // The text summary names the group, so a human run shows the same two facts.
+    // The text summary names the group, so a human run shows the same three facts.
     const text = await run([]);
     expect(text.code).toBe(0);
-    expect(text.stdout).toContain("compat 2/2");
+    expect(text.stdout).toContain("compat 3/3");
   });
 
   test("names the drift it can prove", async () => {

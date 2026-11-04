@@ -489,6 +489,58 @@ depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touchi
 
 If you migrate one of the six holdouts above, remove its row from this table in the same PR.
 
+## When to use `Bun.allocUnsafe` (and when NOT to) — 2026-11-04 audit
+
+[`Bun.allocUnsafe(size)`](https://bun.com/reference/globals/bun#bun.allocUnsafe) returns a
+`Uint8Array` **without zeroing the bytes**. Bun's docs claim up to 3.5× faster than
+`new Uint8Array(size)`; measured on this machine (Bun 1.4.4, Apple Silicon, 2026-11-04) the win
+scales with size:
+
+| Allocation size | `new Uint8Array(n)` | `Bun.allocUnsafe(n)` | Speedup |
+| --------------: | ------------------: | -------------------: | ------: |
+|            1 KB |              166 ns |               200 ns |   0.83× |
+|           64 KB |             1134 ns |               312 ns |   3.64× |
+|            1 MB |           37,535 ns |             2,540 ns |  14.78× |
+|           16 MB |          314,321 ns |             8,385 ns |  37.49× |
+
+Below ~a page the per-call overhead dominates; above 64 KB the win is real and matches the docs.
+The docs warn, verbatim:
+
+> if you send uninitialized memory to your users (even unintentionally), it can leak anything
+> recently in memory.
+
+This invariant — "every byte the consumer may read is written first" — is not something
+`bun check` or `oxlint` can enforce. Every call site needs a per-site argument.
+
+**Where this repo uses it (pinned 2026-11-04):**
+
+| File:line                            | Fill pattern                                                                                            | Why it is safe                                                                                                   |
+| :----------------------------------- | :------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
+| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                   | `const view = buffer.subarray(0, read)` — only the written prefix is ever read; the tail is never exposed        |
+| `scripts/live_positions_cron.ts:375` | `const bytesRead = readSync(fd, buf, 0, len, offset)` then `decoder.decode(buf.subarray(0, bytesRead))` | The `readSync` return is captured and used to slice the exposed prefix; migrating closed a latent short-read bug |
+
+**When to migrate a `new Uint8Array(n)` call site to `Bun.allocUnsafe(n)`:**
+
+1. **Every byte the consumer sees must be written first.** A full fill is enough; a partial fill
+   is only safe if the exposed prefix is sliced to the actual-written length (`.subarray(0, k)`).
+2. **`n` is large enough for the zeroing cost to matter.** Bun's 3.5× number is on large
+   allocations; micro-allocations (≤ a few KB) have no visible win and burn the audit budget.
+3. **The allocation is on a hot path.** A one-shot allocation during startup is not worth the
+   foot-gun — keep `new Uint8Array(n)`.
+
+**When to keep `new Uint8Array(n)`:**
+
+- **Size 0 sentinels** (`new Uint8Array(0)`) — no allocation to speak of; no win.
+- **Small fixed buffers** (≤ a few KB, header slots, 1-byte peek) — the zeroing cost is ns-scale.
+- **Any site that may pass the buffer to a consumer before it is fully written** — fetch
+  responses, log writes, hash inputs where the length is set upstream, decoder inputs without a
+  matching bytes-read capture.
+- **Buffers whose consumer trusts "unwritten = zero"** — do not swap silently; `Bun.allocUnsafe`
+  bytes are whatever was last in that RAM page.
+
+Before adding a third call site, open `tests/bun_capabilities.test.ts` ("Bun.allocUnsafe returns
+a Uint8Array of the requested length (unzeroed)") and add the new file:line to the table above.
+
 ## Future: `bun lint --type-check` unification (2026-11-04 audit)
 
 Bun ships `bun check` (type errors) and `bun fmt` as built-ins on 1.4.4; **`bun lint` is not in

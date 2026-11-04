@@ -550,6 +550,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:crypto.compress"],
   },
   {
+    name: "allocUnsafe",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.allocUnsafe",
+    evidence: ["surface:allocUnsafe", "test:tests/bun_capabilities.test.ts"],
+  },
+  {
     name: "gunzipSync",
     kind: "value",
     subsystem: "crypto",

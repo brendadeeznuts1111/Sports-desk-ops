@@ -144,6 +144,16 @@ const CHECKS: readonly Check[] = [
     read: () =>
       (WebSocket.prototype as unknown as Record<string, unknown>)["pause"],
   },
+  {
+    group: "compat",
+    // Up to 3.5x faster than `new Uint8Array(size)` because the bytes are not zeroed; see
+    // bun.com/reference/globals/bun#bun.allocUnsafe and the "When to use `Bun.allocUnsafe`"
+    // section in docs/bun-upstream-reference.md. Pinned so a downgrade cannot silently drop
+    // the primitive our two production call sites assume (f402_bet_ticker_jsonl.ts,
+    // live_positions_cron.ts).
+    name: "allocUnsafe",
+    read: () => Bun.allocUnsafe,
+  },
 ];
 
 interface Drift {

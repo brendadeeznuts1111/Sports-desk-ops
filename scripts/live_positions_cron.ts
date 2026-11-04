@@ -372,11 +372,22 @@ function computeCumulativeAndDelta(
 
       while (offset < st.size) {
         const len = Math.min(chunkSize, st.size - offset);
-        const buf = new Uint8Array(len);
-        readSync(fd, buf, 0, len, offset);
-        offset += len;
+        // `Bun.allocUnsafe(len)` skips zeroing the 16 MiB chunk — a measurable win per read.
+        // Safe here because (a) `readSync` returns the number of bytes actually read and we
+        // slice `buf.subarray(0, bytesRead)` before handing the buffer to the decoder; (b) the
+        // unfilled tail (when a short read happens on signal / disk issue) is never exposed.
+        // The pre-migration code ignored the `readSync` return and would hand zeroed junk to
+        // the decoder on a short read; capturing it closes that latent bug in the same change.
+        // See docs/bun-upstream-reference.md "When to use `Bun.allocUnsafe` (and when NOT to)".
+        const buf = Bun.allocUnsafe(len);
+        const bytesRead = readSync(fd, buf, 0, len, offset);
+        if (bytesRead === 0) break; // EOF — stop before the no-op decode/split
+        offset += bytesRead;
         const text =
-          leftover + decoder.decode(buf, { stream: offset < st.size });
+          leftover +
+          decoder.decode(buf.subarray(0, bytesRead), {
+            stream: offset < st.size,
+          });
         const lines = text.split("\n");
         leftover = lines.pop() ?? "";
 

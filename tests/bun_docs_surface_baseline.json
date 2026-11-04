@@ -1,11 +1,15 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-04T08:17:26.418Z",
+  "generatedAt": "2026-11-04T23:41:21.782Z",
   "runtime": "Bun 1.4.4",
   "shapes": {
     "$": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.2.11#typescript-improvements-for-bun"
+    },
+    "allocUnsafe": {
+      "documented": true,
+      "link": "https://bun.com/docs/lint/rules/eslint/no-buffer-constructor"
     },
     "Archive": {
       "documented": true,

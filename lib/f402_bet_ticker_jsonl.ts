@@ -166,7 +166,13 @@ export async function readF402TickerJsonl(
   }
 
   const length = fileSize - start;
-  const buffer = new Uint8Array(length);
+  // `Bun.allocUnsafe(length)` skips the ~length-byte zeroing — a measurable win on multi-MB
+  // ticker windows. Safe here because:
+  //   1. The read loop fills `buffer[0..read]` byte-for-byte via `handle.read()`.
+  //   2. The ONLY consumer is `buffer.subarray(0, read)` below; the unfilled tail (bytes
+  //      `[read..length]` when `chunk.bytesRead === 0` hits before completion) is never read.
+  // See docs/bun-upstream-reference.md "When to use `Bun.allocUnsafe` (and when NOT to)".
+  const buffer = Bun.allocUnsafe(length);
   const handle = await open(path, "r");
   try {
     let read = 0;
