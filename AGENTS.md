@@ -32,9 +32,37 @@ bun test tests/
 bun test                                        # not in CI: also runs the colocated tests
 ```
 
-There is **no single `check` script**, so a local run has to be assembled. Actions do run on this
-repo (2026-11-02: PR #10's `verify` job ran and failed at `format:check`); because the job stops at
-the first failing step, a red early step hides every later one.
+`bun run ci:local` replays that chain in order (`--list`, `--keep-going`, `--install`); prefer it
+over assembling the steps by hand. Actions do run on this repo (2026-11-02: PR #10's `verify` job
+ran and failed at `format:check`); because the job stops at the first failing step, a red early
+step hides every later one.
+
+Before a long gate run, `bun run agent:doctor` reports the gaps that otherwise surface one failed
+call at a time: worktree `node_modules`, the gitignored `enriched_customers_full.json`, feed
+provenance, dist staging, graphviz, a headless browser, the `:4020` daemon, sandbox write access
+and the Pages deploy token. The agent tool-call audit lives in
+[`docs/runbooks/agent_tool_friction.md`](docs/runbooks/agent_tool_friction.md) and is reproducible
+with `bun run audit:tool-calls`.
+
+## Agent friction quick reference
+
+- **Read immediately before `edit`.** `bun fmt`, `docs:stage`, `artifacts:value` and the feed
+  poller rewrite tracked files; a read taken before them is stale (`FS_STALE_VERSION`). Re-read
+  after any formatter/generator.
+- **`write` for new files, `edit` for existing ones.** `FS_NOT_OBSERVED` means this session has
+  not read the file: read it, then retry (one extra call, not a workaround).
+- **Writes outside the workspace are denied** (for example `~/.dsh`). The pre-push gate still
+  runs; only its log/proof-cache writes fail. Do not retry them.
+- **Stock Chrome does not start under the sandbox.** Verify pages with
+  `./bin/dx shot <url> --out scratch/shots/x.png` (WebKit) or the Playwright headless shell with
+  `--no-sandbox`; `agent:doctor` prints the available binary.
+- **Citations pin line numbers.** Insert code below cited ranges or re-point anchors in
+  `docs/evidence/ledger.json` plus the citing docs; `bun run check:spec-citations` names the
+  corrected range when an anchor drifts.
+- **Feed-only refresh:** `graph_feed_poller_daemon.ts --once --live --no-backtest-artifact`
+  (under `scripts/`) so a live refresh does not rewrite the committed 4-week backtest artifact.
+- **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`;
+  never source `.env` (1Password FIFO plus R2/F402 secrets that shadow the Pages token).
 
 ## Layout
 

@@ -88,6 +88,8 @@
     "check:innerhtml": "bun run bin/check-innerhtml.ts",
     "probe:bun": "bun scripts/probe_bun.ts --check tests/bun_baseline.json",
     "ci:local": "bun scripts/ci_local.ts",
+    "agent:doctor": "bun run scripts/agent_env_doctor.ts",
+    "audit:tool-calls": "bun run scripts/audit_tool_calls.ts",
     "pm:doctor": "bun scripts/pm_doctor.ts",
     "deps": "bun-deps",
     "check:secrets": "bun run bin/check-secrets.ts",
