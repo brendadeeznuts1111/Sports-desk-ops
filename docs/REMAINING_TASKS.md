@@ -194,6 +194,22 @@ so an id resolves without guessing which artifact it came from.
   - **Exit:** a `NameFirst` payload renders as literal text and sends no request; sink tests cover
     the migrated path. **Not blocked by the external-view canary.**
 
+- [ ] **P0.6 Measure the defenses: authz matrix, financial reconciliation, attack exercises**
+  - **Ref:** `RT-DEFENSE-MEASURE`
+  - **Owner:** security/operator (needs vendor + server team + business owner)
+  - **Issue:** [#17](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/17)
+  - **Basis:** `[CODE]`/`[OBSERVED]` the pack at
+    `docs/analysis/defense-measurement-2026-11-03/`: adversary model (6 actors), authz matrix design,
+    financial-controls audit (no reconciliation found), attack-chain protocol, detection gaps,
+    provisional roadmap.
+  - **Blocked by:** (a) a provisioned low-privilege test account; (b) written authorization + proxy
+    to replay tampered authenticated requests; (c) server team's answer "what does authz check?";
+    (d) business owner's answer "what reconciles the ledger?". None is available in this
+    environment; items 2 and 4 of the pack are explicitly **not executed**.
+  - **Exit:** item 2 Bearer verdict confirmed by the server team by test; item 3 either a
+    reconciliation that holds or the written no-reconciliation finding; item 4 three chains measured
+    before/after each control; roadmap re-derived from the results.
+
 ## P1 — coverage and data quality
 
 - [ ] **P1.6 Capture GSLive deep-link behaviour**
@@ -225,6 +241,10 @@ so an id resolves without guessing which artifact it came from.
 
 ## Done (for context)
 
+- [x] `[CODE]` Defense-measurement pack drafted (`RT-DEFENSE-MEASURE`): items 1, 3, 5 written from
+      repository evidence; item 6 provisional; items 2 and 4 documented as BLOCKED, not simulated.
+      Headline finding: no financial reconciliation invariant exists in this repo, and financial
+      mutation endpoints have no captured wire evidence.
 - [x] `[OBSERVED]` Restore the gslive_report_columns `labelsFor` export (`RT-GSLIVE-TYPECHECK`, issue #14):
       introduced by `a102219`, reproduced on a clean `origin/main` worktree; fixed on main by `5413ade`.
       Full `bun run typecheck` is green (771 files) and the pre-push gate passed on `5413ade..820ed43`.

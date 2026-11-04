@@ -1,0 +1,61 @@
+# 6. Re-prioritized roadmap (provisional)
+
+One page. Provisional because item 2's Bearer verdict — the input that can reorder everything —
+could not be measured here. Items 1, 3 and 5 are enough to move two workstreams, though.
+
+## What the measurements say
+
+1. The controls in flight defend **one actor** (player XSS on a Chromium path) and **one supply-chain
+   path** (asset swap). They do not defend the actors with the most authority: subordinate-agent
+   tampering, stolen sessions, ATO, insider access (item 1).
+2. The **financial gap outranks every XSS in flight**: no reconciliation invariant exists in this
+   repo, and the financial mutations have no captured wire evidence; the only audit is a
+   client-issued, forgeable `Log/write` after success (item 3).
+3. The client is **not** an authorization boundary: it rewrites identity fields and permits a caller
+   to preserve `agentOwner`; whether the server trusts the body is unmeasured (item 2).
+4. Detection exists for assets, not for authority or money: only the pin gate has both detection and
+   a playbook (item 5).
+
+## Ordering
+
+| #   | Workstream                                                                                      | Current state                                               | Verdict from items 1–5                                                                                                                                           | Action                                                                 |
+| --- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 0   | **Inputs**: test account + proxy authorization; server question; business-owner ledger question | absent                                                      | Every measurement below is blocked without these                                                                                                                 | **Raise / unblock first**                                              |
+| 1   | **Black-box authz matrix** (item 2)                                                             | designed, unexecuted                                        | Decides whether actor 2 is bounded; can invalidate the priority of every client control                                                                          | **Raise to top** — 2 days once inputs exist                            |
+| 2   | **Financial ledger + reconciliation invariants** (item 3)                                       | no invariant found; client log only                         | Outranks XSS per the task's rule; also the only control against actor 6                                                                                          | **Raise to top, in parallel** — business owner + server work           |
+| 3   | **`data-pass` / `Password` removal** (upstream)                                                 | not done                                                    | Removes a live credential exposure independent of authz; also shrinks ATO reuse                                                                                  | **Keep P0, upstream**                                                  |
+| 4   | **SRI / pin gate** (existing)                                                                   | shipped, green                                              | The only production control with detection **and** a playbook; regression value                                                                                  | **Keep, maintain only** — no expansion                                 |
+| 5   | **Sink migrations** (`searchComponent`, then four)                                              | seam escaper ready; `searchComponent` not migrated          | Real XSS risk, but the task explicitly forbids migrating before the Bearer answer; if item 2 says claim-derived, this is the main remaining authority-theft path | **Pause until item 2 verdict**, then resume at `searchComponent` first |
+| 6   | **External-view guard canary + further seam hardening**                                         | guard landed dead by default; canary blocked on credentials | One Chrome-only module-load hole; not load-bearing for actors 2/4/5/6                                                                                            | **Pause** — leave the landed code dead; do not spend more cycles       |
+| 7   | **WebKit injection path**                                                                       | scoped by census; not started                               | Depends on item 2 and a real backend census; premature before authz/financial work                                                                               | **Pause** — re-scope after items 1–2                                   |
+| 8   | **Detection layer** (reject-rate, session lifecycle, financial alerts, agent-tree canary)       | design only                                                 | Directly addresses actors 2/3/5/6; needs server/vendor cooperation                                                                                               | **Raise with items 1–2**, not as client-only work                      |
+
+## Explicit pause / raise
+
+- **Pause:** WebKit injection path, the external-view canary, and any further client-side seam member
+  or pin expansion. The measurement pack says these are not load-bearing until the server-trust
+  question and the financial gap are addressed.
+- **Pause:** sink migrations (explicit non-goal until the Bearer verdict), except holding the
+  already-landed escaper.
+- **Raise:** the authz matrix (item 2) and the financial invariant/reconciliation work (item 3) above
+  every client control. If item 2 returns body-trusting, subordinate-to-master is a live escalation
+  and no client control in flight matters as much; if item 3 confirms no reconciliation, insider and
+  tampered financial changes are invisible by construction.
+
+## What the current controls credibly claim (for the PR/roadmap text)
+
+> The seam, external-view guard, pin gate and SRI work raise the cost of stored XSS on one browser
+> backend and make asset swaps visible. They do not address server authorization, financial
+> reconciliation, account takeover, or insider access. The pin gate is the only one of the four with
+> a detection-and-response pair; the others are prevention-only or unverified.
+
+## Restart conditions
+
+1. Item 2 executed and confirmed by the server team by test.
+2. Item 3 answered by the business owner, with either a reconciliation that holds or a written
+   finding (currently: no reconciliation in this repo).
+3. Item 4's three chains executed with authorization, producing the marginal-reduction table.
+4. Item 1 reviewed by an independent attacker against the executed results.
+
+Only then should items 5–7 resume, in the order `searchComponent` → remaining sinks → WebKit
+(behind a census), with `data-pass` and the financial ledger tracking upstream in parallel.
