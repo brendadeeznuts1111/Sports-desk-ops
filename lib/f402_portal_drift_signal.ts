@@ -7,6 +7,7 @@ import {
   classifyBundleDrift,
   fetchPortalArtifactBytes,
 } from "./f402_portal_bundle_fetch.ts";
+import { collectLiveCdnAssetDrift } from "./f402_cdn_pin.ts";
 import { loadPinnedManifest } from "./f402_portal_version_pin.ts";
 
 export const F402_PORTAL_ARTIFACT_DRIFT_SIGNAL =
@@ -64,6 +65,7 @@ export async function collectLivePortalArtifactDrift(
     }
     details.push(`${kind} ${key}: ${JSON.stringify(outcome)}`);
   }
+  details.push(...(await collectLiveCdnAssetDrift()));
   return details;
 }
 

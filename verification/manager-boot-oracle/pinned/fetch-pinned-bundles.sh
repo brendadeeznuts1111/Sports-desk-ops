@@ -20,3 +20,7 @@ fetch "app/sports/score/score.js" "$DIR/score.js"
 fetch "app/sports/report/pending.js" "$DIR/pending.js"
 echo "Compare hashes to pinned/manifest.json"
 echo "Bun fetch (TLS vs bundle-byte drift): bun run fetch:pinned-portal"
+
+# CDN assets the portal executes and their SRI values: pinned in cdn-manifest.json.
+# Same measurement point as the bundles above — the origin response bytes, never ETag.
+bun "$DIR/../../../scripts/pin_cdn_assets.ts" check

@@ -81,6 +81,10 @@ jobs:
           mv platform "$RUNNER_TEMP/platform"
           echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
           bun install --frozen-lockfile --cwd "$RUNNER_TEMP/platform"
+      - name: "Pinned CDN asset drift (live origins; scheduled/unattended runs)"
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        timeout-minutes: 4
+        run: bun run pin:cdn
       - name: Manager boot oracle runtime + slice guard
         timeout-minutes: 2
         run: bun run verify:manager-oracle-slices
@@ -129,7 +133,7 @@ jobs:
       - name: RequestInit Wire Linter Gate
         timeout-minutes: 3
         run: bun bin/check-fetch-init.ts --verbose
-      - name: Safe innerHTML Linter Gate
+      - name: "Safe innerHTML + external-asset SRI gate"
         timeout-minutes: 3
         run: bun bin/check-innerhtml.ts --verbose
       - name: Schema gate (snapshot parity, fixture drift, gauntlet, EOD smoke)
