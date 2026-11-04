@@ -1922,14 +1922,14 @@ export function startServer(options?: ServerOptions) {
               };
         const now = new Date();
         return Response.json(
-          {
+          await withWeblog({
             success: true,
             kpis: deriveDeskKpis(
               { agentTree, liveBets, liveWagers, customerBook },
               now,
             ),
             generatedAt: now.toISOString(),
-          },
+          }),
           { headers: { ...cors, "Cache-Control": "no-store" } },
         );
       }
@@ -2302,4 +2302,13 @@ if (import.meta.main) {
   console.log(` • Mini App (TMA)   : ${location}miniapp`);
   console.log(` • Health Probe     : ${location}health`);
   console.log(` • Watch List API   : ${location}api/watchlist`);
+}
+
+/** Merge the latest f402-weblog rollup into an aggregate response. */
+async function withWeblog<T extends Record<string, unknown>>(
+  value: T,
+): Promise<T & { weblog: unknown }> {
+  const mod = await import("../lib/f402_weblog_latest.ts");
+  const latest = await mod.loadWeblogLatest();
+  return { ...value, weblog: latest.status === "ok" ? latest.rollup : latest };
 }

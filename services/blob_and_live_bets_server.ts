@@ -703,6 +703,7 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               type: "SUBSCRIBED",
               channel: msg.channel,
               channels: subscriptionsOf(ws),
+              subscriptions: ws.subscriptions,
             }),
           );
           return;

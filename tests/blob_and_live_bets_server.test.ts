@@ -585,4 +585,19 @@ describe("no upscaling, ticket cap and publish", () => {
       expect(await response.json()).toMatchObject({ error: { code } });
     }
   });
+  test("SUBSCRIBED ack carries ws.subscriptions including f402-weblog", async () => {
+    const h = start();
+    const ws = await openTicketSocket(h);
+    try {
+      ws.send(JSON.stringify({ type: "SUBSCRIBE", channel: "f402-weblog" }));
+      const ack = JSON.parse(await nextMessage(ws)) as {
+        type: string;
+        subscriptions?: string[];
+      };
+      expect(ack.type).toBe("SUBSCRIBED");
+      expect(ack.subscriptions).toContain("f402-weblog");
+    } finally {
+      ws.close();
+    }
+  });
 });

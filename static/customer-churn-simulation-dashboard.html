@@ -2246,6 +2246,42 @@
       </section>
 
       <!-- Live Desk: pending exposure joined from the wager capture and the scoreboard -->
+      <section
+        class="section-card"
+        id="weblog-panel"
+        aria-labelledby="wl-title"
+        aria-live="polite"
+      >
+        <div class="section-head">
+          <h2 id="wl-title">WebLog &amp; Session Overlap (Mode 6)</h2>
+        </div>
+        <div id="bridge-status" aria-label="Bridge status">
+          <span id="bridge-1-status">Bridge 1: LIVE</span>
+          <span id="bridge-3a-status">Bridge 3a: LIVE</span>
+          <span id="bridge-3b-status">Bridge 3b: awaiting_live_capture</span>
+          <span id="bridge-3c-status">Bridge 3c: LIVE</span>
+          <span id="weblog-status">Bridge WebLog: loading</span>
+        </div>
+        <p id="wl-gates">GATE-WL-01..04: loading…</p>
+        <p id="wl-parsed">—</p>
+        <p id="wl-matched">—</p>
+        <p id="wl-quantiles">—</p>
+        <p id="wl-flags">—</p>
+        <p id="wl-negative">—</p>
+        <table aria-label="IPv4 and IPv6 /64 network distribution">
+          <thead>
+            <tr>
+              <th scope="col">Class</th>
+              <th scope="col">Rows</th>
+            </tr>
+          </thead>
+          <tbody id="wl-net-table">
+            <tr>
+              <td colspan="2">loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
       <section class="section-card" id="live-desk" aria-labelledby="ld-title">
         <div class="section-title">
           <span id="ld-title">Live Desk — Pending Exposure</span>
@@ -4694,6 +4730,112 @@
             else scale = 1;
             img.style.transform = `scale(${scale})`;
           });
+        }
+      })();
+
+      (async () => {
+        try {
+          const res = await authed("/api/kpis", { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const payload = await res.json();
+          const d = payload.weblog || {},
+            rows = d.rows || {},
+            join = d.join || {},
+            flags = d.flags || {};
+          const set = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+          };
+          set(
+            "wl-gates",
+            (d.gates || []).map((g) => g.gate + ": " + g.status).join(" · "),
+          );
+          set(
+            "wl-parsed",
+            (rows.parsed || 0).toLocaleString() +
+              " / " +
+              (rows.total || 0).toLocaleString() +
+              " parsed · " +
+              (rows.distinctTemplates || 0) +
+              " templates · " +
+              (rows.unrecognized || 0) +
+              " unrecognized",
+          );
+          set(
+            "wl-matched",
+            (join.matched || 0).toLocaleString() +
+              " / " +
+              (join.totalWindowWagers || 0).toLocaleString() +
+              " matched · " +
+              (join.persistentUnmatched || 0).toLocaleString() +
+              " persistent · " +
+              (join.nonWebChannel || 0).toLocaleString() +
+              " non-web · " +
+              (join.futureJoins || 0) +
+              " future",
+          );
+          const q = join.deltaQuantilesMs || {};
+          set(
+            "wl-quantiles",
+            "p01 " +
+              ((q.p01 || 0) / 1000).toFixed(2) +
+              "s · p05 " +
+              ((q.p05 || 0) / 1000).toFixed(2) +
+              "s · p50 " +
+              ((q.p50 || 0) / 1000).toFixed(2) +
+              "s · p95 " +
+              ((q.p95 || 0) / 60000).toFixed(2) +
+              "m · p99 " +
+              ((q.p99 || 0) / 60000).toFixed(2) +
+              "m",
+          );
+          set(
+            "wl-flags",
+            "executionSnipers " +
+              (flags.executionSnipers || 0).toLocaleString() +
+              " · sniperTwins " +
+              (flags.sniperTwins || 0) +
+              " · crossOfficeBeards " +
+              (flags.crossOfficeBeards || 0) +
+              " · botRingAccounts " +
+              (flags.botRingAccounts || 0) +
+              " · lineShoppers " +
+              (flags.lineShoppers || 0).toLocaleString(),
+          );
+          const neg = d.negativeControls || {};
+          set(
+            "wl-negative",
+            (neg.falsePositiveFlags || 0) +
+              " / " +
+              (neg.checked || 7) +
+              " false positives",
+          );
+          set(
+            "weblog-status",
+            "Bridge WebLog: " +
+              (d.kind === "f402-weblog"
+                ? "LIVE (" + (rows.total || 0).toLocaleString() + " rows)"
+                : "unavailable"),
+          );
+          const tbody = document.getElementById("wl-net-table");
+          if (tbody)
+            tbody.replaceChildren(
+              ...Object.entries(d.ipClasses || {})
+                .sort((a, b) => b[1] - a[1])
+                .map(([key, value]) => {
+                  const tr = document.createElement("tr");
+                  const th = document.createElement("th");
+                  th.scope = "row";
+                  th.textContent = key;
+                  const td = document.createElement("td");
+                  td.textContent = Number(value).toLocaleString();
+                  tr.append(th, td);
+                  return tr;
+                }),
+            );
+        } catch (err) {
+          const el = document.getElementById("weblog-status");
+          if (el) el.textContent = "Bridge WebLog: unavailable";
         }
       })();
     </script>
