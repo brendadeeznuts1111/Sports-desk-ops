@@ -14,6 +14,7 @@
  *  - Robust error boundary handling via Bun.serve `error(err)` returning structured 500 JSON.
  */
 
+import type { TrackerState } from "../lib/tracker_dashboard.ts";
 import crypto from "node:crypto";
 import { resolve, dirname } from "node:path";
 import {
@@ -321,6 +322,8 @@ export interface ServerOptions {
   readonly executionLedgerRoot?: string;
   /** Policy env for the execution engine; defaults to `Bun.env`. */
   readonly executionEnv?: Readonly<Record<string, string | undefined>>;
+  /** State for GET /tracker; tests inject one so no gh, git or keychain call is made. */
+  readonly trackerState?: () => Promise<TrackerState>;
 }
 
 /**
@@ -3176,6 +3179,36 @@ export function startServer(options?: ServerOptions) {
           },
           { headers: cors },
         );
+      }
+
+      // 13b. Ops tracker (GET /tracker): tasks, pull requests and the secret inventory as a static
+      // page, guarded like the graph page (loopback, or the admin token). Headers (CSP, no-store)
+      // come from lib/tracker_dashboard.ts.
+      if (pathname === "/tracker" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        // Imported here so the daemon does not load react-dom until someone opens the page.
+        const [
+          { TRACKER_HEADERS, renderTrackerPage },
+          { loadTrackerStateCached },
+        ] = await Promise.all([
+          import("../lib/tracker_dashboard.ts"),
+          import("../lib/tracker_sources.ts"),
+        ]);
+        const loadState =
+          options?.trackerState ?? (() => loadTrackerStateCached(repoRoot));
+        return new Response(renderTrackerPage(await loadState()), {
+          headers: { ...cors, ...TRACKER_HEADERS },
+        });
       }
 
       // 14. 404 Fallback

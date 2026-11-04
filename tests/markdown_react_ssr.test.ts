@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { renderToString } from "react-dom/server";
 import {
   MARKDOWN_SSR_PARSER_OPTIONS,
   markdownText,
@@ -7,8 +8,8 @@ import {
 
 /**
  * The SSR path is `Bun.markdown.react()` → `renderToString()`. These assertions keep the two
- * runtime contracts that matter here: React 19 element symbols (a React 18 renderer needs its own
- * `renderToString` and `reactVersion: 18`) and the repo's parser preset.
+ * runtime contracts that matter here: React 18 element symbols (the pinned `react-dom@18` renderer
+ * needs `reactVersion: 18`; React 19 elements make it throw) and the repo's parser preset.
  */
 describe("Bun.markdown.react SSR", () => {
   test("renders GFM with heading ids and strong emphasis", () => {
@@ -35,6 +36,22 @@ describe("Bun.markdown.react SSR", () => {
     const html = renderMarkdownSsr(markdownText("<script>alert(1)</script>"));
     expect(String(html)).toContain("&lt;script&gt;");
     expect(String(html)).not.toContain("<script>");
+  });
+
+  test("the renderer and the element symbol are the same React major", () => {
+    // Bun's default element symbol is React 19's; the pinned react-dom@18 refuses it. This is the
+    // mismatch that `renderMarkdownSsr` avoids by passing `reactVersion: 18`.
+    const legacy = Bun.markdown.react("# x", undefined, { reactVersion: 18 });
+    expect(String(renderToString(legacy))).toBe("<h1>x</h1>");
+    const current = Bun.markdown.react("# x");
+    expect(() => renderToString(current)).toThrow();
+  });
+
+  test("a caller cannot switch the React version through parser options", () => {
+    const html = renderMarkdownSsr(markdownText("# x"), {
+      parserOptions: { reactVersion: 19 } as Bun.markdown.Options,
+    });
+    expect(String(html)).toBe('<h1 id="x">x</h1>');
   });
 
   test("the parser preset is the documented GFM shape", () => {

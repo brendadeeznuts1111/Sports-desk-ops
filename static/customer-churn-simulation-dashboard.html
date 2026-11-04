@@ -1689,6 +1689,36 @@
         opacity: 0.7;
         word-break: break-all;
       }
+      .desk-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 22px;
+        margin: -8px 0 18px;
+        padding: 8px 12px;
+        border: 1px solid var(--sd-surface-border);
+        border-radius: 10px;
+        background: var(--sd-surface-card);
+        font-size: 0.82rem;
+      }
+      .desk-nav-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .desk-nav-label {
+        color: var(--sd-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.68rem;
+      }
+      .desk-nav a {
+        color: var(--sd-text-primary);
+        text-decoration: none;
+      }
+      .desk-nav a:hover,
+      .desk-nav a[aria-current="page"] {
+        color: var(--sd-primary);
+      }
     </style>
   </head>
   <body>
@@ -1710,6 +1740,25 @@
         <span class="badge badge-purple">50% SHARED AGENT</span>
       </div>
     </div>
+
+    <!-- Desk pages, grouped. Every href is a declared daemon route (tests/dashboard_asset_routes). -->
+    <nav class="desk-nav" aria-label="Desk pages">
+      <div class="desk-nav-group">
+        <span class="desk-nav-label">Monitor</span>
+        <a href="/" aria-current="page">Dashboard</a>
+        <a href="/live-bets">Live bets</a>
+        <a href="/status">Status</a>
+      </div>
+      <div class="desk-nav-group">
+        <span class="desk-nav-label">Analysis</span>
+        <a href="/graph">Surveillance graph</a>
+      </div>
+      <div class="desk-nav-group">
+        <span class="desk-nav-label">Ops</span>
+        <a href="/tracker">Tracker</a>
+        <a href="/miniapp">Telegram mini app</a>
+      </div>
+    </nav>
 
     <!-- Agent Tree Graph dropdown -->
     <details class="agent-tree-dropdown">

@@ -521,8 +521,8 @@ but got 2`. Repo code therefore uses the object form exclusively, and `lib/secre
   the API is marked "Unstable API" — https://bun.com/docs/runtime/markdown
 - `Bun.markdown.react()` SSR lives in `lib/markdown_react_ssr.ts`: `renderMarkdownSsr(markdownText(s))`
   returns a `RenderedHtml` brand, so Markdown input and rendered HTML cannot be passed in the wrong
-  direction. React 18 clients must render with React 18's `react-dom/server` and pass
-  `reactVersion: 18`; React 19's renderer rejects the legacy element symbol.
+  direction. The repo pins `react`/`react-dom` 18.3.1, so it passes `reactVersion: 18`; React 18's
+  renderer rejects React 19 elements and React 19's renderer rejects the legacy element symbol.
 - Child processes expose `.terminal.close()` and `exited` —
   https://bun.com/docs/runtime/child-process#reusable-terminal
 - `--no-env-file` disables automatic `.env` loading —
