@@ -324,12 +324,14 @@ Repo rules for [`Bun.secrets`](https://bun.com/docs/runtime/secrets):
   migration fallback. `scripts/secrets_r2.ts seed` copies legacy entries and the macOS Keychain
   values into the canonical service.
 
-> **Prerequisite — do not delete the legacy F402 entry until canonical readers ship.** The live
-> F402 pair is stored under `sportsdesk-ops`, while `scripts/capture/f402_probe.ts` and the player
-> credential loader read the legacy service only. `secrets:f402 set` writes canonical and
-> `secrets:f402 delete` removes both services; after that, those readers return empty with no error.
-> Keep the legacy copy until the canonical-first reader change lands (Finding 2 in
-> [`docs/analysis/secrets-audit-2026-11-04.md`](./analysis/secrets-audit-2026-11-04.md)).
+> **Migration prerequisite — write canonical before deleting legacy.** The live F402 pair is still
+> stored under `sportsdesk-ops`. F402 readers are now canonical-first with a legacy fallback
+> (`lib/secrets.ts`, `lib/f402_credentials_policy.ts`, `scripts/capture/f402_probe.ts`,
+> `session:login --from-keychain`); player credentials are env-only (`F402_PLAYER_ID` /
+> `F402_PLAYER_PASSWORD`), and nothing writes `f402-player-*`. Because `secrets:f402 set` writes
+> canonical and `secrets:f402 delete` removes both services, run `set`, confirm with
+> `secrets:f402 status`, and only then delete. See Finding 2 in
+> [`docs/analysis/secrets-audit-2026-11-04.md`](./analysis/secrets-audit-2026-11-04.md).
 
 - Every `Bun.secrets.set` passes `persist: "local"` (Windows stays on this machine) and validates the
   platform bounds first: service/name are 1..255 printable ASCII characters; value is 1..2048 UTF-8

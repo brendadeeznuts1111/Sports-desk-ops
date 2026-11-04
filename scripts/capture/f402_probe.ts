@@ -87,6 +87,10 @@ import {
 } from "../../lib/f402_probe.ts";
 import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { preflight, warmCaptureNetwork } from "../../lib/preflight.ts";
+import {
+  F402_KEYCHAIN_NAMES,
+  readSecretCanonicalThenLegacy,
+} from "../../lib/secrets.ts";
 import { buildDnsPrefetchExpression } from "../../lib/f402_report_context.ts";
 import {
   parseResize,
@@ -95,12 +99,7 @@ import {
 } from "../../lib/screenshot_encode.ts";
 import { htmlToText } from "../../lib/ticket_html.ts";
 import type { CaptureViewMode } from "./types.ts";
-import {
-  loginF402,
-  MissingF402CredentialsError,
-  SECRET_NAMES,
-  SECRETS_SERVICE,
-} from "./f402_login.ts";
+import { loginF402, MissingF402CredentialsError } from "./f402_login.ts";
 import { provenanceFromProbePage } from "./provenance_helpers.ts";
 import { promoteProbeFromFile } from "./promote_probe_from_file.ts";
 import { buildCaptureRecord, CaptureStore } from "./recorder.ts";
@@ -182,7 +181,7 @@ Options:
   --sport-type <name>           sportType for getSportsVigSetup (default: Football)
   --sort-custom <value>         sortCustom for getCustomerAdmin (default: 1)
   --agent-owner <id>            agentOwner override when it differs from agentID on the wire
-  --login-as-player             Customer/player login (F402_PLAYER_ID / F402_PLAYER_PASSWORD or keychain f402-player-*)
+  --login-as-player             Customer/player login (F402_PLAYER_ID / F402_PLAYER_PASSWORD)
   --include-unconfirmed         Include PendingDelete (also needs --i-understand-mutations)
   -h, --help                    This text
 
@@ -231,21 +230,17 @@ export function extractFormKeys(postData: string | undefined): string[] {
   return [...keys].sort();
 }
 
-export async function resolveAgentId(): Promise<string> {
-  const fromEnv = process.env.F402_AGENT_ID?.trim() ?? "";
+export async function resolveAgentId(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<string> {
+  const fromEnv = env["F402_AGENT_ID"]?.trim() ?? "";
   if (fromEnv !== "") return fromEnv;
-  try {
-    return (
-      (
-        await Bun.secrets.get({
-          service: SECRETS_SERVICE,
-          name: SECRET_NAMES.agentId,
-        })
-      )?.trim() ?? ""
-    );
-  } catch {
-    return "";
-  }
+  // Canonical first, legacy fallback: the live F402 pair is still under
+  // `sportsdesk-ops` (audit Finding 2), so a legacy-only read would miss it
+  // after the canonical migration.
+  return (
+    (await readSecretCanonicalThenLegacy(F402_KEYCHAIN_NAMES.agentId)) ?? ""
+  );
 }
 
 async function main(): Promise<number> {

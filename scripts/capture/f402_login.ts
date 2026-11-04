@@ -37,13 +37,14 @@ export class MissingF402CredentialsError extends Error {
 
 type Env = Record<string, string | undefined>;
 
-/** Keychain-backed credential storage, so a password need not sit in `.env`. */
+/**
+ * @deprecated Legacy-only service name, kept for back-compat. New reads go through
+ * `lib/secrets.ts` (canonical first, legacy fallback); nothing writes here.
+ */
 export const SECRETS_SERVICE = "sportsdesk-ops";
 export const SECRET_NAMES = {
   agentId: "f402-agent-id",
   password: "f402-password",
-  playerId: "f402-player-id",
-  playerPassword: "f402-player-password",
 } as const;
 
 export interface SecretsReader {
@@ -60,25 +61,17 @@ export async function loadF402Credentials(
   return loadF402CredentialsSecure(env, secrets);
 }
 
+/**
+ * Player credentials are env-only: nothing in the repo writes `f402-player-*` to
+ * the keychain, so the old legacy-only read could never succeed and made a
+ * missing-writer look like a missing-credential. `--login-as-player` still works
+ * with `F402_PLAYER_ID` / `F402_PLAYER_PASSWORD`.
+ */
 export async function loadF402PlayerCredentials(
   env: Env = process.env,
-  secrets: SecretsReader | null = Bun.secrets,
 ): Promise<F402LoginIdentity> {
-  const read = async (name: string): Promise<string> => {
-    if (secrets === null) return "";
-    try {
-      return (
-        (await secrets.get({ service: SECRETS_SERVICE, name }))?.trim() ?? ""
-      );
-    } catch {
-      return "";
-    }
-  };
-  const envId = env["F402_PLAYER_ID"]?.trim() ?? "";
-  const envPass = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";
-  const loginId = envId !== "" ? envId : await read(SECRET_NAMES.playerId);
-  const password =
-    envPass !== "" ? envPass : await read(SECRET_NAMES.playerPassword);
+  const loginId = env["F402_PLAYER_ID"]?.trim() ?? "";
+  const password = env["F402_PLAYER_PASSWORD"]?.trim() ?? "";
   if (loginId === "" || password === "") {
     throw new MissingF402CredentialsError();
   }

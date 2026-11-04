@@ -333,7 +333,7 @@ read-only unless the task is explicitly a deploy, and a VIP entry is live custom
 `tests/fixtures/f402-report-requests-observed-2026-11-01.json:188`). One caveat keeps that claim exact:
 `lib/f402_probe.ts:372-386` registers `Log/write` as a non-read-only probe, selected only under
 `--include-unconfirmed`, which the capture CLI also gates behind `--i-understand-mutations`
-(`scripts/capture/f402_probe.ts:370-375`). That probe builds its own body; it never replays the observed
+(`scripts/capture/f402_probe.ts:365-370`). That probe builds its own body; it never replays the observed
 one.
 
 **The acknowledgement `{"INFO":""}` was observed, and it is an empty string.** The paste recorded the
