@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
 
 describe("GET /api/live-wagers", () => {
-  // The committed paste, served from a temp dir: a developer's gitignored data/bet-ticker.json
-  // would otherwise win the selection and change every answer here.
+  // The sanitized partial fixture, served from a temp dir: a developer's gitignored
+  // data/bet-ticker.json or local data/live-wagers.json would otherwise win the selection and
+  // change every answer here.
   let dir: string;
   let server: ReturnType<typeof startServer>;
 
@@ -14,7 +15,7 @@ describe("GET /api/live-wagers", () => {
     dir = mkdtempSync(join(tmpdir(), "live-wagers-paste-"));
     await Bun.write(
       join(dir, "live-wagers.json"),
-      Bun.file(join(import.meta.dir, "../data/live-wagers.json")),
+      Bun.file(join(import.meta.dir, "fixtures/live-wagers.partial.json")),
     );
     server = startServer({
       port: 0,
@@ -241,7 +242,7 @@ describe("GET /api/live-wagers source selection", () => {
     reset();
     const halfHourAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     await write("bet-ticker.json", list(halfHourAgo, 1));
-    // What a checkout does to the committed paste: no observedAt, mtime now.
+    // What a checkout does to a local artifact: no observedAt, mtime now.
     await write("live-wagers.json", list(null, 2));
     const { body } = await get();
     expect(body.wagers?.map((w) => w.wagerNumber)).toEqual([1]);
