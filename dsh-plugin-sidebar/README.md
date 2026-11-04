@@ -94,7 +94,7 @@ auto-loaded `.env` for `PORT=4020` (and the Bun port cascade falls back to 3000)
 ## Verify
 
 ```
-node dsh-plugin-sidebar/verify-load.mjs
+bun dsh-plugin-sidebar/verify-load.mjs
 ```
 
 Proves the manifest, patch, locales, icon, factory id, `apply` registrations

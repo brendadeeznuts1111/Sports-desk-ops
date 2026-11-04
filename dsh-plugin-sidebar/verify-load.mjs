@@ -15,15 +15,39 @@
  * right in the running Web UI. That needs the connected page; without browser
  * control this script must not be reported as visual verification.
  *
- * Run: node dsh-plugin-sidebar/verify-load.mjs
+ * Run: bun dsh-plugin-sidebar/verify-load.mjs
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 
 const HERE = import.meta.dirname;
-const read = (name) => readFileSync(join(HERE, name), "utf8");
+
+/**
+ * The bundle's own files, read once through Bun.file. The script runs under Bun (like the sibling
+ * plug-in verifiers), so no synchronous node:fs read is needed; `read` stays synchronous for the
+ * checks below.
+ */
+const SOURCE_TEXT = await (async () => {
+  const files = [];
+  for (const entry of readdirSync(HERE, { withFileTypes: true })) {
+    if (entry.isFile()) {
+      files.push(entry.name);
+    } else if (entry.isDirectory()) {
+      for (const child of readdirSync(join(HERE, entry.name), {
+        withFileTypes: true,
+      })) {
+        if (child.isFile()) files.push(`${entry.name}/${child.name}`);
+      }
+    }
+  }
+  const pairs = await Promise.all(
+    files.map(async (name) => [name, await Bun.file(join(HERE, name)).text()]),
+  );
+  return new Map(pairs);
+})();
+const read = (name) => SOURCE_TEXT.get(name) ?? "";
 
 let failed = 0;
 function check(label, body) {
@@ -268,7 +292,7 @@ check("locales are complete and interpolate", () => {
   const zhKeys = Object.keys(dicts.zh).sort();
   assert(enKeys.length > 0, "en dictionary is empty");
   assert(
-    JSON.stringify(enKeys) === JSON.stringify(zhKeys),
+    Bun.deepEquals(enKeys, zhKeys),
     "en and zh dictionaries have different keys",
   );
   assert(
