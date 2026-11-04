@@ -35,6 +35,29 @@ ignorePatterns = [
 # Install keys (linker, globalStore, cache.dir, frozenLockfile, minimumReleaseAge) are owned by the
 # machine config at ~/.bunfig.toml. Setting them here would override that SSOT, so they stay out.
 
+# Native Bun lint (Bun 1.5+). Bun 1.4.4 accepts but ignores this section; the enforced
+# gate is `bun run lint:check` (oxlint 1.90 + oxlint-tsgolint). Keep this block aligned
+# with .oxlintrc.json.
+#
+# `typeAware` stays off deliberately: the full type-aware pass currently reports 605
+# warnings (166 no-floating-promises), and `bun check` has 11 unrelated errors.
+[lint]
+ignorePatterns = [
+  "**/node_modules/**",
+  "verification/manager-boot-oracle/pinned/**",
+  "scratch/**",
+  "Scratch/**",
+  "dist/**",
+]
+
+[lint.categories]
+correctness = "warn"
+
+[lint.rules]
+"@typescript-eslint/no-explicit-any" = "error"
+"@typescript-eslint/no-require-imports" = "error"
+"preserve-caught-error" = "warn"
+
 [run]
 # Exit automatically when the parent process dies (macOS kqueue EVFILT_PROC/NOTE_EXIT)
 # and stop-verify-kill all spawned descendants (including headless Bun.WebView).
