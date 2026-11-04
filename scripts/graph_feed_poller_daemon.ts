@@ -189,19 +189,21 @@ export interface GraphLiveFeedPayload {
   readonly gsliveWagers?: WagersLiveEvent;
 }
 
+const CDT_TIMESTAMP_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  timeZoneName: "short",
+});
+
 function formatCdtTimestamp(date: Date): string {
   try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-      timeZoneName: "short",
-    }).format(date);
+    return CDT_TIMESTAMP_FORMAT.format(date);
   } catch {
     return date.toISOString();
   }

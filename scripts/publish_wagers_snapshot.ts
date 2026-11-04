@@ -36,15 +36,17 @@ function walkKeys(value: unknown, path = ""): string[] {
     ...walkKeys(v, path ? `${path}.${k}` : k),
   ]);
 }
+const CHICAGO_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Chicago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function chicagoDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) throw new Error(`invalid timestamp ${iso}`);
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
+  const parts = CHICAGO_YMD_FORMAT.formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
