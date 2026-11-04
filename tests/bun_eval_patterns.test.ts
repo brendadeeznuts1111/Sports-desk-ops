@@ -54,6 +54,34 @@ function probe(
   };
 }
 
+/**
+ * `bun repl -e|-p` is a different entrypoint from `bun -e|-p`: object literals parse as
+ * expressions there, and `-p` prints a structured value. HOME is redirected into the scratch dir
+ * so the REPL's `~/.bun_repl_history` can never touch the operator's real home.
+ */
+function probeRepl(
+  flag: "-e" | "-p",
+  src: string,
+  opts: ProbeOptions = {},
+): ProbeResult {
+  const env: Record<string, string | undefined> = { ...Bun.env };
+  for (const key of opts.unsetEnv ?? []) delete env[key];
+  Object.assign(env, { HOME: scratch }, opts.env);
+  const p = Bun.spawnSync([process.execPath, "repl", flag, src], {
+    env,
+    cwd: opts.cwd ?? scratch,
+    stdin: opts.stdin === undefined ? "ignore" : Buffer.from(opts.stdin),
+    timeout: opts.timeoutMs ?? 10_000,
+  });
+  return {
+    out: p.stdout.toString(),
+    err: p.stderr.toString(),
+    code: p.exitCode,
+    signal: p.signalCode ?? null,
+    timedOut: p.exitedDueToTimeout === true,
+  };
+}
+
 beforeAll(() => {
   scratch = mkdtempSync(join(tmpdir(), "bun-eval-patterns-"));
 });
@@ -95,6 +123,31 @@ describe("bun -e / -p patterns (docs/bun-eval-pitfalls.md)", () => {
     const r = probe("-p", 'JSON.stringify({ s: "hi", n: 1 })');
     expect(JSON.parse(r.out)).toEqual({ s: "hi", n: 1 });
     expect(JSON.parse(probe("-p", 'JSON.stringify("hi")').out)).toBe("hi");
+  });
+
+  test("eval-print-json: bun -p reads a bare object as a block, bun repl -p as an object", () => {
+    // bun -p '{a:1}' parses a BLOCK with a label, so it prints the label's value.
+    expect(probe("-p", "{a:1}").out.trim()).toBe("1");
+    // The repl entrypoint parses the same text as an object expression.
+    const repl = probeRepl("-p", "{a:1}");
+    expect(repl.code).toBe(0);
+    expect(repl.err).toBe("");
+    expect(repl.out).toContain("a: 1");
+    expect(repl.out.trim().startsWith("{")).toBe(true);
+  });
+
+  test("eval-print-json: bun repl -e evaluates without printing the value", () => {
+    expect(probeRepl("-e", 'console.log("side-effect")').out.trim()).toBe(
+      "side-effect",
+    );
+    expect(probeRepl("-e", "{a:1}").out.trim()).toBe("");
+  });
+
+  test("eval-print-json: bun repl exits on EOF instead of hanging a piped caller", () => {
+    const r = probeRepl("-e", "", { stdin: "1+1\n" });
+    expect(r.timedOut).toBe(false);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("2");
   });
 
   test("main-guard: a module imported from an eval skips its main block", () => {
