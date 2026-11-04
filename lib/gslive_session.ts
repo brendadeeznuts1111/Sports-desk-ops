@@ -213,3 +213,10 @@ export async function sessionFromRunningChrome(
 
 /** Re-export so callers can classify profile failures without importing the F402 module. */
 export { ProfileSessionError as GsliveProfileViewError };
+
+// Auto-minted manager session (keychain username/password -> verified GSID).
+export {
+  ensureGsid,
+  fetchBetLog,
+  fetchEventLog,
+} from "./gslive_auto_session.ts";

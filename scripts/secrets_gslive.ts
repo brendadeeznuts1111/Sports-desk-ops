@@ -142,6 +142,14 @@ switch (command) {
     );
     break;
   }
+  case "login": {
+    const { ensureGsid } = await import("../lib/gslive_auto_session.ts");
+    const gsid = await ensureGsid();
+    console.error(
+      `secrets:gslive: GSLive session ready (GSID ${gsid === "" ? "missing" : "verified"}, value not printed)`,
+    );
+    break;
+  }
   case "delete": {
     await deleteGsliveSecret();
     console.error(`secrets:gslive: removed the ${GSID_SECRET.service} session`);

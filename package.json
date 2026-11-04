@@ -230,7 +230,8 @@
     "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts",
     "bridge3c:rollup": "bun run scripts/gslive_tally_bridge3c.ts",
     "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts",
-    "bridge3b:rollup": "bun run scripts/f402_pending_bridge3b.ts"
+    "bridge3b:rollup": "bun run scripts/f402_pending_bridge3b.ts",
+    "gslive:audit-bet": "bun run scripts/gslive_bet_event_audit.ts"
   },
   "keywords": [
     "sportsdesk",

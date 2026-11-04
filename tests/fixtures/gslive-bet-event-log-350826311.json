@@ -1,0 +1,80 @@
+{
+  "betId": "350826311",
+  "eventId": "207059651",
+  "event": {
+    "state": "unblocked",
+    "team1name": "UNLV",
+    "team2name": "Northern Arizona"
+  },
+  "betLog": {
+    "r": [
+      {
+        "betLogId": "1255129920",
+        "logDetails": "Bet placed @ +2431",
+        "logTime": "1793761946000",
+        "isManuallyEntered": "0",
+        "adminUserName": null
+      },
+      {
+        "betLogId": "1255129965",
+        "logDetails": "Ticket# 1074652273 accepted @ +2731",
+        "logTime": "1793761952000",
+        "isManuallyEntered": "0",
+        "adminUserName": null
+      }
+    ],
+    "e": 0,
+    "d": ""
+  },
+  "eventLog": {
+    "r": [
+      {
+        "id": "1358716398",
+        "updateTime": "1793761890926",
+        "eventResult": "{\"m\": [8, 2], \"p\": 1, \"s\": [[8, 2]], \"t\": 1025, \"gp\": 1, \"ht\": false, \"tu\": 1793761890, \"ls_guid\": \"a398df10-cd2b-46a1-9a8a-282abc7ba44d\"}"
+      },
+      {
+        "id": "1358716433",
+        "updateTime": "1793761900530",
+        "eventResult": "{\"m\": [10, 2], \"p\": 1, \"s\": [[10, 2]], \"t\": 1020, \"gp\": 1, \"ht\": false, \"tu\": 1793761900, \"ls_guid\": \"200fc82b-fd42-4632-b81b-8a1f1703cb0d\"}"
+      },
+      {
+        "id": "1358716569",
+        "updateTime": "1793761925982",
+        "eventResult": "{\"m\": [10, 4], \"p\": 1, \"s\": [[10, 4]], \"t\": 991, \"gp\": 1, \"ht\": false, \"tu\": 1793761926, \"ls_guid\": \"be35c2f7-4987-4e35-b224-d1d98d31554a\"}"
+      },
+      {
+        "id": "1358716666",
+        "updateTime": "1793761944010",
+        "eventResult": "{\"m\": [10, 4], \"p\": 1, \"s\": [[10, 4]], \"t\": 971, \"gp\": 1, \"ht\": false, \"tu\": 1793761944, \"ls_guid\": \"2622bbea-24f8-4278-8b4d-5a8f7628bb5d\"}"
+      },
+      {
+        "id": "1358716695",
+        "updateTime": "1793761950247",
+        "eventResult": "{\"m\": [10, 4], \"p\": 1, \"s\": [[10, 4]], \"t\": 969, \"gp\": 1, \"ht\": false, \"tu\": 1793761950, \"ls_guid\": \"b10d1171-a637-432c-ba4c-37c999eccb1b\"}"
+      },
+      {
+        "id": "1358716718",
+        "updateTime": "1793761953488",
+        "eventResult": "{\"m\": [10, 4], \"p\": 1, \"s\": [[10, 4]], \"t\": 965, \"gp\": 1, \"ht\": false, \"tu\": 1793761953, \"ls_guid\": \"b1376fca-67a0-42c1-9439-e053ae850856\"}"
+      },
+      {
+        "id": "1358716734",
+        "updateTime": "1793761956701",
+        "eventResult": "{\"m\": [10, 4], \"p\": 1, \"s\": [[10, 4]], \"t\": 964, \"gp\": 1, \"ht\": false, \"tu\": 1793761956, \"ls_guid\": \"f369064f-06ec-44e8-998d-c147d801ae33\"}"
+      },
+      {
+        "id": "1358716737",
+        "updateTime": "1793761957842",
+        "eventResult": "{\"m\": [13, 4], \"p\": 2, \"s\": [[13, 4]], \"t\": 959, \"gp\": 1, \"ht\": false, \"tu\": 1793761957, \"ls_guid\": \"3f36eb9e-e790-44ba-8651-d5753af2776b\"}"
+      },
+      {
+        "id": "1358716871",
+        "updateTime": "1793761979852",
+        "eventResult": "{\"m\": [13, 7], \"p\": 1, \"s\": [[13, 7]], \"t\": 939, \"gp\": 1, \"ht\": false, \"tu\": 1793761979, \"ls_guid\": \"f8d9c47c-2c4a-4c24-9bde-8a28084e86c4\"}"
+      }
+    ],
+    "e": 0,
+    "d": ""
+  }
+}
