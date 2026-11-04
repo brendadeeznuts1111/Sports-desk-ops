@@ -25,6 +25,32 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(typeof WebSocket).toBe("function");
   });
 
+  test("node:crypto argon2 and the WebSocket client extension are usable", async () => {
+    // v1.4.1 shipped argon2 in node:crypto and pause/resume on the WHATWG client socket.
+    // Both are pinned in bin/bun_surface.ts ("compat"); this test proves the behaviour, not
+    // just the property: a 32-byte tag for argon2id, and functions on the prototype.
+    const crypto = (await import("node:crypto")) as unknown as Record<
+      string,
+      unknown
+    >;
+    const argon2Sync = crypto["argon2Sync"] as
+      | ((algorithm: string, options: Record<string, unknown>) => Buffer)
+      | undefined;
+    expect(typeof argon2Sync).toBe("function");
+    const tag = argon2Sync!("argon2id", {
+      message: "pw",
+      nonce: "saltsalt",
+      parallelism: 1,
+      tagLength: 32,
+      memory: 8,
+      passes: 1,
+    });
+    expect(tag.length).toBe(32);
+    const socket = WebSocket.prototype as unknown as Record<string, unknown>;
+    expect(typeof socket["pause"]).toBe("function");
+    expect(typeof socket["resume"]).toBe("function");
+  });
+
   test("DNS resolution is available for the capture preflight", () => {
     // `Bun.dns.lookup` is the call `capture:preflight` depends on; verify it exists in this build.
     // `resolve` is present at runtime but missing from the 1.4.4 type surface, hence the cast.

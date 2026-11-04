@@ -86,6 +86,21 @@ describe("dx bun", () => {
     expect(report.proxy?.env).toHaveProperty("present");
   });
 
+  test("pins the compatibility surface before adoption", async () => {
+    const report = JSON.parse((await run(["--json"])).stdout) as Report;
+    const compat = report.checks.filter((check) => check.group === "compat");
+    expect(compat.map((check) => check.name).sort()).toEqual([
+      "WebSocket.pause",
+      "node:crypto.argon2Sync",
+    ]);
+    expect(compat.every((check) => check.ok)).toBe(true);
+
+    // The text summary names the group, so a human run shows the same two facts.
+    const text = await run([]);
+    expect(text.code).toBe(0);
+    expect(text.stdout).toContain("compat 2/2");
+  });
+
   test("names the drift it can prove", async () => {
     const report = JSON.parse((await run(["--json"])).stdout) as Report;
     const ids = report.drift.map((entry) => entry.id);
