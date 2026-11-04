@@ -511,6 +511,8 @@ describe("bridge rollup cycle", () => {
     expect(result.jobs.map((job) => job.id)).toEqual(["bridge3c", "weblog"]);
     expect(calls[0]?.argv).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/gslive_tally_bridge3c.ts",
       "--fetch-open",
@@ -521,6 +523,8 @@ describe("bridge rollup cycle", () => {
     ]);
     expect(calls[1]?.argv).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
       "--out",
@@ -543,6 +547,8 @@ describe("bridge rollup cycle", () => {
 
     expect(byId("bridge3a").args).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_bet_ticker_bridge3a.ts",
       "--once",
@@ -550,6 +556,8 @@ describe("bridge rollup cycle", () => {
     expect(byId("bridge3a").requiredEnv).toEqual(["F402_AGENT_ID"]);
     expect(byId("bridge3b").args).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_pending_bridge3b.ts",
     ]);
@@ -560,6 +568,8 @@ describe("bridge rollup cycle", () => {
     ]);
     expect(byId("bridge3c").args).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/gslive_tally_bridge3c.ts",
       "--fetch-open",
@@ -575,6 +585,8 @@ describe("bridge rollup cycle", () => {
     ]);
     expect(byId("weblog").args).toEqual([
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
       "--out",

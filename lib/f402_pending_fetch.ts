@@ -11,6 +11,58 @@ export class F402PendingFetchError extends Error {
 
 const MIN_TOKEN_LENGTH = 24;
 
+const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+const INVALID_TOKEN_MESSAGE = `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, or F402_TOKEN_FILE (min ${MIN_TOKEN_LENGTH} chars, raw value only)`;
+
+/** A headerless JWT is exactly three non-empty base64url segments. */
+function isJwtShaped(token: string): boolean {
+  const segments = token.split(".");
+  return (
+    segments.length === 3 &&
+    segments.every(
+      (segment) => segment !== "" && BASE64URL_SEGMENT.test(segment),
+    )
+  );
+}
+
+/**
+ * Normalizes one candidate (`Bearer ` prefix stripped) and validates it. Returns null instead of
+ * throwing so a file read can fail closed without guessing whether the content was a token.
+ *
+ * Rejected: empty/zero, shell text (`umask…`, `export…`, anything containing whitespace), and a
+ * JWT-looking value (`eyJ…`) that is not exactly three non-empty base64url segments. Opaque
+ * tokens are accepted when they meet the existing minimum length.
+ */
+export function validateF402Token(raw: string): string | null {
+  const token = raw
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (token === "" || token === "0") return null;
+  if (/\s/.test(token)) return null;
+  if (/^(?:umask|export)/.test(token)) return null;
+  if (token.startsWith("eyJ") && !isJwtShaped(token)) return null;
+  if (token.length < MIN_TOKEN_LENGTH) return null;
+  return token;
+}
+
+/**
+ * Reads a token file and returns the validated token, or null when the file is missing,
+ * unreadable, or does not hold exactly one raw token. Reads are injectable for tests.
+ */
+export function readF402TokenFile(
+  path: string,
+  readFile: (target: string) => string = (target) =>
+    readFileSync(target, "utf8"),
+): string | null {
+  try {
+    return validateF402Token(readFile(path));
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve the bearer token read-only: CLI, env, then the token file; fail before network I/O. */
 export function resolveF402BearerToken(
   options: {
@@ -23,28 +75,31 @@ export function resolveF402BearerToken(
     options.environment ?? (Bun.env as Record<string, string | undefined>);
   const readFile =
     options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
-  let token = (options.cliToken ?? "").trim();
-  if (token === "") token = (env.F402_BEARER_TOKEN ?? "").trim();
-  if (token === "") {
-    const explicit = (env.F402_TOKEN_FILE ?? "").trim();
-    const configHome =
-      (env.XDG_CONFIG_HOME ?? "").trim() ||
-      `${(env.HOME ?? "").trim()}/.config`;
-    const path =
-      explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
-    try {
-      token = readFile(path).trim();
-    } catch {
-      token = "";
-    }
+
+  // First non-empty source wins, as before: a present-but-invalid source fails closed instead of
+  // silently falling through to a stale env/file token.
+  const cliRaw = (options.cliToken ?? "").trim();
+  if (cliRaw !== "") {
+    const token = validateF402Token(cliRaw);
+    if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+    return token;
   }
-  token = token.replace(/^Bearer\s+/i, "").trim();
-  if (token === "" || token === "0" || token.length < MIN_TOKEN_LENGTH) {
-    throw new F402PendingFetchError(
-      `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, or F402_TOKEN_FILE (min ${MIN_TOKEN_LENGTH} chars)`,
-    );
+  const envRaw = (env.F402_BEARER_TOKEN ?? "").trim();
+  if (envRaw !== "") {
+    const token = validateF402Token(envRaw);
+    if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+    return token;
   }
-  return token;
+
+  const explicit = (env.F402_TOKEN_FILE ?? "").trim();
+  const configHome =
+    (env.XDG_CONFIG_HOME ?? "").trim() || `${(env.HOME ?? "").trim()}/.config`;
+  const path =
+    explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
+  const fromFile = readF402TokenFile(path, readFile);
+  if (fromFile !== null) return fromFile;
+
+  throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
 }
 
 /** `deskDate - 6d` in America/Chicago, for the 7-day open book. */

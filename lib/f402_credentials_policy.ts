@@ -6,9 +6,13 @@
  * the platform tool (macOS `security`) or `Bun.secrets` when injected in tests.
  *
  * **Child-process rules (the only places a plaintext password crosses a process boundary):**
- * 1. **Keychain read** — `Bun.spawn(["security","find-generic-password",…])` with an **argv array**
- *    (no shell) and an explicit minimal environment allowlist (`buildMinimalSpawnEnv()`). Never `Bun.$` —
- *    interpolation routes bytes through a shell parser.
+ * 1. **Keychain read** — canonical service (`com.bookdeskops.sportsdesk`) then the legacy
+ *    `sportsdesk-ops` fallback. The macOS path shells to `Bun.spawn(["security",
+ *    "find-generic-password",…])` with an **argv array** (no shell) and an explicit minimal
+ *    environment allowlist (`buildMinimalSpawnEnv()`), and fails closed on a 1s timeout so a
+ *    locked Keychain cannot hang a daemon. Never `Bun.$` — interpolation routes bytes through a
+ *    shell parser. When a reader is injected (`Bun.secrets` by default, a fake in tests) only that
+ *    reader is used.
  * 2. **TTY hidden read** — no native no-echo on `Bun.stdin`; uses `Bun.spawn(["bash","-c",
  *    "read -rs …"])` with stdin inherited from the TTY and `env: buildMinimalSpawnEnv()`.
  * 3. **Keychain store** (`secrets:f402 set`) — password only via **stdin**; the macOS write path
@@ -21,10 +25,25 @@ import { stdin as input, stdout as output } from "node:process";
 import {
   MissingF402CredentialsError,
   SECRET_NAMES,
-  SECRETS_SERVICE,
   type F402Credentials,
   type SecretsReader,
 } from "../scripts/capture/f402_login.ts";
+import {
+  CANONICAL_SECRETS_SERVICE,
+  LEGACY_SECRETS_SERVICE,
+} from "./secrets.ts";
+
+/**
+ * @deprecated Legacy-only service name, kept for back-compat. Reads now go canonical-first
+ * (`CANONICAL_SECRETS_SERVICE`) with this as the fallback; nothing new should read only here.
+ */
+export const SECRETS_SERVICE = LEGACY_SECRETS_SERVICE;
+
+/** Read order for every keychain lookup: canonical service first, then the pre-migration one. */
+const KEYCHAIN_SERVICES = [
+  CANONICAL_SECRETS_SERVICE,
+  LEGACY_SECRETS_SERVICE,
+] as const;
 
 export const DEPRECATED_ENV_CREDENTIALS_FLAG = "F402_ALLOW_ENV_CREDENTIALS";
 
@@ -90,46 +109,68 @@ export function wrapF402Credentials(
   return new SecureF402CredentialHandle(creds, source);
 }
 
-async function readMacOsKeychainValue(account: string): Promise<string> {
+/**
+ * A locked Keychain (or an item whose ACL wants an interactive consent dialog) makes
+ * `security -w` block forever — a daemon or a test has no one to click Allow. Fail closed fast.
+ */
+const PLATFORM_KEYCHAIN_TIMEOUT_MS = 1_000;
+
+async function readMacOsKeychainValue(
+  service: string,
+  account: string,
+): Promise<string> {
   const proc = Bun.spawn(
-    [
-      "security",
-      "find-generic-password",
-      "-s",
-      SECRETS_SERVICE,
-      "-a",
-      account,
-      "-w",
-    ],
+    ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
     { stdout: "pipe", stderr: "pipe", env: buildMinimalSpawnEnv() },
   );
-  const out = await new Response(proc.stdout).text();
-  const exit = await proc.exited;
-  if (exit !== 0) return "";
-  return out.trim();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), PLATFORM_KEYCHAIN_TIMEOUT_MS);
+  });
+  try {
+    const result = await Promise.race([proc.exited, timedOut]);
+    if (result === "timeout") {
+      proc.kill();
+      await proc.exited.catch(() => undefined);
+      return "";
+    }
+    if (result !== 0) return "";
+    return (await new Response(proc.stdout).text()).trim();
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
+/** macOS fallback: try the canonical service, then the legacy one. */
 async function readKeychainViaPlatform(account: string): Promise<string> {
-  if (process.platform === "darwin") {
-    return readMacOsKeychainValue(account);
+  if (process.platform !== "darwin") return "";
+  for (const service of KEYCHAIN_SERVICES) {
+    const value = await readMacOsKeychainValue(service, account);
+    if (value !== "") return value;
   }
   return "";
 }
 
+/**
+ * Keychain read with one injected reader (production: `Bun.secrets`, tests: a fake). The reader
+ * is asked canonical-first then legacy, matching `lib/secrets.ts`. The macOS `security` CLI is
+ * the fallback only when the caller supplied no reader at all (`null`), so a fake store stays
+ * deterministic and never depends on the machine's real keychain.
+ */
 async function readKeychain(
   secrets: SecretsReader | null,
   name: string,
 ): Promise<string> {
-  const fromPlatform = await readKeychainViaPlatform(name);
-  if (fromPlatform !== "") return fromPlatform;
-  if (secrets === null) return "";
-  try {
-    return (
-      (await secrets.get({ service: SECRETS_SERVICE, name }))?.trim() ?? ""
-    );
-  } catch {
-    return "";
+  if (secrets === null) return readKeychainViaPlatform(name);
+  for (const service of KEYCHAIN_SERVICES) {
+    try {
+      const value = (await secrets.get({ service, name }))?.trim() ?? "";
+      if (value !== "") return value;
+    } catch {
+      // Locked/unavailable keychain: fall through to the next service.
+    }
   }
+  return "";
 }
 
 /**

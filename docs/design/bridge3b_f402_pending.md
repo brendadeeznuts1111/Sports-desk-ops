@@ -102,6 +102,7 @@ via the service's HTTP surface.
 - **Memory invariant:** zero collection-heap allocations on the aggregation path. No `Map`, `Set`,
   `boolean[]`, or dynamic `T[]` resizing. Column capacities are allocated once from `C_max` and the
   radix table; the only growth is the preallocated arena.
+  **Status (measured 2026-11-04):** the shipped aggregation path in `lib/gslive_tally_rollup.ts` allocates `new Map` in `groups` (line 414), `labelKey` (527) and `siblingGroups` (638), plus `new Set` in `suppressedIndices` (633). This invariant is a target design (fixed TypedArray arenas), **not** a property of the current code. Verification: `bun --heap-prof-md --heap-prof-dir=profiles/ scripts/gslive_tally_bridge3c.ts <fixture> --dry-run --no-r2` gives a retained-object snapshot (it does NOT attribute allocations per call path, so it cannot by itself prove "zero"); the enforceable check is the ratchet in `tests/tally_allocation_invariant.test.ts`, which fails if the collection-allocation count in the projection module increases. Note: in this design revision GATE-02 is `UnsignedHandleAndKeyIntegrity`, not the allocation invariant, so the heap profile is recorded as allocation-invariant evidence, not as a GATE-02 artifact.
 - **Inline legs:** `InlineCapacityList<LegSlot, 8>`; census P100=1, so 8 slots have 8× headroom.
   If a ticket exceeds 8 legs, use the bounded overflow slab (64 slots) and increment
   `overflowTicketCount`; if the slab is exhausted, fail closed via GATE-05. Never drop a leg or

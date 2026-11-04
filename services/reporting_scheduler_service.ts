@@ -26,6 +26,7 @@ import {
 import { SportsDeskTelegramService } from "./sportsdesk_telegram_bot.ts";
 import {
   formatBridgeDigestHtml,
+  keychainCredentialProbe,
   runBridgeRollupCycle,
   type BridgeRollupCycleResult,
   type BridgeRollupJobId,
@@ -415,7 +416,12 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 let bridgeCycleRunner: (
   jobs?: readonly BridgeRollupJobId[],
 ) => Promise<BridgeRollupCycleResult> = (jobs) =>
-  runBridgeRollupCycle(jobs === undefined ? {} : { jobs });
+  runBridgeRollupCycle({
+    ...(jobs === undefined ? {} : { jobs }),
+    // The cron daemon is a fresh process with no shell environment: F402/GSID credentials live in
+    // the OS keychain (canonical service first, legacy fallback), so the gate must read there.
+    credentials: keychainCredentialProbe({ env: Bun.env }),
+  });
 
 /** Replace the cycle runner; tests only. */
 export function setBridgeCycleRunner(

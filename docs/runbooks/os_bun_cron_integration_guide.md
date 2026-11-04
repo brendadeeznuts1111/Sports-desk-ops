@@ -292,3 +292,71 @@ bun sportsdesk_cli.ts docs --audit
 bun sportsdesk_cli.ts docs --watch
 # or: bun run docs:watch
 ```
+
+---
+
+## 6. Bridge rollup schedules (in-process `Bun.cron` in the webview daemon)
+
+The four bridge rollups run from the long-lived webview daemon (`startBridgeSchedules()` in
+`services/sportsdesk_webview_server.ts`), not from the Telegram bot daemon: the bot daemon starts
+its schedules with `BRIDGE_SCHEDULE_IDS` excluded, so running both processes cannot publish twice
+or send duplicate digests.
+
+| Schedule                     | Cron           | Timezone          | Jobs                                                 |
+| ---------------------------- | -------------- | ----------------- | ---------------------------------------------------- |
+| `sched_bridge_rollup_15m`    | `*/15 * * * *` | `America/Chicago` | bridge3a `--once`, bridge3b, bridge3c `--fetch-open` |
+| `sched_bridge_weblog_hourly` | `7 * * * *`    | `America/Chicago` | the WebLog corpus rollup                             |
+
+The cycle is sequential (a tick cannot overlap itself; `startInProcessCron` skips an overlapping
+fire), and the Telegram digest fires only when a gate, flag or job status **changed**. The first
+tick establishes the baseline. The dashboard's Review Queue shows the current OK/FAIL state even
+when no alert fired, and its "Dispatch digest" button sends the last recorded state — it does not
+run the CLIs inside the request.
+
+### Process flags
+
+Every bridge child runs as `bun --no-orphans --no-env-file run <cli>`:
+
+- `--no-orphans` — if the daemon dies mid-rollup, descendant fetches are SIGKILLed instead of
+  surviving and racing the next tick to advance `latest.json`.
+- `--no-env-file` — a stray repo `.env` cannot shadow the explicit child environment or the
+  keychain. The daemon itself is launched with the same flag; `.env` is inert in production.
+- The flag belongs on the production/cron entrypoints, **not** in `bunfig.toml` (a developer
+  shell still wants `.env`). `--no-env-file` only suppresses _automatic_ loading; explicit
+  `Bun.env.FOO` reads are unaffected.
+
+### Credentials
+
+The daemon is a fresh process with no shell environment, so the gate reads the OS keychain:
+
+- **Canonical service first, legacy second**: `com.bookdeskops.sportsdesk`, then
+  `sportsdesk-ops` (`lib/secrets.ts`, mirroring `resolveSecretBackedEnv`). A bare read of the
+  legacy service is the bug that makes a missing credential look like a wrong one.
+- **bridge3c**: `resolveManagerSession()` is keychain-first, so a stored `GSID` satisfies it with
+  no environment variable.
+- **bridge3b**: the CLI sends `Authorization: Bearer`, so the gate requires `F402_BEARER_TOKEN`
+  or a non-empty `F402_TOKEN_FILE`. The stored agent id/password are deliberately **not** enough:
+  the cookie session is not accepted by that fetch. A bearer mint is **held** until
+  `POST /cloud/api/System/authenticateCustomer` is confirmed to return an _agent_ token (the
+  capture allowlist classifies it as an auth exchange, and no response was ever captured).
+- **bridge3a**: needs an agent id (env `F402_AGENT_ID` or the keychain) **and** a readable
+  session file. Only `F402_AGENT_ID` is injected into the child environment; the password is
+  never passed on.
+
+Prerequisite: the keychain entry must allow `bun` without prompting. A prompt hangs the tick, and
+a hanging tick blocks the next one — worse than a failure.
+
+### Verification status
+
+- Manual, credential-less cycle run: passed — all three credential jobs recorded as
+  `missing credentials` without spawning, second tick silent, state + history written.
+- Scheduled run: **not yet attempted.** It needs an agent-session host command that does not
+  expose secrets; that path (`session:login --from-keychain`) and a real tick remain unverified.
+
+### Session/token hygiene
+
+`readF402Session()` validates shape (JSON object, non-empty cookie header, `Bearer` authorization
+when present) before returning, and returns `null` on a malformed file instead of throwing. The
+token reader rejects shell text and malformed JWT-shaped values. On 2026-11-04 two corrupted
+credential files were removed after the keychain reads were confirmed: `~/.config/sportsdesk/`
+`gslive-session` (73 B) and `f402-token` (90 B), both beginning with `umask`.

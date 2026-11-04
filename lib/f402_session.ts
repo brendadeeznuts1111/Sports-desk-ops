@@ -12,7 +12,9 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -67,48 +69,99 @@ function modeIsPrivate(path: string): boolean {
   }
 }
 
+const AUTHORIZATION_HEADER = /^Bearer\s+\S+$/;
+
+/**
+ * Validates one parsed session object. JSON has no typed schema, so this is the boundary: any
+ * shape a fresh login could not produce is rejected instead of being repaired into a half-session.
+ */
+function parseF402SessionValue(
+  value: unknown,
+  now: number,
+): F402Session | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return null;
+  const record = value as Record<string, unknown>;
+  const cookieHeader = record["cookieHeader"];
+  if (typeof cookieHeader !== "string") return null;
+  if (cookieHeader.trim() === "") return null;
+  if (!cookieHeader.includes("=")) return null;
+  // A cookie header is one header line; CR/LF here would be header injection.
+  if (/[\r\n\0]/.test(cookieHeader)) return null;
+
+  const authorizationHeader = record["authorizationHeader"];
+  let authorization: string | undefined;
+  if (authorizationHeader !== undefined) {
+    if (typeof authorizationHeader !== "string") return null;
+    // Same one-header-line rule as the cookie header, before the shape check.
+    if (/[\r\n\0]/.test(authorizationHeader)) return null;
+    if (!AUTHORIZATION_HEADER.test(authorizationHeader)) return null;
+    authorization = authorizationHeader;
+  }
+
+  const session: F402Session = {
+    cookieHeader,
+    cookieNames: Array.isArray(record["cookieNames"])
+      ? record["cookieNames"].filter(
+          (name): name is string => typeof name === "string",
+        )
+      : [],
+    ...(authorization === undefined
+      ? {}
+      : { authorizationHeader: authorization }),
+    obtainedAtIso:
+      typeof record["obtainedAtIso"] === "string"
+        ? record["obtainedAtIso"]
+        : "",
+    expiresAtIso:
+      typeof record["expiresAtIso"] === "string" ? record["expiresAtIso"] : "",
+  };
+  return isExpired(session, now) ? null : session;
+}
+
 /** Reads a cached session; returns null when missing, expired, malformed, or group/world-readable. */
 export function readF402Session(
   options?: F402SessionFileOptions,
 ): F402Session | null {
   const path = options?.path ?? resolveF402SessionPath();
   if (!existsSync(path) || !modeIsPrivate(path)) return null;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(
-      readFileSync(path, "utf8"),
-    ) as Partial<F402Session>;
-    if (typeof parsed.cookieHeader !== "string" || parsed.cookieHeader === "")
-      return null;
-    const session: F402Session = {
-      cookieHeader: parsed.cookieHeader,
-      cookieNames: Array.isArray(parsed.cookieNames)
-        ? parsed.cookieNames.filter(
-            (name): name is string => typeof name === "string",
-          )
-        : [],
-      ...(typeof parsed.authorizationHeader === "string"
-        ? { authorizationHeader: parsed.authorizationHeader }
-        : {}),
-      obtainedAtIso:
-        typeof parsed.obtainedAtIso === "string" ? parsed.obtainedAtIso : "",
-      expiresAtIso:
-        typeof parsed.expiresAtIso === "string" ? parsed.expiresAtIso : "",
-    };
-    return isExpired(session, options?.now ?? Date.now()) ? null : session;
+    parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch {
     return null;
   }
+  return parseF402SessionValue(parsed, options?.now ?? Date.now());
 }
 
-/** Writes the session with directory 0700 and file 0600. */
+/**
+ * Writes the session with directory 0700 and file 0600, atomically: a same-directory `.tmp` is
+ * written at 0600 and renamed over the target, so a reader never observes a partial JSON file.
+ */
 export function writeF402Session(
   session: F402Session,
   options?: F402SessionFileOptions,
 ): string {
   const path = options?.path ?? resolveF402SessionPath();
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(path, 0o600);
+  const directory = dirname(path);
+  const directoryExisted = existsSync(directory);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  if (!directoryExisted) chmodSync(directory, 0o700);
+  const temp = `${path}.tmp`;
+  try {
+    writeFileSync(temp, `${JSON.stringify(session, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    chmodSync(temp, 0o600);
+    renameSync(temp, path);
+  } catch (error) {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // Nothing to clean up; surface the original failure below.
+    }
+    throw error;
+  }
   return path;
 }
 

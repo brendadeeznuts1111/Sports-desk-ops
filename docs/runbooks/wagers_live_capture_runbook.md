@@ -19,6 +19,8 @@ GSID=... bun run wagers:capture --payload Scratch/ajax-getBetReport-body.json
 GSID=... bun run wagers:capture --bootstrap-session
 
 # initial capture + in-process Bun.cron (no-overlap), every 15 minutes
+# Production/cron workers run with --no-env-file (a stray .env is inert) and bridge children add
+# --no-orphans (a dead worker cannot leave an orphaned fetch racing the next tick).
 GSID=... bun run wagers:watch --cron "0,15,30,45 * * * *"
 
 # inspect without network or journal writes

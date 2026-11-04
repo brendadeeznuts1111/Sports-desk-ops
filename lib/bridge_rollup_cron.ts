@@ -38,9 +38,16 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { readF402Session } from "./f402_session.ts";
+import {
+  F402_KEYCHAIN_NAMES,
+  GSID_KEYCHAIN_NAME,
+  readSecretCanonicalThenLegacy,
+} from "./secrets.ts";
 
 export type BridgeRollupJobId = "bridge3a" | "bridge3b" | "bridge3c" | "weblog";
 
@@ -80,6 +87,24 @@ export interface BridgeRollupJobSpec {
   readonly requiredEnv: readonly string[];
 }
 
+/** A job's child environment: the cycle env plus anything a credential probe injects. */
+export type BridgeChildEnv = Readonly<Record<string, string | undefined>>;
+
+/** Why a job may or may not run. `source` is for logs; it never contains a secret. */
+export type BridgeCredentialDecision =
+  | {
+      readonly ok: true;
+      readonly source: string;
+      /** Added to the child env. Never carries a password. */
+      readonly extraEnv?: Readonly<Record<string, string>>;
+    }
+  | { readonly ok: false; readonly error: string };
+
+/** Decides, per job, whether the CLI has what it needs before the cycle spawns it. */
+export interface BridgeCredentialProbe {
+  check(job: BridgeRollupJobSpec): Promise<BridgeCredentialDecision>;
+}
+
 /** bridge3b (live fetch) and bridge3c (manager session) read the F402 session from env. */
 const F402_CREDENTIAL_ENV = [
   "F402_TOKEN_FILE",
@@ -87,6 +112,10 @@ const F402_CREDENTIAL_ENV = [
   "GSID",
 ] as const;
 
+// Every child runs with `--no-orphans` (a crashed worker SIGKILLs its descendants, so no
+// orphaned fetch can advance `latest.json`) and `--no-env-file` (a stray repo `.env` cannot
+// shadow the explicit child env or the keychain). The cron daemon itself is launched with
+// `--no-env-file` too; see docs/runbooks/os_bun_cron_integration_guide.md §6.
 export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
   {
     id: "bridge3a",
@@ -95,7 +124,14 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
     // `usage("no agent…")` and exits 2. Required env makes cron skip cleanly instead of spawning
     // and alerting on a usage error. When the operator runs the long-lived `bridge3a:poll`
     // daemon this cron tick is redundant, but harmless.
-    args: ["bun", "run", "scripts/f402_bet_ticker_bridge3a.ts", "--once"],
+    args: [
+      "bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/f402_bet_ticker_bridge3a.ts",
+      "--once",
+    ],
     timeoutMs: 120_000,
     requiredEnv: ["F402_AGENT_ID"],
   },
@@ -103,7 +139,13 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
     id: "bridge3b",
     label: "Pending liability rollup (3b)",
     // No --out: the CLI publishes to R2/WS and prints its receipt JSON on stdout.
-    args: ["bun", "run", "scripts/f402_pending_bridge3b.ts"],
+    args: [
+      "bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/f402_pending_bridge3b.ts",
+    ],
     timeoutMs: 120_000,
     requiredEnv: F402_CREDENTIAL_ENV,
   },
@@ -115,6 +157,8 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
     // manager_fetch reads Bun.env.GSID; gslive_auto_session reads GSLIVE_SESSION_FILE.
     args: [
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/gslive_tally_bridge3c.ts",
       "--fetch-open",
@@ -133,6 +177,8 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
     // corpus staging convention; a host without staged corpus records one clean job failure.
     args: [
       "bun",
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
       "--out",
@@ -201,6 +247,8 @@ const BRIDGE_ARTIFACTS: Readonly<
 export interface BridgeRollupJobContext extends BridgeRollupJobSpec {
   readonly root: string;
   readonly artifactPath?: string;
+  /** Env handed to the spawned CLI: cycle env + credential-probe extras. */
+  readonly childEnv: BridgeChildEnv;
 }
 
 export interface BridgeRollupJobRun extends BridgeRollupJobContext {
@@ -233,6 +281,12 @@ export interface BridgeRollupCycleOptions {
   readonly now?: () => number;
   /** Credential + threshold source. Default `Bun.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Per-job credential gate. Default: env-only (`envCredentialProbe`). The scheduler passes the
+   * keychain-aware `keychainCredentialProbe`, because a cron child inherits no shell env and the
+   * operator's F402/GSID entries live in the OS keychain.
+   */
+  readonly credentials?: BridgeCredentialProbe;
   readonly spawnJob?: (
     job: BridgeRollupJobContext,
     argv: readonly string[],
@@ -334,6 +388,7 @@ function resolveArgv(
 function jobContext(
   job: BridgeRollupJobSpec,
   root: string,
+  childEnv: BridgeChildEnv,
 ): BridgeRollupJobContext {
   const source = BRIDGE_ARTIFACTS[job.id];
   return source.kind === "file"
@@ -341,8 +396,9 @@ function jobContext(
         ...job,
         root,
         artifactPath: resolveAgainst(root, source.path),
+        childEnv,
       }
-    : { ...job, root };
+    : { ...job, root, childEnv };
 }
 
 function missingCredentials(
@@ -352,6 +408,135 @@ function missingCredentials(
   if (job.requiredEnv.length === 0) return null;
   const present = job.requiredEnv.some((name) => nonEmpty(envValue(env, name)));
   return present ? null : job.requiredEnv;
+}
+
+/**
+ * Default gate: environment only. Deterministic for CI and for tests, which must never read the
+ * operator's real keychain just by running the cycle.
+ */
+export function envCredentialProbe(
+  env: Readonly<Record<string, string | undefined>>,
+): BridgeCredentialProbe {
+  return {
+    async check(job) {
+      const missing = missingCredentials(job, env);
+      return missing === null
+        ? { ok: true, source: "env" }
+        : { ok: false, error: `missing credentials: ${missing.join(", ")}` };
+    },
+  };
+}
+
+export interface KeychainCredentialProbeOptions {
+  readonly env: Readonly<Record<string, string | undefined>>;
+  /** Canonical-then-legacy keychain read. Default `readSecretCanonicalThenLegacy`. */
+  readonly readSecret?: (name: string) => Promise<string | null>;
+  /** Default: `readF402Session() !== null`. */
+  readonly sessionPresent?: () => boolean;
+  /** Default: the token file exists and is non-empty. */
+  readonly tokenFilePresent?: (path: string) => boolean;
+  /** Keychain names, passed in so lib/ does not import scripts/. */
+  readonly gsidName?: string;
+  readonly agentIdName?: string;
+}
+
+function defaultTokenFilePath(
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const explicit = (envValue(env, "F402_TOKEN_FILE") ?? "").trim();
+  if (explicit !== "") return explicit;
+  const configHome =
+    (envValue(env, "XDG_CONFIG_HOME") ?? "").trim() ||
+    `${(envValue(env, "HOME") ?? "").trim()}/.config`;
+  return `${configHome}/sportsdesk/f402-token`;
+}
+
+/**
+ * Keychain-aware gate for the cron daemon. It matches where each CLI actually reads from:
+ * - 3c: `resolveManagerSession()` is keychain-first, so a stored GSID satisfies it with no env.
+ * - 3b: the CLI sends `Authorization: Bearer`, so only a bearer source (env or token file) counts;
+ *   the stored agent id/password are deliberately NOT accepted here (the bearer mint is held).
+ * - 3a: needs an agent id plus a readable session file; the agent id is injected into the child
+ *   env, never the password.
+ */
+export function keychainCredentialProbe(
+  options: KeychainCredentialProbeOptions,
+): BridgeCredentialProbe {
+  const env = options.env;
+  const readSecret = options.readSecret ?? readSecretCanonicalThenLegacy;
+  const sessionPresent =
+    options.sessionPresent ?? (() => readF402Session() !== null);
+  const tokenFilePresent =
+    options.tokenFilePresent ??
+    ((path: string) => {
+      try {
+        return statSync(path).size > 0;
+      } catch {
+        return false;
+      }
+    });
+  const gsidName = options.gsidName ?? GSID_KEYCHAIN_NAME;
+  const agentIdName = options.agentIdName ?? F402_KEYCHAIN_NAMES.agentId;
+
+  return {
+    async check(job) {
+      if (job.id === "weblog") return { ok: true, source: "corpus" };
+      if (job.id === "bridge3c") {
+        const envNames = [
+          "GSID",
+          "GSID_COOKIE",
+          "GSLIVE_SESSION_FILE",
+        ] as const;
+        const fromEnv = envNames.find((name) => nonEmpty(envValue(env, name)));
+        if (fromEnv !== undefined)
+          return { ok: true, source: `env:${fromEnv}` };
+        if (await readSecret(gsidName).catch(() => null)) {
+          return { ok: true, source: "keychain:GSID" };
+        }
+        return {
+          ok: false,
+          error:
+            "missing credentials: GSID (env GSID/GSID_COOKIE/GSLIVE_SESSION_FILE or keychain)",
+        };
+      }
+      if (job.id === "bridge3b") {
+        const envName = (
+          ["F402_BEARER_TOKEN", "F402_TOKEN_FILE"] as const
+        ).find((name) => nonEmpty(envValue(env, name)));
+        if (envName !== undefined)
+          return { ok: true, source: `env:${envName}` };
+        if (tokenFilePresent(defaultTokenFilePath(env))) {
+          return { ok: true, source: "token-file" };
+        }
+        return {
+          ok: false,
+          error:
+            "missing credentials: bearer token (F402_BEARER_TOKEN or F402_TOKEN_FILE); the cookie session is not accepted by the 3b fetch",
+        };
+      }
+      // bridge3a
+      const envAgent = (envValue(env, "F402_AGENT_ID") ?? "").trim();
+      const agentId =
+        envAgent !== ""
+          ? envAgent
+          : await readSecret(agentIdName).catch(() => null);
+      if (agentId === null || agentId === "") {
+        return { ok: false, error: "missing credentials: F402_AGENT_ID" };
+      }
+      if (!sessionPresent()) {
+        return {
+          ok: false,
+          error:
+            "missing credentials: no F402 session file (run session:login --from-keychain)",
+        };
+      }
+      return {
+        ok: true,
+        source: envAgent !== "" ? "env:agent" : "keychain:agent",
+        extraEnv: { F402_AGENT_ID: agentId },
+      };
+    },
+  };
 }
 
 /** Last balanced top-level `{…}` block of a log+JSON stream, or `null`. */
@@ -407,11 +592,10 @@ type BridgeChildProcess = {
 
 function defaultSpawnJob(
   root: string,
-  env: Readonly<Record<string, string | undefined>>,
 ): NonNullable<BridgeRollupCycleOptions["spawnJob"]> {
   return async (job, argv) => {
     const childEnv: Record<string, string> = {};
-    for (const [name, value] of Object.entries(env)) {
+    for (const [name, value] of Object.entries(job.childEnv)) {
       if (typeof value === "string") childEnv[name] = value;
     }
     let proc: BridgeChildProcess;
@@ -820,8 +1004,9 @@ export async function runBridgeRollupCycle(
     options.historyPath ?? DEFAULT_HISTORY_PATH,
   );
   const now = options.now ?? (() => Date.now());
-  const spawnJob = options.spawnJob ?? defaultSpawnJob(root, env);
+  const spawnJob = options.spawnJob ?? defaultSpawnJob(root);
   const readArtifact = options.readArtifact ?? defaultReadArtifact();
+  const credentials = options.credentials ?? envCredentialProbe(env);
   const selected = selectJobs(options.jobs);
   const previous = readState(statePath);
 
@@ -833,20 +1018,24 @@ export async function runBridgeRollupCycle(
   > = {};
 
   for (const job of selected) {
-    const missing = missingCredentials(job, env);
-    if (missing !== null) {
+    const decision = await credentials.check(job);
+    if (!decision.ok) {
       jobs.push({
         id: job.id,
         label: job.label,
         ok: false,
         durationMs: 0,
-        error: `missing credentials: ${missing.join(", ")}`,
+        error: decision.error,
       });
       artifactStatus[job.id] = "missing";
       continue;
     }
 
-    const context = jobContext(job, root);
+    // The probe may inject only non-secret values (e.g. F402_AGENT_ID); never a password.
+    const context = jobContext(job, root, {
+      ...env,
+      ...decision.extraEnv,
+    });
     const argv = resolveArgv(job, root);
     const startedAt = now();
     let spawnResult: BridgeSpawnResult;
