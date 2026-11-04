@@ -3048,6 +3048,30 @@ function surfaceOperationSpecs(
       },
     },
     {
+      path: "/api/csrf",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-telegram-admin-routes",
+      tag: TAG_DAEMON,
+      summary: "CSRF token issuer (GET /api/csrf)",
+      description:
+        "Issues an HMAC-signed CSRF token bound to the caller's `session` cookie (a crypto.randomUUID session is minted and set HttpOnly; SameSite=Lax; Path=/ on first call). `Cache-Control: no-store`. The mutating /api/telegram/* and /api/watchlist routes require this token as X-CSRF-Token with the same session cookie. Admin-token independent by design: the session cookie is the binding, not the credential. 503 when SPORTSDESK_CSRF_SECRET is unset. Surface: surface.daemon-telegram-admin-routes (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/csrf with and without a session cookie, and one rejected POST without X-CSRF-Token.",
+      responses: {
+        "200": jsonSurfaceResponse("CSRF token for the response's session.", {
+          success: { type: "boolean", const: true },
+          token: { type: "string" },
+        }),
+        "503": jsonSurfaceResponse(
+          "SPORTSDESK_CSRF_SECRET is not set on the server.",
+          {
+            success: { type: "boolean", const: false },
+            error: { type: "string" },
+          },
+        ),
+      },
+    },
+    {
       path: "/api/telegram/status",
       httpMethod: "GET",
       surfaceId: "surface.daemon-telegram-admin-routes",

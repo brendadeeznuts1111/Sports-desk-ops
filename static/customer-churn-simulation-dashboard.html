@@ -2578,6 +2578,29 @@
       let connected = false;
       let accounts = [];
       let sort = { key: "sportsHandleUSD", dir: -1 };
+      /** Session-bound CSRF token from /api/csrf; held in memory only, never persisted. */
+      let csrfToken = null;
+      let csrfRefreshPromise = null;
+
+      async function loadCsrfToken() {
+        if (csrfRefreshPromise) return csrfRefreshPromise;
+        csrfRefreshPromise = (async () => {
+          // Authed like every other /api/ read on this page; the issuer route itself is public.
+          const res = await authed("/api/csrf");
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || typeof body.token !== "string") {
+            throw new Error(
+              body.error ?? `CSRF token issuer answered HTTP ${res.status}`,
+            );
+          }
+          csrfToken = body.token;
+        })();
+        try {
+          await csrfRefreshPromise;
+        } finally {
+          csrfRefreshPromise = null;
+        }
+      }
 
       tokenInput.value = sessionStorage.getItem(TOKEN_KEY) ?? "";
 
@@ -2618,15 +2641,29 @@
       }
 
       async function api(path, init = {}) {
-        const res = await fetch(path, {
-          ...init,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${tokenInput.value}`,
-            ...init.headers,
-          },
-        });
-        const body = await res.json().catch(() => ({}));
+        const send = () =>
+          fetch(path, {
+            ...init,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${tokenInput.value}`,
+              ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+              ...init.headers,
+            },
+          });
+        let res = await send();
+        let body = await res.json().catch(() => ({}));
+        const method = (init.method ?? "GET").toUpperCase();
+        if (
+          res.status === 403 &&
+          body?.error === "Invalid CSRF token" &&
+          method !== "GET" &&
+          method !== "HEAD"
+        ) {
+          await loadCsrfToken();
+          res = await send();
+          body = await res.json().catch(() => ({}));
+        }
         if (!res.ok || body.success === false) {
           throw new Error(body.error ?? `HTTP ${res.status}`);
         }
@@ -2640,12 +2677,26 @@
        * TOKEN REQUIRED with no way to supply one.
        */
       function authed(path, init = {}) {
-        return fetch(path, {
-          ...init,
-          headers: {
-            Authorization: `Bearer ${tokenInput.value}`,
-            ...init.headers,
-          },
+        const send = () =>
+          fetch(path, {
+            ...init,
+            headers: {
+              Authorization: `Bearer ${tokenInput.value}`,
+              ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+              ...init.headers,
+            },
+          });
+        const method = (init.method ?? "GET").toUpperCase();
+        return send().then(async (res) => {
+          if (res.status === 403 && method !== "GET" && method !== "HEAD") {
+            const peek = res.clone();
+            const body = await peek.json().catch(() => ({}));
+            if (body?.error === "Invalid CSRF token") {
+              await loadCsrfToken();
+              return send();
+            }
+          }
+          return res;
         });
       }
 
@@ -2984,7 +3035,11 @@
         }
       }, ACTIVITY_POLL_MS);
 
-      refresh();
+      // Panels load their data before the CSRF token resolves — the mutating verbs need it,
+      // the GETs do not — but the token fetch kicks off first so it is ready by first click.
+      loadCsrfToken()
+        .catch((err) => say(`CSRF token unavailable: ${err.message}`, "bad"))
+        .finally(refresh);
 
       /* ------------------------------------------------------------------ *
        * Shared settings helpers                                            *

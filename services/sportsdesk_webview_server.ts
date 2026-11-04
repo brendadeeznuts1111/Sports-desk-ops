@@ -12,6 +12,8 @@
  *  - High-throughput Response.json() and lazy Response(Bun.file()) static file handle serving.
  *  - Standardized CORS and CSP frame-ancestors for Telegram Mini App embedding (no X-Frame-Options).
  *  - Robust error boundary handling via Bun.serve `error(err)` returning structured 500 JSON.
+ *  - `/api/csrf` issues an HMAC-signed CSRF token bound to a per-visitor HttpOnly session cookie;
+ *    mutating `/api/telegram/*` and `/api/watchlist` calls require it via `X-CSRF-Token`.
  */
 
 import crypto from "node:crypto";
@@ -200,6 +202,65 @@ function adminRejection(
   return a.length === b.length && crypto.timingSafeEqual(a, b)
     ? null
     : { status: 401, error: "Missing or wrong admin token" };
+}
+
+/**
+ * The requester's session id from `session=<id>`. `null` when the visitor has no
+ * session yet — never a shared placeholder, or every session-less visitor would
+ * share one token binding.
+ *
+ * Only server-minted UUIDs are accepted; arbitrary client-supplied strings are rejected so
+ * callers cannot invent their own session bindings or exploit malformed cookie sequences.
+ * The canonical `crypto.randomUUID()` format embeds the hyphenated hexadecimal shape.
+ */
+const SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getSessionId(req: Request): string | null {
+  const values =
+    req.headers.get("cookie")?.match(/(?:^|;\s*)session=([^;]+)/g) ?? [];
+  if (values.length !== 1) return null;
+  const value = values[0].replace(/^(?:^|;\s*)session=/, "").trim();
+  return SESSION_ID_RE.test(value) ? value : null;
+}
+
+/** `null` when the CSRF signing secret is unset. Read per request like the admin token. */
+function csrfSecret(): string | null {
+  const secret = Bun.env.SPORTSDESK_CSRF_SECRET ?? "";
+  return secret.length > 0 ? secret : null;
+}
+
+/**
+ * `null` when the request carries a CSRF token bound to its own session.
+ *
+ * Browsers never attach `Authorization` cross-site, but they do attach cookies,
+ * so the mutating `/api/telegram/*` and `/api/watchlist` routes — which also
+ * hold ambient authority by that path — require a session-bound token. The
+ * token is HMAC-signed with `SPORTSDESK_CSRF_SECRET`; without the secret this
+ * rejects (503) rather than falling back to an unbound token.
+ */
+function csrfRejection(
+  req: Request,
+): { status: 403 | 503; error: string } | null {
+  const secret = csrfSecret();
+  if (secret === null) {
+    return {
+      status: 503,
+      error: "SPORTSDESK_CSRF_SECRET is not set on the server",
+    };
+  }
+  const sessionId = getSessionId(req);
+  const token = req.headers.get("x-csrf-token") ?? "";
+  // The token's own embedded expiry is authoritative. Do not add a second, tighter maxAge:
+  // retain the documented 24-hour lifetime and let the client refresh on a 403 CSRF rejection.
+  if (
+    sessionId === null ||
+    token === "" ||
+    !Bun.CSRF.verify(token, { secret, sessionId })
+  ) {
+    return { status: 403, error: "Invalid CSRF token" };
+  }
+  return null;
 }
 
 const repoRoot = resolve(
@@ -697,7 +758,7 @@ export function startServer(options?: ServerOptions) {
   const baseHeaders: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, X-Requested-With, X-Telegram-Bot-Api-Secret-Token",
+      "Content-Type, Authorization, X-Requested-With, X-Telegram-Bot-Api-Secret-Token, X-CSRF-Token",
     "Content-Security-Policy":
       "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:;",
     "X-Content-Type-Options": "nosniff",
@@ -2119,6 +2180,42 @@ export function startServer(options?: ServerOptions) {
         return Response.json({ ok: true }, { headers: cors });
       }
 
+      // CSRF token issuer: mints the per-visitor session cookie and the token bound to it.
+      // Mutating /api/telegram/* and /api/watchlist calls require it via X-CSRF-Token.
+      if (pathname === "/api/csrf" && req.method === "GET") {
+        const secret = csrfSecret();
+        if (secret === null) {
+          return Response.json(
+            {
+              success: false,
+              error: "SPORTSDESK_CSRF_SECRET is not set on the server",
+            },
+            { status: 503, headers: cors },
+          );
+        }
+        let sessionId = getSessionId(req);
+        const headers = new Headers(cors);
+        if (sessionId === null) {
+          sessionId = crypto.randomUUID();
+          headers.append(
+            "Set-Cookie",
+            `session=${sessionId}; HttpOnly; SameSite=Lax; Path=/`,
+          );
+        }
+        // A token is only meaningful for one session; never let a cache hold it.
+        headers.set("Cache-Control", "no-store");
+        return Response.json(
+          {
+            success: true,
+            token: Bun.CSRF.generate(secret, {
+              sessionId,
+              expiresIn: 24 * 60 * 60 * 1000,
+            }),
+          },
+          { headers },
+        );
+      }
+
       if (
         pathname === "/api/watchlist" ||
         pathname.startsWith("/api/telegram/")
@@ -2129,6 +2226,16 @@ export function startServer(options?: ServerOptions) {
             { success: false, error: rejected.error },
             { status: rejected.status, headers: cors },
           );
+        }
+        // Reads stay open to the dashboard; mutations also need the session-bound token.
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          const csrf = csrfRejection(req);
+          if (csrf) {
+            return Response.json(
+              { success: false, error: csrf.error },
+              { status: csrf.status, headers: cors },
+            );
+          }
         }
       }
 

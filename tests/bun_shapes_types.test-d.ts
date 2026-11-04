@@ -17,3 +17,7 @@ export type ImportKindShape = Bun.ImportKind;
 
 /** A runtime shape stays usable in a type position too. */
 export type FileShape = ReturnType<typeof Bun.file>;
+
+/** Bun.CSRF is declared in types/bun-api.d.ts (not yet in @types/bun). */
+export type CsrfGenerateShape = typeof Bun.CSRF.generate;
+export type CsrfVerifyShape = typeof Bun.CSRF.verify;

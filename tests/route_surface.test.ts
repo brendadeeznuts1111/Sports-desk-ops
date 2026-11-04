@@ -227,8 +227,9 @@ describe("the committed tree", () => {
     // scripts/generate_openapi.ts. A non-zero count here now means a new route landed without a
     // spec path, which is what the CI step exists to catch.
     expect(compareRouteSurfaces(inputs)).toEqual([]);
-    // 47 API/page paths, plus the dashboard's agent-graph raster: a page asset, not an /api
+    // 48 API/page paths, plus the dashboard's agent-graph raster: a page asset, not an /api
     // contract path, so it is declared by a ledger surface and correctly absent from the spec.
-    expect(inputs.served.size).toBe(56);
+    // (+1: /api/csrf, the CSRF token issuer.)
+    expect(inputs.served.size).toBe(57);
   });
 });

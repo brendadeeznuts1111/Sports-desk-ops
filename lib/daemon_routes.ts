@@ -315,6 +315,13 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-telegram-admin-routes",
   }),
   defineRoute({
+    path: "/api/csrf",
+    method: "GET",
+    guard: "none",
+    dataClass: "operational",
+    surface: "surface.daemon-telegram-admin-routes",
+  }),
+  defineRoute({
     path: "/api/test/error",
     method: "ANY",
     guard: "none",

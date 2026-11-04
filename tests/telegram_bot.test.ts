@@ -220,11 +220,15 @@ describe("Webview server Telegram endpoints", () => {
     token: env.TELEGRAM_BOT_TOKEN,
     admin: env.SPORTSDESK_ADMIN_TOKEN,
     secret: env.TELEGRAM_WEBHOOK_SECRET,
+    csrf: env.SPORTSDESK_CSRF_SECRET,
   };
 
   beforeAll(async () => {
     delete env.TELEGRAM_BOT_TOKEN;
     env.TELEGRAM_WEBHOOK_SECRET = "hook-secret";
+    // Mutating /api/telegram/* calls need the session-bound token since the CSRF guard;
+    // /api/csrf mints one with this secret for the test below.
+    env.SPORTSDESK_CSRF_SECRET = "test-csrf-secret";
     const { startServer } =
       await import("../services/sportsdesk_webview_server.ts");
     server = startServer({ port: 0, hostname: "127.0.0.1" });
@@ -237,6 +241,7 @@ describe("Webview server Telegram endpoints", () => {
       ["TELEGRAM_BOT_TOKEN", saved.token],
       ["SPORTSDESK_ADMIN_TOKEN", saved.admin],
       ["TELEGRAM_WEBHOOK_SECRET", saved.secret],
+      ["SPORTSDESK_CSRF_SECRET", saved.csrf],
     ] as const) {
       if (value === undefined) delete env[key];
       else env[key] = value;
@@ -269,9 +274,18 @@ describe("Webview server Telegram endpoints", () => {
 
   test("test_assert_report_rejects_unknown_type", async () => {
     env.SPORTSDESK_ADMIN_TOKEN = "admin-secret";
+    const csrfRes = await fetch(`${base}/api/csrf`);
+    const session =
+      /session=([^;]+)/.exec(csrfRes.headers.get("set-cookie") ?? "")?.[1] ??
+      "";
+    const { token } = (await csrfRes.json()) as { token: string };
     const res = await fetch(`${base}/api/telegram/report?type=NOPE`, {
       method: "POST",
-      headers: { Authorization: "Bearer admin-secret" },
+      headers: {
+        Authorization: "Bearer admin-secret",
+        cookie: `session=${session}`,
+        "x-csrf-token": token,
+      },
     });
     expect(res.status).toBe(400);
   });

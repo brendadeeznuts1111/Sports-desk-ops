@@ -88,6 +88,39 @@ declare global {
   }
 }
 
+/**
+ * Bun 1.4 CSRF token API (not yet in @types/bun).
+ *
+ * bun-types declares no CSRF surface, so Bun.CSRF is undeclared at the type
+ * level even though the binary exposes it (probed by bin/bun_surface.ts; see
+ * `RUNTIME_ONLY_SHAPES` in lib/bun_shapes.ts). Token payload is a nonce, an
+ * issue timestamp, the `expiresIn` duration and an HMAC signature.
+ */
+export type CSRFAlgorithm =
+  "blake2b256" | "blake2b512" | "sha256" | "sha384" | "sha512" | "sha512-256";
+
+export interface CSRFGenerateOptions {
+  expiresIn?: number;
+  encoding?: "base64" | "base64url" | "hex";
+  algorithm?: CSRFAlgorithm;
+  sessionId?: string;
+}
+
+export interface CSRFVerifyOptions {
+  secret?: string;
+  encoding?: "base64" | "base64url" | "hex";
+  algorithm?: CSRFAlgorithm;
+  maxAge?: number;
+  sessionId?: string;
+}
+
+declare module "bun" {
+  export namespace CSRF {
+    function generate(secret?: string, options?: CSRFGenerateOptions): string;
+    function verify(token: string, options?: CSRFVerifyOptions): boolean;
+  }
+}
+
 /** Bun 1.4 process memory-pressure event (not yet in @types/node). */
 declare global {
   namespace NodeJS {

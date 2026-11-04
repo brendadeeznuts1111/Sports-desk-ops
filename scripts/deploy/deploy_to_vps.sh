@@ -154,6 +154,20 @@ if ! grep -qE '^SPORTSDESK_ADMIN_TOKEN=.+' "$APP_DIR/.env"; then
   echo -e "      Admin token (shown once, stored in ${APP_DIR}/.env): ${BOLD}${ADMIN_TOKEN}${NC}"
 fi
 
+# The dashboard's mutating routes fail closed without this secret; make the deploy provision it
+# automatically rather than leaving them 503 until an operator notices.
+if [ -z "${SPORTSDESK_CSRF_SECRET:-}" ] && ! grep -qE '^SPORTSDESK_CSRF_SECRET=.+' "$APP_DIR/.env"; then
+  CSRF_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  {
+    echo ""
+    echo "# Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by deploy_to_vps.sh."
+    echo "# Server-side secret for the dashboard's CSRF tokens. Rotate together with the admin token."
+    echo "SPORTSDESK_CSRF_SECRET=${CSRF_SECRET}"
+  } >> "$APP_DIR/.env"
+  chmod 600 "$APP_DIR/.env"
+  echo -e "      CSRF secret (shown once, stored in ${APP_DIR}/.env): ${BOLD}${CSRF_SECRET}${NC}"
+fi
+
 echo -e "      Production configuration saved to ${APP_DIR}/.env"
 
 # Step 4: Configure and Enable Systemd Service

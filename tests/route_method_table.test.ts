@@ -74,7 +74,17 @@ const lan = Object.values(networkInterfaces())
 
 const publicRoutes = DAEMON_ROUTES.filter((route) => route.guard === "none");
 
+/** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
+function setEnv(key: string, value: string | undefined): void {
+  if (value === undefined) Reflect.deleteProperty(process.env, key);
+  else Reflect.set(process.env, key, value);
+}
+
 describe.skipIf(lan === undefined)("public routes are not gated", () => {
+  // /api/csrf needs its signing secret configured to answer at all (503 by design unset);
+  // "public" here means no credential is owed, not that the operator may skip server config.
+  const savedCsrf = process.env["SPORTSDESK_CSRF_SECRET"];
+  setEnv("SPORTSDESK_CSRF_SECRET", "route-method-table-csrf-secret");
   const remote = startServer({ port: 0, hostname: "0.0.0.0" });
   const remoteBase = `http://${lan ?? "127.0.0.1"}:${remote.port}`;
 
@@ -90,5 +100,6 @@ describe.skipIf(lan === undefined)("public routes are not gated", () => {
 
   afterAll(() => {
     remote.stop(true);
+    setEnv("SPORTSDESK_CSRF_SECRET", savedCsrf);
   });
 });
