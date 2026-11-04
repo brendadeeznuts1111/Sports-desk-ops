@@ -276,10 +276,16 @@ for (const item of filesToPublish) {
   const file = Bun.file(path.join(repoRoot, item.file));
   if (!(await file.exists())) continue;
   const bytes = await file.bytes();
-  await client.putWithMetadata(item.key, bytes, {
+  await client.writeWithMetadata(item.key, bytes, {
     type: item.type,
     metadata: item.meta ?? {},
   });
+  const stored = await client.stat(item.key);
+  if (stored.size !== bytes.length) {
+    throw new Error(
+      `R2 stat mismatch for ${item.key}: wrote ${bytes.length}, stat ${stored.size}`,
+    );
+  }
   console.log(
     `  ✓ Published ${item.key.padEnd(46)} (${String(bytes.length).padStart(7)} B | sha256 ${new Bun.CryptoHasher("sha256").update(bytes).digest("hex").slice(0, 12)}…) -> ${publicBase}/${item.key}`,
   );

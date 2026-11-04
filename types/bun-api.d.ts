@@ -23,3 +23,18 @@ export type BunS3Client = Bun.S3Client;
 export type BunS3File = Bun.S3File;
 export type BunS3Options = Bun.S3Options;
 export type BunS3Stats = Bun.S3Stats;
+
+/** Bun's documented S3 error codes (bun.com/docs/runtime/s3#error-codes). */
+export type BunS3ErrorCode =
+  | "ERR_S3_MISSING_CREDENTIALS"
+  | "ERR_S3_INVALID_METHOD"
+  | "ERR_S3_INVALID_PATH"
+  | "ERR_S3_INVALID_ENDPOINT"
+  | "ERR_S3_INVALID_SIGNATURE"
+  | "ERR_S3_INVALID_SESSION_TOKEN";
+
+/** An S3Error from the service (name === "S3Error") or a Bun ERR_S3_* failure. */
+export interface BunS3Error extends Error {
+  readonly name: "S3Error" | string;
+  readonly code?: BunS3ErrorCode;
+}

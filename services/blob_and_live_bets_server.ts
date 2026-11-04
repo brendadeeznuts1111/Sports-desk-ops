@@ -16,7 +16,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { imageErrorCode } from "../lib/image_errors.ts";
-import { R2S3Client } from "../lib/r2_s3_client.ts";
+import { isS3Error, R2S3Client } from "../lib/r2_s3_client.ts";
 
 export interface BlobStat {
   readonly size: number;
@@ -149,6 +149,12 @@ class ImageRejectedError extends Error {
 
 function jsonError(status: number, code: string, message: string): Response {
   return Response.json({ error: { code, message } }, { status });
+}
+
+/** Map Bun S3Error/ERR_S3_* to a stable 502 body without leaking credentials. */
+function storeFailure(error: unknown, fallbackCode: string): Response {
+  const code = isS3Error(error) ? (error.code ?? "S3Error") : fallbackCode;
+  return jsonError(502, code, "Storage operation failed");
 }
 
 function hash(value: string): Buffer {
@@ -480,19 +486,15 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
                 return jsonError(404, "not_found", "Blob not found");
               }
               return await options.blobs.getResponse(key);
-            } catch {
-              return jsonError(502, "read_failed", "Could not read the blob");
+            } catch (error) {
+              return storeFailure(error, "read_failed");
             }
           }
           let url: string;
           try {
             url = options.blobs.presignGet(key, presignTtlSec);
-          } catch {
-            return jsonError(
-              502,
-              "presign_failed",
-              "Could not presign the blob",
-            );
+          } catch (error) {
+            return storeFailure(error, "presign_failed");
           }
           return Response.redirect(url, 302);
         },
@@ -547,8 +549,8 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
               width: transcoded.width,
               height: transcoded.height,
             });
-          } catch {
-            return jsonError(502, "store_failed", "Could not store the blob");
+          } catch (error) {
+            return storeFailure(error, "store_failed");
           }
         },
         DELETE: async (request: KeyedRequest) => {
@@ -565,8 +567,8 @@ export function createBlobLiveBetsServer(options: BlobLiveBetsOptions): {
             }
             await options.blobs.delete(key);
             return new Response(null, { status: 204 });
-          } catch {
-            return jsonError(502, "delete_failed", "Could not delete the blob");
+          } catch (error) {
+            return storeFailure(error, "delete_failed");
           }
         },
       },

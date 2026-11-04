@@ -29,6 +29,24 @@ describe("Bun.S3Client contract", () => {
     for (const name of METHODS) expect(statics.has(name)).toBe(true);
   });
 
+  test("lazy S3File exposes the pinned members and a NaN size", () => {
+    const file = Bun.s3.file("missing.txt");
+    for (const name of [
+      "slice",
+      "stat",
+      "exists",
+      "unlink",
+      "delete",
+      "presign",
+      "write",
+    ] as const) {
+      expect(typeof (file as unknown as Record<string, unknown>)[name]).toBe(
+        "function",
+      );
+    }
+    expect(Number.isNaN(file.size)).toBe(true);
+  });
+
   test("Bun.s3 is an S3Client value and matches the type alias", () => {
     const s3: BunS3Client = Bun.s3;
     expect(s3).toBeInstanceOf(Bun.S3Client);

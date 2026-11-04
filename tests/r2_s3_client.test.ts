@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  isS3Error,
+  isS3ErrorCode,
   R2S3Client,
   type R2S3ClientBackend,
+  S3_ERROR_CODES,
   resolveR2S3Options,
   sha256Hex,
 } from "../lib/r2_s3_client.ts";
@@ -86,19 +89,45 @@ describe("resolveR2S3Options", () => {
     });
   });
 
-  test("falls back to S3_* then AWS_*", () => {
+  test("credential precedence is R2 → token → S3 → AWS", () => {
+    const full = {
+      R2_BUCKET_NAME: "bucket",
+      CLOUDFLARE_ACCOUNT_ID: "acct",
+      R2_ACCESS_KEY_ID: "r2-access",
+      R2_SECRET_ACCESS_KEY: "r2-secret",
+      CLOUDFLARE_R2_TOKEN_ID: "token-id",
+      CLOUDFLARE_R2_API_TOKEN: "token-value",
+      S3_ACCESS_KEY_ID: "s3-access",
+      S3_SECRET_ACCESS_KEY: "s3-secret",
+      AWS_ACCESS_KEY_ID: "aws-access",
+      AWS_SECRET_ACCESS_KEY: "aws-secret",
+    };
+    expect(resolveR2S3Options(full)?.accessKeyId).toBe("r2-access");
+
+    const withoutR2 = { ...full };
+    delete (withoutR2 as { R2_ACCESS_KEY_ID?: string }).R2_ACCESS_KEY_ID;
+    delete (withoutR2 as { R2_SECRET_ACCESS_KEY?: string })
+      .R2_SECRET_ACCESS_KEY;
+    expect(resolveR2S3Options(withoutR2)?.accessKeyId).toBe("token-id");
+    expect(resolveR2S3Options(withoutR2)?.secretAccessKey).toBe(
+      sha256Hex("token-value"),
+    );
+
     expect(
       resolveR2S3Options({
         S3_BUCKET: "s3bucket",
         S3_ENDPOINT: "https://s3.example",
         S3_ACCESS_KEY_ID: "s3-access",
         S3_SECRET_ACCESS_KEY: "s3-secret",
+        AWS_ACCESS_KEY_ID: "aws-access",
+        AWS_SECRET_ACCESS_KEY: "aws-secret",
       })?.accessKeyId,
     ).toBe("s3-access");
+
     expect(
       resolveR2S3Options({
         AWS_BUCKET: "awsbucket",
-        AWS_ENDPOINT_URL_S3: "https://aws.example",
+        AWS_ENDPOINT: "https://aws.example",
         AWS_ACCESS_KEY_ID: "aws-access",
         AWS_SECRET_ACCESS_KEY: "aws-secret",
       })?.bucket,
@@ -125,7 +154,7 @@ describe("resolveR2S3Options", () => {
 });
 
 describe("R2S3Client uploads", () => {
-  test("putWithMetadata presigns a PUT and sends x-amz-meta-* headers", async () => {
+  test("writeWithMetadata presigns a PUT and sends x-amz-meta-* headers", async () => {
     const backend = new FakeBackend();
     const client = R2S3Client.fromOptions(
       {
@@ -157,7 +186,7 @@ describe("R2S3Client uploads", () => {
     }) as typeof fetch;
 
     const bytes = new Uint8Array([1, 2, 3]);
-    const written = await client.putWithMetadata("blobs/k.webp", bytes, {
+    const written = await client.writeWithMetadata("blobs/k.webp", bytes, {
       type: "image/webp",
       metadata: { surface: "blob", Author: "desk" },
     });
@@ -206,6 +235,62 @@ describe("R2S3Client uploads", () => {
     );
     await client.write("a.txt", "hello", { type: "text/plain" });
     expect(backend.writes).toEqual([{ key: "a.txt", type: "text/plain" }]);
+  });
+
+  test("sliceBytes reads a range through S3File.slice", async () => {
+    const backend = new FakeBackend();
+    backend.file = (): Bun.S3File =>
+      ({
+        slice: (start: number, end?: number) => ({
+          arrayBuffer: async () =>
+            new TextEncoder().encode("hello-world").slice(start, end).buffer,
+        }),
+      }) as unknown as Bun.S3File;
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    expect(new TextDecoder().decode(await client.sliceBytes("x", 6, 11))).toBe(
+      "world",
+    );
+  });
+
+  test("stat never reads the deprecated S3File.size property", async () => {
+    const backend = new FakeBackend();
+    backend.file = (): Bun.S3File => {
+      throw new Error("stat must not touch S3File.size");
+    };
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    expect((await client.stat("x")).size).toBe(42);
+  });
+
+  test("classifies all six ERR_S3_* codes and S3Error", () => {
+    for (const code of S3_ERROR_CODES) {
+      expect(isS3ErrorCode(code)).toBe(true);
+      const err = Object.assign(new Error("s3 failure"), { code });
+      expect(isS3Error(err)).toBe(true);
+    }
+    const named = Object.assign(new Error("service error"), {
+      name: "S3Error",
+    });
+    expect(isS3Error(named)).toBe(true);
+    expect(isS3Error(new Error("plain"))).toBe(false);
+    expect(isS3ErrorCode("ERR_NOT_S3")).toBe(false);
   });
 
   test("forwards stat/exists/size/list/presign/delete/unlink/file", async () => {

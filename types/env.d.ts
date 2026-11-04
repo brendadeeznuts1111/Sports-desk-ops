@@ -64,11 +64,17 @@ declare module "bun" {
     /** Generic S3/AWS fallbacks accepted by lib/r2_s3_client.ts. */
     readonly S3_ACCESS_KEY_ID?: string;
     readonly S3_SECRET_ACCESS_KEY?: string;
-    readonly S3_BUCKET?: string;
+    readonly S3_REGION?: string;
     readonly S3_ENDPOINT?: string;
+    readonly S3_BUCKET?: string;
+    readonly S3_SESSION_TOKEN?: string;
     readonly AWS_ACCESS_KEY_ID?: string;
     readonly AWS_SECRET_ACCESS_KEY?: string;
+    readonly AWS_REGION?: string;
+    readonly AWS_SESSION_TOKEN?: string;
     readonly AWS_BUCKET?: string;
+    readonly AWS_ENDPOINT?: string;
+    /** Legacy alias accepted by the resolver. */
     readonly AWS_ENDPOINT_URL_S3?: string;
     /** Cloudflare R2 API token id/value; value is hashed to the S3 secret. */
     readonly CLOUDFLARE_R2_TOKEN_ID?: string;

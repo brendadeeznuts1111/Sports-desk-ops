@@ -16,11 +16,46 @@ import type {
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
 
+/** Bun's S3 error codes (bun.com/docs/runtime/s3#error-codes). */
+export const S3_ERROR_CODES = [
+  "ERR_S3_MISSING_CREDENTIALS",
+  "ERR_S3_INVALID_METHOD",
+  "ERR_S3_INVALID_PATH",
+  "ERR_S3_INVALID_ENDPOINT",
+  "ERR_S3_INVALID_SIGNATURE",
+  "ERR_S3_INVALID_SESSION_TOKEN",
+] as const;
+
+export type S3ErrorCode = (typeof S3_ERROR_CODES)[number];
+
+export interface S3LikeError extends Error {
+  readonly name: "S3Error" | string;
+  readonly code?: S3ErrorCode;
+}
+
+export function isS3ErrorCode(value: unknown): value is S3ErrorCode {
+  return (
+    typeof value === "string" &&
+    (S3_ERROR_CODES as readonly string[]).includes(value)
+  );
+}
+
+/** True for Bun's S3Error and for the six documented ERR_S3_* codes. */
+export function isS3Error(error: unknown): error is S3LikeError {
+  return (
+    error instanceof Error &&
+    (error.name === "S3Error" ||
+      isS3ErrorCode((error as { code?: unknown }).code))
+  );
+}
+
 export interface R2S3Options {
   readonly bucket: string;
   readonly endpoint: string;
   readonly accessKeyId: string;
   readonly secretAccessKey: string;
+  readonly sessionToken?: string;
+  readonly region?: string;
   readonly publicBase: string;
 }
 
@@ -68,7 +103,41 @@ export function sha256Hex(value: string): string {
  * token pair (`CLOUDFLARE_R2_TOKEN_ID` becomes the access-key id; the secret is the
  * SHA-256 hex of `CLOUDFLARE_R2_API_TOKEN`).
  */
+function credentialPair(
+  access: string | undefined,
+  secret: string | undefined,
+): { readonly accessKeyId: string; readonly secretAccessKey: string } | null {
+  return access === undefined || secret === undefined
+    ? null
+    : { accessKeyId: access, secretAccessKey: secret };
+}
+
 export function resolveR2S3Options(env: R2S3Env = Bun.env): R2S3Options | null {
+  // Explicit precedence: R2_* → Cloudflare token pair → S3_* → AWS_*.
+  const candidates = [
+    credentialPair(
+      firstDefined(env, ["R2_ACCESS_KEY_ID"]),
+      firstDefined(env, ["R2_SECRET_ACCESS_KEY"]),
+    ),
+    (() => {
+      const tokenId = firstDefined(env, ["CLOUDFLARE_R2_TOKEN_ID"]);
+      const tokenValue = firstDefined(env, ["CLOUDFLARE_R2_API_TOKEN"]);
+      return tokenId === undefined || tokenValue === undefined
+        ? null
+        : { accessKeyId: tokenId, secretAccessKey: sha256Hex(tokenValue) };
+    })(),
+    credentialPair(
+      firstDefined(env, ["S3_ACCESS_KEY_ID"]),
+      firstDefined(env, ["S3_SECRET_ACCESS_KEY"]),
+    ),
+    credentialPair(
+      firstDefined(env, ["AWS_ACCESS_KEY_ID"]),
+      firstDefined(env, ["AWS_SECRET_ACCESS_KEY"]),
+    ),
+  ];
+  const credentials = candidates.find((candidate) => candidate !== null);
+  if (credentials === null || credentials === undefined) return null;
+
   const bucket = firstDefined(env, [
     "R2_BUCKET_NAME",
     "S3_BUCKET",
@@ -77,41 +146,23 @@ export function resolveR2S3Options(env: R2S3Env = Bun.env): R2S3Options | null {
   const accountId =
     firstDefined(env, ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCOUNT_ID"]) ?? "";
   const endpoint =
-    firstDefined(env, ["R2_ENDPOINT", "S3_ENDPOINT", "AWS_ENDPOINT_URL_S3"]) ??
+    firstDefined(env, ["S3_ENDPOINT", "AWS_ENDPOINT", "AWS_ENDPOINT_URL_S3"]) ??
     (accountId === ""
       ? undefined
       : `https://${accountId}.r2.cloudflarestorage.com`);
-  let accessKeyId = firstDefined(env, [
-    "R2_ACCESS_KEY_ID",
-    "S3_ACCESS_KEY_ID",
-    "AWS_ACCESS_KEY_ID",
+  if (bucket === undefined || endpoint === undefined) return null;
+
+  const sessionToken = firstDefined(env, [
+    "S3_SESSION_TOKEN",
+    "AWS_SESSION_TOKEN",
   ]);
-  let secretAccessKey = firstDefined(env, [
-    "R2_SECRET_ACCESS_KEY",
-    "S3_SECRET_ACCESS_KEY",
-    "AWS_SECRET_ACCESS_KEY",
-  ]);
-  if (accessKeyId === undefined || secretAccessKey === undefined) {
-    const tokenId = firstDefined(env, ["CLOUDFLARE_R2_TOKEN_ID"]);
-    const tokenValue = firstDefined(env, ["CLOUDFLARE_R2_API_TOKEN"]);
-    if (tokenId !== undefined && tokenValue !== undefined) {
-      accessKeyId = tokenId;
-      secretAccessKey = sha256Hex(tokenValue);
-    }
-  }
-  if (
-    bucket === undefined ||
-    endpoint === undefined ||
-    accessKeyId === undefined ||
-    secretAccessKey === undefined
-  ) {
-    return null;
-  }
+  const region = firstDefined(env, ["S3_REGION", "AWS_REGION"]);
   return {
     bucket,
     endpoint,
-    accessKeyId,
-    secretAccessKey,
+    ...credentials,
+    ...(sessionToken === undefined ? {} : { sessionToken }),
+    ...(region === undefined ? {} : { region }),
     publicBase: firstDefined(env, ["R2_PUBLIC_URL"]) ?? DEFAULT_PUBLIC_BASE,
   };
 }
@@ -135,7 +186,7 @@ function byteLength(data: Uint8Array | string): number {
 
 export class R2S3Client {
   constructor(
-    private readonly client: R2S3ClientBackend,
+    readonly client: R2S3ClientBackend,
     readonly bucket: string,
     readonly publicBase: string,
   ) {}
@@ -144,14 +195,17 @@ export class R2S3Client {
     options: R2S3Options,
     client?: R2S3ClientBackend,
   ): R2S3Client {
-    const backend =
-      client ??
-      new Bun.S3Client({
-        bucket: options.bucket,
-        endpoint: options.endpoint,
-        accessKeyId: options.accessKeyId,
-        secretAccessKey: options.secretAccessKey,
-      });
+    const credentials: Bun.S3Options = {
+      bucket: options.bucket,
+      endpoint: options.endpoint,
+      accessKeyId: options.accessKeyId,
+      secretAccessKey: options.secretAccessKey,
+      ...(options.sessionToken === undefined
+        ? {}
+        : { sessionToken: options.sessionToken }),
+      ...(options.region === undefined ? {} : { region: options.region }),
+    };
+    const backend = client ?? new Bun.S3Client(credentials);
     return new R2S3Client(backend, options.bucket, options.publicBase);
   }
 
@@ -183,7 +237,7 @@ export class R2S3Client {
    * Upload with `x-amz-meta-*` headers. Bun's S3 writer has no metadata option, so
    * this presigns a PUT, then sends the caller's metadata headers on the upload.
    */
-  async putWithMetadata(
+  async writeWithMetadata(
     key: string,
     data: Uint8Array | string,
     options: {
@@ -208,6 +262,27 @@ export class R2S3Client {
       throw new Error(`R2 PUT ${key} failed (${response.status})`);
     }
     return byteLength(data);
+  }
+
+  /** Back-compat alias for callers written before the writeWithMetadata rename. */
+  async putWithMetadata(
+    key: string,
+    data: Uint8Array | string,
+    options: {
+      readonly type?: string;
+      readonly metadata?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<number> {
+    return this.writeWithMetadata(key, data, options);
+  }
+
+  async sliceBytes(
+    key: string,
+    start: number,
+    end?: number,
+  ): Promise<Uint8Array> {
+    const sliced = this.client.file(key).slice(start, end);
+    return new Uint8Array(await sliced.arrayBuffer());
   }
 
   stat(key: string): Promise<S3Stats> {

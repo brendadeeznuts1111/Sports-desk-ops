@@ -349,6 +349,36 @@ describe("blob + live-bets gateway", () => {
     expect(await store.exists("x")).toBe(false);
   });
 
+  test("S3Error / ERR_S3_* failures map to a stable 502 code", async () => {
+    class FailingStore extends MemoryBlobStore {
+      override async exists(): Promise<boolean> {
+        throw Object.assign(new Error("signature rejected"), {
+          name: "S3Error",
+          code: "ERR_S3_INVALID_SIGNATURE",
+        });
+      }
+    }
+    const { server, close } = createBlobLiveBetsServer({
+      blobs: new FailingStore(),
+      apiToken: API_TOKEN,
+      ticketSecret: TICKET_SECRET,
+      port: 0,
+      hostname: "127.0.0.1",
+    });
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${server.port}/api/v1/blobs/k1`,
+        { method: "DELETE", headers: auth() },
+      );
+      expect(response.status).toBe(502);
+      expect(await response.json()).toMatchObject({
+        error: { code: "ERR_S3_INVALID_SIGNATURE" },
+      });
+    } finally {
+      close(true);
+    }
+  });
+
   test("unknown paths return a JSON 404", async () => {
     const h = start();
     const response = await fetch(`${h.url}/nope`);
