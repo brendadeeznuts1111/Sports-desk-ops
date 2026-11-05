@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SportsDesk 服务状态",
+    "description": "作曲家下方的紧凑状态行：显示本地 SportsDesk webview 服务是未运行、运行旧构建还是已是最新——实时读取其 /health 与 /api/status 路由。"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-sportsdesk-desk-status",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Compact desk-status row under the Harness composer: the local SportsDesk webview service, live from its own /health and /api/status.",
@@ -17,6 +17,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "verify-load.mjs",
     "README.md"
   ],
   "dsh": {
