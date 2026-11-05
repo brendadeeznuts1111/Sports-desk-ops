@@ -248,8 +248,8 @@
     "timedOut": false
   },
   "proc.timing": {
-    "note": "nanoseconds is monotonic and sleepSync blocks",
-    "stdout": "{\"monotonic\":true,\"sleptAtLeast5ms\":true,\"sleep\":\"function\"}",
+    "note": "nanoseconds is monotonic, process-relative and sleepSync blocks",
+    "stdout": "{\"monotonic\":true,\"sleptAtLeast5ms\":true,\"sleep\":\"function\",\"processRelative\":true}",
     "stderr": "",
     "code": 0,
     "signal": null,

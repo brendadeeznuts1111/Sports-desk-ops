@@ -122,7 +122,7 @@ const sectionInvariants: Record<string, string[]> = {
   process: [
     "`Bun.argv` is an array, `Bun.env` an object, `Bun.main` a string — `proc.shell`.",
     "`Bun.stdin` / `Bun.stdout` are Blob-like with `text()`; nothing here reads them — `proc.stdio`.",
-    "`Bun.nanoseconds()` is monotonic and `Bun.sleepSync(5)` blocks for at least 5 ms — `proc.timing`.",
+    "`Bun.nanoseconds()` is a monotonic, process-relative counter (within 50 ms of `process.uptime()`), and `Bun.sleepSync(5)` blocks for at least 5 ms — `proc.timing`.",
     '`Bun.spawnSync(["echo","ok"])` returns `stdout` + `exitCode`; `Bun.gc(false)` returns a value that is `undefined` — `proc.spawn`.',
     '`Bun.which` honours a `PATH` override; `Bun.resolveSync` resolves against a directory; `Bun.fileURLToPath("file:///tmp/x.ts")` → `/tmp/x.ts`; `Bun.openInEditor` is a 1-arity function — `proc.paths`.',
     "`Bun.Terminal` is a constructor; `Bun.FileSink` has no runtime value — `proc.terminal`.",

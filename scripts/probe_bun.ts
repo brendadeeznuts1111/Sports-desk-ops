@@ -252,10 +252,10 @@ const probes: Probe[] = [
   },
   {
     id: "proc.timing",
-    note: "nanoseconds is monotonic and sleepSync blocks",
+    note: "nanoseconds is monotonic, process-relative and sleepSync blocks",
     argv: [
       "-p",
-      "(function(){const t=Bun.nanoseconds();Bun.sleepSync(5);const d=Bun.nanoseconds()-t;return JSON.stringify({monotonic:d>0, sleptAtLeast5ms:d>=5e6, sleep:typeof Bun.sleep})})()",
+      "(function(){const t=Bun.nanoseconds();const u=process.uptime()*1e9;Bun.sleepSync(5);const d=Bun.nanoseconds()-t;return JSON.stringify({monotonic:d>0, sleptAtLeast5ms:d>=5e6, sleep:typeof Bun.sleep, processRelative:Math.abs(t-u)<5e7})})()",
     ],
   },
   {
