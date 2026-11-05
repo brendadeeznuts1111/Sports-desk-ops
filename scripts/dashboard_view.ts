@@ -2,23 +2,33 @@
 /**
  * Terminal/browser dashboard rendered from the daemon's own APIs.
  *
- * One Markdown snapshot feeds both surfaces:
- *   bun run dashboard:view                 # ANSI in this terminal
- *   bun run dashboard:view --watch 10      # re-render every 10 seconds
- *   bun run dashboard:view --format html --out dist/dashboard-view.html
- *   bun run dashboard:view --format markdown | less
+ * The CLI is three layers (lib/dashboard_cli.ts): a command says what to render, flags only
+ * modify it, and the runtime supplies TTY width, colour support and the admin token.
+ *
+ *   bun run dashboard:view                     # ansi, the default command
+ *   bun run dashboard:view html --out dist/dashboard-view.html
+ *   bun run dashboard:view markdown | less
+ *   bun run dashboard:view watch --interval 10
  *
  * The section order is operational-first (Live Desk, Watchlist, WebLog, Review, Live Wagers) and
  * reference/admin last, matching the review of the interactive page. Tables are capped by --rows.
  */
+import { printHelp } from "../lib/cli_args.ts";
 import {
-  flagValue,
-  hasFlag,
-  parseCliArgs,
-  printHelp,
-  wantsHelp,
-} from "../lib/cli_args.ts";
+  BridgeChannelRouteColumnStore,
+  EMPTY_R2_OBJECT_KEY_SENTINEL,
+  SIGNAL_CHANNEL_POLICY_SPECIFICATION_TABLE,
+  TRANSPORT_BRIDGE_SPECIFICATION_TABLE,
+  asCents,
+  resolveSeparatedBridgeAndChannelEnvelope,
+} from "../lib/bridge_and_channel_router.ts";
 import {
+  helpText,
+  parseDashboardInvocation,
+  resolveDashboardRuntime,
+} from "../lib/dashboard_cli.ts";
+import {
+  buildDashboardMarkdown,
   markdownTable,
   type DashboardSection,
   type DashboardSectionState,
@@ -28,27 +38,10 @@ import {
   renderDashboardAnsi,
   renderDashboardHtml,
 } from "../lib/dashboard_render.ts";
-
-const HELP = `
-dashboard:view — render the SportsDesk/F402 dashboard to ANSI, HTML or Markdown
-
-Usage:
-  bun run dashboard:view [options]
-
-Options:
-  --format <ansi|html|markdown>  Output format (default: ansi)
-  --url <url>                    Daemon base URL (default: http://127.0.0.1:4020)
-  --rows <n>                     Rows per table (default: 25, max: 200)
-  --columns <n>                  ANSI wrap width; 0 disables wrapping (default: terminal width or 100)
-  --no-color                     Disable ANSI colour and OSC 8 links
-  --light                        Light ANSI palette
-  --out <path>                   Write html/markdown to a file instead of stdout
-  --watch <seconds>              Re-render ansi every N seconds (0 = once)
-  -h, --help                     This text
-
-The API token is read from SPORTSDESK_ADMIN_TOKEN, never from argv. Without it, PII panels
-(watchlist, WebLog, telegram) render as LOCKED instead of leaking a request.
-`.trim();
+import {
+  assertBridgeAndChannelTaxonomicSeparation,
+  assertColumnStoreNamingAndUnsignedHandles,
+} from "../lib/specification_naming_police.ts";
 
 interface ApiResult {
   readonly path: string;
@@ -438,11 +431,105 @@ function buildSnapshot(
           ),
   });
 
+  // Transport Bridges vs. Signal Channels — DOD6 v5.4 Taxonomy & Naming Police
+  let namingPoliceVerdict = "PASS (NAMING-GATE-01..04)";
+  try {
+    const sampleStore = new BridgeChannelRouteColumnStore(1);
+    assertColumnStoreNamingAndUnsignedHandles(
+      sampleStore as unknown as Record<string, unknown>,
+      "BridgeChannelRouteColumnStore",
+    );
+    assertBridgeAndChannelTaxonomicSeparation();
+  } catch (err) {
+    namingPoliceVerdict = `FAIL (${err instanceof Error ? err.message : String(err)})`;
+  }
+
+  const transportBridgeRows = Object.values(
+    TRANSPORT_BRIDGE_SPECIFICATION_TABLE,
+  ).map((spec) => [
+    String(spec.bridgeOrdinal4),
+    spec.bridgeId,
+    spec.originDomain,
+    spec.webSocketSubscriptionTopic,
+    spec.r2LatestObjectKey === EMPTY_R2_OBJECT_KEY_SENTINEL
+      ? "(stream-only)"
+      : spec.r2LatestObjectKey,
+    spec.deduplicationWatermarkContract,
+    `${spec.freshnessSlaDurationMs.toLocaleString("en-US")} ms`,
+  ]);
+
+  const signalChannelRows = Object.values(
+    SIGNAL_CHANNEL_POLICY_SPECIFICATION_TABLE,
+  ).map((spec) => [
+    String(spec.channelOrdinal5),
+    spec.channelCode,
+    spec.kind,
+    spec.routingDisposition,
+    spec.treasuryCapitalSilo,
+    `+${spec.vigSurchargeBasisPoints} bps / ${spec.executionSlaDurationMs.toLocaleString("en-US")} ms`,
+    spec.neuronTokenIdentifier,
+    `0x${spec.permittedBridgeBitMask32.toString(16).padStart(3, "0")}`,
+  ]);
+
+  sections.push({
+    id: "bridge-channel-taxonomy",
+    title:
+      "Transport Bridges vs. Signal Channels — DOD6 v5.4 Taxonomy & Naming Police",
+    group: "ops",
+    state: "measured",
+    provenance: `source: lib/bridge_and_channel_router.ts + lib/specification_naming_police.ts · Naming Police: ${namingPoliceVerdict}`,
+    body: [
+      `**Naming Police Status:** \`${namingPoliceVerdict}\` · **10 Transport Ingestion Bridges** (\`TransportBridgeId\`) × **16 Signal Channel Policies** (\`ExtendedSignalChannelCode\`)`,
+      "",
+      "### Axis 1 — Transport Ingestion Bridges (`TransportBridgeId` · Provenance Layer)",
+      "",
+      ...markdownTable(
+        [
+          "Ord",
+          "TransportBridgeId",
+          "Origin Domain",
+          "WebSocket Topic",
+          "R2 Object Key",
+          "Watermark Contract",
+          "Freshness SLA",
+        ],
+        transportBridgeRows,
+      ),
+      "",
+      "### Axis 2 — Signal Channel Policies (`ExtendedSignalChannelCode` · Stage 1/1b Policy Layer)",
+      "",
+      ...markdownTable(
+        [
+          "Ord",
+          "ExtendedSignalChannelCode",
+          "Policy Kind",
+          "Disposition",
+          "Treasury Silo",
+          "Vig / SLA",
+          "Neuron Token",
+          "Bridge Mask",
+        ],
+        signalChannelRows,
+      ),
+    ],
+  });
+
   const wagersSummary = rec(liveWagersBody?.["summary"]);
   const wagers = arr(liveWagersBody?.["wagers"]);
   const liveWagersResult = results["liveWagers"];
   const wagerRows = wagers.slice(0, maxRows).map((value) => {
     const row = rec(value);
+    const legs = arr(row?.["legs"]);
+    const rawWriter =
+      str(row?.["ticketWriter"]) ?? str(row?.["writer"]) ?? "Internet";
+    const resolvedEnvelope = resolveSeparatedBridgeAndChannelEnvelope({
+      transportBridgeId: "BRIDGE_01_F402_BET_TICKER_STREAM",
+      ticketWriterToken: rawWriter,
+      wagerTypeCode: str(row?.["wagerType"]) ?? "S",
+      shortDescriptionPrefix: str(row?.["descCode"]) ?? "",
+      ticketLegCount: legs.length > 0 ? legs.length : 1,
+      amountWageredCents: asCents(numeric(row?.["amountWagered"]) ?? 100),
+    });
     return [
       `#${String(row?.["wagerNumber"] ?? "—")}`,
       str(row?.["agentId"]) ?? "—",
@@ -451,7 +538,8 @@ function buildSnapshot(
       money(row?.["amountWagered"]),
       money(row?.["toWinAmount"]),
       str(row?.["writer"]) ?? "—",
-      count(arr(row?.["legs"]).length),
+      `${resolvedEnvelope.channelSpecification.channelCode} (${resolvedEnvelope.channelSpecification.neuronTokenIdentifier})`,
+      count(legs.length),
     ];
   });
   const wagersProvenance = rec(liveWagersBody?.["provenance"]);
@@ -484,6 +572,7 @@ function buildSnapshot(
                     "Risk",
                     "To win",
                     "Writer",
+                    "Signal Channel",
                     "Legs",
                   ],
                   wagerRows,
@@ -746,74 +835,54 @@ async function load(
 }
 
 async function main(): Promise<number> {
-  const parsed = parseCliArgs(process.argv.slice(2), {
-    valueFlags: [
-      "--format",
-      "--url",
-      "--rows",
-      "--columns",
-      "--out",
-      "--watch",
-    ],
-  });
-  if (wantsHelp(parsed)) {
-    printHelp(HELP);
+  const invocation = parseDashboardInvocation(process.argv.slice(2));
+  if (!invocation.ok) {
+    console.error(`dashboard:view: ${invocation.error}`);
+    return 2;
+  }
+  const { command, source, flags } = invocation.value;
+  if (flags.help) {
+    printHelp(helpText(source === "default" ? null : command));
     return 0;
   }
 
-  const format = flagValue(parsed, "--format", "ansi");
-  if (format !== "ansi" && format !== "html" && format !== "markdown") {
-    console.error(
-      `dashboard:view: unknown --format "${format}" (ansi|html|markdown)`,
-    );
-    return 2;
-  }
-  const base = flagValue(parsed, "--url", "http://127.0.0.1:4020").replace(
-    /\/+$/,
-    "",
-  );
-  const maxRows = Math.min(
-    200,
-    Math.max(1, Number(flagValue(parsed, "--rows", "25")) || 25),
-  );
-  const columns = Number(
-    flagValue(parsed, "--columns", String(process.stdout.columns ?? 100)),
-  );
-  const out = flagValue(parsed, "--out", "");
-  const watchSeconds = Math.max(
-    0,
-    Number(flagValue(parsed, "--watch", "0")) || 0,
-  );
-  const colors = !hasFlag(parsed, "--no-color");
-  const light = hasFlag(parsed, "--light");
-  const token = Bun.env.SPORTSDESK_ADMIN_TOKEN?.trim() ?? "";
+  const runtime = resolveDashboardRuntime(command, flags, {
+    stdoutIsTTY: process.stdout.isTTY === true,
+    stdoutColumns: process.stdout.columns,
+    env: Bun.env,
+  });
 
   const renderOnce = async (): Promise<void> => {
-    const results = await load(base, token);
-    const snapshot = buildSnapshot(base, results, maxRows, Date.now());
-    if (format === "markdown") {
-      const { buildDashboardMarkdown } =
-        await import("../lib/dashboard_markdown.ts");
-      const markdown = buildDashboardMarkdown(snapshot);
-      if (out === "") process.stdout.write(markdown);
-      else await Bun.write(out, markdown);
-      return;
+    const results = await load(flags.url, runtime.token);
+    const snapshot = buildSnapshot(flags.url, results, flags.rows, Date.now());
+    switch (command) {
+      case "markdown": {
+        const markdown = buildDashboardMarkdown(snapshot);
+        if (flags.out === "") process.stdout.write(markdown);
+        else await Bun.write(flags.out, markdown);
+        return;
+      }
+      case "html": {
+        const html = renderDashboardHtml(snapshot);
+        if (flags.out === "") process.stdout.write(html);
+        else await Bun.write(flags.out, html);
+        return;
+      }
+      case "ansi":
+      case "watch": {
+        process.stdout.write(
+          renderDashboardAnsi(snapshot, {
+            colors: runtime.color,
+            columns: runtime.columns,
+            light: flags.light,
+          }),
+        );
+        return;
+      }
     }
-    if (format === "html") {
-      const html = renderDashboardHtml(snapshot);
-      if (out === "") process.stdout.write(html);
-      else await Bun.write(out, html);
-      return;
-    }
-    const ansi = renderDashboardAnsi(snapshot, {
-      colors,
-      columns: Number.isFinite(columns) ? Math.max(0, columns) : 100,
-      light,
-    });
-    process.stdout.write(ansi);
   };
 
-  if (watchSeconds === 0 || format !== "ansi") {
+  if (command !== "watch") {
     await renderOnce();
     return 0;
   }
@@ -823,7 +892,7 @@ async function main(): Promise<number> {
     stopping = true;
   });
   while (!stopping) {
-    if (process.stdout.isTTY && colors) process.stdout.write("\x1b[2J\x1b[H");
+    if (runtime.tty && runtime.color) process.stdout.write("\x1b[2J\x1b[H");
     try {
       await renderOnce();
     } catch (error) {
@@ -831,7 +900,7 @@ async function main(): Promise<number> {
         `dashboard:view: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    await Bun.sleep(watchSeconds * 1000);
+    await Bun.sleep(flags.intervalSeconds * 1000);
   }
   return 0;
 }

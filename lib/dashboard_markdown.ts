@@ -4,8 +4,8 @@
  * The model is Markdown rather than a second HTML template. `Bun.markdown.html()` and
  * `Bun.markdown.ansi()` then produce the two outputs from the same strings, so a section cannot
  * exist in one view and be missing from the other. The section order is deliberate: operational
- * panels (pending exposure, watchlist, WebLog, review, live wagers) come before the reference
- * panels (contests, game board, sport catalog, analysis), and admin last.
+ * panels (pending exposure, watchlist, WebLog, review, bridge/channel taxonomy, live wagers) come
+ * before the reference panels (contests, game board, sport catalog, analysis), and admin last.
  */
 
 export type DashboardSectionState =
@@ -41,6 +41,7 @@ export const DASHBOARD_SECTION_ORDER = [
   "watchlist",
   "weblog",
   "review",
+  "bridge-channel-taxonomy",
   "live-wagers",
   "contests",
   "game-admin",

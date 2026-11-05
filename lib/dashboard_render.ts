@@ -22,7 +22,7 @@ export function dashboardHeadingSlug(title: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** A full standalone HTML page; `--format html` writes this. */
+/** A full standalone HTML page; the `html` command writes this. */
 export function renderDashboardHtml(snapshot: DashboardSnapshot): string {
   const markdown = buildDashboardMarkdown(snapshot);
   // trusted-markdown: the snapshot is built from loopback daemon APIs; raw HTML is disabled by the preset.

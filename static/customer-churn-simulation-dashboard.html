@@ -2303,6 +2303,42 @@
         </button>
       </section>
 
+      <!-- Transport Bridges vs. Signal Channels — DOD6 v5.4 Taxonomy & Naming Police -->
+      <section
+        class="section-card"
+        id="bridge-channel-taxonomy"
+        aria-labelledby="bct-title"
+        aria-live="polite"
+      >
+        <div class="section-title">
+          <span id="bct-title"
+            >Transport Bridges vs. Signal Channels — DOD6 v5.4 Taxonomy &amp;
+            Naming Police</span
+          >
+          <span class="badge badge-accent" id="bct-police-badge"
+            >NAMING-GATE-01..04 · PASS</span
+          >
+        </div>
+        <p class="ld-note" style="margin-top: 0" id="bct-note">
+          Orthogonal separation of Axis 1 Transport Ingestion Bridges
+          (TransportBridgeId · bits 0..3) and Axis 2 Signal Channel Policies
+          (ExtendedSignalChannelCode · bits 4..8) enforced by 4 automated Naming
+          Police gates.
+        </p>
+        <div
+          class="lw-bar"
+          id="bct-filters"
+          role="group"
+          aria-label="Bridge and channel taxonomy filters"
+        ></div>
+        <div class="table-scroll" id="bct-bridges-wrap"></div>
+        <div
+          class="table-scroll"
+          id="bct-channels-wrap"
+          style="margin-top: 12px"
+        ></div>
+      </section>
+
       <section class="section-card" id="live-desk" aria-labelledby="ld-title">
         <div class="section-title">
           <span id="ld-title">Live Desk — Pending Exposure</span>
@@ -5223,6 +5259,375 @@
           }
           socket.close();
         });
+      })();
+
+      (() => {
+        const section = document.getElementById("bridge-channel-taxonomy");
+        if (!section) return;
+        const filtersBox = document.getElementById("bct-filters");
+        const bridgesWrap = document.getElementById("bct-bridges-wrap");
+        const channelsWrap = document.getElementById("bct-channels-wrap");
+
+        const BRIDGES = [
+          [
+            0,
+            "BRIDGE_00_GSLIVE_WAGERS_BY_STATE",
+            "ORIGIN_SPORTSBOOK_GSLIVE_PARTNER118",
+            "wagers-by-state",
+            "wagers-by-state/latest.json",
+            "stateCode:epochDaysAmericaChicago",
+            "90,000 ms",
+          ],
+          [
+            1,
+            "BRIDGE_01_F402_BET_TICKER_STREAM",
+            "ORIGIN_SPORTSBOOK_FANTASY402",
+            "f402-bet-ticker",
+            "f402-bet-ticker/latest.json",
+            "wagerNumberWatermark (fail-closed)",
+            "15,000 ms",
+          ],
+          [
+            2,
+            "BRIDGE_02_F402_PENDING_AND_GRADING",
+            "ORIGIN_SPORTSBOOK_FANTASY402",
+            "f402-pending",
+            "f402-pending/latest.json",
+            "${TicketNumber}-${WagerNumber}-${totalPicks}",
+            "15,000 ms",
+          ],
+          [
+            3,
+            "BRIDGE_03_GSLIVE_PARTNER118_TALLY",
+            "ORIGIN_SPORTSBOOK_GSLIVE_PARTNER118",
+            "gslive-tally",
+            "gslive-tally/latest.json",
+            "M.G<betGroupId>",
+            "30,000 ms",
+          ],
+          [
+            4,
+            "BRIDGE_04_F402_WEBLOG_ACCESS_OVERLAP",
+            "ORIGIN_SPORTSBOOK_FANTASY402",
+            "f402-weblog",
+            "f402-weblog/latest.json",
+            "loginKey64:accessEpochSeconds:subnetPrefix",
+            "3,600,000 ms",
+          ],
+          [
+            5,
+            "BRIDGE_05_POLYMARKET_GAMMA_DISCOVERY",
+            "ORIGIN_EXCHANGE_POLYMARKET_CTF",
+            "cross-venue-polymarket",
+            "EMPTY_R2_OBJECT_KEY_SENTINEL",
+            "conditionId:clobTokenId",
+            "60,000 ms",
+          ],
+          [
+            6,
+            "BRIDGE_06_POLYMARKET_CLOB_WEBSOCKET",
+            "ORIGIN_EXCHANGE_POLYMARKET_CTF",
+            "cross-venue-polymarket",
+            "EMPTY_R2_OBJECT_KEY_SENTINEL",
+            "assetId:orderHash",
+            "118 ms",
+          ],
+          [
+            7,
+            "BRIDGE_07_POLYGON_FASTLANE_ORDER_FILLED",
+            "ORIGIN_EXCHANGE_POLYMARKET_CTF",
+            "cross-venue-polymarket",
+            "EMPTY_R2_OBJECT_KEY_SENTINEL",
+            "transactionHash:logIndex",
+            "164 ms",
+          ],
+          [
+            8,
+            "BRIDGE_08_POLYMARKET_DATA_API_POSITIONS",
+            "ORIGIN_EXCHANGE_POLYMARKET_CTF",
+            "cross-venue-polymarket",
+            "EMPTY_R2_OBJECT_KEY_SENTINEL",
+            "proxyWallet0x:conditionId",
+            "180,000 ms",
+          ],
+          [
+            9,
+            "BRIDGE_09_KALSHI_EXCHANGE_V2_STREAM",
+            "ORIGIN_EXCHANGE_KALSHI_REGULATED",
+            "cross-venue-kalshi",
+            "EMPTY_R2_OBJECT_KEY_SENTINEL",
+            "marketTicker:tradeId",
+            "250 ms",
+          ],
+        ];
+
+        const CHANNELS = [
+          [
+            0,
+            "NON_SPORTS_DROP",
+            "non_sports_excluded",
+            "DISPOSITION_STAGE1_DROP",
+            "SILO_UNALLOCATED",
+            "0 bps / 0 ms",
+            "L19.N0510",
+            "0x006",
+          ],
+          [
+            1,
+            "BLOCKED",
+            "drop_before_grouping",
+            "DISPOSITION_STAGE1_DROP",
+            "SILO_UNALLOCATED",
+            "0 bps / 0 ms",
+            "L19.N0518",
+            "0x016",
+          ],
+          [
+            2,
+            "GATEWAY",
+            "equilibrium_vig_sweep",
+            "DISPOSITION_STAGE1_CONTROL_PLANE_FAST_PATH",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 1,000 ms",
+            "L20.N1105",
+            "0x006",
+          ],
+          [
+            3,
+            "ALERT",
+            "source_alert_zero_volume",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 250 ms",
+            "L21.N0884",
+            "0x006",
+          ],
+          [
+            4,
+            "Internet",
+            "target_twin_min_stake_to_win",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 1,500 ms",
+            "L18.N0204",
+            "0x017",
+          ],
+          [
+            5,
+            "GSLIVE",
+            "gs118_live_join",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_2_PERIOD_AND_LIVE_RFQ_62K5",
+            "+20 bps / 500 ms",
+            "L23.N0412",
+            "0x00f",
+          ],
+          [
+            6,
+            "GSBUILDER",
+            "gs118_builder_join",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 1,000 ms",
+            "L22.N1402",
+            "0x00f",
+          ],
+          [
+            7,
+            "LIVE_CWS",
+            "ezl_cws_live_redirect",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_2_PERIOD_AND_LIVE_RFQ_62K5",
+            "+20 bps / 500 ms",
+            "L23.N0490",
+            "0x006",
+          ],
+          [
+            8,
+            "CSLEVEL2",
+            "syndicate_secondary_feed",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "+15 bps / 2,000 ms",
+            "L24.N2019",
+            "0x006",
+          ],
+          [
+            9,
+            "PHONE",
+            "phone_clerk_audit",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 2,000 ms",
+            "L18.N0310",
+            "0x016",
+          ],
+          [
+            10,
+            "HOUSE_BOOK",
+            "house_agent_entry",
+            "DISPOSITION_STAGE1B_SPORTSBOOK_GROUPABLE",
+            "SILO_1_MATCHED_BOOK_150K",
+            "0 bps / 2,000 ms",
+            "L20.N1180",
+            "0x016",
+          ],
+          [
+            11,
+            "CROSS_VENUE_SHADOW_WALLET_LEAD",
+            "cross_venue_shadow_wallet_lead",
+            "DISPOSITION_STAGE1B_CROSS_VENUE_GROUPABLE",
+            "SILO_3_SHADOW_MIRROR_37K5",
+            "0 bps / 164 ms",
+            "L24.N2101",
+            "0x3c0",
+          ],
+          [
+            12,
+            "CROSS_VENUE_QUARANTINE_SCALP_EXIT",
+            "cross_venue_quarantine_scalp_exit",
+            "DISPOSITION_STAGE1B_CROSS_VENUE_GROUPABLE",
+            "SILO_UNALLOCATED",
+            "0 bps / 180,000 ms",
+            "L24.N2102",
+            "0x3c0",
+          ],
+          [
+            13,
+            "CROSS_VENUE_SYNDICATE_CLUSTER_CONFIRM",
+            "cross_venue_syndicate_cluster_confirm",
+            "DISPOSITION_STAGE1B_CROSS_VENUE_GROUPABLE",
+            "SILO_3_SHADOW_MIRROR_37K5",
+            "+25 bps / 250 ms",
+            "L24.N2103",
+            "0x3c0",
+          ],
+          [
+            14,
+            "CROSS_VENUE_RFQ_COMBO_LAYOFF",
+            "cross_venue_rfq_combo_layoff",
+            "DISPOSITION_STAGE1B_CROSS_VENUE_GROUPABLE",
+            "SILO_2_PERIOD_AND_LIVE_RFQ_62K5",
+            "0 bps / 1,000 ms",
+            "L24.N2104",
+            "0x2e0",
+          ],
+          [
+            15,
+            "CROSS_VENUE_KEY_NUMBER_MIDDLE",
+            "cross_venue_key_number_middle",
+            "DISPOSITION_STAGE1B_CROSS_VENUE_GROUPABLE",
+            "SILO_2_PERIOD_AND_LIVE_RFQ_62K5",
+            "+20 bps / 250 ms",
+            "L24.N2105",
+            "0x2c6",
+          ],
+        ];
+
+        let activeFilter = "ALL";
+
+        const buildTable = (label, headers, rows) => {
+          const table = document.createElement("table");
+          table.setAttribute("aria-label", label);
+          const thead = document.createElement("thead");
+          const trHead = document.createElement("tr");
+          for (const h of headers) {
+            const th = document.createElement("th");
+            th.scope = "col";
+            th.textContent = h;
+            trHead.append(th);
+          }
+          thead.append(trHead);
+          const tbody = document.createElement("tbody");
+          for (const r of rows) {
+            const tr = document.createElement("tr");
+            r.forEach((cellVal, idx) => {
+              const td = document.createElement("td");
+              if (idx === 1 || idx === 6 || idx === 7)
+                td.className = "mono-cell";
+              td.textContent = String(cellVal);
+              tr.append(td);
+            });
+            tbody.append(tr);
+          }
+          table.append(thead, tbody);
+          return table;
+        };
+
+        const renderTaxonomy = () => {
+          if (filtersBox) {
+            filtersBox.replaceChildren();
+            for (const [code, label] of [
+              ["ALL", "All (10 Bridges · 16 Channels)"],
+              ["SPORTSBOOK", "Sportsbook Only (5 Bridges · 11 Channels)"],
+              ["CROSS_VENUE", "Cross-Venue Exchange (5 Bridges · 5 Channels)"],
+            ]) {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.setAttribute(
+                "aria-pressed",
+                activeFilter === code ? "true" : "false",
+              );
+              btn.textContent = label;
+              btn.addEventListener("click", () => {
+                activeFilter = code;
+                renderTaxonomy();
+              });
+              filtersBox.append(btn);
+            }
+          }
+          const bridgeRows = BRIDGES.filter((b) =>
+            activeFilter === "ALL"
+              ? true
+              : activeFilter === "SPORTSBOOK"
+                ? String(b[2]).startsWith("ORIGIN_SPORTSBOOK_")
+                : String(b[2]).startsWith("ORIGIN_EXCHANGE_"),
+          );
+          const channelRows = CHANNELS.filter((c) =>
+            activeFilter === "ALL"
+              ? true
+              : activeFilter === "SPORTSBOOK"
+                ? !String(c[1]).startsWith("CROSS_VENUE_")
+                : String(c[1]).startsWith("CROSS_VENUE_"),
+          );
+          if (bridgesWrap) {
+            bridgesWrap.replaceChildren(
+              buildTable(
+                "Transport Ingestion Bridges (TransportBridgeId)",
+                [
+                  "Ord",
+                  "TransportBridgeId",
+                  "Origin Domain",
+                  "WebSocket Topic",
+                  "R2 Object Key",
+                  "Watermark Contract",
+                  "Freshness SLA",
+                ],
+                bridgeRows,
+              ),
+            );
+          }
+          if (channelsWrap) {
+            channelsWrap.replaceChildren(
+              buildTable(
+                "Signal Channel Policies (ExtendedSignalChannelCode)",
+                [
+                  "Ord",
+                  "ExtendedSignalChannelCode",
+                  "Policy Kind",
+                  "Disposition",
+                  "Treasury Silo",
+                  "Vig / SLA",
+                  "Neuron Token",
+                  "Bridge Mask",
+                ],
+                channelRows,
+              ),
+            );
+          }
+        };
+
+        renderTaxonomy();
       })();
 
       (async () => {
