@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "SportsDesk security/fraud console: eight read-only Host tools over GSLive getBetReport logs, F402 live ticket captures, F402 weblog rollups and GSLive activity artifacts — source provenance, IP-network clusters, named sportsbook-fraud detectors, a transparent weak-label risk model (fit/score), account dossiers and a prior-art research catalog — plus a Web UI operator page. Read-only; no live betting, no order path.",
+  "description": "SportsDesk security/fraud console: nine read-only Host tools over GSLive getBetReport logs, F402 live ticket captures, F402 weblog rollups and GSLive activity artifacts \u2014 source provenance, IP-network clusters, named sportsbook-fraud detectors, a transparent weak-label risk model (fit/score), account dossiers and a prior-art research catalog \u2014 plus a Web UI operator page. Read-only; no live betting, no order path.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

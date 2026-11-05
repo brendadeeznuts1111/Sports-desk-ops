@@ -54,6 +54,7 @@ const EXPECTED_TOOL_NAMES = [
   "fraud_ip_graph",
   "fraud_model",
   "fraud_patterns",
+  "fraud_queue",
   "fraud_research",
   "fraud_status",
   "fraud_weblog",
@@ -65,6 +66,7 @@ const EXPECTED_ROUTE_PATHS = [
   "/api/security/ip-graph",
   "/api/security/model",
   "/api/security/patterns",
+  "/api/security/queue",
   "/api/security/research",
   "/api/security/status",
   "/api/security/weblog",
@@ -315,7 +317,7 @@ async function main() {
   check("apply returns a disposer", () => {
     assert(typeof dispose === "function", "apply did not return a disposer");
   });
-  check("exactly the eight frozen tools are registered", () => {
+  check("exactly the nine frozen tools are registered", () => {
     const names = tools.map((tool) => tool.name).sort();
     assert(
       JSON.stringify(names) === JSON.stringify(EXPECTED_TOOL_NAMES),
@@ -429,6 +431,8 @@ async function main() {
         ["fraud_ip_graph", { minAccounts: 1 }],
         ["fraud_ip_graph", { prefix24: "10.0" }],
         ["fraud_patterns", { minSeverity: "urgent" }],
+        ["fraud_queue", { limit: 0 }],
+        ["fraud_queue", { limit: 101 }],
         ["fraud_dossier", {}],
         ["fraud_dossier", { id: "bad id" }],
         ["fraud_model", { action: "predict" }],
@@ -490,7 +494,7 @@ async function main() {
   );
 
   console.log("verify-load: same-origin read routes");
-  check("exactly the eight frozen route paths are registered", () => {
+  check("exactly the nine frozen route paths are registered", () => {
     const paths = routes.map((route) => route.path).sort();
     assert(
       JSON.stringify(paths) === JSON.stringify(EXPECTED_ROUTE_PATHS),
@@ -718,7 +722,7 @@ async function main() {
   console.log("");
   if (failed === 0) {
     console.log(
-      "PASS: 8 tools + 8 read routes load; write path refuses without confirm; CLI-missing is structured; no live or networked path.",
+      "PASS: 9 tools + 9 read routes load; write path refuses without confirm; CLI-missing is structured; no live or networked path.",
     );
     process.exit(0);
   }

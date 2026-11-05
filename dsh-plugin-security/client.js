@@ -12,6 +12,10 @@
  *   Overview   the per-source matrix (state, provenance, records, age, reason),
  *              the corpus summary, the weak-label model summary with its limits,
  *              the F402 weblog posture/flags and a bet-aggregate strip.
+ *   Queue      the operator triage queue: model/findings-ranked accounts with
+ *              per-row score+band, critical/high counts, desk-flag counts, bets
+ *              and reasons; clicking a row loads that account's dossier without
+ *              leaving the tab.
  *   IP graph   masked IP-network clusters plus the distinct/shared-IP summary.
  *   Findings   named detectors with severity/category filters, expandable
  *              evidence, observed/threshold values and insufficient-data chips.
@@ -28,7 +32,8 @@
  *
  *   /api/security/status      /api/security/bets       /api/security/ip-graph
  *   /api/security/weblog      /api/security/patterns   /api/security/model
- *   /api/security/dossier?id= /api/security/research
+ *   /api/security/queue?limit=25  /api/security/dossier?id=
+ *   /api/security/research
  *
  * A 200 body is `{ ok: true, ...CLI payload }`; a CLI failure is a 502
  * `{ ok: false, reason, message }`; a 404 means the installed Host bundle does
@@ -93,6 +98,8 @@ window.__ModuleLoader__.load({
       weblog: "/api/security/weblog",
       patterns: "/api/security/patterns",
       model: "/api/security/model",
+      /** The triage queue always requests the frozen page size. */
+      queue: "/api/security/queue?limit=25",
       dossier: "/api/security/dossier",
       research: "/api/security/research",
     });
@@ -106,6 +113,7 @@ window.__ModuleLoader__.load({
     /** Page tabs, in keyboard order. Overview is the default. */
     const TAB_ORDER = Object.freeze([
       "overview",
+      "queue",
       "ip",
       "findings",
       "model",
@@ -133,10 +141,20 @@ window.__ModuleLoader__.load({
     /** Which store entries each tab shows (Refresh re-measures exactly these). */
     const TAB_SOURCE_KEYS = Object.freeze({
       overview: Object.freeze(["status", "weblog", "bets"]),
+      queue: Object.freeze(["queue"]),
       ip: Object.freeze(["ipGraph"]),
       findings: Object.freeze(["patterns"]),
       model: Object.freeze(["model", "research"]),
       dossier: Object.freeze(["dossier"]),
+    });
+    /** Locale key per tab; the tablist and the keyboard order share TAB_ORDER. */
+    const TAB_LABEL_KEYS = Object.freeze({
+      overview: "tabOverview",
+      queue: "tabQueue",
+      ip: "tabIpGraph",
+      findings: "tabFindings",
+      model: "tabModel",
+      dossier: "tabDossier",
     });
     /** Rendering bounds; the payloads can be large, the page stays readable. */
     const MAX_FINDINGS = 120;
@@ -147,6 +165,8 @@ window.__ModuleLoader__.load({
     const MAX_NOTE_CHARS = 200;
     const MAX_OVERVIEW_LIMITS = 4;
     const MAX_ACCOUNT_SAMPLES = 6;
+    /** Queue reason cells show the first few reasons; the row keeps the rest in a tooltip. */
+    const MAX_QUEUE_REASONS = 3;
     const MAX_CALIBRATION_BINS = 10;
     /** Data value -> locale key maps (API strings stay data, labels stay local). */
     const SEVERITY_LABEL_KEYS = Object.freeze({
@@ -205,6 +225,7 @@ window.__ModuleLoader__.load({
         never: "never",
         tabsLabel: "Security console tabs",
         tabOverview: "Overview",
+        tabQueue: "Queue",
         tabIpGraph: "IP graph",
         tabFindings: "Findings",
         tabModel: "Model",
@@ -303,6 +324,36 @@ window.__ModuleLoader__.load({
         betsEmpty: "No bet aggregate reported.",
         overviewHint:
           "Every number is read from the CLI payload; a missing field renders — or “not counted”, never 0.",
+        /* Queue */
+        queueTitle: "Review queue",
+        queueSub:
+          "Model/findings-ranked accounts for operator review. Click a row to load that account's dossier in the Dossier tab; nothing here is a finding, a ban or an order.",
+        queueAccounts: "Accounts",
+        queueEligible: "Eligible",
+        queueReturned: "Returned",
+        queueAgents: "Agents",
+        queueScored: "Scored",
+        queueMethod: "Method",
+        queueEligibility: "Eligibility",
+        queueRankBasis: "Rank basis",
+        queueColRank: "Rank",
+        queueColAccount: "Account",
+        queueColAgent: "Agent",
+        queueColModel: "Model",
+        queueColCriticalHigh: "Critical / high",
+        queueColFlags: "Flags",
+        queueColBets: "Bets",
+        queueColReasons: "Reasons",
+        queueNoModel: "no model",
+        queueNoScore: "no score",
+        queueFlagsBot: "bot",
+        queueFlagsReversed: "reversed",
+        queueFlagsManual: "manual",
+        queueFlagsDrift: "drift",
+        queueEmpty:
+          "No accounts in the queue — the measured eligible set is empty.",
+        queueDossierHint:
+          "Dossier for {account} loaded — open the Dossier tab to review it.",
         /* IP graph */
         ipTitle: "IP-network clusters",
         ipSub:
@@ -467,6 +518,7 @@ window.__ModuleLoader__.load({
         never: "从未",
         tabsLabel: "安全控制台标签页",
         tabOverview: "概览",
+        tabQueue: "队列",
         tabIpGraph: "IP 图谱",
         tabFindings: "发现",
         tabModel: "模型",
@@ -562,6 +614,34 @@ window.__ModuleLoader__.load({
         betsEmpty: "未报告投注汇总。",
         overviewHint:
           "每个数字均读取自 CLI 载荷；缺失字段显示 — 或“未统计”，永远不是 0。",
+        /* Queue */
+        queueTitle: "审查队列",
+        queueSub:
+          "按模型与发现排序的待审查账户。点击某行会在“档案”标签页加载该账户的档案；此处内容不是裁定、封禁或指令。",
+        queueAccounts: "账户数",
+        queueEligible: "符合条件",
+        queueReturned: "已返回",
+        queueAgents: "代理数",
+        queueScored: "已评分",
+        queueMethod: "方法",
+        queueEligibility: "入选条件",
+        queueRankBasis: "排序依据",
+        queueColRank: "排名",
+        queueColAccount: "账户",
+        queueColAgent: "代理",
+        queueColModel: "模型",
+        queueColCriticalHigh: "严重 / 高",
+        queueColFlags: "标记",
+        queueColBets: "投注数",
+        queueColReasons: "原因",
+        queueNoModel: "无模型",
+        queueNoScore: "无评分",
+        queueFlagsBot: "机器人",
+        queueFlagsReversed: "冲正",
+        queueFlagsManual: "人工",
+        queueFlagsDrift: "漂移",
+        queueEmpty: "队列中没有账户 — 实测符合条件集合为空。",
+        queueDossierHint: "已加载 {account} 的档案 — 打开“档案”标签页查看。",
         /* IP graph */
         ipTitle: "IP 网络聚类",
         ipSub:
@@ -1011,6 +1091,7 @@ window.__ModuleLoader__.load({
     const SOURCE_KEYS = Object.freeze([
       "status",
       "bets",
+      "queue",
       "weblog",
       "ipGraph",
       "patterns",
@@ -1477,6 +1558,94 @@ window.__ModuleLoader__.load({
       };
     }
 
+    /**
+     * Normalize one queue row; rows without an account id are skipped.
+     * @param {unknown} value
+     * @returns {{ rank: number | null, account: string, agent: string | null, model: { score: number | null, band: string | null } | null, findings: { critical: number | null, high: number | null } | null, flags: { suspectedBot: number | null, reversedCredit: number | null, manualLog: number | null, oddsDrift: number | null } | null, bets: number | null, lastBetAt: string | null, reasons: string[] } | null}
+     */
+    function readQueueRow(value) {
+      if (!isRecord(value)) return null;
+      const account = readText(value.account);
+      if (account === null) return null;
+      const model = isRecord(value.model) ? value.model : null;
+      const findings = isRecord(value.findings) ? value.findings : null;
+      const flags = isRecord(value.flags) ? value.flags : null;
+      return {
+        rank: readNumber(value.rank),
+        account,
+        agent: readText(value.agent),
+        model:
+          model === null
+            ? null
+            : {
+                score: readNumber(model.score),
+                band: readText(model.band),
+              },
+        findings:
+          findings === null
+            ? null
+            : {
+                critical: readNumber(findings.critical),
+                high: readNumber(findings.high),
+              },
+        flags:
+          flags === null
+            ? null
+            : {
+                suspectedBot: readNumber(flags.suspectedBot),
+                reversedCredit: readNumber(flags.reversedCredit),
+                manualLog: readNumber(flags.manualLog),
+                oddsDrift: readNumber(flags.oddsDrift),
+              },
+        bets: readNumber(value.bets),
+        lastBetAt: readText(value.lastBetAt),
+        reasons: asArray(value.reasons).filter(
+          (reason) => typeof reason === "string",
+        ),
+      };
+    }
+
+    /**
+     * The queue payload: totals, method/eligibility/rank basis, model presence,
+     * limits, insufficient notes and rows. Every field is optional at the
+     * boundary; the renderer states an absence instead of inventing a value.
+     * @param {Record<string, unknown> | null} payload
+     * @returns {{ method: string | null, eligibility: string | null, rankBasis: string[], limits: string[], model: { present: boolean, fittedAt: string | null, proxy: string | null, reason: string | null } | null, totals: Record<string, unknown> | null, rows: NonNullable<ReturnType<typeof readQueueRow>>[], insufficient: string[] } | null}
+     */
+    function readQueue(payload) {
+      if (payload === null) return null;
+      const model = isRecord(payload.model) ? payload.model : null;
+      const rows = [];
+      for (const raw of asArray(payload.rows)) {
+        const row = readQueueRow(raw);
+        if (row !== null) rows.push(row);
+      }
+      return {
+        method: readText(payload.method),
+        eligibility: readText(payload.eligibility),
+        rankBasis: asArray(payload.rankBasis).filter(
+          (item) => typeof item === "string",
+        ),
+        limits: asArray(payload.limits).filter(
+          (item) => typeof item === "string",
+        ),
+        model:
+          model === null
+            ? null
+            : {
+                present: model.present === true,
+                fittedAt: readText(model.fittedAt),
+                proxy: readText(model.proxy),
+                reason: readText(model.reason),
+              },
+        totals: isRecord(payload.totals) ? payload.totals : null,
+        rows,
+        insufficient: asArray(payload.insufficient).filter(
+          (item) => typeof item === "string",
+        ),
+      };
+    }
+
     /* -------------------------------------------------------------------- */
     /* Shared rendering pieces                                               */
     /* -------------------------------------------------------------------- */
@@ -1796,6 +1965,27 @@ window.__ModuleLoader__.load({
             h("span", { className: "sec-metric-label" }, metric.label),
             h("span", { className: "sec-metric-value" }, metric.value ?? "—"),
           ),
+        ),
+      );
+    }
+
+    /**
+     * A string list whose rows are bounded for readability; the full text stays
+     * in each row's title tooltip. The queue's limits/insufficient lists are long
+     * backend sentences, so they use this instead of the plain list.
+     * @param {string[]} rows
+     * @param {string} emptyText
+     * @param {string} [key]
+     */
+    function boundedTextList(rows, emptyText, key) {
+      if (rows.length === 0) {
+        return h("p", { className: "sec-empty", key }, emptyText);
+      }
+      return h(
+        "ul",
+        { className: "sec-list", key },
+        rows.map((row) =>
+          h("li", { key: row, title: row }, truncateText(row, MAX_NOTE_CHARS)),
         ),
       );
     }
@@ -2173,6 +2363,356 @@ window.__ModuleLoader__.load({
         if (count !== null) parts.push(`${key} ${count}`);
       }
       return parts.length === 0 ? "—" : parts.join(" · ");
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Queue                                                                 */
+    /* -------------------------------------------------------------------- */
+
+    /**
+     * Model cell for one queue row: score + band, or the honest absence. A
+     * measured row can carry a model object with a null score (account absent
+     * from the feature matrix); that is "no score", not "no model".
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readQueueRow>>["model"]} model
+     */
+    function queueModelCell(t, model) {
+      if (model === null) {
+        return h("span", { className: "sec-muted" }, t("queueNoModel"));
+      }
+      if (model.score === null) {
+        return h("span", { className: "sec-muted" }, t("queueNoScore"));
+      }
+      return h(
+        "span",
+        { className: "sec-queue-model" },
+        h(
+          "span",
+          { className: "sec-mono" },
+          formatFixed(model.score, 1) ?? t("notAvailable"),
+        ),
+        model.band === null
+          ? null
+          : chip(labelOf(t, SEVERITY_LABEL_KEYS, model.band), {
+              key: "band",
+              severity: model.band,
+            }),
+      );
+    }
+
+    /**
+     * Desk-flag counts for one queue row. These are measured counts, so a zero
+     * is shown as 0 (unlike a missing source, which is never zeroed).
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readQueueRow>>["flags"]} flags
+     */
+    function queueFlagsText(t, flags) {
+      if (flags === null) return t("notAvailable");
+      const pairs = [
+        ["queueFlagsBot", flags.suspectedBot],
+        ["queueFlagsReversed", flags.reversedCredit],
+        ["queueFlagsManual", flags.manualLog],
+        ["queueFlagsDrift", flags.oddsDrift],
+      ];
+      const parts = [];
+      for (const [key, count] of pairs) {
+        const formatted = formatInteger(count);
+        if (formatted !== null) parts.push(`${t(key)} ${formatted}`);
+      }
+      return parts.length === 0 ? t("notAvailable") : parts.join(" · ");
+    }
+
+    /**
+     * One clickable queue row. The row and the account button both open the
+     * account's dossier through the panel's existing submit path; the button
+     * stops propagation so one click resolves once. The tab does not change.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readQueueRow>>} row
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function queueRow(t, row, onOpenDossier) {
+      const reasons =
+        row.reasons.length === 0
+          ? t("notAvailable")
+          : `${row.reasons
+              .slice(0, MAX_QUEUE_REASONS)
+              .join(
+                " · ",
+              )}${row.reasons.length > MAX_QUEUE_REASONS ? " …" : ""}`;
+      return h(
+        "tr",
+        {
+          className: "sec-queue-row",
+          key: `${row.rank === null ? "?" : row.rank}:${row.account}`,
+          title: t("dossierOpen"),
+          onClick: () => onOpenDossier(row.account),
+        },
+        h(
+          "td",
+          { className: "sec-mono" },
+          formatInteger(row.rank) ?? t("notAvailable"),
+        ),
+        h(
+          "td",
+          null,
+          h(
+            "button",
+            {
+              type: "button",
+              className: "sec-link-btn",
+              "data-action": "open-dossier",
+              "data-account": row.account,
+              onClick: (event) => {
+                if (event && typeof event.stopPropagation === "function") {
+                  event.stopPropagation();
+                }
+                onOpenDossier(row.account);
+              },
+            },
+            row.account,
+          ),
+        ),
+        h("td", null, row.agent ?? t("notAvailable")),
+        h("td", null, queueModelCell(t, row.model)),
+        h(
+          "td",
+          { className: "sec-mono" },
+          row.findings === null
+            ? t("notAvailable")
+            : `${formatInteger(row.findings.critical) ?? "?"} / ${
+                formatInteger(row.findings.high) ?? "?"
+              }`,
+        ),
+        h("td", null, queueFlagsText(t, row.flags)),
+        h(
+          "td",
+          { className: "sec-mono" },
+          formatInteger(row.bets) ?? t("notAvailable"),
+        ),
+        h(
+          "td",
+          {
+            className: "sec-queue-reasons",
+            title:
+              row.reasons.length === 0 ? undefined : row.reasons.join(" · "),
+          },
+          reasons,
+        ),
+      );
+    }
+
+    /**
+     * The Queue tab: totals, method/eligibility/rank basis, model presence,
+     * limits, insufficient notes and the ranked table. Rows are advisory; a
+     * row click loads that account's dossier in the background.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, ReturnType<typeof initialEntry>>} snapshot
+     * @param {() => void} onRetry
+     * @param {(account: string) => void} onOpenDossier
+     * @param {string | null} loadedDossierAccount
+     */
+    function renderQueue(
+      t,
+      snapshot,
+      onRetry,
+      onOpenDossier,
+      loadedDossierAccount,
+    ) {
+      const entry = snapshot.queue;
+      return h(
+        "div",
+        { className: "sec-tabpanel", id: "sec-panel-queue", role: "tabpanel" },
+        card(
+          t("queueTitle"),
+          measuredSection(t, entry, onRetry, () => {
+            const queue = readQueue(entry.payload);
+            if (queue === null) {
+              return h("p", { className: "sec-empty" }, t("loading"));
+            }
+            const totals = queue.totals;
+            const totalsBlock =
+              totals === null
+                ? null
+                : metricGrid(
+                    [
+                      {
+                        label: t("queueAccounts"),
+                        value: formatInteger(totals.accounts),
+                      },
+                      {
+                        label: t("queueEligible"),
+                        value: formatInteger(totals.eligible),
+                      },
+                      {
+                        label: t("queueReturned"),
+                        value: formatInteger(totals.returned),
+                      },
+                      {
+                        label: t("queueAgents"),
+                        value: formatInteger(totals.agents),
+                      },
+                      {
+                        label: t("queueScored"),
+                        value: formatInteger(totals.scored),
+                      },
+                    ].filter((metric) => metric.value !== null),
+                  );
+            const infoRows = [];
+            if (queue.method !== null) {
+              infoRows.push({
+                label: t("queueMethod"),
+                value: queue.method,
+                key: "method",
+              });
+            }
+            if (queue.eligibility !== null) {
+              infoRows.push({
+                label: t("queueEligibility"),
+                value: queue.eligibility,
+                key: "eligibility",
+              });
+            }
+            if (queue.rankBasis.length > 0) {
+              infoRows.push({
+                label: t("queueRankBasis"),
+                value: queue.rankBasis.join(" · "),
+                key: "rank-basis",
+              });
+            }
+            const model = queue.model;
+            const modelBlock =
+              model === null
+                ? h("div", { className: "sec-chips" }, [
+                    chip(t("modelUnknown"), { key: "unknown", state: "stale" }),
+                  ])
+                : h(
+                    "div",
+                    null,
+                    h(
+                      "div",
+                      { className: "sec-chips" },
+                      model.present
+                        ? chip(t("modelFitted"), { key: "fitted", state: "ok" })
+                        : chip(t("modelNotFitted"), {
+                            key: "not-fitted",
+                            state: "missing",
+                          }),
+                    ),
+                    model.present
+                      ? metaList([
+                          {
+                            label: t("modelFittedAt"),
+                            value:
+                              formatTimestamp(model.fittedAt) ??
+                              t("notAvailable"),
+                            key: "fitted-at",
+                          },
+                          {
+                            label: t("labelProxy"),
+                            value: model.proxy ?? t("notAvailable"),
+                            key: "proxy",
+                          },
+                        ])
+                      : model.reason === null
+                        ? null
+                        : h(
+                            "p",
+                            { className: "sec-muted" },
+                            `${t("modelReason")}: ${model.reason}`,
+                          ),
+                    model.present
+                      ? h(
+                          "p",
+                          { className: "sec-proxy-note" },
+                          t("modelProxyNote"),
+                        )
+                      : null,
+                  );
+            const rows =
+              queue.rows.length === 0
+                ? h("p", { className: "sec-empty" }, t("queueEmpty"))
+                : h(
+                    "div",
+                    { className: "sec-table-wrap" },
+                    h(
+                      "table",
+                      { className: "sec-table sec-queue-table" },
+                      h(
+                        "thead",
+                        null,
+                        h(
+                          "tr",
+                          null,
+                          h("th", null, t("queueColRank")),
+                          h("th", null, t("queueColAccount")),
+                          h("th", null, t("queueColAgent")),
+                          h("th", null, t("queueColModel")),
+                          h("th", null, t("queueColCriticalHigh")),
+                          h("th", null, t("queueColFlags")),
+                          h("th", null, t("queueColBets")),
+                          h("th", null, t("queueColReasons")),
+                        ),
+                      ),
+                      h(
+                        "tbody",
+                        null,
+                        queue.rows.map((row) =>
+                          queueRow(t, row, onOpenDossier),
+                        ),
+                      ),
+                    ),
+                  );
+            return h(
+              "div",
+              null,
+              totalsBlock,
+              infoRows.length === 0 ? null : metaList(infoRows),
+              h("h3", { className: "sec-subtitle" }, t("overviewModel")),
+              modelBlock,
+              queue.limits.length === 0
+                ? null
+                : h(
+                    "div",
+                    { className: "sec-subsection" },
+                    h("h3", { className: "sec-subtitle" }, t("limitsTitle")),
+                    boundedTextList(
+                      queue.limits,
+                      t("noLimits"),
+                      "queue-limits",
+                    ),
+                  ),
+              queue.insufficient.length === 0
+                ? null
+                : h(
+                    "div",
+                    { className: "sec-subsection" },
+                    h(
+                      "h3",
+                      { className: "sec-subtitle" },
+                      t("insufficientTitle"),
+                    ),
+                    boundedTextList(
+                      queue.insufficient,
+                      t("insufficientEmpty"),
+                      "queue-insufficient",
+                    ),
+                  ),
+              h("h3", { className: "sec-subtitle" }, t("betsRows")),
+              rows,
+              loadedDossierAccount === null
+                ? null
+                : h(
+                    "p",
+                    { className: "sec-note" },
+                    t("queueDossierHint", {
+                      account: loadedDossierAccount,
+                    }),
+                  ),
+            );
+          }),
+          { sub: t("queueSub") },
+        ),
+      );
     }
 
     /* -------------------------------------------------------------------- */
@@ -3664,6 +4204,13 @@ window.__ModuleLoader__.load({
 .sec-warning .sec-chips { margin-top: 0; }
 .sec-proxy-note { margin: 10px 0 0; padding: 8px 12px; border-left: 2px solid var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .sec-not-fitted { display: flex; flex-direction: column; gap: 4px; }
+.sec-link-btn { appearance: none; border: 0; background: none; padding: 0; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 12px; line-height: 18px; text-align: left; text-decoration: underline; cursor: pointer; }
+.sec-link-btn:hover { text-decoration: none; }
+.sec-link-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.sec-queue-row { cursor: pointer; }
+.sec-queue-row:hover { background: var(--dsw-alias-bg-layer-2); }
+.sec-queue-model { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sec-queue-reasons { max-width: 320px; overflow-wrap: anywhere; }
 .sec-tabpanel > .sec-note { margin-top: 4px; }
 `;
 
@@ -3731,7 +4278,9 @@ window.__ModuleLoader__.load({
 
       // A tab loads its own route on first activation; Refresh re-measures.
       React.useEffect(() => {
-        if (tab === "ip") {
+        if (tab === "queue") {
+          ensureSource("queue");
+        } else if (tab === "ip") {
           ensureSource("ipGraph");
         } else if (tab === "findings") {
           ensureSource("patterns");
@@ -3795,6 +4344,19 @@ window.__ModuleLoader__.load({
         loadDossier(id);
       };
 
+      /**
+       * Queue row click: load that account's dossier through the same loader
+       * the Dossier submit uses, without changing the active tab.
+       * @param {string} account
+       */
+      const openDossier = (account) => {
+        const id = typeof account === "string" ? account.trim() : "";
+        if (id === "") return;
+        setDossierInput(id);
+        setDossierId(id);
+        loadDossier(id);
+      };
+
       const toggleEvidence = (id) => {
         setExpanded((previous) => ({
           ...previous,
@@ -3807,6 +4369,14 @@ window.__ModuleLoader__.load({
         else if (key === "category") setCategory(value);
       };
 
+      const dossierView = readDossier(snapshot.dossier.payload);
+      const loadedDossierAccount =
+        dossierId !== null &&
+        dossierView !== null &&
+        dossierView.subject !== null
+          ? readText(dossierView.subject.id)
+          : null;
+
       const refreshing = TAB_SOURCE_KEYS[tab].some((key) =>
         key === "dossier"
           ? dossierId !== null && snapshot.dossier.refreshing
@@ -3816,6 +4386,14 @@ window.__ModuleLoader__.load({
       let body;
       if (tab === "overview") {
         body = renderOverview(t, snapshot, refresh);
+      } else if (tab === "queue") {
+        body = renderQueue(
+          t,
+          snapshot,
+          refresh,
+          openDossier,
+          loadedDossierAccount,
+        );
       } else if (tab === "ip") {
         body = renderIpGraph(t, snapshot, refresh);
       } else if (tab === "findings") {
@@ -3905,15 +4483,7 @@ window.__ModuleLoader__.load({
                     onClick: () => selectTab(tabId),
                     onKeyDown: (event) => onTabKeyDown(event, tabId),
                   },
-                  tabId === "overview"
-                    ? t("tabOverview")
-                    : tabId === "ip"
-                      ? t("tabIpGraph")
-                      : tabId === "findings"
-                        ? t("tabFindings")
-                        : tabId === "model"
-                          ? t("tabModel")
-                          : t("tabDossier"),
+                  t(TAB_LABEL_KEYS[tabId]),
                 ),
               ),
             ),

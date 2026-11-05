@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Security & fraud console",
-    "description": "Read-only SportsDesk security/fraud console: log-source provenance and freshness, masked IP-network clusters, named surveillance findings, a transparent weak-label risk model whose limits are stated (a desk-flag proxy, never a fraud probability), and per-account dossiers; a missing source is reported as missing, never as zero."
+    "description": "Read-only SportsDesk security/fraud console: log-source provenance and freshness, a model/findings-ranked review queue, masked IP-network clusters, named surveillance findings, a transparent weak-label risk model whose limits are stated (a desk-flag proxy, never a fraud probability), and per-account dossiers; a missing source is reported as missing, never as zero."
   }
 }

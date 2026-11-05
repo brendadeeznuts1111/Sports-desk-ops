@@ -3,8 +3,8 @@
  * SportsDesk security/fraud CLI — the one implementation behind the `fraud_*` plugin tools.
  *
  * Contract: `Scratch/security/SECURITY-PLUGIN-CONTRACT.md` (rev 2).
- * - one command per invocation: status | bets | ip-graph | weblog | patterns | model | dossier |
- *   research; `model` subcommands are report (default) | fit | score <accountId>
+ * - one command per invocation: status | bets | queue | ip-graph | weblog | patterns | model |
+ *   dossier | research; `model` subcommands are report (default) | fit | score <accountId>
  * - global flags anywhere: --root/-r, --json/-j, --now/-n, --help/-h; closed per-command flag
  *   specs (an unknown flag is a usage error, exit 2)
  * - `--json` stdout is exactly one object; diagnostics go to stderr
@@ -71,6 +71,11 @@ import {
   type FraudModelState,
   type FraudProxyLabel,
 } from "../lib/fraud_model.ts";
+import {
+  buildFraudQueue,
+  type FraudQueueModelSummary,
+  type FraudQueueScore,
+} from "../lib/fraud_queue.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -582,6 +587,68 @@ async function cmdStatus(
       expectedState: weblogsState?.state ?? null,
     },
     nextStep,
+  });
+}
+
+/**
+ * Ranked account triage queue. Deterministic and transparent: findings by severity, then the
+ * fitted model's proxy score, then bet rows. The model is optional; without an artifact the queue
+ * still ranks on findings/flags and reports the model as absent (never as zero scores).
+ */
+async function cmdQueue(
+  tokens: readonly string[],
+  context: CliContext,
+): Promise<number> {
+  const flags = parseCommandFlags("queue", tokens, {
+    valueFlags: ["--limit"],
+    shortAliases: { "-l": "--limit" },
+  });
+  assertNoPositionals("queue", flags);
+  const limit = integerFlag("queue", flags, "--limit", 25, 1, 100);
+  const perception = await perceptionOf(context);
+  const corpus = requireCorpus(perception, "queue");
+  const patterns = runFraudPatterns(perception);
+  const model = await readFraudModel(context.root);
+
+  let scoreOf: ((accountId: string) => FraudQueueScore | null) | undefined;
+  let modelSummary: FraudQueueModelSummary;
+  if (model.artifact === null) {
+    modelSummary = { present: false, reason: model.state.reason };
+  } else {
+    const artifact = model.artifact;
+    const matrix = extractFraudFeatures(corpus.records, {
+      featureIds: perception.config.features.map((feature) => feature.id),
+      datacenterClasses: perception.config.detectors.datacenterClasses,
+    });
+    const cache = new Map<string, FraudQueueScore | null>();
+    scoreOf = (accountId: string): FraudQueueScore | null => {
+      const key = accountId.toUpperCase();
+      if (cache.has(key)) return cache.get(key) ?? null;
+      const score = scoreAccountWithModel(artifact, matrix, accountId);
+      const value =
+        score === null ? null : { score: score.score, band: score.band };
+      cache.set(key, value);
+      return value;
+    };
+    modelSummary = {
+      present: true,
+      fittedAt: artifact.fittedAt,
+      proxy: artifact.proxy,
+      corpusSha256: artifact.corpusSha256,
+    };
+  }
+
+  const queue = buildFraudQueue({
+    corpus,
+    findings: patterns.findings,
+    scoreOf,
+    model: modelSummary,
+    limit,
+    insufficient: patterns.insufficient,
+  });
+  return emitSuccess(context, "queue", {
+    ...queue,
+    sources: sourceStates(perception),
   });
 }
 
@@ -1359,6 +1426,31 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     ],
   },
   {
+    name: "queue",
+    summary:
+      "Ranked account triage queue: findings by severity, then model score, then bets",
+    usage: "queue [--limit N] [flags]",
+    detail: [
+      "Orders the accounts with at least one non-data-quality account finding or one",
+      "suspected-bot / reversed-credit / manual-log / odds-drift row. Order is lexicographic:",
+      "direct desk-flag rows, then critical/high/medium/low/info account-finding counts, then",
+      "the fitted model's 0-100 proxy score (null last), then bet rows, then account id. No",
+      "finding is converted to an invented point score and the model column is not a",
+      "probability. Detectors are mostly book/agent-level aggregates, so account finding",
+      "counts are usually 0; model-missing is reported as null scores, never as zeros.",
+    ],
+    options: [
+      {
+        flags: "-l, --limit <N>",
+        description: "Rows to return (1-100, default 25).",
+      },
+    ],
+    examples: [
+      "bun run cli/sportsdesk_fraud_cli.ts queue --json",
+      "bun run cli/sportsdesk_fraud_cli.ts queue --limit 10 --json",
+    ],
+  },
+  {
     name: "ip-graph",
     summary: "Masked IP clusters and account fan-out summary",
     usage: "ip-graph [--min-accounts N] [--limit N] [--prefix24 a.b.c] [flags]",
@@ -1566,6 +1658,7 @@ Read-only: no network, no secrets/keychain, no artifact mutation. The only write
 Examples:
   bun run cli/sportsdesk_fraud_cli.ts status --json
   bun run cli/sportsdesk_fraud_cli.ts patterns --json
+  bun run cli/sportsdesk_fraud_cli.ts queue --limit 10 --json
   bun run cli/sportsdesk_fraud_cli.ts ip-graph --min-accounts 3 --json
   bun run cli/sportsdesk_fraud_cli.ts model fit --json
   bun run cli/sportsdesk_fraud_cli.ts dossier 983516 --json
@@ -1614,6 +1707,8 @@ async function dispatch(
       return cmdStatus(args, context);
     case "bets":
       return cmdBets(args, context);
+    case "queue":
+      return cmdQueue(args, context);
     case "ip-graph":
       return cmdIpGraph(args, context);
     case "weblog":

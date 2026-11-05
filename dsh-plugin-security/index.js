@@ -14,7 +14,7 @@
  *
  * READ-ONLY, WITH ONE DERIVED WRITE
  *
- * Seven of the eight tools only read local artifacts. `fraud_model` with `action: "fit"`
+ * Eight of the nine tools only read local artifacts. `fraud_model` with `action: "fit"`
  * writes a derived model artifact under `reports/security/` (gitignored) and requires both
  * `confirm: true` and `write: true`; without them it is a dry run that prints the candidate
  * artifact and its metrics. Nothing here places a bet, talks to a venue, or mutates a captured
@@ -808,6 +808,35 @@ export function apply(ctx, config) {
 
   register(
     defineTool({
+      name: "fraud_queue",
+      description:
+        "Ranked account triage queue: the accounts a human should look at first, ordered lexicographically by strong desk-flag rows (suspected bot, reversed credit, manual log), then account-subject findings by severity, then odds-drift rows, then the fitted model's 0-100 proxy score, then bet rows. Each row carries its reasons, finding counts, flag counts, bet count and last placement time; no finding is converted to an invented point score and the model column is not a probability. limit 1-100 (default 25).",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 100,
+            description: "Rows to return (default 25).",
+          },
+        },
+        additionalProperties: false,
+      },
+      isConcurrencySafe: () => true,
+      async execute(request) {
+        const limit = readInteger(request, "limit", 1, 100);
+        if (!limit.ok) return invalidArguments(limit.message);
+        const argv = ["queue"];
+        if (limit.value !== undefined)
+          argv.push("--limit", String(limit.value));
+        return runCli(argv, { timeoutMs: HTTP_SCAN_TIMEOUT_MS });
+      },
+    }),
+  );
+
+  register(
+    defineTool({
       name: "fraud_ip_graph",
       description:
         "Account↔IP network view over the GSLive bet-report corpus: clusters of accounts sharing an IP or a /24 (and IPv6 /64 where present), account IP fan-out, bot-ring range (/16) hits and datacenter IP classes. Identifiers are masked (IP → masked string + stable tag + prefix key); no raw IP is ever returned. Filters: minAccounts (default 2), limit (max 100), prefix24 (a.b.c).",
@@ -1237,6 +1266,20 @@ export function apply(ctx, config) {
                 }),
               ],
             };
+          },
+        ),
+        registerReadRoute(
+          webServer,
+          `${HTTP_PREFIX}/queue`,
+          HTTP_SCAN_TIMEOUT_MS,
+          (params) => {
+            const limit = queryInteger(params, "limit", 1, 100);
+            if (!limit.ok) return limit;
+            const argv = ["queue"];
+            if (limit.value !== undefined) {
+              argv.push("--limit", String(limit.value));
+            }
+            return { ok: true, argv };
           },
         ),
         registerReadRoute(
