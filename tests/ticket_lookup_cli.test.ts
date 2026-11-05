@@ -360,6 +360,8 @@ describe("sportsdesk_ticket_cli", () => {
     expect(htmlInfo.stdout).toContain("Confidence: low");
     expect(htmlInfo.stdout).toContain("ajaxComplete-restart");
     expect(htmlInfo.stdout).toContain("71× pace-running");
+    expect(htmlInfo.stdout).toContain("Sort: client");
+    expect(htmlInfo.stdout).toContain("client-sorted");
 
     const htmlGate = await run([
       "--analyze",

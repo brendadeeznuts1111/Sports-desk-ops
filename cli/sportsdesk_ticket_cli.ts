@@ -23,6 +23,7 @@ import {
   assessConfidence,
   CONFIDENCE_ORDER,
   confidenceReason,
+  detectHtmlSort,
   detectPhase,
   inspectPace,
   parseConfidenceArg,
@@ -284,6 +285,7 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
     lines.push("Status: (not present — HTML capture)");
     lines.push("Amounts: none (HTML display scale)");
     lines.push(`Phase: ${info.phase ?? "unknown"}`);
+    lines.push(`Sort: ${info.htmlSort ?? "unknown"}`);
   }
   if (info.pace !== undefined) {
     lines.push(
@@ -318,6 +320,11 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
   ) {
     lines.push(
       "⚠ status=1 but accountInfo is missing — the verifySession→getAccountInfo chain (manager.js) may not have completed",
+    );
+  }
+  if (info.htmlSort === "client") {
+    lines.push(
+      "⚠ HTML table is client-sorted — row order is presentation, not capture order; dedupe uses a game+leg signature",
     );
   }
   if (info.pace?.verdict === "mid-load") {
@@ -569,6 +576,7 @@ if (text.trimStart().startsWith("<")) {
     hasAmounts: false,
     pace: inspectPace(text, htmlTimeSpanMs(tickets)),
     phase: detectPhase(text),
+    htmlSort: detectHtmlSort(text),
     hasAccountInfo: null,
   };
   if (values.captureInfo === true) {

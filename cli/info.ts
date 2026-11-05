@@ -13,6 +13,22 @@ export type PaceVersion = "0.4.x" | "1.x" | "unknown";
 
 export type CapturePhase = "authenticated" | "login-form" | "unknown";
 
+/** Whether the HTML table's row order is DataTables client order or server order. */
+export type HtmlSort = "client" | "server" | "unknown";
+
+/** Detect a client-side DataTables sort marker; a plain table is treated as server order. */
+export function detectHtmlSort(html: string): HtmlSort {
+  if (
+    /<th\b[^>]*(?:aria-sort="(?:ascending|descending)"|class="[^"]*\bsorting_(?:asc|desc)\b)/i.test(
+      html,
+    )
+  ) {
+    return "client";
+  }
+  if (/<table\b/i.test(html)) return "server";
+  return "unknown";
+}
+
 /** Login-form fingerprint only exists before `credentials()` wipes sessionStorage. */
 export function detectPhase(html: string): CapturePhase {
   if (/<[^>]*data-security="form"/i.test(html)) return "login-form";
@@ -128,6 +144,8 @@ export interface CaptureInfo {
   readonly pace?: PaceState;
   /** HTML phase; JSON captures do not carry a login form. */
   readonly phase?: CapturePhase;
+  /** HTML table sort order; JSON captures do not carry a table. */
+  readonly htmlSort?: HtmlSort;
   /** JSON `accountInfo` presence; `null` when not applicable. */
   readonly hasAccountInfo?: boolean | null;
 }
