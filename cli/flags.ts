@@ -36,6 +36,8 @@ import {
   planReviews,
   readFlagReviews,
   readReviewRun,
+  readReviewRuns,
+  buildFlagRateHistory,
   reviewProgress,
   reviewsCsv,
   recordFlagReview,
@@ -694,7 +696,10 @@ if (options.reviewReport) {
     const run = readReviewRun(db, options.runId);
     if (run === null) fail(`no review run in ${options.db}`);
     const reviews = readFlagReviews(db, run.runId);
-    const metadata = buildFlagsMetricMetadata(run.plan, reviews);
+    const history = buildFlagRateHistory(readReviewRuns(db));
+    const metadata = buildFlagsMetricMetadata(run.plan, reviews, {
+      flagRateHistory: history,
+    });
     const rulePrecision = metadata.definitions.find(
       (definition) => definition.name === "rulePrecision",
     )?.value;

@@ -5,11 +5,13 @@ import { join } from "node:path";
 
 import {
   DEFAULT_SAMPLING_BUDGET,
+  buildFlagRateHistory,
   buildFlagsMetricMetadata,
   openReviewDb,
   planReviews,
   readFlagReviews,
   readReviewRun,
+  readReviewRuns,
   recordFlagReview,
   reviewProgress,
   reviewsCsv,
@@ -143,6 +145,26 @@ describe("planReviews", () => {
     expect(doubleReviews).toHaveLength(Math.ceil(plan.samples.length / 20));
   });
 
+  test("persists every flag, not only the review sample", () => {
+    const plan = planFor(
+      anomalies({ period_correlation: 25, batch_replay: 5 }),
+      {
+        budget: {
+          ...DEFAULT_SAMPLING_BUDGET,
+          analystMinutesPerDay: 1,
+        },
+      },
+    );
+    expect(plan.flags).toHaveLength(30);
+    expect(plan.samples.length).toBeLessThan(30);
+    expect(plan.flags?.[0]).toMatchObject({
+      seq: 0,
+      rule: "period_correlation",
+      customerRef: null,
+      agentRef: null,
+    });
+  });
+
   test("double review is global, not one per rule", () => {
     const plan = planFor(
       anomalies({ period_correlation: 25, batch_replay: 25 }),
@@ -203,6 +225,7 @@ describe("review ledger", () => {
       captureSha256: "a".repeat(64),
     });
     expect(readReviewRun(db, plan.runId)?.flagCount).toBe(12);
+    expect(readReviewRun(db, plan.runId)?.plan.flags).toHaveLength(12);
 
     recordFlagReview(db, {
       runId: plan.runId,
@@ -256,6 +279,37 @@ describe("review ledger", () => {
     expect(() =>
       recordReviewPlan(db, { ...plan, flagCount: plan.flagCount + 1 }),
     ).toThrow(/already exists with a different plan/);
+    db.close();
+  });
+
+  test("builds a P50 flag-rate reference after three persisted runs", () => {
+    const db = openReviewDb(join(ROOT, "history.sqlite"));
+    const counts = [10, 20, 30];
+    for (const [index, count] of counts.entries()) {
+      const plan = planReviews(anomalies({ period_correlation: count }), {
+        runId: `history-${index}`,
+        wagerCount: 1000,
+        budget: DEFAULT_SAMPLING_BUDGET,
+        captureKey: `capture-${index}`,
+      });
+      recordReviewPlan(db, plan);
+    }
+    const runs = readReviewRuns(db);
+    const history = buildFlagRateHistory(runs);
+    expect(history?.runs).toBe(3);
+    expect(history?.p50["period_correlation"]).toBeCloseTo(0.02, 10);
+    const metadata = buildFlagsMetricMetadata(runs[2]!.plan, [], {
+      flagRateHistory: history,
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "flagRateReference",
+      ),
+    ).toMatchObject({
+      kind: "baseline",
+      state: "measured",
+      value: { runs: 3, p50: { period_correlation: 0.02 } },
+    });
     db.close();
   });
 
@@ -378,7 +432,7 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "baseline",
       state: "not_measured",
-      blockedBy: "captureHistory",
+      blockedBy: { name: "captureHistory", layer: "persistence" },
     });
     expect(
       metadata.definitions.find(
@@ -408,7 +462,10 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: ["durableCustomerMaster", "reviewRowsPerRule"],
+      blockedBy: [
+        { name: "durableCustomerMaster", layer: "escalation" },
+        { name: "reviewRowsPerRule", layer: "application" },
+      ],
       value: [
         "desk-flag",
         "findings",
@@ -426,7 +483,7 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: "corpusFreshness",
+      blockedBy: { name: "corpusFreshness", layer: "execution" },
     });
     expect(
       metadata.definitions.find(
@@ -435,7 +492,7 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "metric",
       state: "not_measured",
-      blockedBy: "durableCustomerMaster",
+      blockedBy: { name: "durableCustomerMaster", layer: "escalation" },
       value: 0.0394,
     });
     expect(
@@ -471,8 +528,36 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: "reviewRowsPerRule",
+      blockedBy: { name: "reviewRowsPerRule", layer: "application" },
       value: { applied: [], notApplied: [] },
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "allFlagRows",
+      ),
+    ).toMatchObject({
+      kind: "caveat",
+      state: "measured",
+      value: "persisted-in-plan",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "modelFreshnessThreshold",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      value: 7,
+      unit: "day",
+      derivedFrom: "assumed_default",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "bridgeRepresentativenessThreshold",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      value: "within one Wilson interval",
+      derivedFrom: "assumed_default",
     });
     expect(
       metadata.definitions.find(
@@ -482,13 +567,12 @@ describe("flags metric metadata", () => {
       kind: "caveat",
       state: "not_measured",
       blockedBy: [
-        "durableCustomerMaster",
-        "corpusFreshness",
-        "modelFreshness",
-        "bridgeRepresentativeness",
-        "reviewRows",
-        "reviewRowsPerRule",
-        "allFlagRows",
+        { name: "durableCustomerMaster", layer: "escalation" },
+        { name: "corpusFreshness", layer: "execution" },
+        { name: "modelFreshness", layer: "execution" },
+        { name: "bridgeRepresentativeness", layer: "execution" },
+        { name: "reviewRows", layer: "execution" },
+        { name: "reviewRowsPerRule", layer: "application" },
       ],
     });
     expect(
@@ -626,6 +710,43 @@ describe("flags metric metadata", () => {
       blockedBy: "kappaUndefined",
       n: 2,
     });
+  });
+
+  test("partial rows must name what is missing", () => {
+    const metadata = buildFlagsMetricMetadata(plan, []);
+    const bad = {
+      ...metadata,
+      definitions: metadata.definitions.map((definition) =>
+        definition.name === "ruleApplication"
+          ? {
+              name: "ruleApplication",
+              kind: "parameter",
+              state: "partial",
+              value: {},
+              description: "partial without a blocker",
+            }
+          : definition,
+      ),
+    };
+    expect(() => validateFlagsMetricMetadata(bad)).toThrow(
+      /partial but has no blockedBy/,
+    );
+    const good = {
+      ...metadata,
+      definitions: metadata.definitions.map((definition) =>
+        definition.name === "ruleApplication"
+          ? {
+              ...definition,
+              state: "partial",
+              blockedBy: {
+                name: "reviewRowsPerRule",
+                layer: "application" as const,
+              },
+            }
+          : definition,
+      ),
+    };
+    expect(() => validateFlagsMetricMetadata(good)).not.toThrow();
   });
 
   test("refuses an unknown derivedFrom", () => {

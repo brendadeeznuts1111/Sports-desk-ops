@@ -74,6 +74,15 @@ export interface ReviewRulePlan {
   readonly minutes: number;
 }
 
+export interface ReviewFlag {
+  readonly seq: number;
+  readonly rule: string;
+  readonly severity: string;
+  readonly wagerNumbers: readonly string[];
+  readonly customerRef: string | null;
+  readonly agentRef: string | null;
+}
+
 export interface ReviewSample {
   readonly seq: number;
   readonly rule: string;
@@ -95,6 +104,8 @@ export interface ReviewPlan {
   readonly wagerCount: number;
   readonly flagCount: number;
   readonly samples: readonly ReviewSample[];
+  /** Every anomaly in the run, including those not sampled for review. */
+  readonly flags?: readonly ReviewFlag[];
   readonly rules: readonly ReviewRulePlan[];
 }
 
@@ -216,6 +227,20 @@ export function planReviews(
   }
 
   const captureKey = options.captureKey ?? options.runId;
+  const flags: ReviewFlag[] = anomalies.map((anomaly, seq) => ({
+    seq,
+    rule: anomaly.rule,
+    severity: anomaly.severity,
+    wagerNumbers: anomaly.tickets.map((ticket) => ticket.wagerNumber),
+    customerRef:
+      typeof anomaly.evidence["customerRef"] === "string"
+        ? anomaly.evidence["customerRef"]
+        : null,
+    agentRef:
+      typeof anomaly.evidence["agentRef"] === "string"
+        ? anomaly.evidence["agentRef"]
+        : null,
+  }));
   const samples: ReviewSample[] = [];
   for (const candidate of candidates) {
     if (candidate.selected === 0) continue;
@@ -227,24 +252,15 @@ export function planReviews(
       })
       .slice(0, candidate.selected)
       .sort((a, b) => a.seq - b.seq);
-    chosen.forEach((entry) => {
+    for (const entry of chosen) {
+      const flag = flags[entry.seq];
+      if (flag === undefined) continue;
       samples.push({
-        seq: entry.seq,
-        rule: entry.anomaly.rule,
-        severity: entry.anomaly.severity,
-        wagerNumbers: entry.anomaly.tickets.map((ticket) => ticket.wagerNumber),
-        customerRef:
-          typeof entry.anomaly.evidence["customerRef"] === "string"
-            ? entry.anomaly.evidence["customerRef"]
-            : null,
-        agentRef:
-          typeof entry.anomaly.evidence["agentRef"] === "string"
-            ? entry.anomaly.evidence["agentRef"]
-            : null,
+        ...flag,
         minutes: candidate.cost,
         doubleReview: false,
       });
-    });
+    }
   }
 
   const rules: ReviewRulePlan[] = candidates
@@ -277,6 +293,7 @@ export function planReviews(
     wagerCount: options.wagerCount,
     flagCount: anomalies.length,
     samples: ordered,
+    flags,
     rules,
   };
 }
@@ -475,6 +492,65 @@ export function readReviewRun(
   };
 }
 
+export function readReviewRuns(db: Database): readonly ReviewRunSummary[] {
+  const rows = db
+    .query(
+      `SELECT run_id, created_at, capture_path, capture_sha256, wager_count, flag_count, plan_json
+       FROM flag_run ORDER BY created_at ASC`,
+    )
+    .all();
+  return rows.map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      runId: String(record["run_id"]),
+      createdAt: String(record["created_at"]),
+      capturePath:
+        record["capture_path"] === null ? null : String(record["capture_path"]),
+      captureSha256:
+        record["capture_sha256"] === null
+          ? null
+          : String(record["capture_sha256"]),
+      wagerCount: sqlInt(record["wager_count"] as number | bigint | null),
+      flagCount: sqlInt(record["flag_count"] as number | bigint | null),
+      plan: JSON.parse(String(record["plan_json"])) as ReviewPlan,
+    };
+  });
+}
+
+export interface FlagRateHistory {
+  readonly runs: number;
+  readonly p50: Readonly<Record<string, number>>;
+}
+
+/** Per-rule median flag rate over persisted runs; null until enough history exists. */
+export function buildFlagRateHistory(
+  runs: readonly ReviewRunSummary[],
+  minRuns = 3,
+): FlagRateHistory | null {
+  const usable = runs.filter(
+    (run) => run.wagerCount > 0 && run.plan.rules.length > 0,
+  );
+  if (usable.length < minRuns) return null;
+  const rates = new Map<string, number[]>();
+  for (const run of usable) {
+    for (const rule of run.plan.rules) {
+      const list = rates.get(rule.rule) ?? [];
+      list.push(rule.fired / run.wagerCount);
+      rates.set(rule.rule, list);
+    }
+  }
+  const p50: Record<string, number> = {};
+  for (const [rule, values] of rates) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    p50[rule] =
+      sorted.length % 2 === 1
+        ? sorted[middle]!
+        : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+  }
+  return { runs: usable.length, p50 };
+}
+
 export function readFlagReviews(
   db: Database,
   runId?: string,
@@ -639,6 +715,17 @@ export function reviewsCsv(reviews: readonly StoredFlagReview[]): string {
 /* Flags metric metadata                                                      */
 /* -------------------------------------------------------------------------- */
 
+export type BlockedByLayer =
+  "persistence" | "application" | "execution" | "escalation";
+
+export interface BlockedByRef {
+  readonly name: string;
+  readonly layer: BlockedByLayer;
+}
+
+export type BlockedBy =
+  string | BlockedByRef | readonly (string | BlockedByRef)[];
+
 export interface FlagsMetricDefinition {
   readonly name: string;
   readonly kind: string;
@@ -650,7 +737,7 @@ export interface FlagsMetricDefinition {
   readonly evaluates?: string;
   readonly notApplicableTo?: string;
   readonly state?: string | undefined;
-  readonly blockedBy?: string | readonly string[] | undefined;
+  readonly blockedBy?: BlockedBy | undefined;
   readonly method?: string;
   readonly value?: unknown;
   readonly sampledFrom?: number;
@@ -747,9 +834,14 @@ function reviewerPairs(
  * The `flags-metric-metadata` contract. `rulePrecision` is sampled precision over reviewed flags,
  * never per-flag probability; `evaluates`/`notApplicableTo` make that boundary machine-readable.
  */
+export interface FlagsMetadataOptions {
+  readonly flagRateHistory?: FlagRateHistory | null;
+}
+
 export function buildFlagsMetricMetadata(
   plan: ReviewPlan,
   reviews: readonly StoredFlagReview[],
+  options: FlagsMetadataOptions = {},
 ): FlagsMetricMetadata {
   const flags = definitiveFlags(reviews);
   const byRule = new Map<
@@ -840,6 +932,7 @@ export function buildFlagsMetricMetadata(
           };
 
   const reviewedFlags = new Set(reviews.map((review) => review.seq)).size;
+  const flagsPersisted = (plan.flags?.length ?? 0) > 0;
   const confirmedByRule = Object.fromEntries(
     Object.entries(rulePrecision)
       .filter(([, row]) => row.confirmed !== undefined)
@@ -865,11 +958,27 @@ export function buildFlagsMetricMetadata(
       {
         name: "flagRateReference",
         kind: "baseline",
-        state: "not_measured",
-        blockedBy: "captureHistory",
-        value: null,
-        description:
-          "Historical per-rule flag-rate reference (P50 over recent captures); no capture-history index exists yet.",
+        ...(options.flagRateHistory === undefined ||
+        options.flagRateHistory === null
+          ? {
+              state: "not_measured",
+              blockedBy: {
+                name: "captureHistory",
+                layer: "persistence" as const,
+              },
+              value: null,
+              description:
+                "Historical per-rule flag-rate reference (P50 over recent captures); persist at least three runs to measure it.",
+            }
+          : {
+              state: "measured",
+              value: {
+                runs: options.flagRateHistory.runs,
+                p50: options.flagRateHistory.p50,
+              },
+              description:
+                "Per-rule median flag rate over persisted runs; the reference flagRate should be read against.",
+            }),
       },
       {
         name: "ruleHitWeight",
@@ -915,17 +1024,32 @@ export function buildFlagsMetricMetadata(
       {
         name: "allFlagRows",
         kind: "caveat",
-        state: "not_measured",
-        blockedBy: "flagRunPersistence",
-        value: "not_persisted",
-        description:
-          "flag_run.plan_json stores only the review sample, not every anomaly. hasRuleHit needs all flag rows with customerRef; persist them at review-plan time or rerun dx flags at batch time.",
+        ...(flagsPersisted
+          ? {
+              state: "measured",
+              value: "persisted-in-plan",
+              description:
+                "Every anomaly is persisted in flag_run.plan_json with customerRef/agentRef; hasRuleHit can cover the full run, not just the review sample.",
+            }
+          : {
+              state: "not_measured",
+              blockedBy: {
+                name: "flagRunPersistence",
+                layer: "persistence" as const,
+              },
+              value: "not_persisted",
+              description:
+                "flag_run.plan_json stores only the review sample, not every anomaly. hasRuleHit needs all flag rows with customerRef; persist them at review-plan time or rerun dx flags at batch time.",
+            }),
       },
       {
         name: "ruleApplication",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: "reviewRowsPerRule",
+        blockedBy: {
+          name: "reviewRowsPerRule",
+          layer: "application",
+        },
         value: {
           applied: [],
           notApplied: [],
@@ -951,13 +1075,15 @@ export function buildFlagsMetricMetadata(
         kind: "caveat",
         state: "not_measured",
         blockedBy: [
-          "durableCustomerMaster",
-          "corpusFreshness",
-          "modelFreshness",
-          "bridgeRepresentativeness",
-          "reviewRows",
-          "reviewRowsPerRule",
-          "allFlagRows",
+          { name: "durableCustomerMaster", layer: "escalation" },
+          { name: "corpusFreshness", layer: "execution" },
+          { name: "modelFreshness", layer: "execution" },
+          { name: "bridgeRepresentativeness", layer: "execution" },
+          { name: "reviewRows", layer: "execution" },
+          { name: "reviewRowsPerRule", layer: "application" },
+          ...(flagsPersisted
+            ? []
+            : [{ name: "allFlagRows", layer: "application" as const }]),
         ],
         value: "not_implemented",
         description:
@@ -974,7 +1100,10 @@ export function buildFlagsMetricMetadata(
         name: "queuePriorityOrder",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: ["durableCustomerMaster", "reviewRowsPerRule"],
+        blockedBy: [
+          { name: "durableCustomerMaster", layer: "escalation" },
+          { name: "reviewRowsPerRule", layer: "application" },
+        ],
         value: [
           "desk-flag",
           "findings",
@@ -992,10 +1121,12 @@ export function buildFlagsMetricMetadata(
         kind: "parameter",
         state: "not_measured",
         blockedBy: [
-          "durableCustomerMaster",
-          "allFlagRows",
-          "reviewRowsPerRule",
-          "bridgeRepresentativeness",
+          { name: "durableCustomerMaster", layer: "escalation" },
+          ...(flagsPersisted
+            ? []
+            : [{ name: "allFlagRows", layer: "application" as const }]),
+          { name: "reviewRowsPerRule", layer: "application" },
+          { name: "bridgeRepresentativeness", layer: "execution" },
         ],
         value: {
           field: "hasRuleHit",
@@ -1009,10 +1140,27 @@ export function buildFlagsMetricMetadata(
           "Tie-break, not a score bonus or bucket promotion. Unreviewed hasRuleHit is the dense signal; hasConfirmedRuleHit stays reviewer evidence because at 10% sampling it reflects which flags were sampled. Applied per rule only after >= 5 confirmed reviews.",
       },
       {
+        name: "modelFreshnessThreshold",
+        kind: "parameter",
+        value: 7,
+        unit: "day",
+        derivedFrom: "assumed_default",
+        description:
+          "Not empirically derived; precision@20 versus model age has not been measured. Revisit when the decay study exists.",
+      },
+      {
+        name: "bridgeRepresentativenessThreshold",
+        kind: "parameter",
+        value: "within one Wilson interval",
+        derivedFrom: "assumed_default",
+        description:
+          "Default bar for covered-vs-uncovered precision. Revisit if small but persistent divergence turns out to be meaningful.",
+      },
+      {
         name: "scoreNormalization",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: "corpusFreshness",
+        blockedBy: { name: "corpusFreshness", layer: "execution" },
         value: {
           divisor: 100,
           observed: {
@@ -1035,7 +1183,7 @@ export function buildFlagsMetricMetadata(
         population: "gslive-accounts",
         value: 0.0394,
         state: "not_measured",
-        blockedBy: "durableCustomerMaster",
+        blockedBy: { name: "durableCustomerMaster", layer: "escalation" },
         description:
           "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%). Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones.",
       },
@@ -1113,17 +1261,46 @@ export function validateFlagsMetricMetadata(
         `flagsMetricMetadata: ${row.name}.derivedFrom "${row.derivedFrom}" is not sampled|measured|computed|extrapolated`,
       );
     }
-    if (row.state === "not_measured") {
+    if (row.state === "not_measured" || row.state === "partial") {
       const blocked = row.blockedBy;
       const empty =
         blocked === undefined ||
         (typeof blocked === "string"
           ? blocked.trim() === ""
-          : blocked.length === 0);
+          : "name" in blocked
+            ? blocked.name.trim() === ""
+            : blocked.length === 0);
       if (empty) {
         throw new Error(
-          `flagsMetricMetadata: ${row.name} is not_measured but has no blockedBy`,
+          `flagsMetricMetadata: ${row.name} is ${row.state} but has no blockedBy`,
         );
+      }
+      if (blocked !== undefined) {
+        const entries =
+          typeof blocked === "string"
+            ? []
+            : Array.isArray(blocked)
+              ? blocked
+              : [blocked];
+        for (const entry of entries) {
+          if (typeof entry === "string") continue;
+          const layer = entry.layer;
+          if (
+            layer !== "persistence" &&
+            layer !== "application" &&
+            layer !== "execution" &&
+            layer !== "escalation"
+          ) {
+            throw new Error(
+              `flagsMetricMetadata: ${row.name}.blockedBy "${entry.name}" has unknown layer "${String(layer)}"`,
+            );
+          }
+          if (entry.name.trim() === "") {
+            throw new Error(
+              `flagsMetricMetadata: ${row.name}.blockedBy has an empty name`,
+            );
+          }
+        }
       }
     }
     if (row.evaluates !== undefined) {

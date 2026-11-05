@@ -27,6 +27,7 @@ export const METRIC_DERIVED_FROM = [
   "measured",
   "computed",
   "extrapolated",
+  "assumed_default",
 ] as const;
 
 export type MetricDerivedFrom = (typeof METRIC_DERIVED_FROM)[number];
