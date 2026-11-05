@@ -2,7 +2,7 @@
 /**
  * @file capture_bet_ticker.ts
  * @description Captures the full `Manager/getBetTicker` list into `data/bet-ticker.json`, the file
- * the dashboard's Bet Ticker panel and `/api/live-wagers` read before the committed paste.
+ * the dashboard's Bet Ticker panel and `/api/live-wagers` read before the local paste artifact.
  *
  * Read-only: one POST with `wagerNumber=0`, which returns the whole current list (745 rows in the
  * 2026-11-01 discover run). Auth goes through `createF402ReplayTransport()` — session file or
