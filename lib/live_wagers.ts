@@ -21,8 +21,10 @@
 import { SPORT_CATEGORIES } from "./sport_taxonomy.ts";
 
 /** Parse a bet-ticker XML feed with Bun's native parser (compact shape). */
-export function parseBetTickerXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseBetTickerXml(
+  input: string | Uint8Array,
+): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 export interface LiveWagerLeg {

@@ -18,28 +18,36 @@
 export type Channel = "GSLIVE" | "GSBUILDER" | "Internet" | string;
 
 /** Parse a customer-profile XML document with Bun's native parser (compact shape). */
-export function parseCustomerProfileXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseCustomerProfileXml(
+  input: string | Uint8Array,
+): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 /** Parse a customer-performance XML document with Bun's native parser (compact shape). */
-export function parseCustomerPerformanceXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseCustomerPerformanceXml(
+  input: string | Uint8Array,
+): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 /** Parse a transactions XML document with Bun's native parser (compact shape). */
-export function parseTransactionsXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseTransactionsXml(
+  input: string | Uint8Array,
+): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 /** Parse an AJAX-delivered XML response with Bun's native parser (compact shape). */
-export function parseAjaxXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseAjaxXml(input: string | Uint8Array): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 /** Parse a Fantasy402 AJAX XML response with Bun's native parser (compact shape). */
-export function parseFantasy402AjaxXml(text: string): Bun.XML.Document {
-  return Bun.XML.parse(text);
+export function parseFantasy402AjaxXml(
+  input: string | Uint8Array,
+): Bun.XML.Document {
+  return Bun.XML.parse(input);
 }
 
 /** Unwrap Bun.XML compact one-or-many values into a string (or null). */
@@ -56,8 +64,8 @@ function xmlText(v: unknown): string | null {
 }
 
 /** Map a customer-profile XML document onto a CustomerRow (best-effort, field names are loose). */
-export function customerRowFromXml(text: string): CustomerRow {
-  const doc = parseCustomerProfileXml(text) as Record<string, unknown>;
+export function customerRowFromXml(input: string | Uint8Array): CustomerRow {
+  const doc = parseCustomerProfileXml(input) as Record<string, unknown>;
   // Accept <profile>, <customer>, or a bare root.
   const root = (doc.profile ??
     doc.customer ??

@@ -87,6 +87,29 @@ describe("daemon endpoint smoke", () => {
     }
   });
 
+  test("XML endpoints decode bytes from the declaration", async () => {
+    const encoder = new TextEncoder();
+    const iso = new Uint8Array([
+      ...encoder.encode(`<?xml version="1.0" encoding="ISO-8859-1"?><a>`),
+      0xe9,
+      ...encoder.encode("</a>"),
+    ]);
+    for (const path of [
+      "/api/parse-xml",
+      "/api/parse-ajax-xml",
+      "/api/parse-bet-ticker",
+    ]) {
+      const response = await fetch(new URL(path, server.url), {
+        method: "POST",
+        headers: { "content-type": "application/xml" },
+        body: iso,
+        signal: AbortSignal.timeout(8_000),
+      });
+      expect(response.status, path).toBe(200);
+      expect(await response.json(), path).toEqual({ a: "é" });
+    }
+  });
+
   test("the shipped POST parsers accept a minimal document", async () => {
     const cases: ReadonlyArray<[string, string, string]> = [
       ["/api/parse-xml", "<a>1</a>", "application/xml"],

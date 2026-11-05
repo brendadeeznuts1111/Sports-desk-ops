@@ -1088,15 +1088,15 @@ export function startServer(options?: ServerOptions) {
       // 2d. Bet-ticker XML: parse one feed document and echo the compact tree.
       if (pathname === "/api/parse-bet-ticker" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
             );
           }
           const { parseBetTickerXml } = await import("../lib/live_wagers.ts");
-          return Response.json(parseBetTickerXml(text), { headers: cors });
+          return Response.json(parseBetTickerXml(xml), { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1128,16 +1128,16 @@ export function startServer(options?: ServerOptions) {
       // 2h. Fantasy402 AJAX XML: parse one Fantasy402 AJAX XML response and echo the compact tree.
       if (pathname === "/api/parse-fantasy402-ajax" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
             );
           }
-          const { parseFantasy402AjaxXml } =
+          const { parseFantasy402AjaxXml: parse } =
             await import("../lib/customer_profile.ts");
-          return Response.json(parseFantasy402AjaxXml(text), { headers: cors });
+          return Response.json(parse(xml), { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1149,15 +1149,15 @@ export function startServer(options?: ServerOptions) {
       // 2g. AJAX XML: parse one AJAX-delivered XML response and echo the compact tree.
       if (pathname === "/api/parse-ajax-xml" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
             );
           }
           const { parseAjaxXml } = await import("../lib/customer_profile.ts");
-          return Response.json(parseAjaxXml(text), { headers: cors });
+          return Response.json(parseAjaxXml(xml), { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1169,8 +1169,8 @@ export function startServer(options?: ServerOptions) {
       // 2f. Transactions XML: parse one transactions document and echo the compact tree.
       if (pathname === "/api/parse-transactions" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
@@ -1178,7 +1178,7 @@ export function startServer(options?: ServerOptions) {
           }
           const { parseTransactionsXml } =
             await import("../lib/customer_profile.ts");
-          return Response.json(parseTransactionsXml(text), { headers: cors });
+          return Response.json(parseTransactionsXml(xml), { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1193,8 +1193,8 @@ export function startServer(options?: ServerOptions) {
         req.method === "POST"
       ) {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
@@ -1202,7 +1202,7 @@ export function startServer(options?: ServerOptions) {
           }
           const { parseCustomerPerformanceXml } =
             await import("../lib/customer_profile.ts");
-          return Response.json(parseCustomerPerformanceXml(text), {
+          return Response.json(parseCustomerPerformanceXml(xml), {
             headers: cors,
           });
         } catch (err) {
@@ -1216,8 +1216,8 @@ export function startServer(options?: ServerOptions) {
       // 2c. Customer profile XML: parse one profile document and echo the compact tree.
       if (pathname === "/api/parse-customer-profile" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
@@ -1225,7 +1225,7 @@ export function startServer(options?: ServerOptions) {
           }
           const { customerRowFromXml } =
             await import("../lib/customer_profile.ts");
-          return Response.json(customerRowFromXml(text), { headers: cors });
+          return Response.json(customerRowFromXml(xml), { headers: cors });
         } catch (err) {
           return Response.json(
             { error: String(err) },
@@ -1237,8 +1237,8 @@ export function startServer(options?: ServerOptions) {
       // 2b. XML parse debug: parse one XML body with Bun.XML and echo the compact tree.
       if (pathname === "/api/parse-xml" && req.method === "POST") {
         try {
-          const text = await req.text();
-          if (text.trim() === "") {
+          const xml = new Uint8Array(await req.arrayBuffer());
+          if (xml.byteLength === 0) {
             return Response.json(
               { error: "empty body" },
               { status: 400, headers: cors },
@@ -1246,8 +1246,8 @@ export function startServer(options?: ServerOptions) {
           }
           const compact = url.searchParams.get("compact") !== "false";
           const parsed = compact
-            ? Bun.XML.parse(text)
-            : Bun.XML.parse(text, { compact: false });
+            ? Bun.XML.parse(xml)
+            : Bun.XML.parse(xml, { compact: false });
           return Response.json(parsed, { headers: cors });
         } catch (err) {
           return Response.json(
