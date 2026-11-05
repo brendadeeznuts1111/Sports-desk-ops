@@ -31,18 +31,18 @@ Package: `dsh-plugin-sportsdesk-security` · Host banner id `sportsdesk-security
 
 ## Log sources (measured, not assumed)
 
-| Source id                | Artifact                                                                                     | Provenance                                | Failure mode surfaced                          |
-| :----------------------- | :------------------------------------------------------------------------------------------- | :---------------------------------------- | :--------------------------------------------- |
-| `gslive_bet_report`      | `Scratch/security/corpus/gslive-betreport-all-*.json`, fallback `Scratch/betReport-all.json` | live GSLive export (ephemeral, untracked) | missing / ephemeral                            |
-| `gslive_wagers_by_state` | `Scratch/gslive-wagers-by-state.summary.json` + `.csv`                                       | GSLive export                             | missing                                        |
-| `f402_live_bets`         | `data/live-bets.json`                                                                        | live-api snapshot                         | stale / missing                                |
-| `f402_live_wagers`       | `data/live-wagers.json`                                                                      | live-api snapshot                         | stale / missing                                |
-| `f402_weblog_rollup`     | `Scratch/weblog/rollup-*.json`                                                               | api-log-rollup (zero-PII aggregate)       | missing corpus noted                           |
-| `gslive_weblogs`         | `Scratch/gslive-weblogs/latest.json`                                                         | api-log-rollup                            | `session_expired` (HTTP 401)                   |
-| `gslive_suspect_audit`   | `reports/gslive-suspect-all-states-audit.json`                                               | derived                                   | known `targetAccount:"--help"` defect surfaced |
-| `f402_weblog_capture`    | `docs/evidence/captures/2026-10-31/getWebLog.post.json`                                      | shape sample                              | empty capture: rows MISSING, not zero          |
-| `customer_book`          | `enriched_customers_full.json`                                                               | **generated fixture**                     | fixture chip; excluded from fitting            |
-| `agent_index`            | `data/agent-index.json`, `agent-tree.json`                                                   | derived                                   | missing                                        |
+| Source id                | Artifact                                                                                                                      | Provenance                                | Failure mode surfaced                          |
+| :----------------------- | :---------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------- | :--------------------------------------------- |
+| `gslive_bet_report`      | `Scratch/security/corpus/gslive-betreport-latest.json`, fallback `gslive-betreport-all-*.json` / `Scratch/betReport-all.json` | live GSLive export (ephemeral, untracked) | missing / ephemeral                            |
+| `gslive_wagers_by_state` | `Scratch/gslive-wagers-by-state.summary.json` + `.csv`                                                                        | GSLive export                             | missing                                        |
+| `f402_live_bets`         | `data/live-bets.json`                                                                                                         | live-api snapshot                         | stale / missing                                |
+| `f402_live_wagers`       | `data/live-wagers.json`                                                                                                       | live-api snapshot                         | stale / missing                                |
+| `f402_weblog_rollup`     | `Scratch/weblog/rollup-*.json`                                                                                                | api-log-rollup (zero-PII aggregate)       | missing corpus noted                           |
+| `gslive_weblogs`         | `Scratch/gslive-weblogs/latest.json`                                                                                          | api-log-rollup                            | `session_expired` (HTTP 401)                   |
+| `gslive_suspect_audit`   | `reports/gslive-suspect-all-states-audit.json`                                                                                | derived                                   | known `targetAccount:"--help"` defect surfaced |
+| `f402_weblog_capture`    | `docs/evidence/captures/2026-10-31/getWebLog.post.json`                                                                       | shape sample                              | empty capture: rows MISSING, not zero          |
+| `customer_book`          | `enriched_customers_full.json`                                                                                                | **generated fixture**                     | fixture chip; excluded from fitting            |
+| `agent_index`            | `data/agent-index.json`, `agent-tree.json`                                                                                    | derived                                   | missing                                        |
 
 Every answer carries the source matrix, so a score can never be read without knowing what it was
 computed on.

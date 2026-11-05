@@ -504,12 +504,15 @@ export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
   schemaVersion: 1,
   kind: "fraud-model-config",
   corpus: {
-    primaryRelPath:
+    primaryRelPath: "Scratch/security/corpus/gslive-betreport-latest.json",
+    fallbackRelPaths: [
       "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json",
-    fallbackRelPaths: ["Scratch/betReport-all.json"],
+      "Scratch/betReport-all.json",
+    ],
     sha256SidecarRelPath: "Scratch/security/corpus/sha256.txt",
-    expectedSha256:
-      "8afe7684cec35d3fc179f226712db615fd350a350da266c642eb219af4052acb",
+    // The live corpus changes per capture; the sidecar + manifest carry the hash. The old
+    // dated export's pinned hash is no longer the primary contract.
+    expectedSha256: null,
     staleAfterSeconds: 172_800,
   },
   sources: {

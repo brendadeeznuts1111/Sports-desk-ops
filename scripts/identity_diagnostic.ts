@@ -27,7 +27,7 @@ const DEFAULTS = {
   ticker: "data/live-wagers.json",
   customerDb: "scratch/customers.sqlite",
   players: "scratch/raw-f402-list-agents.json",
-  betReport: "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json",
+  betReport: "Scratch/security/corpus/gslive-betreport-latest.json",
   out: "scratch/identity-diagnostic/report.md",
   json: "scratch/identity-diagnostic/report.json",
   probeSample: "25",
@@ -384,8 +384,14 @@ async function main(): Promise<void> {
   const customerIndex = loadCustomerIndex(options.customerDb);
   const players = await loadPlayers(options.players);
   const probeResults = await loadProbeResults(options.probeResults);
-  const betReport = await loadBetReport(options.betReport);
-
+  const datedCorpus =
+    "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json";
+  let betReportPath = options.betReport;
+  let betReport = await loadBetReport(betReportPath);
+  if (betReport === null && betReportPath !== datedCorpus) {
+    betReportPath = datedCorpus;
+    betReport = await loadBetReport(betReportPath);
+  }
   if (betReport === null) {
     throw new Error(`no r.bets array in ${options.betReport}`);
   }
@@ -557,7 +563,7 @@ async function main(): Promise<void> {
       "getBetReport",
       String(betReport.rows),
       `${gsliveAccounts} userID / ${[...betReport.accounts.values()].reduce((sum, account) => sum + account.partners.size, 0)} partner ids`,
-      options.betReport,
+      betReportPath,
     ]),
     "",
     "## Overlap matrix",
@@ -734,7 +740,7 @@ async function main(): Promise<void> {
         namespaceSource,
       },
       betReport: {
-        path: options.betReport,
+        path: betReportPath,
         rows: betReport.rows,
         accounts: gsliveAccounts,
       },

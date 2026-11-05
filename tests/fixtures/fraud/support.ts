@@ -94,7 +94,7 @@ export interface FixtureRootOptions {
 }
 
 export const CORPUS_PRIMARY_REL =
-  "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json";
+  "Scratch/security/corpus/gslive-betreport-latest.json";
 
 /**
  * Write a complete fixture root. Every path is the real repo-relative path, so the discovery code

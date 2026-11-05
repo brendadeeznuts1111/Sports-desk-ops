@@ -454,7 +454,7 @@ describe("source discovery and provenance", () => {
 
 const REAL_CORPUS = join(
   process.cwd(),
-  "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json",
+  "Scratch/security/corpus/gslive-betreport-latest.json",
 );
 const realCorpusPresent = existsSync(REAL_CORPUS);
 
