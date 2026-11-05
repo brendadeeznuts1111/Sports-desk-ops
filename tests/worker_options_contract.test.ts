@@ -6,7 +6,7 @@
  * on without depending on ELK or another worker payload.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -39,15 +39,15 @@ describe("WorkerOptions contract", () => {
     const workerPath = join(dir, "worker.ts");
     const preloadPath = join(dir, "preload.ts");
     try {
-      writeFileSync(preloadPath, 'globalThis.__workerPreloaded = "yes";\n');
-      writeFileSync(
+      await Bun.write(preloadPath, 'globalThis.__workerPreloaded = "yes";\n');
+      await Bun.write(
         workerPath,
         [
           "postMessage({",
           "  bunArgv: Bun.argv,",
           "  processArgv: process.argv,",
           "  sameArgv: Bun.argv === process.argv,",
-          "  testEnv: process.env.WORKER_TEST,",
+          "  testEnv: Bun.env.WORKER_TEST,",
           "  preloaded: (globalThis as any).__workerPreloaded ?? null,",
           "});",
         ].join("\n"),
@@ -55,7 +55,7 @@ describe("WorkerOptions contract", () => {
 
       const worker = new Worker(pathToFileURL(workerPath), {
         argv: ["--alpha", 42, true, null, { x: 1 }],
-        env: { ...process.env, WORKER_TEST: "yes" },
+        env: { ...Bun.env, WORKER_TEST: "yes" },
         preload: [preloadPath],
         name: "probe",
         smol: true,
@@ -88,7 +88,7 @@ describe("WorkerOptions contract", () => {
     const dir = mkdtempSync(join(tmpdir(), "worker-name-"));
     const workerPath = join(dir, "worker.ts");
     try {
-      writeFileSync(
+      await Bun.write(
         workerPath,
         [
           "postMessage({",
@@ -130,29 +130,29 @@ describe("WorkerOptions contract", () => {
   test("env defaults to a snapshot and explicit env replaces it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "worker-env-"));
     const workerPath = join(dir, "worker.ts");
-    const previousDefault = process.env.WORKER_DEFAULT;
-    const previousParent = process.env.PARENT_ONLY;
+    const previousDefault = Bun.env.WORKER_DEFAULT;
+    const previousParent = Bun.env.PARENT_ONLY;
     try {
-      writeFileSync(
+      await Bun.write(
         workerPath,
         [
           "onmessage = () => {",
           "  postMessage({",
-          "    defaulted: process.env.WORKER_DEFAULT ?? null,",
-          "    parentOnly: process.env.PARENT_ONLY ?? null,",
-          "    workerOnly: process.env.WORKER_ONLY ?? null,",
-          "    keyCount: Object.keys(process.env).length,",
+          "    defaulted: Bun.env.WORKER_DEFAULT ?? null,",
+          "    parentOnly: Bun.env.PARENT_ONLY ?? null,",
+          "    workerOnly: Bun.env.WORKER_ONLY ?? null,",
+          "    keyCount: Object.keys(Bun.env).length,",
           "  });",
           "};",
         ].join("\n"),
       );
-      process.env.WORKER_DEFAULT = "parent";
-      process.env.PARENT_ONLY = "parent-only";
+      Bun.env.WORKER_DEFAULT = "parent";
+      Bun.env.PARENT_ONLY = "parent-only";
 
       const defaultWorker = new Worker(pathToFileURL(workerPath), {
         ref: false,
       });
-      process.env.WORKER_DEFAULT = "changed";
+      Bun.env.WORKER_DEFAULT = "changed";
       try {
         const result = await ping<{
           defaulted: string | null;
@@ -176,7 +176,7 @@ describe("WorkerOptions contract", () => {
           workerOnly: string | null;
           keyCount: number;
         }>(explicitWorker);
-        // An explicit env replaces process.env rather than merging into it.
+        // An explicit env replaces Bun.env rather than merging into it.
         expect(result.defaulted).toBeNull();
         expect(result.parentOnly).toBeNull();
         expect(result.workerOnly).toBe("worker-only");
@@ -196,10 +196,10 @@ describe("WorkerOptions contract", () => {
         emptyWorker.terminate();
       }
     } finally {
-      if (previousDefault === undefined) delete process.env.WORKER_DEFAULT;
-      else process.env.WORKER_DEFAULT = previousDefault;
-      if (previousParent === undefined) delete process.env.PARENT_ONLY;
-      else process.env.PARENT_ONLY = previousParent;
+      if (previousDefault === undefined) delete Bun.env.WORKER_DEFAULT;
+      else Bun.env.WORKER_DEFAULT = previousDefault;
+      if (previousParent === undefined) delete Bun.env.PARENT_ONLY;
+      else Bun.env.PARENT_ONLY = previousParent;
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -207,8 +207,8 @@ describe("WorkerOptions contract", () => {
   test("ref:true keeps the parent alive; ref:false does not", async () => {
     const dir = mkdtempSync(join(tmpdir(), "worker-ref-"));
     try {
-      writeFileSync(join(dir, "worker.ts"), "setInterval(() => {}, 1000);\n");
-      writeFileSync(
+      await Bun.write(join(dir, "worker.ts"), "setInterval(() => {}, 1000);\n");
+      await Bun.write(
         join(dir, "parent.ts"),
         [
           "const ref = process.argv[2];",
@@ -220,6 +220,7 @@ describe("WorkerOptions contract", () => {
 
       const probe = async (
         ref: boolean | "default",
+        waitMs = 1_000,
       ): Promise<"exited" | "alive"> => {
         const proc = Bun.spawn({
           cmd: [process.execPath, "parent.ts", String(ref)],
@@ -229,7 +230,7 @@ describe("WorkerOptions contract", () => {
         });
         const outcome = await Promise.race([
           proc.exited.then(() => "exited" as const),
-          Bun.sleep(1_000).then(() => "alive" as const),
+          Bun.sleep(waitMs).then(() => "alive" as const),
         ]);
         if (outcome === "alive") {
           proc.kill();
@@ -238,26 +239,28 @@ describe("WorkerOptions contract", () => {
         return outcome;
       };
 
-      expect(await probe(false)).toBe("exited");
-      expect(await probe(true)).toBe("alive");
-      expect(await probe("default")).toBe("alive");
+      // `ref: false` must win the race to exit; a loaded parallel suite needs more than 1 s.
+      // The live cases only need to observe that the parent has not exited yet.
+      expect(await probe(false, 3_000)).toBe("exited");
+      expect(await probe(true, 500)).toBe("alive");
+      expect(await probe("default", 500)).toBe("alive");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 10_000);
 
-  test("relative worker and preload paths resolve from cwd", () => {
+  test("relative worker and preload paths resolve from cwd", async () => {
     const dir = mkdtempSync(join(tmpdir(), "worker-relative-"));
     try {
-      writeFileSync(
+      await Bun.write(
         join(dir, "worker.ts"),
         "postMessage({ preloaded: (globalThis as any).__workerPreloaded ?? null });\n",
       );
-      writeFileSync(
+      await Bun.write(
         join(dir, "load-sentry.js"),
         'globalThis.__workerPreloaded = "yes";\n',
       );
-      writeFileSync(
+      await Bun.write(
         join(dir, "parent.ts"),
         [
           'const worker = new Worker("./worker.ts", {',
@@ -286,23 +289,23 @@ describe("WorkerOptions contract", () => {
     }
   });
 
-  test("SHARE_ENV shares process.env both ways", async () => {
+  test("SHARE_ENV shares Bun.env both ways", async () => {
     expect(typeof SHARE_ENV).toBe("symbol");
     expect(SHARE_ENV.description).toBe("nodejs.worker_threads.SHARE_ENV");
 
     const dir = mkdtempSync(join(tmpdir(), "worker-share-env-"));
     const workerPath = join(dir, "worker.ts");
-    const previous = process.env.WORKER_SHARED;
+    const previous = Bun.env.WORKER_SHARED;
     try {
-      writeFileSync(
+      await Bun.write(
         workerPath,
         [
-          "const before = process.env.WORKER_SHARED ?? null;",
-          'process.env.WORKER_SHARED = "worker";',
+          "const before = Bun.env.WORKER_SHARED ?? null;",
+          'Bun.env.WORKER_SHARED = "worker";',
           "postMessage({ before });",
         ].join("\n"),
       );
-      process.env.WORKER_SHARED = "parent";
+      Bun.env.WORKER_SHARED = "parent";
 
       const worker = new Worker(pathToFileURL(workerPath), {
         env: SHARE_ENV,
@@ -311,13 +314,13 @@ describe("WorkerOptions contract", () => {
       try {
         const result = await once<{ before: string | null }>(worker);
         expect(result.before).toBe("parent");
-        expect(process.env.WORKER_SHARED).toBe("worker");
+        expect(Bun.env.WORKER_SHARED).toBe("worker");
       } finally {
         worker.terminate();
       }
     } finally {
-      if (previous === undefined) delete process.env.WORKER_SHARED;
-      else process.env.WORKER_SHARED = previous;
+      if (previous === undefined) delete Bun.env.WORKER_SHARED;
+      else Bun.env.WORKER_SHARED = previous;
       rmSync(dir, { recursive: true, force: true });
     }
   });

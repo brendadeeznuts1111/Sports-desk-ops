@@ -2514,7 +2514,7 @@
     "lib/f402_agent_performance_request.test.ts:61-87": "test(\"reproduces the observed all-periods body byte for byte\"",
     "lib/f402_bet_ticker_config.ts:18-19": "The write builder exists so a future read-side integration cannot hand-assemble a body",
     "lib/f402_bet_ticker_config.ts:2-20": "@file f402_bet_ticker_config.ts",
-    "lib/f402_probe.ts:372-386": "operation: \"write\",",
+    "lib/f402_probe.ts:389-403": "operation: \"write\",",
     "lib/f402_replay_transport.ts:2-3": "Replay transport: primary = FetchSession",
     "lib/fantasy402_settlement_ingest.ts:18": "export type SettlementFeed = \"getHistory\" | \"getGrading\";",
     "lib/fantasy402_settlement_ingest.ts:547-557": "export function resolveHistoryPollUrl(",

@@ -138,10 +138,7 @@ check("locale: en and zh expose the same meta keys", () => {
   const en = leafKeys(JSON.parse(readText("locale/en.json"))).sort();
   const zh = leafKeys(JSON.parse(readText("locale/zh.json"))).sort();
   assert(en.length > 0, "en locale is empty");
-  assert(
-    JSON.stringify(en) === JSON.stringify(zh),
-    `en=${en.join(",")} zh=${zh.join(",")}`,
-  );
+  assert(Bun.deepEquals(en, zh), `en=${en.join(",")} zh=${zh.join(",")}`);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -278,7 +275,7 @@ check("client: every visible key exists in both dictionaries", () => {
   const zhKeys = keys(dict.slice(zhAt));
   assert(enKeys.length > 0, "en dictionary is empty");
   assert(
-    JSON.stringify(enKeys) === JSON.stringify(zhKeys),
+    Bun.deepEquals(enKeys, zhKeys),
     `en=${enKeys.join(",")} zh=${zhKeys.join(",")}`,
   );
   const used = new Set(

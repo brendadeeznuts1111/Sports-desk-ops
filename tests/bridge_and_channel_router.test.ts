@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { test } from "bun:test";
 import {
   BridgeChannelRouteColumnStore,
@@ -25,7 +24,7 @@ import {
   auditSourceCodeNamingCompliance,
 } from "../lib/specification_naming_police.ts";
 
-export function runBridgeAndChannelNamingPoliceSuite(): void {
+export async function runBridgeAndChannelNamingPoliceSuite(): Promise<void> {
   const store = new BridgeChannelRouteColumnStore(4);
   assertColumnStoreNamingAndUnsignedHandles(
     store as unknown as Record<string, unknown>,
@@ -92,10 +91,9 @@ export function runBridgeAndChannelNamingPoliceSuite(): void {
     (err: unknown) => err instanceof DodGateFailureError && err.gate === 4,
   );
 
-  const routerSource = fs.readFileSync(
+  const routerSource = await Bun.file(
     new URL("../lib/bridge_and_channel_router.ts", import.meta.url),
-    "utf8",
-  );
+  ).text();
   auditSourceCodeNamingCompliance(routerSource, "bridge_and_channel_router.ts");
 
   for (const badSnippet of [
@@ -190,6 +188,6 @@ export function runBridgeAndChannelNamingPoliceSuite(): void {
   assert.equal(legBuffer.at(1), 503);
 }
 
-test("bridge and channel router enforces the naming police", () => {
-  runBridgeAndChannelNamingPoliceSuite();
+test("bridge and channel router enforces the naming police", async () => {
+  await runBridgeAndChannelNamingPoliceSuite();
 });

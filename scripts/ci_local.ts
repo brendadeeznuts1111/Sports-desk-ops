@@ -11,7 +11,12 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-type Step = { job: string; name: string; run: string };
+type Step = {
+  job: string;
+  name: string;
+  run: string;
+  condition?: string | undefined;
+};
 
 const ROOT = path.join(import.meta.dir, "..");
 const WORKFLOW = path.join(ROOT, ".github/workflows/ci.yml");
@@ -53,6 +58,7 @@ async function loadSteps(): Promise<Step[]> {
         job,
         name: typeof step.name === "string" ? step.name : run,
         run,
+        condition: typeof step.if === "string" ? step.if : undefined,
       });
     }
   }
@@ -64,10 +70,21 @@ const steps = (await loadSteps()).filter(
   (step) => values.install || !step.run.startsWith("bun install"),
 );
 
+/**
+ * Steps the workflow reserves for `schedule` or `workflow_dispatch`. Running them locally would
+ * hit live origins (the CDN pin) and fail for a reason the push/PR workflow never exercises.
+ */
+const workflowOnly = (step: Step): boolean =>
+  step.condition !== undefined &&
+  /\b(schedule|workflow_dispatch)\b/.test(step.condition) &&
+  !/\b(push|pull_request)\b/.test(step.condition);
+
 if (values.list) {
   for (const [index, step] of steps.entries()) {
     console.log(
-      `${String(index + 1).padStart(2)}. ${step.name}\n    ${step.run}`,
+      `${String(index + 1).padStart(2)}. ${step.name}\n    ${step.run}${
+        workflowOnly(step) ? "\n    (workflow-only; skipped locally)" : ""
+      }`,
     );
   }
   process.exit(0);
@@ -76,6 +93,12 @@ if (values.list) {
 const failed: string[] = [];
 const started = Bun.nanoseconds();
 for (const [index, step] of steps.entries()) {
+  if (workflowOnly(step)) {
+    console.log(
+      `\n↷ [${index + 1}/${steps.length}] ${step.name}\n  skipped: ${step.condition}`,
+    );
+    continue;
+  }
   console.log(
     `\n▶ [${index + 1}/${steps.length}] ${step.name}\n  $ ${step.run}`,
   );

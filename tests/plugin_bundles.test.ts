@@ -36,8 +36,8 @@ describe("DSH plugin bundles", () => {
         stderr: "pipe",
       });
       const [stdout, stderr] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
+        child.stdout.text(),
+        child.stderr.text(),
       ]);
       const exitCode = await child.exited;
       const report = [stderr.trim(), stdout.trim()]

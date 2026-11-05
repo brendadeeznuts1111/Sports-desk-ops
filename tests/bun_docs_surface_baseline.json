@@ -179,6 +179,10 @@
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.2.13#bun-redisclient-getbuffer-method"
     },
+    "readableStreamToArrayBuffer": {
+      "documented": true,
+      "link": "https://bun.com/reference/globals/bun/readableStreamToArrayBuffer"
+    },
     "resolveSync": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-resolvesync"
