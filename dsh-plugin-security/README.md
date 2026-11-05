@@ -17,6 +17,10 @@ Package: `dsh-plugin-sportsdesk-security` · Host banner id `sportsdesk-security
   (gitignored) and requires both `confirm: true` and `write: true`; otherwise it is a dry run.
 - **No credentials.** The plugin reads no secret, environment secret, cookie or keychain item.
   The CLI it shells reads only local artifacts.
+- **No R2 read in the tool path.** The dashboard owns the repo's only network-capable weblog read
+  ([lib/f402_weblog_latest.ts](../lib/f402_weblog_latest.ts)); this CLI reads local rollups and
+  reports `missing` instead. Keep it that way — an R2 pull belongs in a sync step that lands the
+  artifact on disk first.
 - **PII posture.** Raw IP addresses are never returned: they are masked (`47.223.***.***`) with a
   stable short hash tag and a `/24` prefix key for clustering. Account/agent ids appear because
   the desk's other operator tools already expose them; no IP↔account raw join is emitted.

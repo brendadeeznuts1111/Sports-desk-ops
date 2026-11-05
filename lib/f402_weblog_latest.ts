@@ -1,4 +1,12 @@
-/** Resolve the latest f402-weblog rollup: local pointer/rollup first, then the R2 public pointer. */
+/**
+ * Resolve the latest f402-weblog rollup: local pointer/rollup first, then the R2 public pointer.
+ *
+ * Boundary — this module owns the repo's ONE network-capable weblog read. The fraud/security CLI
+ * (`cli/sportsdesk_fraud_cli.ts` via `lib/fraud_logs.ts`) deliberately reads local rollups only and
+ * reports a missing source instead: that keeps its answers offline-reproducible and auditable. Do
+ * not import this resolver into the fraud path; an R2 pull belongs in a documented sync step that
+ * materializes the artifact locally first.
+ */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
