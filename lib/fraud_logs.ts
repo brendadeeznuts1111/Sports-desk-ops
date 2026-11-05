@@ -113,9 +113,18 @@ export interface BetRecord {
   readonly stakeCents: number | null;
   readonly toWinCents: number | null;
   readonly lineHundredths: number | null;
-  readonly sportId: string | null;
+  /**
+   * API `sport`. getBetReport sends a sport id (`sID`/`displaySportId`), while F402 live tickets
+   * send a sport name; this field carries whichever the source sent, verbatim.
+   */
+  readonly sport: string | null;
+  /** API `subSport`. The 69-field getBetReport capture has no sub-sport column; F402 tickets do. */
+  readonly subSport: string | null;
+  /** API `period` code exactly as sent (`m`, `h1`, `s2`, …). The ordinal is `periodCode`. */
+  readonly period: string | null;
+  /** API `wagerType` code exactly as sent (getBetReport `type`, F402 `WagerType`: S/E/G/M/T/…). */
+  readonly wagerType: string | null;
   readonly eventId: string | null;
-  readonly period: number | null;
   readonly resultCode: string | null;
   readonly ipMasked: string | null;
   readonly ipTag: string | null;
@@ -264,6 +273,8 @@ export interface TicketEvent {
   readonly writer: string | null;
   readonly vip: boolean;
   readonly sport: string | null;
+  readonly subSport: string | null;
+  readonly period: string | null;
   readonly status: string | null;
 }
 
@@ -1519,9 +1530,11 @@ function normalizeBetRow(
     toWinCents,
     // The 69-field capture has no `line` column; the frozen feature is constant 0.
     lineHundredths: 0,
-    sportId: nonEmptyText(row["sID"]) ?? nonEmptyText(row["displaySportId"]),
+    sport: nonEmptyText(row["displaySportId"]) ?? nonEmptyText(row["sID"]),
+    subSport: null,
+    period,
+    wagerType: nonEmptyText(row["type"]),
     eventId: nonEmptyText(row["eID"]),
-    period: encodePeriodCode(period),
     resultCode,
     ipMasked: ip.masked,
     ipTag: ip.tag,
@@ -1673,6 +1686,8 @@ function normalizeLiveBets(raw: unknown): {
       writer: null,
       vip: false,
       sport: nonEmptyText(game["sport"]),
+      subSport: nonEmptyText(game["subSport"]),
+      period: nonEmptyText(game["period"]),
       status: nonEmptyText(game["status"]),
     });
   }
@@ -1716,6 +1731,8 @@ function normalizeLiveWagers(raw: unknown): {
       writer: nonEmptyText(row["TicketWriter"]),
       vip: vipRaw !== null && vipRaw !== "0",
       sport: null,
+      subSport: nonEmptyText(row["SubSport"]) ?? nonEmptyText(row["subSport"]),
+      period: nonEmptyText(row["Period"]) ?? nonEmptyText(row["period"]),
       status: null,
     });
   }
@@ -2777,9 +2794,11 @@ export function toBetRecord(record: FraudBetRecord): BetRecord {
     stakeCents: record.stakeCents,
     toWinCents: record.toWinCents,
     lineHundredths: record.lineHundredths,
-    sportId: record.sportId,
-    eventId: record.eventId,
+    sport: record.sport,
+    subSport: record.subSport,
     period: record.period,
+    wagerType: record.wagerType,
+    eventId: record.eventId,
     resultCode: record.resultCode,
     ipMasked: record.ipMasked,
     ipTag: record.ipTag,

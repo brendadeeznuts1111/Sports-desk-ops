@@ -21,8 +21,8 @@ export const EXPLORATION_CONSTANTS = {
   minBets: 20,
   /** Candidate rows returned per candidate (bounded again by the CLI --limit). */
   maxRows: 10,
-  /** Market-entropy bucket: sport + period + line. */
-  entropyBucket: "sportId|period|lineHundredths",
+  /** Market-entropy bucket, named after the upstream API fields. */
+  entropyBucket: "sport|subSport|period|wagerType|line",
 } as const;
 
 export interface BacklogFieldAvailability {
@@ -76,8 +76,25 @@ export interface ExplorationCandidate<Row> {
   readonly omittedRows: number;
 }
 
+export interface VocabularyEntry {
+  /** Normalized record field carrying the value. */
+  readonly normalized: string;
+  /** Upstream raw field(s) it comes from. */
+  readonly raw: string;
+  readonly note: string | null;
+}
+
+export interface ExploredVocabulary {
+  readonly sport: VocabularyEntry;
+  readonly subSport: VocabularyEntry;
+  readonly period: VocabularyEntry;
+  readonly wagerType: VocabularyEntry;
+  readonly line: VocabularyEntry;
+}
+
 export interface FraudExplorationResult {
   readonly constants: typeof EXPLORATION_CONSTANTS;
+  readonly vocabulary: ExploredVocabulary;
   readonly corpus: {
     readonly rows: number;
     readonly accounts: number;
@@ -112,7 +129,18 @@ const RAW_FIELD_PROBES: Readonly<
 > = {
   userID: { via: "record.userId", present: (r) => r.userId.trim() !== "" },
   eID: { via: "record.eventId", present: (r) => r.eventId !== null },
-  period: { via: "record.period", present: (r) => r.period !== null },
+  period: {
+    via: "record.period (API period code: m, h1, s2, …)",
+    present: (r) => r.period !== null,
+  },
+  subSport: {
+    via: "record.subSport (F402 tickets carry it; getBetReport has no sub-sport column)",
+    present: (r) => r.subSport !== null,
+  },
+  wagerType: {
+    via: "record.wagerType (getBetReport type / F402 WagerType: S/E/G/M/T/…)",
+    present: (r) => r.wagerType !== null,
+  },
   logTime: { via: "record.placedAtMs", present: (r) => r.placedAtMs !== null },
   accept: { via: "record.acceptSec", present: (r) => r.acceptSec !== null },
   delay: { via: "record.delaySec", present: (r) => r.delaySec !== null },
@@ -130,10 +158,13 @@ const RAW_FIELD_PROBES: Readonly<
   bet: { via: "record.stakeCents", present: (r) => r.stakeCents !== null },
   toWin: { via: "record.toWinCents", present: (r) => r.toWinCents !== null },
   result: { via: "record.resultCode", present: (r) => r.resultCode !== null },
-  sport: { via: "record.sportId", present: (r) => r.sportId !== null },
+  sport: {
+    via: "record.sport (getBetReport sID/displaySportId is an id; F402 tickets carry a name)",
+    present: (r) => r.sport !== null,
+  },
   line: {
-    via: "record.lineHundredths",
-    present: (r) => r.lineHundredths !== null,
+    via: "record.lineHundredths (constant 0: the getBetReport capture has no line column)",
+    present: () => false,
   },
   manualLogExists: { via: "record.manualLog", present: (r) => r.manualLog },
   adminUser: { via: "record.adminUser", present: (r) => r.adminUser !== null },
@@ -259,7 +290,9 @@ function scanAccounts(corpus: FraudCorpus): readonly AccountScan[] {
       })();
     scan.bets += 1;
     if (scan.agent === null && agent !== null) scan.agent = agent;
-    const bucket = `${record.sportId ?? "?"}|${record.period ?? "?"}|${record.lineHundredths ?? "?"}`;
+    const bucket =
+      `${record.sport ?? "?"}|${record.subSport ?? "?"}|${record.period ?? "?"}|` +
+      `${record.wagerType ?? "?"}|${record.lineHundredths ?? "?"}`;
     scan.buckets.set(bucket, (scan.buckets.get(bucket) ?? 0) + 1);
     if (record.manualLog) {
       scan.manualLogRows += 1;
@@ -356,8 +389,9 @@ function candidatesOf(
       question:
         "Which high-volume accounts concentrate on the fewest market buckets?",
       method:
-        `Shannon entropy (bits) over ${EXPLORATION_CONSTANTS.entropyBucket} per account, ` +
-        `accounts with >= ${minBets} bets, ascending entropy.`,
+        `Shannon entropy (bits) over the API vocabulary bucket ` +
+        `${EXPLORATION_CONSTANTS.entropyBucket} per account, accounts with >= ${minBets} bets, ` +
+        `ascending entropy.`,
       caveat: ENTROPY_CAVEAT,
       rows: entropyRows.slice(0, maxRows),
       omittedRows: Math.max(0, entropyRows.length - maxRows),
@@ -392,6 +426,33 @@ export function buildFraudExploration(
   const scans = scanAccounts(input.corpus);
   return {
     constants: EXPLORATION_CONSTANTS,
+    vocabulary: {
+      sport: {
+        normalized: "record.sport",
+        raw: "getBetReport sID/displaySportId; F402 tickets sport",
+        note: "The getBetReport capture carries a sport id, not a sport name; tickets carry a name.",
+      },
+      subSport: {
+        normalized: "record.subSport",
+        raw: "F402 game subSport; getBetReport has no column",
+        note: "Unavailable in the getBetReport corpus; present only on F402 ticket captures.",
+      },
+      period: {
+        normalized: "record.period",
+        raw: "getBetReport period / F402 period",
+        note: "Kept verbatim as the API code (m, h1, s2, …); the numeric encoding stays at record.periodCode.",
+      },
+      wagerType: {
+        normalized: "record.wagerType",
+        raw: "getBetReport type; F402 WagerType",
+        note: null,
+      },
+      line: {
+        normalized: "record.lineHundredths",
+        raw: "no line column in the 69-field capture",
+        note: "Constant 0 today; the availability map reports it as unavailable.",
+      },
+    },
     corpus: {
       rows: input.corpus.rows,
       accounts: input.corpus.accounts,
@@ -410,6 +471,8 @@ export function buildFraudExploration(
         "rationale may need fields the research entry did not list (CLV needs a closing line, KYC " +
         "needs verification state, SETTLE_BYPASS needs settlement timestamps).",
       "No account-facing decision should cite an exploratory row as evidence.",
+      "Field names follow the upstream API vocabulary (sport, subSport, period, wagerType, " +
+        "line); the vocabulary block maps each to its normalized record field and raw source.",
     ],
   };
 }

@@ -166,7 +166,11 @@ answers two questions in one read-only pass:
    corpus does not have).
 2. **Descriptive candidates** — three ranked lists, all labelled `exploratory`, none a finding and
    none carrying a threshold verdict:
-   - `MARKET_ENTROPY`: lowest Shannon entropy over sport/period/line for accounts with ≥ 20 bets.
+   - `MARKET_ENTROPY`: lowest Shannon entropy over the API vocabulary bucket
+     `sport|subSport|period|wagerType|line` for accounts with ≥ 20 bets. On the getBetReport corpus
+     `subSport` and `line` are unavailable (no column / constant 0), so the usable dimensions are
+     `sport`, `period`, `wagerType` — the payload reports each field's availability rather than
+     pretending otherwise.
    - `OVERRIDE_AUDIT`: manual-log rows lacking an `adminUser`, per account.
    - `STAKE_CONCENTRATION`: largest single stake as a share of an account's total stake.
      The constants (`minBets: 20`, `maxRows: 10`) are returned in the payload and the limits say not
@@ -174,6 +178,22 @@ answers two questions in one read-only pass:
 
 A proposed detector graduates to a frozen detector only by editing `lib/fraud_patterns.ts` +
 `config/fraud-research.json` and its tests; exploration never does that implicitly.
+
+### Field vocabulary (upstream API names)
+
+The normalized records use the upstream API's names instead of local inventions:
+
+| API field   | Normalized field        | Upstream raw source                               | Note                                                                                                   |
+| :---------- | :---------------------- | :------------------------------------------------ | :----------------------------------------------------------------------------------------------------- |
+| `sport`     | `record.sport`          | getBetReport `sID`/`displaySportId`; F402 `sport` | the report carries an id; tickets carry a name                                                         |
+| `subSport`  | `record.subSport`       | F402 game `subSport`                              | the 69-field getBetReport capture has no sub-sport column                                              |
+| `period`    | `record.period`         | getBetReport `period`; F402 `period`              | kept verbatim as the API code (`m`, `h1`, `s2`, …); the model's numeric ordinal is `record.periodCode` |
+| `wagerType` | `record.wagerType`      | getBetReport `type`; F402 `WagerType`             | S/E/G/M/T/… exactly as sent                                                                            |
+| `line`      | `record.lineHundredths` | no `line` column in the 69-field capture          | constant 0 today; exploration reports it as unavailable                                                |
+
+`fraud_explore` returns this mapping in its `vocabulary` block and resolves research-backlog fields
+(`sport`, `subSport`, `period`, `wagerType`, `line`) against it, so a proposed detector's field list
+reads in the same language as the API.
 
 ## Data handling
 

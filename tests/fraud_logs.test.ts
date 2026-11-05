@@ -163,9 +163,12 @@ describe("parseFraudCorpus (fixture)", () => {
     expect(first.oddsDrift).toBe(0);
     expect(first.stakeCents).toBe(10_000);
     expect(first.toWinCents).toBe(20_000);
-    expect(first.sportId).toBe("8");
+    expect(first.sport).toBe("8");
+    expect(first.subSport).toBeNull();
     expect(first.eventId).toBe("1001");
-    expect(first.period).toBe(0);
+    expect(first.period).toBe("m");
+    expect(first.periodCode).toBe(0);
+    expect(first.wagerType).toBe("0");
     expect(first.resultCode).toBe("-100");
     expect(first.suspectedBot).toBe(false);
     expect(first.reversedCredit).toBe(false);
