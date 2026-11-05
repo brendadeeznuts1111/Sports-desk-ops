@@ -166,7 +166,7 @@ where the captured payload settled the wording above:
   the full two-part form if a future payload carries `TicketNumber`.
 - The channel is **`TicketWriter`**, not `ShortDesc` (observed: `Internet`, `ALERT`, `GSLIVE`,
   `GSBUILDER`). `ShortDesc` is parsed only for the leg count; the raw string is never emitted.
-- `AmountWagered`/`ToWinAmount`/`VolumeAmount` are **whole-dollar integers** in the committed paste,
+- `AmountWagered`/`ToWinAmount`/`VolumeAmount` are **whole-dollar integers** in the local paste artifact,
   so canonical volume is `VolumeAmount × 100` exactly; every `ALERT`, `BLOCKED`, and
   `NON_SPORTS_DROP` row is forced to 0 on each money axis while its counts stay visible.
 - A full-snapshot endpoint that repeats every row makes a strict 100-row page loop unconvergeable, so
