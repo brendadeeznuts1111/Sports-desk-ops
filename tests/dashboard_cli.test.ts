@@ -125,6 +125,13 @@ describe("dashboard CLI flags", () => {
     expect(mustParse("--url", "http://127.0.0.1:4020/").flags.url).toBe(
       "http://127.0.0.1:4020",
     );
+    // `${server.url}/api` would be `//api`: the base is stripped so every path joins once.
+    expect(mustParse("--url", "http://127.0.0.1:4020///").flags.url).toBe(
+      "http://127.0.0.1:4020",
+    );
+    expect(mustParse("--url", "http://127.0.0.1:4020/desk/").flags.url).toBe(
+      "http://127.0.0.1:4020/desk",
+    );
   });
 
   test("--watch 0 no longer means 'render once'", () => {
