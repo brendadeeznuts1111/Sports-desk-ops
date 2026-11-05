@@ -124,11 +124,29 @@ export interface FraudMetricWindow {
   readonly toIso: string | null;
 }
 
+/** One operational queue size: what an analyst sees after reviewing the top `k` rows. */
+export interface FraudPrecisionAtK {
+  /** Requested queue size. */
+  readonly k: number;
+  /** Rows actually available: `min(k, scores.length)`. */
+  readonly evaluated: number;
+  readonly hits: number;
+  readonly positives: number;
+  readonly precision: number | null;
+  readonly recall: number | null;
+  /** Precision divided by the holdout prevalence; null when there are no positives. */
+  readonly lift: number | null;
+}
+
+/** Queue sizes an operator can staff; reported as a table rather than one guessed cutoff. */
+export const FRAUD_QUEUE_SIZES = [10, 20, 50, 100, 200, 500] as const;
+
 export interface FraudClassificationMetrics {
   readonly aucRoc: number | null;
   readonly averagePrecision: number | null;
   readonly precisionAt1Pct: number | null;
   readonly precisionAt5Pct: number | null;
+  readonly precisionAtK: readonly FraudPrecisionAtK[];
   readonly brier: number | null;
 }
 
@@ -148,6 +166,7 @@ export type FraudModelWarningCode =
   | "not_converged"
   | "stability_delta_gt_0.10"
   | "drift_shift_gt_1.0"
+  | "cold_start_precision_gap"
   | "source_stale";
 
 export interface FraudModelWarning {
@@ -164,6 +183,13 @@ export interface FraudStability {
   readonly secondHalfRows: number;
 }
 
+/** Holdout rows with no prior bets: does the ranker find a new actor, or only repeat offenders? */
+export interface FraudColdStartValidation {
+  readonly rows: number;
+  readonly positives: number;
+  readonly metrics: FraudClassificationMetrics;
+}
+
 export interface FraudFeatureDrift {
   readonly feature: string;
   readonly standardizedMeanShift: number;
@@ -171,6 +197,7 @@ export interface FraudFeatureDrift {
 
 export interface FraudModelValidation {
   readonly holdout: FraudClassificationMetrics;
+  readonly coldStart: FraudColdStartValidation | null;
   readonly stability: FraudStability;
   readonly drift: readonly FraudFeatureDrift[];
   /**
@@ -275,6 +302,7 @@ export const FRAUD_MODEL_LIMITS: readonly string[] = [
   "class weights balance the weak label: the logistic probability is not calibrated; scores are train-CDF percentiles",
   "temporal split does not remove drift: thresholds may not hold on the next capture",
   "history features use only strictly earlier rows (logTime < logTime_i)",
+  "cold-start rows (no prior bets) are reported separately: overall rank precision is dominated by repeat offenders and must not be quoted for new accounts",
 ];
 
 export function fraudModelLimits(): readonly string[] {
@@ -724,6 +752,62 @@ export function precisionAtFraction(
   return hits / order.length;
 }
 
+/**
+ * The decision-boundary table: precision, recall and lift after the analyst reviews the top
+ * `k` rows. `k` is a staffing choice, so several are reported instead of one invented cutoff.
+ */
+export function precisionAtK(
+  scores: readonly number[],
+  labels: readonly boolean[],
+  k: number,
+): FraudPrecisionAtK {
+  if (scores.length !== labels.length) {
+    throw new Error("precisionAtK: scores/labels length mismatch");
+  }
+  if (!Number.isInteger(k) || k <= 0) {
+    throw new Error("precisionAtK: k must be a positive integer");
+  }
+  const positives = labels.filter(Boolean).length;
+  const evaluated = Math.min(k, scores.length);
+  if (evaluated === 0) {
+    return {
+      k,
+      evaluated: 0,
+      hits: 0,
+      positives,
+      precision: null,
+      recall: null,
+      lift: null,
+    };
+  }
+  const order = scores
+    .map((score, index) => ({ score, label: labels[index] === true, index }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, evaluated);
+  const hits = order.filter((entry) => entry.label).length;
+  const precision = hits / evaluated;
+  const recall = positives === 0 ? null : hits / positives;
+  const prevalence = positives / scores.length;
+  return {
+    k,
+    evaluated,
+    hits,
+    positives,
+    precision,
+    recall,
+    lift: prevalence === 0 ? null : precision / prevalence,
+  };
+}
+
+/** The queue-size table; each `k` larger than the holdout is capped and says so. */
+export function precisionAtKTable(
+  scores: readonly number[],
+  labels: readonly boolean[],
+  sizes: readonly number[] = FRAUD_QUEUE_SIZES,
+): readonly FraudPrecisionAtK[] {
+  return sizes.map((k) => precisionAtK(scores, labels, k));
+}
+
 export function brierScore(
   probabilities: readonly number[],
   labels: readonly boolean[],
@@ -777,6 +861,7 @@ function classificationMetrics(
     averagePrecision: averagePrecision(scores, labels),
     precisionAt1Pct: precisionAtFraction(scores, labels, 0.01),
     precisionAt5Pct: precisionAtFraction(scores, labels, 0.05),
+    precisionAtK: precisionAtKTable(scores, labels),
     brier: brierScore(scores, labels),
   };
 }
@@ -1095,6 +1180,9 @@ function featureStats(
   };
 }
 
+/** A 25-point precision gap at the same queue size is a material repeat-offender effect. */
+const COLD_START_PRECISION_GAP = 0.25;
+
 /**
  * Fit the weak-label logistic model. Refuses with `insufficient_corpus` (exit 3) instead of
  * producing a model from too little data, and always reports the label support it fitted on.
@@ -1218,6 +1306,28 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     holdoutLabels,
     options.calibrationBins,
   );
+  // A cold-start row has no earlier bet for its account. If precision collapses here, the
+  // ranker is finding repeat offenders rather than new ones, and the tier-1 claim must say so.
+  const priorBetsColumn = matrix.featureIds.indexOf("acct_prior_bets");
+  let coldStart: FraudColdStartValidation | null = null;
+  if (priorBetsColumn >= 0) {
+    const indices: number[] = [];
+    for (let index = 0; index < holdoutCount; index += 1) {
+      const row = matrix.rows[trainCount + index];
+      if (row !== undefined && (row.values[priorBetsColumn] ?? 0) === 0) {
+        indices.push(index);
+      }
+    }
+    if (indices.length > 0) {
+      const coldScores = indices.map((index) => scoreList[index] ?? 0);
+      const coldLabels = indices.map((index) => holdoutLabels[index] === true);
+      coldStart = {
+        rows: indices.length,
+        positives: coldLabels.filter(Boolean).length,
+        metrics: classificationMetrics(coldScores, coldLabels),
+      };
+    }
+  }
   const totalPositives = positives;
   const half = Math.floor(holdoutCount / 2);
   const firstHalfLabels = holdoutLabels.slice(0, half);
@@ -1252,6 +1362,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     averagePrecision: holdoutMetrics.averagePrecision,
     precisionAt1Pct: holdoutMetrics.precisionAt1Pct,
     precisionAt5Pct: holdoutMetrics.precisionAt5Pct,
+    precisionAtK: holdoutMetrics.precisionAtK,
     brier: holdoutMetrics.brier,
     calibrationBins: calibration,
     labelSupport: {
@@ -1302,6 +1413,23 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       observed: Math.round(maxDrift.standardizedMeanShift * 10_000) / 10_000,
     });
   }
+  const coldStartAt20 = coldStart?.metrics.precisionAtK.find(
+    (row) => row.k === 20,
+  );
+  const holdoutAt20 = holdoutMetrics.precisionAtK.find((row) => row.k === 20);
+  const coldPrecision = coldStartAt20?.precision ?? null;
+  const holdPrecision = holdoutAt20?.precision ?? null;
+  if (
+    coldPrecision !== null &&
+    holdPrecision !== null &&
+    holdPrecision - coldPrecision > COLD_START_PRECISION_GAP
+  ) {
+    warnings.push({
+      code: "cold_start_precision_gap",
+      message: `cold-start precision@20 is ${coldPrecision.toFixed(3)} vs ${holdPrecision.toFixed(3)} overall (n=${coldStart?.rows ?? 0} rows, ${coldStart?.positives ?? 0} positives): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
+      observed: Math.round((holdPrecision - coldPrecision) * 10_000) / 10_000,
+    });
+  }
   const staleSources = (params.sources ?? [params.corpus.source]).filter(
     (source) => source.stale || source.state === "stale",
   );
@@ -1318,6 +1446,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   }
   const validation: FraudModelValidation = {
     holdout: holdoutMetrics,
+    coldStart,
     stability,
     drift,
     warnings,
@@ -1674,6 +1803,28 @@ function roundReportNullable(value: number | null, digits = 3): number | null {
   return value === null ? null : roundReportNumber(value, digits);
 }
 
+function roundPrecisionAtK(
+  rows: readonly FraudPrecisionAtK[] | undefined,
+): readonly FraudPrecisionAtK[] {
+  return (rows ?? []).map((row) => ({
+    ...row,
+    precision: roundReportNullable(row.precision),
+    recall: roundReportNullable(row.recall),
+    lift: roundReportNullable(row.lift),
+  }));
+}
+
+function roundClassificationMetrics(metrics: FraudClassificationMetrics) {
+  return {
+    aucRoc: roundReportNullable(metrics.aucRoc),
+    averagePrecision: roundReportNullable(metrics.averagePrecision),
+    precisionAt1Pct: roundReportNullable(metrics.precisionAt1Pct),
+    precisionAt5Pct: roundReportNullable(metrics.precisionAt5Pct),
+    precisionAtK: roundPrecisionAtK(metrics.precisionAtK),
+    brier: roundReportNullable(metrics.brier),
+  };
+}
+
 export interface ModelReportPayloadOptions {
   /**
    * Opt-in: include the full train-CDF quantile array (1001 floats, ~19 KB) in the payload.
@@ -1695,6 +1846,7 @@ export function modelReportPayload(
 ): Record<string, unknown> {
   const metrics = artifact.metrics;
   const validation = artifact.validation;
+  const coldStart = validation.coldStart ?? null;
   return {
     present: true,
     path: state.path,
@@ -1720,6 +1872,7 @@ export function modelReportPayload(
       averagePrecision: roundReportNullable(metrics.averagePrecision),
       precisionAt1Pct: roundReportNullable(metrics.precisionAt1Pct),
       precisionAt5Pct: roundReportNullable(metrics.precisionAt5Pct),
+      precisionAtK: roundPrecisionAtK(metrics.precisionAtK),
       brier: roundReportNullable(metrics.brier),
       calibrationBins: metrics.calibrationBins.map((bin) => ({
         lower: roundReportNumber(bin.lower),
@@ -1736,19 +1889,15 @@ export function modelReportPayload(
       converged: metrics.converged,
     },
     validation: {
-      holdout: {
-        aucRoc: roundReportNullable(validation.holdout.aucRoc),
-        averagePrecision: roundReportNullable(
-          validation.holdout.averagePrecision,
-        ),
-        precisionAt1Pct: roundReportNullable(
-          validation.holdout.precisionAt1Pct,
-        ),
-        precisionAt5Pct: roundReportNullable(
-          validation.holdout.precisionAt5Pct,
-        ),
-        brier: roundReportNullable(validation.holdout.brier),
-      },
+      holdout: roundClassificationMetrics(validation.holdout),
+      coldStart:
+        coldStart === null
+          ? null
+          : {
+              rows: coldStart.rows,
+              positives: coldStart.positives,
+              metrics: roundClassificationMetrics(coldStart.metrics),
+            },
       stability: {
         firstHalfAuc: roundReportNullable(validation.stability.firstHalfAuc),
         secondHalfAuc: roundReportNullable(validation.stability.secondHalfAuc),
