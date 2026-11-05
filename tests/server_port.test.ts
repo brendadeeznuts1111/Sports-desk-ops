@@ -40,6 +40,49 @@ describe("Server Port Cascade Resolution", () => {
     expect(result.port).toBe(4100);
   });
 
+  test("BUN_PORT beats PORT beats NODE_PORT, and an explicit port wins", async () => {
+    const serve = (options: string): string =>
+      `const s = Bun.serve({ ${options} fetch: () => new Response("ok") }); console.log(s.port); s.stop(true);`;
+
+    const resolvePort = async (
+      options: string,
+      env: Record<string, string>,
+    ): Promise<number> => {
+      const proc = Bun.spawn({
+        cmd: [process.execPath, "-e", serve(options)],
+        env: { ...Bun.env, ...env },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = await proc.stdout.text();
+      const stderr = await proc.stderr.text();
+      expect({ code: await proc.exited, stderr }).toEqual({
+        code: 0,
+        stderr: "",
+      });
+      return Number(stdout.trim());
+    };
+
+    expect(
+      await resolvePort("", {
+        BUN_PORT: "47151",
+        PORT: "47152",
+        NODE_PORT: "47153",
+      }),
+    ).toBe(47151);
+    expect(await resolvePort("", { PORT: "47152", NODE_PORT: "47153" })).toBe(
+      47152,
+    );
+    expect(await resolvePort("", { NODE_PORT: "47153" })).toBe(47153);
+    expect(
+      await resolvePort("port: 47154,", {
+        BUN_PORT: "47151",
+        PORT: "47152",
+        NODE_PORT: "47153",
+      }),
+    ).toBe(47154);
+  });
+
   test("development accepts the HMR-off object without breaking the daemon", async () => {
     const server = startServer({
       port: 0,
