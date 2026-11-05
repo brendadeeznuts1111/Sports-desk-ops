@@ -520,7 +520,7 @@ function evidenceLine(anomaly: Anomaly): string {
     case "batch_replay":
       return `${evidence.count} wagers · ${evidence.spanMs}ms · ${evidence.agentRef}`;
     case "clone_bet":
-      return `${evidence.cloneCount} clones · ${(evidence.writer as readonly string[]).join("/")}`;
+      return `${evidence.cloneCount} clones · ${(evidence.writerRefs as readonly string[]).join("/")}`;
     case "velocity_customer":
       return `${evidence.count} wagers · ${evidence.windowMinutes} min · ${evidence.customerRef}`;
     case "velocity_market":

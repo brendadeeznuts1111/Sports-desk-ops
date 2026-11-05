@@ -46,9 +46,11 @@ describe("live-wagers LIST-100 fixture", () => {
       "Login",
       "AgentID",
       "AgentLogin",
+      "TicketWriter",
     ]) {
       expect(json).not.toContain(id);
     }
+    expect(Object.hasOwn(rows[0]!, "TicketWriter")).toBe(true);
   });
 
   test("dupe detector finds the P/M pair", () => {

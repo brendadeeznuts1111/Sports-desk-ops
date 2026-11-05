@@ -114,6 +114,28 @@ describe("clone_bet", () => {
     const three = [...two, ticket({ insertedAt: "2026-11-04T22:00:20", legs })];
     expect(cloneBet(three)[0]?.severity).toBe("warning");
   });
+
+  test("keeps the writer hashed in the evidence", () => {
+    const legs = [leg("Lakers vs Kings", "Game", "Lakers", "-110", "Winner")];
+    const two = [
+      ticket({
+        insertedAt: "2026-11-04T22:00:00",
+        legs,
+        ticketWriter: "ALERT",
+      }),
+      ticket({
+        insertedAt: "2026-11-04T22:00:10",
+        legs,
+        ticketWriter: "ALERT",
+      }),
+    ];
+    const hit = cloneBet(two)[0];
+    const writerRefs = hit?.evidence.writerRefs as readonly string[];
+    expect(writerRefs).toHaveLength(2);
+    expect(writerRefs[0]).toMatch(/^agent:[0-9a-f]{12}$/);
+    expect(hit?.evidence).not.toHaveProperty("writer");
+    expect(JSON.stringify(hit?.evidence)).not.toContain("ALERT");
+  });
 });
 
 describe("velocity_customer", () => {

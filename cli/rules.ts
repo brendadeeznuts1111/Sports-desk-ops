@@ -289,7 +289,14 @@ export function cloneBet(tickets: readonly RuleTicket[]): Anomaly[] {
           cloneCount: sorted.length,
           signature,
           wagerNumbers: wagerNumbers(sorted),
-          writer: sorted.map((ticket) => ticket.ticketWriter ?? "?"),
+          // Agent identifiers stay hashed, like every other anomaly evidence field.
+          writerRefs: sorted
+            .map((ticket) => ticket.ticketWriter)
+            .filter(
+              (writer): writer is string =>
+                typeof writer === "string" && writer !== "",
+            )
+            .map((writer) => ref("agent", writer)),
         },
       });
     }
