@@ -270,7 +270,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSLIVE_SESSION_ID; --format/--out/--group-by/--top supported)
 
   Ticket lookup
-    ./bin/dx ticket <wagerNumber>   One ticket from the latest getBetTicker capture [--file=PATH] [--json]
+    ./bin/dx ticket <wagerNumber>|--list   One ticket or every ticket's leg count [--file=PATH] [--json]
 
   Surveillance / ingestion
     ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix

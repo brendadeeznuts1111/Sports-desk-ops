@@ -96,6 +96,47 @@ describe("sportsdesk_ticket_cli", () => {
     }
   });
 
+  test("--list prints every ticket with the parser's leg counts", async () => {
+    const { code, stdout } = await run(["--list", "--file", FIXTURE]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("ticket");
+    expect(stdout).toContain("legs");
+    expect(stdout).toContain("767125863");
+    expect(stdout).toContain("767126230");
+    expect(stdout).toContain("7 tickets · 12 legs · avg 1.71 legs/ticket");
+    for (const identifier of ["WC9001", "ADAM", "MARWES50", "JP1833"]) {
+      expect(stdout).not.toContain(identifier);
+    }
+  });
+
+  test("--list --json keeps one row per ticket and exact leg counts", async () => {
+    const { code, stdout } = await run(["--list", "--file", FIXTURE, "--json"]);
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout) as {
+      tickets: Array<{ wagerNumber: number; legs: unknown[] }>;
+      totals: { tickets: number; legs: number };
+      provenance: { source: string };
+    };
+    expect(payload.totals).toEqual({ tickets: 7, legs: 12 });
+    // Naive `ShortDesc` splitting counts the M.G/P.G code line and misses `\n`-only leg
+    // separators; these are the parser's counts.
+    expect(
+      payload.tickets.map((ticket) => [ticket.wagerNumber, ticket.legs.length]),
+    ).toEqual([
+      [767125863, 2],
+      [767126203, 1],
+      [767126205, 3],
+      [767126231, 1],
+      [767126258, 1],
+      [767126232, 1],
+      [767126230, 3],
+    ]);
+    expect(payload.provenance.source).toBe("unlabelled");
+    for (const identifier of ["WC9001", "ADAM", "MARWES50", "JP1833"]) {
+      expect(stdout).not.toContain(identifier);
+    }
+  });
+
   test("an unknown wager exits 1 and names the artifact", async () => {
     const { code, stderr } = await run(["1", "--file", FIXTURE]);
     expect(code).toBe(1);
@@ -123,12 +164,17 @@ describe("sportsdesk_ticket_cli", () => {
     const extra = await run(["1", "2", "--file", FIXTURE]);
     expect(extra.code).toBe(2);
     expect(extra.stderr).toContain("expected exactly one wager number");
+
+    const listWithNumber = await run(["--list", "1", "--file", FIXTURE]);
+    expect(listWithNumber.code).toBe(2);
+    expect(listWithNumber.stderr).toContain("--list takes no wager number");
   });
 
   test("--help prints usage and exits 0", async () => {
     const { code, stdout } = await run(["--help"]);
     expect(code).toBe(0);
     expect(stdout).toContain("bun run ticket <wagerNumber>");
+    expect(stdout).toContain("bun run ticket --list");
     expect(stdout).toContain("b767125863");
   });
 });

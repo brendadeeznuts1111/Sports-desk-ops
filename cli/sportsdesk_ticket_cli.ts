@@ -1,28 +1,32 @@
 #!/usr/bin/env bun
 /**
- * Inspect one live bet ticket from the latest getBetTicker capture.
+ * Inspect one live bet ticket, or list every ticket with its leg count, from the latest
+ * getBetTicker capture.
  *
  *   bun run ticket 767125863
  *   bun run ticket b767125863 --json
- *   bun run ticket 767125863 --file tests/fixtures/live-wagers-list-sample.json
+ *   bun run ticket --list
+ *   bun run ticket --list --file tests/fixtures/live-wagers-list-sample.json --json
  *
- * Customer logins, agent logins and customer ids stay out of both views: the ticket number,
+ * Customer logins, agent logins and customer ids stay out of every view: the ticket number,
  * writer, amounts and legs are enough to identify the wager on the desk.
  */
 
 import { parseArgs } from "node:util";
 
 import { wagerTypeLabel } from "../lib/game_admin.ts";
-import { readWagerListArtifact } from "../lib/live_wagers.ts";
+import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
 
 const DEFAULT_FILE = "data/live-wagers.json";
 
-const HELP = `ticket — inspect one live bet ticket from the latest getBetTicker capture
+const HELP = `ticket — inspect live bet tickets from the latest getBetTicker capture
 
 Usage: bun run ticket <wagerNumber> [--file <artifact>] [--json]
+       bun run ticket --list [--file <artifact>] [--json]
 
   --file <path>  Capture artifact (default: ${DEFAULT_FILE})
-  --json         Machine-readable, safe view (no customer/agent identifiers)
+  --list         Every ticket with its leg count (safe fields only)
+  --json         Machine-readable safe view (no customer/agent identifiers)
   -h, --help     This text
 
 The number may carry the portal's b prefix (b767125863).`;
@@ -45,9 +49,49 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+/** The only shape either view emits; identifiers from the wire are deliberately absent. */
+function safeWagerView(wager: LiveWager) {
+  return {
+    wagerNumber: wager.wagerNumber,
+    ticketWriter: wager.ticketWriter.trim(),
+    writer: wager.writer,
+    wagerType: wager.wagerType,
+    wagerTypeLabel: wagerTypeLabel(wager.wagerType),
+    live: wager.live,
+    vip: wager.vip,
+    amountWagered: wager.amountWagered,
+    toWinAmount: wager.toWinAmount,
+    volumeAmount: wager.volumeAmount,
+    volumeDiffers: wager.volumeDiffers,
+    insertedAt: wager.insertedAt,
+    descCode: wager.descCode,
+    legs: wager.legs.map((leg) => ({
+      sport: leg.sport,
+      game: leg.game,
+      period: leg.period,
+      market: leg.market,
+      pick: leg.pick,
+      live: leg.live,
+      gameNumber: leg.gameNumber,
+      compact: leg.compact,
+      raw: leg.raw,
+    })),
+  };
+}
+
+function sourceLine(provenance: {
+  readonly source: string;
+  readonly observedAt: string | null;
+}): string {
+  return `Source: ${provenance.source}${
+    provenance.observedAt === null ? "" : ` · observed ${provenance.observedAt}`
+  }`;
+}
+
 let values: {
   readonly file?: string;
   readonly json?: boolean;
+  readonly list?: boolean;
   readonly help?: boolean;
 };
 let positionals: string[];
@@ -57,6 +101,7 @@ try {
     options: {
       file: { type: "string", default: DEFAULT_FILE },
       json: { type: "boolean", default: false },
+      list: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
@@ -72,14 +117,19 @@ if (values.help === true) {
   console.log(HELP);
   process.exit(0);
 }
-if (positionals.length !== 1) {
-  usage("expected exactly one wager number");
-}
 
-const rawWager = positionals[0]!.trim();
-const wagerNumber = Number(rawWager.replace(/^b/i, ""));
-if (!Number.isSafeInteger(wagerNumber) || wagerNumber <= 0) {
-  usage(`invalid wager number ${JSON.stringify(rawWager)}`);
+const listing = values.list === true;
+let target: number | null = null;
+if (listing) {
+  if (positionals.length !== 0) usage("--list takes no wager number");
+} else {
+  if (positionals.length !== 1) usage("expected exactly one wager number");
+  const rawWager = positionals[0]!.trim();
+  const parsed = Number(rawWager.replace(/^b/i, ""));
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    usage(`invalid wager number ${JSON.stringify(rawWager)}`);
+  }
+  target = parsed;
 }
 
 const file = values.file ?? DEFAULT_FILE;
@@ -98,39 +148,57 @@ try {
 }
 
 const artifact = readWagerListArtifact(payload);
-const wager = artifact.wagers.find(
-  (candidate) => candidate.wagerNumber === wagerNumber,
-);
-if (wager === undefined) {
-  fail(`wager ${wagerNumber} not found in ${file}`);
+
+if (listing) {
+  const tickets = artifact.wagers.map(safeWagerView);
+  const legs = tickets.reduce((total, ticket) => total + ticket.legs.length, 0);
+  if (values.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          tickets,
+          totals: { tickets: tickets.length, legs },
+          provenance: artifact.provenance,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(0);
+  }
+
+  const table = Bun.inspect.table(
+    tickets.map((ticket) => ({
+      ticket: ticket.wagerNumber,
+      writer: ticket.writer,
+      type: ticket.wagerType,
+      live: ticket.live,
+      legs: ticket.legs.length,
+      stake: ticket.amountWagered,
+      toWin: ticket.toWinAmount,
+    })),
+    { colors: false },
+  );
+  const average = tickets.length === 0 ? 0 : legs / tickets.length;
+  console.log(
+    [
+      table.trimEnd(),
+      `${tickets.length} tickets · ${legs} legs · avg ${average.toFixed(2)} legs/ticket`,
+      sourceLine(artifact.provenance),
+    ].join("\n"),
+  );
+  process.exit(0);
 }
 
-const view = {
-  wagerNumber: wager.wagerNumber,
-  ticketWriter: wager.ticketWriter.trim(),
-  writer: wager.writer,
-  wagerType: wager.wagerType,
-  wagerTypeLabel: wagerTypeLabel(wager.wagerType),
-  live: wager.live,
-  vip: wager.vip,
-  amountWagered: wager.amountWagered,
-  toWinAmount: wager.toWinAmount,
-  volumeAmount: wager.volumeAmount,
-  volumeDiffers: wager.volumeDiffers,
-  insertedAt: wager.insertedAt,
-  descCode: wager.descCode,
-  legs: wager.legs.map((leg) => ({
-    sport: leg.sport,
-    game: leg.game,
-    period: leg.period,
-    market: leg.market,
-    pick: leg.pick,
-    live: leg.live,
-    gameNumber: leg.gameNumber,
-    compact: leg.compact,
-    raw: leg.raw,
-  })),
-};
+if (target === null) fail("internal: missing wager number");
+const wager = artifact.wagers.find(
+  (candidate) => candidate.wagerNumber === target,
+);
+if (wager === undefined) {
+  fail(`wager ${target} not found in ${file}`);
+}
+
+const view = safeWagerView(wager);
 
 if (values.json === true) {
   console.log(
@@ -149,6 +217,6 @@ const lines = [
       .filter((part) => part !== "");
     return `  ${index + 1}. ${parts.join(" · ")}${leg.live ? " · LIVE" : ""}`;
   }),
-  `Source: ${artifact.provenance.source}${artifact.provenance.observedAt === null ? "" : ` · observed ${artifact.provenance.observedAt}`}`,
+  sourceLine(artifact.provenance),
 ];
 console.log(lines.join("\n"));
