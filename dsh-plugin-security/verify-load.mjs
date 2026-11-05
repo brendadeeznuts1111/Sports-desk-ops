@@ -51,6 +51,7 @@ const HTTP_ORIGIN = "http://verify.test";
 const EXPECTED_TOOL_NAMES = [
   "fraud_bets",
   "fraud_dossier",
+  "fraud_explore",
   "fraud_ip_graph",
   "fraud_model",
   "fraud_patterns",
@@ -63,6 +64,7 @@ const EXPECTED_TOOL_NAMES = [
 const EXPECTED_ROUTE_PATHS = [
   "/api/security/bets",
   "/api/security/dossier",
+  "/api/security/explore",
   "/api/security/ip-graph",
   "/api/security/model",
   "/api/security/patterns",
@@ -317,7 +319,7 @@ async function main() {
   check("apply returns a disposer", () => {
     assert(typeof dispose === "function", "apply did not return a disposer");
   });
-  check("exactly the nine frozen tools are registered", () => {
+  check("exactly the ten frozen tools are registered", () => {
     const names = tools.map((tool) => tool.name).sort();
     assert(
       JSON.stringify(names) === JSON.stringify(EXPECTED_TOOL_NAMES),
@@ -433,6 +435,8 @@ async function main() {
         ["fraud_patterns", { minSeverity: "urgent" }],
         ["fraud_queue", { limit: 0 }],
         ["fraud_queue", { limit: 101 }],
+        ["fraud_explore", { limit: 0 }],
+        ["fraud_explore", { limit: 51 }],
         ["fraud_dossier", {}],
         ["fraud_dossier", { id: "bad id" }],
         ["fraud_model", { action: "predict" }],
@@ -494,7 +498,7 @@ async function main() {
   );
 
   console.log("verify-load: same-origin read routes");
-  check("exactly the nine frozen route paths are registered", () => {
+  check("exactly the ten frozen route paths are registered", () => {
     const paths = routes.map((route) => route.path).sort();
     assert(
       JSON.stringify(paths) === JSON.stringify(EXPECTED_ROUTE_PATHS),
@@ -722,7 +726,7 @@ async function main() {
   console.log("");
   if (failed === 0) {
     console.log(
-      "PASS: 9 tools + 9 read routes load; write path refuses without confirm; CLI-missing is structured; no live or networked path.",
+      "PASS: 10 tools + 10 read routes load; write path refuses without confirm; CLI-missing is structured; no live or networked path.",
     );
     process.exit(0);
   }

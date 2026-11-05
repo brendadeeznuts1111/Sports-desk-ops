@@ -3,8 +3,8 @@
  * SportsDesk security/fraud CLI — the one implementation behind the `fraud_*` plugin tools.
  *
  * Contract: `Scratch/security/SECURITY-PLUGIN-CONTRACT.md` (rev 2).
- * - one command per invocation: status | bets | queue | ip-graph | weblog | patterns | model |
- *   dossier | research; `model` subcommands are report (default) | fit | score <accountId>
+ * - one command per invocation: status | bets | queue | ip-graph | weblog | patterns | explore |
+ *   model | dossier | research; `model` subcommands are report (default) | fit | score <accountId>
  * - global flags anywhere: --root/-r, --json/-j, --now/-n, --help/-h; closed per-command flag
  *   specs (an unknown flag is a usage error, exit 2)
  * - `--json` stdout is exactly one object; diagnostics go to stderr
@@ -76,6 +76,7 @@ import {
   type FraudQueueModelSummary,
   type FraudQueueScore,
 } from "../lib/fraud_queue.ts";
+import { buildFraudExploration } from "../lib/fraud_explore.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -565,7 +566,13 @@ async function cmdStatus(
     }
     return `model fitted at ${model.state.fittedAt ?? "unknown"}; inspect \`model report --json\` or \`patterns --json\``;
   })();
-  return emitSuccess(context, "status", {
+  const sources = sourceStates(perception);
+  const provenanceCounts: Record<string, number> = {};
+  for (const source of sources) {
+    provenanceCounts[source.provenance] =
+      (provenanceCounts[source.provenance] ?? 0) + 1;
+  }
+  const payload = {
     config: {
       path: perception.configPath,
       exists: perception.configExists,
@@ -574,7 +581,42 @@ async function cmdStatus(
     },
     corpus: corpusSummary,
     model: model.state,
-    sources: sourceStates(perception),
+    sources,
+    dataHandling: {
+      masking: {
+        rawIpEmitted: false,
+        maskedFields: ["ipMasked", "ipTag", "ipPrefix24"],
+        policy:
+          "raw ipAddress is masked at the parse boundary (lib/fraud_logs.ts maskIp); no raw IP is serialized",
+        selfCheck: "no IPv4 literal in this payload",
+      },
+      integrity: {
+        sources: sources.length,
+        withSha256: sources
+          .filter((source) => source.sha256 !== null)
+          .map((source) => source.id),
+        withoutSha256: sources
+          .filter((source) => source.sha256 === null)
+          .map((source) => source.id),
+        fixtureSources: sources
+          .filter((source) => source.provenance === "fixture")
+          .map((source) => source.id),
+        missingSources: sources
+          .filter((source) => !source.exists)
+          .map((source) => source.id),
+        provenance: provenanceCounts,
+      },
+      auditability: {
+        envelope: ["sources", "timing"],
+        modelFitsExcludeFixtures: true,
+        modelProxy: "weak-label desk_flag proxy, not a fraud probability",
+      },
+      limits: [
+        "The self-check is a refused-payload guard, not a claim about upstream logs.",
+        "A missing sha256 means the source could not be hashed (send a sidecar for large files).",
+        "Fixture sources are labelled fixture and are never fitted.",
+      ],
+    },
     weblogs: {
       status: perception.weblogs.status,
       asOf: perception.weblogs.asOf,
@@ -587,7 +629,17 @@ async function cmdStatus(
       expectedState: weblogsState?.state ?? null,
     },
     nextStep,
-  });
+  };
+  const serialized = JSON.stringify(payload);
+  if (/(?:\d{1,3}\.){3}\d{1,3}/.test(serialized)) {
+    throw new CliError(
+      "data_handling_violation",
+      "status: payload contains an IPv4 literal; refusing to print it",
+      {},
+      EXIT_ERROR,
+    );
+  }
+  return emitSuccess(context, "status", payload);
 }
 
 /**
@@ -1300,22 +1352,13 @@ async function cmdResearch(
   const flags = parseCommandFlags("research", tokens);
   assertNoPositionals("research", flags);
   const perception = await perceptionOf(context);
-  const relative = "config/fraud-research.json";
-  const absolute = join(context.root, relative);
-  let catalog: unknown = null;
-  let exists = false;
-  let note: string;
-  try {
-    catalog = await Bun.file(absolute).json();
-    exists = true;
-    note = "prior-art/terminology/threshold-provenance catalog (Lead-owned)";
-  } catch {
-    note = `catalog is MISSING at ${relative} (Lead-owned); the built-in model limits are still reported from lib/fraud_model.ts`;
-  }
+  const loaded = await readResearchCatalog(context);
   const catalogLimits = ((): readonly string[] => {
     const record =
-      catalog !== null && typeof catalog === "object" && !Array.isArray(catalog)
-        ? (catalog as Record<string, unknown>)
+      loaded.catalog !== null &&
+      typeof loaded.catalog === "object" &&
+      !Array.isArray(loaded.catalog)
+        ? (loaded.catalog as Record<string, unknown>)
         : null;
     const list = record?.["modelLimits"];
     return Array.isArray(list)
@@ -1323,11 +1366,74 @@ async function cmdResearch(
       : fraudModelLimits();
   })();
   return emitSuccess(context, "research", {
-    catalog: exists ? catalog : null,
-    catalogPath: relative,
-    catalogPresent: exists,
-    catalogNote: note,
+    catalog: loaded.exists ? loaded.catalog : null,
+    catalogPath: loaded.relative,
+    catalogPresent: loaded.exists,
+    catalogNote: loaded.note,
     modelLimits: catalogLimits,
+    sources: sourceStates(perception),
+  });
+}
+
+interface ResearchCatalogLoad {
+  readonly catalog: unknown;
+  readonly exists: boolean;
+  readonly relative: string;
+  readonly note: string;
+}
+
+/** Load the Lead-owned research catalog once; a missing catalog is a labelled state, not zero. */
+async function readResearchCatalog(
+  context: CliContext,
+): Promise<ResearchCatalogLoad> {
+  const relative = "config/fraud-research.json";
+  const absolute = join(context.root, relative);
+  try {
+    const catalog = await Bun.file(absolute).json();
+    return {
+      catalog,
+      exists: true,
+      relative,
+      note: "prior-art/terminology/threshold-provenance catalog (Lead-owned)",
+    };
+  } catch {
+    return {
+      catalog: null,
+      exists: false,
+      relative,
+      note: `catalog is MISSING at ${relative} (Lead-owned); the built-in model limits are still reported from lib/fraud_model.ts`,
+    };
+  }
+}
+
+/**
+ * Read-only pattern exploration: research-backlog field coverage plus descriptive account-level
+ * candidates. It does not add or change frozen detectors, and nothing here is a finding.
+ */
+async function cmdExplore(
+  tokens: readonly string[],
+  context: CliContext,
+): Promise<number> {
+  const flags = parseCommandFlags("explore", tokens, {
+    valueFlags: ["--limit"],
+    shortAliases: { "-l": "--limit" },
+  });
+  assertNoPositionals("explore", flags);
+  const limit = integerFlag("explore", flags, "--limit", 10, 1, 50);
+  const perception = await perceptionOf(context);
+  const corpus = requireCorpus(perception, "explore");
+  const loaded = await readResearchCatalog(context);
+  const patterns = runFraudPatterns(perception);
+  const exploration = buildFraudExploration({
+    corpus,
+    catalog: loaded.catalog,
+    frozenDetectorIds: patterns.findings.map((finding) => finding.id),
+    limit,
+  });
+  return emitSuccess(context, "explore", {
+    ...exploration,
+    catalogPath: loaded.relative,
+    catalogPresent: loaded.exists,
     sources: sourceStates(perception),
   });
 }
@@ -1525,6 +1631,30 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     ],
   },
   {
+    name: "explore",
+    summary:
+      "Read-only pattern exploration: research-backlog field coverage + descriptive candidates",
+    usage: "explore [--limit N] [flags]",
+    detail: [
+      "Maps config/fraud-research.json's proposed detectors to the raw fields this corpus",
+      "actually carries (available/missing per field), then ranks three descriptive account",
+      "candidates: low market-entropy specialisation, manual-log rows without an adminUser,",
+      "and stake concentration. It adds no frozen detector and changes none.",
+      "Every candidate is labelled exploratory and carries no threshold verdict. No account",
+      "decision should cite it as evidence.",
+    ],
+    options: [
+      {
+        flags: "-l, --limit <N>",
+        description: "Candidate rows per list (1-50, default 10).",
+      },
+    ],
+    examples: [
+      "bun run cli/sportsdesk_fraud_cli.ts explore --json",
+      "bun run cli/sportsdesk_fraud_cli.ts explore --limit 5 --json",
+    ],
+  },
+  {
     name: "model",
     summary: "Weak-label model: report | fit [--write] | score <accountId>",
     usage:
@@ -1659,6 +1789,7 @@ Examples:
   bun run cli/sportsdesk_fraud_cli.ts status --json
   bun run cli/sportsdesk_fraud_cli.ts patterns --json
   bun run cli/sportsdesk_fraud_cli.ts queue --limit 10 --json
+  bun run cli/sportsdesk_fraud_cli.ts explore --json
   bun run cli/sportsdesk_fraud_cli.ts ip-graph --min-accounts 3 --json
   bun run cli/sportsdesk_fraud_cli.ts model fit --json
   bun run cli/sportsdesk_fraud_cli.ts dossier 983516 --json
@@ -1715,6 +1846,8 @@ async function dispatch(
       return cmdWeblog(args, context);
     case "patterns":
       return cmdPatterns(args, context);
+    case "explore":
+      return cmdExplore(args, context);
     case "model":
       return cmdModel(args, context);
     case "dossier":

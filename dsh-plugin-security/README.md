@@ -12,7 +12,7 @@ Package: `dsh-plugin-sportsdesk-security` · Host banner id `sportsdesk-security
 
 - **No live betting and no order path.** Nothing in this bundle talks to a venue, a manager API
   or the network. There is no execute/settle/wager capability here.
-- **Read-only over captured artifacts.** Eight tools only read local files. The ninth
+- **Read-only over captured artifacts.** Nine tools only read local files. The tenth
   (`fraud_model` with `action: "fit"`) writes ONE derived artifact under `reports/security/`
   (gitignored) and requires both `confirm: true` and `write: true`; otherwise it is a dry run.
 - **No credentials.** The plugin reads no secret, environment secret, cookie or keychain item.
@@ -49,17 +49,18 @@ computed on.
 
 ## Tools
 
-| Tool             | What it answers                                                                                                                                                                                                                                                                                                         |
-| :--------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fraud_status`   | every source's state/provenance/sha256/age, corpus summary, fitted-model state, next step. Start here.                                                                                                                                                                                                                  |
-| `fraud_bets`     | aggregates over the getBetReport corpus (states, bot/reversal/manual/odds-drift counts, delay histogram) + masked sample rows; filters agent/account/state/since/limit.                                                                                                                                                 |
-| `fraud_queue`    | the account triage queue: accounts with a desk-flag row or an account-subject finding, ranked by strong desk-flag rows (bot/reversal/manual), then account findings by severity, then odds-drift rows, then the model's 0-100 proxy score, then bets; each row carries its reasons and counts. No invented point score. |
-| `fraud_ip_graph` | account↔IP clusters (shared IP, `/24`, IPv6 `/64`), account IP fan-out, bot-ring range, datacenter classes — masked identifiers only.                                                                                                                                                                                   |
-| `fraud_weblog`   | F402 WebLog posture (sessions, join coverage, snipers/twins/shoppers/beards/bot-ring, gates) and GSLive activity flags when present.                                                                                                                                                                                    |
-| `fraud_patterns` | the detector catalog as findings: severity, category, subject, observed values, thresholds, evidence pointers, provenance, `insufficientData`.                                                                                                                                                                          |
-| `fraud_model`    | `report` / `fit` (dry-run unless `write`+`confirm`) / `score <account>`: features, weights, AUC/AP/precision@k/Brier/calibration, validation, limits.                                                                                                                                                                   |
-| `fraud_dossier`  | one account/agent: hierarchy, bet aggregates, IP clusters, findings, model score with contributions, evidence + freshness.                                                                                                                                                                                              |
-| `fraud_research` | the research catalog: terminology, prior-art register per detector, threshold provenance, model limits.                                                                                                                                                                                                                 |
+| Tool             | What it answers                                                                                                                                                                                                                                                                                                               |
+| :--------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fraud_status`   | every source's state/provenance/sha256/age, corpus summary, fitted-model state, next step. Start here.                                                                                                                                                                                                                        |
+| `fraud_bets`     | aggregates over the getBetReport corpus (states, bot/reversal/manual/odds-drift counts, delay histogram) + masked sample rows; filters agent/account/state/since/limit.                                                                                                                                                       |
+| `fraud_queue`    | the account triage queue: accounts with a desk-flag row or an account-subject finding, ranked by strong desk-flag rows (bot/reversal/manual), then account findings by severity, then odds-drift rows, then the model's 0-100 proxy score, then bets; each row carries its reasons and counts. No invented point score.       |
+| `fraud_ip_graph` | account↔IP clusters (shared IP, `/24`, IPv6 `/64`), account IP fan-out, bot-ring range, datacenter classes — masked identifiers only.                                                                                                                                                                                         |
+| `fraud_weblog`   | F402 WebLog posture (sessions, join coverage, snipers/twins/shoppers/beards/bot-ring, gates) and GSLive activity flags when present.                                                                                                                                                                                          |
+| `fraud_patterns` | the detector catalog as findings: severity, category, subject, observed values, thresholds, evidence pointers, provenance, `insufficientData`.                                                                                                                                                                                |
+| `fraud_explore`  | read-only pattern exploration: maps `config/fraud-research.json`'s proposed detectors to the raw fields the corpus carries, then ranks three descriptive, non-finding account candidates (market-entropy specialisation, manual-log rows without `adminUser`, stake concentration). Does not add or change a frozen detector. |
+| `fraud_model`    | `report` / `fit` (dry-run unless `write`+`confirm`) / `score <account>`: features, weights, AUC/AP/precision@k/Brier/calibration, validation, limits.                                                                                                                                                                         |
+| `fraud_dossier`  | one account/agent: hierarchy, bet aggregates, IP clusters, findings, model score with contributions, evidence + freshness.                                                                                                                                                                                                    |
+| `fraud_research` | the research catalog: terminology, prior-art register per detector, threshold provenance, model limits.                                                                                                                                                                                                                       |
 
 ## Detectors
 
@@ -106,7 +107,8 @@ A transparent, reproducible **weak-label risk ranker**, not a supervised fraud c
 Sidebar entry `sportsdesk-security` opens a read-only page with tabs **Overview** (source matrix,
 corpus, weblog posture, model summary + limits), **Queue**, **IP graph**, **Findings**, **Model** and
 **Dossier**. The page reads nine same-origin GET routes from the Host half:
-`/api/security/{status,bets,queue,ip-graph,weblog,patterns,model,dossier?id=,research}`. A route that
+`/api/security/{status,bets,queue,ip-graph,weblog,patterns,model,dossier?id=,research}`; the tenth,
+`/api/security/explore`, is served for tools but has no tab yet. A route that
 does not exist is reported as "update the Host bundle"; a source that is missing is reported as
 missing, never as zero; a failed refresh keeps the last payload labelled stale.
 
@@ -115,7 +117,7 @@ missing, never as zero; a failed refresh keeps the last payload labelled stale.
 Every tool and route shells the one implementation:
 
 ```sh
-bun run cli/sportsdesk_fraud_cli.ts status|bets|queue|ip-graph|weblog|patterns|model|dossier|research --json
+bun run cli/sportsdesk_fraud_cli.ts status|bets|queue|ip-graph|weblog|patterns|explore|model|dossier|research --json
 bun run cli/sportsdesk_fraud_cli.ts model fit --json          # dry run; prints candidate artifact
 bun run cli/sportsdesk_fraud_cli.ts model fit --write --json   # persists reports/security/fraud-model.json
 bun run cli/sportsdesk_fraud_cli.ts model score <account> --json
@@ -143,7 +145,7 @@ plugin_manager({ action: "install_bundle", target: "<abs>/dsh-plugin-security" }
 node dsh-plugin-security/verify-load.mjs
 ```
 
-Proves: module imports under plain Node; `apply` registers exactly the nine tools and nine GET
+Proves: module imports under plain Node; `apply` registers exactly the ten tools and ten GET
 routes; every tool has a complete definition; `fraud_model` refuses a write without
 `confirm: true`/`write: true` and never spawns on that path; a missing CLI yields a structured
 `cli_missing` answer; routes refuse non-GET, foreign Origin and invalid queries; locale files have
@@ -152,6 +154,36 @@ identical key sets; the Client module is syntactically valid and contains no lit
 
 It does **not** prove the CLI answers are correct or that the running Host serves the page —
 that needs the CLI's own tests plus a live install check.
+
+## Pattern exploration (no new frozen detectors)
+
+`fraud_explore` (CLI `explore`) is deliberately separate from the frozen detector catalog. It
+answers two questions in one read-only pass:
+
+1. **Backlog coverage** — for each `proposedDetectors` entry in `config/fraud-research.json`, which
+   of its listed raw fields does this corpus actually carry? Each field reports the normalized
+   accessor (`record.eventId`, `record.adminUser`, …) or that it is absent; `allListedFieldsAvailable`
+   is a field-level fact, not an implementability verdict (CLV still needs a closing line that the
+   corpus does not have).
+2. **Descriptive candidates** — three ranked lists, all labelled `exploratory`, none a finding and
+   none carrying a threshold verdict:
+   - `MARKET_ENTROPY`: lowest Shannon entropy over sport/period/line for accounts with ≥ 20 bets.
+   - `OVERRIDE_AUDIT`: manual-log rows lacking an `adminUser`, per account.
+   - `STAKE_CONCENTRATION`: largest single stake as a share of an account's total stake.
+     The constants (`minBets: 20`, `maxRows: 10`) are returned in the payload and the limits say not
+     to cite these rows as evidence or to treat low entropy / one big stake as fraud.
+
+A proposed detector graduates to a frozen detector only by editing `lib/fraud_patterns.ts` +
+`config/fraud-research.json` and its tests; exploration never does that implicitly.
+
+## Data handling
+
+`fraud_status` returns a `dataHandling` block derived from the measured source matrix: masked IP
+fields (`ipMasked`/`ipTag`/`ipPrefix24`), a self-check that the status payload contains no IPv4
+literal, sha256 coverage per source, fixture/missing source ids, provenance counts, and the
+envelope/auditability facts (every success carries `sources[]` + `timing`; fixtures are never
+fitted; the model column is a proxy). The CLI test suite runs every read command and asserts no
+fixture raw IP appears in stdout.
 
 ## What this bundle does not do
 

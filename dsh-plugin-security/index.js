@@ -14,7 +14,7 @@
  *
  * READ-ONLY, WITH ONE DERIVED WRITE
  *
- * Eight of the nine tools only read local artifacts. `fraud_model` with `action: "fit"`
+ * Nine of the ten tools only read local artifacts. `fraud_model` with `action: "fit"`
  * writes a derived model artifact under `reports/security/` (gitignored) and requires both
  * `confirm: true` and `write: true`; without them it is a dry run that prints the candidate
  * artifact and its metrics. Nothing here places a bet, talks to a venue, or mutates a captured
@@ -837,6 +837,35 @@ export function apply(ctx, config) {
 
   register(
     defineTool({
+      name: "fraud_explore",
+      description:
+        "Read-only pattern exploration over the GSLive corpus: maps config/fraud-research.json's proposed detectors to the raw fields this corpus actually carries (available/missing per field), then ranks three descriptive account-level candidates — low market-entropy specialisation (sport/period/line buckets), manual-log rows without an adminUser attribution, and stake concentration. It adds no frozen detector and changes none; every row is labelled exploratory with no threshold verdict, and no account decision should cite it as evidence. limit 1-50 (default 10).",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 50,
+            description: "Candidate rows per list (default 10).",
+          },
+        },
+        additionalProperties: false,
+      },
+      isConcurrencySafe: () => true,
+      async execute(request) {
+        const limit = readInteger(request, "limit", 1, 50);
+        if (!limit.ok) return invalidArguments(limit.message);
+        const argv = ["explore"];
+        if (limit.value !== undefined)
+          argv.push("--limit", String(limit.value));
+        return runCli(argv, { timeoutMs: HTTP_SCAN_TIMEOUT_MS });
+      },
+    }),
+  );
+
+  register(
+    defineTool({
       name: "fraud_ip_graph",
       description:
         "Account↔IP network view over the GSLive bet-report corpus: clusters of accounts sharing an IP or a /24 (and IPv6 /64 where present), account IP fan-out, bot-ring range (/16) hits and datacenter IP classes. Identifiers are masked (IP → masked string + stable tag + prefix key); no raw IP is ever returned. Filters: minAccounts (default 2), limit (max 100), prefix24 (a.b.c).",
@@ -1276,6 +1305,20 @@ export function apply(ctx, config) {
             const limit = queryInteger(params, "limit", 1, 100);
             if (!limit.ok) return limit;
             const argv = ["queue"];
+            if (limit.value !== undefined) {
+              argv.push("--limit", String(limit.value));
+            }
+            return { ok: true, argv };
+          },
+        ),
+        registerReadRoute(
+          webServer,
+          `${HTTP_PREFIX}/explore`,
+          HTTP_SCAN_TIMEOUT_MS,
+          (params) => {
+            const limit = queryInteger(params, "limit", 1, 50);
+            if (!limit.ok) return limit;
+            const argv = ["explore"];
             if (limit.value !== undefined) {
               argv.push("--limit", String(limit.value));
             }
