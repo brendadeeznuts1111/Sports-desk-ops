@@ -123,12 +123,14 @@ touched chain/field lines) inside that ArrayBuffer, not the size of the allocati
   section mount. This is the open-time assertion for the mmap assumption, not just a comment.
 
 **Rejected:** `Bun.mmap` would cut the remaining 19–28 ms one-time read, but the reader is
-long-lived/per-cron and mmap has a documented truncation/segfault failure mode. This assumes the
-spine is a static dataset or atomically replaced file that is never truncated in place; if a
-deployment rewrites it in place, keep the owned-read path (and treat a mid-read swap as an
-external failure). `Float16` is irrelevant (no float columns in the hot path). The reader has no
-boolean collection, so the bitset item is N/A here; the schema's `highSeverityWatchBitset64Col`
-is not used by this reader.
+long-lived/per-cron and mmap has a documented truncation/segfault failure mode. The Bun 1.4.4
+MCP page states the same rough edges: empty files throw `EINVAL`, shared/networked filesystems are
+discouraged as very slow, and deleting or truncating the file crashes Bun with a segmentation
+fault. This assumes the spine is a static dataset or atomically replaced file that is never
+truncated in place; if a deployment rewrites it in place, keep the owned-read path (and treat a
+mid-read swap as an external failure). `Float16` is irrelevant (no float columns in the hot path).
+The reader has no boolean collection, so the bitset item is N/A here; the schema's
+`highSeverityWatchBitset64Col` is not used by this reader.
 
 **Schema pinning:** the writer schema is vendored at `schema/dod6-v54.schema.json` and pinned by
 SHA-256 (`DOD6_SCHEMA_SHA256`); constants in `lib/dod6_v54_schema.ts` are asserted against it.
