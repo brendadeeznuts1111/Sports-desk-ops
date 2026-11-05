@@ -161,6 +161,28 @@ window.__ModuleLoader__.load({
       implemented: "exploreStatusImplemented",
       proposed: "exploreStatusProposed",
     });
+    /** Bets/dossier aggregate breakdown group -> locale label key (API names). */
+    const BREAKDOWN_LABEL_KEYS = Object.freeze({
+      bySport: "breakdownSport",
+      bySubSport: "breakdownSubSport",
+      byPeriod: "breakdownPeriod",
+      byWagerType: "breakdownWagerType",
+    });
+    /** Explore API-vocabulary field -> locale label key (fixed display order). */
+    const VOCABULARY_FIELD_ORDER = Object.freeze([
+      "sport",
+      "subSport",
+      "period",
+      "wagerType",
+      "line",
+    ]);
+    const VOCABULARY_LABEL_KEYS = Object.freeze({
+      sport: "vocabularySport",
+      subSport: "vocabularySubSport",
+      period: "vocabularyPeriod",
+      wagerType: "vocabularyWagerType",
+      line: "vocabularyLine",
+    });
     /** Locale key per tab; the tablist and the keyboard order share TAB_ORDER. */
     const TAB_LABEL_KEYS = Object.freeze({
       overview: "tabOverview",
@@ -178,6 +200,8 @@ window.__ModuleLoader__.load({
     const MAX_EVIDENCE = 20;
     /** Real source notes and model limits are long; the Overview stays scannable. */
     const MAX_NOTE_CHARS = 200;
+    /** Breakdown groups are bounded; the list keeps the head and reports the rest. */
+    const MAX_BREAKDOWN_ROWS = 20;
     const MAX_OVERVIEW_LIMITS = 4;
     const MAX_ACCOUNT_SAMPLES = 6;
     /** Queue reason cells show the first few reasons; the row keeps the rest in a tooltip. */
@@ -338,6 +362,13 @@ window.__ModuleLoader__.load({
         betsOddsDrift: "Odds drift",
         betsStates: "States",
         betsEmpty: "No bet aggregate reported.",
+        breakdownSport: "Sport",
+        breakdownSubSport: "Sub-sport",
+        breakdownPeriod: "Period",
+        breakdownWagerType: "Wager type",
+        breakdownNotCarried: "not carried by this source",
+        breakdownEmpty: "No rows reported for this field.",
+        breakdownMore: "+{count} more values",
         overviewHint:
           "Every number is read from the CLI payload; a missing field renders — or “not counted”, never 0.",
         /* Queue */
@@ -384,6 +415,16 @@ window.__ModuleLoader__.load({
         exploreConstantMinBets: "Min bets",
         exploreConstantMaxRows: "Max rows",
         exploreConstantEntropyBucket: "Entropy bucket",
+        exploreVocabularyTitle: "API vocabulary",
+        exploreColApiField: "API field",
+        exploreColNormalizedField: "Normalized record field",
+        exploreColRawSource: "Raw source",
+        exploreColNote: "Note",
+        vocabularySport: "Sport",
+        vocabularySubSport: "Sub-sport",
+        vocabularyPeriod: "Period",
+        vocabularyWagerType: "Wager type",
+        vocabularyLine: "Line",
         exploreBacklogTitle: "Detector backlog",
         exploreBacklogNote:
           "Field availability is a fact about the listed source fields only: `allListedFieldsAvailable` is not an implementability verdict, and a proposed detector is not running.",
@@ -676,6 +717,13 @@ window.__ModuleLoader__.load({
         betsOddsDrift: "赔率漂移",
         betsStates: "状态",
         betsEmpty: "未报告投注汇总。",
+        breakdownSport: "运动",
+        breakdownSubSport: "子运动",
+        breakdownPeriod: "节次",
+        breakdownWagerType: "投注类型",
+        breakdownNotCarried: "该来源未提供",
+        breakdownEmpty: "该字段未报告任何行。",
+        breakdownMore: "另有 {count} 个值",
         overviewHint:
           "每个数字均读取自 CLI 载荷；缺失字段显示 — 或“未统计”，永远不是 0。",
         /* Queue */
@@ -720,6 +768,16 @@ window.__ModuleLoader__.load({
         exploreConstantMinBets: "最少投注数",
         exploreConstantMaxRows: "最大行数",
         exploreConstantEntropyBucket: "熵分桶字段",
+        exploreVocabularyTitle: "API 词汇",
+        exploreColApiField: "API 字段",
+        exploreColNormalizedField: "规范化记录字段",
+        exploreColRawSource: "原始来源",
+        exploreColNote: "备注",
+        vocabularySport: "运动",
+        vocabularySubSport: "子运动",
+        vocabularyPeriod: "节次",
+        vocabularyWagerType: "投注类型",
+        vocabularyLine: "盘口线",
         exploreBacklogTitle: "检测器待办",
         exploreBacklogNote:
           "字段可用性仅说明所列来源字段的情况：`allListedFieldsAvailable` 不是可实施性结论，拟议检测器并未运行。",
@@ -1485,6 +1543,55 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Normalize the four API-vocabulary breakdown arrays of a bets aggregate.
+     * A null `value` is a real measured bucket (the SOURCE does not carry that
+     * column), not a missing row; the renderer states that explicitly.
+     * @param {Record<string, unknown> | null} aggregate
+     * @returns {{ key: string, titleKey: string, rows: { value: string | null, rows: number | null }[] }[]}
+     */
+    function readBreakdowns(aggregate) {
+      const groups = [];
+      if (aggregate === null) return groups;
+      for (const [key, titleKey] of Object.entries(BREAKDOWN_LABEL_KEYS)) {
+        const rows = [];
+        for (const raw of asArray(aggregate[key])) {
+          if (!isRecord(raw)) continue;
+          rows.push({ value: readText(raw.value), rows: readNumber(raw.rows) });
+        }
+        groups.push({ key, titleKey, rows });
+      }
+      return groups;
+    }
+
+    /**
+     * One explore API-vocabulary entry.
+     * @param {unknown} value
+     * @returns {{ normalized: string | null, raw: string | null, note: string | null } | null}
+     */
+    function readVocabularyEntry(value) {
+      if (!isRecord(value)) return null;
+      const normalized = readText(value.normalized);
+      const raw = readText(value.raw);
+      if (normalized === null && raw === null) return null;
+      return { normalized, raw, note: readText(value.note) };
+    }
+
+    /**
+     * The explore API-vocabulary table in its frozen field order.
+     * @param {unknown} value
+     * @returns ({ field: string, normalized: string | null, raw: string | null, note: string | null })[] | null
+     */
+    function readVocabulary(value) {
+      if (!isRecord(value)) return null;
+      const entries = [];
+      for (const field of VOCABULARY_FIELD_ORDER) {
+        const entry = readVocabularyEntry(value[field]);
+        if (entry !== null) entries.push({ field, ...entry });
+      }
+      return entries.length === 0 ? null : entries;
+    }
+
+    /**
      * @param {Record<string, unknown> | null} payload
      * @returns {{ summary: Record<string, unknown> | null, clusters: Record<string, unknown>[] }}
      */
@@ -1857,6 +1964,7 @@ window.__ModuleLoader__.load({
         ),
         catalogPresent: payload.catalogPresent === true,
         catalogPath: readText(payload.catalogPath),
+        vocabulary: readVocabulary(payload.vocabulary),
         backlog,
         candidates: {
           marketEntropy:
@@ -2239,6 +2347,70 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * The four API-vocabulary breakdown groups of a bets aggregate (sport,
+     * sub-sport, period, wager type). A bucket whose API value is null means
+     * the SOURCE does not carry that column — it is labelled explicitly, never
+     * rendered as 0 or "—". Lists are bounded with a "+N more" note.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, unknown> | null} aggregate
+     */
+    function breakdownsBlock(t, aggregate) {
+      const groups = readBreakdowns(aggregate);
+      if (groups.length === 0) return null;
+      return h(
+        "div",
+        { className: "sec-breakdowns" },
+        groups.map((group) =>
+          h(
+            "div",
+            { className: "sec-breakdown", key: group.key },
+            h("h4", { className: "sec-breakdown-title" }, t(group.titleKey)),
+            group.rows.length === 0
+              ? h("p", { className: "sec-empty" }, t("breakdownEmpty"))
+              : h(
+                  "ul",
+                  { className: "sec-list" },
+                  group.rows.slice(0, MAX_BREAKDOWN_ROWS).map((row, index) =>
+                    h(
+                      "li",
+                      {
+                        key: `${group.key}-${index}`,
+                        title:
+                          row.value === null
+                            ? t("breakdownNotCarried")
+                            : row.value,
+                      },
+                      h(
+                        "span",
+                        {
+                          className:
+                            row.value === null ? "sec-muted" : "sec-mono",
+                        },
+                        row.value ?? t("breakdownNotCarried"),
+                      ),
+                      h(
+                        "span",
+                        { className: "sec-mono sec-breakdown-rows" },
+                        ` — ${formatInteger(row.rows) ?? t("notAvailable")}`,
+                      ),
+                    ),
+                  ),
+                ),
+            group.rows.length > MAX_BREAKDOWN_ROWS
+              ? h(
+                  "p",
+                  { className: "sec-muted" },
+                  t("breakdownMore", {
+                    count: group.rows.length - MAX_BREAKDOWN_ROWS,
+                  }),
+                )
+              : null,
+          ),
+        ),
+      );
+    }
+
     /* -------------------------------------------------------------------- */
     /* Overview                                                              */
     /* -------------------------------------------------------------------- */
@@ -2561,6 +2733,7 @@ window.__ModuleLoader__.load({
                       `${t("betsStates")}: ${serializeCounts(aggregate.states)}`,
                     )
                   : null,
+                breakdownsBlock(t, aggregate),
               ),
         ),
         { key: "bets" },
@@ -3261,6 +3434,98 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The explore API-vocabulary table: API field, normalized record field, the
+     * raw source accessor and an optional note. Shows the API alignment instead
+     * of leaving it implicit. Raw/note strings are bounded with tooltips.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readVocabulary>>} vocabulary
+     */
+    function exploreVocabularyBlock(t, vocabulary) {
+      return h(
+        "div",
+        { className: "sec-subsection", key: "vocabulary" },
+        h("h3", { className: "sec-subtitle" }, t("exploreVocabularyTitle")),
+        h(
+          "div",
+          { className: "sec-table-wrap" },
+          h(
+            "table",
+            { className: "sec-table" },
+            h(
+              "thead",
+              null,
+              h(
+                "tr",
+                null,
+                h("th", null, t("exploreColApiField")),
+                h("th", null, t("exploreColNormalizedField")),
+                h("th", null, t("exploreColRawSource")),
+                h("th", null, t("exploreColNote")),
+              ),
+            ),
+            h(
+              "tbody",
+              null,
+              vocabulary.map((entry) =>
+                h(
+                  "tr",
+                  { key: entry.field },
+                  h(
+                    "td",
+                    null,
+                    h(
+                      "span",
+                      null,
+                      labelOf(t, VOCABULARY_LABEL_KEYS, entry.field),
+                    ),
+                    h(
+                      "span",
+                      { className: "sec-mono sec-muted" },
+                      ` (${entry.field})`,
+                    ),
+                  ),
+                  h(
+                    "td",
+                    { className: "sec-mono" },
+                    entry.normalized ?? t("notAvailable"),
+                  ),
+                  h(
+                    "td",
+                    null,
+                    entry.raw === null
+                      ? t("notAvailable")
+                      : h(
+                          "span",
+                          {
+                            className: "sec-explore-via",
+                            title: entry.raw,
+                          },
+                          truncateText(entry.raw, MAX_NOTE_CHARS),
+                        ),
+                  ),
+                  h(
+                    "td",
+                    null,
+                    entry.note === null
+                      ? t("notAvailable")
+                      : h(
+                          "span",
+                          {
+                            className: "sec-muted sec-explore-via",
+                            title: entry.note,
+                          },
+                          truncateText(entry.note, MAX_NOTE_CHARS),
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    /**
      * The Explore payload body: corpus/constants/catalog chips, the backlog
      * table and the three exploratory candidates. No candidate is styled as a
      * finding; the badge and the copy say "exploratory — not a finding".
@@ -3443,6 +3708,10 @@ window.__ModuleLoader__.load({
           onOpenDossier,
         ),
       ];
+      const vocabularyBlock =
+        explore.vocabulary === null
+          ? null
+          : exploreVocabularyBlock(t, explore.vocabulary);
       const limitsBlock =
         explore.limits.length === 0
           ? null
@@ -3460,6 +3729,7 @@ window.__ModuleLoader__.load({
         catalogInfo,
         catalogMissing,
         constantsBlock,
+        vocabularyBlock,
         backlogBlock,
         candidateBlocks,
         limitsBlock,
@@ -4512,6 +4782,7 @@ window.__ModuleLoader__.load({
             ? null
             : chip(formatTimestamp(bets.lastPlacedAtIso), { key: "last" }),
         ),
+        breakdownsBlock(t, bets),
       );
     }
 
@@ -5009,6 +5280,10 @@ window.__ModuleLoader__.load({
 .sec-explore-fields { display: flex; flex-direction: column; gap: 4px; }
 .sec-explore-field { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .sec-explore-via { overflow-wrap: anywhere; }
+.sec-breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 20px; margin-top: 16px; }
+.sec-breakdown-title { margin: 0 0 4px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; font-weight: 500; }
+.sec-breakdown .sec-list { margin-top: 0; padding-left: 0; list-style: none; gap: 2px; }
+.sec-breakdown-rows { color: var(--dsw-alias-label-secondary); }
 .sec-tabpanel > .sec-note { margin-top: 4px; }
 `;
 

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Security & fraud console",
-    "description": "Read-only SportsDesk security/fraud console: log-source provenance and freshness, a model/findings-ranked review queue, an explore view of exploratory (not-a-finding) candidates and the detector-backlog field availability, masked IP-network clusters, named surveillance findings, a transparent weak-label risk model whose limits are stated (a desk-flag proxy, never a fraud probability), and per-account dossiers; a missing source is reported as missing, never as zero."
+    "description": "Read-only SportsDesk security/fraud console: log-source provenance and freshness, a model/findings-ranked review queue, an explore view of exploratory (not-a-finding) candidates with the API-vocabulary alignment and detector-backlog field availability, API-vocabulary bet breakdowns (sport/sub-sport/period/wager type), masked IP-network clusters, named surveillance findings, a transparent weak-label risk model whose limits are stated (a desk-flag proxy, never a fraud probability), and per-account dossiers; a missing source or an API field the source does not carry is reported as missing, never as zero."
   }
 }
