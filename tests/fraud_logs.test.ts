@@ -266,6 +266,16 @@ describe("bets aggregation", () => {
     expect(all.manualLog).toBe(1);
     expect(all.oddsDrift).toBe(1);
     expect(all.delayHistogram).toEqual([{ delaySec: 5, count: 16 }]);
+    const breakdownTotal = (rows: readonly { rows: number }[]): number =>
+      rows.reduce((sum, row) => sum + row.rows, 0);
+    expect(breakdownTotal(all.bySport)).toBe(all.rows);
+    expect(breakdownTotal(all.byPeriod)).toBe(all.rows);
+    expect(breakdownTotal(all.byWagerType)).toBe(all.rows);
+    // getBetReport carries a sport id and no sub-sport column: the null bucket is explicit.
+    expect(all.bySubSport).toEqual([{ value: null, rows: all.rows }]);
+    expect(all.bySport.map((row) => row.value)).toContain("8");
+    expect(all.byPeriod.map((row) => row.value)).toContain("m");
+    expect(all.byWagerType.map((row) => row.value)).toContain("0");
 
     const withoutBots = filterBets(records, {
       agent: null,

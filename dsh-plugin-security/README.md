@@ -193,7 +193,10 @@ The normalized records use the upstream API's names instead of local inventions:
 
 `fraud_explore` returns this mapping in its `vocabulary` block and resolves research-backlog fields
 (`sport`, `subSport`, `period`, `wagerType`, `line`) against it, so a proposed detector's field list
-reads in the same language as the API.
+reads in the same language as the API. Bet aggregates (`fraud_bets` and the dossier's `bets`) carry
+the same distributions as `bySport`, `bySubSport`, `byPeriod` and `byWagerType`; a null `value` means
+the source did not carry that field (the getBetReport corpus reports `bySubSport` as one null bucket,
+which the UI shows as "not carried", never as zero).
 
 ## Data handling
 

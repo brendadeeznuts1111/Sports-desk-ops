@@ -260,9 +260,20 @@ describe("read commands", () => {
     expect(aggregate["manualLog"]).toBe(1);
     expect(aggregate["oddsDrift"]).toBe(1);
     expect(Array.isArray(aggregate["delayHistogram"])).toBe(true);
+    for (const key of ["bySport", "bySubSport", "byPeriod", "byWagerType"]) {
+      const rows = aggregate[key] as { value: string | null; rows: number }[];
+      expect(Array.isArray(rows)).toBe(true);
+      expect(rows.reduce((sum, row) => sum + row.rows, 0)).toBe(16);
+    }
+    expect(aggregate["bySubSport"]).toEqual([{ value: null, rows: 16 }]);
     const sample = result.body["sample"] as Record<string, unknown>[];
     expect(sample).toHaveLength(5);
     for (const bet of sample) {
+      // Normalized rows use the upstream API vocabulary.
+      expect(bet["sport"]).toBeDefined();
+      expect(bet["subSport"]).toBeNull();
+      expect(bet["period"]).toBe("m");
+      expect(bet["wagerType"]).toBeDefined();
       expect(String(bet["ipMasked"])).toMatch(/\*\*\*/);
       expect(String(bet["ipTag"])).toMatch(/^[0-9a-f]{8}$/);
       expect(bet["ipAddress"]).toBeUndefined();

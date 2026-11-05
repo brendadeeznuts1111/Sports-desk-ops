@@ -2685,6 +2685,12 @@ export interface BetsFilters {
   readonly includeBots: boolean;
 }
 
+export interface VocabularyBreakdownRow {
+  /** API value exactly as sent; null means the source did not carry the field. */
+  readonly value: string | null;
+  readonly rows: number;
+}
+
 export interface BetsAggregate {
   readonly rows: number;
   readonly accounts: number;
@@ -2703,6 +2709,30 @@ export interface BetsAggregate {
     readonly delaySec: number;
     readonly count: number;
   }[];
+  /** Upstream API vocabulary: sport / subSport / period / wagerType distributions. */
+  readonly bySport: readonly VocabularyBreakdownRow[];
+  readonly bySubSport: readonly VocabularyBreakdownRow[];
+  readonly byPeriod: readonly VocabularyBreakdownRow[];
+  readonly byWagerType: readonly VocabularyBreakdownRow[];
+}
+
+function countVocabulary(
+  records: readonly FraudBetRecord[],
+  pick: (record: FraudBetRecord) => string | null,
+): readonly VocabularyBreakdownRow[] {
+  const counts = new Map<string | null, number>();
+  for (const record of records) {
+    const value = pick(record);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([value, rows]) => ({ value, rows }))
+    .sort((left, right) => {
+      if (right.rows !== left.rows) return right.rows - left.rows;
+      if (left.value === null) return 1;
+      if (right.value === null) return -1;
+      return left.value.localeCompare(right.value);
+    });
 }
 
 /** Apply CLI filters to normalized rows; `includeBots:false` drops suspected-bot rows. */
@@ -2774,6 +2804,10 @@ export function aggregateBets(
     manualLog,
     oddsDrift,
     delayHistogram,
+    bySport: countVocabulary(records, (record) => record.sport),
+    bySubSport: countVocabulary(records, (record) => record.subSport),
+    byPeriod: countVocabulary(records, (record) => record.period),
+    byWagerType: countVocabulary(records, (record) => record.wagerType),
   };
 }
 
