@@ -913,6 +913,15 @@ export function buildFlagsMetricMetadata(
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
       },
       {
+        name: "allFlagRows",
+        kind: "caveat",
+        state: "not_measured",
+        blockedBy: "flagRunPersistence",
+        value: "not_persisted",
+        description:
+          "flag_run.plan_json stores only the review sample, not every anomaly. hasRuleHit needs all flag rows with customerRef; persist them at review-plan time or rerun dx flags at batch time.",
+      },
+      {
         name: "ruleApplication",
         kind: "parameter",
         state: "not_measured",
@@ -948,6 +957,7 @@ export function buildFlagsMetricMetadata(
           "bridgeRepresentativeness",
           "reviewRows",
           "reviewRowsPerRule",
+          "allFlagRows",
         ],
         value: "not_implemented",
         description:
@@ -983,6 +993,7 @@ export function buildFlagsMetricMetadata(
         state: "not_measured",
         blockedBy: [
           "durableCustomerMaster",
+          "allFlagRows",
           "reviewRowsPerRule",
           "bridgeRepresentativeness",
         ],

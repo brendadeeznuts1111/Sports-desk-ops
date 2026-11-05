@@ -488,6 +488,7 @@ describe("flags metric metadata", () => {
         "bridgeRepresentativeness",
         "reviewRows",
         "reviewRowsPerRule",
+        "allFlagRows",
       ],
     });
     expect(
