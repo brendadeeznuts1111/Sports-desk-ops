@@ -121,6 +121,23 @@ describe("queue readiness gate", () => {
     ]);
   });
 
+  test("a divergent study closes the gate even at full coverage", () => {
+    const readiness = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 1,
+      bridgeRepresentative: false,
+      confirmedReviews: 10,
+      rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
+    });
+    expect(readiness.ready).toBe(false);
+    expect(readiness.blockers).toContainEqual({
+      name: "bridgeRepresentativeness",
+      current: "divergent",
+      required: "covered vs uncovered within one Wilson interval",
+    });
+  });
+
   test("coverage alone does not satisfy the bridge gate", () => {
     const readiness = assessQueueReadiness({
       corpusAgeHours: 2,
