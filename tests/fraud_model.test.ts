@@ -7,6 +7,7 @@ import { loadFraudConfig } from "../lib/fraud_logs.ts";
 import {
   FRAUD_FEATURE_IDS,
   FRAUD_MODEL_FIT_COMMAND,
+  FRAUD_MODEL_KIND,
   FRAUD_MODEL_LIMITS,
   FRAUD_MODEL_REL_PATH,
   FRAUD_ROW_REVIEW_SIZES,
@@ -616,8 +617,20 @@ describe("model artifact", () => {
       read.state,
     );
     expect(payload["present"]).toBe(true);
+    expect(payload["kind"]).toBe(FRAUD_MODEL_KIND);
     expect(payload["spec"]).toBeDefined();
     expect(payload["validation"]).toBeDefined();
+    const definitions = payload["metricDefinitions"] as Record<string, unknown>;
+    expect(definitions["kind"]).toBe("fraud-model-metric-definitions");
+    expect(definitions["schemaVersion"]).toBe(1);
+    expect(definitions["unit"]).toBe("bet-row");
+    expect(definitions["notStratifiedBy"]).toEqual([
+      "sport",
+      "subSport",
+      "market",
+      "period",
+      "agent",
+    ]);
     expect(typeof payload["artifactSha256"]).toBe("string");
     expect((payload["artifactSha256"] as string).length).toBe(64);
 

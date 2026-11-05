@@ -1848,6 +1848,8 @@ export interface ModelReportPayloadOptions {
 }
 
 const MODEL_METRIC_DEFINITIONS = {
+  kind: "fraud-model-metric-definitions",
+  schemaVersion: 1,
   unit: "bet-row",
   label:
     "desk_flag proxy on the row (suspectedBot OR reversedCredit OR manualLog)",
@@ -1875,6 +1877,7 @@ export function modelReportPayload(
   const validation = artifact.validation;
   const noPriorBet = validation.noPriorBet ?? null;
   return {
+    kind: FRAUD_MODEL_KIND,
     present: true,
     path: state.path,
     fittedAt: artifact.fittedAt,
