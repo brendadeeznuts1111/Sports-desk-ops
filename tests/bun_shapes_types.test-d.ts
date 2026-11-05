@@ -15,5 +15,28 @@ export type ServerShape = Bun.Server<undefined>;
 
 export type ImportKindShape = Bun.ImportKind;
 
+/**
+ * Exhaustive switch: a new Bun.ImportKind member fails `bun check` here, and a removed member
+ * fails the case label comparison. This pins the documented 9-member union.
+ */
+export function describeImportKind(kind: Bun.ImportKind): string {
+  switch (kind) {
+    case "import-statement":
+    case "require-call":
+    case "require-resolve":
+    case "dynamic-import":
+    case "import-rule":
+    case "url-token":
+    case "internal":
+    case "entry-point-run":
+    case "entry-point-build":
+      return kind;
+    default: {
+      const unhandled: never = kind;
+      return unhandled;
+    }
+  }
+}
+
 /** A runtime shape stays usable in a type position too. */
 export type FileShape = ReturnType<typeof Bun.file>;
