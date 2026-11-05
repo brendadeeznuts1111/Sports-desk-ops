@@ -1895,6 +1895,8 @@ export interface MetricMetadataDefinition {
   /** Population size (rows) or baseline rate, depending on `kind`. */
   readonly value?: unknown;
   readonly state?: string | undefined;
+  /** What unblocks a not-measured row, e.g. accountDispositionFeed. */
+  readonly blockedBy?: string | undefined;
   /** Where the full table lives in the report, for a headline row. */
   readonly detailRef?: string;
 }
@@ -2121,13 +2123,39 @@ export function validateMetricMetadata(
       );
     }
   }
+  for (const row of metadata.definitions) {
+    if (row.state === "not_measured" && (row.blockedBy ?? "").trim() === "") {
+      throw new Error(
+        `metricMetadata: ${row.name} is not_measured but has no blockedBy`,
+      );
+    }
+  }
   if (root !== undefined) {
     for (const row of metadata.definitions) {
       if (row.detailRef === undefined) continue;
-      if (getPath(root, row.detailRef) === undefined) {
+      const target = getPath(root, row.detailRef);
+      if (target === undefined) {
         throw new Error(
           `metricMetadata: ${row.name}.detailRef -> "${row.detailRef}" does not resolve in the report`,
         );
+      }
+      if (row.state === "not_measured") {
+        if (target === null || typeof target !== "object") {
+          throw new Error(
+            `metricMetadata: ${row.name}.detailRef -> "${row.detailRef}" is not a state container`,
+          );
+        }
+        const container = target as Record<string, unknown>;
+        if (container["state"] !== "not_measured") {
+          throw new Error(
+            `metricMetadata: ${row.name}.detailRef -> "${row.detailRef}" has no state "not_measured"`,
+          );
+        }
+        if (container["metrics"] !== undefined) {
+          throw new Error(
+            `metricMetadata: ${row.name}.detailRef -> "${row.detailRef}" carries metrics despite state "not_measured"`,
+          );
+        }
       }
     }
   }
@@ -2211,6 +2239,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         population: "temporalHoldout",
         value: roundReportNullable(holdoutRate, 6),
         state: holdoutRate === null ? "not_measured" : undefined,
+        blockedBy: holdoutRate === null ? "noHoldoutRows" : undefined,
         description:
           "The overall desk_flag rate in the temporal holdout; rowPrecisionAtK is lift over this rate.",
       },
@@ -2222,6 +2251,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         population: "noPriorBet",
         value: roundReportNullable(noPriorBetRate, 6),
         state: noPriorBetRate === null ? "not_measured" : undefined,
+        blockedBy: noPriorBetRate === null ? "noPriorBetSlice" : undefined,
         description:
           "The desk_flag rate in the no-prior-bet slice; rowPrecisionAtKNoPriorBet is lift over this rate.",
       },
@@ -2256,6 +2286,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
             ? "validation.noPriorBet"
             : "validation.noPriorBet.metrics.rowPrecisionAtK",
         state: noPriorBet === null ? "not_measured" : undefined,
+        blockedBy: noPriorBet === null ? "noPriorBetSlice" : undefined,
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(noPriorHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
@@ -2294,6 +2325,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         name: "accountHoldout",
         kind: "population",
         state: "not_measured",
+        blockedBy: "accountDispositionFeed",
         unit: "account",
         value: null,
         description:
@@ -2303,6 +2335,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         name: "accountPrecisionAtK",
         kind: "pending-metric",
         state: "not_measured",
+        blockedBy: "accountDispositionFeed",
         unit: "account",
         label: "account-disposition",
         population: "accountHoldout",
@@ -2389,7 +2422,7 @@ export function modelReportPayload(
       holdout: roundClassificationMetrics(validation.holdout),
       noPriorBet:
         noPriorBet === null
-          ? null
+          ? { state: "not_measured" }
           : {
               rows: noPriorBet.rows,
               positiveRows: noPriorBet.positiveRows,

@@ -343,6 +343,46 @@ describe("validateMetricMetadata", () => {
     );
   });
 
+  test("not-measured detailRef resolves to a state container without metrics", () => {
+    const definitions = [
+      {
+        name: "metric",
+        kind: "pending-metric",
+        state: "not_measured",
+        blockedBy: "feed",
+        detailRef: "validation.noPriorBet",
+      },
+    ];
+    expect(() =>
+      validateMetricMetadata(
+        { definitions },
+        { validation: { noPriorBet: { state: "not_measured" } } },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateMetricMetadata(
+        { definitions },
+        { validation: { noPriorBet: {} } },
+      ),
+    ).toThrow(/state "not_measured"/);
+    expect(() =>
+      validateMetricMetadata(
+        { definitions },
+        { validation: { noPriorBet: { state: "not_measured", metrics: {} } } },
+      ),
+    ).toThrow(/carries metrics/);
+  });
+
+  test("not-measured rows must say what blocks them", () => {
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "metric", kind: "pending-metric", state: "not_measured" },
+        ],
+      }),
+    ).toThrow(/blockedBy/);
+  });
+
   test("duplicate definition names are refused", () => {
     expect(() =>
       validateMetricMetadata({
@@ -897,8 +937,19 @@ describe("model artifact", () => {
     ).toMatchObject({
       kind: "pending-metric",
       state: "not_measured",
+      blockedBy: "accountDispositionFeed",
       unit: "account",
       population: "accountHoldout",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "accountHoldout",
+      ),
+    ).toMatchObject({
+      kind: "population",
+      state: "not_measured",
+      blockedBy: "accountDispositionFeed",
+      value: null,
     });
     expect(
       metadata.definitions.find(
@@ -913,6 +964,44 @@ describe("model artifact", () => {
     expect(await readdir(join(root, "reports", "security"))).toEqual([
       "fraud-model.json",
     ]);
+  });
+
+  test("a missing noPriorBet slice reports a not-measured container", async () => {
+    const { corpus, options, root } = await fullSynthetic();
+    const config = (await loadFraudConfig(root)).config;
+    const { artifact } = fitFraudModel({
+      corpus,
+      config,
+      now: fixedNow(),
+      options,
+    });
+    const state = (await readFraudModel(root)).state;
+    const withoutSlice: FraudModelArtifact = {
+      ...artifact,
+      validation: { ...artifact.validation, noPriorBet: null },
+    };
+    const payload = modelReportPayload(withoutSlice, state);
+    const metadata = payload["metricMetadata"] as {
+      definitions: Array<{
+        name: string;
+        state?: string;
+        blockedBy?: string;
+        detailRef?: string;
+      }>;
+    };
+    const row = metadata.definitions.find(
+      (definition) => definition.name === "rowPrecisionAtKNoPriorBet",
+    );
+    expect(row).toMatchObject({
+      state: "not_measured",
+      blockedBy: "noPriorBetSlice",
+      detailRef: "validation.noPriorBet",
+    });
+    const validation = payload["validation"] as {
+      noPriorBet: { state: string; metrics?: unknown };
+    };
+    expect(validation.noPriorBet).toEqual({ state: "not_measured" });
+    expect(validation.noPriorBet.metrics).toBeUndefined();
   });
 
   test("report payload trims the score map while the artifact keeps it", async () => {
