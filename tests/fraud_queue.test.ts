@@ -565,16 +565,16 @@ describe("fraud priority queue (CLI)", () => {
       "bridgeRepresentativeness",
       "reviewRows",
     ]);
-    expect(error.details.inputs.bridgeCoverage).toBeCloseTo(102 / 2586, 12);
+    expect(error.details.inputs.bridgeCoverage).toBeCloseTo(2577 / 2586, 12);
     expect(error.details.inputs.bridgeRepresentative).toBeNull();
     expect(error.details.inputs.confirmedReviews).toBe(0);
     expect(error.details.bridge.coverage).toMatchObject({
-      matched: 102,
+      matched: 2577,
       total: 2586,
       evidence: "committed-baseline",
       artifactReason: "missing",
     });
-    expect(error.details.bridge.coverage.value).toBeCloseTo(102 / 2586, 12);
+    expect(error.details.bridge.coverage.value).toBeCloseTo(2577 / 2586, 12);
     expect(error.details.bridge.representativeness).toMatchObject({
       representative: null,
       reason: "missing",
@@ -870,6 +870,11 @@ describe("fraud priority queue (CLI)", () => {
       )
       .run("PR000001", FIXED_NOW_ISO);
     namespaceDb.close();
+    // The full hierarchy capture must win over the smaller customer index.
+    writeAt(root, "scratch/raw-f402-list-agents.json", {
+      GENERAL: [],
+      PLAYERS: [{ customerID: "PR000001", Login: "PR000001", Agent: "AG1" }],
+    });
 
     const anomalies: Anomaly[] = Array.from({ length: 5 }, (_, index) => ({
       rule: "period_correlation",
@@ -955,7 +960,7 @@ describe("fraud priority queue (CLI)", () => {
       ruleEvidenceStatus: "unmatched",
     });
     expect(result.body.identityNamespace).toEqual({
-      source: "scratch/customers.sqlite",
+      source: "scratch/raw-f402-list-agents.json#PLAYERS",
       ids: 1,
     });
   });

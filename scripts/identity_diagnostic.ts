@@ -26,6 +26,7 @@ const DEFAULTS = {
   admin: "scratch/f402-customer-admin/list.redacted.json",
   ticker: "data/live-wagers.json",
   customerDb: "scratch/customers.sqlite",
+  players: "scratch/raw-f402-list-agents.json",
   betReport: "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json",
   out: "scratch/identity-diagnostic/report.md",
   json: "scratch/identity-diagnostic/report.json",
@@ -37,6 +38,7 @@ interface Options {
   readonly admin: string;
   readonly ticker: string;
   readonly customerDb: string;
+  readonly players: string;
   readonly betReport: string;
   readonly out: string;
   readonly json: string;
@@ -56,17 +58,19 @@ function parseOptions(argv: readonly string[]): Options {
           ? "ticker"
           : flag === "--customer-db"
             ? "customerDb"
-            : flag === "--bet-report"
-              ? "betReport"
-              : flag === "--out"
-                ? "out"
-                : flag === "--json"
-                  ? "json"
-                  : flag === "--probe-sample"
-                    ? "probeSample"
-                    : flag === "--probe-out"
-                      ? "probeOut"
-                      : null;
+            : flag === "--players"
+              ? "players"
+              : flag === "--bet-report"
+                ? "betReport"
+                : flag === "--out"
+                  ? "out"
+                  : flag === "--json"
+                    ? "json"
+                    : flag === "--probe-sample"
+                      ? "probeSample"
+                      : flag === "--probe-out"
+                        ? "probeOut"
+                        : null;
     if (key === null) throw new Error(`unknown argument: ${flag}`);
     const value = argv[index + 1];
     if (value === undefined) throw new Error(`missing value for ${flag}`);
@@ -228,6 +232,37 @@ interface AccountIdentity {
   rows: number;
 }
 
+interface PlayersData {
+  readonly rows: number;
+  readonly customerIds: ReadonlySet<string>;
+  readonly logins: ReadonlySet<string>;
+  readonly agents: ReadonlySet<string>;
+}
+
+/**
+ * The full manager hierarchy capture: `{ GENERAL, PLAYERS, EXTRA }`. PLAYERS may carry plaintext
+ * passwords; this loader reads only the identifier fields and never returns the raw rows.
+ */
+async function loadPlayers(path: string): Promise<PlayersData | null> {
+  const raw = await readJson(path);
+  const players = asRecord(raw)?.["PLAYERS"];
+  if (!Array.isArray(players)) return null;
+  const customerIds = new Set<string>();
+  const logins = new Set<string>();
+  const agents = new Set<string>();
+  for (const item of players) {
+    const row = asRecord(item);
+    if (row === null) continue;
+    const customerId = norm(row["customerID"]);
+    const login = norm(row["Login"]);
+    const agent = norm(row["Agent"]);
+    if (customerId !== "") customerIds.add(customerId);
+    if (login !== "") logins.add(login);
+    if (agent !== "") agents.add(agent);
+  }
+  return { rows: players.length, customerIds, logins, agents };
+}
+
 interface BetReportData {
   readonly rows: number;
   readonly accounts: ReadonlyMap<string, AccountIdentity>;
@@ -302,6 +337,7 @@ async function main(): Promise<void> {
   const admin = await loadAdmin(options.admin);
   const ticker = await loadTicker(options.ticker);
   const customerIndex = loadCustomerIndex(options.customerDb);
+  const players = await loadPlayers(options.players);
   const betReport = await loadBetReport(options.betReport);
 
   if (betReport === null) {
@@ -310,11 +346,24 @@ async function main(): Promise<void> {
 
   const gsliveAccounts = betReport.accounts.size;
   const captureIds = customerIndex?.ids ?? new Set<string>();
+  const playerIds = players?.customerIds ?? new Set<string>();
+  const playerLogins = players?.logins ?? new Set<string>();
+  const playerNamespace = new Set([...playerIds, ...playerLogins]);
+  const namespace = playerNamespace.size > 0 ? playerNamespace : captureIds;
+  const namespaceSource =
+    playerNamespace.size > 0
+      ? `${options.players}#PLAYERS`
+      : options.customerDb;
   const tickerLogins = ticker?.logins ?? new Set<string>();
   const tickerCustomers = ticker?.customerIds ?? new Set<string>();
   const adminLogins = admin?.logins ?? new Set<string>();
   const adminCustomers = admin?.customerIds ?? new Set<string>();
 
+  const partnerMatchesNamespace = matchedAccounts(
+    betReport.accounts,
+    (account) => account.partners,
+    namespace,
+  );
   const partnerMatchesCapture = matchedAccounts(
     betReport.accounts,
     (account) => account.partners,
@@ -350,13 +399,14 @@ async function main(): Promise<void> {
     (account) => account.partners,
     adminCustomers,
   );
+  const unmatchedByNamespace = gsliveAccounts - partnerMatchesNamespace;
   const unmatchedByPartner = gsliveAccounts - partnerMatchesCapture;
   const coverageCap =
     gsliveAccounts === 0 ? 0 : captureIds.size / gsliveAccounts;
   const unmatchedAccounts = [...betReport.accounts.values()]
     .filter((account) => {
       for (const partner of account.partners) {
-        if (captureIds.has(partner)) return false;
+        if (namespace.has(partner)) return false;
       }
       return true;
     })
@@ -366,6 +416,9 @@ async function main(): Promise<void> {
         firstPartner(right) ?? right.userId,
       ),
     );
+  const unmatchedPartnerIds = [
+    ...new Set(unmatchedAccounts.flatMap((account) => [...account.partners])),
+  ].sort(compareText);
   const probeSample = sampleEvenly(unmatchedAccounts, options.probeSample);
   const probePlan = probeSample.map((account) => {
     const partner = firstPartner(account);
@@ -395,8 +448,7 @@ async function main(): Promise<void> {
     sourceModule: "app/manager/module/player-info.js?bust=1.0.281",
     sourceModuleSha256:
       "865b005a4471a17cba904bce3f6cbc06816afbd20b7ad02904c9b8cb5ba50bf2",
-    population:
-      "GSLive accounts without a partnerUserID in the available F402 capture",
+    population: `GSLive accounts without a partnerUserID in ${namespaceSource}`,
     populationSize: unmatchedAccounts.length,
     sampleSize: probePlan.length,
     note: "customerID is sent as partnerUserID. Confirm the padded CustomerID semantics with one known account before running the full sample; INFO:null means the account was not found.",
@@ -437,6 +489,14 @@ async function main(): Promise<void> {
       `${options.customerDb} (source=capture)`,
     ]),
     tableRow([
+      "getListAgenstByAgent PLAYERS",
+      String(players?.rows ?? 0),
+      players === null
+        ? "missing"
+        : `${players.customerIds.size} customerID / ${players.logins.size} Login`,
+      `${options.players}#PLAYERS`,
+    ]),
+    tableRow([
       "getBetReport",
       String(betReport.rows),
       `${gsliveAccounts} userID / ${[...betReport.accounts.values()].reduce((sum, account) => sum + account.partners.size, 0)} partner ids`,
@@ -447,6 +507,11 @@ async function main(): Promise<void> {
     "",
     tableRow(["Join", "GSLive accounts matched", "Share"]),
     tableRow(["---", "---:", "---:"]),
+    tableRow([
+      "partnerUserID ↔ PLAYERS customerID/Login",
+      String(partnerMatchesNamespace),
+      pct(partnerMatchesNamespace, gsliveAccounts),
+    ]),
     tableRow([
       "partnerUserID ↔ customer-index capture",
       String(partnerMatchesCapture),
@@ -485,17 +550,19 @@ async function main(): Promise<void> {
     "",
     "## The 2,586 GSLive accounts",
     "",
+    `Primary namespace: \`${namespaceSource}\`.`,
+    "",
     tableRow(["Status", "Count", "Share"]),
     tableRow(["---", "---:", "---:"]),
     tableRow([
-      "partner present in customer-index capture",
-      String(partnerMatchesCapture),
-      pct(partnerMatchesCapture, gsliveAccounts),
+      "partner present in primary namespace",
+      String(partnerMatchesNamespace),
+      pct(partnerMatchesNamespace, gsliveAccounts),
     ]),
     tableRow([
-      "partner present, absent from capture",
-      String(unmatchedByPartner),
-      pct(unmatchedByPartner, gsliveAccounts),
+      "partner absent from primary namespace",
+      String(unmatchedByNamespace),
+      pct(unmatchedByNamespace, gsliveAccounts),
     ]),
     tableRow([
       "no partnerUserID at all",
@@ -512,13 +579,28 @@ async function main(): Promise<void> {
       ),
     ]),
     "",
+    "### Customer-index subset",
+    "",
+    tableRow(["Status", "Count", "Share"]),
+    tableRow(["---", "---:", "---:"]),
+    tableRow([
+      "partner present in customer-index capture",
+      String(partnerMatchesCapture),
+      pct(partnerMatchesCapture, gsliveAccounts),
+    ]),
+    tableRow([
+      "partner absent from customer-index capture",
+      String(unmatchedByPartner),
+      pct(unmatchedByPartner, gsliveAccounts),
+    ]),
+    "",
     "## What the numbers say",
     "",
-    `- The current queue hashes \`userID\` as the customer key. Against the available F402 namespace that matches **${userMatchesCapture}** accounts.`,
-    `- The F402 login is \`partnerUserID\`. Against the customer-index capture it matches **${partnerMatchesCapture}** accounts (${pct(partnerMatchesCapture, gsliveAccounts)}).`,
-    `- Even a perfect matcher can cover at most **${customerIndex?.ids.size ?? 0} / ${gsliveAccounts} = ${(coverageCap * 100).toFixed(1)}%** with this capture. The remaining ${unmatchedByPartner} accounts have no row in the available F402 namespace.`,
-    `- The admin file in this checkout has **${admin?.rows ?? 0} row(s)**, so it cannot answer the full-master question. The 131-row namespace referenced earlier is closer to the ticker snapshot (${ticker?.customerIds.size ?? 0} distinct today) than to this admin file.`,
-    `- "Present but no key match" cannot be measured from this capture because the customer index carries only the key itself. The full \`getCustomerAdmin\` rows carry \`CustomerID\`, \`Login\`, \`AgentID\`, and \`Name\`; that is the capture needed to distinguish normalization from absence.`,
+    `- The full \`getListAgenstByAgent\` capture has **${players?.rows ?? 0} PLAYERS** and matches **${partnerMatchesNamespace} / ${gsliveAccounts}** GSLive accounts (${pct(partnerMatchesNamespace, gsliveAccounts)}) on \`customerID\` or \`Login\`.`,
+    `- The customer-index capture has only **${customerIndex?.ids.size ?? 0}** ids and matches **${partnerMatchesCapture}** accounts (${pct(partnerMatchesCapture, gsliveAccounts)}). That 667-row index is where the earlier 3.94% came from, not the full master.`,
+    `- The queue previously hashed \`userID\`; it now joins on \`partnerUserID\`, which is what makes the ${partnerMatchesNamespace} full-capture matches usable.`,
+    `- The ${unmatchedByNamespace} accounts absent from the primary namespace: ${unmatchedPartnerIds.join(", ") || "none"}. These look like new/subaccount ids added after the 2026-11-01 PLAYERS capture.`,
+    `- The admin file in this checkout has **${admin?.rows ?? 0} row(s)**, so it is a snippet, not the master. The master was already present as \`${options.players}#PLAYERS\`.`,
     "",
     "## Sampled existence probe",
     "",
@@ -535,10 +617,10 @@ async function main(): Promise<void> {
     "",
     "## Recommendation",
     "",
-    "1. Capture the full `getCustomerAdmin` scope and rerun this diagnostic. If it contains the 2,167 absent partner ids, coverage rises without a crosswalk. If it does not, the master is incomplete.",
-    "2. Ship `ruleEvidenceStatus` on the queue row (`bridged` / `unmatched` / `not_applied`) before the crosswalk.",
-    "3. Correct the queue's rule-evidence join from `userID` to `partnerUserID`; that alone moves the available bridge from 0 to 419 accounts.",
-    "4. Build the crosswalk only if the full admin capture still leaves a large present-but-unmatched population.",
+    "1. Refresh the `getListAgenstByAgent` PLAYERS capture and rerun this diagnostic. The 9 absent ids may be new accounts added after the 2026-11-01 capture.",
+    "2. Use the sampled `getInfoPlayer` plan for those 9; it is the only remaining identity question.",
+    "3. Keep `ruleEvidenceStatus` and the `partnerUserID` join; both are already shipped.",
+    "4. Do not build the crosswalk. The full PLAYERS capture covers 99.7% of GSLive accounts; a fuzzy crosswalk would be governance for a problem the master already solves.",
     "",
   ];
 
@@ -564,6 +646,14 @@ async function main(): Promise<void> {
         ids: customerIndex?.ids.size ?? 0,
         agents: customerIndex === null ? [] : topAgents(customerIndex.agents),
       },
+      players: {
+        path: options.players,
+        rows: players?.rows ?? 0,
+        customerIds: playerIds.size,
+        logins: playerLogins.size,
+        agents: players === null ? [] : topAgents(players.agents),
+        namespaceSource,
+      },
       betReport: {
         path: options.betReport,
         rows: betReport.rows,
@@ -571,6 +661,7 @@ async function main(): Promise<void> {
       },
     },
     overlap: {
+      partnerMatchesNamespace,
       partnerMatchesCapture,
       partnerMatchesTicker,
       profileMatchesCapture,
@@ -581,13 +672,17 @@ async function main(): Promise<void> {
     },
     accounts: {
       total: gsliveAccounts,
+      namespaceSource,
+      partnerMatchedNamespace: partnerMatchesNamespace,
+      partnerAbsentFromNamespace: unmatchedByNamespace,
       partnerMatchedCapture: partnerMatchesCapture,
       partnerAbsentFromCapture: unmatchedByPartner,
+      unmatchedPartnerIds,
       noPartner: [...betReport.accounts.values()].filter(
         (account) => account.partners.size === 0,
       ).length,
       coverageCap,
-      percentMatched: partnerMatchesCapture / gsliveAccounts,
+      percentMatched: partnerMatchesNamespace / gsliveAccounts,
     },
     probePlan: {
       path: options.probeOut,

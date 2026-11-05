@@ -702,6 +702,7 @@ function loadQueueLedger(path: string): QueueLedger {
  * The customer index is the getBetTicker capture; the ticker snapshot is the fallback. Only
  * `source='capture'` rows count; artifact/demo/fixture rows must not look live.
  */
+const F402_PLAYERS_REL_PATH = "scratch/raw-f402-list-agents.json";
 const F402_CUSTOMER_INDEX_REL_PATH = "scratch/customers.sqlite";
 const F402_TICKER_REL_PATH = "data/live-wagers.json";
 
@@ -711,6 +712,34 @@ interface F402Namespace {
 }
 
 async function loadF402Namespace(root: string): Promise<F402Namespace> {
+  // Full manager hierarchy capture. PLAYERS may contain plaintext passwords; only the
+  // identifier fields are read, and the file itself is 0600 under scratch/.
+  const playersPath = join(root, F402_PLAYERS_REL_PATH);
+  if (existsSync(playersPath)) {
+    try {
+      const raw = (await Bun.file(playersPath).json()) as {
+        PLAYERS?: unknown;
+      };
+      const rows = Array.isArray(raw.PLAYERS) ? raw.PLAYERS : [];
+      const ids = new Set<string>();
+      for (const row of rows) {
+        if (row === null || typeof row !== "object") continue;
+        const record = row as Record<string, unknown>;
+        for (const key of ["customerID", "Login"]) {
+          const value = record[key];
+          if (typeof value !== "string") continue;
+          const normalized = value.trim().toUpperCase();
+          if (normalized !== "") ids.add(normalized);
+        }
+      }
+      if (ids.size > 0) {
+        return { ids, source: `${F402_PLAYERS_REL_PATH}#PLAYERS` };
+      }
+    } catch {
+      // Fall through to the smaller captures.
+    }
+  }
+
   const dbPath = join(root, F402_CUSTOMER_INDEX_REL_PATH);
   if (existsSync(dbPath)) {
     try {

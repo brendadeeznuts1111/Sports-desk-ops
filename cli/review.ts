@@ -1122,7 +1122,7 @@ export function buildFlagsMetricMetadata(
         ],
         value: "not_implemented",
         description:
-          "Bridge coverage is 3.94% (102/2586); the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). hasRuleHit is a tie-break after the model score, not a promotion; all readiness gates must clear before the batch can run.",
+          "Bridge coverage is 99.65% (2,577/2586) against the 2026-11-01 getListAgenstByAgent PLAYERS capture; 9 accounts are unmatched (BA109_0, CRB102, GAGCOF1052, ML117, PEP119, TD103, TD104, TD106, TD108); the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). hasRuleHit is a tie-break after the model score, not a promotion; all readiness gates must clear before the batch can run.",
       },
       {
         name: "response",
@@ -1226,10 +1226,10 @@ export function buildFlagsMetricMetadata(
         kind: "metric",
         unit: "account",
         population: "gslive-accounts",
-        value: 0.0394,
+        value: 0.9965,
         derivedFrom: "measured",
         description:
-          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%), measured 2026-11-05T05:50Z. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones. A measurement older than 30 days emits bridgeCoverageStaleness as a warning, not a blocker.",
+          "2,577/2,586 GSLive accounts resolve to the 2026-11-01 getListAgenstByAgent PLAYERS capture on customerID or Login (99.65%), measured 2026-11-05T07:03Z. The 9 unmatched ids look like accounts added after that capture. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones. A measurement older than 30 days emits bridgeCoverageStaleness as a warning, not a blocker.",
       },
       {
         name: "reviewedSamplePositiveRate",

@@ -1,6 +1,6 @@
 /**
  * Evidence artifacts for the queue bridge. Coverage and representativeness are deliberately
- * separate files: a measured 3.94% coverage must never be presented as a measured study, and a
+ * separate files: a measured coverage number must never be presented as a measured study, and a
  * missing study must not erase a coverage number that was actually measured.
  *
  * `reports/security/bridge-coverage.json` counts the join. `reports/security/
@@ -35,12 +35,13 @@ export interface QueueBridgeCoverage {
  * when present, overrides this baseline. The timestamp travels with the value.
  */
 export const QUEUE_BRIDGE_COVERAGE_BASELINE: QueueBridgeCoverage = {
-  measuredAt: "2026-11-05T05:50:00.006Z",
+  measuredAt: "2026-11-05T07:03:09.970Z",
   population: "gslive-accounts",
-  matched: 102,
+  matched: 2577,
   total: 2586,
-  value: 102 / 2586,
-  source: "committed baseline measurement (live F402 namespace)",
+  value: 2577 / 2586,
+  source:
+    "getListAgenstByAgent PLAYERS capture 2026-11-01 vs GSLive getBetReport corpus 2026-11-03",
 };
 
 export interface QueueBridgeArm {
