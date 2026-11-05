@@ -218,7 +218,27 @@ export function toSafeJson(
   return safe;
 }
 
+export interface DupeTicketLeg {
+  readonly sport?: string;
+  readonly eventName?: string;
+  readonly period?: string;
+  readonly market?: string;
+  readonly selection?: string;
+  readonly price?: string | null;
+}
+
+/** The minimal ticket shape the duplicate detector reads; a normalized ticket fits. */
+export interface DupeTicket {
+  readonly wagerNumber: string;
+  readonly wagerType: string;
+  readonly source?: string;
+  readonly descCode?: string | null;
+  readonly legs: readonly DupeTicketLeg[];
+}
+
 export interface DupePair {
+  /** Game/code line shared by the group; different games never pair. */
+  readonly descCode: string | null;
   /** Order-independent leg signature shared by every ticket in the group. */
   readonly legSignature: string;
   /** Distinct ticket ids, sorted. */
@@ -227,15 +247,15 @@ export interface DupePair {
   readonly wagerTypes: readonly string[];
 }
 
-function legSignature(ticket: NormalizedTicket): string {
+function legSignature(ticket: DupeTicket): string {
   return ticket.legs
     .map((leg) =>
       [
-        leg.sport,
-        leg.eventName,
-        leg.period,
-        leg.market,
-        leg.selection,
+        leg.sport ?? "",
+        leg.eventName ?? "",
+        leg.period ?? "",
+        leg.market ?? "",
+        leg.selection ?? "",
         leg.price ?? "",
       ].join("\u0001"),
     )
@@ -244,33 +264,51 @@ function legSignature(ticket: NormalizedTicket): string {
 }
 
 /**
- * Groups tickets that carry the same legs under different ticket ids. A P ticket and an M
- * ticket on the same selections are the usual pair; the caller can narrow on `wagerTypes`.
- * `ALERT` mirrors and `BLOCKED` sentinels are skipped: they repeat another ticket's legs
- * instead of creating one. Tickets with no legs are ignored, and a repeated id never forms a
- * group by itself.
+ * Groups tickets that carry the same game code and the same legs under different ticket ids.
+ * A P ticket and an M ticket on the same selections are the usual pair; the caller can narrow
+ * on `wagerTypes`. `ALERT` mirrors and `BLOCKED` sentinels are skipped: they repeat another
+ * ticket's legs instead of creating one. Including `descCode` keeps two customers' identical
+ * selection on different games from being flagged. Tickets with no legs are ignored, and a
+ * repeated id never forms a group by itself.
  */
 export function findDupePairs(
-  tickets: readonly NormalizedTicket[],
+  tickets: readonly DupeTicket[],
 ): readonly DupePair[] {
-  const groups = new Map<string, NormalizedTicket[]>();
+  const groups = new Map<
+    string,
+    { descCode: string | null; legSignature: string; tickets: DupeTicket[] }
+  >();
   for (const ticket of tickets) {
     if (ticket.legs.length === 0) continue;
-    const source = ticket.source.toUpperCase();
+    const source = (ticket.source ?? "").toUpperCase();
     if (source === "ALERT" || source === "BLOCKED") continue;
+    // JSON `descCode` is `P.G319747616`; the HTML parser already stores digits only.
+    const descCode =
+      ticket.descCode?.match(/(\d{6,})/)?.[1] ?? ticket.descCode ?? null;
     const signature = legSignature(ticket);
-    const group = groups.get(signature);
-    if (group === undefined) groups.set(signature, [ticket]);
-    else group.push(ticket);
+    const groupKey = `${descCode ?? ""}\u0003${signature}`;
+    const group = groups.get(groupKey);
+    if (group === undefined) {
+      groups.set(groupKey, {
+        descCode,
+        legSignature: signature,
+        tickets: [ticket],
+      });
+    } else {
+      group.tickets.push(ticket);
+    }
   }
   const pairs: DupePair[] = [];
-  for (const [legSignature, group] of groups) {
-    const wagerNumbers = [...new Set(group.map((t) => t.wagerNumber))].sort();
+  for (const group of groups.values()) {
+    const wagerNumbers = [
+      ...new Set(group.tickets.map((t) => t.wagerNumber)),
+    ].sort();
     if (wagerNumbers.length < 2) continue;
     pairs.push({
-      legSignature,
+      descCode: group.descCode,
+      legSignature: group.legSignature,
       wagerNumbers,
-      wagerTypes: [...new Set(group.map((t) => t.wagerType))].sort(),
+      wagerTypes: [...new Set(group.tickets.map((t) => t.wagerType))].sort(),
     });
   }
   return pairs;

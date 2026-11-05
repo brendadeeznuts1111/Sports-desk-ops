@@ -121,6 +121,30 @@ function classMatch(attrs: string, name: string): boolean {
   return className.split(/\s+/).includes(name);
 }
 
+export interface HtmlHeader {
+  readonly index: number;
+  /** `data-language="L-xxx"` when present. */
+  readonly key: string | null;
+  readonly text: string;
+}
+
+/** The captured table's `<th data-language="L-…">` headers, in column order. */
+export function htmlHeaderMap(html: string): HtmlHeader[] {
+  const rows = html.matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/gi);
+  for (const row of rows) {
+    const headers = [
+      ...(row[2] ?? "").matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/gi),
+    ];
+    if (headers.length === 0) continue;
+    return headers.map((header, index) => ({
+      index,
+      key: /data-language="([^"]+)"/i.exec(header[1] ?? "")?.[1] ?? null,
+      text: cellText(header[2] ?? ""),
+    }));
+  }
+  return [];
+}
+
 /** Parse every `<tr data-wager-number="…">` in the table. */
 export function parseBetTickerHtml(html: string): HtmlBetTicket[] {
   const tickets: HtmlBetTicket[] = [];
@@ -176,6 +200,7 @@ export async function loadCapture(
       `${path}: expected HTML or a JSON getBetTicker capture: ${
         error instanceof Error ? error.message : String(error)
       }`,
+      { cause: error },
     );
   }
 

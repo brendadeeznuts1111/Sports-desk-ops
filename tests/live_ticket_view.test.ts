@@ -196,4 +196,24 @@ describe("live_ticket_view", () => {
     expect(withRealTwin).toHaveLength(1);
     expect(withRealTwin[0]?.wagerNumbers).toEqual(["1", "4"]);
   });
+
+  test("identical selections at different games are not duplicates", () => {
+    const rows = [
+      {
+        wagerNumber: "1",
+        wagerType: "S",
+        source: "GSLIVE",
+        descCode: "G320210254",
+        legs: [{ selection: "Utah Jazz", price: "+181" }],
+      },
+      {
+        wagerNumber: "2",
+        wagerType: "S",
+        source: "GSLIVE",
+        descCode: "G320210390",
+        legs: [{ selection: "Utah Jazz", price: "+181" }],
+      },
+    ];
+    expect(findDupePairs(rows)).toEqual([]);
+  });
 });

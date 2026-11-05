@@ -11,6 +11,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const CLI = join(ROOT, "cli/sportsdesk_ticket_cli.ts");
 const FIXTURE = join(import.meta.dir, "fixtures/live-wagers-list-sample.json");
+const HTML_FIXTURE = join(import.meta.dir, "fixtures/bet-ticker.html");
 const TMP = mkdtempSync(join(tmpdir(), "ticket-cli-"));
 afterAll(() => rmSync(TMP, { recursive: true, force: true }));
 
@@ -257,12 +258,110 @@ describe("sportsdesk_ticket_cli", () => {
     );
   });
 
+  test("--lang resolves ui.json labels and warns for JAPANESE", async () => {
+    const spanish = await run([
+      "767125863",
+      "--file",
+      FIXTURE,
+      "--lang=SPANISH",
+    ]);
+    expect(spanish.code).toBe(0);
+    expect(spanish.stdout).toContain("Boleto");
+    expect(spanish.stdout).toContain("Combinada");
+    expect(spanish.stdout).toContain("A Ganar");
+    expect(spanish.stdout).toContain("Fuente");
+
+    const japanese = await run([
+      "767125863",
+      "--file",
+      FIXTURE,
+      "--lang=JAPANESE",
+    ]);
+    expect(japanese.code).toBe(0);
+    expect(japanese.stderr).toContain("JAPANESE → ENGLISH");
+    expect(japanese.stdout).toContain("Ticket 767125863");
+    expect(japanese.stdout).toContain("Parlay");
+  });
+
+  test("--lang-coverage reports the shipped table and locale gaps", async () => {
+    const { code, stdout } = await run(["--lang-coverage"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("JAPANESE");
+    expect(stdout).toContain("VIETNAMES");
+    expect(stdout).toContain("1,461");
+  });
+
+  test("--html-header-map reads data-language keys from a capture", async () => {
+    const { code, stdout } = await run([
+      "--html-header-map",
+      "--from-html",
+      HTML_FIXTURE,
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("L-213  Customer");
+    expect(stdout).toContain("L-1030  Time (ET)");
+  });
+
+  test("HTML captures work through --analyze and a single lookup", async () => {
+    const keys = await run([
+      "--analyze",
+      "--file",
+      HTML_FIXTURE,
+      "--lang=keys",
+    ]);
+    expect(keys.code).toBe(0);
+    expect(keys.stdout).toContain("100 tickets");
+    expect(keys.stdout).toContain("125 legs");
+    expect(keys.stdout).toContain("L-83 Straight");
+    expect(keys.stdout).toContain("L-84 Parlay");
+
+    const single = await run([
+      "767465259",
+      "--file",
+      HTML_FIXTURE,
+      "--lang=SPANISH",
+    ]);
+    expect(single.code).toBe(0);
+    expect(single.stdout).toContain("Boleto 767465259");
+    expect(single.stdout).toContain("Indiana Pacers");
+    expect(single.stdout).toContain("Fuente: GSLIVE");
+  });
+
+  test("--currency-scale applies to JSON and rejects non-positive values", async () => {
+    const scaled = await run([
+      "767125863",
+      "--file",
+      FIXTURE,
+      "--json",
+      "--normalized",
+      "--currency-scale=0.01",
+    ]);
+    expect(scaled.code).toBe(0);
+    const ticket = JSON.parse(scaled.stdout) as {
+      stake: number;
+      toWin: number;
+    };
+    expect(ticket.stake).toBe(10);
+    expect(ticket.toWin).toBe(13.95);
+
+    const invalid = await run([
+      "767125863",
+      "--file",
+      FIXTURE,
+      "--currency-scale=0",
+    ]);
+    expect(invalid.code).toBe(2);
+    expect(invalid.stderr).toContain("positive");
+  });
+
   test("--help prints usage and exits 0", async () => {
     const { code, stdout } = await run(["--help"]);
     expect(code).toBe(0);
     expect(stdout).toContain("bun run ticket <wagerNumber>");
     expect(stdout).toContain("bun run ticket --list");
     expect(stdout).toContain("--normalized");
+    expect(stdout).toContain("--lang");
+    expect(stdout).toContain("--lang-coverage");
     expect(stdout).toContain("b767125863");
   });
 });

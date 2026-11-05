@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { loadCapture, parseBetTickerHtml } from "../lib/bet_ticker_html.ts";
+import {
+  htmlHeaderMap,
+  loadCapture,
+  parseBetTickerHtml,
+} from "../lib/bet_ticker_html.ts";
 import { toSafeJson } from "../lib/live_ticket_view.ts";
 
 /**
@@ -21,6 +25,19 @@ describe("HTML bet ticker", () => {
     expect(rows.length).toBeGreaterThan(90);
     expect(by["767465239"]).toBeDefined();
     expect(by["767469630"]).toBeDefined();
+  });
+
+  test("header map matches the captured <th> order", () => {
+    expect(htmlHeaderMap(HTML).map((header) => header.key)).toEqual([
+      "L-213",
+      "L-152",
+      "L-318",
+      "L-207",
+      "L-244",
+      "L-393",
+      "L-1029",
+      "L-1030",
+    ]);
   });
 
   test("columns map to the view", () => {
