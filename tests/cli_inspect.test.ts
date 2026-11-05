@@ -38,6 +38,15 @@ describe("inspectReport", () => {
     expect(text).not.toContain(ANSI);
   });
 
+  test("large arrays are bounded in operator reports", () => {
+    const text = inspectReport(
+      { rows: Array.from({ length: 1000 }, (_, index) => index) },
+      cliInspectOptions({ isTTY: false }, {}),
+    );
+    expect(text).toContain("... 900 more items");
+    expect(text.length).toBeLessThan(1_000);
+  });
+
   test("colours when the options say so", () => {
     expect(
       inspectReport(report, cliInspectOptions({ isTTY: true }, {})),
