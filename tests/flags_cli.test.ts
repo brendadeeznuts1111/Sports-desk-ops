@@ -189,7 +189,7 @@ describe("flags CLI", () => {
         definitions: Array<{
           name: string;
           evaluates?: string;
-          doesNotEvaluate?: string;
+          notApplicableTo?: string;
           value?: Record<string, unknown>;
         }>;
       };
@@ -201,12 +201,12 @@ describe("flags CLI", () => {
     );
     expect(precision).toMatchObject({
       evaluates: "rule",
-      doesNotEvaluate: "individual-flag",
+      notApplicableTo: "individual-flag",
     });
     expect(precision?.value?.["period_correlation"]).toMatchObject({
       state: "not_measured",
       blockedBy: "reviewedSampleSize",
-      sampleSize: 1,
+      n: 1,
     });
   });
 

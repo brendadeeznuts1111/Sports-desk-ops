@@ -145,7 +145,7 @@ function reviewReportText(
       state?: string;
       blockedBy?: string;
       precision?: number;
-      sampleSize?: number;
+      n?: number;
       wilson?: { low: number; high: number } | null;
     }
   >;
@@ -163,7 +163,7 @@ function reviewReportText(
         ? ""
         : ` · 95% ${value.wilson.low.toFixed(3)}–${value.wilson.high.toFixed(3)}`;
     lines.push(
-      `  ${rule.rule}: ${value.precision?.toFixed(3)} (n=${value.sampleSize}${interval})`,
+      `  ${rule.rule}: ${value.precision?.toFixed(3)} (n=${value.n}${interval})`,
     );
   }
   const agreement = metadata.definitions.find(
@@ -173,7 +173,7 @@ function reviewReportText(
     lines.push(`  reviewer agreement: not measured (${agreement.blockedBy})`);
   } else if (typeof agreement?.value === "number") {
     lines.push(
-      `  reviewer agreement: kappa ${agreement.value.toFixed(3)} (${agreement.overlapSamples} overlaps)`,
+      `  reviewer agreement: kappa ${agreement.value.toFixed(3)} (${agreement.n} overlaps)`,
     );
   }
   return lines.join("\n");

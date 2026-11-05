@@ -252,9 +252,9 @@ describe("flags metric metadata", () => {
       (definition) => definition.name === "rulePrecision",
     );
     expect(rulePrecision).toMatchObject({
-      kind: "classification-metric",
+      kind: "metric",
       evaluates: "rule",
-      doesNotEvaluate: "individual-flag",
+      notApplicableTo: "individual-flag",
     });
     const values = rulePrecision?.value as Record<string, unknown>;
     expect(values["period_correlation"]).toMatchObject({
@@ -289,10 +289,10 @@ describe("flags metric metadata", () => {
     );
     const values = rulePrecision?.value as Record<
       string,
-      { precision: number; sampleSize: number; wilson: { low: number } }
+      { precision: number; n: number; wilson: { low: number } }
     >;
     expect(values["period_correlation"]?.precision).toBeCloseTo(0.7, 6);
-    expect(values["period_correlation"]?.sampleSize).toBe(10);
+    expect(values["period_correlation"]?.n).toBe(10);
     expect(values["period_correlation"]?.wilson.low).toBeGreaterThan(0.3);
     expect(() => validateFlagsMetricMetadata(metadata)).not.toThrow();
   });
@@ -314,7 +314,7 @@ describe("flags metric metadata", () => {
     expect(values["batch_replay"]).toMatchObject({
       state: "not_measured",
       blockedBy: "reviewedSampleSize",
-      sampleSize: 5,
+      n: 5,
     });
   });
 
@@ -350,9 +350,9 @@ describe("flags metric metadata", () => {
       (definition) => definition.name === "reviewerAgreement",
     );
     expect(agreement).toMatchObject({
-      kind: "measurement-quality",
+      kind: "quality",
       method: "cohen-kappa",
-      overlapSamples: 2,
+      n: 2,
     });
     expect(typeof agreement?.value).toBe("number");
   });
@@ -391,7 +391,7 @@ describe("flags metric metadata", () => {
     expect(agreement).toMatchObject({
       state: "not_measured",
       blockedBy: "kappaUndefined",
-      overlapSamples: 2,
+      n: 2,
     });
   });
 

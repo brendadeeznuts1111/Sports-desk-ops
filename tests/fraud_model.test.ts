@@ -175,9 +175,9 @@ describe("rowPrecisionAtK", () => {
     const labels = [true, false, true, false, false];
     expect(rowPrecisionAtK(scores, labels, 2)).toEqual({
       k: 2,
-      rowsReviewed: 2,
-      proxyPositiveRows: 1,
-      positiveRows: 2,
+      kSamples: 2,
+      kPositives: 1,
+      positive: 2,
       precision: 0.5,
       recall: 0.5,
       lift: 1.25,
@@ -187,7 +187,7 @@ describe("rowPrecisionAtK", () => {
   test("caps k at the holdout size instead of inventing rows", () => {
     const row = rowPrecisionAtK([0.9, 0.8], [true, false], 10);
     expect(row.k).toBe(10);
-    expect(row.rowsReviewed).toBe(2);
+    expect(row.kSamples).toBe(2);
     expect(row.precision).toBe(0.5);
   });
 
@@ -212,23 +212,23 @@ describe("rowPrecisionAtK", () => {
       [1, 2, 10],
     );
     expect(rows.map((row) => row.k)).toEqual([1, 2, 10]);
-    expect(rows.map((row) => row.rowsReviewed)).toEqual([1, 2, 3]);
+    expect(rows.map((row) => row.kSamples)).toEqual([1, 2, 3]);
   });
 });
 
 describe("validateMetricMetadata", () => {
   const validDefinitions = [
     { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
-    { name: "pop", kind: "population", value: 24, positiveRows: 12 },
+    { name: "pop", kind: "population", rows: 24, positive: 12 },
     {
       name: "metric",
-      kind: "ranking-metric",
-      baseline: "rate",
+      kind: "metric",
+      baselineRef: "rate",
       population: "pop",
       k: 20,
       maxAchievable: 0.6,
-      topKSamples: 20,
-      topKPositives: 12,
+      kSamples: 20,
+      kPositives: 12,
       detailRef: "metrics.metric",
     },
   ];
@@ -241,7 +241,7 @@ describe("validateMetricMetadata", () => {
     expect(() =>
       validateMetricMetadata({
         definitions: [
-          { name: "metric", kind: "ranking-metric", baseline: "missing" },
+          { name: "metric", kind: "metric", baselineRef: "missing" },
         ],
       }),
     ).toThrow(/missing/);
@@ -249,8 +249,8 @@ describe("validateMetricMetadata", () => {
     expect(() =>
       validateMetricMetadata({
         definitions: [
-          { name: "rate", kind: "scope" },
-          { name: "metric", kind: "ranking-metric", baseline: "rate" },
+          { name: "rate", kind: "caveat" },
+          { name: "metric", kind: "metric", baselineRef: "rate" },
         ],
       }),
     ).toThrow(/not baseline/);
@@ -261,16 +261,16 @@ describe("validateMetricMetadata", () => {
       row.name === "metric" ? { ...row, maxAchievable: 0.5 } : row,
     );
     expect(() => validateMetricMetadata({ definitions })).toThrow(
-      /maxAchievable 0.5 != min\(k=20, positiveRows=12\)\/k = 0.6/,
+      /maxAchievable 0.5 != min\(k=20, positive=12\)\/k = 0.6/,
     );
   });
 
-  test("a baseline value must match positiveRows/rows", () => {
+  test("a baseline value must match positive/rows", () => {
     const definitions = validDefinitions.map((row) =>
       row.name === "rate" ? { ...row, value: 0.6 } : row,
     );
     expect(() => validateMetricMetadata({ definitions })).toThrow(
-      /value 0.6 != positiveRows\/rows = 0.5/,
+      /value 0.6 != positive\/rows = 0.5/,
     );
   });
 
@@ -279,11 +279,11 @@ describe("validateMetricMetadata", () => {
       validateMetricMetadata({
         definitions: [
           { name: "noPriorBetPositiveRate", kind: "baseline" },
-          { name: "pop", kind: "population", positiveRows: 12 },
+          { name: "pop", kind: "population", positive: 12 },
           {
             name: "rowPrecisionAtKNoPriorBet",
-            kind: "ranking-metric",
-            baseline: "noPriorBetHoldout",
+            kind: "metric",
+            baselineRef: "noPriorBetHoldout",
             population: "pop",
             k: 20,
             maxAchievable: 0.6,
@@ -301,8 +301,8 @@ describe("validateMetricMetadata", () => {
           { name: "alphaRateLong", kind: "baseline" },
           {
             name: "metric",
-            kind: "ranking-metric",
-            baseline: "alphaRat",
+            kind: "metric",
+            baselineRef: "alphaRat",
             population: "pop",
           },
         ],
@@ -328,26 +328,24 @@ describe("validateMetricMetadata", () => {
   test("ranking metrics must carry top-k counts and detailRef", () => {
     const definitions = [
       { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
-      { name: "pop", kind: "population", value: 24, positiveRows: 12 },
+      { name: "pop", kind: "population", rows: 24, positive: 12 },
       {
         name: "metric",
-        kind: "ranking-metric",
-        baseline: "rate",
+        kind: "metric",
+        baselineRef: "rate",
         population: "pop",
         k: 20,
         maxAchievable: 0.6,
       },
     ];
-    expect(() => validateMetricMetadata({ definitions })).toThrow(
-      /topKSamples/,
-    );
+    expect(() => validateMetricMetadata({ definitions })).toThrow(/kSamples/);
   });
 
   test("not-measured detailRef resolves to a state container without metrics", () => {
     const definitions = [
       {
         name: "metric",
-        kind: "pending-metric",
+        kind: "metric",
         state: "not_measured",
         blockedBy: "feed",
         detailRef: "validation.noPriorBet",
@@ -377,7 +375,7 @@ describe("validateMetricMetadata", () => {
     expect(() =>
       validateMetricMetadata({
         definitions: [
-          { name: "metric", kind: "pending-metric", state: "not_measured" },
+          { name: "metric", kind: "metric", state: "not_measured" },
         ],
       }),
     ).toThrow(/blockedBy/);
@@ -387,8 +385,8 @@ describe("validateMetricMetadata", () => {
     expect(() =>
       validateMetricMetadata({
         definitions: [
-          { name: "unit", kind: "unit" },
-          { name: "unit", kind: "unit" },
+          { name: "unit", kind: "parameter" },
+          { name: "unit", kind: "parameter" },
         ],
       }),
     ).toThrow(/duplicate/);
@@ -620,7 +618,7 @@ describe("fraud model fit", () => {
     if (noPriorBet !== null) {
       expect(noPriorBet.rows).toBeGreaterThan(0);
       expect(noPriorBet.rows).toBeLessThanOrEqual(metrics.rows.holdout);
-      expect(noPriorBet.positiveRows).toBeLessThanOrEqual(noPriorBet.rows);
+      expect(noPriorBet.positive).toBeLessThanOrEqual(noPriorBet.rows);
       expect(noPriorBet.metrics.rowPrecisionAtK).toHaveLength(
         FRAUD_ROW_REVIEW_SIZES.length,
       );
@@ -790,7 +788,7 @@ describe("model artifact", () => {
     const directoryEntries = await readdir(join(root, "reports", "security"));
     expect(directoryEntries).toEqual(["fraud-model.json"]);
     const onDisk = (await Bun.file(absolute).json()) as FraudModelArtifact;
-    expect(onDisk.schemaVersion).toBe(1);
+    expect(onDisk.schemaVersion).toBe(2);
     expect(onDisk.kind).toBe("fraud-model");
     expect(onDisk.features).toHaveLength(26);
 
@@ -819,20 +817,20 @@ describe("model artifact", () => {
         unit?: string;
         label?: string;
         population?: string;
-        baseline?: string;
+        baselineRef?: string;
         subsetOf?: string;
         state?: string;
-        positiveRows?: number | null;
+        positive?: number | null;
         k?: number;
         maxAchievable?: number | null;
-        topKSamples?: number | null;
-        topKPositives?: number | null;
+        kSamples?: number | null;
+        kPositives?: number | null;
         detailRef?: string;
         value?: unknown;
       }>;
     };
     expect(metadata.kind).toBe("fraud-model-metric-metadata");
-    expect(metadata.schemaVersion).toBe(1);
+    expect(metadata.schemaVersion).toBe(2);
     expect(metadata.proxy).toBe(artifact.proxy);
     for (const definition of metadata.definitions) {
       expect(typeof definition.name).toBe("string");
@@ -841,16 +839,16 @@ describe("model artifact", () => {
     }
     expect(
       metadata.definitions.find((definition) => definition.name === "unit"),
-    ).toMatchObject({ kind: "unit" });
+    ).toMatchObject({ kind: "parameter" });
     const rowMetric = metadata.definitions.find(
       (definition) => definition.name === "rowPrecisionAtK",
     );
     expect(rowMetric).toMatchObject({
-      kind: "ranking-metric",
+      kind: "metric",
       unit: "bet-row",
       label: "desk_flag",
       population: "temporalHoldout",
-      baseline: "temporalHoldoutPositiveRate",
+      baselineRef: "temporalHoldoutPositiveRate",
       k: FRAUD_HEADLINE_K,
       maxAchievable: 1,
     });
@@ -859,10 +857,8 @@ describe("model artifact", () => {
       (row) => row.k === FRAUD_HEADLINE_K,
     );
     expect(rowMetric?.value).toBeCloseTo(rowHeadline?.precision ?? -1, 6);
-    expect(rowMetric?.topKSamples).toBe(rowHeadline?.rowsReviewed ?? null);
-    expect(rowMetric?.topKPositives).toBe(
-      rowHeadline?.proxyPositiveRows ?? null,
-    );
+    expect(rowMetric?.kSamples).toBe(rowHeadline?.kSamples ?? null);
+    expect(rowMetric?.kPositives).toBe(rowHeadline?.kPositives ?? null);
     const noPriorMetric = metadata.definitions.find(
       (definition) => definition.name === "rowPrecisionAtKNoPriorBet",
     );
@@ -873,14 +869,14 @@ describe("model artifact", () => {
     if (noPriorHeadline !== undefined) {
       expect(noPriorMetric).toMatchObject({
         k: FRAUD_HEADLINE_K,
-        samples: noPriorHeadline.rowsReviewed,
-        positives: noPriorHeadline.proxyPositiveRows,
+        samples: noPriorHeadline.kSamples,
+        positives: noPriorHeadline.kPositives,
         detailRef: "validation.noPriorBet.metrics.rowPrecisionAtK",
       });
       expect(noPriorMetric?.maxAchievable).toBeCloseTo(
         Math.min(
           FRAUD_HEADLINE_K,
-          artifact.validation.noPriorBet?.positiveRows ?? 0,
+          artifact.validation.noPriorBet?.positive ?? 0,
         ) / FRAUD_HEADLINE_K,
         6,
       );
@@ -890,8 +886,9 @@ describe("model artifact", () => {
     );
     expect(holdoutRow).toMatchObject({
       kind: "population",
-      value: artifact.metrics.rows.holdout,
-      positiveRows: artifact.metrics.labelSupport.holdoutPositives,
+      rows: artifact.metrics.rows.holdout,
+      positive: artifact.metrics.labelSupport.holdoutPositives,
+      subsets: ["noPriorBet"],
     });
     const noPriorRow = metadata.definitions.find(
       (definition) => definition.name === "noPriorBet",
@@ -899,8 +896,8 @@ describe("model artifact", () => {
     expect(noPriorRow).toMatchObject({
       kind: "population",
       subsetOf: "temporalHoldout",
-      value: artifact.validation.noPriorBet?.rows ?? null,
-      positiveRows: artifact.validation.noPriorBet?.positiveRows ?? null,
+      rows: artifact.validation.noPriorBet?.rows ?? null,
+      positive: artifact.validation.noPriorBet?.positive ?? null,
     });
     const baseline = metadata.definitions.find(
       (definition) => definition.name === "temporalHoldoutPositiveRate",
@@ -920,22 +917,20 @@ describe("model artifact", () => {
       (definition) => definition.name === "labelComposition",
     );
     expect(composition).toMatchObject({
-      kind: "label-composition",
-      unit: "bet-row",
-      label: "desk_flag",
+      kind: "distribution",
       population: "temporalHoldout",
     });
     expect(composition?.value).toMatchObject({
-      suspectedBot: { count: expect.any(Number) },
-      reversedCredit: { count: expect.any(Number) },
-      manualLog: { count: expect.any(Number) },
+      suspectedBot: expect.any(Number),
+      reversedCredit: expect.any(Number),
+      manualLog: expect.any(Number),
     });
     expect(
       metadata.definitions.find(
         (definition) => definition.name === "accountPrecisionAtK",
       ),
     ).toMatchObject({
-      kind: "pending-metric",
+      kind: "metric",
       state: "not_measured",
       blockedBy: "accountDispositionFeed",
       unit: "account",
@@ -949,7 +944,6 @@ describe("model artifact", () => {
       kind: "population",
       state: "not_measured",
       blockedBy: "accountDispositionFeed",
-      value: null,
     });
     expect(
       metadata.definitions.find(

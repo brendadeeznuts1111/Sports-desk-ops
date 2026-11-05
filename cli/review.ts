@@ -9,6 +9,10 @@
  */
 import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite, sqlInt } from "../lib/sportsdesk_sqlite.ts";
+import {
+  METRIC_METADATA_KINDS,
+  isMetricMetadataKind,
+} from "../lib/metric_metadata.ts";
 import type { Anomaly, RuleName } from "./rules.ts";
 
 export const REVIEW_VERDICTS = [
@@ -465,19 +469,17 @@ export interface FlagsMetricDefinition {
   readonly unit?: string;
   readonly label?: string;
   readonly population?: string;
-  readonly baseline?: string;
+  readonly baselineRef?: string;
   readonly detailRef?: string;
   readonly evaluates?: string;
-  readonly doesNotEvaluate?: string;
+  readonly notApplicableTo?: string;
   readonly state?: string | undefined;
   readonly blockedBy?: string | undefined;
   readonly method?: string;
   readonly value?: unknown;
-  readonly denominator?: string;
-  readonly sampleSize?: number;
   readonly sampledFrom?: number;
-  readonly overlapSamples?: number;
-  readonly extrapolatedFrom?: string;
+  readonly n?: number;
+  readonly derivedFrom?: string;
   readonly reviewPolicy?: string;
   readonly description: string;
 }
@@ -494,7 +496,7 @@ interface RulePrecisionRow {
   readonly blockedBy?: string;
   readonly precision?: number;
   readonly wilson?: WilsonInterval | null;
-  readonly sampleSize: number;
+  readonly n: number;
   readonly sampledFrom: number;
   readonly confirmed: number;
 }
@@ -567,7 +569,7 @@ function reviewerPairs(
 
 /**
  * The `flags-metric-metadata` contract. `rulePrecision` is sampled precision over reviewed flags,
- * never per-flag probability; `evaluates`/`doesNotEvaluate` make that boundary machine-readable.
+ * never per-flag probability; `evaluates`/`notApplicableTo` make that boundary machine-readable.
  */
 export function buildFlagsMetricMetadata(
   plan: ReviewPlan,
@@ -597,7 +599,7 @@ export function buildFlagsMetricMetadata(
       rulePrecision[rule.rule] = {
         state: "not_measured",
         blockedBy: "noReviews",
-        sampleSize: 0,
+        n: 0,
         sampledFrom: rule.fired,
         confirmed: 0,
       };
@@ -607,7 +609,7 @@ export function buildFlagsMetricMetadata(
       rulePrecision[rule.rule] = {
         state: "not_measured",
         blockedBy: "reviewedSampleSize",
-        sampleSize: definitive.length,
+        n: definitive.length,
         sampledFrom: rule.fired,
         confirmed,
       };
@@ -616,7 +618,7 @@ export function buildFlagsMetricMetadata(
     rulePrecision[rule.rule] = {
       precision: confirmed / definitive.length,
       wilson: wilsonInterval(confirmed, definitive.length),
-      sampleSize: definitive.length,
+      n: definitive.length,
       sampledFrom: rule.fired,
       confirmed,
     };
@@ -647,18 +649,18 @@ export function buildFlagsMetricMetadata(
       ? {
           state: "not_measured" as const,
           blockedBy: "noDoubleReview",
-          overlapSamples: 0,
+          n: 0,
         }
       : kappa === null
         ? {
             state: "not_measured" as const,
             blockedBy: "kappaUndefined",
-            overlapSamples: pairs.length,
+            n: pairs.length,
           }
         : {
             value: kappa,
             method: "cohen-kappa",
-            overlapSamples: pairs.length,
+            n: pairs.length,
           };
 
   const reviewedFlags = new Set(reviews.map((review) => review.seq)).size;
@@ -669,10 +671,9 @@ export function buildFlagsMetricMetadata(
     definitions: [
       {
         name: "flagRate",
-        kind: "rate-metric",
+        kind: "metric",
         unit: "flag",
         population: "all-wagers",
-        denominator: "wager",
         value: plan.wagerCount === 0 ? null : plan.flagCount / plan.wagerCount,
         state: plan.wagerCount === 0 ? "not_measured" : undefined,
         blockedBy: plan.wagerCount === 0 ? "noWagers" : undefined,
@@ -681,7 +682,7 @@ export function buildFlagsMetricMetadata(
       },
       {
         name: "samplingRate",
-        kind: "sampling-metric",
+        kind: "parameter",
         value: plan.flagCount === 0 ? null : reviewedFlags / plan.flagCount,
         state: plan.flagCount === 0 ? "not_measured" : undefined,
         blockedBy: plan.flagCount === 0 ? "noFlags" : undefined,
@@ -690,18 +691,18 @@ export function buildFlagsMetricMetadata(
       },
       {
         name: "rulePrecision",
-        kind: "classification-metric",
+        kind: "metric",
         unit: "flag",
         label: "reviewer.verdict == confirmed",
         population: "reviewed-sample",
-        baseline: "reviewedSamplePositiveRate",
+        baselineRef: "reviewedSamplePositiveRate",
         detailRef: "reviews.rulePrecision",
         evaluates: "rule",
-        doesNotEvaluate: "individual-flag",
+        notApplicableTo: "individual-flag",
         value: rulePrecision,
-        sampleSize: definitive.length,
+        n: definitive.length,
         sampledFrom: plan.flagCount,
-        extrapolatedFrom: "reviewed-sample",
+        derivedFrom: "sampled",
         reviewPolicy: DEFAULT_REVIEW_POLICY,
         description:
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
@@ -722,7 +723,7 @@ export function buildFlagsMetricMetadata(
       },
       {
         name: "reviewerAgreement",
-        kind: "measurement-quality",
+        kind: "quality",
         ...reviewerAgreement,
         description:
           "Cohen's kappa on double-reviewed flags. Without it, rule precision cannot separate rule quality from reviewer disagreement.",
@@ -743,6 +744,13 @@ export function validateFlagsMetricMetadata(
   if (byName.size !== metadata.definitions.length) {
     throw new Error("flagsMetricMetadata: duplicate definition name");
   }
+  for (const row of metadata.definitions) {
+    if (!isMetricMetadataKind(row.kind)) {
+      throw new Error(
+        `flagsMetricMetadata: ${row.name} has unknown kind "${row.kind}"; allowed: ${METRIC_METADATA_KINDS.join(", ")}`,
+      );
+    }
+  }
   const resolve = (path: string): unknown => {
     let current = root;
     for (const key of path.split(".")) {
@@ -753,11 +761,11 @@ export function validateFlagsMetricMetadata(
   };
   for (const row of metadata.definitions) {
     if (
-      row.baseline !== undefined &&
-      byName.get(row.baseline)?.kind !== "baseline"
+      row.baselineRef !== undefined &&
+      byName.get(row.baselineRef)?.kind !== "baseline"
     ) {
       throw new Error(
-        `flagsMetricMetadata: ${row.name}.baseline -> "${row.baseline}" is not a baseline`,
+        `flagsMetricMetadata: ${row.name}.baselineRef -> "${row.baselineRef}" is not a baseline`,
       );
     }
     if (row.state === "not_measured" && (row.blockedBy ?? "").trim() === "") {
@@ -765,15 +773,20 @@ export function validateFlagsMetricMetadata(
         `flagsMetricMetadata: ${row.name} is not_measured but has no blockedBy`,
       );
     }
-    if (row.kind === "classification-metric") {
+    if (row.evaluates !== undefined) {
       if (row.evaluates !== "rule") {
         throw new Error(
-          `flagsMetricMetadata: ${row.name} classification-metric must evaluate rules, not ${row.evaluates ?? "nothing"}`,
+          `flagsMetricMetadata: ${row.name} metric must evaluate rules, not ${row.evaluates ?? "nothing"}`,
         );
       }
-      if (row.doesNotEvaluate !== "individual-flag") {
+      if (row.notApplicableTo !== "individual-flag") {
         throw new Error(
           `flagsMetricMetadata: ${row.name} must disclaim individual-flag evaluation`,
+        );
+      }
+      if (typeof row.n !== "number" || typeof row.sampledFrom !== "number") {
+        throw new Error(
+          `flagsMetricMetadata: ${row.name} metric needs n and sampledFrom`,
         );
       }
       if (row.detailRef === undefined) {

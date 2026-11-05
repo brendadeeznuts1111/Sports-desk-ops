@@ -22,6 +22,10 @@
 
 import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import {
+  METRIC_METADATA_KINDS,
+  isMetricMetadataKind,
+} from "./metric_metadata.ts";
 
 import { sha256Hex, stableJson } from "./f402_bet_ticker_delta.ts";
 import {
@@ -42,7 +46,7 @@ export type { FraudProxyLabel } from "./fraud_logs.ts";
 
 export const FRAUD_MODEL_REL_PATH = "reports/security/fraud-model.json";
 export const FRAUD_MODEL_KIND = "fraud-model" as const;
-export const FRAUD_MODEL_SCHEMA_VERSION = 1 as const;
+export const FRAUD_MODEL_SCHEMA_VERSION = 2 as const;
 
 export type FraudModelErrorCode =
   | "insufficient_corpus"
@@ -136,11 +140,11 @@ export interface FraudRowPrecisionAtK {
   /** Requested review size in bet rows. */
   readonly k: number;
   /** Bet rows actually available: `min(k, scored rows)`. */
-  readonly rowsReviewed: number;
+  readonly kSamples: number;
   /** Top-k rows whose own label is true. */
-  readonly proxyPositiveRows: number;
+  readonly kPositives: number;
   /** All rows in the scored population whose own label is true. */
-  readonly positiveRows: number;
+  readonly positive: number;
   readonly precision: number | null;
   readonly recall: number | null;
   /** Precision divided by the label prevalence in the scored rows. */
@@ -198,7 +202,7 @@ export interface FraudStability {
 /** Holdout **bet rows** whose account has no earlier bet in the corpus. */
 export interface FraudNoPriorBetValidation {
   readonly rows: number;
-  readonly positiveRows: number;
+  readonly positive: number;
   readonly metrics: FraudClassificationMetrics;
 }
 
@@ -286,7 +290,7 @@ export interface FraudModelState {
   readonly present: boolean;
   readonly path: string;
   readonly fittedAt: string | null;
-  readonly schemaVersion: 1 | null;
+  readonly schemaVersion: typeof FRAUD_MODEL_SCHEMA_VERSION | null;
   readonly corpusRows: number | null;
   readonly split: number | null;
   readonly metrics: {
@@ -791,14 +795,14 @@ export function rowPrecisionAtK(
   if (!Number.isInteger(k) || k <= 0) {
     throw new Error("rowPrecisionAtK: k must be a positive integer");
   }
-  const positiveRows = labels.filter(Boolean).length;
-  const rowsReviewed = Math.min(k, scores.length);
-  if (rowsReviewed === 0) {
+  const positive = labels.filter(Boolean).length;
+  const kSamples = Math.min(k, scores.length);
+  if (kSamples === 0) {
     return {
       k,
-      rowsReviewed: 0,
-      proxyPositiveRows: 0,
-      positiveRows,
+      kSamples: 0,
+      kPositives: 0,
+      positive,
       precision: null,
       recall: null,
       lift: null,
@@ -807,16 +811,16 @@ export function rowPrecisionAtK(
   const order = scores
     .map((score, index) => ({ score, label: labels[index] === true, index }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, rowsReviewed);
-  const proxyPositiveRows = order.filter((entry) => entry.label).length;
-  const precision = proxyPositiveRows / rowsReviewed;
-  const recall = positiveRows === 0 ? null : proxyPositiveRows / positiveRows;
-  const prevalence = positiveRows / scores.length;
+    .slice(0, kSamples);
+  const kPositives = order.filter((entry) => entry.label).length;
+  const precision = kPositives / kSamples;
+  const recall = positive === 0 ? null : kPositives / positive;
+  const prevalence = positive / scores.length;
   return {
     k,
-    rowsReviewed,
-    proxyPositiveRows,
-    positiveRows,
+    kSamples,
+    kPositives,
+    positive,
     precision,
     recall,
     lift: prevalence === 0 ? null : precision / prevalence,
@@ -1237,7 +1241,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       `insufficient corpus to fit: ${rowCount} rows, ${positives} positive rows, ${positiveAccounts.size} accounts with proxy "${options.proxy}" (need >= ${options.minRows} rows and >= ${options.minLabeledAccounts} labeled accounts)`,
       {
         rows: rowCount,
-        positiveRows: positives,
+        positive: positives,
         accountsWithProxyLabel: positiveAccounts.size,
         proxy: options.proxy,
         minRows: options.minRows,
@@ -1349,7 +1353,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       );
       noPriorBet = {
         rows: indices.length,
-        positiveRows: noPriorLabels.filter(Boolean).length,
+        positive: noPriorLabels.filter(Boolean).length,
         metrics: classificationMetrics(noPriorScores, noPriorLabels),
       };
     }
@@ -1471,7 +1475,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   ) {
     warnings.push({
       code: "no_prior_bet_precision_gap",
-      message: `no-prior-bet precision@20 is ${noPriorPrecision.toFixed(3)} vs ${holdoutPrecision.toFixed(3)} overall (n=${noPriorBet?.rows ?? 0} rows, ${noPriorBet?.positiveRows ?? 0} positive rows): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
+      message: `no-prior-bet precision@20 is ${noPriorPrecision.toFixed(3)} vs ${holdoutPrecision.toFixed(3)} overall (n=${noPriorBet?.rows ?? 0} rows, ${noPriorBet?.positive ?? 0} positive rows): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
       observed:
         Math.round((holdoutPrecision - noPriorPrecision) * 10_000) / 10_000,
     });
@@ -1660,7 +1664,7 @@ export async function readFraudModel(root: string): Promise<{
       path: FRAUD_MODEL_REL_PATH,
       fittedAt:
         typeof artifact.fittedAt === "string" ? artifact.fittedAt : null,
-      schemaVersion: 1,
+      schemaVersion: FRAUD_MODEL_SCHEMA_VERSION,
       corpusRows: artifact.corpusRows,
       split: artifact.split,
       metrics: {
@@ -1884,14 +1888,16 @@ export interface ModelReportPayloadOptions {
 export interface MetricMetadataDefinition {
   readonly name: string;
   readonly kind: string;
-  readonly baseline?: string;
+  readonly baselineRef?: string;
   readonly population?: string;
   readonly subsetOf?: string;
+  readonly subsets?: readonly string[];
+  readonly rows?: number | null;
   readonly k?: number;
   readonly maxAchievable?: number | null;
-  readonly topKSamples?: number | null;
-  readonly topKPositives?: number | null;
-  readonly positiveRows?: number | null;
+  readonly kSamples?: number | null;
+  readonly kPositives?: number | null;
+  readonly positive?: number | null;
   /** Population size (rows) or baseline rate, depending on `kind`. */
   readonly value?: unknown;
   readonly state?: string | undefined;
@@ -1983,6 +1989,11 @@ export function validateMetricMetadata(
 ): void {
   const byName = new Map<string, MetricMetadataDefinition>();
   for (const row of metadata.definitions) {
+    if (!isMetricMetadataKind(row.kind)) {
+      throw new Error(
+        `metricMetadata: ${row.name} has unknown kind "${row.kind}"; allowed: ${METRIC_METADATA_KINDS.join(", ")}`,
+      );
+    }
     if (byName.has(row.name)) {
       throw new Error(`metricMetadata: duplicate definition "${row.name}"`);
     }
@@ -2015,8 +2026,8 @@ export function validateMetricMetadata(
     }
   };
   for (const row of metadata.definitions) {
-    if (row.baseline !== undefined) {
-      requireKind(row.name, "baseline", row.baseline, "baseline");
+    if (row.baselineRef !== undefined) {
+      requireKind(row.name, "baselineRef", row.baselineRef, "baseline");
     }
     if (row.population !== undefined) {
       requireKind(row.name, "population", row.population, "population");
@@ -2024,8 +2035,18 @@ export function validateMetricMetadata(
     if (row.subsetOf !== undefined) {
       requireKind(row.name, "subsetOf", row.subsetOf, "population");
     }
+    if (row.subsets !== undefined) {
+      for (const subset of row.subsets) {
+        const target = byName.get(subset);
+        if (target?.kind !== "population" || target.subsetOf !== row.name) {
+          throw new Error(
+            `metricMetadata: ${row.name}.subsets -> "${subset}" is not a population with subsetOf "${row.name}"`,
+          );
+        }
+      }
+    }
   }
-  // A baseline value is positiveRows / rows for the population it names.
+  // A baseline value is positive / rows for the population it names.
   for (const row of metadata.definitions) {
     if (row.kind !== "baseline") continue;
     if (row.value === null) {
@@ -2045,24 +2066,25 @@ export function validateMetricMetadata(
       row.population === undefined ? undefined : byName.get(row.population);
     if (
       population === undefined ||
-      typeof population.value !== "number" ||
-      population.positiveRows === null ||
-      population.positiveRows === undefined
+      typeof population.rows !== "number" ||
+      population.positive === null ||
+      population.positive === undefined
     ) {
       throw new Error(
-        `metricMetadata: ${row.name} baseline cannot resolve rows/positiveRows from "${row.population ?? "?"}"`,
+        `metricMetadata: ${row.name} baseline cannot resolve rows/positive from "${row.population ?? "?"}"`,
       );
     }
-    const expected = population.positiveRows / population.value;
+    const expected = population.positive / population.rows;
     if (Math.abs(row.value - expected) > 1e-6) {
       throw new Error(
-        `metricMetadata: ${row.name}.value ${row.value} != positiveRows/rows = ${expected}`,
+        `metricMetadata: ${row.name}.value ${row.value} != positive/rows = ${expected}`,
       );
     }
   }
-  // A stored maxAchievable is min(k, positiveRows) / k; the top-k counts must also fit k.
+  // A stored maxAchievable is min(k, positive) / k; the top-k counts must also fit k.
   for (const row of metadata.definitions) {
-    if (row.kind !== "ranking-metric") continue;
+    if (row.kind !== "metric") continue;
+    if (row.k === undefined) continue;
     if (row.maxAchievable === null) {
       if (row.state !== "not_measured") {
         throw new Error(
@@ -2073,53 +2095,50 @@ export function validateMetricMetadata(
     }
     if (row.maxAchievable === undefined) {
       throw new Error(
-        `metricMetadata: ${row.name} (ranking-metric) has no maxAchievable`,
+        `metricMetadata: ${row.name} (metric with k) has no maxAchievable`,
       );
     }
     if (row.k === undefined || !Number.isInteger(row.k) || row.k <= 0) {
       throw new Error(
-        `metricMetadata: ${row.name} (ranking-metric) needs a positive integer k`,
+        `metricMetadata: ${row.name} (metric with k) needs a positive integer k`,
       );
     }
-    if (row.topKSamples === null || row.topKSamples === undefined) {
+    if (row.kSamples === null || row.kSamples === undefined) {
       throw new Error(
-        `metricMetadata: ${row.name} (ranking-metric) has no topKSamples`,
+        `metricMetadata: ${row.name} (metric with k) has no kSamples`,
       );
     }
-    if (row.topKPositives === null || row.topKPositives === undefined) {
+    if (row.kPositives === null || row.kPositives === undefined) {
       throw new Error(
-        `metricMetadata: ${row.name} (ranking-metric) has no topKPositives`,
+        `metricMetadata: ${row.name} (metric with k) has no kPositives`,
       );
     }
-    if (row.topKSamples > row.k) {
+    if (row.kSamples > row.k) {
       throw new Error(
-        `metricMetadata: ${row.name}.topKSamples ${row.topKSamples} > k ${row.k}`,
+        `metricMetadata: ${row.name}.kSamples ${row.kSamples} > k ${row.k}`,
       );
     }
-    if (row.topKPositives > row.topKSamples) {
+    if (row.kPositives > row.kSamples) {
       throw new Error(
-        `metricMetadata: ${row.name}.topKPositives ${row.topKPositives} > topKSamples ${row.topKSamples}`,
+        `metricMetadata: ${row.name}.kPositives ${row.kPositives} > kSamples ${row.kSamples}`,
       );
     }
     if (row.detailRef === undefined) {
       throw new Error(
-        `metricMetadata: ${row.name} (ranking-metric) has no detailRef`,
+        `metricMetadata: ${row.name} (metric with k) has no detailRef`,
       );
     }
     const population =
       row.population === undefined ? undefined : byName.get(row.population);
-    if (
-      population?.positiveRows === null ||
-      population?.positiveRows === undefined
-    ) {
+    if (population?.positive === null || population?.positive === undefined) {
       throw new Error(
-        `metricMetadata: ${row.name} stores maxAchievable but population "${row.population ?? "?"}" has no positiveRows`,
+        `metricMetadata: ${row.name} stores maxAchievable but population "${row.population ?? "?"}" has no positive`,
       );
     }
-    const expected = Math.min(row.k, population.positiveRows) / row.k;
+    const expected = Math.min(row.k, population.positive) / row.k;
     if (Math.abs(row.maxAchievable - expected) > 1e-6) {
       throw new Error(
-        `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positiveRows=${population.positiveRows})/k = ${expected}`,
+        `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positive=${population.positive})/k = ${expected}`,
       );
     }
   }
@@ -2174,11 +2193,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
   const noPriorBetRate =
     noPriorBet === null || noPriorBet.rows === 0
       ? null
-      : noPriorBet.positiveRows / noPriorBet.rows;
-  const share = (count: number): number | null =>
-    labelSupport.holdoutDeskFlagPositives === 0
-      ? null
-      : count / labelSupport.holdoutDeskFlagPositives;
+      : noPriorBet.positive / noPriorBet.rows;
   const signals = labelSupport.holdoutBySignal ?? {
     suspectedBot: 0,
     reversedCredit: 0,
@@ -2192,42 +2207,41 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
     noPriorBet?.metrics.rowPrecisionAtK.find(
       (row) => row.k === FRAUD_HEADLINE_K,
     ) ?? null;
-  const maxAchievable = (positiveRows: number | null): number | null =>
-    positiveRows === null
+  const maxAchievable = (positive: number | null): number | null =>
+    positive === null
       ? null
-      : Math.min(FRAUD_HEADLINE_K, positiveRows) / FRAUD_HEADLINE_K;
+      : Math.min(FRAUD_HEADLINE_K, positive) / FRAUD_HEADLINE_K;
   const metadata = {
     kind: "fraud-model-metric-metadata",
-    schemaVersion: 1,
+    schemaVersion: FRAUD_MODEL_SCHEMA_VERSION,
     proxy: artifact.proxy,
     definitions: [
       {
         name: "unit",
-        kind: "unit",
+        kind: "parameter",
         description:
           "One getBetReport bet row; not an account, sport, sub-sport, market, or period.",
       },
       {
         name: "label",
-        kind: "label",
+        kind: "parameter",
         description:
           "The row's desk_flag proxy (suspectedBot OR reversedCredit OR manualLog), never a confirmed fraud outcome.",
       },
       {
         name: "temporalHoldout",
         kind: "population",
-        unit: "bet-row",
-        value: rows.holdout,
-        positiveRows: labelSupport.holdoutPositives,
+        rows: rows.holdout,
+        positive: labelSupport.holdoutPositives,
+        subsets: ["noPriorBet"],
         description: "The last 30% of rows by logTime (temporal split).",
       },
       {
         name: "noPriorBet",
         kind: "population",
         subsetOf: "temporalHoldout",
-        unit: "bet-row",
-        value: noPriorBet?.rows ?? null,
-        positiveRows: noPriorBet?.positiveRows ?? null,
+        rows: noPriorBet?.rows ?? null,
+        positive: noPriorBet?.positive ?? null,
         description:
           "The same row table restricted to holdout rows whose account has no earlier bet in the corpus.",
       },
@@ -2257,11 +2271,11 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
       },
       {
         name: "rowPrecisionAtK",
-        kind: "ranking-metric",
+        kind: "metric",
         unit: "bet-row",
         label: artifact.proxy,
         population: "temporalHoldout",
-        baseline: "temporalHoldoutPositiveRate",
+        baselineRef: "temporalHoldoutPositiveRate",
         detailRef: "metrics.rowPrecisionAtK",
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(holdoutHeadline?.precision ?? null),
@@ -2269,18 +2283,18 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
           maxAchievable(labelSupport.holdoutPositives),
           6,
         ),
-        topKSamples: holdoutHeadline?.rowsReviewed ?? null,
-        topKPositives: holdoutHeadline?.proxyPositiveRows ?? null,
+        kSamples: holdoutHeadline?.kSamples ?? null,
+        kPositives: holdoutHeadline?.kPositives ?? null,
         description:
           "Headline at k=20 (full table in metrics.rowPrecisionAtK): of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
       },
       {
         name: "rowPrecisionAtKNoPriorBet",
-        kind: "ranking-metric",
+        kind: "metric",
         unit: "bet-row",
         label: artifact.proxy,
         population: "noPriorBet",
-        baseline: "noPriorBetPositiveRate",
+        baselineRef: "noPriorBetPositiveRate",
         detailRef:
           noPriorBet === null
             ? "validation.noPriorBet"
@@ -2290,50 +2304,37 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(noPriorHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
-          maxAchievable(noPriorBet?.positiveRows ?? null),
+          maxAchievable(noPriorBet?.positive ?? null),
           6,
         ),
-        topKSamples: noPriorHeadline?.rowsReviewed ?? null,
-        topKPositives: noPriorHeadline?.proxyPositiveRows ?? null,
+        kSamples: noPriorHeadline?.kSamples ?? null,
+        kPositives: noPriorHeadline?.kPositives ?? null,
         description:
-          "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positiveRows) / k, so a slice with fewer than k positives cannot reach 1.0.",
+          "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positive) / k, so a slice with fewer than k positives cannot reach 1.0.",
       },
       {
         name: "labelComposition",
-        kind: "label-composition",
-        unit: "bet-row",
-        label: "desk_flag",
+        kind: "distribution",
         population: "temporalHoldout",
         value: {
-          suspectedBot: {
-            count: signals.suspectedBot,
-            share: roundReportNullable(share(signals.suspectedBot), 6),
-          },
-          reversedCredit: {
-            count: signals.reversedCredit,
-            share: roundReportNullable(share(signals.reversedCredit), 6),
-          },
-          manualLog: {
-            count: signals.manualLog,
-            share: roundReportNullable(share(signals.manualLog), 6),
-          },
+          suspectedBot: signals.suspectedBot,
+          reversedCredit: signals.reversedCredit,
+          manualLog: signals.manualLog,
         },
         description:
-          "Which signals make up the composite desk_flag holdout positives (independent of the fitted proxy); the signals overlap, so shares can sum above 1. labelComposition describes the composite desk_flag. Metric rows measure against the fitted proxy (see metricMetadata.proxy); the two labels have different positive sets, and correlation between them is not measured here.",
+          "Counts of the composite desk_flag holdout positives by signal; the signals overlap, so counts can sum above positive. labelComposition describes the composite desk_flag. Metric rows measure against the fitted proxy (see metricMetadata.proxy); the two labels have different positive sets, and correlation between them is not measured here.",
       },
       {
         name: "accountHoldout",
         kind: "population",
         state: "not_measured",
         blockedBy: "accountDispositionFeed",
-        unit: "account",
-        value: null,
         description:
           "No account-level holdout exists yet; accountPrecisionAtK cannot be computed without one.",
       },
       {
         name: "accountPrecisionAtK",
-        kind: "pending-metric",
+        kind: "metric",
         state: "not_measured",
         blockedBy: "accountDispositionFeed",
         unit: "account",
@@ -2344,14 +2345,14 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
       },
       {
         name: "notStratifiedBy",
-        kind: "scope",
+        kind: "caveat",
         value: ["sport", "subSport", "market", "period", "agent"],
         description:
           "No per-sport, per-subSport, per-market, per-period or per-agent precision is claimed; those fields are not the unit.",
       },
       {
         name: "accountQueue",
-        kind: "scope",
+        kind: "caveat",
         value: "account",
         description:
           "fraud_queue ranks accounts; these row metrics are not account precision.",
@@ -2425,7 +2426,7 @@ export function modelReportPayload(
           ? { state: "not_measured" }
           : {
               rows: noPriorBet.rows,
-              positiveRows: noPriorBet.positiveRows,
+              positive: noPriorBet.positive,
               metrics: roundClassificationMetrics(noPriorBet.metrics),
             },
       stability: {
