@@ -183,6 +183,11 @@ describe("Bun.XML contract", () => {
     ).toEqual({ a: "3" });
   });
 
+  test("comments/PIs outside the root are not represented", () => {
+    expect(Bun.XML.parse("<!--x--><a>1</a><?pi data?>")).toEqual({ a: "1" });
+    expect(() => Bun.XML.parse("<a/><b/>")).toThrow(/Only one root/);
+  });
+
   test("stringify round-trips both shapes", () => {
     const compact = Bun.XML.parse(
       `<order id="A1"><item sku="x">Tea</item><paid/></order>`,
@@ -266,6 +271,41 @@ describe("Bun.XML contract", () => {
 
     expect(Bun.XML.stringify(undefined)).toBeUndefined();
     expect(Bun.XML.stringify(() => 1)).toBeUndefined();
+  });
+
+  test("stringify skips inherited keys and escapes CR/attribute whitespace", () => {
+    const inherited = Object.assign(
+      Object.create({ inherited: "x" }) as object,
+      {
+        name: "a",
+        children: ["t"],
+      },
+    );
+    expect(Bun.XML.stringify(inherited)).toBe("<a>t</a>");
+    expect(Bun.XML.stringify({ a: "a\rb" })).toBe("<a>a&#xD;b</a>");
+    expect(Bun.XML.stringify({ a: { "@x": "1\t2\n3\r4" } })).toBe(
+      '<a x="1&#x9;2&#xA;3&#xD;4"/>',
+    );
+  });
+
+  test("stringify rejects root arrays, nested arrays and surrogates", () => {
+    expect(() => Bun.XML.stringify([1, 2] as never)).toThrow(
+      /expects an object/,
+    );
+    expect(() =>
+      Bun.XML.stringify({ name: "a", children: [[1]] } as never),
+    ).toThrow(/cannot contain arrays/);
+    expect(() => Bun.XML.stringify({ a: "\uD800" })).toThrow(/U\+D800/);
+    expect(() => Bun.XML.stringify({ a: "\uFFFE" })).toThrow(/U\+FFFE/);
+    expect(() =>
+      Bun.XML.stringify({ name: "a", children: [{ comment: "x-" }] }),
+    ).toThrow(/comment/);
+    expect(() =>
+      Bun.XML.stringify({
+        name: "a",
+        children: [{ target: "1bad", data: "" }],
+      }),
+    ).toThrow(/processing instruction/);
   });
 
   test("stringify caps indentation at ten characters", () => {
