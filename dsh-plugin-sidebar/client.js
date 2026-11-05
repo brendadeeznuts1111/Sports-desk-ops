@@ -148,6 +148,9 @@ window.__ModuleLoader__.load({
     const RESTART_COMMAND = "PORT=4020 bun run serve";
     /** Bound the rendered schedule list; the service currently reports six. */
     const MAX_SCHEDULES = 12;
+    /** Rolling /health latency samples for the sparkline (oldest first). */
+    const LATENCY_HISTORY_MAX = 30;
+    let healthLatencyHistory = [];
 
     /**
      * Visible copy. Both built-in locales are supplied because the locale
@@ -164,6 +167,12 @@ window.__ModuleLoader__.load({
         open: "Open desk",
         retry: "Retry",
         lastMeasured: "Last measured",
+        latency: "Health latency",
+        latencySummary: "{count} probes · p50 {p50} ms · max {max} ms",
+        latencyEmpty: "No successful probes yet",
+        copyDiagnostics: "Copy diagnostics",
+        copied: "Copied",
+        copyFailed: "Copy failed",
         checking: "checking…",
         current: "current",
         stale: "stale build (uptime {uptime})",
@@ -298,6 +307,12 @@ window.__ModuleLoader__.load({
         open: "打开工作台",
         retry: "重试",
         lastMeasured: "最近测量",
+        latency: "健康检查延迟",
+        latencySummary: "{count} 次探测 · p50 {p50} ms · 最大 {max} ms",
+        latencyEmpty: "尚无成功探测",
+        copyDiagnostics: "复制诊断",
+        copied: "已复制",
+        copyFailed: "复制失败",
         checking: "检测中…",
         current: "已是最新",
         stale: "旧构建（已运行 {uptime}）",
@@ -1226,6 +1241,14 @@ window.__ModuleLoader__.load({
 
     /** @param {typeof INITIAL} next */
     function publish(next) {
+      // A down probe measured the failure, not the service; keep the strip to
+      // successful /health answers (stale/current/unknown all read /health).
+      if (next.phase !== "down" && typeof next.healthLatencyMs === "number") {
+        healthLatencyHistory = [
+          ...healthLatencyHistory,
+          next.healthLatencyMs,
+        ].slice(-LATENCY_HISTORY_MAX);
+      }
       snapshot = next;
       for (const listener of listeners) listener();
     }
@@ -1402,6 +1425,50 @@ window.__ModuleLoader__.load({
      * @param {number | null} cents
      * @returns {string | null}
      */
+    /** Last-N /health latency polyline; null until two samples exist. */
+    function latencySparkline(history) {
+      if (history.length < 2) return null;
+      const width = 160;
+      const height = 24;
+      const max = Math.max(...history, 1);
+      const points = history
+        .map((value, index) => {
+          const x = (index / (history.length - 1)) * width;
+          const y = height - 1 - (value / max) * (height - 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(" ");
+      return h(
+        "svg",
+        {
+          key: "latency-spark",
+          className: "spsd-spark",
+          viewBox: `0 0 ${width} ${height}`,
+          preserveAspectRatio: "none",
+          "aria-hidden": true,
+        },
+        h("polyline", {
+          points,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.5,
+          vectorEffect: "non-scaling-stroke",
+        }),
+      );
+    }
+
+    /** p50/max over the same samples; null when nothing succeeded yet. */
+    function latencySummary(history, t) {
+      if (history.length === 0) return null;
+      const sorted = [...history].sort((left, right) => left - right);
+      const p50 = sorted[Math.floor((sorted.length - 1) / 2)];
+      return t("latencySummary", {
+        count: history.length,
+        p50,
+        max: sorted[sorted.length - 1],
+      });
+    }
+
     function formatUsdFromCents(cents) {
       if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
       const negative = cents < 0;
@@ -2886,6 +2953,10 @@ window.__ModuleLoader__.load({
 .spsd-btn:disabled { cursor: progress; opacity: 0.6; }
 .spsd-btn-strong { border-color: var(--dsw-alias-brand-primary); background: var(--dsw-alias-bg-layer-2); font-weight: 500; }
 .spsd-lastmeasured { margin: 0 0 16px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.spsd-latency { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.spsd-latency-label { color: var(--dsw-alias-label-tertiary); }
+.spsd-latency-text { font-variant-numeric: tabular-nums; }
+.spsd-spark { width: 160px; height: 24px; margin-left: auto; color: var(--dsw-alias-state-success-primary); }
 .spsd-card { border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); padding: 20px; }
 .spsd-section { margin-top: 16px; }
 .spsd-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -3062,6 +3133,14 @@ window.__ModuleLoader__.load({
     const DeskPanel = React.memo(function DeskPanel(props) {
       const t = typeof props.t === "function" ? props.t : fallbackT;
       const state = useStatus();
+      const [copyState, setCopyState] = React.useState("idle");
+      const copyTimer = React.useRef(null);
+      React.useEffect(
+        () => () => {
+          if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+        },
+        [],
+      );
       React.useEffect(() => {
         startPolling();
       }, []);
@@ -3080,6 +3159,49 @@ window.__ModuleLoader__.load({
       );
       const retry = () => {
         void runProbe(true);
+      };
+      const copyDiagnostics = async () => {
+        const measured = {
+          generatedAt: new Date().toISOString(),
+          phase: state.phase,
+          httpStatus: state.httpStatus,
+          uptimeSeconds: state.uptimeSeconds,
+          checkedAt: state.checkedAt,
+          source: state.source,
+          healthLatencyMs: state.healthLatencyMs,
+          statusLatencyMs: state.statusLatencyMs,
+          error: state.error,
+          sources: Object.fromEntries(
+            Object.entries(state.sources).map(([id, entry]) => [
+              id,
+              {
+                status: entry.status,
+                httpStatus: entry.httpStatus,
+                latencyMs: entry.latencyMs,
+                error: entry.error ?? null,
+              },
+            ]),
+          ),
+        };
+        let next = "failed";
+        try {
+          if (
+            typeof navigator === "undefined" ||
+            !navigator.clipboard ||
+            typeof navigator.clipboard.writeText !== "function"
+          ) {
+            throw new Error("clipboard unavailable");
+          }
+          await navigator.clipboard.writeText(
+            JSON.stringify(measured, null, 2),
+          );
+          next = "copied";
+        } catch {
+          next = "failed";
+        }
+        setCopyState(next);
+        if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+        copyTimer.current = setTimeout(() => setCopyState("idle"), 2_000);
       };
       const checked =
         state.checkedAt === null
@@ -3189,6 +3311,20 @@ window.__ModuleLoader__.load({
                   t("refresh"),
                 ),
                 h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "spsd-btn",
+                    disabled: state.checkedAt === null,
+                    onClick: copyDiagnostics,
+                  },
+                  copyState === "copied"
+                    ? t("copied")
+                    : copyState === "failed"
+                      ? t("copyFailed")
+                      : t("copyDiagnostics"),
+                ),
+                h(
                   "a",
                   {
                     className: "spsd-btn spsd-btn-strong",
@@ -3248,6 +3384,17 @@ window.__ModuleLoader__.load({
                 metaRow(t("source"), source),
               ),
               rawLinks(t, state),
+              h(
+                "div",
+                { className: "spsd-latency", key: "latency" },
+                h("span", { className: "spsd-latency-label" }, t("latency")),
+                h(
+                  "span",
+                  { className: "spsd-latency-text" },
+                  latencySummary(healthLatencyHistory, t) ?? t("latencyEmpty"),
+                ),
+                latencySparkline(healthLatencyHistory),
+              ),
             ),
             recovery,
             attention,

@@ -73,6 +73,8 @@ window.__ModuleLoader__.load({
         down: "service down",
         unknown: "status probe failed",
         detail: "Local webview service at {url} · checked {checked}",
+        staleHint: "restart with PORT=4020 bun run serve",
+        downHint: "start with bun run serve",
       },
       zh: {
         brand: "SportsDesk",
@@ -83,6 +85,8 @@ window.__ModuleLoader__.load({
         down: "服务未运行",
         unknown: "状态探测失败",
         detail: "本地 webview 服务 {url} · 检查于 {checked}",
+        staleHint: "使用 PORT=4020 bun run serve 重启",
+        downHint: "使用 bun run serve 启动",
       },
     };
 
@@ -274,10 +278,17 @@ window.__ModuleLoader__.load({
         state.checkedAt === null
           ? "—"
           : new Date(state.checkedAt).toLocaleTimeString();
+      const hint =
+        state.phase === "stale"
+          ? t("staleHint")
+          : state.phase === "down"
+            ? t("downHint")
+            : null;
       const title = [
         t("detail", { url: HEALTH_URL, checked }),
         state.httpStatus === null ? null : `HTTP ${state.httpStatus}`,
         state.error,
+        hint,
       ]
         .filter(Boolean)
         .join(" · ");

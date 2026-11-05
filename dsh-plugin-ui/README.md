@@ -24,6 +24,10 @@ Data source: `http://127.0.0.1:4020/health` and
 each request bounded by `AbortSignal.timeout(3000)`. The tooltip carries the
 probe URL, the last check time, the HTTP status and the error, if any.
 
+The tooltip adds the HTTP status, the probe error when there is one, and, for a
+stale or down service, the exact recovery command (`PORT=4020 bun run serve` to
+restart, `bun run serve` to start).
+
 The `/api/status` probe and the `ingress` field check exist because the running
 service can answer `/health` while predating the checkout. Measured on
 2026-11-02: `uptimeSeconds` 457596 (~5.3 days), `/api/status` 404, `/health`

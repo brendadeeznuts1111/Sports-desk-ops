@@ -66,7 +66,12 @@ field):
 The status card carries the endpoint, the HTTP status, uptime, the absolute and
 relative check time, the probe source (**Harness proxy** or **direct loopback**)
 with the `/health` latency, and links to the raw `/health` and `/api/status`
-documents. The Service card renders only fields the service actually returned:
+documents. A rolling **health-latency strip** keeps the last 30 successful
+`/health` probes and renders their p50/max plus a sparkline (failed probes are
+excluded, and before the first success it says "No successful probes yet"). The
+header's **Copy diagnostics** action copies the measured snapshot (phase,
+latencies, per-source status/HTTP/error) to the clipboard for a bug report and
+reports `Copied` / `Copy failed` in place. The Service card renders only fields the service actually returned:
 runtime, PID, RSS memory, `nodeEnv`; Telegram mode (with `modeReason` as a
 tooltip) and the `checks` entries; both probe latencies; and the scheduled
 reports with their enabled count.

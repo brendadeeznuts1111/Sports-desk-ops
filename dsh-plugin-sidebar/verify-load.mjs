@@ -1404,6 +1404,24 @@ await checkAsync("an /api/status 5xx is unknown, never current", async () => {
   harness.dispose();
 });
 
+check("the desk exposes latency history and a diagnostics copy", () => {
+  const harness = bootClient(async (url) =>
+    proxiedResponse(url, fixtureFor(url)),
+  );
+  const tree = harness.render("main");
+  const text = JSON.stringify(tree);
+  assert(text.includes("spsd-latency"), "no latency strip");
+  assert(
+    text.includes("No successful probes yet"),
+    "the empty latency strip is not honest",
+  );
+  const source = read("client.js");
+  assert(source.includes("navigator.clipboard"), "no clipboard copy path");
+  assert(source.includes("polyline"), "no latency sparkline");
+  assert(source.includes("copyDiagnostics"), "no diagnostics copy action");
+  harness.dispose();
+});
+
 check("page chrome uses theme tokens, not literal colors", () => {
   const harness = bootClient(async (url) =>
     proxiedResponse(url, fixtureFor(url)),

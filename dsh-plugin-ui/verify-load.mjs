@@ -212,6 +212,11 @@ check("client: poll effect owns its timer", () => {
   assert(client.includes("disposed = true"), "no disposed guard");
 });
 
+check("client: stale and down tooltips carry restart guidance", () => {
+  assert(client.includes('t("staleHint")'), "stale hint is not used");
+  assert(client.includes('t("downHint")'), "down hint is not used");
+});
+
 check("client: fetches only the desk's two routes", () => {
   const urls = [...client.matchAll(/https?:\/\/[^\s"'`]+/g)].map((match) =>
     match[0].replace(/[.,;:)]+$/, ""),
