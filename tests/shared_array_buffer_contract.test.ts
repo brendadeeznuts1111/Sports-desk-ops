@@ -11,6 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deserialize, serialize } from "bun:jsc";
 
+import {
+  carryForwardJsonlBuffer,
+  skipPoisonJsonlLine,
+} from "../lib/jsonl_stream_replay.ts";
+
 describe("SharedArrayBuffer contract", () => {
   test("growable buffers expose growable, maxByteLength, grow and the tag", () => {
     const sab = new SharedArrayBuffer(16, { maxByteLength: 32 });
@@ -106,5 +111,52 @@ describe("ArrayBuffer Uint8Array views", () => {
     const copy = uint8.slice(0, 4);
     copy[1] = 88;
     expect(uint8[1]).toBe(2);
+  });
+
+  test("subarray indices are relative to byteOffset", () => {
+    const buffer = new ArrayBuffer(8);
+    new Uint8Array(buffer).set([0, 1, 2, 3, 4, 5, 6, 7]);
+    const window = new Uint8Array(buffer, 2, 4);
+    expect([...window]).toEqual([2, 3, 4, 5]);
+    expect(window.byteOffset).toBe(2);
+    expect(window.buffer).toBe(buffer);
+
+    const tail = window.subarray(1, 3);
+    expect([...tail]).toEqual([3, 4]);
+    tail[0] = 99;
+    expect(new Uint8Array(buffer)[3]).toBe(99);
+  });
+
+  test("carryForwardJsonlBuffer drops consumed bytes without copying the buffer object", () => {
+    const text = '{"a":1}\n{"b":';
+    const bytes = new TextEncoder().encode(text);
+    const first = Bun.JSONL.parseChunk(bytes);
+    expect(first.values).toEqual([{ a: 1 }]);
+    expect(first.read).toBeGreaterThan(0);
+
+    const rest = carryForwardJsonlBuffer(bytes, first);
+    expect(rest.buffer).toBe(bytes.buffer);
+    expect(rest.byteOffset).toBe(bytes.byteOffset + first.read);
+    const second = Bun.JSONL.parseChunk(rest);
+    expect(second.values).toEqual([]);
+    expect(new TextDecoder().decode(rest)).toContain('"b"');
+  });
+
+  test("skipPoisonJsonlLine advances with subarray past a bad line", () => {
+    const poison = new TextEncoder().encode('not-json\n{"ok":1}\n');
+    const after = skipPoisonJsonlLine(poison);
+    const parsed = Bun.JSONL.parseChunk(after);
+    expect(parsed.values).toEqual([{ ok: 1 }]);
+  });
+
+  test("allocUnsafe prefix slice exposes only the filled span", () => {
+    const slab = Bun.allocUnsafe(16);
+    slab.set([10, 11, 12, 13], 0);
+    const exposed = slab.subarray(0, 4);
+    expect([...exposed]).toEqual([10, 11, 12, 13]);
+    exposed[0] = 1;
+    expect(slab[0]).toBe(1);
+    // Tail bytes are not part of `exposed`; production code must not read slab[4..] without writing.
+    expect(exposed.buffer).toBe(slab.buffer);
   });
 });

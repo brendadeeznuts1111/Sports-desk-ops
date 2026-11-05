@@ -386,27 +386,104 @@ observed; keep the types (a stream source may change) but the "may sit on a Shar
 comment is not reproducible on this binary. `Bun.JSONL.parse` over a SAB-backed view, `Bun.write(
 path, sabView)` and `Bun.file(sabPathBytes)` all work.
 
-**`ArrayBuffer` views: `subarray` vs `slice`, measured 1.4.4 (2026-11-05).** A normal
-`new ArrayBuffer(n)` starts zeroed; a `Uint8Array` view writes in place. `subarray(start, end)` is
-another view on the **same** buffer (no copy) — mutating the subview updates the parent. `slice(start,
-end)` allocates a **new** `ArrayBuffer` and copies that range — mutating the slice does not change
-the parent. JSONL resume uses byte offsets with `subarray` for that reason (see
-[`bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)). Slab
-allocators in this repo (`Bun.allocUnsafe`, tally SoA columns in
-[`lib/gslive_tally_rollup.ts`](../lib/gslive_tally_rollup.ts)) also slice windows with
-`subarray`, but **`allocUnsafe` does not zero** — only indices the code initializes are safe to read.
-Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts).
+## TypedArray views, slabs, and zero-copy windows (measured 1.4.4, 2026-11-05)
+
+A **`ArrayBuffer`** is raw bytes. A **`Uint8Array`** (or any TypedArray) is a **view**: a triple of
+`(buffer, byteOffset, byteLength)` into that store. Several views can overlap the same bytes; they
+are not copies unless you explicitly copy.
+
+```text
+ArrayBuffer  [ 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 ]
+Uint8Array   ^---------------- byteLength=8, byteOffset=0
+Uint8Array(,,4) at offset 2     ^-- bytes 2..5 only
+subarray(0,4) on full view      ^-- bytes 0..3 (same backing as parent)
+```
+
+### Zero initialization vs `Bun.allocUnsafe`
+
+| Source               | Unwritten bytes                   | Typical use                                                                                     |
+| -------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `new ArrayBuffer(n)` | **0**                             | Trust “empty tail is zero”                                                                      |
+| `new Uint8Array(n)`  | **0** (new buffer under the hood) | Same                                                                                            |
+| `Bun.allocUnsafe(n)` | **Undefined** (prior RAM)         | Hot slabs when every **read** index is written first or the consumer only sees `subarray(0, k)` |
+
+The tally SoA path ([`lib/gslive_tally_rollup.ts`](../lib/gslive_tally_rollup.ts)) and ticker read
+([`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts)) rely on the last row of that
+table. Full audit rules live under
+[When to use `Bun.allocUnsafe`](#when-to-use-bunallocunsafe-and-when-not--2026-11-04-audit) below.
+
+### `subarray` vs `slice` (TypedArray)
+
+| API                          | Allocates               | Same `ArrayBuffer`?       | Index base                                        |
+| ---------------------------- | ----------------------- | ------------------------- | ------------------------------------------------- |
+| `view.subarray(start, end?)` | No                      | Yes — shared mutation     | **Relative to this view** (respects `byteOffset`) |
+| `view.slice(start, end?)`    | Yes — new buffer        | No                        | Relative to this view                             |
+| `buffer.slice(start, end?)`  | Yes — new `ArrayBuffer` | N/A (on buffer, not view) | Absolute byte indices in the buffer               |
 
 ```ts
 const buffer = new ArrayBuffer(8);
 const uint8 = new Uint8Array(buffer);
-uint8.set([1, 2, 3]); // [1,2,3,0,0,0,0,0]
+uint8.set([1, 2, 3, 0, 0, 0, 0, 0]);
 
 const sub = uint8.subarray(0, 4); // [1,2,3,0], shared backing
 sub[0] = 99; // uint8[0] becomes 99
 
-const copy = uint8.slice(0, 4); // independent copy
+const copy = uint8.slice(0, 4); // new ArrayBuffer; uint8[1] stays 2 if copy[1]=88
+
+const window = new Uint8Array(buffer, 2, 4); // bytes [2..5] → [3,0,0,0]
+const tail = window.subarray(1); // still into `buffer`, starts at byte 3
 ```
+
+**Do not confuse** `SharedArrayBuffer.slice` (copy of a region) with `Uint8Array.subarray` (alias).
+The SAB section above documents buffer-level `slice`; stream and JSONL code almost always mean
+**view `subarray`**.
+
+### JSONL: byte `read` and carry-forward (no memcpy)
+
+`Bun.JSONL.parseChunk(buf)` returns `read`: bytes consumed from **`buf`’s index 0**, not from the
+underlying buffer origin when `buf.byteOffset > 0`. The published docs say to resume with
+`TypedArray.subarray()` — https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+
+This repo centralizes that in [`lib/jsonl_stream_replay.ts`](../lib/jsonl_stream_replay.ts):
+
+```ts
+export function carryForwardJsonlBuffer(buffer, result) {
+  if (result.read <= 0) return buffer;
+  return buffer.subarray(result.read); // drop parsed prefix, keep one live allocation
+}
+```
+
+Partial-line streaming keeps one growing buffer (via `Bun.concatArrayBuffers` when appending
+chunks), parses complete records, then **`subarray(result.read)`** so the next `parseChunk` sees
+the remainder at index 0. Using `String.slice` or copying to a new `Uint8Array` on every chunk
+would work but adds allocations; the runbook’s “zero-copy byte slices” note refers to this pattern
+([`bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)).
+
+Weblog ingestion uses the same idea on a sliding pending buffer:
+[`lib/f402_weblog.ts`](../lib/f402_weblog.ts) (`pending.subarray(cut)` after a consumed window).
+
+### SoA slabs and “logical length”
+
+Structure-of-arrays rollup storage keeps **fixed-capacity** typed columns (`Uint32Array`,
+`BigInt64Array`, `Bun.allocUnsafe` byte labels, …). Logical row count (`groupCount`, `cellCount`)
+is always **≤ capacity**; only indices `< count` are read. There is no `array.length = n` shrink —
+capacity is the arena size. **`subarray(0, count)`** is the pattern when an API needs a dense
+prefix (file read, hash, decode); the tally path instead indexes `0..count-1` in place and never
+passes the unfilled tail to consumers.
+
+### Footguns (read before `allocUnsafe` or `subarray`)
+
+1. **Expose only the written prefix** — `Bun.write(path, buf)` or `Bun.hash(buf)` uses **full
+   `buf.length`**, not “bytes read”. Pair reads with `buf.subarray(0, bytesRead)` (see
+   `scripts/live_positions_cron.ts` in the allocUnsafe table).
+2. **`[...view]` and `Array.from(view)` copy** — fine for tests; avoid on megabyte slabs in hot
+   loops.
+3. **Assuming tail is zero** — safe after `new ArrayBuffer` / `new Uint8Array`; **false** after
+   `Bun.allocUnsafe` unless you zero or slice.
+4. **Detached buffers** — `ArrayBuffer.transfer` / resizing can invalidate views; this repo’s paths
+   use fixed-size arenas and concat, not transfer, on these hot paths.
+
+Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts).
 
 ## Bun docs MCP (live server; repo-native client)
 
