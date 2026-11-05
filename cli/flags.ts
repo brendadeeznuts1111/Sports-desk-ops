@@ -7,7 +7,7 @@
  *   bun run cli/flags.ts --rules
  *   bun run cli/flags.ts --file=captures/today.json --strict
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { loadCapture, type HtmlBetTicket } from "./html.ts";
@@ -222,17 +222,31 @@ async function loadFile(path: string): Promise<RuleTicket[]> {
 }
 
 async function loadDir(path: string): Promise<RuleTicket[]> {
-  let entries;
   try {
-    entries = readdirSync(path, { withFileTypes: true });
+    if (!statSync(path).isDirectory()) {
+      fail(`${path} is not a directory; pass --dir=<dir>`);
+    }
   } catch {
     fail(`${path} is not a readable directory; pass --dir=<dir>`);
   }
+
   const tickets: RuleTicket[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (!/\.(json|jsonl|html)$/i.test(entry.name)) continue;
-    tickets.push(...(await loadFile(join(path, entry.name))));
+  const entries: string[] = [];
+  try {
+    for await (const entry of new Bun.Glob("*").scan({
+      cwd: path,
+      onlyFiles: true,
+    })) {
+      // The pattern stays a single `*` so `.JSON` keeps matching, as readdirSync did.
+      if (!/\.(json|jsonl|html)$/i.test(entry)) continue;
+      entries.push(entry);
+    }
+  } catch {
+    fail(`${path} is not a readable directory; pass --dir=<dir>`);
+  }
+
+  for (const entry of entries.sort()) {
+    tickets.push(...(await loadFile(join(path, entry))));
   }
   return tickets;
 }

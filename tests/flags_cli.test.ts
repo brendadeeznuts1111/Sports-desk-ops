@@ -110,4 +110,79 @@ describe("flags CLI", () => {
     expect(one.code).toBe(0);
     expect(one.stdout).toBe("");
   });
+
+  test("--dir globs captures and --week keeps the last seven days", async () => {
+    const dir = mkdtempSync(join(TMP, "dir-"));
+    const write = (
+      name: string,
+      base: number,
+      date: string,
+      customer: string,
+      event: string,
+    ): void => {
+      const periods = [
+        "1st Quarter",
+        "2nd Quarter",
+        "3rd Quarter",
+        "4th Quarter",
+      ];
+      const rows = periods.map((period, index) => ({
+        WagerNumber: base + index,
+        AgentID: "DIRAGENT",
+        AgentLogin: "DIRAGENT",
+        CustomerID: customer,
+        Login: customer,
+        WagerType: "S",
+        AmountWagered: 100,
+        ToWinAmount: 90,
+        VolumeAmount: 100,
+        TicketWriter: "Internet",
+        InsertDateTime: `${date} 21:${15 + index}:00.000`,
+        ShortDesc: `S.G999999001\r\nBasketball - ${event} / ${period} / Total / Over 55 -110&#x0D;\n`,
+        VIP: "0",
+      }));
+      writeFileSync(
+        join(dir, name),
+        JSON.stringify({
+          status: 1,
+          accountInfo: { Language: "ENGLISH" },
+          LIST: rows,
+        }),
+      );
+    };
+    write(
+      "capture-2020.json",
+      810000001,
+      "2020-01-01",
+      "OLDCUST",
+      "Lakers vs Kings",
+    );
+    write(
+      "capture-2026.json",
+      820000001,
+      "2026-11-04",
+      "NEWCUST",
+      "Celtics vs Heat",
+    );
+    // Not a capture: scanning every file and parsing it would fail here.
+    writeFileSync(join(dir, "notes.txt"), "not a capture");
+
+    const all = await run(["--dir", dir, "--json"]);
+    expect(all.code).toBe(0);
+    const allPayload = JSON.parse(all.stdout) as {
+      wagerCount: number;
+      items: unknown[];
+    };
+    expect(allPayload.wagerCount).toBe(8);
+    expect(allPayload.items).toHaveLength(2);
+
+    const week = await run(["--dir", dir, "--week", "--json"]);
+    expect(week.code).toBe(0);
+    const weekPayload = JSON.parse(week.stdout) as {
+      wagerCount: number;
+      items: unknown[];
+    };
+    expect(weekPayload.wagerCount).toBe(4);
+    expect(weekPayload.items).toHaveLength(1);
+  });
 });
