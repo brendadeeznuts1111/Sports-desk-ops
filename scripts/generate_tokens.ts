@@ -24,6 +24,7 @@ import {
 } from "../lib/gen_tokens/emission_targets.ts";
 import { DOMAIN_BRANDED_TYPES_PATH } from "../lib/gen_tokens/domain_branded_section.ts";
 import { DOMAIN_BRANDED_PREAMBLE } from "../lib/gen_tokens/domain_branded_preamble.ts";
+import { DOMAIN_BRANDED_TRANSPORT } from "../lib/gen_tokens/domain_branded_transport.ts";
 import { renderDomainBrandedSection7 } from "../lib/gen_tokens/domain_branded_section7.ts";
 import {
   parseTokensToml,
@@ -102,7 +103,7 @@ console.log(` - UI       : ${ui.length}`);
 // ============================================================================
 const domainBrandedTypesPath = resolve(rootDir, DOMAIN_BRANDED_TYPES_PATH);
 const generatedSection7 = renderDomainBrandedSection7(ssot);
-const newDomainBrandedText = `${DOMAIN_BRANDED_PREAMBLE}\n\n${generatedSection7}`;
+const newDomainBrandedText = `${DOMAIN_BRANDED_PREAMBLE}\n\n${DOMAIN_BRANDED_TRANSPORT}\n\n${generatedSection7}`;
 emitRepoFile(
   DOMAIN_BRANDED_TYPES_PATH,
   domainBrandedTypesPath,

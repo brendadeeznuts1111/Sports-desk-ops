@@ -21,35 +21,40 @@
 // 1. BRANDED UNIT TYPES, BIT-PACKED HANDLES & EXPLICIT SENTINELS
 // ============================================================================
 
-export type Cents = number & { readonly __brand: "Cents" };
-export type SettledCents = number & { readonly __brand: "SettledCents" };
-export type LifetimeCents = number & { readonly __brand: "LifetimeCents" };
-export type BasisPoints = number & { readonly __brand: "BasisPoints" };
-export type LineHundredths = number & { readonly __brand: "LineHundredths" };
-export type EpochDays = number & { readonly __brand: "EpochDays" };
-export type DurationMilliseconds = number & {
-  readonly __brand: "DurationMilliseconds";
-};
-export type RotationNumber = number & { readonly __brand: "RotationNumber" };
+import type {
+  BasisPoints,
+  BitSet32,
+  BridgeChannelPackedWord32,
+  Cents,
+  ComboPackedKey15,
+  CustomerPackedHandle32,
+  CustomerPackedHandle64,
+  CustomerPackedKey64,
+  DurationMilliseconds,
+  EpochDays,
+  LifetimeCents,
+  LineHundredths,
+  RotationNumber,
+  SettledCents,
+  TransportBridgeBitMask32,
+} from "../design/domain-branded-types.ts";
 
-export type BitSet32 = number & { readonly __brand: "BitSet32" };
-export type TransportBridgeBitMask32 = number & {
-  readonly __brand: "TransportBridgeBitMask32";
-};
-export type BridgeChannelPackedWord32 = number & {
-  readonly __brand: "BridgeChannelPackedWord32";
-};
-export type CustomerPackedHandle32 = number & {
-  readonly __brand: "CustomerPackedHandle32";
-};
-export type CustomerPackedHandle64 = bigint & {
-  readonly __brand: "CustomerPackedHandle64";
-};
-export type CustomerPackedKey64 = bigint & {
-  readonly __brand: "CustomerPackedKey64";
-};
-export type ComboPackedKey15 = number & {
-  readonly __brand: "ComboPackedKey15";
+export type {
+  BasisPoints,
+  BitSet32,
+  BridgeChannelPackedWord32,
+  Cents,
+  ComboPackedKey15,
+  CustomerPackedHandle32,
+  CustomerPackedHandle64,
+  CustomerPackedKey64,
+  DurationMilliseconds,
+  EpochDays,
+  LifetimeCents,
+  LineHundredths,
+  RotationNumber,
+  SettledCents,
+  TransportBridgeBitMask32,
 };
 
 export const NULL_CLV_SENTINEL = -2147483648 as LineHundredths;

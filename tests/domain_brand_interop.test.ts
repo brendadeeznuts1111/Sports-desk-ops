@@ -1,13 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import {
+  asBitSet32,
+  asBridgeChannelPackedWord32,
+  asComboPackedKey15,
+  asCustomerPackedHandle32,
+  asCustomerPackedHandle64,
+  asCustomerPackedKey64,
+  asDurationMilliseconds,
+  asEpochDays,
+  asLifetimeCents,
+  asLineHundredths,
+  asSettledCents,
+  asTransportBridgeBitMask32,
   assertCents as assertDesignCents,
   isCents as isDesignCents,
   isPaddedCustomerId,
   padCustomerIdCanonical,
   parseAsCents as designCents,
+  rotationNumber,
   type Cents as DesignCents,
   type PaddedCustomerId,
+  type RotationNumber as DesignRotation,
 } from "../design/domain-branded-types.ts";
+import {
+  asCents as bridgeCents,
+  type Cents as BridgeCents,
+  type RotationNumber as BridgeRotation,
+} from "../lib/bridge_and_channel_router.ts";
 import {
   createPaddedCustomerId,
   parseAsCents as serviceCents,
@@ -42,6 +61,35 @@ describe("brand engine is shared across modules", () => {
     expect(isDesignCents(asService)).toBe(true);
     expect(isDesignCents(serviceCents(99))).toBe(true);
     assertDesignCents(asPass);
+  });
+
+  test("the bridge router shares the design brands", () => {
+    const fromDesign: DesignCents = designCents(1234);
+    const asBridge: BridgeCents = fromDesign;
+    const back: DesignCents = asBridge;
+    expect(Number(back)).toBe(1234);
+
+    const rotation: DesignRotation = rotationNumber(100);
+    const bridgeRotation: BridgeRotation = rotation;
+    const backRotation: DesignRotation = bridgeRotation;
+    expect(Number(backRotation)).toBe(100);
+
+    expect(isDesignCents(bridgeCents(99))).toBe(true);
+  });
+
+  test("transport/binary constructors truncate and mask", () => {
+    expect(Number(asSettledCents(12.9))).toBe(12);
+    expect(Number(asLifetimeCents(-3.2))).toBe(-3);
+    expect(Number(asLineHundredths(-4.2))).toBe(-4);
+    expect(Number(asEpochDays(2.9))).toBe(2);
+    expect(Number(asDurationMilliseconds(9.9))).toBe(9);
+    expect(Number(asBitSet32(-1))).toBe(0xffffffff);
+    expect(Number(asTransportBridgeBitMask32(-2))).toBe(0xfffffffe);
+    expect(Number(asBridgeChannelPackedWord32(-1))).toBe(0xffffffff);
+    expect(Number(asCustomerPackedHandle32(-1))).toBe(0xffffffff);
+    expect(Number(asComboPackedKey15(0xffff))).toBe(0x7fff);
+    expect(BigInt(asCustomerPackedHandle64(-1n))).toBe(0xffffffffffffffffn);
+    expect(BigInt(asCustomerPackedKey64(0x1_0000_0000_0000_0001n))).toBe(1n);
   });
 
   test("the brand still rejects an unbranded primitive", () => {
