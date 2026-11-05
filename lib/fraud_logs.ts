@@ -137,6 +137,11 @@ export interface BetRecord {
 
 /** Internal normalized row: the frozen {@link BetRecord} plus fields only detectors/model use. */
 export interface FraudBetRecord extends BetRecord {
+  /**
+   * GSLive `partnerUserID` — the F402 login. `userId` is the GSLive numeric player id, which is
+   * not the F402 namespace key. Optional because older synthetic fixtures may omit it.
+   */
+  readonly partnerUserId?: string | null;
   /** IP classification from `lib/f402_weblog.ts` (`BOT_RING_140_248`, `ICLOUD_RELAY`, ...). */
   readonly ipClass: string;
   readonly botRingRange: boolean;
@@ -1517,6 +1522,7 @@ function normalizeBetRow(
   return {
     betId,
     userId,
+    partnerUserId: nonEmptyText(row["partnerUserID"]),
     agentId,
     placedAtMs,
     acceptedAtMs,

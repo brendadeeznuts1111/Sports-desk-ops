@@ -57,6 +57,15 @@ export interface FraudQueueRuleHit {
   readonly n: number;
 }
 
+/**
+ * Whether rule evidence could be checked for this account.
+ * - bridged: the account resolved to the F402 namespace; an evidence lookup was performed.
+ * - unmatched: the identity join failed; `hasRuleHit: false` does not mean "no hit".
+ * - not_applied: no rule reached the readiness gate; rule evidence is not applicable.
+ */
+export type FraudQueueRuleEvidenceStatus =
+  "bridged" | "unmatched" | "not_applied";
+
 /** Applied-rule evidence for one account. Unreviewed hits and reviewer-confirmed hits stay separate. */
 export interface FraudQueueRuleEvidence {
   readonly hasRuleHit: boolean;
@@ -76,6 +85,8 @@ export interface FraudQueueRow {
   readonly hasConfirmedRuleHit: boolean;
   readonly ruleHits: readonly FraudQueueRuleHit[];
   readonly confirmedRuleHits: readonly FraudQueueRuleHit[];
+  /** Distinguishes "no hit" from "could not check"; see the type comment. */
+  readonly ruleEvidenceStatus: FraudQueueRuleEvidenceStatus;
   readonly findings: Readonly<Record<FraudFindingSeverity, number>> & {
     readonly total: number;
   };
@@ -347,6 +358,12 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
     if (total === 0 && flagRows === 0) continue;
     const model = input.scoreOf?.(aggregate.account) ?? null;
     const ruleEvidence = input.ruleEvidenceOf?.(aggregate.account) ?? null;
+    const ruleEvidenceStatus: FraudQueueRuleEvidenceStatus =
+      input.ruleEvidenceOf === undefined
+        ? "not_applied"
+        : ruleEvidence === null
+          ? "unmatched"
+          : "bridged";
     // Confirmed evidence is a subset of a hit; normalize so a direct caller cannot promote an
     // account on confirmed evidence with no hit.
     const hasRuleHit =
@@ -362,6 +379,7 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
       hasConfirmedRuleHit: ruleEvidence?.hasConfirmedRuleHit === true,
       ruleHits: ruleEvidence?.ruleHits ?? [],
       confirmedRuleHits: ruleEvidence?.confirmedRuleHits ?? [],
+      ruleEvidenceStatus,
       findings: findingsBlock,
       categories: [...(counted?.categories ?? [])].sort(),
       flags,
@@ -431,6 +449,9 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
       "Rule evidence is a tie-break after the model score and never adds points; only rules " +
         "the readiness gate applied after >= 5 confirmed reviews can contribute. An account with " +
         "a 95 without a rule hit still ranks ahead of an 82.5 with one.",
+      "ruleEvidenceStatus separates 'no hit' from 'could not check': bridged means the account " +
+        "resolved to the F402 namespace and the evidence lookup ran; unmatched means the identity " +
+        "join failed; not_applied means no rule reached the gate.",
     ],
     model: input.model ?? { present: false, reason: null },
     totals: {

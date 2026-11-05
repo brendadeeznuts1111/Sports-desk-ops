@@ -154,6 +154,7 @@ describe("parseFraudCorpus (fixture)", () => {
     if (first === undefined) throw new Error("fixture corpus is empty");
     expect(first.betId).toBe("900001");
     expect(first.userId).toBe("U001");
+    expect(first.partnerUserId).toBe("PR000001");
     expect(first.agentId).toBe("AG1");
     expect(first.delaySec).toBe(5);
     expect(first.acceptSec).toBe(1);

@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { openReviewDb, recordFlagReview } from "../cli/review.ts";
+import {
+  DEFAULT_SAMPLING_BUDGET,
+  openReviewDb,
+  planReviews,
+  recordFlagReview,
+  recordReviewPlan,
+} from "../cli/review.ts";
+import { customerRefOf, type Anomaly } from "../cli/rules.ts";
 import { loadFraudPerception } from "../lib/fraud_logs.ts";
 import type {
   FraudBetRecord,
@@ -203,6 +211,7 @@ interface TiedBatch {
     readonly hasConfirmedRuleHit: boolean;
     readonly ruleHits: readonly { rule: string; n: number }[];
     readonly confirmedRuleHits: readonly { rule: string; n: number }[];
+    readonly ruleEvidenceStatus: string;
   }[];
   readonly ruleApplication: {
     readonly state: string;
@@ -217,10 +226,10 @@ function tiedBatch(
   scoreOf: (account: string) => { score: number; band: string },
 ): TiedBatch {
   const readiness = readyWith("period_correlation", ruleApplied ? 5 : 4);
-  // The CLI only builds evidence for rules the gate applied; mirror that here.
-  const active = ruleApplied
-    ? evidence
-    : new Map<string, FraudQueueRuleEvidence>();
+  // The CLI only passes an evidence lookup when the gate applied a rule; mirror that here.
+  const ruleEvidenceOf = ruleApplied
+    ? (account: string) => evidence.get(account) ?? null
+    : undefined;
   return queueBatchBody(readiness, () =>
     buildFraudQueue({
       corpus: tiedCorpus(),
@@ -232,7 +241,7 @@ function tiedBatch(
         corpusSha256: null,
       },
       scoreOf,
-      ruleEvidenceOf: (account) => active.get(account) ?? null,
+      ruleEvidenceOf,
       limit: 10,
     }),
   );
@@ -401,6 +410,8 @@ describe("queue rule tie-break", () => {
       ruleHits: [{ rule: "period_correlation", n: 5 }],
     });
     expect(batch.rows[0]?.confirmedRuleHits).toEqual([]);
+    expect(batch.rows[0]?.ruleEvidenceStatus).toBe("bridged");
+    expect(batch.rows[1]?.ruleEvidenceStatus).toBe("unmatched");
     expect(batch.ruleApplication.state).toBe("measured");
     expect(batch.ruleApplication.applied).toEqual(["period_correlation"]);
   });
@@ -424,6 +435,8 @@ describe("queue rule tie-break", () => {
       hasConfirmedRuleHit: false,
     });
     expect(batch.rows[1]?.confirmedRuleHits).toEqual([]);
+    expect(batch.rows[0]?.ruleEvidenceStatus).toBe("bridged");
+    expect(batch.rows[1]?.ruleEvidenceStatus).toBe("bridged");
   });
 
   test("a higher score still beats a lower score with a rule hit", () => {
@@ -436,7 +449,9 @@ describe("queue rule tie-break", () => {
           : { score: 95, band: "high" },
     );
     expect(batch.rows.map((row) => row.account)).toEqual(["Z", "A"]);
+    expect(batch.rows[0]?.ruleEvidenceStatus).toBe("unmatched");
     expect(batch.rows[1]?.hasRuleHit).toBe(true);
+    expect(batch.rows[1]?.ruleEvidenceStatus).toBe("bridged");
   });
 
   test("the tie-break is inert when no rule has five confirmed reviews", () => {
@@ -448,6 +463,9 @@ describe("queue rule tie-break", () => {
     expect(batch.rows.find((row) => row.account === "Z")?.hasRuleHit).toBe(
       false,
     );
+    expect(
+      batch.rows.every((row) => row.ruleEvidenceStatus === "not_applied"),
+    ).toBe(true);
     expect(batch.ruleApplication.state).toBe("not_applied");
     expect(batch.ruleApplication.applied).toEqual([]);
   });
@@ -468,6 +486,11 @@ describe("fraud priority queue (CLI)", () => {
       (rows as unknown[]).map((_row, index) => index + 1),
     );
     expect((body.totals as { returned: number }).returned).toBe(rows.length);
+    expect(
+      (rows as { ruleEvidenceStatus: string }[]).every(
+        (row) => row.ruleEvidenceStatus === "not_applied",
+      ),
+    ).toBe(true);
     expect(Array.isArray(body.sources)).toBe(true);
   });
 
@@ -778,6 +801,11 @@ describe("fraud priority queue (CLI)", () => {
     expect(batch.ruleApplication.state).toBe("not_applied");
     expect(batch.ruleApplication.applied).toEqual([]);
     expect(batch.ruleApplication.notApplied).toHaveLength(9);
+    expect(
+      (batch.rows as { ruleEvidenceStatus: string }[]).every(
+        (row) => row.ruleEvidenceStatus === "not_applied",
+      ),
+    ).toBe(true);
 
     const inputs = result.body.inputs as {
       bridgeCoverage: number | null;
@@ -793,5 +821,142 @@ describe("fraud priority queue (CLI)", () => {
     expect(bridge.coverage).toMatchObject({ matched: 102, total: 2586 });
     expect(bridge.coverage.value).toBeCloseTo(102 / 2586, 12);
     expect(bridge.representativeness.representative).toBe(true);
+  });
+
+  test("queue build joins partnerUserID and distinguishes bridged from unmatched", async () => {
+    const { root: created, corpus } = buildSyntheticRoot();
+    const root = track(created);
+    const nowSec = Math.floor(fixedNow().getTime() / 1000);
+    const document = {
+      r: { bets: corpus.rows },
+      e: 0,
+      d: "",
+      from: nowSec - 7200,
+      to: nowSec - 60,
+    };
+    writeAt(root, CORPUS_PRIMARY_REL, document);
+    writeAt(
+      root,
+      "Scratch/security/corpus/sha256.txt",
+      `${sha256Of(`${JSON.stringify(document, null, 2)}\n`)}  ${CORPUS_PRIMARY_REL}\n`,
+    );
+
+    const perception = await loadFraudPerception({ root, now: fixedNow() });
+    if (perception.corpus === null) throw new Error("fixture corpus missing");
+    const { artifact } = fitFraudModel({
+      corpus: perception.corpus,
+      config: perception.config,
+      now: fixedNow(),
+      options: {},
+    });
+    await writeFraudModelArtifact(root, artifact);
+
+    // Interim F402 namespace: U001's partnerUserID is PR000001; U002's is not in this capture.
+    mkdirSync(join(root, "scratch"), { recursive: true });
+    const namespaceDb = new Database(join(root, "scratch/customers.sqlite"));
+    namespaceDb.exec(`
+      CREATE TABLE customers (
+        id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        agent TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (id, source)
+      )
+    `);
+    namespaceDb
+      .prepare(
+        "INSERT INTO customers (id, source, agent, name, updated_at) VALUES (?, 'capture', '', '', ?)",
+      )
+      .run("PR000001", FIXED_NOW_ISO);
+    namespaceDb.close();
+
+    const anomalies: Anomaly[] = Array.from({ length: 5 }, (_, index) => ({
+      rule: "period_correlation",
+      severity: "warning",
+      tickets: [
+        {
+          wagerNumber: String(900_000_000 + index),
+          insertedAt: null,
+          stake: 100,
+          toWin: 90,
+          legs: [],
+        },
+      ],
+      evidence: {
+        customerRef: customerRefOf("PR000001"),
+        agentRef: customerRefOf("AG1"),
+      },
+    }));
+    const plan = planReviews(anomalies, {
+      runId: "bridge-run",
+      wagerCount: 700,
+      budget: DEFAULT_SAMPLING_BUDGET,
+      captureKey: "bridge-capture",
+    });
+    const reviewDb = openReviewDb(
+      join(root, "reports/security/flags-review.sqlite"),
+    );
+    try {
+      recordReviewPlan(reviewDb, plan);
+      for (let seq = 0; seq < 5; seq += 1) {
+        recordFlagReview(reviewDb, {
+          runId: "bridge-run",
+          seq,
+          rule: "period_correlation",
+          wagerNumbers: [String(seq)],
+          verdict: "confirmed",
+          reviewer: "test",
+        });
+      }
+    } finally {
+      reviewDb.close();
+    }
+
+    writeAt(root, "reports/security/bridge-coverage.json", {
+      schemaVersion: 1,
+      kind: "queue-bridge-coverage",
+      measuredAt: FIXED_NOW_ISO,
+      population: "gslive-accounts",
+      matched: 102,
+      total: 2586,
+    });
+    writeAt(root, "reports/security/bridge-representativeness.json", {
+      schemaVersion: 1,
+      kind: "queue-bridge-representativeness",
+      measuredAt: FIXED_NOW_ISO,
+      corpusSha: artifact.corpusSha256,
+      covered: { n: 34, precision: 0.71, wilson: [0.54, 0.84] },
+      uncovered: { n: 21, precision: 0.62, wilson: [0.41, 0.79] },
+      representative: true,
+    });
+
+    const result = runCli(root, [
+      "queue",
+      "build",
+      "--dry-run",
+      "--limit",
+      "50",
+    ]);
+    expect(result.code).toBe(0);
+    const batch = result.body.batch as {
+      rows: {
+        account: string;
+        hasRuleHit: boolean;
+        ruleEvidenceStatus: string;
+      }[];
+    };
+    expect(batch.rows.find((row) => row.account === "U001")).toMatchObject({
+      hasRuleHit: true,
+      ruleEvidenceStatus: "bridged",
+    });
+    expect(batch.rows.find((row) => row.account === "U002")).toMatchObject({
+      hasRuleHit: false,
+      ruleEvidenceStatus: "unmatched",
+    });
+    expect(result.body.identityNamespace).toEqual({
+      source: "scratch/customers.sqlite",
+      ids: 1,
+    });
   });
 });

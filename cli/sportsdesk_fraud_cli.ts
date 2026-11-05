@@ -697,6 +697,69 @@ function loadQueueLedger(path: string): QueueLedger {
   }
 }
 
+/**
+ * Interim F402 namespace for the rule-evidence join. The governed crosswalk will replace this.
+ * The customer index is the getBetTicker capture; the ticker snapshot is the fallback. Only
+ * `source='capture'` rows count; artifact/demo/fixture rows must not look live.
+ */
+const F402_CUSTOMER_INDEX_REL_PATH = "scratch/customers.sqlite";
+const F402_TICKER_REL_PATH = "data/live-wagers.json";
+
+interface F402Namespace {
+  readonly ids: ReadonlySet<string>;
+  readonly source: string;
+}
+
+async function loadF402Namespace(root: string): Promise<F402Namespace> {
+  const dbPath = join(root, F402_CUSTOMER_INDEX_REL_PATH);
+  if (existsSync(dbPath)) {
+    try {
+      const db = openSportsdeskSqliteReadonly(dbPath);
+      try {
+        const rows = db
+          .query("SELECT id FROM customers WHERE source = 'capture'")
+          .all() as Array<{ id: string }>;
+        const ids = new Set(
+          rows.map((row) => row.id.trim().toUpperCase()).filter(Boolean),
+        );
+        if (ids.size > 0) {
+          return { ids, source: F402_CUSTOMER_INDEX_REL_PATH };
+        }
+      } finally {
+        db.close();
+      }
+    } catch {
+      // Fall through to the ticker snapshot; a missing/foreign DB is not a refusal.
+    }
+  }
+
+  const tickerPath = join(root, F402_TICKER_REL_PATH);
+  if (existsSync(tickerPath)) {
+    try {
+      const raw = (await Bun.file(tickerPath).json()) as {
+        LIST?: unknown;
+      };
+      const rows = Array.isArray(raw.LIST) ? raw.LIST : [];
+      const ids = new Set<string>();
+      for (const row of rows) {
+        if (row === null || typeof row !== "object") continue;
+        const record = row as Record<string, unknown>;
+        for (const key of ["Login", "CustomerID"]) {
+          const value = record[key];
+          if (typeof value !== "string") continue;
+          const normalized = value.trim().toUpperCase();
+          if (normalized !== "") ids.add(normalized);
+        }
+      }
+      return { ids, source: F402_TICKER_REL_PATH };
+    } catch {
+      // Fall through to the empty namespace.
+    }
+  }
+
+  return { ids: new Set(), source: "none" };
+}
+
 function queueBlockers(readiness: QueueReadiness): string[] {
   return [
     ...readiness.blockers.map((blocker) => blocker.name),
@@ -925,9 +988,20 @@ async function cmdQueueBuild(
   }
 
   const limit = integerFlag("queue build", flags, "--limit", 25, 1, 100);
-  // The plan's customerRef is `customer:<sha256("customer:"+login)[:12]>`; hashing the queue
-  // account id is a conservative exact-identity join. Accounts whose F402 login differs from the
-  // GSLive user id need the durable customer master and will not match here.
+  // GSLive `userID` is a numeric player id, not the F402 login. `partnerUserID` is the login.
+  // The plan's customerRef is `customer:<sha256("customer:"+login)[:12]>`, so hash the partner id,
+  // never the GSLive user id. The governed crosswalk will replace this interim namespace.
+  const partnerByUser = new Map<string, string>();
+  for (const record of corpus.records) {
+    if (record.partnerUserId === null || record.partnerUserId === undefined) {
+      continue;
+    }
+    partnerByUser.set(
+      record.userId.trim().toUpperCase(),
+      record.partnerUserId.trim().toUpperCase(),
+    );
+  }
+  const namespace = await loadF402Namespace(context.root);
   const appliedRules = new Set(readiness.ruleApplication.applied);
   const reviewCountByRule = new Map(
     rules
@@ -939,8 +1013,21 @@ async function cmdQueueBuild(
     ledger.reviews,
     reviewCountByRule,
   );
-  const ruleEvidenceOf = (accountId: string): FraudQueueRuleEvidence | null =>
-    evidenceByRef.get(customerRefOf(accountId)) ?? null;
+  const ruleEvidenceOf =
+    appliedRules.size === 0
+      ? undefined
+      : (accountId: string): FraudQueueRuleEvidence | null => {
+          const partner = partnerByUser.get(accountId.trim().toUpperCase());
+          if (partner === undefined || !namespace.ids.has(partner)) return null;
+          return (
+            evidenceByRef.get(customerRefOf(partner)) ?? {
+              hasRuleHit: false,
+              hasConfirmedRuleHit: false,
+              ruleHits: [],
+              confirmedRuleHits: [],
+            }
+          );
+        };
   const queue = await buildQueue(
     context,
     perception,
@@ -956,6 +1043,10 @@ async function cmdQueueBuild(
     readiness,
     inputs,
     bridge,
+    identityNamespace: {
+      source: namespace.source,
+      ids: namespace.ids.size,
+    },
     batch,
     sources: sourceStates(perception),
   });
