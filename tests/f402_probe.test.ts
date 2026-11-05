@@ -7,6 +7,7 @@ import {
   buildProbeExpression,
   buildProbeBody,
   buildReadRequestSnifferExpression,
+  isProbeReadOnlyConfirmed,
   parseProbePageResult,
   parseSniffedTemplates,
   padLogWriteCustomerId,
@@ -20,8 +21,43 @@ describe("f402 probe plan", () => {
   test("excludes the unconfirmed mutation by default and selects manager-boot / all suites", () => {
     const ops = selectProbeOps(false);
     expect(ops.map((op) => op.operation)).not.toContain("PendingDelete");
-    expect(ops).toHaveLength(PROBE_OPS.length - 4);
+    // Excluded by default: the 4 mutations (`readOnly:false`) plus the 4 source-extracted
+    // customer reads (`readOnly:true, unconfirmed:true`). The two axes are distinct: `readOnly`
+    // is the write-contract flag, `unconfirmed` is the evidence flag.
+    const unconfirmed = PROBE_OPS.filter(
+      (op) => !op.readOnly || op.unconfirmed === true,
+    ).length;
+    expect(unconfirmed).toBe(8);
+    expect(ops).toHaveLength(PROBE_OPS.length - unconfirmed);
     expect(selectProbeOps(true)).toHaveLength(PROBE_OPS.length);
+
+    // A source-extracted read is readOnly but NOT "read-only confirmed" until a capture exists.
+    for (const name of [
+      "Get_LeagueLines",
+      "Get_LeagueLines2",
+      "Get_SportsLeagues",
+      "verifyLeagues",
+    ]) {
+      const op = PROBE_OPS.find((o) => o.operation === name);
+      expect(op?.readOnly).toBe(true);
+      expect(op?.unconfirmed).toBe(true);
+      expect(op === undefined ? false : isProbeReadOnlyConfirmed(op)).toBe(
+        false,
+      );
+    }
+    // The mutation set the docs admit to is unchanged.
+    expect(
+      PROBE_OPS.filter((op) => !op.readOnly)
+        .map((op) => op.operation)
+        .sort(),
+    ).toEqual(
+      [
+        "PendingDelete",
+        "renewToken",
+        "updateReportConfigCustomerAdmin",
+        "write",
+      ].sort(),
+    );
 
     const bootOps = selectProbeOps(false, "manager-boot");
     expect(bootOps).toHaveLength(9);
@@ -57,6 +93,82 @@ describe("f402 probe plan", () => {
     expect(() => probeUrl("https://fantasy402.com", op, "cloud")).toThrow(
       "start with /",
     );
+  });
+
+  test("builds the source-observed customer league catalog body and URLs", () => {
+    const leagues = PROBE_OPS.find((o) => o.operation === "Get_SportsLeagues");
+    if (leagues === undefined) throw new Error("Get_SportsLeagues missing");
+    const body = new URLSearchParams(
+      buildProbeBody(leagues, "BILLY666", "CCC107"),
+    );
+    expect([...body.keys()]).toEqual([
+      "customerID",
+      "token",
+      "wagerType",
+      "office",
+      "placeLateFlag",
+      "operation",
+      "RRO",
+    ]);
+    expect(body.get("operation")).toBe("Get_SportsLeagues");
+    expect(body.get("office")).toBe("BILLY666");
+    expect(body.get("wagerType")).toBe("Straight");
+    expect(body.get("placeLateFlag")).toBe("false");
+
+    // League reads live under /cloud/api/League/, not the Manager prefix.
+    expect(
+      probeUrl("https://fantasy402.com", leagues, "/cloud/api/League"),
+    ).toBe("https://fantasy402.com/cloud/api/League/Get_SportsLeagues");
+    const verify = PROBE_OPS.find((o) => o.operation === "verifyLeagues");
+    if (verify === undefined) throw new Error("verifyLeagues missing");
+    expect(
+      probeUrl("https://fantasy402.com", verify, "/cloud/api/League"),
+    ).toBe("https://fantasy402.com/cloud/api/League/verifyLeagues");
+  });
+
+  test("builds the source-observed customer front-end lines body", () => {
+    const op = PROBE_OPS.find((o) => o.operation === "Get_LeagueLines");
+    if (op === undefined)
+      throw new Error("Get_LeagueLines missing from PROBE_OPS");
+    const body = new URLSearchParams(buildProbeBody(op, "BILLY666", "CCC107"));
+    // Every field the customer bundle posts in `customer/line/line.js` (source-observed).
+    expect([...body.keys()]).toEqual([
+      "customerID",
+      "token",
+      "operation",
+      "propDescription",
+      "sportType",
+      "sportSubType",
+      "period",
+      "hourFilter",
+      "wagerType",
+      "office",
+      "keyword",
+      "correlationID",
+      "periodNumber",
+      "periods",
+      "rotOrder",
+      "placeLateFlag",
+      "RRO",
+    ]);
+    expect(body.get("operation")).toBe("Get_LeagueLines");
+    expect(body.get("customerID")).toBe("CCC107");
+    expect(body.get("office")).toBe("BILLY666");
+    expect(body.get("period")).toBe("Game");
+    expect(body.get("periodNumber")).toBe("0");
+    expect(body.get("wagerType")).toBe("Straight");
+    expect(body.get("sportType")).toBe(".");
+    expect(body.get("placeLateFlag")).toBe("false");
+    expect(body.get("RRO")).toBe("1");
+
+    // Operator-reported variant carries the same source-derived body but its own operation.
+    const variant = PROBE_OPS.find((o) => o.operation === "Get_LeagueLines2");
+    if (variant === undefined) throw new Error("Get_LeagueLines2 missing");
+    expect(
+      new URLSearchParams(buildProbeBody(variant, "BILLY666", "CCC107")).get(
+        "operation",
+      ),
+    ).toBe("Get_LeagueLines2");
   });
 
   test("builds the client envelope from customer/report/report.js and app/manager/manager.js", () => {

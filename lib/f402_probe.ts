@@ -60,7 +60,20 @@ export type ProbeParam =
   | "positionBySport"
   | "figureDate"
   | "graded"
-  | "sortCustom";
+  | "sortCustom"
+  // Customer front-end line read (`customer/line/line.js`): fields the customer app posts to
+  // `/cloud/api/Lines/Get_LeagueLines`. Source-observed, not wire-captured.
+  | "propDescription"
+  | "sportSubType"
+  | "period"
+  | "hourFilter"
+  | "wagerType"
+  | "keyword"
+  | "correlationID"
+  | "periodNumber"
+  | "periods"
+  | "rotOrder"
+  | "placeLateFlag";
 
 export type ProbeWireContentType =
   "application/x-www-form-urlencoded; charset=UTF-8" | "application/json";
@@ -70,8 +83,17 @@ export type ProbeSuite = "report" | "manager-boot" | "all";
 export interface ProbeOp {
   readonly operation: string;
   readonly method: "POST";
-  /** False for operations gated behind `--include-unconfirmed`. */
+  /**
+   * True when the operation only reads. `false` marks a write/mutation and is what the
+   * "writable operations are exactly the ones the docs admit to" contract test pins.
+   */
   readonly readOnly: boolean;
+  /**
+   * True when the wire contract is unconfirmed (source-extracted only), regardless of whether
+   * the call reads. Unconfirmed ops are excluded unless `--include-unconfirmed`; this keeps a
+   * source-extracted *read* out of the default suite without mislabelling it as a mutation.
+   */
+  readonly unconfirmed?: boolean;
   readonly note: string;
   /** Fields the client sends, read from `customer/report/report.js` or `app/manager/manager.js`. */
   readonly params: readonly ProbeParam[];
@@ -80,12 +102,18 @@ export interface ProbeOp {
    * `manager.js:31200` for `getAccountInfoOwner` use `application/json`; all others use form-urlencoded).
    */
   readonly wireContentType?: ProbeWireContentType;
-  /** Default route prefix observed in client JS. */
+  /**
+   * Default route prefix observed in client JS, or source-extracted for the customer
+   * front-end reads (`Get_LeagueLines`, `Get_SportsLeagues`, `verifyLeagues`). Callers pass the
+   * prefix explicitly to `probeUrl`.
+   */
   readonly defaultPrefix?:
     | "/cloud/api/Manager"
     | "/cloud/api/Report"
     | "/cloud/api/System"
-    | "/cloud/api/Log";
+    | "/cloud/api/Log"
+    | "/cloud/api/Lines"
+    | "/cloud/api/League";
 }
 
 export const PROBE_OPS: readonly ProbeOp[] = [
@@ -473,6 +501,102 @@ export const PROBE_OPS: readonly ProbeOp[] = [
     params: ["customerID", "ticketNumber", "token", "operation"],
     defaultPrefix: "/cloud/api/Report",
   },
+  {
+    operation: "Get_LeagueLines",
+    method: "POST",
+    // Source-observed in the customer front-end bundle
+    // `customer/line/line.js` (fetched 2026-11-04, sha256 63852a5b…): `path: Util.apiPath + 'api/Lines/'`
+    // with `operation: 'Get_LeagueLines'` posted by jQuery (`data: param`, form-urlencoded).
+    // It is a CUSTOMER-session read (`customerID` + `customer` sessionStorage token), not the
+    // manager portal's session. Still gated until a wire capture proves the response:
+    // the client consumes `data.Lines[]` + `data.HourLimit` (see F402-LINES-CONTRACT.md).
+    readOnly: true,
+    unconfirmed: true,
+    note: "customer front-end lines read, source-observed (customer/line/line.js); response fields source-derived, not wire-captured — CUSTOMER session required, manager session may 401",
+    params: [
+      "customerID",
+      "token",
+      "operation",
+      "propDescription",
+      "sportType",
+      "sportSubType",
+      "period",
+      "hourFilter",
+      "wagerType",
+      "office",
+      "keyword",
+      "correlationID",
+      "periodNumber",
+      "periods",
+      "rotOrder",
+      "placeLateFlag",
+      "RRO",
+    ],
+    defaultPrefix: "/cloud/api/Lines",
+  },
+  {
+    operation: "Get_LeagueLines2",
+    method: "POST",
+    // Operator-reported variant (2026-11-04). The current public customer bundle above posts
+    // `Get_LeagueLines`; this name appeared only in the operator's report, so it carries the same
+    // source-derived body as a best-effort probe and stays unconfirmed until a capture decides.
+    readOnly: true,
+    unconfirmed: true,
+    note: "operator-reported variant of the customer lines read; body copied from source-observed Get_LeagueLines and UNCONFIRMED — capture from a customer-session HAR before relying on it",
+    params: [
+      "customerID",
+      "token",
+      "operation",
+      "propDescription",
+      "sportType",
+      "sportSubType",
+      "period",
+      "hourFilter",
+      "wagerType",
+      "office",
+      "keyword",
+      "correlationID",
+      "periodNumber",
+      "periods",
+      "rotOrder",
+      "placeLateFlag",
+      "RRO",
+    ],
+    defaultPrefix: "/cloud/api/Lines",
+  },
+  {
+    operation: "Get_SportsLeagues",
+    method: "POST",
+    // Source-observed in `customer/line/league.js` (fetched 2026-11-04, sha256 27126c28…):
+    // `path: Util.apiPath + 'api/League/'`, POST form-urlencoded, response `data.Leagues[]`
+    // (SportType/SportSubType/PeriodNumber/Grouping/Active/SequenceNumber). This is the league
+    // catalog a lines capture needs: `Get_LeagueLines` selects by sportType/sportSubType, not
+    // a league id. CUSTOMER session. Unconfirmed until a wire capture proves the payload.
+    readOnly: true,
+    unconfirmed: true,
+    note: "customer front-end league catalog, source-observed (customer/line/league.js); prerequisite for a Get_LeagueLines capture; response fields source-derived, not wire-captured",
+    params: [
+      "customerID",
+      "token",
+      "wagerType",
+      "office",
+      "placeLateFlag",
+      "operation",
+      "RRO",
+    ],
+    defaultPrefix: "/cloud/api/League",
+  },
+  {
+    operation: "verifyLeagues",
+    method: "POST",
+    // Source-observed in `customer/line/league.js` (~byte 38167): same customer session, reads
+    // `data.Leagues[]` and compares SportType/SportSubType/PeriodNumber/Active. Unconfirmed.
+    readOnly: true,
+    unconfirmed: true,
+    note: "customer front-end league availability check, source-observed (customer/line/league.js); response fields source-derived, not wire-captured",
+    params: ["customerID", "token", "wagerType", "office", "operation", "RRO"],
+    defaultPrefix: "/cloud/api/League",
+  },
 ] as const;
 
 /** Wire name says "Delete" but client JS is a read-only Pending[] modal lookup (report.js:8578). */
@@ -483,7 +607,15 @@ export const CLIENT_JS_CONFIRMED_READ_ONLY_OPS = new Set<string>([
 /** Player-info tab calls use form field `acc` (padded customer id), not `customerID`. */
 export const PROBE_ACC_IS_CUSTOMER_OPS = new Set<string>(["getTeaserProfile"]);
 
+/**
+ * A read whose contract is confirmed by client JS or a prior capture. An unconfirmed read
+ * (`unconfirmed: true`) is deliberately excluded even though it only reads: there is no
+ * evidence yet that its wire shape is what the source says.
+ */
 export function isProbeReadOnlyConfirmed(op: ProbeOp): boolean {
+  if (op.unconfirmed === true) {
+    return CLIENT_JS_CONFIRMED_READ_ONLY_OPS.has(op.operation);
+  }
   return op.readOnly || CLIENT_JS_CONFIRMED_READ_ONLY_OPS.has(op.operation);
 }
 
@@ -599,7 +731,9 @@ export function selectProbeOps(
   } else {
     pool = PROBE_OPS;
   }
-  return includeUnconfirmed ? pool : pool.filter((op) => op.readOnly);
+  return includeUnconfirmed
+    ? pool
+    : pool.filter((op) => op.readOnly && op.unconfirmed !== true);
 }
 
 export interface ProbeRequest {
@@ -1028,6 +1162,18 @@ export interface ProbeBodyOptions {
   readonly sportType?: string;
   readonly sortCustom?: string;
   readonly agentOwner?: string;
+  /** Customer front-end line read (`Get_LeagueLines`), source-observed defaults only. */
+  readonly propDescription?: string;
+  readonly sportSubType?: string;
+  readonly period?: string;
+  readonly hourFilter?: string;
+  readonly wagerType?: string;
+  readonly keyword?: string;
+  readonly correlationID?: string;
+  readonly periodNumber?: string;
+  readonly periods?: string;
+  readonly rotOrder?: string;
+  readonly placeLateFlag?: string;
 }
 
 function resolveParamMap(
@@ -1112,7 +1258,14 @@ function resolveParamMap(
     } else if (name === "showGraded") {
       out[name] = "false";
     } else if (name === "sportType") {
-      out[name] = options.sportType ?? "Football";
+      // The customer lines feed sends "." for "all sports" (`line.js`, variant A);
+      // the manager/report probes default to Football.
+      out[name] =
+        options.sportType ??
+        (op.operation === "Get_LeagueLines" ||
+        op.operation === "Get_LeagueLines2"
+          ? "."
+          : "Football");
     } else if (name === "sportTypeIn") {
       out[name] = "Football";
     } else if (name === "sportSubTypeIn") {
@@ -1145,6 +1298,33 @@ function resolveParamMap(
       out[name] = "1";
     } else if (name === "sortCustom") {
       out[name] = options.sortCustom ?? "1";
+    } else if (name === "propDescription") {
+      out[name] = options.propDescription ?? "";
+    } else if (name === "sportSubType") {
+      out[name] = options.sportSubType ?? ".";
+    } else if (name === "period") {
+      // `Util.typePeriod.GAME` in util.js (bundle sha256 fba79858…).
+      out[name] = options.period ?? "Game";
+    } else if (name === "hourFilter") {
+      out[name] = options.hourFilter ?? "0";
+    } else if (name === "wagerType") {
+      // `Util.BET.TYPE.STRAIGHT.val` in util.js.
+      out[name] = options.wagerType ?? "Straight";
+    } else if (name === "keyword") {
+      out[name] = options.keyword ?? "";
+    } else if (name === "correlationID") {
+      out[name] = options.correlationID ?? "";
+    } else if (name === "periodNumber") {
+      // `Util.period.GAME` = 0 in util.js.
+      out[name] = options.periodNumber ?? "0";
+    } else if (name === "periods") {
+      out[name] = options.periods ?? "0";
+    } else if (name === "rotOrder") {
+      out[name] = options.rotOrder ?? "0";
+    } else if (name === "placeLateFlag") {
+      // `Util.isPlaceLateBetAgent()` is false for the plain customer front end; jQuery serializes
+      // the boolean as "false".
+      out[name] = options.placeLateFlag ?? "false";
     } else {
       // Compile-time exhaustiveness: adding a ProbeParam variant without a case
       // fails the build here instead of silently dropping the field from every body.

@@ -75,7 +75,7 @@ Options:
   --promote-dir <dir>     Write value-free CaptureStore records for 2xx read-only probes
   --dry-run               Print what would be sent; make no requests
   --no-preflight          Skip the DNS/TLS preflight
-  --include-unconfirmed   Include PendingDelete
+  --include-unconfirmed   Include unconfirmed ops (PendingDelete, Get_LeagueLines2)
   -h, --help              This text
 
 Examples:

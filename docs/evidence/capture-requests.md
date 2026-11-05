@@ -331,7 +331,7 @@ two encodings — JSON, form, JSON — so a client assuming one content type bre
 read-only unless the task is explicitly a deploy, and a VIP entry is live customer state
 (`tests/f402_observed_requests.test.ts:402-408`,
 `tests/fixtures/f402-report-requests-observed-2026-11-01.json:188`). One caveat keeps that claim exact:
-`lib/f402_probe.ts:389-403` registers `Log/write` as a non-read-only probe, selected only under
+`lib/f402_probe.ts:400-414` registers `Log/write` as a non-read-only probe, selected only under
 `--include-unconfirmed`, which the capture CLI also gates behind `--i-understand-mutations`
 (`scripts/capture/f402_probe.ts:370-375`). That probe builds its own body; it never replays the observed
 one.
