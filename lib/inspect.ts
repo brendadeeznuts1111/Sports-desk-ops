@@ -3,7 +3,7 @@ import type { ColumnRow, KeyRow, TableSummary } from "./schema_report.ts";
 function inspectTable<const R extends Record<string, unknown>>(
   rows: readonly R[],
   props?: readonly (keyof R & string)[],
-  opts?: { colors?: boolean; depth?: number },
+  opts?: { colors?: boolean },
 ): string {
   return Bun.inspect.table(rows as R[], props as string[] | undefined, opts);
 }
@@ -11,18 +11,16 @@ function inspectTable<const R extends Record<string, unknown>>(
 export const inspectSummary = (rows: readonly TableSummary[]) =>
   inspectTable(rows, ["table", "domain", "columns", "keys", "appendOnly"], {
     colors: true,
-    depth: 2,
   });
 
 export const inspectColumns = (rows: readonly ColumnRow[]) =>
   inspectTable(
     rows,
     ["table", "column", "sqlType", "kind", "nullable", "keyRoles"],
-    { colors: true, depth: 2 },
+    { colors: true },
   );
 
 export const inspectKeys = (rows: readonly KeyRow[]) =>
   inspectTable(rows, ["table", "keyKind", "name", "columns", "partial"], {
     colors: true,
-    depth: 2,
   });
