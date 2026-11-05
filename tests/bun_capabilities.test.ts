@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -156,6 +156,43 @@ describe("Bun capabilities used by the ops tooling", () => {
     const png = Buffer.from(url.slice(url.indexOf(",") + 1), "base64");
     const blurAspect = png.readUInt32BE(16) / png.readUInt32BE(20);
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
+  });
+
+  test("GlobScanOptions defaults exclude dotfiles, symlinked dirs and directories", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-glob-options-"));
+    try {
+      mkdirSync(join(dir, "real", "sub"), { recursive: true });
+      await Bun.write(join(dir, "real", "sub", "a.txt"), "x");
+      await Bun.write(join(dir, ".hidden"), "x");
+      symlinkSync("real", join(dir, "linkdir"));
+      symlinkSync("missing", join(dir, "broken"));
+
+      const list = async (options: Bun.GlobScanOptions): Promise<string[]> => {
+        const out: string[] = [];
+        for await (const rel of new Bun.Glob("**/*").scan({
+          cwd: dir,
+          ...options,
+        })) {
+          out.push(rel);
+        }
+        return out.sort();
+      };
+
+      expect(await list({})).toEqual(["real/sub/a.txt"]);
+      expect(await list({ dot: true })).toContain(".hidden");
+      expect(await list({ followSymlinks: true })).toContain(
+        "linkdir/sub/a.txt",
+      );
+      expect(await list({ followSymlinks: false })).not.toContain(
+        "linkdir/sub/a.txt",
+      );
+      const all = await list({ onlyFiles: false });
+      expect(all).toContain("real");
+      expect(all).toContain("linkdir");
+      expect(all).toContain("broken");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("FileSink accepts highWaterMark and end() flushes the write", async () => {
