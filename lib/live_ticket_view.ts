@@ -208,7 +208,9 @@ function legSignature(ticket: NormalizedTicket): string {
 /**
  * Groups tickets that carry the same legs under different ticket ids. A P ticket and an M
  * ticket on the same selections are the usual pair; the caller can narrow on `wagerTypes`.
- * Tickets with no legs are ignored, and a repeated id never forms a group by itself.
+ * `ALERT` mirrors and `BLOCKED` sentinels are skipped: they repeat another ticket's legs
+ * instead of creating one. Tickets with no legs are ignored, and a repeated id never forms a
+ * group by itself.
  */
 export function findDupePairs(
   tickets: readonly NormalizedTicket[],
@@ -216,6 +218,8 @@ export function findDupePairs(
   const groups = new Map<string, NormalizedTicket[]>();
   for (const ticket of tickets) {
     if (ticket.legs.length === 0) continue;
+    const source = ticket.source.toUpperCase();
+    if (source === "ALERT" || source === "BLOCKED") continue;
     const signature = legSignature(ticket);
     const group = groups.get(signature);
     if (group === undefined) groups.set(signature, [ticket]);

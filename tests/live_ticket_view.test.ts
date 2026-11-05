@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { normalizeTicket, splitPickPrice } from "../lib/live_ticket_view.ts";
+import {
+  findDupePairs,
+  normalizeTicket,
+  splitPickPrice,
+} from "../lib/live_ticket_view.ts";
 import { readWagerList, readWagerListArtifact } from "../lib/live_wagers.ts";
 
 const FIXTURE = join(import.meta.dir, "fixtures/live-wagers-list-sample.json");
@@ -131,5 +135,37 @@ describe("live_ticket_view", () => {
       price: null,
     });
     expect(splitPickPrice("")).toEqual({ selection: "", price: null });
+  });
+
+  test("duplicate grouping skips ALERT mirrors and BLOCKED sentinels", () => {
+    const rawRow = (
+      wagerNumber: number,
+      writer: string,
+      type: string,
+    ): Record<string, unknown> => ({
+      WagerNumber: wagerNumber,
+      WagerType: type,
+      AmountWagered: 100,
+      ToWinAmount: 90,
+      VolumeAmount: 100,
+      TicketWriter: writer,
+      InsertDateTime: "2026-11-04 12:00:00.000",
+      ShortDesc:
+        "S.G999999777\r\nFootball - Gamma vs Delta / Game / Winner (2 way) / Gamma -110&#x0D;\n",
+      VIP: "0",
+    });
+    const tickets = [
+      normalizeTicket(rawRow(1, "GSLIVE", "P")),
+      normalizeTicket(rawRow(2, "ALERT", "M")),
+      normalizeTicket(rawRow(3, "BLOCKED", "S")),
+    ];
+    expect(findDupePairs(tickets)).toEqual([]);
+
+    const withRealTwin = findDupePairs([
+      ...tickets,
+      normalizeTicket(rawRow(4, "GSLIVE", "M")),
+    ]);
+    expect(withRealTwin).toHaveLength(1);
+    expect(withRealTwin[0]?.wagerNumbers).toEqual(["1", "4"]);
   });
 });
