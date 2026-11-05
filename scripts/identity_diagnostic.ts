@@ -29,6 +29,8 @@ const DEFAULTS = {
   betReport: "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json",
   out: "scratch/identity-diagnostic/report.md",
   json: "scratch/identity-diagnostic/report.json",
+  probeSample: "25",
+  probeOut: "scratch/identity-diagnostic/probe-plan.json",
 } as const;
 
 interface Options {
@@ -38,6 +40,8 @@ interface Options {
   readonly betReport: string;
   readonly out: string;
   readonly json: string;
+  readonly probeSample: number;
+  readonly probeOut: string;
 }
 
 function parseOptions(argv: readonly string[]): Options {
@@ -58,14 +62,22 @@ function parseOptions(argv: readonly string[]): Options {
                 ? "out"
                 : flag === "--json"
                   ? "json"
-                  : null;
+                  : flag === "--probe-sample"
+                    ? "probeSample"
+                    : flag === "--probe-out"
+                      ? "probeOut"
+                      : null;
     if (key === null) throw new Error(`unknown argument: ${flag}`);
     const value = argv[index + 1];
     if (value === undefined) throw new Error(`missing value for ${flag}`);
     options[key] = value;
     index += 1;
   }
-  return options as unknown as Options;
+  const probeSample = Number(options["probeSample"]);
+  if (!Number.isInteger(probeSample) || probeSample < 0 || probeSample > 500) {
+    throw new Error("--probe-sample must be an integer in 0..500");
+  }
+  return { ...options, probeSample } as unknown as Options;
 }
 
 function norm(value: unknown): string {
@@ -80,6 +92,21 @@ function stripPlayer(value: unknown): string {
 
 function pct(part: number, whole: number): string {
   return whole === 0 ? "0.0%" : `${((part / whole) * 100).toFixed(1)}%`;
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** Deterministic evenly-spaced sample; no clock, no randomness. */
+function sampleEvenly<T>(values: readonly T[], limit: number): T[] {
+  if (limit <= 0 || values.length === 0) return [];
+  const count = Math.min(limit, values.length);
+  const step = values.length / count;
+  return Array.from(
+    { length: count },
+    (_, index) => values[Math.floor(index * step)] as T,
+  );
 }
 
 interface AdminRow {
@@ -255,7 +282,15 @@ function matchedAccounts(
 }
 
 function topAgents(agents: ReadonlySet<string>, limit = 8): string[] {
-  return [...agents].sort().slice(0, limit);
+  return [...agents].sort(compareText).slice(0, limit);
+}
+
+function firstPartner(account: AccountIdentity): string | null {
+  return [...account.partners].sort(compareText)[0] ?? null;
+}
+
+function firstAgent(account: AccountIdentity): string | null {
+  return [...account.agents].sort(compareText)[0] ?? null;
 }
 
 function tableRow(cells: readonly string[]): string {
@@ -318,6 +353,55 @@ async function main(): Promise<void> {
   const unmatchedByPartner = gsliveAccounts - partnerMatchesCapture;
   const coverageCap =
     gsliveAccounts === 0 ? 0 : captureIds.size / gsliveAccounts;
+  const unmatchedAccounts = [...betReport.accounts.values()]
+    .filter((account) => {
+      for (const partner of account.partners) {
+        if (captureIds.has(partner)) return false;
+      }
+      return true;
+    })
+    .sort((left, right) =>
+      compareText(
+        firstPartner(left) ?? left.userId,
+        firstPartner(right) ?? right.userId,
+      ),
+    );
+  const probeSample = sampleEvenly(unmatchedAccounts, options.probeSample);
+  const probePlan = probeSample.map((account) => {
+    const partner = firstPartner(account);
+    const agent = firstAgent(account);
+    return {
+      gsliveUserId: account.userId,
+      partnerUserIds: [...account.partners].sort(compareText),
+      agents: [...account.agents].sort(compareText),
+      request: {
+        method: "POST",
+        path: "/cloud/api/Manager/getInfoPlayer",
+        contentType: "application/x-www-form-urlencoded; charset=UTF-8",
+        form: {
+          customerID: partner ?? "",
+          agentID: agent ?? "",
+          agentOwner: agent ?? "",
+          operation: "getInfoPlayer",
+          RRO: "0",
+        },
+      },
+    };
+  });
+  const probePlanDoc = {
+    schemaVersion: 1,
+    kind: "queue-identity-probe-plan",
+    generatedAt: new Date().toISOString(),
+    sourceModule: "app/manager/module/player-info.js?bust=1.0.281",
+    sourceModuleSha256:
+      "865b005a4471a17cba904bce3f6cbc06816afbd20b7ad02904c9b8cb5ba50bf2",
+    population:
+      "GSLive accounts without a partnerUserID in the available F402 capture",
+    populationSize: unmatchedAccounts.length,
+    sampleSize: probePlan.length,
+    note: "customerID is sent as partnerUserID. Confirm the padded CustomerID semantics with one known account before running the full sample; INFO:null means the account was not found.",
+    requests: probePlan,
+  };
 
   const lines: string[] = [
     "# Identity diagnostic",
@@ -436,6 +520,19 @@ async function main(): Promise<void> {
     `- The admin file in this checkout has **${admin?.rows ?? 0} row(s)**, so it cannot answer the full-master question. The 131-row namespace referenced earlier is closer to the ticker snapshot (${ticker?.customerIds.size ?? 0} distinct today) than to this admin file.`,
     `- "Present but no key match" cannot be measured from this capture because the customer index carries only the key itself. The full \`getCustomerAdmin\` rows carry \`CustomerID\`, \`Login\`, \`AgentID\`, and \`Name\`; that is the capture needed to distinguish normalization from absence.`,
     "",
+    "## Sampled existence probe",
+    "",
+    `The \`player-info.js\` module (v1.0.281, SHA-256 \`865b005a…\`) calls \`getInfoPlayer\` with:`,
+    "",
+    "```text",
+    "POST /cloud/api/Manager/getInfoPlayer",
+    "form: customerID=<partnerUserID>, agentID=<agent>, agentOwner=<agent>,",
+    "      operation=getInfoPlayer, RRO=0",
+    "```",
+    "",
+    `A \`null\` INFO means the account was not found. The plan samples ${probePlan.length} of ${unmatchedAccounts.length} unmatched accounts: ${options.probeOut}.`,
+    `The generated sample uses \`customerID = partnerUserID\`; confirm the padded \`CustomerID\` semantics on one known account before running the full sample.`,
+    "",
     "## Recommendation",
     "",
     "1. Capture the full `getCustomerAdmin` scope and rerun this diagnostic. If it contains the 2,167 absent partner ids, coverage rises without a crosswalk. If it does not, the master is incomplete.",
@@ -492,6 +589,11 @@ async function main(): Promise<void> {
       coverageCap,
       percentMatched: partnerMatchesCapture / gsliveAccounts,
     },
+    probePlan: {
+      path: options.probeOut,
+      populationSize: unmatchedAccounts.length,
+      sampleSize: probePlan.length,
+    },
   };
 
   const outPath = join(ROOT, options.out);
@@ -500,6 +602,11 @@ async function main(): Promise<void> {
   await mkdir(dirname(jsonPath), { recursive: true });
   await Bun.write(outPath, `${lines.join("\n")}\n`);
   await Bun.write(jsonPath, `${JSON.stringify(json, null, 2)}\n`);
+  if (probePlan.length > 0) {
+    const probePath = join(ROOT, options.probeOut);
+    await mkdir(dirname(probePath), { recursive: true });
+    await Bun.write(probePath, `${JSON.stringify(probePlanDoc, null, 2)}\n`);
+  }
 
   console.log(
     JSON.stringify(
@@ -508,6 +615,7 @@ async function main(): Promise<void> {
         json: jsonPath,
         sources: json.sources,
         accounts: json.accounts,
+        probePlan: json.probePlan,
       },
       null,
       2,
