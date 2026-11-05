@@ -387,13 +387,55 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: "accountBridge",
+      blockedBy: "topKGapCalibration",
       value: {
         perConfirmedHit: 0.02,
         cap: 0.1,
         appliedTo: "normalized-priority",
-        confirmedByRule: { period_correlation: 0 },
       },
+    });
+    expect(
+      (
+        metadata.definitions.find(
+          (definition) => definition.name === "ruleHitWeight",
+        )?.value as { confirmedByRule: Record<string, number> }
+      ).confirmedByRule["period_correlation"],
+    ).toBe(0);
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "queuePriorityOrder",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      state: "not_measured",
+      blockedBy: "weightCalibration",
+      value: [
+        "desk-flag",
+        "findings",
+        "rule-weight",
+        "odds-drift",
+        "model-score",
+        "bets",
+      ],
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "scoreNormalization",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      state: "not_measured",
+      blockedBy: "corpusFreshness",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "bridgeCoverage",
+      ),
+    ).toMatchObject({
+      kind: "metric",
+      state: "not_measured",
+      blockedBy: "durableCustomerMaster",
+      value: 0.0394,
     });
     expect(
       metadata.definitions.find(
@@ -402,7 +444,12 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "caveat",
       state: "not_measured",
-      blockedBy: "accountBridge",
+      blockedBy: [
+        "durableCustomerMaster",
+        "corpusFreshness",
+        "reviewRows",
+        "topKGapCalibration",
+      ],
     });
     expect(
       metadata.definitions.find((definition) => definition.name === "response"),

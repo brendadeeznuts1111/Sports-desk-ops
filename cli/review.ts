@@ -650,7 +650,7 @@ export interface FlagsMetricDefinition {
   readonly evaluates?: string;
   readonly notApplicableTo?: string;
   readonly state?: string | undefined;
-  readonly blockedBy?: string | undefined;
+  readonly blockedBy?: string | readonly string[] | undefined;
   readonly method?: string;
   readonly value?: unknown;
   readonly sampledFrom?: number;
@@ -875,7 +875,7 @@ export function buildFlagsMetricMetadata(
         name: "ruleHitWeight",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: "accountBridge",
+        blockedBy: "topKGapCalibration",
         value: {
           perConfirmedHit: RULE_HIT_WEIGHT_PER_CONFIRMED,
           cap: RULE_HIT_WEIGHT_CAP,
@@ -916,10 +916,15 @@ export function buildFlagsMetricMetadata(
         name: "queueEscalation",
         kind: "caveat",
         state: "not_measured",
-        blockedBy: "accountBridge",
-        value: "not-applied",
+        blockedBy: [
+          "durableCustomerMaster",
+          "corpusFreshness",
+          "reviewRows",
+          "topKGapCalibration",
+        ],
+        value: "not_implemented",
         description:
-          "Confirmed rule hits are not attached to fraud_queue: the review store keys on hashed F402 customerRef/agentRef, the queue keys on GSLive userID, and partnerUserID overlap is partial. The queue model score is 0-100; the weight contract uses a normalized 0-1 priority.",
+          "Bridge coverage is 3.94% (102/2586 GSLive accounts); the GSLive corpus window ends 2026-11-04T05:59:59Z; there are 0 confirmed reviews; the top-100 median adjacent score gap is 0 (54 ties), so +0.10 is uncalibrated. All four must clear before the queue batch can run.",
       },
       {
         name: "response",
@@ -927,6 +932,53 @@ export function buildFlagsMetricMetadata(
         value: "measurement-only",
         description:
           "A confirmed flag writes to flag_review only: no notification, queue escalation, or account change. rulePrecision measures the rule, not an action.",
+      },
+      {
+        name: "queuePriorityOrder",
+        kind: "parameter",
+        state: "not_measured",
+        blockedBy: "weightCalibration",
+        value: [
+          "desk-flag",
+          "findings",
+          "rule-weight",
+          "odds-drift",
+          "model-score",
+          "bets",
+        ],
+        description:
+          "Lexicographic key order; rule-weight reorders only within (desk-flag, findings). Not applied until the top-K gap median is measured.",
+      },
+      {
+        name: "scoreNormalization",
+        kind: "parameter",
+        state: "not_measured",
+        blockedBy: "corpusFreshness",
+        value: {
+          divisor: 100,
+          observed: {
+            n: 1276,
+            min: 0,
+            max: 100,
+            mean: 52.18,
+            sd: 22.67,
+          },
+          measuredAt: "2026-11-05T05:50:00.006Z",
+          source: "GSLive corpus 2026-11-04 (stale)",
+        },
+        description:
+          "The model score is 0-100; normalize by 100 before adding weight. Observed over 1,276 eligible accounts; refresh after live ingestion.",
+      },
+      {
+        name: "bridgeCoverage",
+        kind: "metric",
+        unit: "account",
+        population: "gslive-accounts",
+        value: 0.0394,
+        state: "not_measured",
+        blockedBy: "durableCustomerMaster",
+        description:
+          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%); this is a snapshot of the ticker capture, not a durable customer master.",
       },
       {
         name: "reviewedSamplePositiveRate",
@@ -1002,10 +1054,18 @@ export function validateFlagsMetricMetadata(
         `flagsMetricMetadata: ${row.name}.derivedFrom "${row.derivedFrom}" is not sampled|measured|computed|extrapolated`,
       );
     }
-    if (row.state === "not_measured" && (row.blockedBy ?? "").trim() === "") {
-      throw new Error(
-        `flagsMetricMetadata: ${row.name} is not_measured but has no blockedBy`,
-      );
+    if (row.state === "not_measured") {
+      const blocked = row.blockedBy;
+      const empty =
+        blocked === undefined ||
+        (typeof blocked === "string"
+          ? blocked.trim() === ""
+          : blocked.length === 0);
+      if (empty) {
+        throw new Error(
+          `flagsMetricMetadata: ${row.name} is not_measured but has no blockedBy`,
+        );
+      }
     }
     if (row.evaluates !== undefined) {
       if (row.evaluates !== "rule") {
