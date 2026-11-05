@@ -37,9 +37,10 @@ export const AJAX_URL =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
 
 /**
- * Session bootstrap the SPA itself uses (`docs/gs-manager-contracts.md`, "Session"):
- * `POST {"checkSession":true}` returns `ganchrowSessionId`, which the app then sends as the
- * JS-readable `x-gs-session` header on `ajax.php`. It is not a credential login.
+ * Session endpoint the SPA uses for both flows: `POST {"checkSession":true}` returns
+ * `ganchrowSessionId` (sent as the JS-readable `x-gs-session` header on `ajax.php`), and
+ * `POST {"username","password"}` is the credential login. The credential flow is used by
+ * `lib/gslive_auto_session.ts`; no credential or cookie value is logged.
  */
 export const SIGNIN_URL =
   "https://plive.sportswidgets.pro/api/v3/manager-tools/signin/";
@@ -84,7 +85,7 @@ export type DateFilterBy = (typeof BET_REPORT_DATE_FILTERS)[number];
 
 const STATE_FIELD_CANDIDATES = ["state", "status", "betState", "betStatus"];
 
-const USER_AGENT =
+export const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
 
 export interface BetReportPayload {

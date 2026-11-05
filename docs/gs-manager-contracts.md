@@ -135,18 +135,18 @@ A second evidence level now exists: an operator's browser network log names the 
 calls. **URLs only** — no methods, request bodies, headers, cookies or responses were captured, and
 none are reproduced here.
 
-| URL observed                                          | Appears to be                                       | Contract status                                                                                                             |
-| ----------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `/manager-tools/ajax.php` (4 calls)                   | Report/data transport                               | `blocked_contract` — action, method, auth, body, response all unknown                                                       |
-| `/manager-tools/usersList/?t=<ms>`                    | Player/user list (JSON)                             | `blocked_contract`; unauthenticated `GET` → **401** (`text/html`, `no-store`) — see §2.7                                    |
-| `/api/v3/manager-tools/signin/`                       | Session sign-in                                     | `blocked_contract` — auth flow unknown; do not probe                                                                        |
-| `/api/v3/manager-tools/common/`                       | Session bootstrap                                   | **observed**: unauthenticated `GET` → `200` `{"FLAVOR":"live","partner":118}` — see §2.5                                    |
-| `/manager-tools/partnerConfig/`                       | Partner configuration                               | `blocked_contract`; responds **401** to an unauthenticated GET (verified 2026-11-02); one response body observed — see §2.3 |
-| `/manager-tools/groups/`                              | Group/agent hierarchy (the SPA preloads it as JSON) | `blocked_contract`; 401 unauthenticated GET; client builds `GET {group, withSle:true}` — §2.8                               |
-| `/manager-tools/translations/v2/getI18nResources/...` | UI strings                                          | public, no report data                                                                                                      |
-| `/manager-tools/assets/components/*/*.html`           | UI component templates (ag-Grid/React fragments)    | public static assets; no data contract                                                                                      |
-| `/betLobbyV2/logic/`                                  | Bet lobby action dispatcher (`POST` + `{"a": …}`)   | **observed**: unauthenticated `POST {"a":"sportPeriods"}` → `200` JSON catalog — see §2.4                                   |
-| `/live/data?...`                                      | Sports/league/country catalog                       | **observed**: unauthenticated `GET` → `200` JSON, 80/29,938/383 entries — see §2.6; not a manager report surface            |
+| URL observed                                          | Appears to be                                       | Contract status                                                                                                                                                                                                         |
+| ----------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/manager-tools/ajax.php` (4 calls)                   | Report/data transport                               | `blocked_contract` — action, method, auth, body, response all unknown                                                                                                                                                   |
+| `/manager-tools/usersList/?t=<ms>`                    | Player/user list (JSON)                             | `blocked_contract`; unauthenticated `GET` → **401** (`text/html`, `no-store`) — see §2.7                                                                                                                                |
+| `/api/v3/manager-tools/signin/`                       | Session sign-in / bootstrap                         | **observed 2026-11-05**: `POST {"username","password"}` → **403** + "Username or password are incorrect" for rejected credentials; `POST {"checkSession":true}` → `ganchrowSessionId` when a session exists — see §2.10 |
+| `/api/v3/manager-tools/common/`                       | Session bootstrap                                   | **observed**: unauthenticated `GET` → `200` `{"FLAVOR":"live","partner":118}` — see §2.5                                                                                                                                |
+| `/manager-tools/partnerConfig/`                       | Partner configuration                               | `blocked_contract`; responds **401** to an unauthenticated GET (verified 2026-11-02); one response body observed — see §2.3                                                                                             |
+| `/manager-tools/groups/`                              | Group/agent hierarchy (the SPA preloads it as JSON) | `blocked_contract`; 401 unauthenticated GET; client builds `GET {group, withSle:true}` — §2.8                                                                                                                           |
+| `/manager-tools/translations/v2/getI18nResources/...` | UI strings                                          | public, no report data                                                                                                                                                                                                  |
+| `/manager-tools/assets/components/*/*.html`           | UI component templates (ag-Grid/React fragments)    | public static assets; no data contract                                                                                                                                                                                  |
+| `/betLobbyV2/logic/`                                  | Bet lobby action dispatcher (`POST` + `{"a": …}`)   | **observed**: unauthenticated `POST {"a":"sportPeriods"}` → `200` JSON catalog — see §2.4                                                                                                                               |
+| `/live/data?...`                                      | Sports/league/country catalog                       | **observed**: unauthenticated `GET` → `200` JSON, 80/29,938/383 entries — see §2.6; not a manager report surface                                                                                                        |
 
 What this changes: the earlier statement that **no** URL had ever been observed is now too strong,
 so it is corrected at the top of this document. What it does **not** change: `ajax.php` remains
@@ -352,10 +352,14 @@ helper, plus a request interceptor that sets, on every call:
 - `withCredentials` only when the URL is absolute (`startsWith("http")`), which is never true for the
   `/manager-tools/…` paths.
 
-**Session.** `POST /api/v3/manager-tools/signin/` with `{"checkSession":true}`; the response carries
-`ganchrowSessionId` plus `adminUserName`/`agentName`. Logout is `POST /manager-tools/ajax.php` with
-`{"action":"logout"}` — so `ajax.php` is an action dispatcher keyed on `action`, consistent with the
-earlier hypothesis that it was not a rows API.
+**Session.** `POST /api/v3/manager-tools/signin/` serves both flows: `{"checkSession":true}`
+returns `ganchrowSessionId` plus `adminUserName`/`agentName` when a session exists, and
+`{"username","password"}` is the credential login the SPA uses (request-body keys observed from
+`assets/index-DB17VVxN.js` and a CDP trace, 2026-11-05). A rejected credential login returns
+**403** with the login page text "Username or password are incorrect." No credential or cookie
+value is recorded here. Logout is `POST /manager-tools/ajax.php` with `{"action":"logout"}` — so
+`ajax.php` is an action dispatcher keyed on `action`, consistent with the earlier hypothesis that
+it was not a rows API.
 
 **The report request.** `kind` is the report id and everything else is a query string:
 
@@ -415,6 +419,22 @@ What would: a second operator replaying the probe set from this document alone, 
 produced by tooling this author did not write. Neither exists. Treat the §2.3/§2.5/§2.6 bodies as
 single-source observations, §2.4 as single-source, twice, §2.7 as a status code and nothing more, and
 §2.8 as static source rather than a captured exchange.
+
+### 2.10 Sign-in flow — source plus one CDP trace (2026-11-05)
+
+The public SPA bundle `assets/index-DB17VVxN.js` defines both flows on the same endpoint:
+`POST /api/v3/manager-tools/signin/` with `{checkSession:true}` for bootstrap and
+`{username,password}` for the credential login. A CDP trace of the login page confirmed the
+credential request-body keys (`password`, `username`), a **403** response for the keychain
+credentials in this checkout, and the rendered error "Username or password are incorrect."
+
+That 403 is a credential verdict, not an empty report. `lib/gslive_auto_session.ts` now posts to
+this endpoint, sends `x-gs-session` on the verification probe, and persists a GSID only after the
+session verifies; it never installs a pre-auth cookie. No username, password, cookie or session id
+is recorded here.
+
+Limits: one operator, one trace, one invalid-credential attempt. A successful credential login was
+not observed in this checkout, so the 200 response shape remains unconfirmed.
 
 ## 3. CLI interfaces — local orchestration, not HTTP endpoints
 

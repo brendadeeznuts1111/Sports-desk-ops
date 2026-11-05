@@ -1,6 +1,11 @@
 /** Auto-mint the GSLive GSID from keychain credentials; no secret is logged or printed. */
 import { readFileSync, writeFileSync } from "node:fs";
-import { GSID_SECRET } from "../scripts/fetch-bet-tally.ts";
+import {
+  bootstrapGanchrowSession,
+  GSID_SECRET,
+  SIGNIN_URL,
+  USER_AGENT,
+} from "../scripts/fetch-bet-tally.ts";
 
 export const GSLIVE_AJAX =
   "https://plive.sportswidgets.pro/manager-tools/ajax.php";
@@ -42,14 +47,30 @@ export async function getGsid(): Promise<string | null> {
   if (fromKeychain !== null && fromKeychain !== "") return fromKeychain;
   return readSessionFile();
 }
-async function probe(gsid: string, fetchImpl: typeof fetch): Promise<boolean> {
+/** Injectable credential reader so tests never touch the real keychain. */
+export interface GsliveCredentialReader {
+  get(name: "GSLIVE_USERNAME" | "GSLIVE_PASSWORD"): Promise<string | null>;
+}
+
+const keychainCredentialReader: GsliveCredentialReader = {
+  get: (name) => secret(name),
+};
+
+async function probe(
+  gsid: string,
+  fetchImpl: typeof fetch,
+  sessionGate = "",
+): Promise<boolean> {
+  const headers: Record<string, string> = {
+    cookie: `GSID=${gsid}`,
+    "content-type": "application/x-www-form-urlencoded",
+  };
+  // The SPA sends the bootstrap id as `x-gs-session`; ajax.php can reject a valid GSID without it.
+  if (sessionGate !== "") headers["x-gs-session"] = sessionGate;
   try {
     const res = await fetchImpl(GSLIVE_AJAX, {
       method: "POST",
-      headers: {
-        cookie: `GSID=${gsid}`,
-        "content-type": "application/x-www-form-urlencoded",
-      },
+      headers,
       body: new URLSearchParams({
         action: "getBetLog",
         betId: "0",
@@ -71,9 +92,10 @@ async function probe(gsid: string, fetchImpl: typeof fetch): Promise<boolean> {
 }
 export async function mintGsid(
   fetchImpl: typeof fetch = fetch,
+  credentials: GsliveCredentialReader = keychainCredentialReader,
 ): Promise<string> {
-  const username = await secret("GSLIVE_USERNAME");
-  const password = await secret("GSLIVE_PASSWORD");
+  const username = await credentials.get("GSLIVE_USERNAME");
+  const password = await credentials.get("GSLIVE_PASSWORD");
   if (
     username === null ||
     username === "" ||
@@ -84,17 +106,38 @@ export async function mintGsid(
       "GSLive username/password are not in Bun.secrets (service com.bookdeskops.sportsdesk)",
     );
   }
-  const res = await fetchImpl(GSLIVE_AJAX, {
+  // The SPA logs in with JSON `{username,password}` to the signin endpoint. The older
+  // `ajax.php action=login` path returned a pre-auth GSID that failed every getBetReport call.
+  const res = await fetchImpl(SIGNIN_URL, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      action: "login",
-      username,
-      password,
-    }).toString(),
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      referer: "https://plive.sportswidgets.pro/manager-tools/",
+      "user-agent": USER_AGENT,
+    },
+    body: JSON.stringify({ username, password }),
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
   });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(
+      `GSLive rejected the keychain credentials (HTTP ${res.status}); update ` +
+        "GSLIVE_USERNAME/GSLIVE_PASSWORD or provision GSLIVE_SESSION_ID",
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`GSLive signin returned HTTP ${res.status}`);
+  }
+  const contentType = res.headers.get("content-type") ?? "";
+  let body: { GSID?: unknown; gsid?: unknown } = {};
+  if (contentType.includes("json")) {
+    try {
+      body = (await res.json()) as { GSID?: unknown; gsid?: unknown };
+    } catch {
+      body = {};
+    }
+  }
   const cookies =
     typeof res.headers.getSetCookie === "function"
       ? res.headers.getSetCookie()
@@ -107,18 +150,29 @@ export async function mintGsid(
       break;
     }
   }
+  if (gsid === "") gsid = String(body.GSID ?? body.gsid ?? "");
   if (gsid === "") {
-    try {
-      const body = (await res.json()) as { GSID?: unknown; gsid?: unknown };
-      gsid = String(body.GSID ?? body.gsid ?? "");
-    } catch {
-      /* no JSON */
-    }
+    throw new Error("GSLive signin succeeded without a GSID cookie");
   }
-  if (gsid === "")
+  let gate: string;
+  try {
+    gate = await bootstrapGanchrowSession({
+      cookieHeader: `GSID=${gsid}`,
+      fetchImpl,
+    });
+  } catch {
     throw new Error(
-      `GSLive login did not return a GSID (HTTP ${res.status}); set GSID manually via bun run secrets:gslive set`,
+      "GSLive signin did not establish a session; the keychain credentials were rejected " +
+        "or the pre-auth session is missing. Update GSLIVE_USERNAME/GSLIVE_PASSWORD or " +
+        "provision GSLIVE_SESSION_ID",
     );
+  }
+  if (!(await probe(gsid, fetchImpl, gate))) {
+    throw new Error(
+      "GSLive signin returned a GSID that did not verify against ajax.php",
+    );
+  }
+  // Persist only after verification, so a failed login never overwrites a usable session.
   cachedGsid = gsid;
   try {
     await Bun.secrets.set({
@@ -131,19 +185,23 @@ export async function mintGsid(
     // Best effort: keychain writes are denied (ERR_SECRETS_PLATFORM_ERROR) in some sandboxes.
   }
   writeSessionFile(gsid);
-  if (await probe(gsid, fetchImpl)) return gsid;
-  throw new Error("minted GSID did not verify against ajax.php");
+  return gsid;
 }
 export async function ensureGsid(
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   const existing = await getGsid();
-  if (
-    existing !== null &&
-    existing !== "" &&
-    (await probe(existing, fetchImpl))
-  )
-    return existing;
+  if (existing !== null && existing !== "") {
+    try {
+      const gate = await bootstrapGanchrowSession({
+        cookieHeader: `GSID=${existing}`,
+        fetchImpl,
+      });
+      if (await probe(existing, fetchImpl, gate)) return existing;
+    } catch {
+      // Expired or gate-less: fall through to a credential login.
+    }
+  }
   return mintGsid(fetchImpl);
 }
 export async function fetchBetLog(
