@@ -6,13 +6,18 @@ import { dirname, join } from "node:path";
 import { openReviewDb, recordFlagReview } from "../cli/review.ts";
 import { loadFraudPerception } from "../lib/fraud_logs.ts";
 import type { FraudFinding } from "../lib/fraud_logs.ts";
+import { fitFraudModel, writeFraudModelArtifact } from "../lib/fraud_model.ts";
 import { runFraudPatterns } from "../lib/fraud_patterns.ts";
 import { buildFraudQueue } from "../lib/fraud_queue.ts";
 import {
   CLI_PATH,
+  CORPUS_PRIMARY_REL,
   FIXED_NOW_ISO,
   buildFixtureRoot,
+  buildSyntheticRoot,
   fixedNow,
+  sha256Of,
+  writeAt,
 } from "./fixtures/fraud/support.ts";
 
 const roots: string[] = [];
@@ -268,11 +273,30 @@ describe("fraud priority queue (CLI)", () => {
         readiness: {
           ready: boolean;
           blockers: { name: string }[];
+          ruleApplication: {
+            applied: string[];
+            notApplied: { rule: string; reason: string; n: number }[];
+            blockers: { name: string }[];
+          };
+        };
+        bridge: {
+          coverage: {
+            value: number;
+            matched: number;
+            total: number;
+            evidence: string;
+            artifactReason: string | null;
+          };
+          representativeness: {
+            representative: boolean | null;
+            reason?: string;
+          };
         };
         inputs: {
           bridgeCoverage: number | null;
           bridgeRepresentative: boolean | null;
           confirmedReviews: number;
+          rules: { rule: string; confirmedReviews: number }[];
         };
       };
     };
@@ -286,9 +310,32 @@ describe("fraud priority queue (CLI)", () => {
       "bridgeRepresentativeness",
       "reviewRows",
     ]);
-    expect(error.details.inputs.bridgeCoverage).toBeNull();
+    expect(error.details.inputs.bridgeCoverage).toBeCloseTo(102 / 2586, 12);
     expect(error.details.inputs.bridgeRepresentative).toBeNull();
     expect(error.details.inputs.confirmedReviews).toBe(0);
+    expect(error.details.bridge.coverage).toMatchObject({
+      matched: 102,
+      total: 2586,
+      evidence: "committed-baseline",
+      artifactReason: "missing",
+    });
+    expect(error.details.bridge.coverage.value).toBeCloseTo(102 / 2586, 12);
+    expect(error.details.bridge.representativeness).toMatchObject({
+      representative: null,
+      reason: "missing",
+    });
+    expect(error.details.inputs.rules).toHaveLength(9);
+    expect(error.details.readiness.ruleApplication.notApplied).toHaveLength(9);
+    expect(
+      error.details.readiness.ruleApplication.notApplied.every(
+        (entry) => entry.n === 0 && entry.reason === "reviewedSampleSize",
+      ),
+    ).toBe(true);
+    expect(
+      error.details.readiness.ruleApplication.blockers.map(
+        (blocker) => blocker.name,
+      ),
+    ).toEqual(["reviewRowsPerRule"]);
     expect(result.body.rows).toBeUndefined();
     expect(result.body.batch).toBeUndefined();
   });
@@ -355,12 +402,126 @@ describe("fraud priority queue (CLI)", () => {
       }
     ).details;
     expect(details.inputs.confirmedReviews).toBe(5);
-    expect(details.inputs.rules).toEqual([
-      { rule: "period_correlation", confirmedReviews: 5 },
-    ]);
+    expect(details.inputs.rules).toHaveLength(9);
+    expect(
+      details.inputs.rules.find((rule) => rule.rule === "period_correlation"),
+    ).toEqual({ rule: "period_correlation", confirmedReviews: 5 });
     expect(details.readiness.ruleApplication.applied).toEqual([
       "period_correlation",
     ]);
-    expect(details.readiness.ruleApplication.notApplied).toEqual([]);
+    expect(details.readiness.ruleApplication.notApplied).toHaveLength(8);
+    expect(
+      (
+        details.readiness.ruleApplication.notApplied as {
+          n: number;
+        }[]
+      ).every((entry) => entry.n === 0),
+    ).toBe(true);
+  });
+
+  test("the batch executes when fresh data and a study open every gate", async () => {
+    const { root: created, corpus } = buildSyntheticRoot();
+    const root = track(created);
+    const nowSec = Math.floor(fixedNow().getTime() / 1000);
+    const document = {
+      r: { bets: corpus.rows },
+      e: 0,
+      d: "",
+      from: nowSec - 7200,
+      to: nowSec - 60,
+    };
+    writeAt(root, CORPUS_PRIMARY_REL, document);
+    writeAt(
+      root,
+      "Scratch/security/corpus/sha256.txt",
+      `${sha256Of(`${JSON.stringify(document, null, 2)}\n`)}  ${CORPUS_PRIMARY_REL}\n`,
+    );
+
+    const perception = await loadFraudPerception({ root, now: fixedNow() });
+    if (perception.corpus === null) throw new Error("fixture corpus missing");
+    const { artifact } = fitFraudModel({
+      corpus: perception.corpus,
+      config: perception.config,
+      now: fixedNow(),
+      options: {},
+    });
+    await writeFraudModelArtifact(root, artifact);
+
+    const db = openReviewDb(join(root, "reports/security/flags-review.sqlite"));
+    try {
+      recordFlagReview(db, {
+        runId: "batch-run",
+        seq: 0,
+        rule: "period_correlation",
+        wagerNumbers: ["900000000"],
+        verdict: "confirmed",
+        reviewer: "test",
+      });
+    } finally {
+      db.close();
+    }
+
+    writeAt(root, "reports/security/bridge-coverage.json", {
+      schemaVersion: 1,
+      kind: "queue-bridge-coverage",
+      measuredAt: FIXED_NOW_ISO,
+      population: "gslive-accounts",
+      matched: 102,
+      total: 2586,
+    });
+    writeAt(root, "reports/security/bridge-representativeness.json", {
+      schemaVersion: 1,
+      kind: "queue-bridge-representativeness",
+      measuredAt: FIXED_NOW_ISO,
+      corpusSha: artifact.corpusSha256,
+      covered: { n: 34, precision: 0.71, wilson: [0.54, 0.84] },
+      uncovered: { n: 21, precision: 0.62, wilson: [0.41, 0.79] },
+      representative: true,
+    });
+
+    const result = runCli(root, ["queue", "build", "--dry-run"]);
+    expect(result.code).toBe(0);
+    expect(result.body.success).toBe(true);
+    expect(result.body.subcommand).toBe("build");
+    expect(result.body.dryRun).toBe(true);
+
+    const readiness = result.body.readiness as {
+      ready: boolean;
+      ruleApplication: { applied: string[]; notApplied: unknown[] };
+    };
+    expect(readiness.ready).toBe(true);
+    expect(readiness.ruleApplication.applied).toEqual([]);
+    expect(readiness.ruleApplication.notApplied).toHaveLength(9);
+
+    const batch = result.body.batch as {
+      rows: unknown[];
+      totals: { eligible: number; returned: number };
+      ruleApplication: {
+        state: string;
+        applied: string[];
+        notApplied: unknown[];
+      };
+    };
+    expect(batch.rows.length).toBeGreaterThan(0);
+    expect(batch.totals.eligible).toBeGreaterThan(0);
+    expect(batch.totals.returned).toBe(batch.rows.length);
+    expect(batch.ruleApplication.state).toBe("not_applied");
+    expect(batch.ruleApplication.applied).toEqual([]);
+    expect(batch.ruleApplication.notApplied).toHaveLength(9);
+
+    const inputs = result.body.inputs as {
+      bridgeCoverage: number | null;
+      bridgeRepresentative: boolean | null;
+    };
+    expect(inputs.bridgeCoverage).toBeCloseTo(102 / 2586, 12);
+    expect(inputs.bridgeRepresentative).toBe(true);
+
+    const bridge = result.body.bridge as {
+      coverage: { value: number; matched: number; total: number };
+      representativeness: { representative: boolean };
+    };
+    expect(bridge.coverage).toMatchObject({ matched: 102, total: 2586 });
+    expect(bridge.coverage.value).toBeCloseTo(102 / 2586, 12);
+    expect(bridge.representativeness.representative).toBe(true);
   });
 });

@@ -502,8 +502,7 @@ describe("flags metric metadata", () => {
       ),
     ).toMatchObject({
       kind: "metric",
-      state: "not_measured",
-      blockedBy: { name: "durableCustomerMaster", layer: "escalation" },
+      derivedFrom: "measured",
       value: 0.0394,
     });
     expect(
@@ -529,8 +528,8 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "quality",
       state: "not_measured",
-      blockedBy: "bridgeRepresentativenessStudy",
-      value: { covered: 102, uncovered: 2484, measured: false },
+      blockedBy: "studyArtifact",
+      value: { representative: null, study: "missing" },
     });
     const ruleApplication = metadata.definitions.find(
       (definition) => definition.name === "ruleApplication",

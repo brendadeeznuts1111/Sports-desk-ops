@@ -157,14 +157,6 @@ export function assessQueueReadiness(
  */
 export type QueueRuleApplicationState = "measured" | "partial" | "not_applied";
 
-export interface QueueBatchStub {
-  readonly rows: readonly never[];
-  readonly ruleApplication: QueueReadiness["ruleApplication"] & {
-    /** measured = every reviewed rule applied; partial = some did; not_applied = none did. */
-    readonly state: QueueRuleApplicationState;
-  };
-}
-
 function ruleApplicationState(
   application: QueueReadiness["ruleApplication"],
 ): QueueRuleApplicationState {
@@ -172,12 +164,25 @@ function ruleApplicationState(
   return application.notApplied.length === 0 ? "measured" : "partial";
 }
 
-export function queueBatchBody(readiness: QueueReadiness): QueueBatchStub {
+/**
+ * Run the batch body behind the gate. The gate check stays here so a caller cannot build a queue
+ * without an open readiness result; the body itself is supplied by the caller and is only
+ * evaluated after the check.
+ */
+export function queueBatchBody<T extends object>(
+  readiness: QueueReadiness,
+  body: () => T,
+): T & {
+  readonly ruleApplication: QueueReadiness["ruleApplication"] & {
+    /** measured = every reviewed rule applied; partial = some did; not_applied = none did. */
+    readonly state: QueueRuleApplicationState;
+  };
+} {
   if (!readiness.ready) {
     throw new Error("queueBatchBody: readiness gate is closed");
   }
   return {
-    rows: [],
+    ...body(),
     ruleApplication: {
       ...readiness.ruleApplication,
       state: ruleApplicationState(readiness.ruleApplication),

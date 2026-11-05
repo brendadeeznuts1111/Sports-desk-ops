@@ -145,7 +145,9 @@ describe("queue readiness gate", () => {
       confirmedReviews: 0,
       rules: [],
     });
-    expect(() => queueBatchBody(closed)).toThrow(/gate is closed/);
+    expect(() => queueBatchBody(closed, () => ({ rows: [] }))).toThrow(
+      /gate is closed/,
+    );
     const open = assessQueueReadiness({
       corpusAgeHours: 2,
       modelAgeDays: 2,
@@ -157,8 +159,8 @@ describe("queue readiness gate", () => {
         { rule: "velocity_market", confirmedReviews: 3 },
       ],
     });
-    expect(queueBatchBody(open)).toEqual({
-      rows: [],
+    expect(queueBatchBody(open, () => ({ rows: ["U001"] }))).toEqual({
+      rows: ["U001"],
       ruleApplication: {
         ready: true,
         applied: ["period_correlation"],
@@ -177,7 +179,9 @@ describe("queue readiness gate", () => {
       confirmedReviews: 6,
       rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
     });
-    expect(queueBatchBody(complete).ruleApplication.state).toBe("measured");
+    expect(queueBatchBody(complete, () => ({})).ruleApplication.state).toBe(
+      "measured",
+    );
     const none = assessQueueReadiness({
       corpusAgeHours: 2,
       modelAgeDays: 2,
@@ -186,7 +190,9 @@ describe("queue readiness gate", () => {
       confirmedReviews: 1,
       rules: [{ rule: "period_correlation", confirmedReviews: 1 }],
     });
-    expect(queueBatchBody(none).ruleApplication.state).toBe("not_applied");
+    expect(queueBatchBody(none, () => ({})).ruleApplication.state).toBe(
+      "not_applied",
+    );
   });
 
   test("a missing corpus or model reports 'missing', not an infinity string", () => {

@@ -1092,14 +1092,13 @@ export function buildFlagsMetricMetadata(
         name: "bridgeRepresentativeness",
         kind: "quality",
         state: "not_measured",
-        blockedBy: "bridgeRepresentativenessStudy",
+        blockedBy: "studyArtifact",
         value: {
-          covered: 102,
-          uncovered: 2484,
-          measured: false,
+          representative: null,
+          study: "missing",
         },
         description:
-          "Coverage is not representativeness: before shipping, compare rule precision on covered accounts with the model's precision on uncovered accounts within one Wilson interval; if they diverge, the queue must state reasons are attached to N accounts only.",
+          "The other three execution gates (corpus, model, reviews) clear as data lands. This one requires a written study artifact at reports/security/bridge-representativeness.json; the gate reads `representative` and refuses if it is false or missing. Coverage is measured separately and is not a substitute for this study.",
       },
       {
         name: "queueEscalation",
@@ -1228,10 +1227,9 @@ export function buildFlagsMetricMetadata(
         unit: "account",
         population: "gslive-accounts",
         value: 0.0394,
-        state: "not_measured",
-        blockedBy: { name: "durableCustomerMaster", layer: "escalation" },
+        derivedFrom: "measured",
         description:
-          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%). Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones.",
+          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%), measured 2026-11-05T05:50Z. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones.",
       },
       {
         name: "reviewedSamplePositiveRate",

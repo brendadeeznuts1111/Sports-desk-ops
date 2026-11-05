@@ -75,10 +75,19 @@ import {
 import {
   buildFraudQueue,
   type FraudQueueModelSummary,
+  type FraudQueueResult,
   type FraudQueueScore,
 } from "../lib/fraud_queue.ts";
 import { buildFraudExploration } from "../lib/fraud_explore.ts";
 import { openSportsdeskSqliteReadonly } from "../lib/sportsdesk_sqlite.ts";
+import {
+  QUEUE_BRIDGE_COVERAGE_BASELINE,
+  readQueueBridgeCoverage,
+  readQueueBridgeStudy,
+  type BridgeArtifactRead,
+  type QueueBridgeCoverage,
+  type QueueBridgeStudy,
+} from "../lib/queue_bridge_evidence.ts";
 import {
   assessQueueReadiness,
   queueBatchBody,
@@ -91,6 +100,7 @@ import {
   readFlagReviews,
   type StoredFlagReview,
 } from "./review.ts";
+import { DETERMINISTIC_RULES, type RuleName } from "./rules.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -689,13 +699,74 @@ function formatInputAge(value: number, unit: "h" | "d"): string {
   return Number.isFinite(value) ? `${value.toFixed(1)}${unit}` : "missing";
 }
 
+function bridgePayload(
+  coverage: QueueBridgeCoverage,
+  coverageSource: "artifact" | "committed-baseline",
+  coverageReason: string | null,
+  study: BridgeArtifactRead<QueueBridgeStudy>,
+): Readonly<Record<string, unknown>> {
+  return {
+    coverage: {
+      value: coverage.value,
+      matched: coverage.matched,
+      total: coverage.total,
+      population: coverage.population,
+      measuredAt: coverage.measuredAt,
+      source: coverage.source,
+      evidence: coverageSource,
+      artifactReason: coverageReason,
+    },
+    representativeness:
+      study.present && study.artifact !== null
+        ? {
+            representative: study.artifact.representative,
+            measuredAt: study.artifact.measuredAt,
+            corpusSha: study.artifact.corpusSha,
+            covered: study.artifact.covered,
+            uncovered: study.artifact.uncovered,
+            method: study.artifact.method,
+          }
+        : {
+            representative: null,
+            state: "not_measured",
+            reason: study.reason,
+          },
+  };
+}
+
+function renderBridge(
+  coverage: QueueBridgeCoverage,
+  coverageSource: "artifact" | "committed-baseline",
+  study: BridgeArtifactRead<QueueBridgeStudy>,
+): string[] {
+  const lines = ["  bridge:"];
+  lines.push(
+    `    coverage: ${(coverage.value * 100).toFixed(2)}% (${coverage.matched}/${coverage.total}, ${coverage.population}, measured ${coverage.measuredAt}, ${coverageSource})`,
+  );
+  if (study.present && study.artifact !== null) {
+    const artifact = study.artifact;
+    lines.push(
+      `    representativeness: ${artifact.representative ? "representative" : "divergent"} (n=${artifact.covered.n}+${artifact.uncovered.n}, measured ${artifact.measuredAt})`,
+    );
+  } else {
+    lines.push(
+      `    representativeness: not measured (${study.reason ?? "unknown"})`,
+    );
+  }
+  return lines;
+}
+
 function renderQueueReadiness(
   readiness: QueueReadiness,
   inputs: QueueReadinessInput,
+  coverage: QueueBridgeCoverage,
+  coverageSource: "artifact" | "committed-baseline",
+  study: BridgeArtifactRead<QueueBridgeStudy>,
 ): string {
   const lines = [
     "queue build: NOT READY (dry run; no queue rows produced)",
-    `  measured: corpus=${formatInputAge(inputs.corpusAgeHours, "h")}, model=${formatInputAge(inputs.modelAgeDays, "d")}, confirmedReviews=${inputs.confirmedReviews}`,
+    `  current: corpus=${formatInputAge(inputs.corpusAgeHours, "h")}, model=${formatInputAge(inputs.modelAgeDays, "d")}, reviews=${inputs.confirmedReviews}`,
+    ...renderBridge(coverage, coverageSource, study),
     "  execution:",
   ];
   if (readiness.blockers.length === 0) {
@@ -712,10 +783,11 @@ function renderQueueReadiness(
   } else {
     lines.push(`    applied: ${readiness.ruleApplication.applied.join(", ")}`);
   }
-  for (const entry of readiness.ruleApplication.notApplied) {
-    lines.push(
-      `    not applied: ${entry.rule} (${entry.reason}, n=${entry.n})`,
-    );
+  if (readiness.ruleApplication.notApplied.length > 0) {
+    lines.push("    notApplied:");
+    for (const entry of readiness.ruleApplication.notApplied) {
+      lines.push(`      ${entry.rule}: ${entry.reason} (n=${entry.n})`);
+    }
   }
   return lines.join("\n");
 }
@@ -743,6 +815,16 @@ async function cmdQueueBuild(
       ? join(context.root, FLAGS_REVIEW_DB_REL_PATH)
       : resolve(context.root, reviewArg);
   const reviews = loadQueueReviews(reviewPath);
+  const coverageRead = await readQueueBridgeCoverage(context.root);
+  const coverage =
+    coverageRead.present && coverageRead.artifact !== null
+      ? coverageRead.artifact
+      : QUEUE_BRIDGE_COVERAGE_BASELINE;
+  const coverageSource =
+    coverageRead.present && coverageRead.artifact !== null
+      ? ("artifact" as const)
+      : ("committed-baseline" as const);
+  const study = await readQueueBridgeStudy(context.root);
 
   // seq is per run; the same seq in two runs is two different flags. reviewer is not part of the
   // key because a double review of one flag is one confirmed flag, not two.
@@ -756,9 +838,19 @@ async function cmdQueueBuild(
     set.add(key);
     confirmedByRule.set(review.rule, set);
   }
-  const rules: QueueRuleSupport[] = [...confirmedByRule].map(
-    ([rule, keys]) => ({ rule, confirmedReviews: keys.size }),
-  );
+  // Every rule in the catalog is a candidate for the tie-break. Listing them at n=0 makes "no
+  // rules eligible" different from "no rules blocked"; a rule absent from a bare review map would
+  // silently disappear from both lists.
+  const catalog = Object.keys(DETERMINISTIC_RULES) as RuleName[];
+  const rules: QueueRuleSupport[] = catalog.map((rule) => ({
+    rule,
+    confirmedReviews: confirmedByRule.get(rule)?.size ?? 0,
+  }));
+  for (const [rule, keys] of confirmedByRule) {
+    if (!(rule in DETERMINISTIC_RULES)) {
+      rules.push({ rule, confirmedReviews: keys.size });
+    }
+  }
 
   const nowMs = context.now.getTime();
   const inputs: QueueReadinessInput = {
@@ -767,14 +859,23 @@ async function cmdQueueBuild(
       model.artifact === null
         ? Number.POSITIVE_INFINITY
         : ageIn(nowMs, model.artifact.fittedAt, 86_400_000),
-    // Not measured in a dry run. Coverage is reported, not gated; representativeness is the gate
-    // and stays blocked until the bridge study is run.
-    bridgeCoverage: null,
-    bridgeRepresentative: null,
+    // Coverage and representativeness are separate artifacts: a known coverage number survives
+    // a missing study, and the gate reads only `representative`.
+    bridgeCoverage: coverage.value,
+    bridgeRepresentative:
+      study.present && study.artifact !== null
+        ? study.artifact.representative
+        : null,
     confirmedReviews: confirmedFlags.size,
     rules,
   };
   const readiness = assessQueueReadiness(inputs);
+  const bridge = bridgePayload(
+    coverage,
+    coverageSource,
+    coverageRead.reason,
+    study,
+  );
 
   if (!readiness.ready) {
     const names = queueBlockers(readiness);
@@ -790,25 +891,81 @@ async function cmdQueueBuild(
             dryRun: true,
             readiness,
             inputs,
+            bridge,
           },
           EXIT_ERROR,
         ),
         true,
       );
     }
-    process.stdout.write(`${renderQueueReadiness(readiness, inputs)}\n`);
+    process.stdout.write(
+      `${renderQueueReadiness(readiness, inputs, coverage, coverageSource, study)}\n`,
+    );
     process.stderr.write(`queue_not_ready: ${message}\n`);
     return EXIT_ERROR;
   }
 
-  const batch = queueBatchBody(readiness);
+  const limit = integerFlag("queue build", flags, "--limit", 25, 1, 100);
+  const queue = await buildQueue(context, perception, corpus, limit, model);
+  const batch = queueBatchBody(readiness, () => queue);
   return emitSuccess(context, "queue", {
     subcommand: "build",
     dryRun: true,
     readiness,
     inputs,
+    bridge,
     batch,
     sources: sourceStates(perception),
+  });
+}
+
+type FraudModelRead = Awaited<ReturnType<typeof readFraudModel>>;
+
+async function buildQueue(
+  context: CliContext,
+  perception: FraudPerception,
+  corpus: FraudCorpus,
+  limit: number,
+  modelIn?: FraudModelRead,
+): Promise<FraudQueueResult> {
+  const patterns = runFraudPatterns(perception);
+  const model = modelIn ?? (await readFraudModel(context.root));
+
+  let scoreOf: ((accountId: string) => FraudQueueScore | null) | undefined;
+  let modelSummary: FraudQueueModelSummary;
+  if (model.artifact === null) {
+    modelSummary = { present: false, reason: model.state.reason };
+  } else {
+    const artifact = model.artifact;
+    const matrix = extractFraudFeatures(corpus.records, {
+      featureIds: perception.config.features.map((feature) => feature.id),
+      datacenterClasses: perception.config.detectors.datacenterClasses,
+    });
+    const cache = new Map<string, FraudQueueScore | null>();
+    scoreOf = (accountId: string): FraudQueueScore | null => {
+      const key = accountId.toUpperCase();
+      if (cache.has(key)) return cache.get(key) ?? null;
+      const score = scoreAccountWithModel(artifact, matrix, accountId);
+      const value =
+        score === null ? null : { score: score.score, band: score.band };
+      cache.set(key, value);
+      return value;
+    };
+    modelSummary = {
+      present: true,
+      fittedAt: artifact.fittedAt,
+      proxy: artifact.proxy,
+      corpusSha256: artifact.corpusSha256,
+    };
+  }
+
+  return buildFraudQueue({
+    corpus,
+    findings: patterns.findings,
+    scoreOf,
+    model: modelSummary,
+    limit,
+    insufficient: patterns.insufficient,
   });
 }
 
@@ -842,45 +999,7 @@ async function cmdQueue(
   const limit = integerFlag("queue", flags, "--limit", 25, 1, 100);
   const perception = await perceptionOf(context);
   const corpus = requireCorpus(perception, "queue");
-  const patterns = runFraudPatterns(perception);
-  const model = await readFraudModel(context.root);
-
-  let scoreOf: ((accountId: string) => FraudQueueScore | null) | undefined;
-  let modelSummary: FraudQueueModelSummary;
-  if (model.artifact === null) {
-    modelSummary = { present: false, reason: model.state.reason };
-  } else {
-    const artifact = model.artifact;
-    const matrix = extractFraudFeatures(corpus.records, {
-      featureIds: perception.config.features.map((feature) => feature.id),
-      datacenterClasses: perception.config.detectors.datacenterClasses,
-    });
-    const cache = new Map<string, FraudQueueScore | null>();
-    scoreOf = (accountId: string): FraudQueueScore | null => {
-      const key = accountId.toUpperCase();
-      if (cache.has(key)) return cache.get(key) ?? null;
-      const score = scoreAccountWithModel(artifact, matrix, accountId);
-      const value =
-        score === null ? null : { score: score.score, band: score.band };
-      cache.set(key, value);
-      return value;
-    };
-    modelSummary = {
-      present: true,
-      fittedAt: artifact.fittedAt,
-      proxy: artifact.proxy,
-      corpusSha256: artifact.corpusSha256,
-    };
-  }
-
-  const queue = buildFraudQueue({
-    corpus,
-    findings: patterns.findings,
-    scoreOf,
-    model: modelSummary,
-    limit,
-    insufficient: patterns.insufficient,
-  });
+  const queue = await buildQueue(context, perception, corpus, limit);
   return emitSuccess(context, "queue", {
     ...queue,
     sources: sourceStates(perception),
@@ -1727,6 +1846,11 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       "finding is converted to an invented point score and the model column is not a",
       "probability. Detectors are mostly book/agent-level aggregates, so account finding",
       "counts are usually 0; model-missing is reported as null scores, never as zeros.",
+      "queue build reads two bridge artifacts: reports/security/bridge-coverage.json (the",
+      "measured join count) and reports/security/bridge-representativeness.json (the study;",
+      "`representative` is the only field the gate reads). A missing study blocks execution;",
+      "a missing coverage file falls back to the committed 2026-11-05 baseline, with its",
+      "measurement time, rather than reporting 0%.",
     ],
     options: [
       {
