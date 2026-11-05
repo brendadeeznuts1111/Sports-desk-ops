@@ -87,11 +87,11 @@ What the page manages for the operator:
 
 Routes (same origin as the GUI, registered by the Host half when the browser carrier exists):
 
-| Route                            | Method | Purpose                                                                                                                                                                     |
-| :------------------------------- | :----- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/watchlist-autobet/board`   | GET    | Board: safety, config, sources, ledger counts, intents with UI derivations, paper summary, plan, decision feed, CSRF token.                                                 |
+| Route                            | Method | Purpose                                                                                                                                                                                    |
+| :------------------------------- | :----- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/watchlist-autobet/board`   | GET    | Board: safety, config, sources, ledger counts, intents with UI derivations, paper summary, plan, decision feed, CSRF token.                                                                |
 | `/api/watchlist-autobet/signals` | GET    | Signals inspector: the CLI `signals` payload (`includeRejected`, `limit`, `minConfidence` bounded server-side): sources, counts, per-signal gate verdicts and the advisory candidate list. |
-| `/api/watchlist-autobet/action`  | POST   | Closed action set (`enqueue`/`approve`/`reject`/`execute`/`settle`); requires `confirm: true`, the same Origin and the per-activation CSRF token, then returns CLI + board. |
+| `/api/watchlist-autobet/action`  | POST   | Closed action set (`enqueue`/`approve`/`reject`/`execute`/`settle`); requires `confirm: true`, the same Origin and the per-activation CSRF token, then returns CLI + board.                |
 
 The routes are **local GUI plumbing, not an authentication boundary**: the carrier's own page
 asks for DSH web auth, but these paths do not, so any process able to reach the loopback
@@ -221,20 +221,20 @@ bun run autobet <command> --help    # arguments, long + short flags, defaults, e
 Global flags are accepted before or after the command, long or short: `-h/--help`, `-j/--json`,
 `-r/--root <path>`, `-c/--config <path>`, `-n/--now <iso>`.
 
-| Command   | Short flags      | Effect                                                               |
-| :-------- | :--------------- | :------------------------------------------------------------------- |
-| `status`  | –                | config, ledger and source freshness                                  |
-| `signals` | `-l`, `-m`, `-i` | gate verdicts; `-i` includes rejected, `-m` pre-filters confidence   |
-| `candidates` | `-l`          | accounts the captures saw that the watchlist does not cover; read-only |
-| `plan`    | –                | dry run of `enqueue`; writes nothing                                 |
-| `enqueue` | `-a`             | idempotent queue of eligible intents; never approves or executes     |
-| `list`    | `-s`, `-l`       | intents by derived status (expiry computed at read time)             |
-| `approve` | `-a`, `-o`       | human decision: queued -> approved                                   |
-| `reject`  | `-a`, `-R`       | queued/approved -> rejected; reason required, releases stake         |
-| `execute` | `-v`             | paper fill of an approved intent; any other venue -> `live_disabled` |
-| `settle`  | `-e`             | won/lost/void for a filled intent, folds paper P&L                   |
-| `journal` | `-l`             | append-only event tail plus the folded paper summary                 |
-| `watch`   | `-i`             | enqueue loop (interval ≥ 30 s); queues only, never executes          |
+| Command      | Short flags      | Effect                                                                 |
+| :----------- | :--------------- | :--------------------------------------------------------------------- |
+| `status`     | –                | config, ledger and source freshness                                    |
+| `signals`    | `-l`, `-m`, `-i` | gate verdicts; `-i` includes rejected, `-m` pre-filters confidence     |
+| `candidates` | `-l`             | accounts the captures saw that the watchlist does not cover; read-only |
+| `plan`       | –                | dry run of `enqueue`; writes nothing                                   |
+| `enqueue`    | `-a`             | idempotent queue of eligible intents; never approves or executes       |
+| `list`       | `-s`, `-l`       | intents by derived status (expiry computed at read time)               |
+| `approve`    | `-a`, `-o`       | human decision: queued -> approved                                     |
+| `reject`     | `-a`, `-R`       | queued/approved -> rejected; reason required, releases stake           |
+| `execute`    | `-v`             | paper fill of an approved intent; any other venue -> `live_disabled`   |
+| `settle`     | `-e`             | won/lost/void for a filled intent, folds paper P&L                     |
+| `journal`    | `-l`             | append-only event tail plus the folded paper summary                   |
+| `watch`      | `-i`             | enqueue loop (interval ≥ 30 s); queues only, never executes            |
 
 ## Failure shape
 

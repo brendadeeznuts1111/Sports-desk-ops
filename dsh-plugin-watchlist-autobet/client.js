@@ -4614,7 +4614,7 @@ window.__ModuleLoader__.load({
                 void signals.load({ force: true });
               }
               if (serverBoard === null) {
-                void boardState.refresh();
+                boardState.refresh();
               }
               return { ok: true, cli };
             }
@@ -4628,13 +4628,13 @@ window.__ModuleLoader__.load({
               (body === null ? null : stringOrNull(body.message)) ??
               "";
             if (serverBoard === null || code === "csrf_refused") {
-              void boardState.refresh();
+              boardState.refresh();
             }
             return { ok: false, code, message, status: response.status };
           } catch (error) {
             // The action may have been applied server-side even though the response was
             // lost, so refresh the board and say the outcome is unknown.
-            void boardState.refresh();
+            boardState.refresh();
             const aborted =
               error !== null &&
               typeof error === "object" &&
