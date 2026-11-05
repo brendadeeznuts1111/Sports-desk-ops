@@ -144,6 +144,7 @@ none are reproduced here.
 | `/api/v3/manager-tools/common/`                       | Session bootstrap                                   | **observed**: unauthenticated `GET` → `200` `{"FLAVOR":"live","partner":118}` — see §2.5                                                                                                                                |
 | `/manager-tools/partnerConfig/`                       | Partner configuration                               | `blocked_contract`; responds **401** to an unauthenticated GET (verified 2026-11-02); one response body observed — see §2.3                                                                                             |
 | `/manager-tools/groups/`                              | Group/agent hierarchy (the SPA preloads it as JSON) | `blocked_contract`; 401 unauthenticated GET; client builds `GET {group, withSle:true}` — §2.8                                                                                                                           |
+| `/manager-tools/liveEvents/`                          | Live-event list / admin actions (legacy)            | **observed 2026-11-05** (source): GET list + 16 actions; source-only, no response captured — see §2.11                                                                                                                  |
 | `/manager-tools/translations/v2/getI18nResources/...` | UI strings                                          | public, no report data                                                                                                                                                                                                  |
 | `/manager-tools/assets/components/*/*.html`           | UI component templates (ag-Grid/React fragments)    | public static assets; no data contract                                                                                                                                                                                  |
 | `/betLobbyV2/logic/`                                  | Bet lobby action dispatcher (`POST` + `{"a": …}`)   | **observed**: unauthenticated `POST {"a":"sportPeriods"}` → `200` JSON catalog — see §2.4                                                                                                                               |
@@ -448,6 +449,37 @@ success. The bundle's `doServerRequest` also confirms `ajax.php` is the action d
 
 Limits: one operator, one trace, one invalid-credential attempt per route. A successful credential
 login was not observed in this checkout, so the 200 response shape remains unconfirmed.
+
+### 2.11 Legacy `liveEvents` actions — source-observed (2026-11-05)
+
+The public `assets/components/liveEvents/liveEvents-2f8bec425e.min.js` module defines
+`/manager-tools/liveEvents/` and the actions below. This is static source, not a captured exchange:
+no response body, row shape or auth failure was recorded.
+
+| Method                       | Action                | Purpose                         |
+| ---------------------------- | --------------------- | ------------------------------- |
+| `getLiveEvents`              | — (GET)               | current live events             |
+| `getFinishedEvents`          | `finished`            | finished events in a window     |
+| `getFinishedEventsNoResults` | `finished-no-results` | finished events missing results |
+| `getBlockedMarkets`          | `blocked-markets`     | blocked markets for an event    |
+| `setBlockedMarkets`          | `blocked-markets`     | replace blocked markets         |
+| `finishEvent`                | `finish-event`        | finish one event                |
+| `setEventInactive`           | `inactivate-event`    | inactivate one event            |
+| `setEventActive`             | `unfinish-event`      | reactivate one event            |
+| `unfinishEvent`              | `unfinish-event`      | unfinish one event              |
+| `cancelEvent`                | `cancel-event`        | cancel one event                |
+| `regradeEvent`               | `regrade-event`       | regrade one event               |
+| `ungradeEvent`               | `ungrade-event`       | ungrade one event               |
+| `toggleHalftime`             | `toggle-halftime`     | halftime toggle                 |
+| `addEventMessage`            | `add-message`         | event note                      |
+| `showEventLog`               | `show-log`            | event log                       |
+| `getCoefficientsByEventId`   | `event-coefficients`  | event coefficients              |
+| `blockEvent`                 | `block-event`         | block one event                 |
+| `blockEvents`                | `block-events`        | block many events               |
+| `saveScores`                 | `save-scores`         | save scores                     |
+
+The legacy component is not the React SPA; a React render crash in `index-DB17VVxN.js` is a
+different surface.
 
 ## 3. CLI interfaces — local orchestration, not HTTP endpoints
 
