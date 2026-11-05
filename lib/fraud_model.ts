@@ -117,6 +117,10 @@ export interface FraudLabelSupport {
   readonly holdoutNegatives: number;
   readonly totalPositives: number;
   readonly prevalence: number | null;
+  /** Holdout rows whose composite desk_flag is true (independent of the fitted proxy). */
+  readonly holdoutDeskFlagPositives: number;
+  /** Which signals make up the composite holdout positives; a row can carry more than one. */
+  readonly holdoutBySignal: FraudLabelSignalCounts;
 }
 
 export interface FraudMetricWindow {
@@ -324,6 +328,14 @@ export interface FraudFeatureLabels {
   readonly deskFlag: boolean;
   readonly suspectedBot: boolean;
   readonly reversedCredit: boolean;
+  readonly manualLog: boolean;
+}
+
+/** Holdout proxy-positive rows by source signal; the signals overlap, so counts need not sum. */
+export interface FraudLabelSignalCounts {
+  readonly suspectedBot: number;
+  readonly reversedCredit: number;
+  readonly manualLog: number;
 }
 
 export interface FraudFeatureRow {
@@ -591,6 +603,7 @@ function buildFeatureRow(
         record.suspectedBot || record.reversedCredit || record.manualLog,
       suspectedBot: record.suspectedBot,
       reversedCredit: record.reversedCredit,
+      manualLog: record.manualLog,
     },
     values,
     missing,
@@ -1367,6 +1380,21 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       stats: featureStats(matrix, column, trainCount, standardization),
     };
   });
+  const holdoutRows = matrix.rows.slice(trainCount);
+  const holdoutBySignal = {
+    suspectedBot: 0,
+    reversedCredit: 0,
+    manualLog: 0,
+  };
+  let holdoutDeskFlagPositives = 0;
+  for (let index = 0; index < holdoutRows.length; index += 1) {
+    const row = holdoutRows[index];
+    if (row?.labels.deskFlag !== true) continue;
+    holdoutDeskFlagPositives += 1;
+    if (row.labels.suspectedBot) holdoutBySignal.suspectedBot += 1;
+    if (row.labels.reversedCredit) holdoutBySignal.reversedCredit += 1;
+    if (row.labels.manualLog) holdoutBySignal.manualLog += 1;
+  }
   const metrics: FraudModelMetrics = {
     aucRoc: holdoutMetrics.aucRoc,
     averagePrecision: holdoutMetrics.averagePrecision,
@@ -1383,6 +1411,8 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       holdoutNegatives: holdoutCount - holdoutLabels.filter(Boolean).length,
       totalPositives,
       prevalence: rowCount === 0 ? null : totalPositives / rowCount,
+      holdoutDeskFlagPositives,
+      holdoutBySignal,
     },
     trainWindow: windowOf(matrix, 0, trainCount),
     holdoutWindow: windowOf(matrix, trainCount, rowCount),
@@ -1847,61 +1877,163 @@ export interface ModelReportPayloadOptions {
   readonly includeScoreMap?: boolean;
 }
 
-const MODEL_METRIC_METADATA = {
-  kind: "fraud-model-metric-metadata",
-  schemaVersion: 1,
-  definitions: [
-    {
-      name: "unit",
-      kind: "unit",
-      description:
-        "One getBetReport bet row; not an account, sport, sub-sport, market, or period.",
-    },
-    {
-      name: "label",
-      kind: "label",
-      description:
-        "The row's desk_flag proxy (suspectedBot OR reversedCredit OR manualLog), never a confirmed fraud outcome.",
-    },
-    {
-      name: "holdout",
-      kind: "population",
-      description: "The last 30% of rows by logTime (temporal split).",
-    },
-    {
-      name: "rowPrecisionAtK",
-      kind: "ranking-metric",
-      unit: "bet-row",
-      label: "desk_flag",
-      population: "temporal-holdout",
-      description:
-        "Of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
-    },
-    {
-      name: "noPriorBet",
-      kind: "population-slice",
-      unit: "bet-row",
-      label: "desk_flag",
-      population: "no-prior-bet-holdout",
-      description:
-        "The same row table restricted to holdout rows whose account has no earlier bet in the corpus.",
-    },
-    {
-      name: "notStratifiedBy",
-      kind: "scope",
-      value: ["sport", "subSport", "market", "period", "agent"],
-      description:
-        "No per-sport, per-subSport, per-market, per-period or per-agent precision is claimed; those fields are not the unit.",
-    },
-    {
-      name: "accountQueue",
-      kind: "scope",
-      value: "account",
-      description:
-        "fraud_queue ranks accounts; these row metrics are not account precision.",
-    },
-  ],
-} as const;
+/**
+ * Metric metadata is built from the fitted artifact, not a static constant: a population size,
+ * a base rate or a label mix that cannot be read from the numbers would be a comment, not a
+ * contract. Every row separates `kind` (what the row is) from `description` (what it says).
+ */
+function buildMetricMetadata(artifact: FraudModelArtifact) {
+  const { rows, labelSupport } = artifact.metrics;
+  const noPriorBet = artifact.validation.noPriorBet ?? null;
+  const holdoutRate =
+    rows.holdout === 0 ? null : labelSupport.holdoutPositives / rows.holdout;
+  const noPriorBetRate =
+    noPriorBet === null || noPriorBet.rows === 0
+      ? null
+      : noPriorBet.positiveRows / noPriorBet.rows;
+  const share = (count: number): number | null =>
+    labelSupport.holdoutDeskFlagPositives === 0
+      ? null
+      : count / labelSupport.holdoutDeskFlagPositives;
+  const signals = labelSupport.holdoutBySignal ?? {
+    suspectedBot: 0,
+    reversedCredit: 0,
+    manualLog: 0,
+  };
+  return {
+    kind: "fraud-model-metric-metadata",
+    schemaVersion: 1,
+    proxy: artifact.proxy,
+    definitions: [
+      {
+        name: "unit",
+        kind: "unit",
+        description:
+          "One getBetReport bet row; not an account, sport, sub-sport, market, or period.",
+      },
+      {
+        name: "label",
+        kind: "label",
+        description:
+          "The row's desk_flag proxy (suspectedBot OR reversedCredit OR manualLog), never a confirmed fraud outcome.",
+      },
+      {
+        name: "temporalHoldout",
+        kind: "population",
+        unit: "bet-row",
+        value: rows.holdout,
+        positiveRows: labelSupport.holdoutPositives,
+        description: "The last 30% of rows by logTime (temporal split).",
+      },
+      {
+        name: "noPriorBet",
+        kind: "population",
+        subsetOf: "temporalHoldout",
+        unit: "bet-row",
+        value: noPriorBet?.rows ?? null,
+        positiveRows: noPriorBet?.positiveRows ?? null,
+        description:
+          "The same row table restricted to holdout rows whose account has no earlier bet in the corpus.",
+      },
+      {
+        name: "temporalHoldoutPositiveRate",
+        kind: "baseline",
+        unit: "bet-row",
+        label: artifact.proxy,
+        population: "temporalHoldout",
+        value: roundReportNullable(holdoutRate, 6),
+        description:
+          "The overall desk_flag rate in the temporal holdout; rowPrecisionAtK is lift over this rate.",
+      },
+      {
+        name: "noPriorBetPositiveRate",
+        kind: "baseline",
+        unit: "bet-row",
+        label: artifact.proxy,
+        population: "noPriorBet",
+        value: roundReportNullable(noPriorBetRate, 6),
+        description:
+          "The desk_flag rate in the no-prior-bet slice; rowPrecisionAtKNoPriorBet is lift over this rate.",
+      },
+      {
+        name: "rowPrecisionAtK",
+        kind: "ranking-metric",
+        unit: "bet-row",
+        label: artifact.proxy,
+        population: "temporalHoldout",
+        baseline: "temporalHoldoutPositiveRate",
+        description:
+          "Of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
+      },
+      {
+        name: "rowPrecisionAtKNoPriorBet",
+        kind: "ranking-metric",
+        unit: "bet-row",
+        label: artifact.proxy,
+        population: "noPriorBet",
+        baseline: "noPriorBetPositiveRate",
+        description:
+          "The same row table restricted to accounts with no earlier bet; it tests new-actor ranking, not repeat-offender ranking.",
+      },
+      {
+        name: "labelComposition",
+        kind: "label-composition",
+        unit: "bet-row",
+        label: "desk_flag",
+        population: "temporalHoldout",
+        value: {
+          suspectedBot: {
+            count: signals.suspectedBot,
+            share: roundReportNullable(share(signals.suspectedBot), 6),
+          },
+          reversedCredit: {
+            count: signals.reversedCredit,
+            share: roundReportNullable(share(signals.reversedCredit), 6),
+          },
+          manualLog: {
+            count: signals.manualLog,
+            share: roundReportNullable(share(signals.manualLog), 6),
+          },
+        },
+        description:
+          "Which signals make up the composite desk_flag holdout positives (independent of the fitted proxy); the signals overlap, so shares can sum above 1.",
+      },
+      {
+        name: "accountHoldout",
+        kind: "population",
+        state: "not_measured",
+        unit: "account",
+        value: null,
+        description:
+          "No account-level holdout exists yet; accountPrecisionAtK cannot be computed without one.",
+      },
+      {
+        name: "accountPrecisionAtK",
+        kind: "pending-metric",
+        state: "not_measured",
+        unit: "account",
+        label: "account-disposition",
+        population: "accountHoldout",
+        description:
+          "fraud_queue ranks accounts; account-level precision@k is the operational KPI and is not measured yet.",
+      },
+      {
+        name: "notStratifiedBy",
+        kind: "scope",
+        value: ["sport", "subSport", "market", "period", "agent"],
+        description:
+          "No per-sport, per-subSport, per-market, per-period or per-agent precision is claimed; those fields are not the unit.",
+      },
+      {
+        name: "accountQueue",
+        kind: "scope",
+        value: "account",
+        description:
+          "fraud_queue ranks accounts; these row metrics are not account precision.",
+      },
+    ],
+  };
+}
 
 /**
  * The `model report` payload (contract shape; client half reads these keys). Numbers are rounded
@@ -1921,7 +2053,7 @@ export function modelReportPayload(
     present: true,
     path: state.path,
     fittedAt: artifact.fittedAt,
-    metricMetadata: MODEL_METRIC_METADATA,
+    metricMetadata: buildMetricMetadata(artifact),
     spec: artifact.spec,
     features: artifact.features.map((feature) => ({
       id: feature.id,

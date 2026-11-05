@@ -474,6 +474,13 @@ describe("fraud model fit", () => {
       support.totalPositives / artifact.corpusRows,
       10,
     );
+    expect(support.holdoutDeskFlagPositives).toBeGreaterThanOrEqual(
+      support.holdoutPositives,
+    );
+    for (const count of Object.values(support.holdoutBySignal)) {
+      expect(count).toBeGreaterThanOrEqual(0);
+      expect(count).toBeLessThanOrEqual(support.holdoutPositives);
+    }
     if (metrics.aucRoc === null)
       throw new Error("synthetic corpus should be separable");
     expect(metrics.aucRoc).toBeGreaterThan(0.5);
@@ -623,6 +630,7 @@ describe("model artifact", () => {
     const metadata = payload["metricMetadata"] as {
       kind: string;
       schemaVersion: number;
+      proxy: string;
       definitions: Array<{
         name: string;
         kind: string;
@@ -630,11 +638,16 @@ describe("model artifact", () => {
         unit?: string;
         label?: string;
         population?: string;
+        baseline?: string;
+        subsetOf?: string;
+        state?: string;
+        positiveRows?: number | null;
         value?: unknown;
       }>;
     };
     expect(metadata.kind).toBe("fraud-model-metric-metadata");
     expect(metadata.schemaVersion).toBe(1);
+    expect(metadata.proxy).toBe(artifact.proxy);
     for (const definition of metadata.definitions) {
       expect(typeof definition.name).toBe("string");
       expect(typeof definition.kind).toBe("string");
@@ -651,7 +664,63 @@ describe("model artifact", () => {
       kind: "ranking-metric",
       unit: "bet-row",
       label: "desk_flag",
-      population: "temporal-holdout",
+      population: "temporalHoldout",
+      baseline: "temporalHoldoutPositiveRate",
+    });
+    const holdoutRow = metadata.definitions.find(
+      (definition) => definition.name === "temporalHoldout",
+    );
+    expect(holdoutRow).toMatchObject({
+      kind: "population",
+      value: artifact.metrics.rows.holdout,
+      positiveRows: artifact.metrics.labelSupport.holdoutPositives,
+    });
+    const noPriorRow = metadata.definitions.find(
+      (definition) => definition.name === "noPriorBet",
+    );
+    expect(noPriorRow).toMatchObject({
+      kind: "population",
+      subsetOf: "temporalHoldout",
+      value: artifact.validation.noPriorBet?.rows ?? null,
+      positiveRows: artifact.validation.noPriorBet?.positiveRows ?? null,
+    });
+    const baseline = metadata.definitions.find(
+      (definition) => definition.name === "temporalHoldoutPositiveRate",
+    );
+    expect(baseline).toMatchObject({
+      kind: "baseline",
+      unit: "bet-row",
+      label: "desk_flag",
+      population: "temporalHoldout",
+    });
+    expect(baseline?.value).toBeCloseTo(
+      artifact.metrics.labelSupport.holdoutPositives /
+        artifact.metrics.rows.holdout,
+      6,
+    );
+    const composition = metadata.definitions.find(
+      (definition) => definition.name === "labelComposition",
+    );
+    expect(composition).toMatchObject({
+      kind: "label-composition",
+      unit: "bet-row",
+      label: "desk_flag",
+      population: "temporalHoldout",
+    });
+    expect(composition?.value).toMatchObject({
+      suspectedBot: { count: expect.any(Number) },
+      reversedCredit: { count: expect.any(Number) },
+      manualLog: { count: expect.any(Number) },
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "accountPrecisionAtK",
+      ),
+    ).toMatchObject({
+      kind: "pending-metric",
+      state: "not_measured",
+      unit: "account",
+      population: "accountHoldout",
     });
     expect(
       metadata.definitions.find(
