@@ -9,6 +9,7 @@ import {
   FRAUD_MODEL_FIT_COMMAND,
   FRAUD_MODEL_KIND,
   FRAUD_MODEL_LIMITS,
+  FRAUD_HEADLINE_K,
   FRAUD_MODEL_REL_PATH,
   FRAUD_ROW_REVIEW_SIZES,
   FraudModelError,
@@ -23,6 +24,7 @@ import {
   readFraudModel,
   scoreAccountWithModel,
   scoreFromQuantiles,
+  validateMetricMetadata,
   writeFraudModelArtifact,
   type FraudFitOptions,
   type FraudModelArtifact,
@@ -211,6 +213,53 @@ describe("rowPrecisionAtK", () => {
     );
     expect(rows.map((row) => row.k)).toEqual([1, 2, 10]);
     expect(rows.map((row) => row.rowsReviewed)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("validateMetricMetadata", () => {
+  test("baseline and population references resolve by kind", () => {
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "rate", kind: "baseline" },
+          { name: "pop", kind: "population" },
+          {
+            name: "metric",
+            kind: "ranking-metric",
+            baseline: "rate",
+            population: "pop",
+          },
+        ],
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "metric", kind: "ranking-metric", baseline: "missing" },
+        ],
+      }),
+    ).toThrow(/missing/);
+
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "rate", kind: "scope" },
+          { name: "metric", kind: "ranking-metric", baseline: "rate" },
+        ],
+      }),
+    ).toThrow(/not baseline/);
+  });
+
+  test("duplicate definition names are refused", () => {
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "unit", kind: "unit" },
+          { name: "unit", kind: "unit" },
+        ],
+      }),
+    ).toThrow(/duplicate/);
   });
 });
 
@@ -642,6 +691,10 @@ describe("model artifact", () => {
         subsetOf?: string;
         state?: string;
         positiveRows?: number | null;
+        k?: number;
+        maxAchievable?: number | null;
+        samples?: number | null;
+        positives?: number | null;
         value?: unknown;
       }>;
     };
@@ -656,17 +709,45 @@ describe("model artifact", () => {
     expect(
       metadata.definitions.find((definition) => definition.name === "unit"),
     ).toMatchObject({ kind: "unit" });
-    expect(
-      metadata.definitions.find(
-        (definition) => definition.name === "rowPrecisionAtK",
-      ),
-    ).toMatchObject({
+    const rowMetric = metadata.definitions.find(
+      (definition) => definition.name === "rowPrecisionAtK",
+    );
+    expect(rowMetric).toMatchObject({
       kind: "ranking-metric",
       unit: "bet-row",
       label: "desk_flag",
       population: "temporalHoldout",
       baseline: "temporalHoldoutPositiveRate",
+      k: FRAUD_HEADLINE_K,
+      maxAchievable: 1,
     });
+    const rowHeadline = artifact.metrics.rowPrecisionAtK.find(
+      (row) => row.k === FRAUD_HEADLINE_K,
+    );
+    expect(rowMetric?.value).toBeCloseTo(rowHeadline?.precision ?? -1, 6);
+    expect(rowMetric?.samples).toBe(rowHeadline?.rowsReviewed ?? null);
+    expect(rowMetric?.positives).toBe(rowHeadline?.proxyPositiveRows ?? null);
+    const noPriorMetric = metadata.definitions.find(
+      (definition) => definition.name === "rowPrecisionAtKNoPriorBet",
+    );
+    const noPriorHeadline =
+      artifact.validation.noPriorBet?.metrics.rowPrecisionAtK.find(
+        (row) => row.k === FRAUD_HEADLINE_K,
+      );
+    if (noPriorHeadline !== undefined) {
+      expect(noPriorMetric).toMatchObject({
+        k: FRAUD_HEADLINE_K,
+        samples: noPriorHeadline.rowsReviewed,
+        positives: noPriorHeadline.proxyPositiveRows,
+      });
+      expect(noPriorMetric?.maxAchievable).toBeCloseTo(
+        Math.min(
+          FRAUD_HEADLINE_K,
+          artifact.validation.noPriorBet?.positiveRows ?? 0,
+        ) / FRAUD_HEADLINE_K,
+        6,
+      );
+    }
     const holdoutRow = metadata.definitions.find(
       (definition) => definition.name === "temporalHoldout",
     );

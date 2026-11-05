@@ -150,6 +150,9 @@ export interface FraudRowPrecisionAtK {
 /** Review sizes in **bet rows**; reported as a table rather than one guessed cutoff. */
 export const FRAUD_ROW_REVIEW_SIZES = [10, 20, 50, 100, 200, 500] as const;
 
+/** Headline review size for the metadata row; the full k-table stays in `metrics.rowPrecisionAtK`. */
+export const FRAUD_HEADLINE_K = 20;
+
 export interface FraudClassificationMetrics {
   readonly aucRoc: number | null;
   readonly averagePrecision: number | null;
@@ -1877,6 +1880,61 @@ export interface ModelReportPayloadOptions {
   readonly includeScoreMap?: boolean;
 }
 
+/** The reference-bearing fields a metric-metadata definition can carry. */
+export interface MetricMetadataDefinition {
+  readonly name: string;
+  readonly kind: string;
+  readonly baseline?: string;
+  readonly population?: string;
+  readonly subsetOf?: string;
+}
+
+/**
+ * Check the FK-by-name contract: a `baseline` must name a `baseline` row, a `population` or
+ * `subsetOf` must name a `population` row, and names must be unique. Cheap enough to run on every
+ * report; turns the convention into a checked invariant instead of a schema-version promise.
+ */
+export function validateMetricMetadata(metadata: {
+  readonly definitions: readonly MetricMetadataDefinition[];
+}): void {
+  const byName = new Map<string, MetricMetadataDefinition>();
+  for (const row of metadata.definitions) {
+    if (byName.has(row.name)) {
+      throw new Error(`metricMetadata: duplicate definition "${row.name}"`);
+    }
+    byName.set(row.name, row);
+  }
+  const requireKind = (
+    source: string,
+    field: string,
+    targetName: string,
+    kind: string,
+  ): void => {
+    const target = byName.get(targetName);
+    if (target === undefined) {
+      throw new Error(
+        `metricMetadata: ${source}.${field} -> "${targetName}" is missing`,
+      );
+    }
+    if (target.kind !== kind) {
+      throw new Error(
+        `metricMetadata: ${source}.${field} -> "${targetName}" is ${target.kind}, not ${kind}`,
+      );
+    }
+  };
+  for (const row of metadata.definitions) {
+    if (row.baseline !== undefined) {
+      requireKind(row.name, "baseline", row.baseline, "baseline");
+    }
+    if (row.population !== undefined) {
+      requireKind(row.name, "population", row.population, "population");
+    }
+    if (row.subsetOf !== undefined) {
+      requireKind(row.name, "subsetOf", row.subsetOf, "population");
+    }
+  }
+}
+
 /**
  * Metric metadata is built from the fitted artifact, not a static constant: a population size,
  * a base rate or a label mix that cannot be read from the numbers would be a comment, not a
@@ -1900,7 +1958,19 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
     reversedCredit: 0,
     manualLog: 0,
   };
-  return {
+  const holdoutHeadline =
+    artifact.metrics.rowPrecisionAtK.find(
+      (row) => row.k === FRAUD_HEADLINE_K,
+    ) ?? null;
+  const noPriorHeadline =
+    noPriorBet?.metrics.rowPrecisionAtK.find(
+      (row) => row.k === FRAUD_HEADLINE_K,
+    ) ?? null;
+  const maxAchievable = (positiveRows: number | null): number | null =>
+    positiveRows === null
+      ? null
+      : Math.min(FRAUD_HEADLINE_K, positiveRows) / FRAUD_HEADLINE_K;
+  const metadata = {
     kind: "fraud-model-metric-metadata",
     schemaVersion: 1,
     proxy: artifact.proxy,
@@ -1962,8 +2032,16 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "temporalHoldout",
         baseline: "temporalHoldoutPositiveRate",
+        k: FRAUD_HEADLINE_K,
+        value: roundReportNullable(holdoutHeadline?.precision ?? null),
+        maxAchievable: roundReportNullable(
+          maxAchievable(labelSupport.holdoutPositives),
+          6,
+        ),
+        samples: holdoutHeadline?.rowsReviewed ?? null,
+        positives: holdoutHeadline?.proxyPositiveRows ?? null,
         description:
-          "Of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
+          "Headline at k=20 (full table in metrics.rowPrecisionAtK): of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
       },
       {
         name: "rowPrecisionAtKNoPriorBet",
@@ -1972,8 +2050,16 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "noPriorBet",
         baseline: "noPriorBetPositiveRate",
+        k: FRAUD_HEADLINE_K,
+        value: roundReportNullable(noPriorHeadline?.precision ?? null),
+        maxAchievable: roundReportNullable(
+          maxAchievable(noPriorBet?.positiveRows ?? null),
+          6,
+        ),
+        samples: noPriorHeadline?.rowsReviewed ?? null,
+        positives: noPriorHeadline?.proxyPositiveRows ?? null,
         description:
-          "The same row table restricted to accounts with no earlier bet; it tests new-actor ranking, not repeat-offender ranking.",
+          "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positiveRows) / k, so a slice with fewer than k positives cannot reach 1.0.",
       },
       {
         name: "labelComposition",
@@ -1996,7 +2082,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
           },
         },
         description:
-          "Which signals make up the composite desk_flag holdout positives (independent of the fitted proxy); the signals overlap, so shares can sum above 1.",
+          "Which signals make up the composite desk_flag holdout positives (independent of the fitted proxy); the signals overlap, so shares can sum above 1. labelComposition describes the composite desk_flag. Metric rows measure against the fitted proxy (see metricMetadata.proxy); the two labels have different positive sets, and correlation between them is not measured here.",
       },
       {
         name: "accountHoldout",
@@ -2033,6 +2119,8 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
       },
     ],
   };
+  validateMetricMetadata(metadata);
+  return metadata;
 }
 
 /**
