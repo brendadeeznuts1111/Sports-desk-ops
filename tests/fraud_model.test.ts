@@ -251,6 +251,43 @@ describe("validateMetricMetadata", () => {
     ).toThrow(/not baseline/);
   });
 
+  test("a stored maxAchievable must match the population it names", () => {
+    const definitions = [
+      { name: "rate", kind: "baseline" },
+      { name: "pop", kind: "population", positiveRows: 12 },
+      {
+        name: "metric",
+        kind: "ranking-metric",
+        baseline: "rate",
+        population: "pop",
+        k: 20,
+        maxAchievable: 0.5,
+      },
+    ];
+    expect(() => validateMetricMetadata({ definitions })).toThrow(
+      /maxAchievable 0.5 != min\(k=20, positiveRows=12\)\/k = 0.6/,
+    );
+  });
+
+  test("a missing reference suggests the nearest name", () => {
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "noPriorBetPositiveRate", kind: "baseline" },
+          { name: "pop", kind: "population", positiveRows: 12 },
+          {
+            name: "rowPrecisionAtKNoPriorBet",
+            kind: "ranking-metric",
+            baseline: "noPriorBetHoldout",
+            population: "pop",
+            k: 20,
+            maxAchievable: 0.6,
+          },
+        ],
+      }),
+    ).toThrow(/did you mean "noPriorBetPositiveRate"/);
+  });
+
   test("duplicate definition names are refused", () => {
     expect(() =>
       validateMetricMetadata({
@@ -695,6 +732,7 @@ describe("model artifact", () => {
         maxAchievable?: number | null;
         samples?: number | null;
         positives?: number | null;
+        detailRef?: string;
         value?: unknown;
       }>;
     };
@@ -721,6 +759,7 @@ describe("model artifact", () => {
       k: FRAUD_HEADLINE_K,
       maxAchievable: 1,
     });
+    expect(rowMetric?.detailRef).toBe("metrics.rowPrecisionAtK");
     const rowHeadline = artifact.metrics.rowPrecisionAtK.find(
       (row) => row.k === FRAUD_HEADLINE_K,
     );
@@ -739,6 +778,7 @@ describe("model artifact", () => {
         k: FRAUD_HEADLINE_K,
         samples: noPriorHeadline.rowsReviewed,
         positives: noPriorHeadline.proxyPositiveRows,
+        detailRef: "validation.noPriorBet.metrics.rowPrecisionAtK",
       });
       expect(noPriorMetric?.maxAchievable).toBeCloseTo(
         Math.min(

@@ -1887,6 +1887,62 @@ export interface MetricMetadataDefinition {
   readonly baseline?: string;
   readonly population?: string;
   readonly subsetOf?: string;
+  readonly k?: number;
+  readonly maxAchievable?: number | null;
+  readonly positiveRows?: number | null;
+  /** Where the full table lives in the report, for a headline row. */
+  readonly detailRef?: string;
+}
+
+/** Levenshtein distance over short definition names; candidates are fewer than 20. */
+function editDistance(a: string, b: string): number {
+  const columns = b.length + 1;
+  let previous = Array.from({ length: columns }, (_, index) => index);
+  for (let row = 1; row <= a.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column < columns; column += 1) {
+      current[column] = Math.min(
+        (previous[column] ?? 0) + 1,
+        (current[column - 1] ?? 0) + 1,
+        (previous[column - 1] ?? 0) + (a[row - 1] === b[column - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? 0;
+}
+
+/** Longest shared prefix, so long names with a stable stem still get a useful hint. */
+function commonPrefixLength(a: string, b: string): number {
+  const limit = Math.min(a.length, b.length);
+  let index = 0;
+  while (index < limit && a[index] === b[index]) index += 1;
+  return index;
+}
+
+/** Nearest name by shared stem (>= 4 chars) or edit distance (<= 3), else null. */
+function suggestName(
+  name: string,
+  candidates: readonly string[],
+): string | null {
+  let best: {
+    readonly name: string;
+    readonly prefix: number;
+    readonly distance: number;
+  } | null = null;
+  for (const candidate of candidates) {
+    const prefix = commonPrefixLength(name, candidate);
+    const distance = editDistance(name, candidate);
+    if (prefix < 4 && distance > 3) continue;
+    if (
+      best === null ||
+      prefix > best.prefix ||
+      (prefix === best.prefix && distance < best.distance)
+    ) {
+      best = { name: candidate, prefix, distance };
+    }
+  }
+  return best?.name ?? null;
 }
 
 /**
@@ -1911,14 +1967,21 @@ export function validateMetricMetadata(metadata: {
     kind: string,
   ): void => {
     const target = byName.get(targetName);
+    const suggestion = suggestName(
+      targetName,
+      [...byName.values()]
+        .filter((row) => row.kind === kind)
+        .map((row) => row.name),
+    );
+    const hint = suggestion === null ? "" : `; did you mean "${suggestion}"?`;
     if (target === undefined) {
       throw new Error(
-        `metricMetadata: ${source}.${field} -> "${targetName}" is missing`,
+        `metricMetadata: ${source}.${field} -> "${targetName}" not found${hint}`,
       );
     }
     if (target.kind !== kind) {
       throw new Error(
-        `metricMetadata: ${source}.${field} -> "${targetName}" is ${target.kind}, not ${kind}`,
+        `metricMetadata: ${source}.${field} -> "${targetName}" is ${target.kind}, not ${kind}${hint}`,
       );
     }
   };
@@ -1931,6 +1994,28 @@ export function validateMetricMetadata(metadata: {
     }
     if (row.subsetOf !== undefined) {
       requireKind(row.name, "subsetOf", row.subsetOf, "population");
+    }
+  }
+  // A stored maxAchievable is a computed field; validate it against the population it names
+  // instead of trusting the writer to remember both sides of the edit.
+  for (const row of metadata.definitions) {
+    if (row.kind !== "ranking-metric" || row.maxAchievable === null) continue;
+    if (row.maxAchievable === undefined || row.k === undefined) continue;
+    const population =
+      row.population === undefined ? undefined : byName.get(row.population);
+    if (
+      population?.positiveRows === undefined ||
+      population.positiveRows === null
+    ) {
+      throw new Error(
+        `metricMetadata: ${row.name} stores maxAchievable but population "${row.population ?? "?"}" has no positiveRows`,
+      );
+    }
+    const expected = Math.min(row.k, population.positiveRows) / row.k;
+    if (Math.abs(row.maxAchievable - expected) > 1e-6) {
+      throw new Error(
+        `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positiveRows=${population.positiveRows})/k = ${expected}`,
+      );
     }
   }
 }
@@ -2032,6 +2117,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "temporalHoldout",
         baseline: "temporalHoldoutPositiveRate",
+        detailRef: "metrics.rowPrecisionAtK",
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(holdoutHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
@@ -2050,6 +2136,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "noPriorBet",
         baseline: "noPriorBetPositiveRate",
+        detailRef: "validation.noPriorBet.metrics.rowPrecisionAtK",
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(noPriorHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
