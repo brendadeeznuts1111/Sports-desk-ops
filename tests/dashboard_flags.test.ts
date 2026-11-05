@@ -5,13 +5,13 @@ import { join } from "node:path";
 
 import { startServer } from "../services/sportsdesk_webview_server.ts";
 
-const TMP = mkdtempSync(join(tmpdir(), "flags-api-"));
-afterAll(() => rmSync(TMP, { recursive: true, force: true }));
+const ROOT = join(import.meta.dir, "..");
+const TMP = mkdtempSync(join(tmpdir(), "dashboard-flags-"));
 
 function writeCapture(): void {
   const periods = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
   const rows = periods.map((period, index) => ({
-    WagerNumber: 910000001 + index,
+    WagerNumber: 930000001 + index,
     AgentID: "RULEAGENT",
     AgentLogin: "RULEAGENT",
     CustomerID: "RULECUST",
@@ -35,7 +35,7 @@ function writeCapture(): void {
   );
 }
 
-describe("GET /api/flags", () => {
+describe("dashboard anomaly signatures", () => {
   let server: ReturnType<typeof startServer>;
 
   beforeAll(() => {
@@ -50,40 +50,41 @@ describe("GET /api/flags", () => {
 
   afterAll(() => {
     server.stop(true);
+    rmSync(TMP, { recursive: true, force: true });
   });
 
-  test("runs deterministic rules over the raw capture", async () => {
-    const res = await fetch(`${server.url}api/flags`);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      success: boolean;
-      wagerCount: number;
-      totalFlags: number;
-      byRule: Record<string, number>;
-      flags: Array<{
-        rule: string;
-        severity: string;
-        wagerNumbers: string[];
-      }>;
-    };
-    expect(body.success).toBe(true);
-    expect(body.wagerCount).toBe(4);
-    expect(body.totalFlags).toBe(1);
-    expect(body.byRule.period_correlation).toBe(1);
-    expect(body.flags[0]?.rule).toBe("period_correlation");
-    expect(body.flags[0]?.wagerNumbers).toEqual([
-      "910000001",
-      "910000002",
-      "910000003",
-      "910000004",
+  test("renders the deterministic flags section from /api/live-wagers", async () => {
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "scripts/dashboard_view.ts",
+        "markdown",
+        "--url",
+        String(server.url),
+        "--rows",
+        "5",
+      ],
+      {
+        cwd: ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [out, err, code] = await Promise.all([
+      proc.stdout.text(),
+      proc.stderr.text(),
+      proc.exited,
     ]);
-  });
-
-  test("never exposes customer or agent identifiers", async () => {
-    const text = await (await fetch(`${server.url}api/flags`)).text();
-    expect(text).not.toContain("RULECUST");
-    expect(text).not.toContain("RULEAGENT");
-    expect(text).not.toContain("CustomerID");
-    expect(text).not.toContain("Login");
+    expect(code).toBe(0);
+    expect(err).toBe("");
+    const start = out.indexOf("## Anomaly Signatures");
+    expect(start).toBeGreaterThan(-1);
+    const end = out.indexOf("\n## ", start + 1);
+    const section = out.slice(start, end === -1 ? undefined : end);
+    expect(section).toContain("period_correlation");
+    expect(section).toContain("1 flags · 4 wagers");
+    expect(section).toContain("930000001");
+    expect(section).not.toContain("RULECUST");
+    expect(section).not.toContain("RULEAGENT");
   });
 });

@@ -34,6 +34,8 @@ import {
   type DashboardSectionState,
   type DashboardSnapshot,
 } from "../lib/dashboard_markdown.ts";
+import { normalizeTicket } from "../lib/live_ticket_view.ts";
+import { DETERMINISTIC_RULES, toRuleTicket } from "../cli/rules.ts";
 import {
   renderDashboardAnsi,
   renderDashboardHtml,
@@ -197,7 +199,6 @@ function buildSnapshot(
   const summary = rec(results["summary"]?.body);
   const liveBetsBody = rec(results["liveBets"]?.body);
   const liveWagersBody = rec(results["liveWagers"]?.body);
-  const flagsBody = rec(results["flags"]?.body);
   const contestsBody = rec(results["contests"]?.body);
   const boardBody = rec(results["gameBoard"]?.body);
   const catalogBody = rec(results["catalog"]?.body);
@@ -584,43 +585,55 @@ function buildSnapshot(
         },
   );
 
-  const flagsResult = results["flags"];
-  const flagItems = arr(flagsBody?.["flags"]);
   const flagsByRule = new Map<
     string,
     { severity: string; hits: number; wagers: string[] }
   >();
-  for (const value of flagItems) {
-    const item = rec(value);
-    const rule = str(item?.["rule"]) ?? "?";
-    const entry = flagsByRule.get(rule) ?? {
-      severity: str(item?.["severity"]) ?? "notice",
-      hits: 0,
-      wagers: [],
-    };
-    entry.hits += 1;
-    entry.severity = str(item?.["severity"]) ?? entry.severity;
-    for (const wager of arr(item?.["wagerNumbers"])) {
-      if (entry.wagers.length < 6) entry.wagers.push(String(wager));
+  const flagTickets = wagers
+    .map((value) => rec(value))
+    .filter((row): row is Json => row !== null)
+    .map((row) => toRuleTicket(normalizeTicket(row)));
+  for (const run of Object.values(DETERMINISTIC_RULES)) {
+    let hits: ReturnType<typeof run> = [];
+    try {
+      hits = run(flagTickets);
+    } catch {
+      hits = [];
     }
-    flagsByRule.set(rule, entry);
+    for (const hit of hits) {
+      const entry = flagsByRule.get(hit.rule) ?? {
+        severity: hit.severity,
+        hits: 0,
+        wagers: [],
+      };
+      entry.hits += 1;
+      entry.severity = hit.severity;
+      for (const ticket of hit.tickets) {
+        if (entry.wagers.length < 6) entry.wagers.push(ticket.wagerNumber);
+      }
+      flagsByRule.set(hit.rule, entry);
+    }
   }
+  const flagCount = [...flagsByRule.values()].reduce(
+    (sum, entry) => sum + entry.hits,
+    0,
+  );
   sections.push(
-    flagsResult?.ok !== true
+    liveWagersResult?.ok !== true
       ? missingSection(
           "flags",
           "Anomaly Signatures — Deterministic Rules",
           "risk",
-          flagsResult?.error ?? "no /api/flags response",
+          liveWagersResult?.error ?? "no /api/live-wagers response",
         )
       : {
           id: "flags",
           title: "Anomaly Signatures — Deterministic Rules",
           group: "risk",
           state: "measured",
-          provenance: `source: /api/flags · ${count(flagsBody?.["wagerCount"])} wagers · generated ${str(flagsBody?.["generatedAt"]) ?? "—"}`,
+          provenance: `source: /api/live-wagers · ${wagers.length} wagers`,
           body: [
-            `**${count(flagsBody?.["totalFlags"])} flags · ${count(flagsBody?.["wagerCount"])} wagers**`,
+            `**${flagCount} flags · ${wagers.length} wagers**`,
             "",
             ...(flagsByRule.size === 0
               ? ["> No deterministic signatures fired."]
@@ -630,9 +643,7 @@ function buildSnapshot(
                     rule,
                     entry.severity,
                     entry.hits,
-                    `${entry.wagers.join(", ")}${
-                      entry.hits > entry.wagers.length ? " …" : ""
-                    }`,
+                    `${entry.wagers.join(", ")}${entry.hits > entry.wagers.length ? " …" : ""}`,
                   ]),
                 )),
           ],
@@ -861,7 +872,7 @@ function buildSnapshot(
 
   return {
     generatedAt: new Date(now).toISOString(),
-    source: `${base} · /api/kpis + /api/flags + /api/live-bets + /api/live-wagers + /api/contests + /api/game-admin/board + /api/sports/catalog + /api/graph/summary`,
+    source: `${base} · /api/kpis + /api/live-bets + /api/live-wagers + /api/contests + /api/game-admin/board + /api/sports/catalog + /api/graph/summary`,
     sections,
   };
 }
@@ -872,7 +883,6 @@ async function load(
 ): Promise<Readonly<Record<string, ApiResult>>> {
   const paths = {
     kpis: "/api/kpis",
-    flags: "/api/flags",
     liveBets: "/api/live-bets",
     liveWagers: "/api/live-wagers",
     contests: "/api/contests",

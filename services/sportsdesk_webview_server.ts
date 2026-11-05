@@ -57,8 +57,6 @@ import {
   summarizeLiveWagers,
   type WagerListArtifact,
 } from "../lib/live_wagers.ts";
-import { normalizeTicket, toSafeJson } from "../lib/live_ticket_view.ts";
-import { DETERMINISTIC_RULES, toRuleTicket } from "../cli/rules.ts";
 import {
   BOARD_WINDOWS,
   biggestSide,
@@ -2515,95 +2513,6 @@ export function startServer(options?: ServerOptions) {
                 freshness: fresh,
                 skipped,
                 wagers: filtered,
-              }),
-            ),
-          headers: { ...cors, "Cache-Control": "no-store" },
-        });
-      }
-
-      // Deterministic anomaly signatures over the same live wager list.
-      if (pathname === "/api/flags") {
-        const rejected = piiRejection(
-          req,
-          server.requestIP(req)?.address,
-          ingress,
-        );
-        if (rejected !== null) {
-          return Response.json(
-            { success: false, error: rejected.error },
-            { status: rejected.status, headers: cors },
-          );
-        }
-
-        const { chosen, skipped } = await loadWagerList(wagerLists);
-        if (chosen === null) {
-          return Response.json(
-            {
-              error: "no live wager list",
-              hint: "run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json, and reload",
-              skipped,
-            },
-            { status: 404, headers: cors },
-          );
-        }
-
-        const artifact = chosen.artifact;
-        const tickets = artifact.wagers.map((wager) =>
-          toRuleTicket(normalizeTicket(wager)),
-        );
-        const flags: Array<{
-          rule: string;
-          severity: string;
-          evidence: Readonly<
-            Record<string, string | number | readonly string[]>
-          >;
-          wagerNumbers: readonly string[];
-          tickets: readonly Record<string, unknown>[];
-        }> = [];
-        const byRule: Record<string, number> = {};
-        for (const [rule, run] of Object.entries(DETERMINISTIC_RULES)) {
-          let hits: ReturnType<typeof run> = [];
-          try {
-            hits = run(tickets);
-          } catch {
-            hits = [];
-          }
-          for (const hit of hits) {
-            byRule[rule] = (byRule[rule] ?? 0) + 1;
-            flags.push({
-              rule: hit.rule,
-              severity: hit.severity,
-              evidence: hit.evidence,
-              wagerNumbers: hit.tickets.map((ticket) => ticket.wagerNumber),
-              tickets: hit.tickets.map((ticket) =>
-                toSafeJson(ticket as unknown as Record<string, unknown>),
-              ),
-            });
-          }
-        }
-
-        const { ageSeconds: _age, ...fresh } = freshness(
-          artifact.provenance.observedAt,
-          chosen.mtime,
-          STALE_AFTER_SECONDS.liveWagers,
-          new Date(),
-        );
-
-        return encodedResponse(req, {
-          version: `flags|${chosen.path}|${chosen.version}|${JSON.stringify(skipped)}`,
-          contentType: "application/json; charset=utf-8",
-          produce: () =>
-            new TextEncoder().encode(
-              JSON.stringify({
-                success: true,
-                generatedAt: new Date().toISOString(),
-                wagerCount: tickets.length,
-                totalFlags: flags.length,
-                byRule,
-                flags,
-                provenance: artifact.provenance,
-                freshness: fresh,
-                skipped,
               }),
             ),
           headers: { ...cors, "Cache-Control": "no-store" },
