@@ -875,15 +875,16 @@ export function buildFlagsMetricMetadata(
         name: "ruleHitWeight",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: "topKGapCalibration",
+        blockedBy: "scoreSubIntegerPrecision",
         value: {
           perConfirmedHit: RULE_HIT_WEIGHT_PER_CONFIRMED,
           cap: RULE_HIT_WEIGHT_CAP,
           appliedTo: "normalized-priority",
+          enabled: false,
           confirmedByRule,
         },
         description:
-          "Contract for the queue overlay: +0.02 per confirmed hit, capped at +0.10, applied to a normalized 0-1 priority; the displayed model score is 0-100. Not applied until the F402/GSLive account bridge is resolved.",
+          "Not used with the current integer model scores. A +0.10 bonus would be a score override against the observed zero median top-K gap. Kept for a future sub-integer score model; the boolean ruleHitTieBreak is the shippable contract.",
       },
       {
         name: "samplingRate",
@@ -913,18 +914,33 @@ export function buildFlagsMetricMetadata(
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
       },
       {
+        name: "bridgeRepresentativeness",
+        kind: "quality",
+        state: "not_measured",
+        blockedBy: "bridgeRepresentativenessStudy",
+        value: {
+          covered: 102,
+          uncovered: 2484,
+          measured: false,
+        },
+        description:
+          "Coverage is not representativeness: before shipping, compare rule precision on covered accounts with the model's precision on uncovered accounts within one Wilson interval; if they diverge, the queue must state reasons are attached to N accounts only.",
+      },
+      {
         name: "queueEscalation",
         kind: "caveat",
         state: "not_measured",
         blockedBy: [
           "durableCustomerMaster",
           "corpusFreshness",
+          "modelFreshness",
+          "bridgeRepresentativeness",
           "reviewRows",
-          "topKGapCalibration",
+          "reviewRowsPerRule",
         ],
         value: "not_implemented",
         description:
-          "Bridge coverage is 3.94% (102/2586 GSLive accounts); the GSLive corpus window ends 2026-11-04T05:59:59Z; there are 0 confirmed reviews; the top-100 median adjacent score gap is 0 (54 ties), so +0.10 is uncalibrated. All four must clear before the queue batch can run.",
+          "Bridge coverage is 3.94% (102/2586); the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). The boolean tie-break replaces the score weight; all readiness gates must clear before the batch can run.",
       },
       {
         name: "response",
@@ -937,17 +953,36 @@ export function buildFlagsMetricMetadata(
         name: "queuePriorityOrder",
         kind: "parameter",
         state: "not_measured",
-        blockedBy: "weightCalibration",
+        blockedBy: ["durableCustomerMaster", "reviewRowsPerRule"],
         value: [
           "desk-flag",
           "findings",
-          "rule-weight",
+          "has-confirmed-rule-hit",
           "odds-drift",
           "model-score",
           "bets",
         ],
         description:
-          "Lexicographic key order; rule-weight reorders only within (desk-flag, findings). Not applied until the top-K gap median is measured.",
+          "Lexicographic key order. The boolean has-confirmed-rule-hit sits before odds-drift and model-score, so it floats tied accounts with rule evidence without changing the displayed score.",
+      },
+      {
+        name: "ruleHitTieBreak",
+        kind: "parameter",
+        state: "not_measured",
+        blockedBy: [
+          "durableCustomerMaster",
+          "reviewRowsPerRule",
+          "bridgeRepresentativeness",
+        ],
+        value: {
+          field: "hasConfirmedRuleHit",
+          order: "desc",
+          position: "before-model-score",
+          scoreBonus: false,
+          minConfirmedReviewsPerRule: 5,
+        },
+        description:
+          "Boolean tie-break, not a score bonus: tied accounts with a confirmed rule hit float above tied accounts without one. Applied per rule only after >= 5 confirmed reviews; below that the rule contributes no tie-break.",
       },
       {
         name: "scoreNormalization",
@@ -967,7 +1002,7 @@ export function buildFlagsMetricMetadata(
           source: "GSLive corpus 2026-11-04 (stale)",
         },
         description:
-          "The model score is 0-100; normalize by 100 before adding weight. Observed over 1,276 eligible accounts; refresh after live ingestion.",
+          "The model score is 0-100; recorded for display and future sub-integer scoring. The tie-break contract does not add a score bonus. Observed over 1,276 eligible accounts; refresh after live ingestion.",
       },
       {
         name: "bridgeCoverage",
@@ -978,7 +1013,7 @@ export function buildFlagsMetricMetadata(
         state: "not_measured",
         blockedBy: "durableCustomerMaster",
         description:
-          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%); this is a snapshot of the ticker capture, not a durable customer master.",
+          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%). Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones.",
       },
       {
         name: "reviewedSamplePositiveRate",

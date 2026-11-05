@@ -387,11 +387,12 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: "topKGapCalibration",
+      blockedBy: "scoreSubIntegerPrecision",
       value: {
         perConfirmedHit: 0.02,
         cap: 0.1,
         appliedTo: "normalized-priority",
+        enabled: false,
       },
     });
     expect(
@@ -408,11 +409,11 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "parameter",
       state: "not_measured",
-      blockedBy: "weightCalibration",
+      blockedBy: ["durableCustomerMaster", "reviewRowsPerRule"],
       value: [
         "desk-flag",
         "findings",
-        "rule-weight",
+        "has-confirmed-rule-hit",
         "odds-drift",
         "model-score",
         "bets",
@@ -439,6 +440,31 @@ describe("flags metric metadata", () => {
     });
     expect(
       metadata.definitions.find(
+        (definition) => definition.name === "ruleHitTieBreak",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      state: "not_measured",
+      value: {
+        field: "hasConfirmedRuleHit",
+        order: "desc",
+        position: "before-model-score",
+        scoreBonus: false,
+        minConfirmedReviewsPerRule: 5,
+      },
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "bridgeRepresentativeness",
+      ),
+    ).toMatchObject({
+      kind: "quality",
+      state: "not_measured",
+      blockedBy: "bridgeRepresentativenessStudy",
+      value: { covered: 102, uncovered: 2484, measured: false },
+    });
+    expect(
+      metadata.definitions.find(
         (definition) => definition.name === "queueEscalation",
       ),
     ).toMatchObject({
@@ -447,8 +473,10 @@ describe("flags metric metadata", () => {
       blockedBy: [
         "durableCustomerMaster",
         "corpusFreshness",
+        "modelFreshness",
+        "bridgeRepresentativeness",
         "reviewRows",
-        "topKGapCalibration",
+        "reviewRowsPerRule",
       ],
     });
     expect(

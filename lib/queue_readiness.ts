@@ -1,44 +1,61 @@
 /**
- * Readiness gate for the queue rule-hit batch. This is a decision gate, not a warning: if any
- * blocker is present the batch must not run. A queue built on stale data or a 4% bridge looks
- * authoritative to the reviewer and is wrong in a way a warning does not fix.
+ * Readiness gate for the queue rule-hit batch. Execution and per-rule application are separate
+ * decisions: a batch may run and still be a no-op if no rule has enough reviews to apply.
+ *
+ * The gate is hard: `ready: false` means the batch must not produce a queue.
  */
 export interface QueueReadinessInput {
   /** Age of the GSLive corpus window relative to the batch clock. */
   readonly corpusAgeHours: number;
+  /** Age of the fitted model artifact. */
+  readonly modelAgeDays: number;
   /** Fraction of GSLive queue accounts that resolve to a durable F402 identity. */
   readonly bridgeCoverage: number;
+  /**
+   * Whether covered and uncovered accounts are statistically comparable. Null means the
+   * representativeness study has not been run; coverage alone is not enough.
+   */
+  readonly bridgeRepresentative: boolean | null;
   /** Confirmed review rows available to attach. */
   readonly confirmedReviews: number;
-  /** Median absolute gap between adjacent model scores in the top K; null if not computed. */
-  readonly topKGapMedian: number | null;
+  /** Smallest confirmed-review count among rules that fired; 0 when no rule fired. */
+  readonly minConfirmedReviewsPerRule: number;
 }
 
 export interface QueueReadinessBlocker {
   readonly name:
-    "corpusFreshness" | "bridgeCoverage" | "reviewRows" | "weightCalibration";
+    | "corpusFreshness"
+    | "modelFreshness"
+    | "bridgeRepresentativeness"
+    | "reviewRows"
+    | "reviewRowsPerRule";
   readonly current: string;
   readonly required: string;
 }
 
 export interface QueueReadinessPolicy {
   readonly maxCorpusAgeHours: number;
-  readonly minBridgeCoverage: number;
+  readonly maxModelAgeDays: number;
   readonly minConfirmedReviews: number;
-  /** A weight is only calibrated once the top-K adjacent gap is known. */
-  readonly requireTopKGap: boolean;
+  readonly minConfirmedReviewsPerRule: number;
 }
 
 export const DEFAULT_QUEUE_READINESS_POLICY: QueueReadinessPolicy = {
   maxCorpusAgeHours: 6,
-  minBridgeCoverage: 0.5,
+  maxModelAgeDays: 7,
   minConfirmedReviews: 1,
-  requireTopKGap: true,
+  minConfirmedReviewsPerRule: 5,
 };
 
 export interface QueueReadiness {
+  /** The batch may execute: fresh corpus/model, representative bridge, at least one review. */
   readonly ready: boolean;
   readonly blockers: readonly QueueReadinessBlocker[];
+  /** At least one rule has enough reviews to apply its boolean tie-break. */
+  readonly ruleApplication: {
+    readonly ready: boolean;
+    readonly blockers: readonly QueueReadinessBlocker[];
+  };
 }
 
 export function assessQueueReadiness(
@@ -53,11 +70,23 @@ export function assessQueueReadiness(
       required: `<= ${policy.maxCorpusAgeHours}h`,
     });
   }
-  if (input.bridgeCoverage < policy.minBridgeCoverage) {
+  if (input.modelAgeDays > policy.maxModelAgeDays) {
     blockers.push({
-      name: "bridgeCoverage",
-      current: `${(input.bridgeCoverage * 100).toFixed(1)}%`,
-      required: `>= ${(policy.minBridgeCoverage * 100).toFixed(0)}%`,
+      name: "modelFreshness",
+      current: `${input.modelAgeDays.toFixed(1)}d`,
+      required: `<= ${policy.maxModelAgeDays}d`,
+    });
+  }
+  if (input.bridgeRepresentative !== true) {
+    blockers.push({
+      name: "bridgeRepresentativeness",
+      current:
+        input.bridgeRepresentative === null
+          ? "not measured"
+          : input.bridgeRepresentative
+            ? "representative"
+            : "divergent",
+      required: "covered vs uncovered within one Wilson interval",
     });
   }
   if (input.confirmedReviews < policy.minConfirmedReviews) {
@@ -67,12 +96,22 @@ export function assessQueueReadiness(
       required: `>= ${policy.minConfirmedReviews} confirmed`,
     });
   }
-  if (policy.requireTopKGap && input.topKGapMedian === null) {
-    blockers.push({
-      name: "weightCalibration",
-      current: "not measured",
-      required: "top-K gap median computed",
+
+  const applicationBlockers: QueueReadinessBlocker[] = [];
+  if (input.minConfirmedReviewsPerRule < policy.minConfirmedReviewsPerRule) {
+    applicationBlockers.push({
+      name: "reviewRowsPerRule",
+      current: `${input.minConfirmedReviewsPerRule} per rule`,
+      required: `>= ${policy.minConfirmedReviewsPerRule} confirmed per rule`,
     });
   }
-  return { ready: blockers.length === 0, blockers };
+
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    ruleApplication: {
+      ready: applicationBlockers.length === 0,
+      blockers: applicationBlockers,
+    },
+  };
 }
