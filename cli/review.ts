@@ -843,6 +843,13 @@ export function buildFlagsMetricMetadata(
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
       },
       {
+        name: "response",
+        kind: "caveat",
+        value: "measurement-only",
+        description:
+          "A confirmed flag writes to flag_review only: no notification, queue escalation, or account change. rulePrecision measures the rule, not an action.",
+      },
+      {
         name: "reviewedSamplePositiveRate",
         kind: "baseline",
         unit: "flag",

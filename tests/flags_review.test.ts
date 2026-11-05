@@ -336,6 +336,9 @@ describe("flags metric metadata", () => {
       state: "not_measured",
       blockedBy: "noReviews",
     });
+    expect(
+      metadata.definitions.find((definition) => definition.name === "response"),
+    ).toMatchObject({ kind: "caveat", value: "measurement-only" });
     const baseline = metadata.definitions.find(
       (definition) => definition.name === "reviewedSamplePositiveRate",
     );
