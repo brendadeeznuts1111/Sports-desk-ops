@@ -620,17 +620,44 @@ describe("model artifact", () => {
     expect(payload["kind"]).toBe(FRAUD_MODEL_KIND);
     expect(payload["spec"]).toBeDefined();
     expect(payload["validation"]).toBeDefined();
-    const definitions = payload["metricDefinitions"] as Record<string, unknown>;
-    expect(definitions["kind"]).toBe("fraud-model-metric-definitions");
-    expect(definitions["schemaVersion"]).toBe(1);
-    expect(definitions["unit"]).toBe("bet-row");
-    expect(definitions["notStratifiedBy"]).toEqual([
-      "sport",
-      "subSport",
-      "market",
-      "period",
-      "agent",
-    ]);
+    const metadata = payload["metricMetadata"] as {
+      kind: string;
+      schemaVersion: number;
+      definitions: Array<{
+        name: string;
+        kind: string;
+        description: string;
+        unit?: string;
+        label?: string;
+        population?: string;
+        value?: unknown;
+      }>;
+    };
+    expect(metadata.kind).toBe("fraud-model-metric-metadata");
+    expect(metadata.schemaVersion).toBe(1);
+    for (const definition of metadata.definitions) {
+      expect(typeof definition.name).toBe("string");
+      expect(typeof definition.kind).toBe("string");
+      expect(typeof definition.description).toBe("string");
+    }
+    expect(
+      metadata.definitions.find((definition) => definition.name === "unit"),
+    ).toMatchObject({ kind: "unit" });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "rowPrecisionAtK",
+      ),
+    ).toMatchObject({
+      kind: "ranking-metric",
+      unit: "bet-row",
+      label: "desk_flag",
+      population: "temporal-holdout",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "notStratifiedBy",
+      )?.value,
+    ).toEqual(["sport", "subSport", "market", "period", "agent"]);
     expect(typeof payload["artifactSha256"]).toBe("string");
     expect((payload["artifactSha256"] as string).length).toBe(64);
 

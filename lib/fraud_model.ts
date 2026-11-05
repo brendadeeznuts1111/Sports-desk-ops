@@ -1847,20 +1847,60 @@ export interface ModelReportPayloadOptions {
   readonly includeScoreMap?: boolean;
 }
 
-const MODEL_METRIC_DEFINITIONS = {
-  kind: "fraud-model-metric-definitions",
+const MODEL_METRIC_METADATA = {
+  kind: "fraud-model-metric-metadata",
   schemaVersion: 1,
-  unit: "bet-row",
-  label:
-    "desk_flag proxy on the row (suspectedBot OR reversedCredit OR manualLog)",
-  holdout: "last 30% of rows by logTime (temporal split)",
-  rowPrecisionAtK:
-    "of the top-k holdout bet rows by model score, the share whose own desk_flag is true",
-  noPriorBet:
-    "the same row table restricted to holdout rows whose account has no earlier bet in the corpus",
-  notStratifiedBy: ["sport", "subSport", "market", "period", "agent"],
-  accountQueue:
-    "fraud_queue ranks accounts; these row metrics are not account precision",
+  definitions: [
+    {
+      name: "unit",
+      kind: "unit",
+      description:
+        "One getBetReport bet row; not an account, sport, sub-sport, market, or period.",
+    },
+    {
+      name: "label",
+      kind: "label",
+      description:
+        "The row's desk_flag proxy (suspectedBot OR reversedCredit OR manualLog), never a confirmed fraud outcome.",
+    },
+    {
+      name: "holdout",
+      kind: "population",
+      description: "The last 30% of rows by logTime (temporal split).",
+    },
+    {
+      name: "rowPrecisionAtK",
+      kind: "ranking-metric",
+      unit: "bet-row",
+      label: "desk_flag",
+      population: "temporal-holdout",
+      description:
+        "Of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
+    },
+    {
+      name: "noPriorBet",
+      kind: "population-slice",
+      unit: "bet-row",
+      label: "desk_flag",
+      population: "no-prior-bet-holdout",
+      description:
+        "The same row table restricted to holdout rows whose account has no earlier bet in the corpus.",
+    },
+    {
+      name: "notStratifiedBy",
+      kind: "scope",
+      value: ["sport", "subSport", "market", "period", "agent"],
+      description:
+        "No per-sport, per-subSport, per-market, per-period or per-agent precision is claimed; those fields are not the unit.",
+    },
+    {
+      name: "accountQueue",
+      kind: "scope",
+      value: "account",
+      description:
+        "fraud_queue ranks accounts; these row metrics are not account precision.",
+    },
+  ],
 } as const;
 
 /**
@@ -1881,7 +1921,7 @@ export function modelReportPayload(
     present: true,
     path: state.path,
     fittedAt: artifact.fittedAt,
-    metricDefinitions: MODEL_METRIC_DEFINITIONS,
+    metricMetadata: MODEL_METRIC_METADATA,
     spec: artifact.spec,
     features: artifact.features.map((feature) => ({
       id: feature.id,
