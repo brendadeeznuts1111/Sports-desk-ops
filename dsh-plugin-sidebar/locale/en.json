@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "SportsDesk desk",
-    "description": "Adds a SportsDesk entry to the left sidebar; it opens a read-only desk overview that measures the local SportsDesk webview service from five same-origin routes: service state (/health, /api/status), market feed and repo evidence (/api/graph/summary), book KPIs with provenance (/api/kpis) and the paper execution plan (/api/execution/plan). Each source is probed independently, so a failed or missing source is named instead of zeroed, and a payload that previously loaded stays visible labelled stale."
+    "description": "Adds a SportsDesk entry to the left sidebar; it opens a read-only desk view of the local SportsDesk webview service the desk runs with bun run serve. A live Server-Sent Events card reads the desk's own /api/graph/stream through a chunked same-origin proxy (connection state, frames, heartbeats and counter deltas), and five polled routes measure the rest: service state (/health, /api/status), market feed and repo evidence (/api/graph/summary), book KPIs with provenance (/api/kpis) and the paper execution plan (/api/execution/plan). Each source is measured independently, so a failed or missing source is named instead of zeroed, and a payload that previously loaded stays visible labelled stale."
   }
 }

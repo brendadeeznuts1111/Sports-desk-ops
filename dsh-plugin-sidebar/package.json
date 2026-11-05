@@ -1,9 +1,9 @@
 {
   "name": "dsh-plugin-sportsdesk-desk-panel",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Left-sidebar SportsDesk entry in the Harness Web UI: a global panel icon with a live status dot and a desk page reporting the local SportsDesk webview service from its own /health and /api/status routes \u2014 service runtime, memory, Telegram mode, report schedules, probe provenance and latency, and stale-build recovery; the Host half proxies an allowlist of read-only desk GET routes.",
+  "description": "Left-sidebar SportsDesk entry in the Harness Web UI: a global panel icon with a live status dot and a desk page for the local SportsDesk webview service the desk runs with bun run serve \u2014 a live Server-Sent Events card (connection state, frames, heartbeats, counter deltas) plus service runtime, memory, Telegram mode, report schedules, market feed, book KPIs, paper execution, probe provenance and stale-build recovery; the Host half proxies an allowlist of read-only desk GET routes plus one chunked SSE route.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

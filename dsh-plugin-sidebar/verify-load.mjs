@@ -32,18 +32,28 @@
  *   - a stale service (no `ingress`, /api/status 404) renders "stale build" with
  *     the missing pieces and the `PORT=4020 bun run serve` command; a refused
  *     health probe renders "service down"; an /api/status 5xx is unknown;
+ *   - the live stream card reads a stubbed SSE body (two `event: summary`
+ *     frames and two `: heartbeat` comments): it renders `streaming`, the frame
+ *     and heartbeat counts, the latest counters and the real deltas
+ *     (`Pending bets 14 → 16`), and a marked 404 renders `no stream route`
+ *     without a loopback fallback while an unmarked 404 does fall back;
+ *   - the sidebar glyph never opens a stream (only the desk page does);
  *   - the sidebar glyph renders the same measured service phase as a corner dot
  *     (and tracks only the phase, not the overview sources);
  *   - disposal removes the slot registrations and locale dictionary, aborts the
  *     in-flight probe, removes the visibility listener, and publishes nothing
  *     afterwards.
  *
- * Host half (`index.js`): registers the five allowlisted same-origin GET proxy
+ * Host half (`index.js`): registers the six allowlisted same-origin GET proxy
  * routes, answers 405 for other methods and 403 for a foreign Origin (both with
  * the proxy marker), forwards the upstream status/body/content-type with
  * `cache-control: no-store` and the marker, caps an oversized upstream document
  * at 502 `response_too_large`, turns an unreachable desk service into 502 JSON
- * (never a healthy response), and unregisters every route on disposal.
+ * (never a healthy response), and unregisters every route on disposal. The
+ * stream route is checked separately: it forwards SSE bytes as they arrive
+ * (content-type, `x-accel-buffering: no`, marker), reports a missing upstream
+ * route as 404 `stream_route_missing`, an unreachable desk as 502, and aborts
+ * an open upstream stream on disposal.
  *
  * It also checks that visible copy exists in every supplied locale, that every
  * dictionary key the client uses is present in BOTH locales, that the locale
@@ -499,10 +509,20 @@ function fakeDocument() {
  * Component effects run when a component renders (this is a shim, not React),
  * which is what starts the real poll loop.
  *
+ * The live-stream fetch is intercepted separately. By default it never
+ * resolves, so scenarios that only measure the five polled sources are not
+ * affected by a stream connection they did not ask for; `stream: "honor"`
+ * passes stream URLs to `fetchImpl` for the live-stream checks, and
+ * `stream: "unavailable"` answers a proxy-marked 404.
+ *
  * `slots.register` returns a real disposer so the disposal checks can prove the
  * registrations are removed, matching the slot service's contract.
+ *
+ * @param {(url: string, init?: object) => Promise<object>} fetchImpl
+ * @param {{ stream?: "pending" | "honor" | "unavailable" }} [options]
  */
-function bootClient(fetchImpl) {
+function bootClient(fetchImpl, options = {}) {
+  const streamMode = options.stream ?? "pending";
   const effectCleanups = [];
   const React = {
     createElement: (type, props, ...children) => ({ type, props, children }),
@@ -529,8 +549,21 @@ function bootClient(fetchImpl) {
         },
       },
     },
-    fetch: fetchImpl,
+    fetch: (url, init) => {
+      if (String(url).includes("/stream") && streamMode !== "honor") {
+        if (streamMode === "unavailable") {
+          return Promise.resolve(
+            jsonBody({ error: "stream_route_missing" }, 404, true),
+          );
+        }
+        // Never resolves: the page shows "connecting…" and never publishes a
+        // frame, exactly like a stream that has not answered yet.
+        return new Promise(() => {});
+      }
+      return fetchImpl(url, init);
+    },
     AbortController,
+    TextDecoder,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -1422,6 +1455,361 @@ check("the desk exposes latency history and a diagnostics copy", () => {
   harness.dispose();
 });
 
+/* --- live stream (SSE) -------------------------------------------------- */
+
+/**
+ * Two summary frames shaped like the running desk's `/api/graph/stream` body
+ * (measured 2026-11-05), with the counters moved between them so the card has
+ * one real delta of each kind to render.
+ */
+const LIVE_FRAME_ONE = JSON.stringify({
+  feed: {
+    status: "measured",
+    dataMode: "PARTIAL",
+    wssIngestion: "not_ingested",
+    pollSequence: 1,
+    lastUpdatedIso: "2026-11-04T20:00:38.143Z",
+    ageSeconds: 15146,
+    stale: true,
+    counts: {
+      activeWallets: 23,
+      openLegs: 90,
+      openExposureUsd: 15609,
+      pendingBets: 14,
+      ipClusters: 13,
+    },
+  },
+  repo: { head: "5e4b493", branch: "feat/dashboard-markdown" },
+});
+const LIVE_FRAME_TWO = JSON.stringify({
+  feed: {
+    status: "measured",
+    dataMode: "PARTIAL",
+    wssIngestion: "not_ingested",
+    pollSequence: 2,
+    lastUpdatedIso: "2026-11-04T20:01:38.143Z",
+    ageSeconds: 15086,
+    stale: true,
+    counts: {
+      activeWallets: 23,
+      openLegs: 90,
+      openExposureUsd: 16609,
+      pendingBets: 16,
+      ipClusters: 13,
+    },
+  },
+  repo: { head: "5e4b493", branch: "feat/dashboard-markdown" },
+});
+const LIVE_SSE = [
+  `event: summary\ndata: ${LIVE_FRAME_ONE}\n\n`,
+  ": heartbeat 1793822438143\n\n",
+  `event: summary\ndata: ${LIVE_FRAME_TWO}\n\n`,
+  ": heartbeat 1793822439143\n\n",
+];
+
+await checkAsync(
+  "live stream renders frames, heartbeats and counter deltas",
+  async () => {
+    const streamCalls = [];
+    const harness = bootClient(
+      async (url, init) => {
+        if (String(url).includes("/stream")) {
+          streamCalls.push(String(url));
+          return streamResponse(LIVE_SSE, {
+            stayOpen: true,
+            signal: init?.signal,
+          });
+        }
+        return proxiedResponse(url, fixtureFor(url));
+      },
+      { stream: "honor" },
+    );
+    harness.render("main");
+    await settle();
+    const tree = harness.render("main");
+    const text = JSON.stringify(tree);
+    const card = findOne(tree, "spsd-live");
+    assert(card !== undefined, "no live card rendered");
+    assert(
+      card.props["data-live-state"] === "streaming",
+      `live card state is ${card.props["data-live-state"]}`,
+    );
+    for (const expected of [
+      "Live stream",
+      "streaming",
+      "2 frames",
+      "Heartbeats",
+      "Pending bets 14 → 16",
+      "Open exposure $15,609 → $16,609",
+      "measured",
+    ]) {
+      assert(text.includes(expected), `live card is missing ${expected}`);
+    }
+    assert(
+      streamCalls.length === 1 &&
+        streamCalls[0] === "/api/sportsdesk-desk/stream",
+      `unexpected stream calls: ${streamCalls.join(", ")}`,
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "live stream marks a marked 404 as unavailable, not down",
+  async () => {
+    const calls = [];
+    const harness = bootClient(
+      async (url) => {
+        calls.push(String(url));
+        return jsonBody({ error: "stream_route_missing" }, 404, true);
+      },
+      { stream: "honor" },
+    );
+    harness.render("main");
+    await settle();
+    const tree = harness.render("main");
+    const text = JSON.stringify(tree);
+    const card = findOne(tree, "spsd-live");
+    assert(card !== undefined, "no live card rendered");
+    assert(
+      card.props["data-live-state"] === "unavailable",
+      `live card state is ${card.props["data-live-state"]}`,
+    );
+    assert(text.includes("no stream route"), "missing the unavailable label");
+    assert(
+      text.includes("live stream route is not in this running build"),
+      "missing the unavailable explanation",
+    );
+    const streamCalls = calls.filter((url) => String(url).includes("/stream"));
+    // A re-render after the 404 may retry the stream; what matters is that it
+    // never leaves the proxy for a loopback URL the viewer cannot reach.
+    assert(streamCalls.length >= 1, "the live stream was never attempted");
+    assert(
+      streamCalls.every((url) => url === "/api/sportsdesk-desk/stream"),
+      `a marked 404 fell back to ${streamCalls.join(", ")}`,
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "live stream falls back to loopback when the Host half has no route",
+  async () => {
+    const calls = [];
+    const harness = bootClient(
+      async (url, init) => {
+        calls.push(String(url));
+        if (String(url) === "/api/sportsdesk-desk/stream") {
+          // Unmarked: this Harness did not register the streaming proxy.
+          return jsonBody({}, 404, false);
+        }
+        if (String(url).includes("/stream")) {
+          return streamResponse(": heartbeat 1\n\n", {
+            stayOpen: true,
+            signal: init?.signal,
+          });
+        }
+        return proxiedResponse(url, fixtureFor(url));
+      },
+      { stream: "honor" },
+    );
+    harness.render("main");
+    await settle();
+    const card = findOne(harness.render("main"), "spsd-live");
+    assert(
+      card.props["data-live-state"] === "streaming",
+      `loopback stream not used (${card.props["data-live-state"]})`,
+    );
+    assert(
+      calls.includes("http://127.0.0.1:4020/api/graph/stream"),
+      "no loopback stream fallback",
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "a non-SSE proxy answer is not parsed as a live stream",
+  async () => {
+    const calls = [];
+    const harness = bootClient(
+      async (url) => {
+        calls.push(String(url));
+        if (String(url) === "/api/sportsdesk-desk/stream") {
+          // The Harness answered a path it does not route with something that
+          // is not an event stream, and without the proxy marker.
+          return {
+            status: 200,
+            headers: {
+              get: (name) =>
+                name.toLowerCase() === "content-type"
+                  ? "text/html; charset=utf-8"
+                  : null,
+            },
+          };
+        }
+        if (String(url).includes("/stream")) {
+          throw new Error("Failed to fetch");
+        }
+        return proxiedResponse(url, fixtureFor(url));
+      },
+      { stream: "honor" },
+    );
+    harness.render("main");
+    await settle();
+    const card = findOne(harness.render("main"), "spsd-live");
+    assert(card !== undefined, "no live card rendered");
+    // The HTML must never be parsed as frames; with the poll fixtures present
+    // the honest outcome is the polling fallback (or unavailable without them).
+    assert(
+      ["polling", "unavailable"].includes(card.props["data-live-state"]),
+      `non-SSE answer rendered as ${card.props["data-live-state"]}`,
+    );
+    assert(
+      !JSON.stringify(card).includes("frames ·"),
+      "the HTML body was counted as stream frames",
+    );
+    assert(
+      calls.includes("http://127.0.0.1:4020/api/graph/stream"),
+      "a non-SSE proxy answer did not try the loopback fallback",
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "a non-SSE proxy answer still falls back to a real loopback stream",
+  async () => {
+    const harness = bootClient(
+      async (url, init) => {
+        if (String(url) === "/api/sportsdesk-desk/stream") {
+          return {
+            status: 200,
+            headers: {
+              get: (name) =>
+                name.toLowerCase() === "content-type"
+                  ? "text/html; charset=utf-8"
+                  : null,
+            },
+          };
+        }
+        if (String(url).includes("/stream")) {
+          return streamResponse(": heartbeat 1\n\n", {
+            stayOpen: true,
+            signal: init?.signal,
+          });
+        }
+        return proxiedResponse(url, fixtureFor(url));
+      },
+      { stream: "honor" },
+    );
+    harness.render("main");
+    await settle();
+    const card = findOne(harness.render("main"), "spsd-live");
+    assert(
+      card.props["data-live-state"] === "streaming",
+      `loopback stream not used (${card.props["data-live-state"]})`,
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "an absent stream route falls back to the polled graph",
+  async () => {
+    // The default stream stub is a proxy-marked 404; the poll fixtures are real.
+    const harness = bootClient(
+      async (url) => proxiedResponse(url, fixtureFor(url)),
+      { stream: "unavailable" },
+    );
+    harness.render("main");
+    await settle();
+    const tree = harness.render("main");
+    const card = findOne(tree, "spsd-live");
+    assert(card !== undefined, "no live card rendered");
+    assert(
+      card.props["data-live-state"] === "polling",
+      `absent stream rendered as ${card.props["data-live-state"]}`,
+    );
+    const text = JSON.stringify(card);
+    for (const expected of [
+      "polling fallback",
+      "Pending bets",
+      "$64,139",
+      "Last poll",
+      "15 s graph probe",
+    ]) {
+      assert(
+        text.includes(expected),
+        `polling fallback is missing ${expected}`,
+      );
+    }
+    harness.dispose();
+  },
+);
+
+await checkAsync("polling fallback shows poll-to-poll deltas", async () => {
+  let graphCalls = 0;
+  const harness = bootClient(
+    async (url) => {
+      if (String(url).endsWith("/graph")) {
+        graphCalls += 1;
+        const body = JSON.parse(JSON.stringify(FIXTURE_GRAPH));
+        if (graphCalls > 1) body.feed.counts.pendingBets = 16;
+        return proxiedResponse(url, body);
+      }
+      return proxiedResponse(url, fixtureFor(url));
+    },
+    { stream: "unavailable" },
+  );
+  harness.render("main");
+  await settle();
+  const first = harness.render("main");
+  assert(
+    findOne(first, "spsd-live").props["data-live-state"] === "polling",
+    "the first render is not polling",
+  );
+  const refresh = findAll(first, "spsd-btn").find((button) =>
+    JSON.stringify(button.children).includes("Refresh"),
+  );
+  assert(refresh !== undefined, "no Refresh button");
+  assert(
+    typeof refresh.props.onClick === "function",
+    "the Refresh button has no click handler",
+  );
+  refresh.props.onClick();
+  await settle();
+  const card = findOne(harness.render("main"), "spsd-live");
+  const text = JSON.stringify(card);
+  assert(
+    text.includes("Pending bets 14 → 16"),
+    "the poll-to-poll delta was not rendered",
+  );
+  assert(
+    text.includes("Changes between probes"),
+    "the polling change list has no label",
+  );
+  harness.dispose();
+});
+
+await checkAsync("only the desk page opens the live stream", async () => {
+  const calls = [];
+  const harness = bootClient(
+    async (url) => {
+      calls.push(String(url));
+      return proxiedResponse(url, fixtureFor(url));
+    },
+    { stream: "honor" },
+  );
+  harness.render("sidebar.panellist");
+  await settle();
+  assert(
+    !calls.some((url) => String(url).includes("/stream")),
+    "the sidebar glyph opened a stream",
+  );
+  harness.dispose();
+});
+
 check("page chrome uses theme tokens, not literal colors", () => {
   const harness = bootClient(async (url) =>
     proxiedResponse(url, fixtureFor(url)),
@@ -1494,6 +1882,10 @@ await checkAsync(
     const mainEntry = harness.mainEntry();
     const seat = harness.capturedSeat();
     const renderNow = () => mainEntry.component({ t: seat });
+    // The first render mounts and starts both loops; the live card's initial
+    // "connecting" state is measured (a connection was opened), so capture the
+    // baseline from the render that already includes it.
+    harness.render("main");
     const before = textOf(renderNow());
     await settle();
     assert(pending.length >= 1, "no probe started");
@@ -1592,16 +1984,97 @@ function fakeWebServer(origin = "https://dsh.example") {
 }
 
 function fakeRes() {
-  const out = { status: null, headers: null, body: null };
+  const out = {
+    status: null,
+    headers: null,
+    body: null,
+    chunks: [],
+    ended: false,
+    listeners: new Map(),
+  };
   return {
     out,
     writeHead(status, headers) {
       out.status = status;
       out.headers = headers;
     },
-    end(body) {
-      out.body = body;
+    flushHeaders() {},
+    write(chunk) {
+      out.chunks.push(chunk);
+      return true;
     },
+    end(body) {
+      if (body !== undefined) out.body = body;
+      out.ended = true;
+    },
+    once(type, handler) {
+      out.listeners.set(type, handler);
+    },
+    off(type) {
+      out.listeners.delete(type);
+    },
+  };
+}
+
+/** Concatenate the chunks a streaming handler wrote to a fake response. */
+function concatChunks(chunks) {
+  const encoder = new TextEncoder();
+  const arrays = chunks.map((chunk) =>
+    typeof chunk === "string" ? encoder.encode(chunk) : chunk,
+  );
+  const total = arrays.reduce((sum, array) => sum + array.byteLength, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const array of arrays) {
+    merged.set(array, offset);
+    offset += array.byteLength;
+  }
+  return merged;
+}
+
+/**
+ * A response-shaped object for one SSE body. `stayOpen` keeps the stream open
+ * after the enqueued bytes (the real service does this between frames) and
+ * errors the body when `signal` aborts, so disposal can settle it.
+ */
+function streamResponse(
+  text,
+  { stayOpen = false, proxied = true, signal = null } = {},
+) {
+  const encoder = new TextEncoder();
+  const chunks = Array.isArray(text) ? text : [text];
+  return {
+    status: 200,
+    headers: {
+      get: (name) => {
+        const key = name.toLowerCase();
+        if (key === "content-type") return "text/event-stream; charset=utf-8";
+        if (key === "x-sportsdesk-desk-proxy") {
+          return proxied ? "/api/graph/stream" : null;
+        }
+        return null;
+      },
+    },
+    body: new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        if (!stayOpen) {
+          controller.close();
+          return;
+        }
+        const onAbort = () => {
+          try {
+            controller.error(new Error("stream aborted"));
+          } catch {
+            // The stream may already be closed.
+          }
+        };
+        if (signal !== null) {
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        }
+      },
+    }),
   };
 }
 
@@ -1644,6 +2117,7 @@ const ALLOWLIST = new Map([
   ["/api/sportsdesk-desk/graph", "/api/graph/summary"],
   ["/api/sportsdesk-desk/kpis", "/api/kpis"],
   ["/api/sportsdesk-desk/execution", "/api/execution/plan"],
+  ["/api/sportsdesk-desk/stream", "/api/graph/stream"],
 ]);
 
 /** Run `body` against a temporary global fetch stub, then restore it. */
@@ -1829,6 +2303,138 @@ await checkAsync("host refuses an oversized upstream document", async () => {
   assert(
     res.out.headers["x-sportsdesk-desk-proxy"] === "/api/graph/summary",
     "oversized refusal lost the proxy marker",
+  );
+});
+
+await checkAsync(
+  "host streams the desk's SSE body instead of buffering it",
+  async () => {
+    const host = await bootHost();
+    const route = host.routes.find(
+      (candidate) => candidate.path === "/api/sportsdesk-desk/stream",
+    );
+    assert(route !== undefined, "stream route not registered");
+    const res = fakeRes();
+    let upstreamUrl = null;
+    let upstreamSignal = null;
+    await withFetchStub(
+      async (url, init) => {
+        upstreamUrl = String(url);
+        upstreamSignal = init?.signal;
+        return streamResponse([
+          'event: summary\ndata: {"feed":{"status":"measured"}}\n\n',
+          ": heartbeat 1793822438143\n\n",
+        ]);
+      },
+      () => route.handler({ method: "GET", headers: {} }, res),
+    );
+    assert(
+      upstreamUrl === "http://127.0.0.1:4020/api/graph/stream",
+      `unexpected stream upstream ${upstreamUrl}`,
+    );
+    assert(
+      upstreamSignal !== undefined,
+      "stream fetch carries no abort signal",
+    );
+    assert(res.out.status === 200, `stream answered ${res.out.status}`);
+    assert(
+      String(res.out.headers["content-type"]).startsWith("text/event-stream"),
+      `stream content-type ${res.out.headers["content-type"]}`,
+    );
+    assert(
+      res.out.headers["cache-control"] === "no-store",
+      "stream response is cacheable",
+    );
+    assert(
+      res.out.headers["x-accel-buffering"] === "no",
+      "stream response may be buffered by an intermediary",
+    );
+    assert(
+      res.out.headers["x-sportsdesk-desk-proxy"] === "/api/graph/stream",
+      "stream response lost the proxy marker",
+    );
+    const forwarded = new TextDecoder().decode(concatChunks(res.out.chunks));
+    assert(
+      forwarded.includes("event: summary"),
+      "the summary frame was not forwarded",
+    );
+    assert(
+      forwarded.includes(": heartbeat 1793822438143"),
+      "the heartbeat comment was not forwarded",
+    );
+    assert(res.out.ended === true, "the stream response was not ended");
+  },
+);
+
+await checkAsync("host reports a missing or unreachable stream", async () => {
+  const host = await bootHost();
+  const route = host.routes.find(
+    (candidate) => candidate.path === "/api/sportsdesk-desk/stream",
+  );
+
+  const missing = fakeRes();
+  await withFetchStub(
+    async () => upstreamBody('{"error":"not found"}', 404),
+    () => route.handler({ method: "GET", headers: {} }, missing),
+  );
+  assert(
+    missing.out.status === 404,
+    `missing stream route answered ${missing.out.status}`,
+  );
+  assert(
+    JSON.parse(missing.out.body).error === "stream_route_missing",
+    "missing stream route lost its error token",
+  );
+  assert(
+    missing.out.headers["x-sportsdesk-desk-proxy"] === "/api/graph/stream",
+    "missing stream route lost the proxy marker",
+  );
+
+  const down = fakeRes();
+  await withFetchStub(
+    async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:4020");
+    },
+    () => route.handler({ method: "GET", headers: {} }, down),
+  );
+  assert(down.out.status === 502, `down stream answered ${down.out.status}`);
+  assert(
+    JSON.parse(down.out.body).error === "desk service unreachable",
+    "down stream lost its error token",
+  );
+  assert(
+    down.out.headers["x-sportsdesk-desk-proxy"] === "/api/graph/stream",
+    "down stream lost the proxy marker",
+  );
+});
+
+await checkAsync("disposal aborts an open stream", async () => {
+  const host = await bootHost();
+  const route = host.routes.find(
+    (candidate) => candidate.path === "/api/sportsdesk-desk/stream",
+  );
+  const res = fakeRes();
+  let upstreamSignal = null;
+  await withFetchStub(
+    async (_url, init) => {
+      upstreamSignal = init?.signal;
+      return streamResponse(": heartbeat 1\n\n", {
+        stayOpen: true,
+        signal: init?.signal,
+      });
+    },
+    async () => {
+      const running = route.handler({ method: "GET", headers: {} }, res);
+      await settle();
+      assert(res.out.status === 200, `stream did not open (${res.out.status})`);
+      host.dispose();
+      assert(
+        upstreamSignal?.aborted === true,
+        "disposal did not abort the upstream stream",
+      );
+      await running;
+      assert(res.out.ended === true, "aborted stream did not end its response");
+    },
   );
 });
 

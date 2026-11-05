@@ -9,7 +9,9 @@ state.
 
 The icon also carries a small status dot, and the page and the icon read the
 same measured snapshot: one 15 s probe loop feeds both, so desk health is
-visible from the sidebar without opening the page.
+visible from the sidebar without opening the page. The page additionally opens
+the desk's own Server-Sent Events stream while it is mounted; the sidebar dot
+never depends on that stream.
 
 This directory is independent of `../dsh-plugin/` (the read-only Host tools
 bundle) and `../dsh-plugin-ui/` (the composer desk-status row): different
@@ -42,12 +44,12 @@ available without opening the page.
 ## What the page shows
 
 A header (title, one-line description, Refresh and Open desk), a compact **Last
-measured** line, the existing service status card, a recovery callout when the
-service is stale/down/unknown, an **attention** banner, and a responsive card
-grid (2 columns at ≥ 900 px, 1 below) with the three desk cards. Every card
-carries its own state chip — `live` / `stale` / `error` / `missing` — plus the
-time its payload was received (or, when it has no payload, the last attempt)
-and the relative age.
+measured** line, the existing service status card, a **Live stream** card, a
+recovery callout when the service is stale/down/unknown, an **attention**
+banner, and a responsive card grid (2 columns at ≥ 900 px, 1 below) with the
+three desk cards. Every card carries its own state chip — `live` / `stale` /
+`error` / `missing` — plus the time its payload was received (or, when it has no
+payload, the last attempt) and the relative age.
 
 ### Service phase
 
@@ -80,6 +82,62 @@ When the build is stale the callout names what is missing (`/api/status` route
 404, `ingress` field) and shows the exact restart command,
 `PORT=4020 bun run serve`; when the service is down it shows the upstream error
 and the same start command.
+
+### Live stream
+
+The **Live stream** card sits directly below the service card and reads the
+desk's own push route, `GET /api/graph/stream`, through a **chunked**
+same-origin proxy (see [Transport and CORS](#transport-and-cors)). The desk
+sends an `event: summary` frame only when its stat fingerprint changes (at most
+every 5 s) and a `: heartbeat <epochMs>` comment every 5 s, so the card
+distinguishes "connected but quiet" from "not connected".
+
+| State              | Meaning                                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connecting…`      | a connection attempt is in flight                                                                                                                              |
+| `streaming`        | HTTP 200; frames and/or heartbeats are being read                                                                                                              |
+| `reconnecting`     | the connection ended or failed; the next attempt has a delay                                                                                                   |
+| `paused`           | the browser tab is hidden; reading resumes when it is visible                                                                                                  |
+| `polling fallback` | no stream route in this build, but the 15 s graph probe has data: the card shows those counters, labelled as a poll                                            |
+| `no stream route`  | the proxy or the desk does not serve `/api/graph/stream` and no polled data exists — no retry, because the route cannot appear until the Host half is reloaded |
+| `stream error`     | any other measured failure (a 502 from the proxy, a bad body, …)                                                                                               |
+
+The card renders only what arrived: the endpoint and HTTP status, the transport
+(Harness proxy or direct loopback), frames received with their byte count, the
+last change frame's clock and age, heartbeats with the last heartbeat's age, and
+the connection time. From the latest frame it renders the same counters the
+Market feed card uses (pending bets, active wallets, open legs, open exposure,
+IP clusters) plus feed status, feed age and poll sequence; the feed age is the
+frame's `ageSeconds` plus the time elapsed since that frame, because the honest
+feed keeps aging between frames.
+
+A **Changes while connected** list shows the counter deltas between consecutive
+frames (`Pending bets 14 → 16`, `Open exposure $15,609 → $16,609`) with the
+clock time of the frame that reported them. It is bounded to the newest 8.
+
+Honesty rules specific to the stream:
+
+- the first frame establishes values and produces **no** deltas; a counter
+  absent from either frame is never diffed;
+- a frame whose `data:` is not JSON is counted in `parseErrors`, not rendered;
+- a payload without a recognised `feed`/`repo` shape is not rendered at all;
+- a marked 404 renders `no stream route` (or `polling fallback` when the graph
+  probe has data) and does not fall back or retry; an unmarked 404 — or a 200
+  whose content type is not `text/event-stream` — falls back to loopback, and a
+  route the proxy does not have plus a loopback that does not answer renders
+  `no stream route`/`polling fallback` instead of reconnecting forever;
+- in `polling fallback` the counters and deltas come from the 15 s graph probe,
+  never from a fabricated stream frame; a later successful connection replaces
+  them with stream frames;
+- retries use a bounded backoff (2 s, 5 s, 10 s, then 30 s) and keep the last
+  measured failure reason on screen;
+- the page's **Refresh** action re-probes the five polled sources **and**
+  reopens the stream immediately.
+
+The stream connection belongs to the desk page: it opens when the page mounts,
+closes when the page unmounts, pauses when the tab hides, and aborts on bundle
+disposal. The sidebar glyph starts only the probe loop, so a closed page never
+holds an SSE connection.
 
 ### Desk overview cards
 
@@ -174,6 +232,18 @@ tick probes all five sources independently. The loop:
 - never publishes after disposal, and clears its timer, visibility listener and
   in-flight request when the bundle is disposed.
 
+The live stream has its own store and lifetime, and never moves the service
+phase the sidebar dot renders. The page opens it on mount; hiding the tab aborts
+it and records `paused`; becoming visible reopens it; unmounting the page or
+disposing the bundle aborts it and forbids any later frame from publishing.
+Retries use the bounded backoff described above and stop on disposal.
+
+In `polling fallback` the live card follows the poll store instead: every
+published snapshot refreshes its counters and derives poll-to-poll deltas. The
+stream is not retried on a timer (a missing Host half cannot appear without a
+reload), so **Refresh** is the explicit way to try again; a successful
+connection switches the card back to `streaming`.
+
 A poll tick that finds the same phase keeps the last measurement on screen
 instead of flashing "checking…"; only a manual Refresh resets the visible
 state — and even then the last good per-source payloads survive, so a failed
@@ -195,22 +265,30 @@ The Harness server is the process on the desk host, so it proxies instead.
 Measured 2026-11-04: the desk service answered 200 on `/health` and `/api/status`
 while the panel showed "service down" from the tunnel-served UI.
 
-The Host half allowlists five read-only GET routes, served by one shared handler
-(`target` is the route's fixed upstream path, never caller input):
+The Host half allowlists six read-only GET routes — five buffered JSON
+documents and one chunked SSE stream — served by two fixed handlers (`target` is
+the route's fixed upstream path, never caller input):
 
-| Proxy route                      | Upstream              |
-| -------------------------------- | --------------------- |
-| `/api/sportsdesk-desk/health`    | `/health`             |
-| `/api/sportsdesk-desk/status`    | `/api/status`         |
-| `/api/sportsdesk-desk/graph`     | `/api/graph/summary`  |
-| `/api/sportsdesk-desk/kpis`      | `/api/kpis`           |
-| `/api/sportsdesk-desk/execution` | `/api/execution/plan` |
+| Proxy route                      | Upstream              | Forwarding |
+| -------------------------------- | --------------------- | ---------- |
+| `/api/sportsdesk-desk/health`    | `/health`             | buffered   |
+| `/api/sportsdesk-desk/status`    | `/api/status`         | buffered   |
+| `/api/sportsdesk-desk/graph`     | `/api/graph/summary`  | buffered   |
+| `/api/sportsdesk-desk/kpis`      | `/api/kpis`           | buffered   |
+| `/api/sportsdesk-desk/execution` | `/api/execution/plan` | buffered   |
+| `/api/sportsdesk-desk/stream`    | `/api/graph/stream`   | chunked    |
 
-The handler answers GET only (405 otherwise), refuses a present Origin that does
-not match the carrier (403), bounds the upstream with a 4 s abort, forwards the
-upstream status/content-type/body, and always sets `cache-control: no-store`.
-A forwarded document over 512 KiB becomes 502 `response_too_large` instead of
-being forwarded. Measured 2026-11-04 18:13 UTC, the five documents were
+Both handlers answer GET only (405 otherwise) and refuse a present Origin that
+does not match the carrier (403). The buffered handler bounds the upstream with
+a 4 s abort, forwards the upstream status/content-type/body, and always sets
+`cache-control: no-store`; a forwarded document over 512 KiB becomes 502
+`response_too_large` instead of being forwarded. The stream handler bounds only
+the wait for upstream response headers (4 s), then forwards the SSE bytes as
+they arrive with `x-accel-buffering: no`, aborts the upstream read when the
+browser closes the connection, and ends the response when the desk ends the
+stream so the page reconnects. Every route is unregistered on disposal,
+including when the `webServer` injection callback resolves after disposal; open
+streams are aborted at the same time. Measured 2026-11-04 18:13 UTC, the five documents were
 `/health` 255 B, `/api/status` 2,355 B, `/api/graph/summary` 12,691 B (~12.7 KB),
 `/api/kpis` 4,165 B (~4.2 KB) and `/api/execution/plan` 9,925 B (~10 KB), so the
 cap is a runaway-response guard, not a working limit. Every route is
@@ -224,7 +302,7 @@ unregistered route, and the client would fall back to a loopback URL the remote
 browser cannot reach — turning "stale build" into "status probe failed". The
 marker makes a proxied 404 authoritative. When the health probe already answered
 through the proxy, a 404 from any of the other four proxies is treated as
-authoritative too: the Host half registers all five routes together, so this
+authoritative too: the Host half registers all six routes together, so this
 also covers a Host half older than the marker (the source renders `missing` —
 "not in this build" — rather than probing a loopback the viewer cannot reach).
 An unmarked 404 when health was _not_ proxied still falls back to the loopback
@@ -304,9 +382,10 @@ auto-loaded `.env` for `PORT=4020` (and the Bun port cascade falls back to 3000)
   `inject` ordering for the two slot owners and the locale service) and exports
   `./client` beside the bundle patch.
 - The Client factory is side-effect free; the locale dictionary, slot
-  registrations and the probe loop's lifetime are `ctx.effect`/`ctx.slots.inject`
-  resources cleaned up on dispose. Probing starts from a mounted component, so a
-  headless composition never polls.
+  registrations and the probe/stream lifetimes are `ctx.effect`/
+  `ctx.slots.inject` resources cleaned up on dispose. Probing and streaming
+  start from a mounted component, so a headless composition never polls or
+  connects.
 - Visible copy is registered through the Client locale service
   (`ctx.locale.register` + the slot's `locale:` option, which supplies `t`), in
   both built-in locales, with an English fallback so a missing seat cannot
@@ -318,8 +397,9 @@ auto-loaded `.env` for `PORT=4020` (and the Bun port cascade falls back to 3000)
 - React comes from the browser module table; no Harness Client package is
   imported; the app root is not touched.
 - Read-only: no POST, no control actions, no mutations, and no network
-  destination beyond the five allowlisted same-origin routes and their loopback
-  fallbacks.
+  destination beyond the six allowlisted same-origin routes and their loopback
+  fallbacks. The one streaming route forwards the desk's own SSE bytes and
+  synthesizes nothing; the client never sends a body or a credential.
 
 ## Verify
 
@@ -357,11 +437,21 @@ checks:
   a Host half older than the marker is authoritative once health came through
   the proxy, and an unmarked proxy 404 still falls back to the loopback URLs
   when it did not;
+- **the live stream**: from a stubbed SSE body the card reaches `streaming`,
+  counts two frames and two heartbeats, renders `Pending bets 14 → 16` and
+  `Open exposure $15,609 → $16,609`, and never invents a delta for the first
+  frame; a proxy-marked 404 renders `no stream route` when there is no polled
+  data and `polling fallback` (with the fixture counters) when there is; an
+  unmarked 404 falls back to loopback, and the sidebar glyph opens no stream;
+- the Host half streams the desk's SSE body chunk by chunk (content-type,
+  `x-accel-buffering: no`, proxy marker, no buffering), reports a missing route
+  as 404 `stream_route_missing` and an unreachable desk as 502, and aborts an
+  open upstream stream on disposal;
 - **disposal** removes the slot registrations and locale dictionary, removes the
   visibility listener, aborts the in-flight request and publishes nothing after
   the probe resolves;
 - the sidebar dot tracks the service phase only;
-- the Host half registers the five exact allowlisted GET routes, refuses non-GET
+- the Host half registers the six exact allowlisted GET routes, refuses non-GET
   (405) and a foreign Origin (403) with the proxy marker, forwards upstream
   status/body/content-type plus the marker with `cache-control: no-store`, caps
   an oversized upstream document at 502 `response_too_large`, turns an

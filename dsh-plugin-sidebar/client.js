@@ -47,6 +47,20 @@
  * says "stale build". When it is stale or down, the page names what is missing
  * and the exact command that restarts the service from the checkout.
  *
+ * THE LIVE VIEW (Server-Sent Events)
+ *
+ * Above the overview cards, a **Live stream** card reads the desk's own
+ * `/api/graph/stream` route through a streaming same-origin proxy: the desk
+ * pushes an `event: summary` frame whenever its stat fingerprint changes (at
+ * most every 5 s) and a `: heartbeat` comment every 5 s. The card renders only
+ * what arrived — connection state (connecting/streaming/reconnecting/paused/
+ * unavailable/error), HTTP status, frames, heartbeats, bytes, the latest
+ * frame's counters, and the counter deltas between frames. A first frame
+ * establishes values without inventing deltas; a counter absent from a frame is
+ * never diffed; a parse failure is counted, not rendered. The stream is opened
+ * by the desk page (not the sidebar glyph) and closes when the page unmounts,
+ * when the tab hides, or on bundle disposal.
+ *
  * THE OVERVIEW (read-only, measured)
  *
  * Three overview cards render the desk: **Market feed** (feed status/data mode/
@@ -80,14 +94,16 @@
  * The Harness Web UI is tunnel-served (`--public-url`, Cloudflare Access), so
  * the browser's `127.0.0.1` is the VIEWER's machine, not the desk host. Every
  * source therefore probes the same-origin proxy first —
- * `/api/sportsdesk-desk/{health,status,graph,kpis,execution}`, which the Host
- * half (`index.js`) forwards to the loopback service — and falls back to the
- * direct loopback URL (a Harness without the Host half, or a browser on the
+ * `/api/sportsdesk-desk/{health,status,graph,kpis,execution,stream}`, which the
+ * Host half (`index.js`) forwards to the loopback service — and falls back to
+ * the direct loopback URL (a Harness without the Host half, or a browser on the
  * desk host). A 404 carrying the Host half's `x-sportsdesk-desk-proxy` marker is
  * authoritative ("the desk service itself answered", so the source is missing
  * from this build); an unmarked 404 is the generic Harness 404 and may fall
  * back. Each card shows which transport answered and the raw URL, so a transport
- * problem is visible instead of looking like a dead service.
+ * problem is visible instead of looking like a dead service. The JSON routes
+ * are buffered by the proxy; the stream route is forwarded chunk by chunk, so
+ * frames arrive as the desk emits them.
  *
  * RULES FOLLOWED
  *
@@ -98,6 +114,9 @@
  *   removes the visibility listener, aborts the in-flight probe (and every
  *   request it started), and forbids any later publish. A superseded request
  *   (manual Refresh) never publishes.
+ * - The stream connection is owned by the desk page's mount effect and by the
+ *   same disposal: hiding the tab pauses it, unmounting or disposing aborts it,
+ *   and a stopped connection can never publish another frame.
  * - Visible copy goes through the Client locale service (`ctx.locale.register`
  *   plus the `locale:` registration option, which supplies `t`), in both
  *   built-in locales, with a dictionary fallback so a missing seat renders
@@ -140,6 +159,15 @@ window.__ModuleLoader__.load({
       `${PROXY_BASE}/execution`,
       `${SERVICE_URL}/api/execution/plan`,
     ];
+    /**
+     * The desk's own Server-Sent Events route (`event: summary` frames plus
+     * `: heartbeat` comments), proxied same-origin like the JSON sources and
+     * falling back to loopback for a browser on the desk host.
+     */
+    const STREAM_URLS = [
+      `${PROXY_BASE}/stream`,
+      `${SERVICE_URL}/api/graph/stream`,
+    ];
     /** Per-request bound; the service answers in a few milliseconds when up. */
     const PROBE_TIMEOUT_MS = 4_000;
     /** Live cadence while the tab is visible. Hidden tabs stop probing. */
@@ -151,6 +179,26 @@ window.__ModuleLoader__.load({
     /** Rolling /health latency samples for the sparkline (oldest first). */
     const LATENCY_HISTORY_MAX = 30;
     let healthLatencyHistory = [];
+    /** Reconnect backoff for the live stream; the last delay repeats. */
+    const LIVE_RETRY_MS = Object.freeze([2_000, 5_000, 10_000, 30_000]);
+    /** Newest-first bound on the rendered counter-change list. */
+    const LIVE_CHANGES_MAX = 8;
+    /** The stream counts this card diffs; each is a locale key too. */
+    const LIVE_COUNTER_KEYS = Object.freeze([
+      "pendingBets",
+      "activeWallets",
+      "openLegs",
+      "openExposureUsd",
+      "ipClusters",
+    ]);
+    /** Payload counter name -> the visible label's locale key. */
+    const LIVE_COUNTER_LABELS = Object.freeze({
+      pendingBets: "pendingBets",
+      activeWallets: "activeWallets",
+      openLegs: "openLegs",
+      openExposureUsd: "openExposure",
+      ipClusters: "ipClusters",
+    });
 
     /**
      * Visible copy. Both built-in locales are supplied because the locale
@@ -162,7 +210,7 @@ window.__ModuleLoader__.load({
         panel: "SportsDesk",
         title: "SportsDesk desk",
         description:
-          "Read-only overview of the local SportsDesk webview service and its desk: service phase, market feed, book KPIs and the paper execution plan, measured from its own read-only routes.",
+          "Read-only view of the local SportsDesk webview service the desk runs with bun run serve: live Server-Sent Events frames through a same-origin proxy, service phase, market feed, book KPIs and the paper execution plan, measured from its own read-only routes.",
         refresh: "Refresh",
         open: "Open desk",
         retry: "Retry",
@@ -206,8 +254,6 @@ window.__ModuleLoader__.load({
         what: "What this checks",
         explain:
           "/health answers first. /api/status is a route the current checkout defines, so a 404 there — or a /health body without an ingress field — means the running service predates this checkout, and the page shows “stale build” rather than “healthy”. Each overview card measures its own source, so one failed source never blanks the others.",
-        liveNote:
-          "The sidebar dot and this page share one probe loop: five read-only routes every {seconds}s while the browser tab is visible, and immediately when it becomes visible again. Refresh measures now.",
         staleFixTitle: "Stale build",
         staleFixLead: "The running service predates this checkout. Missing:",
         missingStatus: "/api/status route (HTTP 404)",
@@ -297,12 +343,50 @@ window.__ModuleLoader__.load({
         attentionKill: "kill switch is on",
         attentionMode: "mode is {mode}",
         attentionLive: "live execution is enabled",
+        liveTitle: "Live stream",
+        liveStateIdle: "idle",
+        liveStateConnecting: "connecting…",
+        liveStateStreaming: "streaming",
+        liveStateReconnecting: "reconnecting",
+        liveStatePaused: "paused",
+        liveStateUnavailable: "no stream route",
+        liveStatePolling: "polling fallback",
+        liveStateError: "stream error",
+        liveLastPoll: "Last poll",
+        liveChangesPoll: "Changes between probes",
+        livePolling:
+          "The live stream route is not in this running build, so these counters come from the 15 s graph probe and the changes below are poll-to-poll. Streaming starts after the Harness reloads the plugin.",
+        liveEndpoint: "Stream",
+        liveFrames: "Frames",
+        liveFramesValue: "{frames} frames · {bytes}",
+        liveLastFrame: "Last change frame",
+        liveHeartbeats: "Heartbeats",
+        liveHeartbeatsValue: "{count} · last {age}",
+        liveConnected: "Connected",
+        liveConnectedValue: "{time} · {age}",
+        liveNoFrames:
+          "Connected. No change frame yet — the desk sends one only when its stat fingerprint changes (at most every 5 s) and a heartbeat comment every 5 s.",
+        liveCounters: "Live counters",
+        liveNoValues: "No summary frame has been read yet.",
+        liveChanges: "Changes while connected",
+        liveChangeLine: "{field} {from} → {to}",
+        liveNoChanges: "No counter has changed since this stream connected.",
+        liveUnavailable:
+          "The live stream route is not in this running build — the Harness Host half or the desk service predates it. The 15 s overview probes below still measure the desk; streaming starts after the Harness reloads the plugin.",
+        liveDown:
+          "The live stream is not connected: {reason}. The 15 s overview probes below still measure the desk.",
+        livePausedNote:
+          "Reading pauses while the browser tab is hidden and resumes when it becomes visible again.",
+        liveRetry: "Next attempt in {seconds}s.",
+        liveRaw: "Raw stream",
+        liveNote:
+          "Live frames come from the desk's own Server-Sent Events route through the same-origin proxy. The three overview cards below stay on the shared probe loop: five read-only routes every {seconds}s while the tab is visible. Refresh measures both now.",
       },
       zh: {
         panel: "SportsDesk",
         title: "SportsDesk 工作台",
         description:
-          "本地 SportsDesk webview 服务及其工作台的只读概览：服务状态、市场行情、账目指标与模拟执行计划，均来自其自身的只读路由。",
+          "本地 SportsDesk webview 服务（由 bun run serve 启动）的只读视图：通过同源代理读取实时 Server-Sent Events 帧，以及服务状态、市场行情、账目指标与模拟执行计划，均来自其自身的只读路由。",
         refresh: "刷新",
         open: "打开工作台",
         retry: "重试",
@@ -346,8 +430,6 @@ window.__ModuleLoader__.load({
         what: "检测内容",
         explain:
           "先检查 /health；/api/status 是当前代码定义的路由。该路由返回 404，或 /health 响应缺少 ingress 字段，说明运行中的服务早于此代码版本，因此显示“旧构建”而不是“正常”。概览中的每张卡片各自测量自己的数据源，单个源失败不会清空其他卡片。",
-        liveNote:
-          "左侧状态点与本页共用同一探测循环：浏览器标签页可见时每 {seconds} 秒探测五个只读路由，重新可见时立刻补测。点击“刷新”立即探测。",
         staleFixTitle: "旧构建",
         staleFixLead: "运行中的服务早于当前代码版本，缺少：",
         missingStatus: "/api/status 路由（HTTP 404）",
@@ -436,6 +518,43 @@ window.__ModuleLoader__.load({
         attentionKill: "紧急开关已开启",
         attentionMode: "模式为 {mode}",
         attentionLive: "已启用实盘执行",
+        liveTitle: "实时流",
+        liveStateIdle: "空闲",
+        liveStateConnecting: "连接中…",
+        liveStateStreaming: "实时接收中",
+        liveStateReconnecting: "重连中",
+        liveStatePaused: "已暂停",
+        liveStateUnavailable: "无实时路由",
+        liveStatePolling: "轮询回退",
+        liveStateError: "实时流错误",
+        liveLastPoll: "最近轮询",
+        liveChangesPoll: "两次探测之间的变化",
+        livePolling:
+          "运行中的构建没有实时流路由，因此这些计数来自每 15 秒的行情探测，下方变化为两次探测之间的差异。Harness 重新加载插件后即开始实时接收。",
+        liveEndpoint: "实时地址",
+        liveFrames: "帧数",
+        liveFramesValue: "{frames} 帧 · {bytes}",
+        liveLastFrame: "最近变更帧",
+        liveHeartbeats: "心跳",
+        liveHeartbeatsValue: "{count} 次 · 最近 {age}",
+        liveConnected: "连接时间",
+        liveConnectedValue: "{time} · {age}",
+        liveNoFrames:
+          "已连接。尚未收到变更帧——只有服务端统计指纹变化时才会发送（最多每 5 秒一次），并每 5 秒发送一次心跳注释。",
+        liveCounters: "实时计数",
+        liveNoValues: "尚未读取到 summary 帧。",
+        liveChanges: "连接期间的变更",
+        liveChangeLine: "{field} {from} → {to}",
+        liveNoChanges: "本次连接以来没有计数发生变化。",
+        liveUnavailable:
+          "运行中的构建没有实时流路由——Harness 主机部分或 desk 服务早于此版本。下方每 15 秒的概览探测仍会测量工作台；Harness 重新加载插件后即开始实时接收。",
+        liveDown:
+          "实时流未连接：{reason}。下方每 15 秒的概览探测仍会测量工作台。",
+        livePausedNote: "浏览器标签页隐藏时暂停读取，重新可见时自动恢复。",
+        liveRetry: "{seconds} 秒后重试。",
+        liveRaw: "原始实时流",
+        liveNote:
+          "实时帧来自服务自身的 Server-Sent Events 路由，经同源代理转发。下方三张概览卡片仍使用共享探测循环：标签页可见时每 {seconds} 秒探测五个只读路由。点击“刷新”会同时重新测量两者。",
       },
     };
 
@@ -472,6 +591,31 @@ window.__ModuleLoader__.load({
         kpis: null,
         execution: null,
       }),
+    });
+
+    /**
+     * The live-stream snapshot. It is separate from the polled snapshot on
+     * purpose: a stream frame is a different measurement (the desk pushes it
+     * when its stat fingerprint changes) and must not be rendered as if a
+     * 15 s probe had confirmed the service phase.
+     */
+    const LIVE_INITIAL = Object.freeze({
+      state: "idle",
+      url: null,
+      transport: null,
+      httpStatus: null,
+      error: null,
+      attempts: 0,
+      frames: 0,
+      heartbeats: 0,
+      parseErrors: 0,
+      bytes: 0,
+      connectedAt: null,
+      lastFrameAt: null,
+      lastHeartbeatAt: null,
+      polledAt: null,
+      values: null,
+      changes: Object.freeze([]),
     });
 
     /** Empty sources map for a probe that threw before any source settled. */
@@ -647,6 +791,50 @@ window.__ModuleLoader__.load({
       const repo = repoRaw === null ? null : readRepo(repoRaw);
       if (feed === null && repo === null) return null;
       return { feed, repo };
+    }
+
+    /**
+     * Read one live SSE `summary` frame into the counters the live card diffs.
+     * The desk's stream carries the same body as `/api/graph/summary`, so this
+     * reuses the graph readers; an unrecognised payload returns null and the
+     * frame is never rendered as if it were a measurement.
+     * @param {unknown} body
+     */
+    function readLiveValues(body) {
+      const payload = readGraphPayload(body);
+      if (payload === null) return null;
+      const feed = payload.feed;
+      return {
+        feedStatus: feed === null ? null : feed.status,
+        dataMode: feed === null ? null : feed.dataMode,
+        feedAgeSeconds: feed === null ? null : feed.ageSeconds,
+        feedStale: feed === null ? null : feed.stale,
+        pollSequence: feed === null ? null : feed.pollSequence,
+        lastUpdatedIso: feed === null ? null : feed.lastUpdatedIso,
+        counts: feed === null ? null : feed.counts,
+      };
+    }
+
+    /**
+     * The counters that actually moved between two frames. Only two measured
+     * numbers are compared, so a first frame (previous null) and a frame that
+     * omits a counter produce no invented delta.
+     * @param {{ counts: Record<string, unknown> | null } | null} previous
+     * @param {{ counts: Record<string, unknown> | null }} next
+     * @param {number} at
+     */
+    function diffLiveValues(previous, next, at) {
+      if (previous === null || previous === undefined) return [];
+      if (previous.counts === null || next.counts === null) return [];
+      const changes = [];
+      for (const key of LIVE_COUNTER_KEYS) {
+        const from = previous.counts[key];
+        const to = next.counts[key];
+        if (typeof from === "number" && typeof to === "number" && from !== to) {
+          changes.push({ key, from, to, at });
+        }
+      }
+      return changes;
     }
 
     /**
@@ -1250,6 +1438,9 @@ window.__ModuleLoader__.load({
         ].slice(-LATENCY_HISTORY_MAX);
       }
       snapshot = next;
+      // A polling-fallback live card follows the 15 s probe until a stream is
+      // available; stream frames never pass through this path.
+      syncLiveFromPoll(next);
       for (const listener of listeners) listener();
     }
 
@@ -1344,21 +1535,477 @@ window.__ModuleLoader__.load({
       }, POLL_MS);
     }
 
-    /** A hidden tab stops probing; becoming visible probes immediately. */
+    /** A hidden tab stops probing and streaming; becoming visible resumes both. */
     function onVisibilityChange() {
-      if (!polling || disposed) return;
+      if (disposed) return;
       if (isHidden()) {
+        stopLive("paused");
+        if (!polling) return;
         if (pollTimer !== null) {
           clearTimeout(pollTimer);
           pollTimer = null;
         }
         return;
       }
+      startLive();
+      if (!polling) return;
       if (pollTimer !== null) {
         clearTimeout(pollTimer);
         pollTimer = null;
       }
       void runProbe(false).finally(scheduleNext);
+    }
+
+    /* --- live stream store: the desk's own SSE frames -------------------- */
+
+    /** Last published live snapshot; separate from the polled snapshot. */
+    let liveState = LIVE_INITIAL;
+    const liveListeners = new Set();
+    /** The AbortController of the open (or opening) stream, else null. */
+    let liveController = null;
+    let liveRetryTimer = null;
+    /** Bumped whenever the current connection must stop publishing. */
+    let liveGeneration = 0;
+
+    /** @param {typeof LIVE_INITIAL} next */
+    function publishLive(next) {
+      liveState = next;
+      for (const listener of liveListeners) listener();
+    }
+
+    function subscribeLive(listener) {
+      liveListeners.add(listener);
+      return () => {
+        liveListeners.delete(listener);
+      };
+    }
+
+    function getLive() {
+      return liveState;
+    }
+
+    /** Subscribe a component to the live-stream snapshot. */
+    function useLive() {
+      return React.useSyncExternalStore(subscribeLive, getLive, getLive);
+    }
+
+    /**
+     * The live card's fallback when the stream route is absent: the 15 s graph
+     * probe becomes the card's source, labelled as a poll rather than a frame.
+     * Runs only when the poll store publishes a new measured snapshot.
+     * @param {typeof INITIAL} next
+     */
+    function syncLiveFromPoll(next) {
+      // The stream's 404 can settle before the first graph probe; a later poll
+      // upgrades `unavailable` to `polling` once it has data to show.
+      if (liveState.state !== "polling" && liveState.state !== "unavailable") {
+        return;
+      }
+      const source =
+        next.sources && next.sources.graph ? next.sources.graph : null;
+      const values = readLiveValues(source ? source.body : null);
+      if (values === null) return;
+      // Label the poll when the payload was received, not when it was folded
+      // in: a carried-forward last-good payload must keep its own age.
+      const at =
+        typeof source.receivedAt === "number" ? source.receivedAt : Date.now();
+      const changes = diffLiveValues(liveState.values, values, at);
+      publishLive({
+        ...liveState,
+        state: "polling",
+        values,
+        polledAt: at,
+        changes:
+          changes.length === 0
+            ? liveState.changes
+            : [...changes, ...liveState.changes].slice(0, LIVE_CHANGES_MAX),
+      });
+    }
+
+    /**
+     * Record that this build has no stream route. When a polled graph
+     * measurement exists — or an earlier one is still on screen — the card
+     * keeps measuring those counters as `polling`; otherwise it is
+     * `unavailable`, because there is nothing honest to render.
+     * @param {{ url: string, transport: string, httpStatus: number | null, error: string }} absent
+     */
+    function publishStreamAbsent(absent) {
+      const graphSource =
+        snapshot.sources && snapshot.sources.graph
+          ? snapshot.sources.graph
+          : null;
+      const polled = readLiveValues(graphSource ? graphSource.body : null);
+      const values = polled ?? liveState.values;
+      const polledAt =
+        values === null
+          ? liveState.polledAt
+          : typeof graphSource?.receivedAt === "number"
+            ? graphSource.receivedAt
+            : Date.now();
+      publishLive({
+        ...liveState,
+        state: values === null ? "unavailable" : "polling",
+        url: absent.url,
+        transport: absent.transport,
+        httpStatus: absent.httpStatus,
+        error: absent.error,
+        attempts: 0,
+        values,
+        polledAt,
+      });
+    }
+
+    /**
+     * Parse one SSE block. `event: summary` carries the same body as
+     * `/api/graph/summary`; `: heartbeat <epochMs>` comments prove the
+     * connection is alive between frames. Anything else is ignored — the card
+     * never renders a payload it did not recognise.
+     * @param {string} block
+     * @param {number} bytes - total bytes received on this connection.
+     */
+    function liveHandleFrame(block, bytes) {
+      let event = "message";
+      const data = [];
+      let heartbeat = false;
+      for (const rawLine of block.split("\n")) {
+        const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+        if (line === "") continue;
+        if (line.startsWith(":")) {
+          heartbeat = true;
+          continue;
+        }
+        const colon = line.indexOf(":");
+        if (colon === -1) continue;
+        const field = line.slice(0, colon);
+        let value = line.slice(colon + 1);
+        if (value.startsWith(" ")) value = value.slice(1);
+        if (field === "event") event = value;
+        else if (field === "data") data.push(value);
+      }
+      if (heartbeat) {
+        publishLive({
+          ...liveState,
+          heartbeats: liveState.heartbeats + 1,
+          lastHeartbeatAt: Date.now(),
+          bytes,
+        });
+      }
+      if (event !== "summary" || data.length === 0) return;
+      let body;
+      try {
+        body = JSON.parse(data.join("\n"));
+      } catch {
+        // A frame the desk sent but this build cannot parse is counted, not
+        // rendered and not guessed at.
+        publishLive({
+          ...liveState,
+          parseErrors: liveState.parseErrors + 1,
+        });
+        return;
+      }
+      const values = readLiveValues(body);
+      if (values === null) return;
+      const at = Date.now();
+      const changes = diffLiveValues(liveState.values, values, at);
+      publishLive({
+        ...liveState,
+        frames: liveState.frames + 1,
+        bytes,
+        lastFrameAt: at,
+        values,
+        changes:
+          changes.length === 0
+            ? liveState.changes
+            : [...changes, ...liveState.changes].slice(0, LIVE_CHANGES_MAX),
+      });
+    }
+
+    /**
+     * Read the SSE body until it ends or is aborted, splitting on blank lines.
+     * Returns true when the desk ended the stream cleanly (retry), false when
+     * this side aborted it (pause, Refresh, disposal — never retry).
+     * @param {ReadableStream<Uint8Array>} body
+     * @param {AbortController} controller
+     * @param {number} generation
+     * @returns {Promise<boolean>}
+     */
+    async function readLiveStream(body, controller, generation) {
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let bytes = 0;
+      let ended = false;
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) {
+            ended = true;
+            break;
+          }
+          if (generation !== liveGeneration || disposed) break;
+          if (value === undefined) continue;
+          bytes += value.byteLength ?? 0;
+          buffer += decoder
+            .decode(value, { stream: true })
+            .replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const block = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            liveHandleFrame(block, bytes);
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+      } catch {
+        // Aborted reads are the normal stop path; an unexpected read error is
+        // reported by the retry state below instead of being swallowed.
+        ended = controller.signal.aborted !== true;
+      } finally {
+        try {
+          await reader.cancel();
+        } catch {
+          // Already closed by the desk.
+        }
+      }
+      return ended;
+    }
+
+    /** The proxy's JSON error token, when it answered with one. */
+    async function streamErrorDetail(response) {
+      try {
+        const body = await response.json();
+        if (isRecord(body) && typeof body.error === "string") return body.error;
+      } catch {
+        // Non-JSON bodies are described by their status instead.
+      }
+      return null;
+    }
+
+    /**
+     * Open the stream once. Proxy first, then loopback (an unmarked 404 means
+     * this Harness has not registered the streaming route). A marked 404 means
+     * the desk's running build has no `/api/graph/stream`, which the card
+     * renders as `unavailable` instead of retrying a route that cannot appear.
+     */
+    async function openLiveStream() {
+      if (disposed || liveController !== null) return;
+      const generation = ++liveGeneration;
+      publishLive({ ...liveState, state: "connecting", error: null });
+      let failure = null;
+      /** True when the Harness proxy answered for a route it does not have. */
+      let routeAbsent = false;
+      for (let index = 0; index < STREAM_URLS.length; index += 1) {
+        const url = STREAM_URLS[index];
+        const transport = index === 0 ? "proxy" : "direct";
+        const controller = new AbortController();
+        liveController = controller;
+        try {
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: { accept: "text/event-stream" },
+          });
+          if (generation !== liveGeneration || disposed) {
+            controller.abort();
+            return;
+          }
+          const proxied =
+            typeof response.headers?.get === "function" &&
+            response.headers.get("x-sportsdesk-desk-proxy") !== null;
+          const contentType =
+            typeof response.headers?.get === "function"
+              ? response.headers.get("content-type")
+              : null;
+          const eventStream =
+            typeof contentType === "string" &&
+            contentType.toLowerCase().startsWith("text/event-stream");
+          if (response.status === 200 && !eventStream) {
+            controller.abort();
+            liveController = null;
+            if (transport === "proxy" && !proxied) {
+              // The Harness answered for an unknown path (its generic 404, or
+              // the SPA fallback / a plain 200). Either way this build has no
+              // stream route: fall back to loopback before deciding.
+              routeAbsent = true;
+              continue;
+            }
+            if (generation !== liveGeneration || disposed) return;
+            publishStreamAbsent({
+              url,
+              transport,
+              httpStatus: response.status,
+              error: `not an event stream (${contentType ?? "no content-type"})`,
+            });
+            return;
+          }
+          if (response.status === 404 && transport === "proxy" && !proxied) {
+            // The generic Harness 404: this Host half predates the stream
+            // route. The loopback fallback can only work on the desk host.
+            controller.abort();
+            liveController = null;
+            routeAbsent = true;
+            continue;
+          }
+          if (response.status !== 200) {
+            const detail = await streamErrorDetail(response);
+            liveController = null;
+            if (generation !== liveGeneration || disposed) return;
+            if (response.status === 404) {
+              publishStreamAbsent({
+                url,
+                transport,
+                httpStatus: response.status,
+                error: detail ?? "HTTP 404",
+              });
+              return;
+            }
+            failure = {
+              url,
+              transport,
+              error: detail === null ? `HTTP ${response.status}` : detail,
+            };
+            break;
+          }
+          if (
+            response.body === null ||
+            typeof response.body.getReader !== "function"
+          ) {
+            liveController = null;
+            publishLive({
+              ...liveState,
+              state: "error",
+              url,
+              transport,
+              httpStatus: response.status,
+              error: "stream body missing",
+              attempts: 0,
+            });
+            return;
+          }
+          publishLive({
+            ...liveState,
+            state: "streaming",
+            url,
+            transport,
+            httpStatus: 200,
+            error: null,
+            attempts: 0,
+            connectedAt: Date.now(),
+          });
+          const ended = await readLiveStream(
+            response.body,
+            controller,
+            generation,
+          );
+          liveController = null;
+          if (generation !== liveGeneration || disposed) return;
+          if (ended) scheduleLiveRetry(null);
+          return;
+        } catch (error) {
+          liveController = null;
+          if (generation !== liveGeneration || disposed) return;
+          if (controller.signal.aborted) return;
+          failure = {
+            url,
+            transport,
+            error: String((error && error.message) || error),
+            // No HTTP answer at all: a CORS refusal and a refused socket are
+            // both a transport failure, which decides "unavailable" below.
+            transportError: true,
+          };
+          continue;
+        }
+      }
+      liveController = null;
+      if (generation !== liveGeneration || disposed) return;
+      if (routeAbsent && failure !== null && failure.transportError === true) {
+        // The proxy has no stream route and the loopback did not answer, so
+        // retrying cannot succeed without the Host half being reloaded. Name
+        // that state — with the polled counters when there are any — instead
+        // of reconnecting forever.
+        publishStreamAbsent({
+          url: failure.url,
+          transport: failure.transport,
+          httpStatus: null,
+          error: failure.error,
+        });
+        return;
+      }
+      scheduleLiveRetry(failure);
+    }
+
+    /**
+     * Schedule the next connection attempt with a bounded backoff. The state
+     * keeps the last measured failure reason, so the card says why it is
+     * reconnecting instead of showing a bare spinner.
+     * @param {{ url: string, transport: string, error: string } | null} failure
+     */
+    function scheduleLiveRetry(failure) {
+      if (disposed || liveRetryTimer !== null) return;
+      const attempts = liveState.attempts + 1;
+      const delay =
+        LIVE_RETRY_MS[Math.min(attempts - 1, LIVE_RETRY_MS.length - 1)];
+      publishLive({
+        ...liveState,
+        state: "reconnecting",
+        attempts,
+        error: failure === null ? liveState.error : failure.error,
+        url: failure === null ? liveState.url : failure.url,
+        transport: failure === null ? liveState.transport : failure.transport,
+        httpStatus: failure === null ? liveState.httpStatus : null,
+      });
+      liveRetryTimer = setTimeout(() => {
+        liveRetryTimer = null;
+        if (disposed) return;
+        if (isHidden()) {
+          publishLive({ ...liveState, state: "paused" });
+          return;
+        }
+        void openLiveStream();
+      }, delay);
+    }
+
+    /**
+     * Start the live stream. Idempotent while a connection is open or opening,
+     * and a no-op while the tab is hidden (the visibility listener resumes it).
+     */
+    function startLive() {
+      if (disposed || liveController !== null) return;
+      if (liveRetryTimer !== null) {
+        clearTimeout(liveRetryTimer);
+        liveRetryTimer = null;
+      }
+      if (isHidden()) {
+        if (liveState.state !== "paused") {
+          publishLive({ ...liveState, state: "paused" });
+        }
+        return;
+      }
+      void openLiveStream();
+    }
+
+    /**
+     * Stop the stream and forbid any later publish from it. `nextState` is
+     * rendered for a deliberate pause; unmount and disposal pass none.
+     * @param {"paused" | undefined} nextState
+     */
+    function stopLive(nextState) {
+      liveGeneration += 1;
+      if (liveRetryTimer !== null) {
+        clearTimeout(liveRetryTimer);
+        liveRetryTimer = null;
+      }
+      const controller = liveController;
+      liveController = null;
+      if (controller !== null) controller.abort();
+      if (nextState !== undefined && liveState.state !== nextState) {
+        publishLive({ ...liveState, state: nextState });
+      }
+    }
+
+    /** Manual Refresh: measure the polled snapshot and reopen the stream. */
+    function reconnectLive() {
+      stopLive();
+      startLive();
     }
 
     /* --- formatting ------------------------------------------------------ */
@@ -1407,6 +2054,21 @@ window.__ModuleLoader__.load({
       const mib = bytes / (1024 * 1024);
       if (mib >= 1024) return `${(mib / 1024).toFixed(1)} GiB`;
       return `${mib >= 100 ? Math.round(mib) : mib.toFixed(1)} MiB`;
+    }
+
+    /**
+     * Byte count for the live-stream row. Stream bodies are small (a summary
+     * frame is ~13 KB), so keep them in B/KiB until MiB.
+     * @param {number | null} bytes
+     * @returns {string | null}
+     */
+    function formatLiveBytes(bytes) {
+      if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) {
+        return null;
+      }
+      if (bytes < 1024) return `${Math.round(bytes)} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
     }
 
     /**
@@ -1837,6 +2499,300 @@ window.__ModuleLoader__.load({
           key: "recovery",
         },
         content,
+      );
+    }
+
+    /** Chip state for the live card header (the host owns the colors). */
+    function liveChipState(state) {
+      if (state === "streaming") return "ok";
+      if (state === "unavailable" || state === "error") return "error";
+      if (
+        state === "reconnecting" ||
+        state === "paused" ||
+        state === "polling"
+      ) {
+        return "stale";
+      }
+      return "checking";
+    }
+
+    /**
+     * @param {(key: string, params?: object) => string} t
+     * @param {string} state
+     */
+    function liveStateText(t, state) {
+      if (state === "connecting") return t("liveStateConnecting");
+      if (state === "streaming") return t("liveStateStreaming");
+      if (state === "reconnecting") return t("liveStateReconnecting");
+      if (state === "paused") return t("liveStatePaused");
+      if (state === "polling") return t("liveStatePolling");
+      if (state === "unavailable") return t("liveStateUnavailable");
+      if (state === "error") return t("liveStateError");
+      return t("liveStateIdle");
+    }
+
+    /** The delay the next retry will use, in whole seconds. */
+    function liveRetrySeconds(attempts) {
+      const index = Math.min(Math.max(attempts, 1), LIVE_RETRY_MS.length) - 1;
+      return Math.round(LIVE_RETRY_MS[index] / 1_000);
+    }
+
+    /** One live counter in the unit its name implies (USD for exposure). */
+    function liveCounterText(key, value) {
+      return key === "openExposureUsd" ? formatUsd(value) : formatCount(value);
+    }
+
+    /**
+     * The Live stream card: the desk's own Server-Sent Events connection,
+     * rendered from what actually arrived — connection state, HTTP status,
+     * frames/heartbeats/bytes, the latest frame's counters, and the counter
+     * deltas between frames. A missing route, a refused connection and a quiet
+     * (but open) stream are three different, named states; none of them falls
+     * back to a placeholder value.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof LIVE_INITIAL} live
+     * @param {number} now
+     */
+    function liveCard(t, live, now) {
+      const state = live.state;
+      const rows = [
+        h(
+          "div",
+          { className: "spsd-live-head", key: "head" },
+          h("span", { className: "spsd-live-dot", "aria-hidden": true }),
+          h("h2", { className: "spsd-ovtitle" }, t("liveTitle")),
+          h(
+            "span",
+            {
+              className: "spsd-chip-state",
+              "data-state": liveChipState(state),
+            },
+            liveStateText(t, state),
+          ),
+        ),
+      ];
+
+      const meta = [
+        metaRow(
+          t("liveEndpoint"),
+          h("code", { className: "spsd-code" }, live.url ?? STREAM_URLS[0]),
+        ),
+        metaRow(
+          t("http"),
+          live.httpStatus === null ? t("never") : String(live.httpStatus),
+        ),
+        metaRow(
+          t("liveFrames"),
+          live.frames === 0
+            ? "0"
+            : t("liveFramesValue", {
+                frames: formatCount(live.frames),
+                bytes: formatLiveBytes(live.bytes) ?? t("never"),
+              }),
+        ),
+        state === "polling"
+          ? metaRow(
+              t("liveLastPoll"),
+              live.polledAt === null
+                ? t("never")
+                : `${formatClock(live.polledAt) ?? t("never")} · ${formatAgeSeconds(t, (now - live.polledAt) / 1_000) ?? t("never")}`,
+            )
+          : metaRow(
+              t("liveLastFrame"),
+              live.lastFrameAt === null
+                ? t("never")
+                : `${formatClock(live.lastFrameAt) ?? t("never")} · ${formatAgeSeconds(t, (now - live.lastFrameAt) / 1_000) ?? t("never")}`,
+            ),
+        metaRow(
+          t("liveHeartbeats"),
+          live.heartbeats === 0
+            ? "0"
+            : t("liveHeartbeatsValue", {
+                count: formatCount(live.heartbeats),
+                age:
+                  live.lastHeartbeatAt === null
+                    ? t("never")
+                    : (formatAgeSeconds(
+                        t,
+                        (now - live.lastHeartbeatAt) / 1_000,
+                      ) ?? t("never")),
+              }),
+        ),
+      ];
+      if (live.connectedAt !== null) {
+        meta.push(
+          metaRow(
+            t("liveConnected"),
+            t("liveConnectedValue", {
+              time: formatClock(live.connectedAt) ?? t("never"),
+              age:
+                formatAgeSeconds(t, (now - live.connectedAt) / 1_000) ??
+                t("never"),
+            }),
+          ),
+        );
+      }
+      rows.push(h("dl", { className: "spsd-meta", key: "meta" }, meta));
+
+      if (live.values === null) {
+        rows.push(noteLine(t("liveNoValues"), undefined, "live-no-values"));
+      } else {
+        const counts = live.values.counts;
+        const values = [];
+        if (counts !== null) {
+          for (const key of LIVE_COUNTER_KEYS) {
+            const value = counts[key];
+            if (typeof value !== "number") continue;
+            values.push(
+              kvRow(
+                t(LIVE_COUNTER_LABELS[key] ?? key),
+                liveCounterText(key, value),
+                key,
+              ),
+            );
+          }
+        }
+        if (live.values.feedStatus !== null) {
+          values.push(
+            kvRow(
+              t("feedStatus"),
+              live.values.feedStatus,
+              "live-feed-status",
+              live.values.feedStale === true ? "warn" : undefined,
+            ),
+          );
+        }
+        if (live.values.feedAgeSeconds !== null) {
+          // The frame reports the age at frame time; the desk's feed keeps
+          // aging between frames, so add the time elapsed since that frame.
+          const reference =
+            state === "polling" ? live.polledAt : live.lastFrameAt;
+          const elapsed = reference === null ? 0 : (now - reference) / 1_000;
+          values.push(
+            kvRow(
+              t("age"),
+              formatAgeSeconds(t, live.values.feedAgeSeconds + elapsed) ??
+                t("never"),
+              "live-feed-age",
+              live.values.feedStale === true ? "warn" : undefined,
+            ),
+          );
+        }
+        if (live.values.pollSequence !== null) {
+          values.push(
+            kvRow(
+              t("pollSequence"),
+              formatCount(live.values.pollSequence),
+              "live-poll-seq",
+            ),
+          );
+        }
+        if (values.length === 0) {
+          rows.push(noteLine(t("liveNoValues"), undefined, "live-no-values"));
+        } else {
+          rows.push(
+            subSection(
+              t("liveCounters"),
+              kvList(values, "live-values"),
+              "live-values",
+            ),
+          );
+        }
+      }
+
+      if (live.frames > 0 || live.changes.length > 0) {
+        const changeItems = live.changes.map((change, index) =>
+          h(
+            "li",
+            { key: `live-change-${change.at}-${change.key}-${index}` },
+            h(
+              "span",
+              { className: "spsd-when" },
+              formatClock(change.at) ?? t("never"),
+            ),
+            h(
+              "span",
+              null,
+              t("liveChangeLine", {
+                field: t(LIVE_COUNTER_LABELS[change.key] ?? change.key),
+                from: liveCounterText(change.key, change.from),
+                to: liveCounterText(change.key, change.to),
+              }),
+            ),
+          ),
+        );
+        rows.push(
+          subSection(
+            state === "polling" ? t("liveChangesPoll") : t("liveChanges"),
+            changeItems.length === 0
+              ? noteLine(t("liveNoChanges"), undefined, "live-no-changes")
+              : h("ul", { className: "spsd-live-changes" }, changeItems),
+            "live-changes",
+          ),
+        );
+      }
+
+      // One state line: what the card is doing about the connection it measured.
+      if (state === "polling") {
+        rows.push(noteLine(t("livePolling"), "warn", "live-polling"));
+      } else if (state === "unavailable") {
+        rows.push(noteLine(t("liveUnavailable"), "warn", "live-unavailable"));
+      } else if (state === "error") {
+        rows.push(
+          noteLine(
+            t("liveDown", { reason: live.error ?? t("never") }),
+            "warn",
+            "live-down",
+          ),
+        );
+      } else if (state === "reconnecting") {
+        rows.push(
+          noteLine(
+            `${t("liveDown", { reason: live.error ?? t("never") })} ${t("liveRetry", { seconds: liveRetrySeconds(live.attempts) })}`,
+            "warn",
+            "live-reconnect",
+          ),
+        );
+      } else if (state === "paused") {
+        rows.push(noteLine(t("livePausedNote"), undefined, "live-paused"));
+      } else if (state === "streaming" && live.frames === 0) {
+        rows.push(noteLine(t("liveNoFrames"), undefined, "live-no-frames"));
+      } else if (state === "connecting" || state === "idle") {
+        rows.push(noteLine(t("liveNoValues"), undefined, "live-connecting"));
+      }
+
+      rows.push(
+        h(
+          "div",
+          { className: "spsd-ovfoot", key: "foot" },
+          h(
+            "a",
+            {
+              className: "spsd-link",
+              href: live.url ?? STREAM_URLS[0],
+              target: "_blank",
+              rel: "noreferrer",
+            },
+            t("liveRaw"),
+          ),
+          live.transport === null
+            ? null
+            : h(
+                "span",
+                { className: "spsd-ovtransport" },
+                sourceText(t, live.transport),
+              ),
+        ),
+      );
+
+      return h(
+        "section",
+        {
+          className: "spsd-card spsd-live",
+          key: "live",
+          "data-live-state": state,
+        },
+        rows,
       );
     }
 
@@ -2966,6 +3922,16 @@ window.__ModuleLoader__.load({
 .spsd-card[data-phase='down'] .spsd-dot { background: var(--dsw-alias-state-error-primary); }
 .spsd-status-text { font-size: 14px; font-weight: 500; }
 .spsd-status .spsd-chip { margin-left: auto; }
+.spsd-live { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.spsd-live-head { display: flex; align-items: center; gap: 8px; }
+.spsd-live-head .spsd-chip-state { margin-left: auto; }
+.spsd-live-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-state-idle-primary); }
+.spsd-live[data-live-state='streaming'] .spsd-live-dot { background: var(--dsw-alias-state-success-primary); }
+.spsd-live[data-live-state='connecting'] .spsd-live-dot, .spsd-live[data-live-state='reconnecting'] .spsd-live-dot, .spsd-live[data-live-state='paused'] .spsd-live-dot { background: var(--dsw-alias-state-warn-primary); }
+.spsd-live[data-live-state='unavailable'] .spsd-live-dot, .spsd-live[data-live-state='error'] .spsd-live-dot { background: var(--dsw-alias-state-error-primary); }
+.spsd-live-changes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.spsd-live-changes li { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.spsd-live-changes .spsd-when { flex: none; }
 .spsd-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 999px; color: var(--dsw-alias-label-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; }
 .spsd-chip[data-tone='warn'] { border-color: var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-primary); }
 .spsd-chip[data-tone='error'] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
@@ -3133,6 +4099,7 @@ window.__ModuleLoader__.load({
     const DeskPanel = React.memo(function DeskPanel(props) {
       const t = typeof props.t === "function" ? props.t : fallbackT;
       const state = useStatus();
+      const live = useLive();
       const [copyState, setCopyState] = React.useState("idle");
       const copyTimer = React.useRef(null);
       React.useEffect(
@@ -3143,6 +4110,10 @@ window.__ModuleLoader__.load({
       );
       React.useEffect(() => {
         startPolling();
+        // The stream belongs to the page: the sidebar glyph needs only the
+        // probe loop, so a closed desk page must not hold an SSE connection.
+        startLive();
+        return () => stopLive();
       }, []);
       const now = useNow(1_000);
       const sources = state.sources;
@@ -3159,6 +4130,7 @@ window.__ModuleLoader__.load({
       );
       const retry = () => {
         void runProbe(true);
+        reconnectLive();
       };
       const copyDiagnostics = async () => {
         const measured = {
@@ -3171,6 +4143,19 @@ window.__ModuleLoader__.load({
           healthLatencyMs: state.healthLatencyMs,
           statusLatencyMs: state.statusLatencyMs,
           error: state.error,
+          live: {
+            state: live.state,
+            url: live.url,
+            httpStatus: live.httpStatus,
+            frames: live.frames,
+            heartbeats: live.heartbeats,
+            parseErrors: live.parseErrors,
+            bytes: live.bytes,
+            connectedAt: live.connectedAt,
+            lastFrameAt: live.lastFrameAt,
+            lastHeartbeatAt: live.lastHeartbeatAt,
+            error: live.error ?? null,
+          },
           sources: Object.fromEntries(
             Object.entries(state.sources).map(([id, entry]) => [
               id,
@@ -3396,6 +4381,7 @@ window.__ModuleLoader__.load({
                 latencySparkline(healthLatencyHistory),
               ),
             ),
+            liveCard(t, live, now),
             recovery,
             attention,
             overview,
@@ -3444,8 +4430,10 @@ window.__ModuleLoader__.load({
             const pending = inFlight;
             inFlight = null;
             if (pending !== null) pending.abort();
+            // Closes the SSE connection and forbids any later publish from it.
+            stopLive();
           };
-        }, "sportsdesk desk panel: live status polling");
+        }, "sportsdesk desk panel: live status polling and stream");
 
         ctx.effect(
           () => ctx.locale.register(NS, DICTS),
