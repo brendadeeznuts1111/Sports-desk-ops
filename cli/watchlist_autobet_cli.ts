@@ -49,6 +49,13 @@ import {
   type SettlementResult,
   type SkippedEnqueue,
 } from "../lib/watchlist_autobet.ts";
+import {
+  WATCHLIST_ACCOUNT_CATEGORIES,
+  WatchlistOverlayError,
+  addWatchlistAccount,
+  listWatchlistAccounts,
+  removeWatchlistAccount,
+} from "../lib/watchlist_account_overlay.ts";
 import { collectWatchlistCandidates } from "../lib/watchlist_signal_engine.ts";
 
 const EXIT_OK = 0;
@@ -229,6 +236,17 @@ function emitFailure(command: string, error: AutobetError): void {
 
 function toAutobetError(error: unknown): AutobetError {
   if (error instanceof AutobetError) return error;
+  if (error instanceof WatchlistOverlayError) {
+    // The overlay module owns its own vocabulary; map it onto the CLI's closed error codes so
+    // the operator sees a stable code (and the right exit code) instead of internal_error.
+    const code =
+      error.code === "overlay_invalid" || error.code === "overlay_unreadable"
+        ? "config_invalid"
+        : error.code;
+    return new AutobetError(code, error.message, error.details, {
+      cause: error,
+    });
+  }
   return new AutobetError(
     "internal_error",
     error instanceof Error ? error.message : String(error),
@@ -497,6 +515,7 @@ async function cmdStatus(
     context.now,
   );
   const lastEvent = ledger.events[ledger.events.length - 1];
+  const accounts = await listWatchlistAccounts(context.root);
   return emitSuccess(context, "status", {
     config: {
       path: context.configRelPath,
@@ -511,6 +530,11 @@ async function cmdStatus(
       lastEventAt: lastEvent === undefined ? null : lastEvent.at,
     },
     sources: sources.map(sourceJson),
+    accounts: {
+      path: accounts.path,
+      exists: accounts.exists,
+      ...accounts.counts,
+    },
     safety: { liveExecution: false, reason: "paper_mode_only" },
   });
 }
@@ -563,8 +587,10 @@ async function cmdSignals(
   const visible = includeRejected ? evaluations : eligible;
   // Advisory discovery: accounts in the same artifacts that the registry does not watch.
   // Never gated, never queued — the Signals inspector shows them so a new account is not silent.
+  // The overlay registry is passed so an account the operator just added stops appearing here.
   const discovered = collectWatchlistCandidates(snapshot.inputs, {
     now: context.now,
+    registry: snapshot.registry,
   });
 
   return emitSuccess(context, "signals", {
@@ -604,6 +630,7 @@ async function cmdCandidates(
   const discovered = collectWatchlistCandidates(snapshot.inputs, {
     now: context.now,
     minRiskUsd,
+    registry: snapshot.registry,
   });
   const totalRiskUsd =
     Math.round(discovered.reduce((sum, c) => sum + c.riskUsd, 0) * 100) / 100;
@@ -618,6 +645,110 @@ async function cmdCandidates(
     },
     candidates: discovered.slice(0, limit),
   });
+}
+
+async function cmdAccounts(
+  tokens: readonly string[],
+  context: CliContext,
+): Promise<number> {
+  const subcommand = tokens[0];
+  if (subcommand === undefined || subcommand.trim() === "") {
+    usageError(
+      "accounts",
+      "missing subcommand (list|add|remove); run `bun run autobet accounts --help`",
+    );
+  }
+  const rest = tokens.slice(1);
+
+  if (subcommand === "list") {
+    const flags = parseCommandFlags("accounts", rest);
+    assertNoPositionals("accounts", flags);
+    const listing = await listWatchlistAccounts(context.root);
+    return emitSuccess(context, "accounts", {
+      action: "list",
+      ...listing,
+    });
+  }
+
+  if (subcommand === "add") {
+    const flags = parseCommandFlags("accounts", rest, {
+      valueFlags: ["--agent", "--category", "--archetype", "--note", "--actor"],
+    });
+    const login = flags.positionals[0];
+    if (login === undefined) {
+      usageError("accounts", "add: missing <login>");
+    }
+    if (flags.positionals.length > 1) {
+      usageError("accounts", "add: expected exactly one <login>");
+    }
+    const agentId = flags.values.get("--agent");
+    if (agentId === undefined || agentId.trim() === "") {
+      usageError("accounts", "add: --agent is required");
+    }
+    const actor = flags.values.get("--actor") ?? "operator";
+    if (actor.trim() === "") {
+      usageError("accounts", "add: --actor must not be empty");
+    }
+    const category = flags.values.get("--category");
+    if (
+      category !== undefined &&
+      !(WATCHLIST_ACCOUNT_CATEGORIES as readonly string[]).includes(category)
+    ) {
+      usageError(
+        "accounts",
+        `add: unknown --category ${category}; allowed: ${WATCHLIST_ACCOUNT_CATEGORIES.join(", ")}`,
+      );
+    }
+    const archetype = flags.values.get("--archetype");
+    const note = flags.values.get("--note");
+    const result = await addWatchlistAccount(context.root, {
+      login,
+      agentId,
+      ...(category === undefined ? {} : { sourceCategory: category }),
+      ...(archetype === undefined ? {} : { archetype }),
+      ...(note === undefined ? {} : { note }),
+      actor,
+      now: context.now,
+    });
+    return emitSuccess(context, "accounts", {
+      action: "add",
+      account: result.account,
+      path: result.overlay.path,
+      exists: true,
+      counts: result.counts,
+    });
+  }
+
+  if (subcommand === "remove") {
+    const flags = parseCommandFlags("accounts", rest, {
+      valueFlags: ["--actor"],
+    });
+    const login = flags.positionals[0];
+    if (login === undefined) {
+      usageError("accounts", "remove: missing <login>");
+    }
+    if (flags.positionals.length > 1) {
+      usageError("accounts", "remove: expected exactly one <login>");
+    }
+    const actor = flags.values.get("--actor") ?? "operator";
+    if (actor.trim() === "") {
+      usageError("accounts", "remove: --actor must not be empty");
+    }
+    const result = await removeWatchlistAccount(context.root, login);
+    return emitSuccess(context, "accounts", {
+      action: "remove",
+      removed: result.removed,
+      actor,
+      path: result.overlay.path,
+      exists: result.overlay.exists,
+      counts: result.counts,
+    });
+  }
+
+  usageError(
+    "accounts",
+    `unknown subcommand ${subcommand}; expected list, add or remove`,
+  );
 }
 
 async function cmdPlan(
@@ -1075,6 +1206,8 @@ async function dispatch(
       return cmdSignals(args, context);
     case "candidates":
       return cmdCandidates(args, context);
+    case "accounts":
+      return cmdAccounts(args, context);
     case "plan":
       return cmdPlan(args, context);
     case "enqueue":
@@ -1222,6 +1355,61 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     examples: [
       "bun run autobet candidates --json",
       "bun run autobet candidates --min-risk-usd 100 -l 20",
+    ],
+  },
+  {
+    name: "accounts",
+    summary: "Manage the operator watchlist overlay (list/add/remove)",
+    usage:
+      "accounts list | accounts add <login> --agent <id> [--category <cat>] [--archetype <text>] [--note <text>] [--actor <name>] | accounts remove <login> [--actor <name>]",
+    detail: [
+      "The built-in watchlist registry is code; this command maintains the untracked operator",
+      "overlay (config/watchlist-accounts.json) that `signals`, `plan` and `enqueue` merge on top",
+      "of it. Adding an account only makes its captured wagers eligible for the normal gates — it",
+      "does not approve, fill or place anything. Built-in accounts are read-only here.",
+      "Categories: POLY_ONCHAIN_CTF_WHALE, POLY_PARLAY_SYNDICATE, SUBNET_BRIDGED_SHARP,",
+      "SIX_GATE_BET1_DISCOVERY, INTERNAL_F402_SHARP (default), FUNDING_DISTRIBUTOR_ROOT.",
+    ],
+    arguments: [
+      {
+        flags: "<subcommand>",
+        description: "One of list, add or remove.",
+      },
+      {
+        flags: "<login>",
+        description:
+          "Fantasy402 customer login, e.g. BRT104 or player_BRT104 (max 32 chars).",
+      },
+    ],
+    options: [
+      {
+        flags: "--agent <agentId>",
+        description:
+          "Owning Fantasy402 sub-agent; required for add so the account keeps its 4-part identity.",
+      },
+      {
+        flags: "--category <category>",
+        description:
+          "Source category that drives confidence weight (default INTERNAL_F402_SHARP).",
+      },
+      {
+        flags: "--archetype <text>",
+        description: "Free-text description shown in the signal account table.",
+      },
+      {
+        flags: "--note <text>",
+        description: "Free-text operator note (max 500 chars).",
+      },
+      {
+        flags: "--actor <name>",
+        description: "Who records the change (default: operator).",
+      },
+    ],
+    examples: [
+      "bun run autobet accounts list --json",
+      "bun run autobet accounts add BRT104 --agent JACESFACES --actor operator --json",
+      "bun run autobet accounts add player_DAN700 --agent DANHR --category INTERNAL_F402_SHARP --note 'top live risk' --json",
+      "bun run autobet accounts remove BRT104 --actor operator --json",
     ],
   },
   {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "关注列表自动下注控制台（仅纸面）",
+    "description": "sportsdesk-ops 的仅纸面关注列表自动下注控制台：九个 Host 工具（status、signals、plan、queue、journal，以及需 confirm 确认的 enqueue/approve/reject/纸面 execute/settle）和一个 Web 操作员页面，包含批准队列、决定追踪、单个意图上下文、显示全部闸门检查的信号检查器，以及账户标签页（列出内置注册表并管理未跟踪的操作员关注列表叠加层，添加/移除操作员选择的登录名，需确认并署名操作员）。它管理人工介入并把决定记录到只追加的纸面账本中。未实现真实下注，也不存在真实下单路径。"
+  }
+}

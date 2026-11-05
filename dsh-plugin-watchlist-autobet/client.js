@@ -8,7 +8,9 @@
  * plane for the watchlist autobet pipeline: its Queue tab (the default) shows the paper
  * ledger's intents, records operator approve/reject decisions, paper-fills approved intents
  * and settles paper fills; its Signals tab inspects the watchlist itself — the derived
- * signals with every closed gate check, so the operator can see why nothing is eligible.
+ * signals with every closed gate check, so the operator can see why nothing is eligible;
+ * its Accounts tab manages the operator watchlist overlay (add/remove an operator-chosen
+ * login) without touching the code-defined built-in registry.
  *
  * DATA (same-origin Host routes served by this bundle's index.js)
  *
@@ -85,7 +87,13 @@ window.__ModuleLoader__.load({
     /** Account-cohort rows shown before the "+N more" note. */
     const SIGNALS_ACCOUNT_ROWS = 4;
     /** Body tabs, in keyboard order. The Queue tab is the default. */
-    const TAB_ORDER = Object.freeze(["queue", "signals"]);
+    const TAB_ORDER = Object.freeze(["queue", "signals", "accounts"]);
+    /** Body tab id -> locale key for its label. */
+    const TAB_LABEL_KEYS = Object.freeze({
+      queue: "queueTitle",
+      signals: "tabSignals",
+      accounts: "tabAccounts",
+    });
     /** Per-activation CSRF token: the board hands it out, every POST must echo it. */
     const CSRF_HEADER = "x-autobet-csrf";
     /** Operator identity, persisted across page switches and reloads. */
@@ -104,6 +112,35 @@ window.__ModuleLoader__.load({
     /** Server-side bounds mirrored here so the form cannot send an invalid body. */
     const FREE_TEXT_MAX_LENGTH = 2_000;
     const ACTOR_MAX_LENGTH = 120;
+    /**
+     * The operator account overlay bounds and closed source-category list are owned by
+     * `lib/watchlist_account_overlay.ts`; they are mirrored here only for the form's local
+     * validation and the category select, never to re-implement the CLI.
+     */
+    const ACCOUNT_LOGIN_MAX_LENGTH = 32;
+    const ACCOUNT_AGENT_MAX_LENGTH = 64;
+    const ACCOUNT_NOTE_MAX_LENGTH = 500;
+    const DEFAULT_ACCOUNT_CATEGORY = "INTERNAL_F402_SHARP";
+    const ACCOUNT_CATEGORIES = Object.freeze([
+      "POLY_ONCHAIN_CTF_WHALE",
+      "POLY_PARLAY_SYNDICATE",
+      "SUBNET_BRIDGED_SHARP",
+      "SIX_GATE_BET1_DISCOVERY",
+      "INTERNAL_F402_SHARP",
+      "FUNDING_DISTRIBUTOR_ROOT",
+    ]);
+    /** Category token -> locale key for the visible label. */
+    const ACCOUNT_CATEGORY_LABEL_KEYS = Object.freeze({
+      POLY_ONCHAIN_CTF_WHALE: "accountCatPolyOnchainCtfWhale",
+      POLY_PARLAY_SYNDICATE: "accountCatPolyParlaySyndicate",
+      SUBNET_BRIDGED_SHARP: "accountCatSubnetBridgedSharp",
+      SIX_GATE_BET1_DISCOVERY: "accountCatSixGateBet1Discovery",
+      INTERNAL_F402_SHARP: "accountCatInternalF402Sharp",
+      FUNDING_DISTRIBUTOR_ROOT: "accountCatFundingDistributorRoot",
+    });
+    /** Account logins are upper-case; `player_` is a presentation prefix, not part of the id. */
+    const ACCOUNT_LOGIN_PATTERN = /^[A-Z0-9][A-Z0-9_.-]{0,31}$/;
+    const ACCOUNT_AGENT_PATTERN = /^[A-Z0-9][A-Z0-9_. :-]{0,63}$/;
 
     /* -------------------------------------------------------------------------- */
     /* Small helpers: never invent data                                          */
@@ -537,6 +574,146 @@ window.__ModuleLoader__.load({
       return asArray(board === null ? null : board.decisions).filter(
         (decision) => asRecord(decision) !== null,
       );
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /* Operator account overlay helpers                                           */
+    /* -------------------------------------------------------------------------- */
+
+    /**
+     * Normalize a login the way `lib/watchlist_account_overlay.ts` does: trim, strip a
+     * `player_` presentation prefix and upper-case. The form sends the normalized value.
+     * @param {string} value
+     * @returns {string}
+     */
+    function normalizeAccountLogin(value) {
+      return String(value)
+        .trim()
+        .replace(/^player_/i, "")
+        .toUpperCase();
+    }
+
+    /**
+     * The board's operator-account block, narrowed for rendering. A missing block is
+     * `known:false` (unknown, never "no accounts"); rows are known only when the listing
+     * carried an array. A failed listing keeps its error instead of inventing rows.
+     *
+     * `present` separates the two unknown cases: a board with NO `accounts` key was served
+     * by a Host generation that predates account management (the linked plugin changed on
+     * disk but the running Host still holds the old module), while a present block with
+     * `accounts: null` and an `error` is a listing that failed on the current backend.
+     * @param {unknown} board
+     * @returns {{
+     *   present: boolean,
+     *   known: boolean,
+     *   exists: boolean | null,
+     *   path: string | null,
+     *   counts: Record<string, unknown> | null,
+     *   rows: Record<string, unknown>[] | null,
+     *   error: { code: string | null, message: string | null } | null,
+     * }}
+     */
+    function readAccounts(board) {
+      const block = asRecord(board === null ? null : board.accounts);
+      if (block === null) {
+        return {
+          present: false,
+          known: false,
+          exists: null,
+          path: null,
+          counts: null,
+          rows: null,
+          error: null,
+        };
+      }
+      const rows = Array.isArray(block.accounts)
+        ? block.accounts.filter((row) => asRecord(row) !== null)
+        : null;
+      const error = asRecord(block.error);
+      return {
+        present: true,
+        known: rows !== null,
+        exists: booleanOrNull(block.exists),
+        path: stringOrNull(block.path),
+        counts: asRecord(block.counts),
+        rows,
+        error:
+          error === null
+            ? null
+            : {
+                code:
+                  stringOrNull(error.reason) ??
+                  stringOrNull(error.code) ??
+                  null,
+                message: stringOrNull(error.message),
+              },
+      };
+    }
+
+    /**
+     * One account count (base/overlay/total) or null when the board omits it.
+     * @param {{ counts: Record<string, unknown> | null }} accounts
+     * @param {string} key
+     * @returns {number | null}
+     */
+    function accountCount(accounts, key) {
+      const counts = accounts === null ? null : accounts.counts;
+      return counts === null ? null : numberOrNull(counts[key]);
+    }
+
+    /**
+     * Local form validation for a login, mirroring the overlay module. Returns the
+     * localized error, or null when the value is acceptable.
+     * @param {(key: string, params?: object) => string} t
+     * @param {string} value
+     * @returns {string | null}
+     */
+    function accountLoginError(t, value) {
+      const login = normalizeAccountLogin(value);
+      if (login === "") return t("accountsLoginRequired");
+      if (!ACCOUNT_LOGIN_PATTERN.test(login)) return t("accountsLoginInvalid");
+      return null;
+    }
+
+    /**
+     * Local form validation for an agent id, mirroring the overlay module.
+     * @param {(key: string, params?: object) => string} t
+     * @param {string} value
+     * @returns {string | null}
+     */
+    function accountAgentError(t, value) {
+      const agentId = String(value).trim().toUpperCase();
+      if (agentId === "") return t("accountsAgentRequired");
+      if (!ACCOUNT_AGENT_PATTERN.test(agentId))
+        return t("accountsAgentInvalid");
+      return null;
+    }
+
+    /**
+     * A closed source-category token rendered as visible copy. An unknown token is shown
+     * verbatim rather than hidden, so a new category is visible before this copy updates.
+     * @param {(key: string, params?: object) => string} t
+     * @param {unknown} value
+     * @returns {string}
+     */
+    function accountCategoryLabel(t, value) {
+      const category = stringOrNull(value);
+      if (category === null) return t("notAvailable");
+      const key = ACCOUNT_CATEGORY_LABEL_KEYS[category];
+      return key === undefined ? category : t(key);
+    }
+
+    /**
+     * Success copy for one account action, using the CLI payload where available.
+     * @param {(key: string, params?: object) => string} t
+     * @param {"addAccount" | "removeAccount"} action
+     * @param {string} login
+     * @returns {string}
+     */
+    function accountSuccessText(t, action, login) {
+      return action === "addAccount"
+        ? t("successAddAccount", { login })
+        : t("successRemoveAccount", { login });
     }
 
     /**
@@ -1023,6 +1200,76 @@ window.__ModuleLoader__.load({
         signalsCandidateNoBet: "no bet time",
         signalsReasonsTitle: "Refused by",
         signalsMoreAccounts: "+{count} more account(s)",
+        /* Accounts tab — operator watchlist overlay */
+        tabAccounts: "Accounts",
+        accountsPanelTitle: "Watched accounts",
+        accountsSub:
+          "The built-in watchlist registry plus the operator overlay. Built-in rows are read-only here; adding or removing an operator account changes only the untracked overlay file and never queues, approves or executes a paper intent.",
+        accountsListTitle: "Watchlist registry",
+        accountsAddTitle: "Add an operator account",
+        accountsAddSub:
+          "Watching a login makes the signal engine consider it. Every existing gate still applies, and nothing is approved or executed.",
+        accountsCounts:
+          "{base} built-in · {overlay} operator · {total} watched",
+        accountsCountsUnknown: "Account counts unavailable",
+        accountsOverlayPresentChip: "Overlay present",
+        accountsOverlayMissingChip: "Overlay not configured",
+        accountsOverlayUnknownChip: "Overlay state unknown",
+        accountsUnknown:
+          "This board snapshot has no account listing, so the watched accounts are unknown rather than empty.",
+        accountsErrorTitle: "The account listing failed",
+        accountsErrorHint:
+          "The rest of the control plane is unaffected. The account state is unknown, not empty.",
+        accountsBackendStale:
+          "Restart DSH — the running control-plane backend predates account management.",
+        accountsBackendStaleTitle: "Account management needs a backend restart",
+        accountsBackendStaleHint:
+          "This page is served by an older Host generation than the plugin on disk, so add/remove is disabled: the backend would refuse it as an unknown action. Restart DSH to load the current plugin. Meanwhile the CLI still works: bun run autobet accounts add <login> --agent <id>.",
+        accountsEmpty: "No watchlist accounts.",
+        accountsOverlayEmpty:
+          "No operator-added accounts yet — the built-in registry is everything currently watched.",
+        accountsMissingOverlay:
+          "No operator overlay at {path} yet. Adding an account creates it; the built-in registry is unchanged.",
+        accountsBaseReadOnly: "read-only",
+        accountsBaseBadge: "built-in",
+        accountsOverlayBadge: "operator",
+        accountsScopeLabel: "Scope",
+        accountsRemove: "Remove",
+        accountsRemoveConfirmTitle:
+          "Remove {login} from the operator watchlist?",
+        accountsRemoveHint:
+          "Deletes the operator overlay row. The built-in registry is unchanged, no paper intent is touched, and future signal derivation stops watching the login.",
+        accountsConfirmRemove: "Confirm remove",
+        accountsLoginLabel: "Customer login",
+        accountsLoginPlaceholder: "e.g. CCC107 or player_CCC107",
+        accountsAgentLabel: "Agent id",
+        accountsAgentPlaceholder: "e.g. BIGDAD",
+        accountsCategoryLabel: "Source category",
+        accountsNoteLabel: "Note (optional)",
+        accountsNotePlaceholder: "Why watch this account?",
+        accountsReviewAdd: "Review add",
+        accountsConfirmAdd: "Confirm add",
+        accountsAddSummary: "Add {login} · agent {agent} · {category}",
+        accountsAddHint:
+          "Adds the login to the operator watchlist overlay and records the operator name as addedBy. Nothing is queued, approved or executed.",
+        accountsActorRequired:
+          "Set the operator name before adding or removing an account.",
+        accountsLoginRequired: "A customer login is required.",
+        accountsLoginInvalid:
+          "Customer login must be 1-32 characters: letters, digits, _ . - (a leading player_ is stripped).",
+        accountsAgentRequired: "An agent id is required.",
+        accountsAgentInvalid:
+          "Agent id must be 1-64 characters: letters, digits, space, _ . : -",
+        accountsUnknownScope: "unknown",
+        successAddAccount: "Added {login} to the operator watchlist.",
+        successRemoveAccount: "Removed {login} from the operator watchlist.",
+        /* Account source categories (the closed overlay vocabulary) */
+        accountCatPolyOnchainCtfWhale: "On-chain CTF whale",
+        accountCatPolyParlaySyndicate: "Polymarket parlay syndicate",
+        accountCatSubnetBridgedSharp: "Subnet-bridged sharp",
+        accountCatSixGateBet1Discovery: "Six-gate Bet1 discovery",
+        accountCatInternalF402Sharp: "Internal F402 sharp",
+        accountCatFundingDistributorRoot: "Funding distributor root",
         /* Gate check labels (the 12 closed checks; reasons reuse them) */
         gateEnabled: "enabled",
         gateLeagueAllowed: "league allowed",
@@ -1316,6 +1563,72 @@ window.__ModuleLoader__.load({
         signalsCandidateNoBet: "无下注时间",
         signalsReasonsTitle: "拒绝原因",
         signalsMoreAccounts: "另有 {count} 个账户",
+        /* 账户标签页 — 操作员关注列表叠加层 */
+        tabAccounts: "账户",
+        accountsPanelTitle: "已关注账户",
+        accountsSub:
+          "内置关注列表注册表加上操作员叠加层。内置行在此为只读；添加或移除操作员账户只会修改未跟踪的叠加层文件，绝不会入队、批准或执行任何纸面意图。",
+        accountsListTitle: "关注列表注册表",
+        accountsAddTitle: "添加操作员账户",
+        accountsAddSub:
+          "关注某个登录名后，信号引擎会将其纳入考虑；所有现有闸门仍然生效，不会批准或执行任何操作。",
+        accountsCounts: "内置 {base} · 操作员 {overlay} · 共关注 {total}",
+        accountsCountsUnknown: "账户计数不可用",
+        accountsOverlayPresentChip: "叠加层存在",
+        accountsOverlayMissingChip: "叠加层未配置",
+        accountsOverlayUnknownChip: "叠加层状态未知",
+        accountsUnknown:
+          "该看板快照没有账户列表，因此已关注账户是未知，而不是空。",
+        accountsErrorTitle: "账户列表获取失败",
+        accountsErrorHint: "控制台其余部分不受影响。账户状态是未知，而不是空。",
+        accountsBackendStale:
+          "请重启 DSH — 正在运行的控制台后端早于账户管理功能。",
+        accountsBackendStaleTitle: "账户管理需要重启后端",
+        accountsBackendStaleHint:
+          "此页面由比磁盘上插件更早的 Host 代际提供，因此添加/移除已禁用：后端会将其视为未知操作而拒绝。请重启 DSH 以加载当前插件。期间命令行仍然可用：bun run autobet accounts add <login> --agent <id>。",
+        accountsEmpty: "关注列表中没有账户。",
+        accountsOverlayEmpty:
+          "尚无操作员添加的账户 — 当前关注的就是内置注册表中的全部账户。",
+        accountsMissingOverlay:
+          "尚无操作员叠加层：{path}。添加账户会创建该文件；内置注册表不变。",
+        accountsBaseReadOnly: "只读",
+        accountsBaseBadge: "内置",
+        accountsOverlayBadge: "操作员",
+        accountsScopeLabel: "范围",
+        accountsRemove: "移除",
+        accountsRemoveConfirmTitle: "从操作员关注列表中移除 {login}？",
+        accountsRemoveHint:
+          "删除操作员叠加层中的该行。内置注册表不变，不会影响任何纸面意图，之后的信号推导将不再关注该登录名。",
+        accountsConfirmRemove: "确认移除",
+        accountsLoginLabel: "客户登录名",
+        accountsLoginPlaceholder: "例如 CCC107 或 player_CCC107",
+        accountsAgentLabel: "代理 ID",
+        accountsAgentPlaceholder: "例如 BIGDAD",
+        accountsCategoryLabel: "来源类别",
+        accountsNoteLabel: "备注（可选）",
+        accountsNotePlaceholder: "为什么关注该账户？",
+        accountsReviewAdd: "检查并添加",
+        accountsConfirmAdd: "确认添加",
+        accountsAddSummary: "添加 {login} · 代理 {agent} · {category}",
+        accountsAddHint:
+          "把登录名加入操作员关注列表叠加层，并将操作员名字记录为 addedBy。不会入队、批准或执行任何操作。",
+        accountsActorRequired: "添加或移除账户前请先填写操作员名字。",
+        accountsLoginRequired: "必须填写客户登录名。",
+        accountsLoginInvalid:
+          "客户登录名须为 1-32 个字符：字母、数字、_ . -（开头的 player_ 会被去除）。",
+        accountsAgentRequired: "必须填写代理 ID。",
+        accountsAgentInvalid:
+          "代理 ID 须为 1-64 个字符：字母、数字、空格、_ . : -",
+        accountsUnknownScope: "未知",
+        successAddAccount: "已把 {login} 添加到操作员关注列表。",
+        successRemoveAccount: "已把 {login} 从操作员关注列表移除。",
+        /* 账户来源类别（叠加层的封闭词表） */
+        accountCatPolyOnchainCtfWhale: "链上 CTF 巨鲸",
+        accountCatPolyParlaySyndicate: "Polymarket 串关集团",
+        accountCatSubnetBridgedSharp: "子网桥接高手",
+        accountCatSixGateBet1Discovery: "六闸门 Bet1 发现",
+        accountCatInternalF402Sharp: "内部 F402 高手",
+        accountCatFundingDistributorRoot: "资金分发根节点",
         /* Gate check labels (the 12 closed checks; reasons reuse them) */
         gateEnabled: "已启用",
         gateLeagueAllowed: "联赛允许",
@@ -2093,6 +2406,19 @@ window.__ModuleLoader__.load({
 .wab-signals-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
 .wab-signals-enqueue { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--dsw-alias-brand-primary); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); }
 .wab-signals-enqueue-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wab-accounts { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.wab-accounts-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wab-accounts-add { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); }
+.wab-accounts-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; }
+.wab-accounts-form .wab-form-row { min-width: 0; }
+.wab-accounts-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wab-account-scope { display: inline-flex; align-items: center; padding: 0 7px; border: 1px solid var(--dsw-alias-state-idle-primary); border-radius: 999px; color: var(--dsw-alias-state-idle-primary); font-size: 11px; line-height: 17px; letter-spacing: 0.03em; }
+.wab-account-scope[data-scope='base'] { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
+.wab-account-scope[data-scope='operator'] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+.wab-account-confirm { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--dsw-alias-state-warn-primary); border-radius: 8px; background: var(--dsw-alias-bg-layer-2); }
+.wab-account-login { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.wab-account-note { max-width: 34ch; overflow-wrap: anywhere; }
+.wab-account-feedback { margin: 0; font-size: 12px; line-height: 17px; overflow-wrap: anywhere; }
 .wab-candidates { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l1); }
 .wab-candidates-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .wab-candidates-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -4445,6 +4771,608 @@ window.__ModuleLoader__.load({
     });
 
     /* -------------------------------------------------------------------------- */
+    /* Accounts tab: the operator watchlist overlay                               */
+    /* -------------------------------------------------------------------------- */
+
+    /**
+     * The Accounts tab. It lists the built-in registry rows (read-only) plus the operator
+     * overlay rows (removable). Adding a login writes only the untracked overlay file
+     * (`config/watchlist-accounts.json`); nothing is queued, approved or executed here, and
+     * every gate still decides eligibility. Each mutation is confirm-gated, records the
+     * operator name, is disabled while in flight and refreshes from the board the action
+     * returns. A missing overlay reads as "not configured", never as zero accounts.
+     */
+    const AccountsPanel = React.memo(function AccountsPanel(props) {
+      const {
+        t,
+        board,
+        actorMissing,
+        actionBlock,
+        busyKey,
+        runAction,
+        notify,
+        now,
+      } = props;
+      const accounts = readAccounts(board);
+      const rows = accounts.rows === null ? [] : accounts.rows;
+      const known = accounts.known;
+      /**
+       * A loaded board with no `accounts` block was served by a Host generation that
+       * predates account management. Adding or removing then reaches an action surface that
+       * refuses every request with `invalid_action`, so the form is disabled and says why
+       * instead of rendering one confusing error per attempt. The CLI works regardless of
+       * Host age. `board === null` is the first paint, not a stale backend.
+       */
+      const staleBackend = board !== null && accounts.present === false;
+      const busy = busyKey !== null;
+      const baseCount = accountCount(accounts, "base");
+      const overlayCount = accountCount(accounts, "overlay");
+      const totalCount = accountCount(accounts, "total");
+      const [login, setLogin] = React.useState("");
+      const [agentId, setAgentId] = React.useState("");
+      const [category, setCategory] = React.useState(DEFAULT_ACCOUNT_CATEGORY);
+      const [note, setNote] = React.useState("");
+      const [confirmAdd, setConfirmAdd] = React.useState(false);
+      const [removeTarget, setRemoveTarget] = React.useState(null);
+      const [addError, setAddError] = React.useState(null);
+      const [removeError, setRemoveError] = React.useState(null);
+      const [localError, setLocalError] = React.useState(null);
+      const [feedback, setFeedback] = React.useState(null);
+
+      const blockedReason =
+        actionBlock !== null
+          ? actionBlock
+          : staleBackend
+            ? t("accountsBackendStale")
+            : actorMissing
+              ? t("accountsActorRequired")
+              : busy
+                ? t("working")
+                : undefined;
+      const removeBlocked =
+        blockedReason !== undefined || removeTarget !== null;
+
+      const resetAdd = () => {
+        setConfirmAdd(false);
+        setAddError(null);
+        setLocalError(null);
+      };
+
+      const reviewAdd = () => {
+        const loginError = accountLoginError(t, login);
+        if (loginError !== null) {
+          setLocalError(loginError);
+          return;
+        }
+        const agentError = accountAgentError(t, agentId);
+        if (agentError !== null) {
+          setLocalError(agentError);
+          return;
+        }
+        setLocalError(null);
+        setAddError(null);
+        setFeedback(null);
+        setConfirmAdd(true);
+      };
+
+      const confirmAddAccount = async () => {
+        const normalizedLogin = normalizeAccountLogin(login);
+        const request = {
+          key: `addAccount:${normalizedLogin}`,
+          action: "addAccount",
+          customerLogin: normalizedLogin,
+          agentId: agentId.trim().toUpperCase(),
+          category,
+        };
+        const trimmedNote = note.trim();
+        if (trimmedNote !== "") request.note = trimmedNote;
+        const result = await runAction(request);
+        if (result.ok) {
+          const text = accountSuccessText(t, "addAccount", normalizedLogin);
+          setConfirmAdd(false);
+          setAddError(null);
+          setFeedback({ kind: "success", text });
+          setLogin("");
+          setNote("");
+          notify({ kind: "success", text });
+          return;
+        }
+        const text = describeFailure(t, result);
+        setAddError(text);
+        setFeedback({ kind: "error", text });
+      };
+
+      const confirmRemoveAccount = async (target) => {
+        const result = await runAction({
+          key: `removeAccount:${target}`,
+          action: "removeAccount",
+          customerLogin: target,
+        });
+        if (result.ok) {
+          const text = accountSuccessText(t, "removeAccount", target);
+          setRemoveTarget(null);
+          setRemoveError(null);
+          setFeedback({ kind: "success", text });
+          notify({ kind: "success", text });
+          return;
+        }
+        const text = describeFailure(t, result);
+        setRemoveError(text);
+        setFeedback({ kind: "error", text });
+      };
+
+      const countsChip =
+        baseCount === null || overlayCount === null || totalCount === null
+          ? h("span", { className: "wab-chip" }, t("accountsCountsUnknown"))
+          : h(
+              "span",
+              { className: "wab-chip" },
+              t("accountsCounts", {
+                base: plainNumber(baseCount),
+                overlay: plainNumber(overlayCount),
+                total: plainNumber(totalCount),
+              }),
+            );
+      const overlayStateChip = !known
+        ? h("span", { className: "wab-chip" }, t("accountsOverlayUnknownChip"))
+        : accounts.exists === false
+          ? h(
+              "span",
+              { className: "wab-chip", "data-tone": "warn" },
+              t("accountsOverlayMissingChip"),
+            )
+          : accounts.exists === true
+            ? h(
+                "span",
+                { className: "wab-chip", "data-tone": "success" },
+                t("accountsOverlayPresentChip"),
+              )
+            : h(
+                "span",
+                { className: "wab-chip" },
+                t("accountsOverlayUnknownChip"),
+              );
+      const overlayPathChip =
+        known && accounts.path !== null
+          ? h(
+              "span",
+              {
+                className: "wab-chip wab-mono",
+                title: accounts.path,
+              },
+              accounts.path,
+            )
+          : null;
+
+      const addForm = h(
+        "section",
+        { className: "wab-accounts-add", "aria-label": t("accountsAddTitle") },
+        h("h3", { className: "wab-subtitle" }, t("accountsAddTitle")),
+        h("p", { className: "wab-hint" }, t("accountsAddSub")),
+        h(
+          "div",
+          { className: "wab-accounts-form" },
+          h(
+            "div",
+            { className: "wab-form-row" },
+            h(
+              "label",
+              { className: "wab-label", htmlFor: "wab-account-login" },
+              t("accountsLoginLabel"),
+            ),
+            h("input", {
+              id: "wab-account-login",
+              className: "wab-input",
+              type: "text",
+              value: login,
+              placeholder: t("accountsLoginPlaceholder"),
+              maxLength: ACCOUNT_LOGIN_MAX_LENGTH + 7,
+              autoComplete: "off",
+              spellCheck: false,
+              disabled: busy,
+              onChange: (event) => setLogin(event.target.value),
+            }),
+          ),
+          h(
+            "div",
+            { className: "wab-form-row" },
+            h(
+              "label",
+              { className: "wab-label", htmlFor: "wab-account-agent" },
+              t("accountsAgentLabel"),
+            ),
+            h("input", {
+              id: "wab-account-agent",
+              className: "wab-input",
+              type: "text",
+              value: agentId,
+              placeholder: t("accountsAgentPlaceholder"),
+              maxLength: ACCOUNT_AGENT_MAX_LENGTH,
+              autoComplete: "off",
+              spellCheck: false,
+              disabled: busy,
+              onChange: (event) => setAgentId(event.target.value),
+            }),
+          ),
+          h(
+            "div",
+            { className: "wab-form-row" },
+            h(
+              "label",
+              { className: "wab-label", htmlFor: "wab-account-category" },
+              t("accountsCategoryLabel"),
+            ),
+            h(
+              "select",
+              {
+                id: "wab-account-category",
+                className: "wab-select",
+                value: category,
+                disabled: busy,
+                onChange: (event) => setCategory(event.target.value),
+              },
+              ACCOUNT_CATEGORIES.map((token) =>
+                h(
+                  "option",
+                  { key: token, value: token },
+                  accountCategoryLabel(t, token),
+                ),
+              ),
+            ),
+          ),
+          h(
+            "div",
+            { className: "wab-form-row" },
+            h(
+              "label",
+              { className: "wab-label", htmlFor: "wab-account-note" },
+              t("accountsNoteLabel"),
+            ),
+            h("textarea", {
+              id: "wab-account-note",
+              className: "wab-textarea",
+              rows: 2,
+              value: note,
+              placeholder: t("accountsNotePlaceholder"),
+              maxLength: ACCOUNT_NOTE_MAX_LENGTH,
+              disabled: busy,
+              onChange: (event) => setNote(event.target.value),
+            }),
+          ),
+        ),
+        actorMissing
+          ? h("p", { className: "wab-hint" }, t("accountsActorRequired"))
+          : null,
+        localError === null
+          ? null
+          : h("p", { className: "wab-form-error", role: "alert" }, localError),
+        confirmAdd
+          ? h(
+              "div",
+              { className: "wab-account-confirm" },
+              h(
+                "p",
+                { className: "wab-hint" },
+                t("accountsAddSummary", {
+                  login: normalizeAccountLogin(login),
+                  agent: agentId.trim().toUpperCase(),
+                  category: accountCategoryLabel(t, category),
+                }),
+              ),
+              h("p", { className: "wab-hint" }, t("accountsAddHint")),
+              addError === null
+                ? null
+                : h(
+                    "p",
+                    { className: "wab-form-error", role: "alert" },
+                    addError,
+                  ),
+              h(
+                "div",
+                { className: "wab-accounts-actions" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "wab-btn wab-btn-primary",
+                    disabled: busy,
+                    onClick: () => {
+                      void confirmAddAccount();
+                    },
+                  },
+                  busy ? t("working") : t("accountsConfirmAdd"),
+                ),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "wab-btn",
+                    disabled: busy,
+                    onClick: resetAdd,
+                  },
+                  t("cancel"),
+                ),
+              ),
+            )
+          : h(
+              "div",
+              { className: "wab-accounts-actions" },
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "wab-btn wab-btn-primary",
+                  disabled: blockedReason !== undefined,
+                  title: blockedReason,
+                  onClick: reviewAdd,
+                },
+                t("accountsReviewAdd"),
+              ),
+              actorMissing
+                ? h(
+                    "span",
+                    { className: "wab-hint" },
+                    t("accountsActorRequired"),
+                  )
+                : null,
+            ),
+      );
+
+      let list;
+      if (!known) {
+        list = h("p", { className: "wab-empty" }, t("accountsUnknown"));
+      } else if (rows.length === 0) {
+        list = h("p", { className: "wab-empty" }, t("accountsEmpty"));
+      } else {
+        const rowNodes = rows.map((row, index) => {
+          const rowLogin = stringOrNull(row.login);
+          const inBase = booleanOrNull(row.inBase);
+          const scope =
+            inBase === true
+              ? "base"
+              : inBase === false
+                ? "operator"
+                : "unknown";
+          const scopeLabel =
+            inBase === true
+              ? t("accountsBaseBadge")
+              : inBase === false
+                ? t("accountsOverlayBadge")
+                : t("accountsUnknownScope");
+          const addedAtText = relativeTime(t, row.addedAt, now);
+          const noteText = stringOrNull(row.note);
+          return h(
+            "tr",
+            { key: rowLogin === null ? `account-${index}` : rowLogin },
+            h(
+              "td",
+              null,
+              h(
+                "span",
+                { className: "wab-account-login" },
+                rowLogin === null ? t("notAvailable") : rowLogin,
+              ),
+            ),
+            h("td", null, shown(t, stringOrNull(row.agentId))),
+            h("td", null, accountCategoryLabel(t, row.sourceCategory)),
+            h(
+              "td",
+              null,
+              inBase === true
+                ? t("notAvailable")
+                : shown(t, stringOrNull(row.addedBy)),
+            ),
+            h(
+              "td",
+              { title: absoluteTime(row.addedAt) || undefined },
+              inBase === true ? t("notAvailable") : shown(t, addedAtText),
+            ),
+            h(
+              "td",
+              {
+                className: "wab-account-note",
+                title: noteText === null ? undefined : noteText,
+              },
+              shown(t, noteText),
+            ),
+            h(
+              "td",
+              null,
+              h(
+                "span",
+                { className: "wab-account-scope", "data-scope": scope },
+                scopeLabel,
+              ),
+            ),
+            h(
+              "td",
+              null,
+              inBase === false && rowLogin !== null
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "wab-btn wab-btn-danger",
+                      disabled: removeBlocked,
+                      title: removeBlocked ? blockedReason : undefined,
+                      onClick: () => {
+                        setRemoveTarget(rowLogin);
+                        setRemoveError(null);
+                        setFeedback(null);
+                      },
+                    },
+                    t("accountsRemove"),
+                  )
+                : h(
+                    "span",
+                    { className: "wab-hint" },
+                    inBase === true
+                      ? t("accountsBaseReadOnly")
+                      : t("accountsUnknownScope"),
+                  ),
+            ),
+          );
+        });
+        list = h(
+          "div",
+          { className: "wab-table-wrap" },
+          h(
+            "table",
+            { className: "wab-table", "aria-label": t("accountsListTitle") },
+            h("caption", null, t("accountsListTitle")),
+            h(
+              "thead",
+              null,
+              h(
+                "tr",
+                null,
+                [
+                  "colLogin",
+                  "colAgent",
+                  "colCategory",
+                  "colAddedBy",
+                  "colAddedAt",
+                  "colNote",
+                  "accountsScopeLabel",
+                  "colActions",
+                ].map((key) => h("th", { key, scope: "col" }, t(key))),
+              ),
+            ),
+            h("tbody", null, rowNodes),
+          ),
+        );
+      }
+
+      const removeConfirm =
+        removeTarget === null
+          ? null
+          : h(
+              "div",
+              { className: "wab-account-confirm" },
+              h(
+                "p",
+                { className: "wab-hint" },
+                t("accountsRemoveConfirmTitle", { login: removeTarget }),
+              ),
+              h("p", { className: "wab-hint" }, t("accountsRemoveHint")),
+              removeError === null
+                ? null
+                : h(
+                    "p",
+                    { className: "wab-form-error", role: "alert" },
+                    removeError,
+                  ),
+              h(
+                "div",
+                { className: "wab-accounts-actions" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "wab-btn wab-btn-danger",
+                    disabled: busy,
+                    onClick: () => {
+                      void confirmRemoveAccount(removeTarget);
+                    },
+                  },
+                  busy ? t("working") : t("accountsConfirmRemove"),
+                ),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "wab-btn",
+                    disabled: busy,
+                    onClick: () => {
+                      setRemoveTarget(null);
+                      setRemoveError(null);
+                    },
+                  },
+                  t("cancel"),
+                ),
+              ),
+            );
+
+      return h(
+        "section",
+        { className: "wab-accounts", "aria-label": t("accountsPanelTitle") },
+        h(
+          "div",
+          { className: "wab-panel-head" },
+          h("h2", { className: "wab-panel-title" }, t("accountsPanelTitle")),
+          h(
+            "div",
+            { className: "wab-accounts-summary" },
+            countsChip,
+            overlayStateChip,
+            overlayPathChip,
+          ),
+        ),
+        h("p", { className: "wab-hint" }, t("accountsSub")),
+        feedback === null
+          ? null
+          : h(
+              "p",
+              {
+                className:
+                  feedback.kind === "error"
+                    ? "wab-form-error"
+                    : "wab-account-feedback wab-tone-positive",
+                role: feedback.kind === "error" ? "alert" : "status",
+              },
+              feedback.text,
+            ),
+        known && accounts.exists === false && accounts.path !== null
+          ? h(
+              "p",
+              { className: "wab-hint" },
+              t("accountsMissingOverlay", { path: accounts.path }),
+            )
+          : null,
+        known && accounts.exists === true && overlayCount === 0
+          ? h("p", { className: "wab-hint" }, t("accountsOverlayEmpty"))
+          : null,
+        accounts.error === null
+          ? null
+          : h(
+              "div",
+              { className: "wab-stale", role: "alert" },
+              h("p", { className: "wab-stale-text" }, t("accountsErrorTitle")),
+              h(
+                "p",
+                { className: "wab-stale-error" },
+                describeFailure(t, accounts.error),
+              ),
+              h("p", { className: "wab-hint" }, t("accountsErrorHint")),
+            ),
+        staleBackend
+          ? h(
+              "div",
+              { className: "wab-stale", role: "alert" },
+              h(
+                "p",
+                { className: "wab-stale-text" },
+                t("accountsBackendStaleTitle"),
+              ),
+              h("p", { className: "wab-hint" }, t("accountsBackendStaleHint")),
+            )
+          : null,
+        addForm,
+        h(
+          "section",
+          { className: "wab-section", "aria-label": t("accountsListTitle") },
+          h(
+            "div",
+            { className: "wab-section-head" },
+            h("h3", { className: "wab-section-title" }, t("accountsListTitle")),
+          ),
+          list,
+          removeConfirm,
+        ),
+      );
+    });
+
+    /* -------------------------------------------------------------------------- */
     /* The page                                                                   */
     /* -------------------------------------------------------------------------- */
 
@@ -4568,7 +5496,10 @@ window.__ModuleLoader__.load({
             return { ok: false, code: "busy", message: "" };
           }
           const needsActor =
-            request.action === "approve" || request.action === "reject";
+            request.action === "approve" ||
+            request.action === "reject" ||
+            request.action === "addAccount" ||
+            request.action === "removeAccount";
           const actor = operator.trim();
           if (needsActor && actor === "") {
             return { ok: false, code: "actor_required", message: "" };
@@ -4596,6 +5527,14 @@ window.__ModuleLoader__.load({
             if (request.note !== undefined) payload.note = request.note;
             if (request.reason !== undefined) payload.reason = request.reason;
             if (request.result !== undefined) payload.result = request.result;
+            if (request.customerLogin !== undefined) {
+              payload.customerLogin = request.customerLogin;
+            }
+            if (request.agentId !== undefined)
+              payload.agentId = request.agentId;
+            if (request.category !== undefined) {
+              payload.category = request.category;
+            }
             const response = await postAction(
               payload,
               csrfToken,
@@ -4746,7 +5685,7 @@ window.__ModuleLoader__.load({
                     onClick: () => selectTab(tabId),
                     onKeyDown: (event) => onTabKeyDown(event, tabId),
                   },
-                  tabId === "queue" ? t("queueTitle") : t("tabSignals"),
+                  t(TAB_LABEL_KEYS[tabId]),
                 ),
               ),
             ),
@@ -4855,6 +5794,26 @@ window.__ModuleLoader__.load({
                 runAction,
                 notify,
                 onRetry: retrySignals,
+                now,
+              }),
+            ),
+            h(
+              "div",
+              {
+                id: "wab-panel-accounts",
+                role: "tabpanel",
+                className: "wab-tabpanel",
+                "aria-labelledby": "wab-tab-accounts",
+                hidden: tab !== "accounts",
+              },
+              h(AccountsPanel, {
+                t,
+                board,
+                actorMissing,
+                actionBlock,
+                busyKey,
+                runAction,
+                notify,
                 now,
               }),
             ),

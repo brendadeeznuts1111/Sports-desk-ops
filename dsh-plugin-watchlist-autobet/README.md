@@ -51,9 +51,9 @@ does not cover (see [New-account discovery](#new-account-discovery)) — alongsi
 
 The bundle also ships a Client half: a **Watchlist autobet** icon in the left sidebar opens a
 control-plane page in the main column. It never bypasses the engine — the page reads a
-same-origin board composed from four read-only CLI calls (`status`, `list`, `journal`, `plan`)
-and a signals inspector composed from `signals`, then posts a closed action set through the
-same CLI.
+same-origin board composed from five read-only CLI calls (`status`, `list`, `journal`, `plan`,
+`accounts list`) and a signals inspector composed from `signals`, then posts a closed action set
+through the same CLI.
 
 What the page manages for the operator:
 
@@ -67,6 +67,16 @@ What the page manages for the operator:
   accounts the captures saw but the watchlist registry does not cover (login, agent, summed risk,
   last bet time and source), with an `Unwatched N` summary chip. It is advisory only: the engine
   still ignores those logins, and a payload without the list reads "unknown", never "none".
+- **Accounts tab** — the watchlist the engine derives from: the code-defined built-in registry
+  plus the operator overlay in the untracked `config/watchlist-accounts.json`. Built-in rows are
+  read-only; an operator-added row (marked `operator`) can be removed with an explicit confirm
+  step. The add form takes a customer login, an agent id, one of the six closed source
+  categories and an optional note. Both add and remove record the header's operator name as
+  `addedBy`/`actor` and are disabled until it is set; each mutation is confirm-gated, disabled
+  while in flight, shows its refusal inline and refreshes from the board the action returns.
+  Watching a login only feeds the same gates — it never queues, approves or executes an intent.
+  A missing overlay reads as `exists: false` / "overlay not configured", never as zero accounts;
+  a failed listing reads as unknown with the error shown, not as an empty registry.
 - **Human-in-the-loop queue** — queued, approved and filled intents as cards with market label,
   stake, confidence/distinct accounts, fair probability, risk, age and expiry countdown; inline
   action forms for Approve (+ optional note), Reject (+ required reason), Execute paper and
@@ -87,11 +97,11 @@ What the page manages for the operator:
 
 Routes (same origin as the GUI, registered by the Host half when the browser carrier exists):
 
-| Route                            | Method | Purpose                                                                                                                                                                                    |
-| :------------------------------- | :----- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/watchlist-autobet/board`   | GET    | Board: safety, config, sources, ledger counts, intents with UI derivations, paper summary, plan, decision feed, CSRF token.                                                                |
-| `/api/watchlist-autobet/signals` | GET    | Signals inspector: the CLI `signals` payload (`includeRejected`, `limit`, `minConfidence` bounded server-side): sources, counts, per-signal gate verdicts and the advisory candidate list. |
-| `/api/watchlist-autobet/action`  | POST   | Closed action set (`enqueue`/`approve`/`reject`/`execute`/`settle`); requires `confirm: true`, the same Origin and the per-activation CSRF token, then returns CLI + board.                |
+| Route                            | Method | Purpose                                                                                                                                                                                                                                                                                 |
+| :------------------------------- | :----- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/watchlist-autobet/board`   | GET    | Board: safety, config, sources, ledger counts, intents with UI derivations, paper summary, plan, decision feed, the account listing (`base`/`overlay`/`total` counts + rows, `exists` for the overlay) and CSRF token.                                                                  |
+| `/api/watchlist-autobet/signals` | GET    | Signals inspector: the CLI `signals` payload (`includeRejected`, `limit`, `minConfidence` bounded server-side): sources, counts, per-signal gate verdicts and the advisory candidate list.                                                                                              |
+| `/api/watchlist-autobet/action`  | POST   | Closed action set (`enqueue`/`approve`/`reject`/`execute`/`settle`/`addAccount`/`removeAccount`); requires `confirm: true`, the same Origin and the per-activation CSRF token, then returns CLI + board. `addAccount`/`removeAccount` need `actor` and write only the operator overlay. |
 
 The routes are **local GUI plumbing, not an authentication boundary**: the carrier's own page
 asks for DSH web auth, but these paths do not, so any process able to reach the loopback
@@ -104,7 +114,13 @@ content type and a 32 KiB body bound); the whole surface is paper-only. Every ma
 is 400 `invalid_body` (including a wrong content-type and an oversized body).
 The board is cached server-side for 4 s and each signals query for 4 s; every action answer
 carries a force-refreshed board. After installing or updating the bundle, reload the GUI page
-once so the Client module and sidebar entry load.
+once so the Client module and sidebar entry load. A page reload is **not** enough for a
+Host-side change (`index.js`): replacing an installed package requires a Host restart to load a
+fresh JavaScript module generation, so a linked checkout that was edited while DSH runs keeps
+serving the old action surface until DSH restarts. The Accounts tab detects that stale pairing —
+a board with no `accounts` block — and disables add/remove with an explicit restart notice
+instead of failing every attempt as `invalid_action`; the CLI
+(`bun run autobet accounts add <login> --agent <id>`) keeps working in the meantime.
 
 ## The paper lifecycle
 
@@ -146,12 +162,15 @@ genuinely new account can bet in the desk's own captures and leave no trace in t
 gap. It re-parses the same three artifacts and returns every login the registry does not cover,
 ranked by summed capture risk, with `agentId`, `wagers`, `sources`, `leagues`, `lastBetAt`,
 `ageSeconds` and up to three `sampleMarkets`. It is advisory: no gate consumes it, nothing is
-queued or written, and promoting an account stays a deliberate operator act (add it to
-`lib/gslive_manager_watchlist.ts`, then re-derive).
+queued or written, and promoting an account stays a deliberate operator act — add it to the
+operator overlay from the Accounts tab (or with `autobet accounts add`), then re-derive. The
+overlay lives in the untracked `config/watchlist-accounts.json`; the code-defined registry stays
+read-only.
 
 ```sh
 bun run autobet candidates --json                       # all unwatched accounts, ranked
 bun run autobet candidates --min-risk-usd 100 -l 20     # risk-ranked shortlist
+bun run autobet accounts list --json                    # built-in + operator rows, counts, exists
 ```
 
 An unparseable market still surfaces its account: the market sample is omitted, the login and
@@ -221,20 +240,21 @@ bun run autobet <command> --help    # arguments, long + short flags, defaults, e
 Global flags are accepted before or after the command, long or short: `-h/--help`, `-j/--json`,
 `-r/--root <path>`, `-c/--config <path>`, `-n/--now <iso>`.
 
-| Command      | Short flags      | Effect                                                                 |
-| :----------- | :--------------- | :--------------------------------------------------------------------- |
-| `status`     | –                | config, ledger and source freshness                                    |
-| `signals`    | `-l`, `-m`, `-i` | gate verdicts; `-i` includes rejected, `-m` pre-filters confidence     |
-| `candidates` | `-l`             | accounts the captures saw that the watchlist does not cover; read-only |
-| `plan`       | –                | dry run of `enqueue`; writes nothing                                   |
-| `enqueue`    | `-a`             | idempotent queue of eligible intents; never approves or executes       |
-| `list`       | `-s`, `-l`       | intents by derived status (expiry computed at read time)               |
-| `approve`    | `-a`, `-o`       | human decision: queued -> approved                                     |
-| `reject`     | `-a`, `-R`       | queued/approved -> rejected; reason required, releases stake           |
-| `execute`    | `-v`             | paper fill of an approved intent; any other venue -> `live_disabled`   |
-| `settle`     | `-e`             | won/lost/void for a filled intent, folds paper P&L                     |
-| `journal`    | `-l`             | append-only event tail plus the folded paper summary                   |
-| `watch`      | `-i`             | enqueue loop (interval ≥ 30 s); queues only, never executes            |
+| Command      | Short flags      | Effect                                                                                                                                                                                                                                                 |
+| :----------- | :--------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`     | –                | config, ledger and source freshness                                                                                                                                                                                                                    |
+| `signals`    | `-l`, `-m`, `-i` | gate verdicts; `-i` includes rejected, `-m` pre-filters confidence                                                                                                                                                                                     |
+| `candidates` | `-l`             | accounts the captures saw that the watchlist does not cover; read-only                                                                                                                                                                                 |
+| `plan`       | –                | dry run of `enqueue`; writes nothing                                                                                                                                                                                                                   |
+| `enqueue`    | `-a`             | idempotent queue of eligible intents; never approves or executes                                                                                                                                                                                       |
+| `list`       | `-s`, `-l`       | intents by derived status (expiry computed at read time)                                                                                                                                                                                               |
+| `approve`    | `-a`, `-o`       | human decision: queued -> approved                                                                                                                                                                                                                     |
+| `reject`     | `-a`, `-R`       | queued/approved -> rejected; reason required, releases stake                                                                                                                                                                                           |
+| `execute`    | `-v`             | paper fill of an approved intent; any other venue -> `live_disabled`                                                                                                                                                                                   |
+| `settle`     | `-e`             | won/lost/void for a filled intent, folds paper P&L                                                                                                                                                                                                     |
+| `journal`    | `-l`             | append-only event tail plus the folded paper summary                                                                                                                                                                                                   |
+| `accounts`   | –                | operator overlay: `list`; `add <login> --agent <id> [--category <cat>] [--archetype <text>] [--note <text>] --actor <name>`; `remove <login> --actor <name>` (built-in rows are read-only; writes only the untracked `config/watchlist-accounts.json`) |
+| `watch`      | `-i`             | enqueue loop (interval ≥ 30 s); queues only, never executes                                                                                                                                                                                            |
 
 ## Failure shape
 
@@ -260,9 +280,11 @@ A CLI success payload is returned unchanged (`success: true`, `schemaVersion: 1`
 
 `reason` is the CLI's own error code (`config_missing`, `config_invalid`, `ledger_corrupt`,
 `ledger_locked`, `intent_not_found`, `invalid_transition`, `intent_expired`, `live_disabled`,
-`usage_error`, `internal_error`) when the CLI answered, or a wrapper code when it could not:
-`confirmation_required`, `invalid_arguments`, `cli_missing`, `cli_timeout`, `cli_failed`. The
-wrapper never throws out of `execute`.
+`usage_error`, `internal_error`, and for the account overlay `account_invalid`, `account_exists`,
+`account_not_found`, `account_read_only`, `overlay_invalid`, `overlay_unreadable`) when the CLI
+answered, or a wrapper code when it could not: `confirmation_required`, `invalid_arguments`,
+`cli_missing`, `cli_timeout`, `cli_failed`. The wrapper never throws out of `execute`. The
+control-plane action route preserves the same CLI error under `cli.error` for the Accounts tab.
 
 ## Verification
 
@@ -280,7 +302,7 @@ asserts malformed arguments are refused, asserts a missing CLI yields a structur
 rather than an exception, and asserts the disposer releases all nine registrations. It points
 `repoPath` at a non-existent temp directory, so it needs neither the CLI nor a real ledger.
 
-The CLI surface is covered by `bun test tests/watchlist_autobet.test.ts` (64 tests): paper
+The CLI surface is covered by `bun test tests/watchlist_autobet.test.ts` (65 tests): paper
 lifecycle, gate/config/ledger corruption, concurrency safety, the read-only `candidates`
 discovery pass, and the CLI help contract —
 root command table, every command's `--help` (usage, arguments, long and short flags, examples),
@@ -296,16 +318,21 @@ node Scratch/watchlist-autobet/http-harness.mjs      # Lead harness (Scratch is 
 
 The Client half passes `node --check`, `bun fmt --check`, oxlint and the repo's fetch/innerHTML
 scanners, plus a fake-loader/render harness covering both slot registrations, en/zh dictionary
-agreement, the Queue/Signals tabs, the operator-name gate (approve and signals-enqueue refuse
-without sending any mutation), the POST wire format (`confirm: true` + the CSRF header), CLI
-refusals preserved inline, and unmount aborting in-flight reads while clearing every
-timer/listener. The Host routes are exercised by the Lead harness against the real CLI (44
-checks: board shape/honesty; signals query validation, keyed cache, include-rejected gate
-verdicts and payload honesty; foreign-origin/CSRF/confirm refusals; operator-required approvals;
-structured missing-intent refusals; malformed-body status alignment) and were also run live
-against the running Harness carrier (15 checks). Visual rendering and the live Client boot
-remain unverified without browser control: **reload the GUI page once after installing or
-upgrading** so the Client module and sidebar entry load.
+agreement, the Queue/Signals/Accounts tabs, the operator-name gate (approve, signals-enqueue and
+account add/remove refuse without sending any mutation), the POST wire format (`confirm: true` +
+the CSRF header), the Accounts add/remove bodies (normalized login/agent, closed category), the
+base-row read-only rule, inline success/CLI-refusal copy, and unmount aborting in-flight reads
+while clearing every timer/listener. The Host routes are exercised by the Lead harness against
+the real CLI (44 checks: board shape/honesty; signals query validation, keyed cache,
+include-rejected gate verdicts and payload honesty; foreign-origin/CSRF/confirm refusals;
+operator-required approvals; structured missing-intent refusals; malformed-body status
+alignment) and were also run live against the running Harness carrier (15 checks). The accounts
+surface was additionally exercised against a fake CLI (board composition and a degraded listing
+that keeps the board usable, the add/remove argv arrays, operator-required/confirm/CSRF/category
+guards, refreshed board and preserved CLI error codes) and once read-only against the real CLI
+(51 built-in + 25 operator = 76 listed rows). Visual rendering and the live Client boot remain
+unverified without browser control: **reload the GUI page once after installing or upgrading** so
+the Client module and sidebar entry load.
 
 ## Installing
 

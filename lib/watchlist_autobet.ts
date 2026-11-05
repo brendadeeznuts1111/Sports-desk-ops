@@ -42,6 +42,15 @@ import {
   deriveWatchlistSignals,
   loadWatchlistSignalInputs,
 } from "./watchlist_signal_engine.ts";
+import {
+  loadWatchlistAccountOverlay,
+  mergeWatchlistRegistry,
+  type WatchlistAccountCounts,
+} from "./watchlist_account_overlay.ts";
+import {
+  getUnifiedWatchlistRegistry,
+  type WatchlistUnifiedEntry,
+} from "./gslive_manager_watchlist.ts";
 
 export const AUTOBET_SCHEMA_VERSION = 1 as const;
 export const AUTOBET_CONFIG_REL_PATH = "config/watchlist-autobet.json";
@@ -135,6 +144,10 @@ export type AutobetErrorCode =
   | "invalid_transition"
   | "intent_expired"
   | "live_disabled"
+  | "account_exists"
+  | "account_not_found"
+  | "account_read_only"
+  | "account_invalid"
   | "internal_error";
 
 const EXIT_CODES: Readonly<Record<AutobetErrorCode, 1 | 2 | 3>> = {
@@ -147,6 +160,10 @@ const EXIT_CODES: Readonly<Record<AutobetErrorCode, 1 | 2 | 3>> = {
   invalid_transition: 3,
   intent_expired: 3,
   live_disabled: 3,
+  account_exists: 3,
+  account_not_found: 3,
+  account_read_only: 3,
+  account_invalid: 2,
   internal_error: 1,
 };
 
@@ -607,6 +624,14 @@ export interface AutobetSignalSnapshot {
   readonly sources: readonly AutobetSourceStatus[];
   /** The parsed artifacts this snapshot read, so a caller runs the advisory candidate pass once. */
   readonly inputs: WatchlistSignalInputs;
+  /**
+   * The registry actually used for derivation: built-in accounts plus the operator overlay.
+   * Callers that need the candidate pass must pass this same registry, otherwise an account
+   * the operator just added would still be reported as "not on the watchlist".
+   */
+  readonly registry: readonly WatchlistUnifiedEntry[];
+  /** Base/overlay/total account counts, so status can report the overlay state honestly. */
+  readonly accounts: WatchlistAccountCounts;
 }
 
 /** Load the local artifacts, derive signals with the existing engine, and report source ages. */
@@ -616,19 +641,33 @@ export async function loadAutobetSignals(
   now: Date,
 ): Promise<AutobetSignalSnapshot> {
   const inputs = await loadWatchlistSignalInputs(root);
+  const overlay = await loadWatchlistAccountOverlay(root);
+  const base = getUnifiedWatchlistRegistry();
+  const registry = mergeWatchlistRegistry(base, overlay.accounts);
   // One window for every layer: the same config value feeds the source chips above and the
   // engine's per-row `stale` flag, so the inspector cannot show "sources fresh" while the
   // freshness gate refuses on "engine marked this signal's provenance stale".
   const signals = deriveWatchlistSignals(inputs, {
     now,
     maxAgeSeconds: config.maxSignalAgeSeconds,
+    registry,
   });
   const sources = await describeSignalSources(
     root,
     config.maxSignalAgeSeconds,
     now,
   );
-  return { signals, sources, inputs };
+  return {
+    signals,
+    sources,
+    inputs,
+    registry,
+    accounts: {
+      base: base.length,
+      overlay: overlay.accounts.length,
+      total: registry.length,
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */

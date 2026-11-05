@@ -34,6 +34,10 @@ data/bet-ticker.json
 # Live captures rewritten by `positions:cron`; customer ids and logins. Keep local only.
 data/live-bets.json
 data/live-wagers.json
+# Operator watchlist overlay: real Fantasy402 customer logins chosen in the control plane.
+# The built-in registry stays in source; this file is local state only.
+config/watchlist-accounts.json
+config/watchlist-accounts.json.tmp-*
 Untitled.txt.rtf
 
 # Customer and downline datasets stay local (public repo)

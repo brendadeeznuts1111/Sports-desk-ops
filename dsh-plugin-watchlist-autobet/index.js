@@ -116,6 +116,25 @@ const INTENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
  * the `live_disabled` refusal. This plugin never decides that a venue is safe.
  */
 const VENUE_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
+/**
+ * The operator account overlay (`config/watchlist-accounts.json`, untracked) is a second
+ * source of watched logins next to the code-defined registry. Its closed source-category
+ * vocabulary and its login/agent bounds are owned by `lib/watchlist_account_overlay.ts`;
+ * they are mirrored here only so a malformed request is refused before a spawn, never to
+ * re-implement the CLI's validation.
+ */
+const ACCOUNT_CATEGORIES = Object.freeze([
+  "POLY_ONCHAIN_CTF_WHALE",
+  "POLY_PARLAY_SYNDICATE",
+  "SUBNET_BRIDGED_SHARP",
+  "SIX_GATE_BET1_DISCOVERY",
+  "INTERNAL_F402_SHARP",
+  "FUNDING_DISTRIBUTOR_ROOT",
+]);
+const ACCOUNT_LOGIN_PATTERN = /^[A-Z0-9][A-Z0-9_.-]{0,31}$/;
+const ACCOUNT_AGENT_PATTERN = /^[A-Z0-9][A-Z0-9_. :-]{0,63}$/;
+/** `lib/watchlist_account_overlay.ts` caps a stored note at 500 characters. */
+const MAX_ACCOUNT_NOTE_LENGTH = 500;
 const MAX_ACTOR_LENGTH = 120;
 const MAX_FREE_TEXT_LENGTH = 2000;
 /** How much captured stdout/stderr a failure result keeps before eliding the rest. */
@@ -442,6 +461,74 @@ function readIntentId(request) {
 }
 
 /**
+ * The overlay's login normalization, mirrored from `normalizeAccountLogin` in
+ * `lib/watchlist_account_overlay.ts`: `player_CCC107` and `ccc107` both become `CCC107`.
+ * The CLI normalizes again; sending the normalized value keeps the board and the request
+ * in the same vocabulary.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeAccountLogin(value) {
+  return value
+    .trim()
+    .replace(/^player_/i, "")
+    .toUpperCase();
+}
+
+/**
+ * Read and validate the required `customerLogin` of an account action.
+ *
+ * @param {Record<string, unknown>} request
+ * @returns {{ ok: true, value: string } | { ok: false, message: string }}
+ */
+function readAccountLogin(request) {
+  const value = request.customerLogin;
+  if (typeof value !== "string") {
+    return { ok: false, message: "customerLogin must be a string." };
+  }
+  const login = normalizeAccountLogin(value);
+  if (login === "") {
+    return { ok: false, message: "customerLogin must not be empty." };
+  }
+  if (!ACCOUNT_LOGIN_PATTERN.test(login)) {
+    return {
+      ok: false,
+      message:
+        "customerLogin must be a customer login (letters, digits, underscore, dot, hyphen; " +
+        "at most 32 characters; a leading player_ is stripped).",
+    };
+  }
+  return { ok: true, value: login };
+}
+
+/**
+ * Read and validate the required `agentId` of an addAccount action.
+ *
+ * @param {Record<string, unknown>} request
+ * @returns {{ ok: true, value: string } | { ok: false, message: string }}
+ */
+function readAccountAgentId(request) {
+  const value = request.agentId;
+  if (typeof value !== "string") {
+    return { ok: false, message: "agentId must be a string." };
+  }
+  const agentId = value.trim().toUpperCase();
+  if (agentId === "") {
+    return { ok: false, message: "agentId must not be empty." };
+  }
+  if (!ACCOUNT_AGENT_PATTERN.test(agentId)) {
+    return {
+      ok: false,
+      message:
+        "agentId must be an agent id (letters, digits, space, underscore, dot, colon, " +
+        "hyphen; at most 64 characters).",
+    };
+  }
+  return { ok: true, value: agentId };
+}
+
+/**
  * True when a string carries C0 controls (except tab/newline) or DEL.
  *
  * WHY A LOOP AND NOT A REGEX: a control-character regex trips the lint rule that exists
@@ -494,8 +581,9 @@ function readActor(request) {
  *
  * @param {Record<string, unknown>} request
  * @param {string} key
+ * @param {number} [maxLength] defaults to the generic bound; the account note uses its own
  */
-function readFreeText(request, key) {
+function readFreeText(request, key, maxLength = MAX_FREE_TEXT_LENGTH) {
   const value = request[key];
   if (value === undefined) return { ok: true, present: false };
   if (typeof value !== "string") {
@@ -508,10 +596,10 @@ function readFreeText(request, key) {
       message: `${key} must be a non-empty string when provided.`,
     };
   }
-  if (trimmed.length > MAX_FREE_TEXT_LENGTH) {
+  if (trimmed.length > maxLength) {
     return {
       ok: false,
-      message: `${key} must be at most ${MAX_FREE_TEXT_LENGTH} characters.`,
+      message: `${key} must be at most ${maxLength} characters.`,
     };
   }
   if (hasControlCharacters(trimmed)) {
@@ -764,6 +852,73 @@ function nextActionForStatus(status) {
 }
 
 /**
+ * The board's operator-account block, derived from one `accounts list` CLI answer.
+ *
+ * WHY THIS ONE READ DEGRADES: the board's other five reads feed the queue, the decision feed
+ * and the plan. If the accounts command is unavailable (an older CLI while the backend work
+ * lands) the rest of the control plane must stay usable, so the block reports `error` and
+ * null values — "unknown", never a fabricated zero. A wrong zero here would read as "no
+ * overlay accounts" when the truth is "the listing could not be read".
+ *
+ * @param {{ ok: true, body: Record<string, unknown> } | { ok: false, reason: string, message: string }} part
+ * @returns {{
+ *   path: string | null,
+ *   exists: boolean | null,
+ *   counts: { base: number | null, overlay: number | null, total: number | null } | null,
+ *   accounts: Record<string, unknown>[] | null,
+ *   error: { reason: string, message: string } | null,
+ * }}
+ */
+function buildAccountsBlock(part) {
+  if (part.ok && isPlainObjectValue(part.body) && part.body.success === true) {
+    const body = part.body;
+    const rawCounts = isPlainObjectValue(body.counts) ? body.counts : null;
+    const accountNumber = (key) => {
+      const value = rawCounts === null ? undefined : rawCounts[key];
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    };
+    return {
+      path:
+        typeof body.path === "string" && body.path !== "" ? body.path : null,
+      exists: typeof body.exists === "boolean" ? body.exists : null,
+      counts:
+        rawCounts === null
+          ? null
+          : {
+              base: accountNumber("base"),
+              overlay: accountNumber("overlay"),
+              total: accountNumber("total"),
+            },
+      accounts: Array.isArray(body.accounts)
+        ? body.accounts.filter(isPlainObjectValue)
+        : null,
+      error: null,
+    };
+  }
+  let reason = "cli_failed";
+  let message = "accounts: the CLI reported failure.";
+  if (!part.ok) {
+    reason = part.reason;
+    message = part.message;
+  } else if (isPlainObjectValue(part.body)) {
+    const error = isPlainObjectValue(part.body.error) ? part.body.error : {};
+    if (typeof error.code === "string" && error.code !== "") {
+      reason = error.code;
+    }
+    if (typeof error.message === "string" && error.message !== "") {
+      message = `accounts: ${error.message}`;
+    }
+  }
+  return {
+    path: null,
+    exists: null,
+    counts: null,
+    accounts: null,
+    error: { reason, message },
+  };
+}
+
+/**
  * @param {{ tools: { register: (definition: object) => () => void } }} ctx
  *   Host context; only the `tools` service is injected, so no other service is touched.
  * @param {unknown} config the bundle row's config (normalized above)
@@ -772,7 +927,12 @@ export function apply(ctx, config) {
   const settings = normalizeConfig(config);
   const repoPath = settings.repoPath;
   const cliAbsolutePath = join(repoPath, CLI_RELATIVE_PATH);
-  /** Disposers from ctx.tools.register, returned as this plugin's cleanup. */
+  /**
+   * Disposers from ctx.tools.register, returned from `apply` for a caller that runs the
+   * return value. The Host itself disposes tool registrations with the plugin fiber; the
+   * browser routes are owned by `serverCtx.effect` below because the Host does not run this
+   * returned cleanup.
+   */
   const disposers = [];
   const register = (definition) => {
     disposers.push(ctx.tools.register(definition));
@@ -1009,7 +1169,7 @@ export function apply(ctx, config) {
   }
 
   /**
-   * Board cache: a board is four CLI spawns (~31 ms each, measured 2026-11-04; the UI polls
+   * Board cache: a board is five CLI spawns (~31 ms each, measured 2026-11-04; the UI polls
    * every 20 s). It absorbs process spawn and JSON I/O, not a data-layout cost, so it stays.
    */
   let boardCacheAt = 0;
@@ -1021,8 +1181,11 @@ export function apply(ctx, config) {
 
   /**
    * Compose the operator board: safety, config, source freshness, ledger counts, intents
-   * with UI derivations, paper summary, the current plan (what would queue) and the recent
-   * decision feed. Four read-only CLI calls; no mutation.
+   * with UI derivations, paper summary, the current plan (what would queue), the recent
+   * decision feed and the operator-account listing. Five read-only CLI calls; no mutation.
+   *
+   * The accounts read is deliberately degradable (see `buildAccountsBlock`): if it fails,
+   * the block carries the error and null values instead of failing the whole board.
    */
   async function readBoard(force = false) {
     const nowMs = Date.now();
@@ -1033,11 +1196,12 @@ export function apply(ctx, config) {
     ) {
       return { ok: true, value: boardCacheValue };
     }
-    const [status, list, journal, plan] = await Promise.all([
+    const [status, list, journal, plan, accounts] = await Promise.all([
       runCliJson(["status"]),
       runCliJson(["list", "--limit", "500"]),
       runCliJson(["journal", "--limit", "500"]),
       runCliJson(["plan"]),
+      runCliJson(["accounts", "list"]),
     ]);
     const parts = { status, list, journal, plan };
     for (const [name, part] of Object.entries(parts)) {
@@ -1124,6 +1288,7 @@ export function apply(ctx, config) {
       summary: journal.body.summary,
       plan: plan.body,
       decisions,
+      accounts: buildAccountsBlock(accounts),
     };
     boardCacheAt = Date.now();
     boardCacheValue = value;
@@ -1192,12 +1357,28 @@ export function apply(ctx, config) {
     "reject",
     "execute",
     "settle",
+    "addAccount",
+    "removeAccount",
+  ]);
+
+  /**
+   * The actions that are operator decisions or operator identity changes: each records the
+   * operator name as `actor`, so an empty name is refused.
+   */
+  const HTTP_ACTOR_REQUIRED_ACTIONS = Object.freeze([
+    "approve",
+    "reject",
+    "addAccount",
+    "removeAccount",
   ]);
 
   /**
    * Validate one action body and run the matching CLI command. Every branch maps to an
    * argv array of literal flags and validated values — never a shell string. Approve and
    * reject require an explicit operator name; execute is pinned to the paper venue.
+   * addAccount/removeAccount change the untracked operator account overlay
+   * (`config/watchlist-accounts.json`) only: they never queue, approve or execute a paper
+   * intent, and the built-in registry stays read-only.
    */
   async function performHttpAction(body) {
     if (!isPlainObjectValue(body)) {
@@ -1247,14 +1428,16 @@ export function apply(ctx, config) {
     }
     const actorProvided =
       typeof body.actor === "string" && body.actor.trim() !== "";
-    if ((action === "approve" || action === "reject") && !actorProvided) {
+    if (HTTP_ACTOR_REQUIRED_ACTIONS.includes(action) && !actorProvided) {
       return {
         status: 400,
         body: {
           ok: false,
           reason: "actor_required",
           message:
-            "approve/reject are human decisions: send the operator name as `actor`",
+            action === "addAccount" || action === "removeAccount"
+              ? `${action} changes the operator watchlist overlay: send the operator name as \`actor\``
+              : "approve/reject are human decisions: send the operator name as `actor`",
         },
       };
     }
@@ -1264,6 +1447,85 @@ export function apply(ctx, config) {
     let argv;
     if (action === "enqueue") {
       argv = ["enqueue", "--actor", actor];
+    } else if (action === "addAccount") {
+      const loginResult = readAccountLogin(body);
+      if (!loginResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: loginResult.message,
+          },
+        };
+      }
+      const agentResult = readAccountAgentId(body);
+      if (!agentResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: agentResult.message,
+          },
+        };
+      }
+      const categoryResult = readEnum(
+        { category: body.category },
+        "category",
+        ACCOUNT_CATEGORIES,
+      );
+      if (!categoryResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: categoryResult.message,
+          },
+        };
+      }
+      const noteResult = readFreeText(
+        { note: body.note },
+        "note",
+        MAX_ACCOUNT_NOTE_LENGTH,
+      );
+      if (!noteResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: noteResult.message,
+          },
+        };
+      }
+      argv = [
+        "accounts",
+        "add",
+        loginResult.value,
+        "--agent",
+        agentResult.value,
+        "--actor",
+        actor,
+      ];
+      if (categoryResult.present) {
+        argv.push("--category", categoryResult.value);
+      }
+      if (noteResult.present) argv.push("--note", noteResult.value);
+    } else if (action === "removeAccount") {
+      const loginResult = readAccountLogin(body);
+      if (!loginResult.ok) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            reason: "invalid_arguments",
+            message: loginResult.message,
+          },
+        };
+      }
+      argv = ["accounts", "remove", loginResult.value, "--actor", actor];
     } else {
       const intentResult = readIntentId({ intentId: body.intentId });
       if (!intentResult.ok) {
@@ -1400,157 +1662,169 @@ export function apply(ctx, config) {
         if (origin === null) return requestOrigin === null;
         return requestOrigin === null || requestOrigin === origin;
       };
-      const boardRoute = webServer.register({
-        kind: "exact",
-        path: `${HTTP_PREFIX}/board`,
-        handler: async (req, res) => {
-          if (req.method !== "GET") {
-            sendJson(res, 405, {
-              ok: false,
-              reason: "method_not_allowed",
-              message: "GET only",
-            });
-            return;
-          }
-          if (!readOriginAllowed(req)) {
-            sendJson(res, 403, {
-              ok: false,
-              reason: "origin_refused",
-              message: "cross-origin request refused",
-            });
-            return;
-          }
-          try {
-            const board = await readBoard(false);
-            if (!board.ok) {
-              sendJson(res, 502, {
+      // Same-origin control-plane routes are fiber-owned: `ctx.effect` is the cleanup the
+      // Host actually runs when the bundle is disabled, removed or replaced. A plain
+      // `webServer.register` disposer collected into `apply`'s return value is not run by
+      // the Host, so a leaked handler stays bound and its duplicate path makes the next
+      // activation fail (`register` throws on a duplicate kind+path).
+      serverCtx.effect(() => {
+        const boardRoute = webServer.register({
+          kind: "exact",
+          path: `${HTTP_PREFIX}/board`,
+          handler: async (req, res) => {
+            if (req.method !== "GET") {
+              sendJson(res, 405, {
                 ok: false,
-                reason: board.reason,
-                message: board.message,
+                reason: "method_not_allowed",
+                message: "GET only",
               });
               return;
             }
-            sendJson(res, 200, { ...board.value, csrfToken });
-          } catch (error) {
-            sendJson(res, 500, {
-              ok: false,
-              reason: "internal_error",
-              message: String(error?.message ?? error),
-            });
-          }
-        },
-      });
-      const actionRoute = webServer.register({
-        kind: "exact",
-        path: `${HTTP_PREFIX}/action`,
-        handler: async (req, res) => {
-          if (req.method !== "POST") {
-            sendJson(res, 405, {
-              ok: false,
-              reason: "method_not_allowed",
-              message: "POST only",
-            });
-            return;
-          }
-          // Mutations require the exact same origin the carrier advertises: a cross-site
-          // page cannot drive the paper ledger, and a no-Origin local client cannot approve.
-          if (origin === null || req.headers.origin !== origin) {
-            sendJson(res, 403, {
-              ok: false,
-              reason: "origin_refused",
-              message: "mutations require the same-origin control-plane UI",
-            });
-            return;
-          }
-          if (req.headers["x-autobet-csrf"] !== csrfToken) {
-            sendJson(res, 403, {
-              ok: false,
-              reason: "csrf_refused",
-              message: "missing or stale CSRF token; reload the control plane",
-            });
-            return;
-          }
-          try {
-            const read = await readHttpJsonBody(req);
-            if (!read.ok) {
-              sendJson(res, read.status, {
+            if (!readOriginAllowed(req)) {
+              sendJson(res, 403, {
                 ok: false,
-                reason: "invalid_body",
-                message: read.message,
+                reason: "origin_refused",
+                message: "cross-origin request refused",
               });
               return;
             }
-            const outcome = await performHttpAction(read.value);
-            // The refreshed board is composed without the per-activation token (the GET
-            // route adds it); re-attach it so an action answer is a drop-in board snapshot.
-            const responseBody =
-              isPlainObjectValue(outcome.body) &&
-              isPlainObjectValue(outcome.body.board)
-                ? {
-                    ...outcome.body,
-                    board: { ...outcome.body.board, csrfToken },
-                  }
-                : outcome.body;
-            sendJson(res, outcome.status, responseBody);
-          } catch (error) {
-            sendJson(res, 500, {
-              ok: false,
-              reason: "internal_error",
-              message: String(error?.message ?? error),
-            });
-          }
-        },
-      });
-      const signalsRoute = webServer.register({
-        kind: "exact",
-        path: `${HTTP_PREFIX}/signals`,
-        handler: async (req, res) => {
-          if (req.method !== "GET") {
-            sendJson(res, 405, {
-              ok: false,
-              reason: "method_not_allowed",
-              message: "GET only",
-            });
-            return;
-          }
-          if (!readOriginAllowed(req)) {
-            sendJson(res, 403, {
-              ok: false,
-              reason: "origin_refused",
-              message: "cross-origin request refused",
-            });
-            return;
-          }
-          const query = readSignalsQuery(req.url);
-          if (!query.ok) {
-            sendJson(res, 400, {
-              ok: false,
-              reason: "invalid_arguments",
-              message: query.message,
-            });
-            return;
-          }
-          try {
-            const signals = await readSignals(query.value);
-            if (!signals.ok) {
-              sendJson(res, 502, {
+            try {
+              const board = await readBoard(false);
+              if (!board.ok) {
+                sendJson(res, 502, {
+                  ok: false,
+                  reason: board.reason,
+                  message: board.message,
+                });
+                return;
+              }
+              sendJson(res, 200, { ...board.value, csrfToken });
+            } catch (error) {
+              sendJson(res, 500, {
                 ok: false,
-                reason: signals.reason,
-                message: signals.message,
+                reason: "internal_error",
+                message: String(error?.message ?? error),
+              });
+            }
+          },
+        });
+        const actionRoute = webServer.register({
+          kind: "exact",
+          path: `${HTTP_PREFIX}/action`,
+          handler: async (req, res) => {
+            if (req.method !== "POST") {
+              sendJson(res, 405, {
+                ok: false,
+                reason: "method_not_allowed",
+                message: "POST only",
               });
               return;
             }
-            sendJson(res, 200, signals.value);
-          } catch (error) {
-            sendJson(res, 500, {
-              ok: false,
-              reason: "internal_error",
-              message: String(error?.message ?? error),
-            });
-          }
-        },
-      });
-      disposers.push(boardRoute, actionRoute, signalsRoute);
+            // Mutations require the exact same origin the carrier advertises: a cross-site
+            // page cannot drive the paper ledger, and a no-Origin local client cannot approve.
+            if (origin === null || req.headers.origin !== origin) {
+              sendJson(res, 403, {
+                ok: false,
+                reason: "origin_refused",
+                message: "mutations require the same-origin control-plane UI",
+              });
+              return;
+            }
+            if (req.headers["x-autobet-csrf"] !== csrfToken) {
+              sendJson(res, 403, {
+                ok: false,
+                reason: "csrf_refused",
+                message:
+                  "missing or stale CSRF token; reload the control plane",
+              });
+              return;
+            }
+            try {
+              const read = await readHttpJsonBody(req);
+              if (!read.ok) {
+                sendJson(res, read.status, {
+                  ok: false,
+                  reason: "invalid_body",
+                  message: read.message,
+                });
+                return;
+              }
+              const outcome = await performHttpAction(read.value);
+              // The refreshed board is composed without the per-activation token (the GET
+              // route adds it); re-attach it so an action answer is a drop-in board snapshot.
+              const responseBody =
+                isPlainObjectValue(outcome.body) &&
+                isPlainObjectValue(outcome.body.board)
+                  ? {
+                      ...outcome.body,
+                      board: { ...outcome.body.board, csrfToken },
+                    }
+                  : outcome.body;
+              sendJson(res, outcome.status, responseBody);
+            } catch (error) {
+              sendJson(res, 500, {
+                ok: false,
+                reason: "internal_error",
+                message: String(error?.message ?? error),
+              });
+            }
+          },
+        });
+        const signalsRoute = webServer.register({
+          kind: "exact",
+          path: `${HTTP_PREFIX}/signals`,
+          handler: async (req, res) => {
+            if (req.method !== "GET") {
+              sendJson(res, 405, {
+                ok: false,
+                reason: "method_not_allowed",
+                message: "GET only",
+              });
+              return;
+            }
+            if (!readOriginAllowed(req)) {
+              sendJson(res, 403, {
+                ok: false,
+                reason: "origin_refused",
+                message: "cross-origin request refused",
+              });
+              return;
+            }
+            const query = readSignalsQuery(req.url);
+            if (!query.ok) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "invalid_arguments",
+                message: query.message,
+              });
+              return;
+            }
+            try {
+              const signals = await readSignals(query.value);
+              if (!signals.ok) {
+                sendJson(res, 502, {
+                  ok: false,
+                  reason: signals.reason,
+                  message: signals.message,
+                });
+                return;
+              }
+              sendJson(res, 200, signals.value);
+            } catch (error) {
+              sendJson(res, 500, {
+                ok: false,
+                reason: "internal_error",
+                message: String(error?.message ?? error),
+              });
+            }
+          },
+        });
+        return () => {
+          boardRoute();
+          actionRoute();
+          signalsRoute();
+        };
+      }, "watchlist autobet: control-plane routes");
     });
   }
 
