@@ -158,6 +158,28 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
+  test("BunFile.slice is lazy, does not open a missing file, and does not clamp size", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bunfile-slice-lazy-"));
+    try {
+      const path = join(dir, "bytes.txt");
+      await Bun.write(path, "abcdef");
+      const scoped = Bun.file(path).slice(0, 3);
+      await Bun.write(path, "xyz123");
+      expect(await scoped.text()).toBe("xyz"); // lazy read, not a copy
+
+      const beyond = Bun.file(path).slice(2, 100);
+      expect(await beyond.text()).toBe("z123");
+      // 1.4.4 reports the requested span (98), not the clamped file length (4).
+      expect(beyond.size).toBe(98);
+
+      const missing = Bun.file(join(dir, "missing.txt")).slice(0, 5);
+      expect(await missing.exists()).toBe(false);
+      await expect(missing.text()).rejects.toThrow(/ENOENT/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("BunFile.slice treats end as an absolute byte offset", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bunfile-slice-"));
     try {
