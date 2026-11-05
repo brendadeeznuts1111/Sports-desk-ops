@@ -39,7 +39,11 @@ describe("localhost resolution and TLS identity", () => {
         key: await Bun.file(fixture.keyPath).text(),
         cert: await Bun.file(fixture.certPath).text(),
       },
-      fetch: () => new Response("tls-host"),
+      fetch: (request) =>
+        Response.json({
+          text: "tls-host",
+          host: request.headers.get("host"),
+        }),
     });
     const port = server.port;
     if (port === undefined) throw new Error("server has no port");
@@ -50,13 +54,21 @@ describe("localhost resolution and TLS identity", () => {
         tls: { ca },
       });
       expect(viaHostHeader.status).toBe(200);
-      expect(await viaHostHeader.text()).toBe("tls-host");
+      expect(await viaHostHeader.json()).toEqual({
+        text: "tls-host",
+        host: "b.localhost",
+      });
 
+      // The docs' IP case: verify against a name while the Host header stays caller-controlled.
       const viaServername = await fetch(`https://127.0.0.1:${port}/`, {
+        headers: { Host: "proxy.localhost" },
         tls: { ca, servername: "a.localhost" },
       });
       expect(viaServername.status).toBe(200);
-      expect(await viaServername.text()).toBe("tls-host");
+      expect(await viaServername.json()).toEqual({
+        text: "tls-host",
+        host: "proxy.localhost",
+      });
 
       // Without the override the certificate has no matching IP SAN, so verification fails.
       await expect(
