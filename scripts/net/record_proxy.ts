@@ -63,7 +63,10 @@ const HOP_BY_HOP = new Set([
 export function forwardableHeaders(headers: Headers): Headers {
   const clean = new Headers();
   for (const [name, value] of headers) {
-    if (HOP_BY_HOP.has(name.toLowerCase())) continue;
+    const lower = name.toLowerCase();
+    // A proxy must not relay the client's Host: fetch derives it from the target URL. Before
+    // Bun 1.4.1 a relayed Host also selected TLS verification, which made this injectable.
+    if (lower === "host" || HOP_BY_HOP.has(lower)) continue;
     clean.set(name, value);
   }
   return clean;
