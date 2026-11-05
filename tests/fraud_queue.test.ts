@@ -188,8 +188,10 @@ function evidenceFor(
     {
       hasRuleHit: true,
       hasConfirmedRuleHit: confirmed,
-      ruleHits: ["period_correlation"],
-      confirmedRuleHits: confirmed ? ["period_correlation"] : [],
+      ruleHits: [{ rule: "period_correlation", n: 5 }],
+      confirmedRuleHits: confirmed
+        ? [{ rule: "period_correlation", n: 5 }]
+        : [],
     },
   ];
 }
@@ -199,6 +201,8 @@ interface TiedBatch {
     readonly account: string;
     readonly hasRuleHit: boolean;
     readonly hasConfirmedRuleHit: boolean;
+    readonly ruleHits: readonly { rule: string; n: number }[];
+    readonly confirmedRuleHits: readonly { rule: string; n: number }[];
   }[];
   readonly ruleApplication: {
     readonly state: string;
@@ -394,7 +398,9 @@ describe("queue rule tie-break", () => {
     expect(batch.rows[0]).toMatchObject({
       hasRuleHit: true,
       hasConfirmedRuleHit: false,
+      ruleHits: [{ rule: "period_correlation", n: 5 }],
     });
+    expect(batch.rows[0]?.confirmedRuleHits).toEqual([]);
     expect(batch.ruleApplication.state).toBe("measured");
     expect(batch.ruleApplication.applied).toEqual(["period_correlation"]);
   });
@@ -410,10 +416,14 @@ describe("queue rule tie-break", () => {
       hasRuleHit: true,
       hasConfirmedRuleHit: true,
     });
+    expect(batch.rows[0]?.confirmedRuleHits).toEqual([
+      { rule: "period_correlation", n: 5 },
+    ]);
     expect(batch.rows[1]).toMatchObject({
       hasRuleHit: true,
       hasConfirmedRuleHit: false,
     });
+    expect(batch.rows[1]?.confirmedRuleHits).toEqual([]);
   });
 
   test("a higher score still beats a lower score with a rule hit", () => {

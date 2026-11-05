@@ -4,9 +4,14 @@
  * two flags, while a double review of one flag is one.
  *
  * Only rules the readiness gate applied may contribute. A rule below the confirmed-review minimum
- * is absent from the index, so the queue cannot accidentally promote on an unmeasured rule.
+ * is absent from the index, so the queue cannot accidentally promote on an unmeasured rule. The
+ * applied-rule map carries the confirmed-review count; that `n` travels into the row so a hit at
+ * n=5 is distinguishable from one at n=50.
  */
-import type { FraudQueueRuleEvidence } from "./fraud_queue.ts";
+import type {
+  FraudQueueRuleEvidence,
+  FraudQueueRuleHit,
+} from "./fraud_queue.ts";
 
 export interface QueueRuleFlag {
   readonly seq: number;
@@ -30,7 +35,7 @@ export interface QueueRuleReview {
 export function buildRuleEvidenceByCustomerRef(
   runs: readonly QueueRuleRun[],
   reviews: readonly QueueRuleReview[],
-  appliedRules: ReadonlySet<string>,
+  appliedRules: ReadonlyMap<string, number>,
 ): ReadonlyMap<string, FraudQueueRuleEvidence> {
   const confirmedSeqs = new Map<string, Set<number>>();
   for (const review of reviews) {
@@ -40,28 +45,41 @@ export function buildRuleEvidenceByCustomerRef(
     confirmedSeqs.set(review.runId, set);
   }
 
-  const byRef = new Map<string, { hit: Set<string>; confirmed: Set<string> }>();
+  const byRef = new Map<
+    string,
+    { hit: Map<string, number>; confirmed: Map<string, number> }
+  >();
   for (const run of runs) {
     const confirmed = confirmedSeqs.get(run.runId) ?? new Set<number>();
     for (const flag of run.plan.flags ?? []) {
-      if (!appliedRules.has(flag.rule) || flag.customerRef === null) continue;
+      const reviewCount = appliedRules.get(flag.rule);
+      if (reviewCount === undefined || flag.customerRef === null) continue;
       const entry = byRef.get(flag.customerRef) ?? {
-        hit: new Set<string>(),
-        confirmed: new Set<string>(),
+        hit: new Map<string, number>(),
+        confirmed: new Map<string, number>(),
       };
-      entry.hit.add(flag.rule);
-      if (confirmed.has(flag.seq)) entry.confirmed.add(flag.rule);
+      entry.hit.set(flag.rule, reviewCount);
+      if (confirmed.has(flag.seq)) {
+        entry.confirmed.set(flag.rule, reviewCount);
+      }
       byRef.set(flag.customerRef, entry);
     }
   }
+
+  const hits = (values: ReadonlyMap<string, number>): FraudQueueRuleHit[] =>
+    [...values]
+      .map(([rule, n]) => ({ rule, n }))
+      .sort((left, right) =>
+        left.rule < right.rule ? -1 : left.rule > right.rule ? 1 : 0,
+      );
 
   const evidence = new Map<string, FraudQueueRuleEvidence>();
   for (const [ref, entry] of byRef) {
     evidence.set(ref, {
       hasRuleHit: entry.hit.size > 0,
       hasConfirmedRuleHit: entry.confirmed.size > 0,
-      ruleHits: [...entry.hit].sort(),
-      confirmedRuleHits: [...entry.confirmed].sort(),
+      ruleHits: hits(entry.hit),
+      confirmedRuleHits: hits(entry.confirmed),
     });
   }
   return evidence;

@@ -928,10 +928,16 @@ async function cmdQueueBuild(
   // The plan's customerRef is `customer:<sha256("customer:"+login)[:12]>`; hashing the queue
   // account id is a conservative exact-identity join. Accounts whose F402 login differs from the
   // GSLive user id need the durable customer master and will not match here.
+  const appliedRules = new Set(readiness.ruleApplication.applied);
+  const reviewCountByRule = new Map(
+    rules
+      .filter((rule) => appliedRules.has(rule.rule))
+      .map((rule) => [rule.rule, rule.confirmedReviews] as const),
+  );
   const evidenceByRef = buildRuleEvidenceByCustomerRef(
     ledger.runs,
     ledger.reviews,
-    new Set(readiness.ruleApplication.applied),
+    reviewCountByRule,
   );
   const ruleEvidenceOf = (accountId: string): FraudQueueRuleEvidence | null =>
     evidenceByRef.get(customerRefOf(accountId)) ?? null;

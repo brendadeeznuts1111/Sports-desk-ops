@@ -50,12 +50,19 @@ export type FraudQueueModelSummary =
     }
   | { readonly present: false; readonly reason: string | null };
 
+/** One rule hit with the rule's confirmed-review count, so the evidence carries its own strength. */
+export interface FraudQueueRuleHit {
+  readonly rule: string;
+  /** Confirmed reviews behind the rule at gate time; 5 is the minimum, 50 is well-tested. */
+  readonly n: number;
+}
+
 /** Applied-rule evidence for one account. Unreviewed hits and reviewer-confirmed hits stay separate. */
 export interface FraudQueueRuleEvidence {
   readonly hasRuleHit: boolean;
   readonly hasConfirmedRuleHit: boolean;
-  readonly ruleHits: readonly string[];
-  readonly confirmedRuleHits: readonly string[];
+  readonly ruleHits: readonly FraudQueueRuleHit[];
+  readonly confirmedRuleHits: readonly FraudQueueRuleHit[];
 }
 
 export interface FraudQueueRow {
@@ -67,8 +74,8 @@ export interface FraudQueueRow {
   readonly hasRuleHit: boolean;
   /** Reviewer evidence for the same tie slot; confirmed hits sort ahead of unreviewed ones. */
   readonly hasConfirmedRuleHit: boolean;
-  readonly ruleHits: readonly string[];
-  readonly confirmedRuleHits: readonly string[];
+  readonly ruleHits: readonly FraudQueueRuleHit[];
+  readonly confirmedRuleHits: readonly FraudQueueRuleHit[];
   readonly findings: Readonly<Record<FraudFindingSeverity, number>> & {
     readonly total: number;
   };
@@ -186,6 +193,10 @@ function compareRows(left: FraudQueueRow, right: FraudQueueRow): number {
       : 0;
 }
 
+function ruleHitsLabel(hits: readonly FraudQueueRuleHit[]): string {
+  return hits.map((hit) => `${hit.rule} (n=${hit.n})`).join(", ");
+}
+
 function reasonsFor(row: {
   findings: FraudQueueRow["findings"];
   flags: FraudQueueRow["flags"];
@@ -236,14 +247,14 @@ function reasonsFor(row: {
     reasons.push(
       row.ruleEvidence.ruleHits.length === 0
         ? "rule hit"
-        : `rule hit: ${row.ruleEvidence.ruleHits.join(", ")}`,
+        : `rule hit: ${ruleHitsLabel(row.ruleEvidence.ruleHits)}`,
     );
   }
   if (row.ruleEvidence !== null && row.ruleEvidence.hasConfirmedRuleHit) {
     reasons.push(
       row.ruleEvidence.confirmedRuleHits.length === 0
         ? "confirmed rule hit"
-        : `confirmed rule hit: ${row.ruleEvidence.confirmedRuleHits.join(", ")}`,
+        : `confirmed rule hit: ${ruleHitsLabel(row.ruleEvidence.confirmedRuleHits)}`,
     );
   }
   return reasons;

@@ -35,7 +35,7 @@ function review(
   return { runId, seq, verdict };
 }
 
-const APPLIED = new Set(["period_correlation"]);
+const APPLIED = new Map([["period_correlation", 5]]);
 
 describe("queue rule evidence", () => {
   test("separates an unreviewed hit from a confirmed hit", () => {
@@ -52,13 +52,13 @@ describe("queue rule evidence", () => {
     expect(evidence.get("customer:a")).toEqual({
       hasRuleHit: true,
       hasConfirmedRuleHit: true,
-      ruleHits: ["period_correlation"],
-      confirmedRuleHits: ["period_correlation"],
+      ruleHits: [{ rule: "period_correlation", n: 5 }],
+      confirmedRuleHits: [{ rule: "period_correlation", n: 5 }],
     });
     expect(evidence.get("customer:z")).toEqual({
       hasRuleHit: true,
       hasConfirmedRuleHit: false,
-      ruleHits: ["period_correlation"],
+      ruleHits: [{ rule: "period_correlation", n: 5 }],
       confirmedRuleHits: [],
     });
   });
@@ -100,10 +100,10 @@ describe("queue rule evidence", () => {
       APPLIED,
     );
     expect(evidence.get("customer:a")?.ruleHits).toEqual([
-      "period_correlation",
+      { rule: "period_correlation", n: 5 },
     ]);
     expect(evidence.get("customer:a")?.confirmedRuleHits).toEqual([
-      "period_correlation",
+      { rule: "period_correlation", n: 5 },
     ]);
   });
 
@@ -111,9 +111,23 @@ describe("queue rule evidence", () => {
     const evidence = buildRuleEvidenceByCustomerRef(
       [run("run-1", [{ seq: 0, customerRef: "customer:a" }])],
       [review("run-1", 0, "confirmed")],
-      new Set(),
+      new Map(),
     );
     expect(evidence.size).toBe(0);
+  });
+
+  test("the rule's review count travels with the hit", () => {
+    const evidence = buildRuleEvidenceByCustomerRef(
+      [run("run-1", [{ seq: 0, customerRef: "customer:a" }])],
+      [review("run-1", 0, "confirmed")],
+      new Map([["period_correlation", 50]]),
+    );
+    expect(evidence.get("customer:a")?.ruleHits).toEqual([
+      { rule: "period_correlation", n: 50 },
+    ]);
+    expect(evidence.get("customer:a")?.confirmedRuleHits).toEqual([
+      { rule: "period_correlation", n: 50 },
+    ]);
   });
 
   test("a null customerRef never joins", () => {
