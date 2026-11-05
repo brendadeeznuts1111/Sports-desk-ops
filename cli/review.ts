@@ -880,7 +880,6 @@ export function buildFlagsMetricMetadata(
           perConfirmedHit: RULE_HIT_WEIGHT_PER_CONFIRMED,
           cap: RULE_HIT_WEIGHT_CAP,
           appliedTo: "normalized-priority",
-          enabled: false,
           confirmedByRule,
         },
         description:
@@ -914,6 +913,18 @@ export function buildFlagsMetricMetadata(
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
       },
       {
+        name: "ruleApplication",
+        kind: "parameter",
+        state: "not_measured",
+        blockedBy: "reviewRowsPerRule",
+        value: {
+          applied: [],
+          notApplied: [],
+        },
+        description:
+          "Per-run applied/not_applied rules. A rule below 5 confirmed reviews contributes no tie-break and appears in notApplied with its n, so a promoted account never hides which rule was excluded.",
+      },
+      {
         name: "bridgeRepresentativeness",
         kind: "quality",
         state: "not_measured",
@@ -940,7 +951,7 @@ export function buildFlagsMetricMetadata(
         ],
         value: "not_implemented",
         description:
-          "Bridge coverage is 3.94% (102/2586); the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). The boolean tie-break replaces the score weight; all readiness gates must clear before the batch can run.",
+          "Bridge coverage is 3.94% (102/2586); the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). hasRuleHit is a tie-break after the model score, not a promotion; all readiness gates must clear before the batch can run.",
       },
       {
         name: "response",
@@ -957,13 +968,14 @@ export function buildFlagsMetricMetadata(
         value: [
           "desk-flag",
           "findings",
-          "has-confirmed-rule-hit",
           "odds-drift",
           "model-score",
+          "has-rule-hit",
+          "has-confirmed-rule-hit",
           "bets",
         ],
         description:
-          "Lexicographic key order. The boolean has-confirmed-rule-hit sits before odds-drift and model-score, so it floats tied accounts with rule evidence without changing the displayed score.",
+          "Lexicographic key order. Rule evidence is a tie-break after the model score, not a bucket promotion: a 95 still beats an 82.5 with a rule hit. has-rule-hit uses all anomalies; has-confirmed-rule-hit is reviewer evidence.",
       },
       {
         name: "ruleHitTieBreak",
@@ -975,14 +987,15 @@ export function buildFlagsMetricMetadata(
           "bridgeRepresentativeness",
         ],
         value: {
-          field: "hasConfirmedRuleHit",
+          field: "hasRuleHit",
+          evidenceField: "hasConfirmedRuleHit",
           order: "desc",
-          position: "before-model-score",
+          position: "after-model-score",
           scoreBonus: false,
           minConfirmedReviewsPerRule: 5,
         },
         description:
-          "Boolean tie-break, not a score bonus: tied accounts with a confirmed rule hit float above tied accounts without one. Applied per rule only after >= 5 confirmed reviews; below that the rule contributes no tie-break.",
+          "Tie-break, not a score bonus or bucket promotion. Unreviewed hasRuleHit is the dense signal; hasConfirmedRuleHit stays reviewer evidence because at 10% sampling it reflects which flags were sampled. Applied per rule only after >= 5 confirmed reviews.",
       },
       {
         name: "scoreNormalization",

@@ -4,6 +4,11 @@
  *
  * The gate is hard: `ready: false` means the batch must not produce a queue.
  */
+export interface QueueRuleSupport {
+  readonly rule: string;
+  readonly confirmedReviews: number;
+}
+
 export interface QueueReadinessInput {
   /** Age of the GSLive corpus window relative to the batch clock. */
   readonly corpusAgeHours: number;
@@ -18,8 +23,8 @@ export interface QueueReadinessInput {
   readonly bridgeRepresentative: boolean | null;
   /** Confirmed review rows available to attach. */
   readonly confirmedReviews: number;
-  /** Smallest confirmed-review count among rules that fired; 0 when no rule fired. */
-  readonly minConfirmedReviewsPerRule: number;
+  /** Per-rule confirmed-review support; a rule is applied only at the policy minimum. */
+  readonly rules: readonly QueueRuleSupport[];
 }
 
 export interface QueueReadinessBlocker {
@@ -47,13 +52,21 @@ export const DEFAULT_QUEUE_READINESS_POLICY: QueueReadinessPolicy = {
   minConfirmedReviewsPerRule: 5,
 };
 
+export interface QueueRuleApplication {
+  readonly rule: string;
+  readonly reason: "reviewedSampleSize";
+  readonly n: number;
+}
+
 export interface QueueReadiness {
   /** The batch may execute: fresh corpus/model, representative bridge, at least one review. */
   readonly ready: boolean;
   readonly blockers: readonly QueueReadinessBlocker[];
-  /** At least one rule has enough reviews to apply its boolean tie-break. */
+  /** Which rules may contribute a tie-break, and which are excluded and why. */
   readonly ruleApplication: {
     readonly ready: boolean;
+    readonly applied: readonly string[];
+    readonly notApplied: readonly QueueRuleApplication[];
     readonly blockers: readonly QueueReadinessBlocker[];
   };
 }
@@ -97,11 +110,23 @@ export function assessQueueReadiness(
     });
   }
 
+  const applied = input.rules
+    .filter(
+      (rule) => rule.confirmedReviews >= policy.minConfirmedReviewsPerRule,
+    )
+    .map((rule) => rule.rule);
+  const notApplied: QueueRuleApplication[] = input.rules
+    .filter((rule) => rule.confirmedReviews < policy.minConfirmedReviewsPerRule)
+    .map((rule) => ({
+      rule: rule.rule,
+      reason: "reviewedSampleSize" as const,
+      n: rule.confirmedReviews,
+    }));
   const applicationBlockers: QueueReadinessBlocker[] = [];
-  if (input.minConfirmedReviewsPerRule < policy.minConfirmedReviewsPerRule) {
+  if (input.rules.length > 0 && applied.length === 0) {
     applicationBlockers.push({
       name: "reviewRowsPerRule",
-      current: `${input.minConfirmedReviewsPerRule} per rule`,
+      current: `best ${Math.max(...input.rules.map((rule) => rule.confirmedReviews))} per rule`,
       required: `>= ${policy.minConfirmedReviewsPerRule} confirmed per rule`,
     });
   }
@@ -111,6 +136,8 @@ export function assessQueueReadiness(
     blockers,
     ruleApplication: {
       ready: applicationBlockers.length === 0,
+      applied,
+      notApplied,
       blockers: applicationBlockers,
     },
   };

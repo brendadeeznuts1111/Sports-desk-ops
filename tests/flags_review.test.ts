@@ -392,7 +392,6 @@ describe("flags metric metadata", () => {
         perConfirmedHit: 0.02,
         cap: 0.1,
         appliedTo: "normalized-priority",
-        enabled: false,
       },
     });
     expect(
@@ -413,9 +412,10 @@ describe("flags metric metadata", () => {
       value: [
         "desk-flag",
         "findings",
-        "has-confirmed-rule-hit",
         "odds-drift",
         "model-score",
+        "has-rule-hit",
+        "has-confirmed-rule-hit",
         "bets",
       ],
     });
@@ -446,9 +446,10 @@ describe("flags metric metadata", () => {
       kind: "parameter",
       state: "not_measured",
       value: {
-        field: "hasConfirmedRuleHit",
+        field: "hasRuleHit",
+        evidenceField: "hasConfirmedRuleHit",
         order: "desc",
-        position: "before-model-score",
+        position: "after-model-score",
         scoreBonus: false,
         minConfirmedReviewsPerRule: 5,
       },
@@ -462,6 +463,16 @@ describe("flags metric metadata", () => {
       state: "not_measured",
       blockedBy: "bridgeRepresentativenessStudy",
       value: { covered: 102, uncovered: 2484, measured: false },
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "ruleApplication",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      state: "not_measured",
+      blockedBy: "reviewRowsPerRule",
+      value: { applied: [], notApplied: [] },
     });
     expect(
       metadata.definitions.find(

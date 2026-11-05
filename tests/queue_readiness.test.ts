@@ -14,23 +14,34 @@ describe("queue readiness gate", () => {
         bridgeCoverage: 0.6,
         bridgeRepresentative: true,
         confirmedReviews: 10,
-        minConfirmedReviewsPerRule: 6,
+        rules: [
+          { rule: "period_correlation", confirmedReviews: 6 },
+          { rule: "batch_replay", confirmedReviews: 7 },
+        ],
       }),
     ).toEqual({
       ready: true,
       blockers: [],
-      ruleApplication: { ready: true, blockers: [] },
+      ruleApplication: {
+        ready: true,
+        applied: ["period_correlation", "batch_replay"],
+        notApplied: [],
+        blockers: [],
+      },
     });
   });
 
-  test("names every blocker instead of a single vague refusal", () => {
+  test("names every blocker and every rule that did not apply", () => {
     const readiness = assessQueueReadiness({
       corpusAgeHours: 24,
       modelAgeDays: 9,
       bridgeCoverage: 0.0394,
       bridgeRepresentative: null,
       confirmedReviews: 0,
-      minConfirmedReviewsPerRule: 0,
+      rules: [
+        { rule: "period_correlation", confirmedReviews: 0 },
+        { rule: "velocity_market", confirmedReviews: 3 },
+      ],
     });
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers.map((blocker) => blocker.name)).toEqual([
@@ -48,13 +59,29 @@ describe("queue readiness gate", () => {
       required: "<= 7d",
     });
     expect(readiness.blockers[2]?.current).toBe("not measured");
-    expect(readiness.ruleApplication.blockers).toEqual([
-      {
-        name: "reviewRowsPerRule",
-        current: "0 per rule",
-        required: ">= 5 confirmed per rule",
-      },
-    ]);
+    expect(readiness.ruleApplication).toEqual({
+      ready: false,
+      applied: [],
+      notApplied: [
+        {
+          rule: "period_correlation",
+          reason: "reviewedSampleSize",
+          n: 0,
+        },
+        {
+          rule: "velocity_market",
+          reason: "reviewedSampleSize",
+          n: 3,
+        },
+      ],
+      blockers: [
+        {
+          name: "reviewRowsPerRule",
+          current: "best 3 per rule",
+          required: ">= 5 confirmed per rule",
+        },
+      ],
+    });
   });
 
   test("treats the thresholds as inclusive", () => {
@@ -64,10 +91,17 @@ describe("queue readiness gate", () => {
       bridgeCoverage: 0.01,
       bridgeRepresentative: true,
       confirmedReviews: DEFAULT_QUEUE_READINESS_POLICY.minConfirmedReviews,
-      minConfirmedReviewsPerRule: 5,
+      rules: [
+        {
+          rule: "period_correlation",
+          confirmedReviews:
+            DEFAULT_QUEUE_READINESS_POLICY.minConfirmedReviewsPerRule,
+        },
+      ],
     });
     expect(readiness.ready).toBe(true);
     expect(readiness.ruleApplication.ready).toBe(true);
+    expect(readiness.ruleApplication.applied).toEqual(["period_correlation"]);
   });
 
   test("execution readiness and per-rule application are separate", () => {
@@ -77,13 +111,13 @@ describe("queue readiness gate", () => {
       bridgeCoverage: 0.9,
       bridgeRepresentative: true,
       confirmedReviews: 1,
-      minConfirmedReviewsPerRule: 0,
+      rules: [{ rule: "period_correlation", confirmedReviews: 4 }],
     });
     expect(readiness.ready).toBe(true);
     expect(readiness.ruleApplication.ready).toBe(false);
-    expect(readiness.ruleApplication.blockers[0]?.name).toBe(
-      "reviewRowsPerRule",
-    );
+    expect(readiness.ruleApplication.notApplied).toEqual([
+      { rule: "period_correlation", reason: "reviewedSampleSize", n: 4 },
+    ]);
   });
 
   test("coverage alone does not satisfy the bridge gate", () => {
@@ -93,7 +127,7 @@ describe("queue readiness gate", () => {
       bridgeCoverage: 1,
       bridgeRepresentative: null,
       confirmedReviews: 10,
-      minConfirmedReviewsPerRule: 6,
+      rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
     });
     expect(readiness.ready).toBe(false);
     expect(readiness.blockers.map((blocker) => blocker.name)).toEqual([
@@ -109,7 +143,7 @@ describe("queue readiness gate", () => {
         bridgeCoverage: 0.7,
         bridgeRepresentative: true,
         confirmedReviews: 5,
-        minConfirmedReviewsPerRule: 5,
+        rules: [{ rule: "period_correlation", confirmedReviews: 5 }],
       },
       {
         maxCorpusAgeHours: 6,
@@ -122,8 +156,11 @@ describe("queue readiness gate", () => {
       "modelFreshness",
       "reviewRows",
     ]);
-    expect(readiness.ruleApplication.blockers[0]?.name).toBe(
-      "reviewRowsPerRule",
-    );
+    expect(readiness.ruleApplication.applied).toEqual([]);
+    expect(readiness.ruleApplication.notApplied[0]).toEqual({
+      rule: "period_correlation",
+      reason: "reviewedSampleSize",
+      n: 5,
+    });
   });
 });
