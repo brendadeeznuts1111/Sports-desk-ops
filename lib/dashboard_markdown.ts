@@ -41,6 +41,7 @@ export const DASHBOARD_SECTION_ORDER = [
   "watchlist",
   "weblog",
   "review",
+  "flags",
   "bridge-channel-taxonomy",
   "live-wagers",
   "contests",

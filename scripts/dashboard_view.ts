@@ -197,6 +197,7 @@ function buildSnapshot(
   const summary = rec(results["summary"]?.body);
   const liveBetsBody = rec(results["liveBets"]?.body);
   const liveWagersBody = rec(results["liveWagers"]?.body);
+  const flagsBody = rec(results["flags"]?.body);
   const contestsBody = rec(results["contests"]?.body);
   const boardBody = rec(results["gameBoard"]?.body);
   const catalogBody = rec(results["catalog"]?.body);
@@ -583,6 +584,61 @@ function buildSnapshot(
         },
   );
 
+  const flagsResult = results["flags"];
+  const flagItems = arr(flagsBody?.["flags"]);
+  const flagsByRule = new Map<
+    string,
+    { severity: string; hits: number; wagers: string[] }
+  >();
+  for (const value of flagItems) {
+    const item = rec(value);
+    const rule = str(item?.["rule"]) ?? "?";
+    const entry = flagsByRule.get(rule) ?? {
+      severity: str(item?.["severity"]) ?? "notice",
+      hits: 0,
+      wagers: [],
+    };
+    entry.hits += 1;
+    entry.severity = str(item?.["severity"]) ?? entry.severity;
+    for (const wager of arr(item?.["wagerNumbers"])) {
+      if (entry.wagers.length < 6) entry.wagers.push(String(wager));
+    }
+    flagsByRule.set(rule, entry);
+  }
+  sections.push(
+    flagsResult?.ok !== true
+      ? missingSection(
+          "flags",
+          "Anomaly Signatures — Deterministic Rules",
+          "risk",
+          flagsResult?.error ?? "no /api/flags response",
+        )
+      : {
+          id: "flags",
+          title: "Anomaly Signatures — Deterministic Rules",
+          group: "risk",
+          state: "measured",
+          provenance: `source: /api/flags · ${count(flagsBody?.["wagerCount"])} wagers · generated ${str(flagsBody?.["generatedAt"]) ?? "—"}`,
+          body: [
+            `**${count(flagsBody?.["totalFlags"])} flags · ${count(flagsBody?.["wagerCount"])} wagers**`,
+            "",
+            ...(flagsByRule.size === 0
+              ? ["> No deterministic signatures fired."]
+              : markdownTable(
+                  ["Rule", "Severity", "Hits", "Sample wagers"],
+                  [...flagsByRule].map(([rule, entry]) => [
+                    rule,
+                    entry.severity,
+                    entry.hits,
+                    `${entry.wagers.join(", ")}${
+                      entry.hits > entry.wagers.length ? " …" : ""
+                    }`,
+                  ]),
+                )),
+          ],
+        },
+  );
+
   const contestSummary = rec(contestsBody?.["summary"]);
   const contestEntries = arr(contestsBody?.["entries"]).slice(0, maxRows);
   const contestsResult = results["contests"];
@@ -805,7 +861,7 @@ function buildSnapshot(
 
   return {
     generatedAt: new Date(now).toISOString(),
-    source: `${base} · /api/kpis + /api/live-bets + /api/live-wagers + /api/contests + /api/game-admin/board + /api/sports/catalog + /api/graph/summary`,
+    source: `${base} · /api/kpis + /api/flags + /api/live-bets + /api/live-wagers + /api/contests + /api/game-admin/board + /api/sports/catalog + /api/graph/summary`,
     sections,
   };
 }
@@ -816,6 +872,7 @@ async function load(
 ): Promise<Readonly<Record<string, ApiResult>>> {
   const paths = {
     kpis: "/api/kpis",
+    flags: "/api/flags",
     liveBets: "/api/live-bets",
     liveWagers: "/api/live-wagers",
     contests: "/api/contests",
