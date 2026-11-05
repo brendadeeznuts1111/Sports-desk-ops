@@ -550,6 +550,16 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:crypto.compress"],
   },
   {
+    name: "readableStreamToArrayBuffer",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.readableStreamToArrayBuffer",
+    evidence: [
+      "surface:readableStreamToArrayBuffer",
+      "test:tests/jsonl_stream_replay.test.ts",
+    ],
+  },
+  {
     name: "allocUnsafe",
     kind: "value",
     subsystem: "crypto",

@@ -64,8 +64,8 @@ const rules = (problems: ReturnType<typeof analyzeBunShapes>) =>
   problems.map((p) => p.rule);
 
 describe("manifest", () => {
-  test("partition is 79 shapes across the eight subsystems", () => {
-    expect(BUN_SHAPES.length).toBe(79);
+  test("partition is 80 shapes across the eight subsystems", () => {
+    expect(BUN_SHAPES.length).toBe(80);
     const counts = Object.fromEntries(SHAPE_SUBSYSTEMS.map((s) => [s, 0]));
     for (const s of BUN_SHAPES)
       counts[s.subsystem] = (counts[s.subsystem] ?? 0) + 1;
@@ -74,15 +74,15 @@ describe("manifest", () => {
       text: 8,
       data: 12,
       storage: 11,
-      crypto: 12,
+      crypto: 13,
       network: 9,
       image: 2,
       meta: 5,
     });
   });
 
-  test("70 runtime values and 9 type-only declarations (one declared-only)", () => {
-    expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(70);
+  test("71 runtime values and 9 type-only declarations (one declared-only)", () => {
+    expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(71);
     expect(
       BUN_SHAPES.filter((s) => s.kind === "type")
         .map((s) => s.name)

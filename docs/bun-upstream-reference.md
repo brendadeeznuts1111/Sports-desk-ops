@@ -465,6 +465,22 @@ would work but adds allocations; the runbook’s “zero-copy byte slices” not
 Weblog ingestion uses the same idea on a sliding pending buffer:
 [`lib/f402_weblog.ts`](../lib/f402_weblog.ts) (`pending.subarray(cut)` after a consumed window).
 
+### Draining `ReadableStream`s (whole buffer vs incremental JSONL)
+
+[`Bun.readableStreamToArrayBuffer(stream)`](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)
+reads until close/error and concatenates chunks into **one** `ArrayBuffer`. Each chunk must be a
+**TypedArray or `ArrayBuffer`**; mixed chunk types (strings + bytes) need
+[`Bun.readableStreamToBlob`](https://bun.com/reference/globals/bun/readableStreamToBlob) instead.
+
+| Goal                                           | API                                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Small/medium body; need exact byte length once | `await Bun.readableStreamToArrayBuffer(body)` → `new Uint8Array(ab)` (see [`lib/http_body.ts`](../lib/http_body.ts) — uses `Response.arrayBuffer()`, equivalent drain) |
+| Known JSONL file; bounded memory via windows   | [`replayHistoricalJsonlStream`](../lib/jsonl_stream_replay.ts) — `mergeUint8JsonlChunks` + `parseChunk` + `carryForwardJsonlBuffer`                                    |
+| “Give me all stream bytes” SSOT wrapper        | `drainReadableStreamToUint8(stream)` in the same module                                                                                                                |
+
+Do **not** replace the JSONL replay loop with a full-stream drain on multi‑hundred‑MB ticker archives:
+that duplicates the file in RAM. Drain helpers fit probes, tests, and bodies that are already size-capped.
+
 ### SoA slabs and “logical length”
 
 Structure-of-arrays rollup storage keeps **fixed-capacity** typed columns (`Uint32Array`,

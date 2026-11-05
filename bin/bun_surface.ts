@@ -86,6 +86,11 @@ const CHECKS: readonly Check[] = [
   { group: "core", name: "JSON5", read: () => Bun.JSON5.parse },
   { group: "core", name: "JSONL.parse", read: () => Bun.JSONL.parse },
   { group: "core", name: "JSONL.parseChunk", read: () => Bun.JSONL.parseChunk },
+  {
+    group: "capture",
+    name: "readableStreamToArrayBuffer",
+    read: () => Bun.readableStreamToArrayBuffer,
+  },
   { group: "core", name: "CSRF", read: () => Bun.CSRF.generate },
   {
     group: "core",

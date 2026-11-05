@@ -448,8 +448,16 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/concatArrayBuffers)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/schema_binary.ts`
+- **Here:** `lib/schema_binary.ts`, `lib/jsonl_stream_replay.ts`
 - **Evidence:** `probe:crypto.compress`
+
+#### Bun.readableStreamToArrayBuffer
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Here:** `bin/bun_surface.ts`, `lib/jsonl_stream_replay.ts`
+- **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/jsonl_stream_replay.test.ts`
+- **Note:** Drains a byte stream to one `ArrayBuffer`; chunks must be TypedArrays or ArrayBuffers. Prefer incremental JSONL replay for multi‑MB ticker archives — see `docs/bun-upstream-reference.md` (TypedArray views → Draining ReadableStreams).
 
 #### Bun.allocUnsafe
 

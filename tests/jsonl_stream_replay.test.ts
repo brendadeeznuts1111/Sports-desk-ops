@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   carryForwardJsonlBuffer,
+  drainReadableStreamToUint8,
   jsonlAdvancePastLineFeedDelimiters,
   mergeUint8JsonlChunks,
   replayHistoricalJsonlStream,
@@ -17,6 +18,28 @@ import {
 const enc = new TextEncoder();
 
 describe("jsonl_stream_replay SSOT", () => {
+  test("drainReadableStreamToUint8 matches Bun.readableStreamToArrayBuffer", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+        controller.enqueue(new Uint8Array([3, 4]));
+        controller.close();
+      },
+    });
+    const drained = await drainReadableStreamToUint8(stream);
+    const ab = await Bun.readableStreamToArrayBuffer(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2]));
+          controller.enqueue(new Uint8Array([3, 4]));
+          controller.close();
+        },
+      }),
+    );
+    expect(drained).toEqual(new Uint8Array(ab));
+    expect([...drained]).toEqual([1, 2, 3, 4]);
+  });
+
   test("mergeUint8JsonlChunks uses concat (no hand-rolled double set)", () => {
     const left = enc.encode('{"a":1}\n');
     const right = enc.encode('{"b":2}\n');

@@ -19,6 +19,18 @@ export type HistoricalLogReplayHandlers = {
   ) => void | Promise<void>;
 };
 
+/**
+ * Drain an entire byte stream into one contiguous buffer. Chunks must be TypedArrays or
+ * ArrayBuffers (same contract as [`Bun.readableStreamToArrayBuffer`](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)).
+ * For large JSONL logs prefer {@link replayHistoricalJsonlStream} (incremental merge + parseChunk).
+ */
+export async function drainReadableStreamToUint8(
+  stream: ReadableStream<JsonlByteBuffer>,
+): Promise<JsonlByteBuffer> {
+  const ab = await Bun.readableStreamToArrayBuffer(stream);
+  return new Uint8Array(ab);
+}
+
 export function mergeUint8JsonlChunks(
   buffer: JsonlByteBuffer,
   chunk: JsonlByteBuffer,
