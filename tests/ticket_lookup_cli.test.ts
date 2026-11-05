@@ -376,6 +376,10 @@ describe("sportsdesk_ticket_cli", () => {
     const jsonInfo = await run(["--capture-info", "--file", FIXTURE]);
     expect(jsonInfo.code).toBe(0);
     expect(jsonInfo.stdout).toContain("Status: 1 (OK)");
+    expect(jsonInfo.stdout).toContain("Amounts: present (cents)");
+    expect(jsonInfo.stdout).toContain("Poll model: incremental");
+    expect(jsonInfo.stdout).toContain("Wager ordering: in-order");
+    expect(jsonInfo.stdout).toContain("stake/to-win are in cents");
     expect(jsonInfo.stdout).toContain("Confidence: high");
 
     const jsonGate = await run([

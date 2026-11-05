@@ -8,6 +8,8 @@
  * `finish()` strips only one token (`String.replace`), so a long-running page carries one
  * `pace-running` per completed AJAX request while the active bar is mid-load.
  */
+import type { OrderingReport } from "./analyze.ts";
+import type { HtmlFilters } from "./html.ts";
 
 export type PaceVersion = "0.4.x" | "1.x" | "unknown";
 
@@ -146,8 +148,24 @@ export interface CaptureInfo {
   readonly phase?: CapturePhase;
   /** HTML table sort order; JSON captures do not carry a table. */
   readonly htmlSort?: HtmlSort;
+  /** Active client-side table filters; HTML rows are a subset of the AJAX response. */
+  readonly filters?: HtmlFilters;
+  /** Wager-number/insert-time ordering report for JSON captures. */
+  readonly ordering?: OrderingReport;
   /** JSON `accountInfo` presence; `null` when not applicable. */
   readonly hasAccountInfo?: boolean | null;
+}
+
+/** Human-readable active filter labels; empty when nothing is filtered. */
+export function activeFilterLabels(filters: HtmlFilters | undefined): string[] {
+  if (filters === undefined) return [];
+  const active: string[] = [];
+  if (filters.vipOnly) active.push("VIP only");
+  if (filters.betsOver !== null) active.push(`Bets over ${filters.betsOver}`);
+  if (filters.hiddenWagerTypes.length > 0) {
+    active.push(`Hidden types: ${filters.hiddenWagerTypes.join(", ")}`);
+  }
+  return active;
 }
 
 /** Parse `--require-confidence`/`--capture-info` confidence names. */
@@ -169,6 +187,7 @@ export function assessConfidence(info: CaptureInfo): Confidence {
     return info.hasAmounts ? "high" : "medium";
   }
   if (info.pace?.verdict === "mid-load") return "low";
+  if (activeFilterLabels(info.filters).length > 0) return "low";
   return "medium";
 }
 
@@ -178,6 +197,10 @@ export function confidenceReason(info: CaptureInfo): string {
     return info.hasAmounts
       ? "JSON, status=1, amounts present"
       : "JSON, status=1, but no amounts (display-scaled HTML in JSON wrapper?)";
+  }
+  const filters = activeFilterLabels(info.filters);
+  if (filters.length > 0) {
+    return `HTML, active filters (${filters.join("; ")})`;
   }
   if (info.pace?.verdict === "mid-load") {
     return info.pace.cause === "ajaxComplete-restart"

@@ -17,9 +17,15 @@ import { parseArgs } from "node:util";
 import { wagerTypeLabel } from "../lib/bet_ticker_labels.ts";
 import { normalizeTicket } from "../lib/live_ticket_view.ts";
 import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
-import { parseBetTickerHtml, type HtmlBetTicket } from "./html.ts";
+import {
+  inspectHtmlFilters,
+  parseBetTickerHtml,
+  type HtmlBetTicket,
+} from "./html.ts";
+import { checkWagerOrdering } from "./analyze.ts";
 import { wagerStatusLabel } from "./enums.ts";
 import {
+  activeFilterLabels,
   assessConfidence,
   CONFIDENCE_ORDER,
   confidenceReason,
@@ -69,7 +75,7 @@ Usage: bun run ticket <wagerNumber> [--file <artifact>] [--json]
   --html-header-map   HTML-capture column L-keys -> English, for reading raw captures
   --from-html <path>  With --html-header-map: extract the L-keys actually in a capture
   --ui-table <path>   Override the extracted ui.json (default: ${"tests/fixtures/ui.json"})
-  --currency-scale <n> Multiply JSON amounts (e.g. 0.01 cents -> dollars); HTML ignores it
+  --currency-scale <n> JSON amounts are cents (bet-ticker.js divides by 100); 0.01 renders dollars
   -h, --help          This text
 
 Labels come from the same /app/language/ui.json table the Manager app renders, so a
@@ -269,7 +275,12 @@ function htmlTimeSpanMs(tickets: readonly HtmlBetTicket[]): number {
 
 function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
   const level = assessConfidence(info);
-  const lines = [`Capture: ${file}`, `Format: ${info.format}`, `Rows: ${rows}`];
+  const lines = [
+    `Capture: ${file}`,
+    `Format: ${info.format}`,
+    `Rows: ${rows}`,
+    "Poll model: incremental (getBetTicker returns wagers > lastWagerNumber); this capture is a delta, not a complete ledger",
+  ];
   if (info.format === "json") {
     lines.push(
       `Status: ${
@@ -280,12 +291,30 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
             : "(not present)"
       }`,
     );
-    lines.push(`Amounts: ${info.hasAmounts ? "present" : "none"}`);
+    lines.push(
+      `Amounts: ${info.hasAmounts ? "present (cents)" : "none (cents)"}`,
+    );
   } else {
     lines.push("Status: (not present — HTML capture)");
     lines.push("Amounts: none (HTML display scale)");
     lines.push(`Phase: ${info.phase ?? "unknown"}`);
     lines.push(`Sort: ${info.htmlSort ?? "unknown"}`);
+    lines.push(
+      `Filters: ${
+        activeFilterLabels(info.filters).length === 0
+          ? "(none)"
+          : activeFilterLabels(info.filters).join("; ")
+      }`,
+    );
+  }
+  if (info.ordering !== undefined) {
+    lines.push(
+      `Wager ordering: ${
+        info.ordering.inOrder
+          ? "in-order ✓"
+          : `${info.ordering.outOfOrder.length} out-of-order pair(s)`
+      }`,
+    );
   }
   if (info.pace !== undefined) {
     lines.push(
@@ -326,6 +355,26 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
     lines.push(
       "⚠ HTML table is client-sorted — row order is presentation, not capture order; dedupe uses a game+leg signature",
     );
+  }
+  if (info.format === "json" && info.hasAmounts) {
+    lines.push(
+      "⚠ stake/to-win are in cents (confirmed by bet-ticker.js: `l.AmountWagered / 100`). Pass --currency-scale=0.01 to render display-matching dollars, or leave as-is for raw server amounts",
+    );
+  }
+  if (activeFilterLabels(info.filters).length > 0) {
+    lines.push(
+      `⚠ HTML capture has active filters (${activeFilterLabels(info.filters).join("; ")}) — rows may be missing relative to the underlying getBetTicker response. The JSON capture would have everything`,
+    );
+  }
+  if (info.ordering !== undefined && !info.ordering.inOrder) {
+    lines.push(
+      `⚠ wager ordering: ${info.ordering.outOfOrder.length} out-of-order pair(s) — lastWagerNumber tracking may have skipped subsequent wagers; consider re-capturing with lastWagerNumber=0`,
+    );
+    for (const pair of info.ordering.outOfOrder.slice(0, 3)) {
+      lines.push(
+        `  · ${pair.wager} inserted at ${pair.inserted} but follows ${pair.prevWager} at ${pair.prevInserted}`,
+      );
+    }
   }
   if (info.pace?.verdict === "mid-load") {
     const versionNote =
@@ -577,6 +626,7 @@ if (text.trimStart().startsWith("<")) {
     pace: inspectPace(text, htmlTimeSpanMs(tickets)),
     phase: detectPhase(text),
     htmlSort: detectHtmlSort(text),
+    filters: inspectHtmlFilters(text),
     hasAccountInfo: null,
   };
   if (values.captureInfo === true) {
@@ -739,11 +789,18 @@ const accountInfo =
     ? (payload as { accountInfo?: unknown }).accountInfo
     : undefined;
 const hasAccountInfo = typeof accountInfo === "object" && accountInfo !== null;
+const ordering = checkWagerOrdering(
+  artifact.wagers.map((wager) => ({
+    wagerNumber: String(wager.wagerNumber),
+    insertedAt: wager.insertedAt,
+  })),
+);
 const info: CaptureInfo = {
   format: "json",
   statusOk,
   hasAmounts,
   hasAccountInfo,
+  ordering,
 };
 if (values.captureInfo === true) {
   printCaptureInfo(file, info, artifact.wagers.length);

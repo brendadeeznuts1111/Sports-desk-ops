@@ -4,11 +4,13 @@
  */
 export {
   htmlHeaderMap,
+  inspectHtmlFilters,
   loadCapture,
   parseBetTickerHtml,
 } from "../lib/bet_ticker_html.ts";
 export type {
   HtmlBetTicket,
+  HtmlFilters,
   HtmlHeader,
   LoadCaptureOptions,
   LoadedCapture,

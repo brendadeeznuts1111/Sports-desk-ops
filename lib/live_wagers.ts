@@ -246,6 +246,11 @@ function parseCompactLeg(header: string): {
  * Lines are separated by `\r\n` (and stray `&#x0D;\n` artefacts); a leg is
  * `"Sport - Game / Period / Market / Pick"`. Segments are taken positionally, and a leg with
  * fewer segments keeps what it has rather than inventing the rest.
+ *
+ * The client's bet-ticker renderer strips non-ASCII from `ShortDesc` before painting the DOM
+ * (`replace(/[^(\x20-\x7F)½]+/g, "")`), so DOM captures mangle names like `Culiacán`. This
+ * parser deliberately preserves them: the JSON source is correct, and if the client bug is
+ * fixed the two stay aligned.
  */
 export function parseShortDesc(shortDesc: unknown): {
   legs: LiveWagerLeg[];

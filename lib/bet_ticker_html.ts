@@ -152,6 +152,54 @@ export function htmlHeaderMap(html: string): HtmlHeader[] {
   return [];
 }
 
+export interface HtmlFilters {
+  readonly vipOnly: boolean;
+  readonly betsOver: number | null;
+  /** Type checkboxes that are off; empty when the capture has no type controls. */
+  readonly hiddenWagerTypes: readonly string[];
+}
+
+const TYPE_FILTERS = [
+  ["flag-straight", "Straight"],
+  ["flag-parlay", "Parlay"],
+  ["flag-teaser", "Teaser"],
+  ["flag-if-bet", "If-Bet"],
+  ["flag-prop", "Prop"],
+] as const;
+
+function checkedAttr(html: string, selector: string): boolean {
+  const forward = new RegExp(
+    `<input\\b[^>]*${selector}[^>]*\\bchecked\\b`,
+    "i",
+  );
+  const reverse = new RegExp(
+    `<input\\b[^>]*\\bchecked\\b[^>]*${selector}`,
+    "i",
+  );
+  return forward.test(html) || reverse.test(html);
+}
+
+/** Client-side table filters operate after the AJAX response, so the HTML is a subset. */
+export function inspectHtmlFilters(html: string): HtmlFilters {
+  const vipOnly = checkedAttr(html, 'data-action="vip-active"');
+  const betsOverRaw =
+    /data-field="bets-over"[^>]*value="(\d+)"/i.exec(html)?.[1] ??
+    /value="(\d+)"[^>]*data-field="bets-over"/i.exec(html)?.[1];
+  const hasTypeControls = TYPE_FILTERS.some(([field]) =>
+    new RegExp(`<input\\b[^>]*data-field="${field}"`, "i").test(html),
+  );
+  const hiddenWagerTypes = hasTypeControls
+    ? TYPE_FILTERS.filter(
+        ([field]) => !checkedAttr(html, `data-field="${field}"`),
+      ).map(([, label]) => label)
+    : [];
+  return {
+    vipOnly,
+    betsOver: betsOverRaw === undefined ? null : Number(betsOverRaw),
+    hiddenWagerTypes,
+  };
+}
+
 /** Parse every `<tr data-wager-number="…">` in the table. */
 export function parseBetTickerHtml(html: string): HtmlBetTicket[] {
   const tickets: HtmlBetTicket[] = [];
