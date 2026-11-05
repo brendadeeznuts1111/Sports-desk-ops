@@ -182,6 +182,19 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(signalled).toBe(1);
   });
 
+  test("direct ReadableStream source writes and closes", async () => {
+    const source: Bun.DirectUnderlyingSource<Uint8Array> = {
+      type: "direct",
+      async pull(controller) {
+        await controller.write(new TextEncoder().encode("hello"));
+        controller.close();
+      },
+    };
+    const stream = new ReadableStream<Uint8Array>(source as never);
+    const bytes = await Bun.readableStreamToArrayBuffer(stream);
+    expect(new TextDecoder().decode(bytes)).toBe("hello");
+  });
+
   test("readableStreamToArrayBuffer concatenates typed chunks", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
