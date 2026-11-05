@@ -85,6 +85,8 @@ export interface LiveWager {
   readonly legs: readonly LiveWagerLeg[];
   /** Leading code before the first newline (`S`, `M.G319748909`, `P.G14580595`). */
   readonly descCode: string | null;
+  /** `W`/`L`/`X`/`P` when the wire row carries `WagerStatus`; absent in most ticker rows. */
+  readonly wagerStatus?: string;
 }
 
 export interface WagerListFile {
@@ -362,6 +364,7 @@ export function toLiveWager(row: Record<string, unknown>): LiveWager {
     legs,
     descCode,
     live: isLive,
+    wagerStatus: text(row.WagerStatus),
   };
 }
 

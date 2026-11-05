@@ -165,6 +165,7 @@ export function labelOrKey(
 /** Canonical labels the CLI renders, pinned to verified L-keys (2026-11-04 extraction). */
 export const ENGLISH_LABEL_KEYS: Readonly<Record<string, string>> = {
   Ticket: "L-38",
+  Status: "L-423",
   "To Win": "L-245",
   Source: "L-1029",
   Type: "L-152",

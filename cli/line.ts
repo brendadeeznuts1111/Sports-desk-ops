@@ -1,35 +1,37 @@
 /**
  * @file line.ts
- * @description Spread/total/point formatting ported from the portal's `util.js`
- * (`formatSpread`, `formatTotal`, `formatPoints`, `formatTotalPart`).
+ * @description Line display strings from the portal's `util.js`.
  *
- * The caller supplies the chosen and favorite team ids; the chosen side decides the quarter
- * line's sign. Odds are American integers.
+ * `formatSpread`/`formatTotal` are helpers inside `getAsianLine`; the ticket display path is
+ * `checkDisplayLine`/`getLineGameFull`, which orders quarter lines differently and uses
+ * `isDecimal` for `PK`/`½`. Those canonical functions are the primitives here; the older
+ * helpers delegate to them.
  */
 
-/** `4.5` -> `4½`, `0` -> `PK` (no leading sign). */
-export function formatTotalPart(value: number): string {
-  if (!Number.isFinite(value)) return "";
-  const whole = Math.trunc(value);
-  const fraction = Math.abs(value) - Math.abs(whole);
-  if (value === 0 && fraction === 0) return "PK";
-  if (whole === 0 && fraction >= 0.49 && fraction <= 0.51) return "½";
-  if (fraction >= 0.49 && fraction <= 0.51) return `${whole}½`;
-  return `${whole}`;
+/** `0` → `PK`, `4.5` → `4½`, `-4.5` → `-4½`; matches the client's `isDecimal`. */
+export function isDecimal(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "";
+  if (value === 0) return "PK";
+  if (value % 1 !== 0) {
+    const text = value.toString();
+    const whole = text.split(".")[0] ?? "";
+    const parsed = Number.parseInt(text, 10);
+    if (parsed === 0) return `${text.startsWith("-") ? "-" : ""}½`;
+    return `${whole}½`;
+  }
+  return String(value);
 }
 
-/** `4.5` -> `+4½`, `-4.5` -> `-4½`, `0` -> `PK`. */
+/** `4.5` → `+4½`, `-4.5` → `-4½`, `0` → `PK`. */
 export function formatPoints(value: number): string {
-  if (!Number.isFinite(value)) return "";
-  const whole = Math.trunc(value);
-  const fraction = Math.abs(value) - Math.abs(whole);
-  if (value === 0) return "PK";
-  if (whole === 0 && value > 0) return "+½";
-  if (whole === 0 && value < 0) return "-½";
-  if (fraction >= 0.49 && fraction <= 0.51) {
-    return `${value > 0 ? "+" : ""}${whole}½`;
-  }
-  return `${value > 0 ? "+" : ""}${whole}`;
+  const base = isDecimal(value);
+  if (base === "PK" || base.startsWith("-")) return base;
+  return `+${base}`;
+}
+
+/** Backwards-compatible name for the canonical half-point formatter. */
+export function formatTotalPart(value: number): string {
+  return isDecimal(value);
 }
 
 function formatOdds(price: number): string {
@@ -37,29 +39,170 @@ function formatOdds(price: number): string {
   return Number.isInteger(price) && price > 0 ? `+${price}` : `${price}`;
 }
 
-function isQuarterLine(line: number): boolean {
-  const tail = Math.round(100 * Math.abs(line)) % 100;
-  return tail === 25 || tail === 75;
+function setSymbol(text: string): string {
+  if (text === "PK" || text.startsWith("+") || text.startsWith("-"))
+    return text;
+  return `+${text}`;
 }
 
-/** `Ov 219½ -115`; quarter totals render as two prices, e.g. `Un 3,3½ -110`. */
+export type LineType = "S" | "L" | "E" | "M" | "G";
+
+export interface LineCtx {
+  readonly line: number;
+  readonly odd: number;
+  readonly lineType: LineType;
+  readonly totalOU?: "O" | "U" | undefined;
+  /** Append the American price; default true. */
+  readonly append?: boolean;
+  /** Report-style leading `+` via `setSymbol`; default false. */
+  readonly report?: boolean;
+}
+
+/** The client's canonical display line (`checkDisplayLine`). */
+export function checkDisplayLine(ctx: LineCtx): string {
+  const { line, odd, lineType, append = true } = ctx;
+  const overUnder =
+    ctx.totalOU === "O" ? "Ov" : ctx.totalOU === "U" ? "Un" : "";
+  let out = "";
+
+  if (lineType === "S") {
+    const fraction = line.toString().split(".")[1];
+    const quarter = fraction === "25" || fraction === "75";
+    if (quarter) {
+      if (line > 0) {
+        if (line - 0.25 === 0) out = `PK,${isDecimal(line)}`;
+        else if ([-1, 1].includes(Number.parseInt(String(line), 10))) {
+          out = `+${Math.round(line)},${isDecimal(line)}`;
+        } else out = `${isDecimal(line)},+${Math.round(line)}`;
+      } else {
+        if (line + 0.25 === 0) out = `PK,${isDecimal(line)}`;
+        else if ([-1, 1].includes(Number.parseInt(String(line), 10))) {
+          out = `${Math.round(line)},${isDecimal(line)}`;
+        } else out = `${isDecimal(line)},${Math.round(line)}`;
+      }
+    } else {
+      out = isDecimal(line);
+      if (line > 0) out = `+${out.replace(/^\+/, "")}`;
+    }
+    if (append) out += ` ${formatOdds(odd)}`;
+    return ctx.report === true ? setSymbol(out) : out;
+  }
+
+  if (lineType === "L") {
+    if (2 * line === Math.floor(2 * line)) {
+      out = `${overUnder} ${isDecimal(line)}`;
+    } else {
+      out = `${overUnder} ${isDecimal(line - 0.25)},${isDecimal(line + 0.25)}`;
+    }
+    if (append) out += ` ${formatOdds(odd)}`;
+    return ctx.report === true ? setSymbol(out) : out;
+  }
+
+  if (lineType === "E") {
+    return `${overUnder} ${isDecimal(line)}${
+      append ? ` ${formatOdds(odd)}` : ""
+    }`;
+  }
+
+  return isDecimal(line);
+}
+
+export interface FullLineCtx {
+  readonly legWagerType: "S" | "M" | "C" | "A" | "L" | "E";
+  readonly adjSpread?: number;
+  readonly adjTotalPoints?: number;
+  readonly finalMoney: number;
+  readonly totalOU?: "O" | "U";
+  readonly sportType: string;
+  readonly chosenTeamId: string;
+  readonly team1Id: string;
+  readonly team2Id: string;
+  readonly buyPoints?: number;
+  readonly teaserPoints?: number;
+}
+
+/** The client's full ticket-leg line builder (`getLineGameFull`). */
+export function getLineGameFull(ctx: FullLineCtx): string {
+  const plus =
+    ctx.finalMoney > 0 && Number.isInteger(ctx.finalMoney) ? " +" : " ";
+
+  switch (ctx.legWagerType) {
+    case "S": {
+      const spread = ctx.adjSpread ?? 0;
+      const base = checkDisplayLine({
+        line: spread,
+        odd: ctx.finalMoney,
+        lineType: "S",
+        append: false,
+      }).replace(/^\+/, "");
+      let out = `${spread > 0 ? "+" : ""}${base}${plus}${ctx.finalMoney}`;
+      const buy = ctx.buyPoints ?? 0;
+      if (!Number.isNaN(buy) && buy > 0) {
+        out += ` (B+${isDecimal(buy)}) `;
+      }
+      const teaser = ctx.teaserPoints ?? 0;
+      if (teaser !== 0) {
+        out = isDecimal(spread + teaser).replace(/^/, teaser > 0 ? "+" : "");
+      }
+      return out;
+    }
+    case "M": {
+      const draw =
+        ctx.sportType.toUpperCase() === "SOCCER" &&
+        ctx.chosenTeamId === `${ctx.team1Id} / ${ctx.team2Id}`;
+      return `${draw ? "DRAW" : "ML"}${plus}${ctx.finalMoney}`;
+    }
+    case "C":
+      return `${plus}${ctx.finalMoney}`;
+    case "A":
+      return "";
+    case "L": {
+      const overUnder = ctx.totalOU === "O" ? "Ov" : "Un";
+      let out = `${checkDisplayLine({
+        line: ctx.adjTotalPoints ?? 0,
+        odd: ctx.finalMoney,
+        lineType: "L",
+        totalOU: ctx.totalOU,
+        append: false,
+      })}${plus}${ctx.finalMoney}`;
+      const buy = ctx.buyPoints ?? 0;
+      if (!Number.isNaN(buy) && buy > 0) {
+        out += ` (B+${isDecimal(buy)}) `;
+      }
+      const teaser = ctx.teaserPoints ?? 0;
+      if (teaser !== 0) {
+        const total =
+          (ctx.adjTotalPoints ?? 0) + (ctx.totalOU === "O" ? -teaser : teaser);
+        out = `${overUnder} ${isDecimal(total)}`;
+      }
+      return out;
+    }
+    case "E":
+      return `${ctx.totalOU === "O" ? "Ov" : "Un"} ${isDecimal(
+        ctx.adjTotalPoints ?? 0,
+      )}${plus}${ctx.finalMoney}`;
+    default:
+      return `${plus}${ctx.finalMoney}`;
+  }
+}
+
+/** `Ov 219½ -115`; quarter totals split as `Un 3,3½ -110`. */
 export function formatTotal(
   line: number,
   price: number,
   totalOU: string,
 ): string {
-  if (!Number.isFinite(line) || !Number.isFinite(price)) return "";
-  if (isQuarterLine(line)) {
-    return `${totalOU} ${formatTotalPart(line - 0.25)},${formatTotalPart(
-      line + 0.25,
-    )} ${formatOdds(price)}`;
-  }
-  return `${totalOU} ${formatTotalPart(line)} ${formatOdds(price)}`;
+  return checkDisplayLine({
+    line,
+    odd: price,
+    lineType: "L",
+    totalOU: totalOU === "Ov" ? "O" : totalOU === "Un" ? "U" : undefined,
+  });
 }
 
 /**
- * `-4½,-4 -110` for the favorite side of a quarter line, `+4,-4½ -110` for the other side.
- * The chosen team id, not the home team id, selects the sign.
+ * Compatibility wrapper around `checkDisplayLine`: the chosen side, not the home side,
+ * selects the spread's sign.
  */
 export function formatSpread(
   line: number,
@@ -67,21 +210,8 @@ export function formatSpread(
   chosenTeamId: string,
   favTeamId: string,
 ): string {
-  if (!Number.isFinite(line) || !Number.isFinite(price)) return "";
   const chosen = chosenTeamId.trim().toUpperCase();
   const favorite = favTeamId.trim().toUpperCase();
-  const magnitude = Math.abs(line);
-  if (isQuarterLine(line)) {
-    if (chosen === favorite) {
-      return `${formatPoints(-magnitude - 0.25)},${formatPoints(
-        -magnitude + 0.25,
-      )} ${formatOdds(price)}`;
-    }
-    return `${formatPoints(magnitude - 0.25)},${formatPoints(
-      -magnitude - 0.25,
-    )} ${formatOdds(price)}`;
-  }
-  return `${
-    chosen === favorite ? formatPoints(-magnitude) : formatPoints(magnitude)
-  } ${formatOdds(price)}`;
+  const signed = chosen === favorite ? -Math.abs(line) : Math.abs(line);
+  return checkDisplayLine({ line: signed, odd: price, lineType: "S" });
 }

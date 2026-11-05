@@ -7,7 +7,11 @@ import {
   normalizeTicket,
   splitPickPrice,
 } from "../lib/live_ticket_view.ts";
-import { readWagerList, readWagerListArtifact } from "../lib/live_wagers.ts";
+import {
+  readWagerList,
+  readWagerListArtifact,
+  toLiveWager,
+} from "../lib/live_wagers.ts";
 
 const FIXTURE = join(import.meta.dir, "fixtures/live-wagers-list-sample.json");
 const payload = (await Bun.file(FIXTURE).json()) as { LIST: unknown[] };
@@ -103,6 +107,11 @@ describe("live_ticket_view", () => {
     const spread = wagers.find((wager) => wager.wagerNumber === 767126231)!;
     expect(normalizeTicket(moneyline).wagerTypeLabel).toBe("Moneyline");
     expect(normalizeTicket(spread).wagerTypeLabel).toBe("Spread");
+  });
+
+  test("wager status is parsed when the wire row carries it", () => {
+    expect(toLiveWager({ ...row, WagerStatus: "W" }).wagerStatus).toBe("W");
+    expect(toLiveWager(row).wagerStatus).toBe("");
   });
 
   test("periods use the canonical typePeriod code", () => {

@@ -18,6 +18,7 @@ import { wagerTypeLabel } from "../lib/bet_ticker_labels.ts";
 import { normalizeTicket } from "../lib/live_ticket_view.ts";
 import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
 import { parseBetTickerHtml, type HtmlBetTicket } from "./html.ts";
+import { wagerStatusLabel } from "./enums.ts";
 import {
   assessConfidence,
   CONFIDENCE_ORDER,
@@ -188,6 +189,13 @@ function safeWagerView(wager: LiveWager, scale = 1) {
     volumeDiffers: wager.volumeDiffers,
     insertedAt: wager.insertedAt,
     descCode: wager.descCode,
+    wagerStatus: {
+      code:
+        wager.wagerStatus === undefined || wager.wagerStatus === ""
+          ? null
+          : wager.wagerStatus,
+      label: wagerStatusLabel(wager.wagerStatus ?? null),
+    },
     legs: wager.legs.map((leg) => ({
       sport: leg.sport,
       game: leg.game,
@@ -835,8 +843,14 @@ const liveLabel = localized
   : view.live
     ? "live"
     : "pregame";
+const statusCode = view.wagerStatus.code;
+const statusLine =
+  statusCode === null
+    ? []
+    : [`${L("Status")}: ${wagerStatusLabel(statusCode, langArg, uiTable)}`];
 const lines = [
   `${localized ? L("Ticket") : "Ticket"} ${wager.wagerNumber} · ${view.ticketWriter || view.writer.toUpperCase()} · ${typeLabel} (${view.wagerType}) · ${liveLabel}${view.vip ? " · VIP" : ""}`,
+  ...statusLine,
   localized
     ? `${L("Stake")} ${money.format(view.amountWagered)} · ${L("To Win")} ${money.format(view.toWinAmount)}${view.volumeDiffers ? ` · Volume ${money.format(view.volumeAmount)}` : ""}`
     : `Stake ${money.format(view.amountWagered)} · To win ${money.format(view.toWinAmount)}${view.volumeDiffers ? ` · Volume ${money.format(view.volumeAmount)}` : ""}`,

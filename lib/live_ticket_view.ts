@@ -171,6 +171,7 @@ const SAFE_ROW_FIELDS = [
   "InsertDateTime",
   "ShortDesc",
   "VIP",
+  "WagerStatus",
 ] as const;
 
 /** Public ticket fields shared by the JSON and HTML projections; identities are absent. */

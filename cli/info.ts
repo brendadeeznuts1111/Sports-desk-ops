@@ -122,7 +122,11 @@ export function parseConfidenceArg(value: string): Confidence | null {
     : null;
 }
 
-/** Combine status, Pace and amount signals into one pipeline verdict. */
+/** Combine status, Pace and amount signals into one pipeline verdict.
+ *
+ * A low/zero Pace token count is not proof of a clean capture: Pace 1.x can set
+ * `ignoreURLs` (for example `getBetTicker`), suppressing restarts without changing data.
+ */
 export function assessConfidence(info: CaptureInfo): Confidence {
   if (info.format === "json") {
     if (info.statusOk !== true) return "none";

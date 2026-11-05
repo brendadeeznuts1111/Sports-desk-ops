@@ -10,7 +10,7 @@ import {
 describe("line formatting", () => {
   test("formatSpread uses the chosen side, not the home side", () => {
     expect(formatSpread(-4.25, -110, "NE", "NE")).toBe("-4½,-4 -110");
-    expect(formatSpread(-4.25, -110, "BUF", "NE")).toBe("+4,-4½ -110");
+    expect(formatSpread(-4.25, -110, "BUF", "NE")).toBe("4½,+4 -110");
     expect(formatSpread(-3, -105, "NE", "NE")).toBe("-3 -105");
     expect(formatSpread(-3, -105, "BUF", "NE")).toBe("+3 -105");
   });
