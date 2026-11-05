@@ -150,6 +150,11 @@ import {
   type PaperQuote,
 } from "../lib/execution_paper.ts";
 import {
+  approvedSignalIds,
+  readExecutionApprovals,
+  type ExecutionApprovalStyle,
+} from "../lib/execution_approvals.ts";
+import {
   defaultAgentGraphViewPaths,
   isAgentGraphWebpFresh,
 } from "../lib/f402_agent_graph_view_http.ts";
@@ -960,10 +965,17 @@ export function startServer(options?: ServerOptions) {
   let lastExecutionRunAtMs = 0;
   const EXECUTION_RUN_INTERVAL_MS = 2_000;
 
+  function executionStyleFrom(raw: unknown): ExecutionApprovalStyle | null {
+    if (raw === undefined || raw === null || raw === "") return "auto";
+    return raw === "auto" || raw === "taker" || raw === "maker" ? raw : null;
+  }
+
   function executionPlanOptions(
     limit: number,
     mode: ExecutionMode,
     liveConfirm: string | null = null,
+    stylePreference: ExecutionApprovalStyle = "auto",
+    signalIds?: readonly string[],
   ): Parameters<typeof buildExecutionPlan>[0] {
     return {
       root: repoRoot,
@@ -971,6 +983,8 @@ export function startServer(options?: ServerOptions) {
       limit,
       mode,
       liveConfirm,
+      stylePreference,
+      ...(signalIds === undefined ? {} : { signalIds }),
       ledgerRoot: executionLedgerRoot,
       policyEnv: executionEnv,
       kalshiNow: options?.kalshiNow ?? (() => executionNow().getTime()),
@@ -2056,20 +2070,37 @@ export function startServer(options?: ServerOptions) {
         const limit = Number.isFinite(limitRaw)
           ? Math.max(1, Math.min(200, Math.trunc(limitRaw)))
           : 25;
+        const style = executionStyleFrom(url.searchParams.get("style"));
+        if (style === null) {
+          return Response.json(
+            {
+              success: false,
+              error: "invalid_style",
+              message: "style must be auto, taker or maker",
+            },
+            { status: 400, headers: cors },
+          );
+        }
         const plan = await buildExecutionPlan(
-          executionPlanOptions(limit, executionMode),
+          executionPlanOptions(limit, executionMode, null, style),
         );
+        const approvals = await readExecutionApprovals(executionLedgerRoot);
         return Response.json(
           {
             success: true,
             schemaVersion: 1,
             generatedAt: plan.generatedAt,
             mode: plan.mode,
+            style,
+            approvals: approvals.rows,
             killSwitch: plan.killSwitch,
             policy: plan.policy,
             venues: plan.venues,
             risk: plan.risk,
-            decisions: plan.decisions.map(publicDecision),
+            decisions: plan.decisions.map((decision) => ({
+              ...publicDecision(decision),
+              approval: approvals.latest.get(decision.signalId) ?? null,
+            })),
             paper: {
               quotes: plan.paper.quotes,
               fills: plan.paper.fills,
@@ -2206,6 +2237,31 @@ export function startServer(options?: ServerOptions) {
             ? (body as Record<string, unknown>)
             : {};
         const live = record["live"] === true;
+        const style = executionStyleFrom(record["style"]);
+        if (style === null) {
+          return Response.json(
+            {
+              success: false,
+              error: "invalid_style",
+              message: "style must be auto, taker or maker",
+            },
+            { status: 400, headers: cors },
+          );
+        }
+        const requireApproval = record["requireApproval"] === true;
+        const approvals = await readExecutionApprovals(executionLedgerRoot);
+        const approved = approvedSignalIds(approvals);
+        if (requireApproval && approved.length === 0) {
+          return Response.json(
+            {
+              success: false,
+              error: "no_approved_signals",
+              message:
+                "requireApproval is set but no signal has an operator approval",
+            },
+            { status: 409, headers: cors },
+          );
+        }
         const now = executionNow();
         const elapsed = now.getTime() - lastExecutionRunAtMs;
         if (lastExecutionRunAtMs !== 0 && elapsed < EXECUTION_RUN_INTERVAL_MS) {
@@ -2227,6 +2283,8 @@ export function startServer(options?: ServerOptions) {
             live && record["confirm"] === LIVE_CONFIRM_PHRASE
               ? LIVE_CONFIRM_PHRASE
               : null,
+            style,
+            requireApproval ? approved : undefined,
           ),
         );
         const snapshot = executionRiskSnapshot(plan);
@@ -2385,9 +2443,14 @@ export function startServer(options?: ServerOptions) {
           {
             success: true,
             mode: executionMode,
+            style,
+            approvals: requireApproval ? approvals.rows : [],
             generatedAt: now.toISOString(),
             live: false,
-            decisions: plan.decisions.map(publicDecision),
+            decisions: plan.decisions.map((decision) => ({
+              ...publicDecision(decision),
+              approval: approvals.latest.get(decision.signalId) ?? null,
+            })),
             paper: { fills, quotes },
             blockedReasons: plan.blockedReasons,
           },

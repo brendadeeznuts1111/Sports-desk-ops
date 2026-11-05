@@ -54,6 +54,8 @@ export interface PolymarketQuoteAvailable {
   /** Book age in seconds, so a consumer can tell a fresh quote from a cached one. */
   readonly queriedAtIso: string;
   readonly telemetry: PolymarketTelemetry;
+  /** Gamma market description (resolution rule), when present. */
+  readonly description?: string;
 }
 
 export interface PolymarketQuoteUnavailable {
@@ -109,6 +111,8 @@ export interface PolymarketMarketCandidate {
   readonly slug: string | null;
   readonly tokenIds: readonly string[];
   readonly outcomes: readonly string[];
+  /** Gamma market description, which usually states the resolution rule. */
+  readonly description?: string;
 }
 
 /** One gamma market row, only if it is open and its token/outcome arrays are readable. */
@@ -124,12 +128,14 @@ export function parseGammaMarket(
   if (marketId === null || question === null) return null;
   if (tokenIds === null || outcomes === null) return null;
   if (tokenIds.length !== outcomes.length) return null;
+  const description = parseString(value["description"]);
   return {
     marketId,
     question,
     slug: parseString(value["slug"]),
     tokenIds,
     outcomes,
+    ...(description === null ? {} : { description }),
   };
 }
 
@@ -425,6 +431,9 @@ export class PolymarketQuoteClient {
           ],
           queriedAtIso: new Date(this.now()).toISOString(),
           telemetry: this.telemetry(),
+          ...(candidate.description === undefined
+            ? {}
+            : { description: candidate.description }),
         };
       }
     }

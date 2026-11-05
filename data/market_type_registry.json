@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "description": "Canonical market vocabulary for cross-venue matching: parser kinds, observed picker labels, period tokens, wager-type codes and combo rules. Kalshi series come from lib/kalshi_signal_join.ts SERIES_BY_LEAGUE at runtime.",
+  "snapshot": {
+    "pending": {
+      "path": "data/live-bets.json",
+      "capturedAt": "2026-11-05T07:20:00.001Z",
+      "games": 250
+    },
+    "ticker": {
+      "path": "data/live-wagers.json",
+      "observedAt": "2026-11-05T07:20:00.001Z",
+      "rows": 300
+    }
+  },
+  "wagerTypes": [
+    {
+      "code": "S",
+      "name": "Straight",
+      "labelKey": "L-142",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": false,
+      "observed": 49
+    },
+    {
+      "code": "M",
+      "name": "Moneyline",
+      "labelKey": "L-432",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": false,
+      "observed": 155
+    },
+    {
+      "code": "C",
+      "name": "Casino",
+      "labelKey": "L-203",
+      "appendsTotalPicks": false,
+      "canonicalEligible": false,
+      "combo": false,
+      "observed": 10
+    },
+    {
+      "code": "T",
+      "name": "Teaser",
+      "labelKey": "L-85",
+      "appendsTotalPicks": true,
+      "canonicalEligible": true,
+      "combo": true,
+      "observed": 0
+    },
+    {
+      "code": "L",
+      "name": "Total",
+      "labelKey": "L-144",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": false,
+      "observed": 16
+    },
+    {
+      "code": "E",
+      "name": "Team Total",
+      "labelKey": "L-145",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": false,
+      "observed": 0
+    },
+    {
+      "code": "I",
+      "name": "If-Bet",
+      "labelKey": "L-16",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": true,
+      "observed": 0
+    },
+    {
+      "code": "P",
+      "name": "Parlay",
+      "labelKey": "L-15",
+      "appendsTotalPicks": true,
+      "canonicalEligible": true,
+      "combo": true,
+      "observed": 20
+    },
+    {
+      "code": "G",
+      "name": "Racebook / Live Wagers (LIVEBETTINGCWS / EZL - INTERNET)",
+      "labelKey": "LIVE",
+      "appendsTotalPicks": false,
+      "canonicalEligible": true,
+      "combo": false,
+      "observed": 0
+    },
+    {
+      "code": "A",
+      "name": "Action / Manual Play",
+      "labelKey": "L-202",
+      "appendsTotalPicks": false,
+      "canonicalEligible": false,
+      "combo": false,
+      "observed": 0
+    }
+  ],
+  "marketTypes": [
+    {
+      "id": "moneyline",
+      "parserKind": "moneyline",
+      "family": "single outcome price (team/player/draw)",
+      "periods": [
+        "game",
+        "match",
+        "1q",
+        "2q",
+        "3q",
+        "4q",
+        "1h",
+        "2h",
+        "1p",
+        "2p",
+        "3p"
+      ],
+      "observed": [
+        {
+          "label": "winner (2 way)",
+          "count": 49
+        },
+        {
+          "label": "game winner",
+          "count": 1
+        }
+      ],
+      "parserObserved": 149
+    },
+    {
+      "id": "spread",
+      "parserKind": "spread",
+      "family": "handicap/line vs opponent",
+      "periods": [
+        "game",
+        "1q",
+        "2q",
+        "3q",
+        "4q",
+        "1h",
+        "2h",
+        "1p",
+        "2p",
+        "3p"
+      ],
+      "observed": [
+        {
+          "label": "point spread",
+          "count": 13
+        },
+        {
+          "label": "game spread",
+          "count": 7
+        },
+        {
+          "label": "set spread",
+          "count": 2
+        }
+      ],
+      "parserObserved": 96
+    },
+    {
+      "id": "total",
+      "parserKind": "total",
+      "family": "over/under on a combined score",
+      "periods": [
+        "game",
+        "1q",
+        "2q",
+        "3q",
+        "4q",
+        "1h",
+        "2h",
+        "1p",
+        "2p",
+        "3p"
+      ],
+      "observed": [
+        {
+          "label": "total",
+          "count": 12
+        }
+      ],
+      "parserObserved": 30
+    },
+    {
+      "id": "team_total",
+      "parserKind": "team_total",
+      "family": "over/under on one team's score",
+      "periods": [
+        "game",
+        "1h",
+        "2h",
+        "1q",
+        "2q",
+        "3q",
+        "4q"
+      ],
+      "observed": [
+        {
+          "label": "baltimore ravens team total",
+          "count": 1
+        },
+        {
+          "label": "shubladze alexandra team total",
+          "count": 1
+        },
+        {
+          "label": "elena pridankina team total",
+          "count": 1
+        }
+      ],
+      "parserObserved": 2
+    },
+    {
+      "id": "player_prop",
+      "parserKind": "player_prop",
+      "family": "player stat over/under",
+      "periods": [
+        "game"
+      ],
+      "observed": [
+        {
+          "label": "total player touchdowns",
+          "count": 9
+        },
+        {
+          "label": "total player receptions",
+          "count": 3
+        },
+        {
+          "label": "total player rushing yds",
+          "count": 2
+        },
+        {
+          "label": "total player interceptions",
+          "count": 1
+        },
+        {
+          "label": "total player passing tds",
+          "count": 1
+        },
+        {
+          "label": "total player receiving yds",
+          "count": 1
+        },
+        {
+          "label": "total player rushing attempts",
+          "count": 1
+        }
+      ],
+      "parserObserved": 17
+    },
+    {
+      "id": "prop",
+      "parserKind": "prop",
+      "family": "non-player prop (margin, first scorer, tree)",
+      "periods": [
+        "game"
+      ],
+      "observed": [
+        {
+          "label": "winning margin",
+          "count": 4
+        }
+      ],
+      "parserObserved": 4
+    },
+    {
+      "id": "combo",
+      "parserKind": null,
+      "family": "ticket of ≥2 legs; Kalshi has no parlay product, Polymarket's combo product is wallet-scoped/RFQ",
+      "periods": [
+        "game"
+      ],
+      "observed": [],
+      "parserObserved": 0
+    }
+  ],
+  "periods": {
+    "tokens": {
+      "game": [
+        "Game",
+        "Match",
+        "Match (Including OT)"
+      ],
+      "1h": [
+        "1st Half"
+      ],
+      "2h": [
+        "2nd Half"
+      ],
+      "1q": [
+        "1st Quarter"
+      ],
+      "2q": [
+        "2nd Quarter"
+      ],
+      "3q": [
+        "3rd Quarter"
+      ],
+      "4q": [
+        "4th Quarter"
+      ],
+      "1p": [
+        "1st Period"
+      ],
+      "2p": [
+        "2nd Period"
+      ],
+      "3p": [
+        "3rd Period"
+      ],
+      "round": [
+        "1st Round"
+      ]
+    }
+  },
+  "wagerComposition": {
+    "scope": "all wagers: single + same-game / cross-game / cross-sport, 1-4 legs (5+ counted separately)",
+    "excluded": [
+      "futures"
+    ],
+    "kinds": [
+      "single",
+      "same_game",
+      "cross_game",
+      "cross_sport",
+      "mixed",
+      "unknown"
+    ],
+    "measured": {
+      "pending": {
+        "legBuckets": {
+          "1": 230,
+          "2": 9,
+          "3": 5,
+          "4": 1,
+          "5+": 5
+        },
+        "kinds": {
+          "single": 230,
+          "same_game": 6,
+          "cross_game": 12,
+          "mixed": 2
+        },
+        "crossSportPairs": {},
+        "unparsedLegs": 0,
+        "excludedFutures": 9,
+        "total": 250
+      },
+      "ticker": {
+        "legBuckets": {
+          "1": 248,
+          "2": 11,
+          "3": 19,
+          "4": 3,
+          "5+": 19
+        },
+        "kinds": {
+          "single": 248,
+          "cross_game": 44,
+          "mixed": 2,
+          "same_game": 4,
+          "cross_sport": 2
+        },
+        "crossSportPairs": {
+          "Basketball + Soccer": 1,
+          "Football + Tennis": 1
+        },
+        "unparsedLegs": 0,
+        "excludedFutures": 10,
+        "total": 300
+      }
+    }
+  },
+  "combos": {
+    "definition": "A ticket with two or more picks/legs, or a wager code that appends total picks.",
+    "minLegs": 2,
+    "wagerCodes": [
+      "P",
+      "T",
+      "I"
+    ],
+    "observed": {
+      "comboRows": 20,
+      "singleRows": 230,
+      "picksHistogram": {
+        "1": 230,
+        "2": 9,
+        "3": 5,
+        "4": 1,
+        "5": 3,
+        "7": 1,
+        "8": 1
+      }
+    },
+    "venueEquivalence": {
+      "kalshi": {
+        "product": "none",
+        "note": "Kalshi exposes single markets only; there is no parlay/teaser/if-bet order path."
+      },
+      "polymarket": {
+        "product": "combo",
+        "note": "Combo product is user/wallet-anchored (lib/polymarket_combo.ts CFB series 12756, plus RFQ combo markets); it is not a public price feed for an arbitrary F402 ticket."
+      },
+      "repo": {
+        "product": "synthetic",
+        "note": "lib/sports_combo_* tools price synthetic parlay/basket combos from leg quotes; they are not venue markets."
+      }
+    }
+  }
+}

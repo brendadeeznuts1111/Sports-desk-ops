@@ -414,6 +414,8 @@ export interface DecideExecutionInput {
   readonly now: Date;
   /** Present only on an explicit live run: `PLACE LIVE ORDERS`. */
   readonly liveConfirm?: string | null;
+  /** Operator order-style preference: auto (default), taker-only or maker-only. */
+  readonly stylePreference?: ExecutionStyle | "auto";
 }
 
 interface TakerCandidate {
@@ -670,7 +672,8 @@ export function decideExecution(
         b.walk.depthContracts - a.walk.depthContracts ||
         a.book.venue.localeCompare(b.book.venue),
     );
-  const chosen = eligible[0];
+  const stylePreference = input.stylePreference ?? "auto";
+  const chosen = stylePreference === "maker" ? undefined : eligible[0];
   if (chosen !== undefined) {
     const contracts = Math.max(0, Math.floor(chosen.walk.contracts));
     const sizeUsd = roundUsd(contracts * chosen.avgPrice);
@@ -721,6 +724,14 @@ export function decideExecution(
       provenance,
       bookLevels: chosen.book.asks,
     };
+  }
+
+  if (stylePreference === "taker") {
+    // The operator asked for taker only: do not quietly fall back to a resting maker quote.
+    return blockedDecision(input, "style_taker_no_fill", {
+      book: firstBook,
+      style: null,
+    });
   }
 
   // No taker candidate cleared the policy: offer a maker quote if a book exists.
@@ -780,6 +791,7 @@ export function decideExecution(
       `maker:${book.venue}`,
       `maker_margin:${policy.makerMarginBps}bps`,
       "no_eligible_taker",
+      ...(stylePreference === "maker" ? ["style:maker_preferred"] : []),
     ];
     if (!policy.allowMakerLive) reasons.push("maker_live_disallowed");
     if (makerEdgeBps !== null) {
@@ -846,6 +858,7 @@ export interface DecideExecutionsInput {
   readonly venues: VenueReadiness;
   readonly now: Date;
   readonly liveConfirm?: string | null;
+  readonly stylePreference?: ExecutionStyle | "auto";
 }
 
 /** Decide a batch in order, advancing the in-memory risk state so caps apply within a plan. */
@@ -875,6 +888,9 @@ export function decideExecutions(
       ...(input.liveConfirm === undefined
         ? {}
         : { liveConfirm: input.liveConfirm }),
+      ...(input.stylePreference === undefined
+        ? {}
+        : { stylePreference: input.stylePreference }),
     });
     decisions.push(decision);
     if (!decision.blocked) {

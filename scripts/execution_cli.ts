@@ -6,12 +6,22 @@
  *   bun run execution:plan --json           # the same envelope as GET /api/execution/plan
  *   bun run execution:plan --limit 10
  *   bun run execution:plan --paper-run      # also append paper fills/quotes to the local ledger
+ *   bun run execution:plan --style maker    # operator price preference (auto|taker|maker)
+ *   bun run execution:plan --approve <id> --actor <name> --style maker
+ *   bun run execution:plan --reject <id> --actor <name> --reason "price moved"
+ *   bun run execution:plan --list-approvals
  *
  * Planning reads public books only (Kalshi events/orderbook, Polymarket gamma/CLOB). It never
  * places an order: live placement lives in `lib/kalshi_live_execution.ts` and is reachable only
  * through POST /api/execution/run behind the full env + credentials + confirm gate.
  */
 import { resolve } from "node:path";
+import {
+  appendExecutionApproval,
+  approvedSignalIds,
+  readExecutionApprovals,
+  type ExecutionApprovalStyle,
+} from "../lib/execution_approvals.ts";
 import { buildExecutionPlan } from "../lib/execution_planner.ts";
 import {
   appendExecutionLedgerRow,
@@ -27,10 +37,16 @@ const ROOT = resolve(import.meta.dir, "..");
 function usage(): string {
   return [
     "Usage: bun run execution:plan [--json] [--limit N] [--paper-run]",
+    "       [--style auto|taker|maker] [--approve <signalId>|--reject <signalId> --actor <name>]",
+    "       [--list-approvals]",
     "",
     "Read-only planning against public venue books. Paper by default; no order endpoint is",
     "called and no credentials are used. --paper-run appends taker fills / maker quotes to",
     "Scratch/execution/ledger.jsonl.",
+    "",
+    "Human-in-the-loop: --approve/--reject record an operator decision in",
+    "Scratch/execution/approvals.jsonl (a reject requires a reason; the latest decision wins).",
+    "The style preference is recorded on the approval and used by the run route when approved",
   ].join("\n");
 }
 
@@ -38,12 +54,24 @@ interface CliArgs {
   readonly json: boolean;
   readonly limit: number;
   readonly paperRun: boolean;
+  readonly style: ExecutionApprovalStyle;
+  readonly approve: string | null;
+  readonly reject: string | null;
+  readonly actor: string | null;
+  readonly reason: string | null;
+  readonly listApprovals: boolean;
 }
 
 function parseArgs(argv: readonly string[]): CliArgs | null {
   let json = false;
   let limit = 25;
   let paperRun = false;
+  let style: ExecutionApprovalStyle = "auto";
+  let approve: string | null = null;
+  let reject: string | null = null;
+  let actor: string | null = null;
+  let reason: string | null = null;
+  let listApprovals = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--json") {
@@ -52,6 +80,36 @@ function parseArgs(argv: readonly string[]): CliArgs | null {
     }
     if (arg === "--paper-run") {
       paperRun = true;
+      continue;
+    }
+    if (arg === "--list-approvals") {
+      listApprovals = true;
+      continue;
+    }
+    if (
+      arg === "--approve" ||
+      arg === "--reject" ||
+      arg === "--actor" ||
+      arg === "--reason" ||
+      arg === "--style"
+    ) {
+      const value = argv[index + 1];
+      index += 1;
+      if (value === undefined || value.startsWith("--")) {
+        console.error(`execution:plan: ${arg} needs a value`);
+        return null;
+      }
+      if (arg === "--approve") approve = value;
+      else if (arg === "--reject") reject = value;
+      else if (arg === "--actor") actor = value;
+      else if (arg === "--reason") reason = value;
+      else if (arg === "--style") {
+        if (value !== "auto" && value !== "taker" && value !== "maker") {
+          console.error("execution:plan: --style must be auto, taker or maker");
+          return null;
+        }
+        style = value;
+      }
       continue;
     }
     if (arg === "--help" || arg === "-h") {
@@ -71,7 +129,23 @@ function parseArgs(argv: readonly string[]): CliArgs | null {
     console.error(`execution:plan: unknown argument ${String(arg)}`);
     return null;
   }
-  return { json, limit, paperRun };
+  if (approve !== null && reject !== null) {
+    console.error(
+      "execution:plan: --approve and --reject are mutually exclusive",
+    );
+    return null;
+  }
+  return {
+    json,
+    limit,
+    paperRun,
+    style,
+    approve,
+    reject,
+    actor,
+    reason,
+    listApprovals,
+  };
 }
 
 function fmt(value: number | null, digits = 3): string {
@@ -86,10 +160,51 @@ async function main(): Promise<void> {
     return;
   }
   const now = new Date();
+  if (args.listApprovals) {
+    const state = await readExecutionApprovals(ROOT);
+    const body = {
+      success: true,
+      checkedAt: now.toISOString(),
+      approved: approvedSignalIds(state),
+      rows: state.rows,
+    };
+    console.log(JSON.stringify(body, null, 2));
+    return;
+  }
+  const approvalAction =
+    args.approve !== null ? "approve" : args.reject !== null ? "reject" : null;
+  if (approvalAction !== null) {
+    if (args.actor === null || args.actor.trim() === "") {
+      console.error(
+        "execution:plan: --actor <name> is required with --approve/--reject",
+      );
+      process.exitCode = 2;
+      return;
+    }
+    try {
+      const approval = await appendExecutionApproval(ROOT, {
+        signalId: args.approve ?? args.reject ?? "",
+        action: approvalAction,
+        actor: args.actor,
+        style: args.style,
+        reason: args.reason,
+        atIso: now.toISOString(),
+      });
+      console.log(JSON.stringify({ success: true, approval }, null, 2));
+      return;
+    } catch (error) {
+      console.error(
+        `execution:plan: ${String((error as Error).message ?? error)}`,
+      );
+      process.exitCode = 2;
+      return;
+    }
+  }
   const plan = await buildExecutionPlan({
     root: ROOT,
     now,
     limit: args.limit,
+    stylePreference: args.style,
   });
 
   const paperFills: PaperFill[] = [];
@@ -143,6 +258,7 @@ async function main(): Promise<void> {
           schemaVersion: 1,
           generatedAt: plan.generatedAt,
           mode: plan.mode,
+          style: plan.stylePreference ?? args.style,
           killSwitch: plan.killSwitch,
           policy: plan.policy,
           venues: plan.venues,
@@ -166,7 +282,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `execution:plan — mode ${plan.mode}${plan.killSwitch ? " (KILL SWITCH)" : ""}; ` +
+    `execution:plan — mode ${plan.mode}, style ${plan.stylePreference ?? args.style}${plan.killSwitch ? " (KILL SWITCH)" : ""}; ` +
       `${plan.decisions.length} decision(s); Kalshi live-ready ${plan.venues.kalshi.liveReady ? "yes" : `no (${plan.venues.kalshi.reason})`}`,
   );
   console.log(

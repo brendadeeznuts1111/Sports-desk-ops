@@ -37,3 +37,21 @@ describe("unified team registry", () => {
     expect(side.slots[1]?.registryTeamId).toBe("nba:was");
   });
 });
+
+test("CFB seed resolves Kalshi team names and codes", () => {
+  resetUnifiedTeamRegistryCache();
+  const reg = loadUnifiedTeamRegistry();
+  expect(reg.canonicalCode("CFB", "FLORIDA ATLANTIC")).toBe("FAU");
+  expect(reg.canonicalCode("CFB", "UTSA")).toBe("UTSA");
+  expect(reg.kalshiCode("CFB", "UTSA")).toBe("UTSA");
+  expect(unifiedTeamCodesMatch("CFB", "FAU", "FAU")).toBe(true);
+});
+
+test("capture-derived aliases resolve full F402 names to venue codes", () => {
+  resetUnifiedTeamRegistryCache();
+  const reg = loadUnifiedTeamRegistry();
+  expect(reg.canonicalCode("NBA", "MIAMI HEAT")).toBe("MIA");
+  expect(reg.kalshiCode("NHL", "SEATTLE KRAKEN")).toBe("SEA");
+  expect(reg.canonicalCode("NFL", "LAS VEGAS RAIDERS")).toBe("LV");
+  expect(reg.canonicalCode("NBA", "CLEVELAND CAVALIERS")).toBe("CLE");
+});

@@ -1,0 +1,217 @@
+# Incoming-bet flag rules for lib/bet_flags.ts (schemaVersion 1).
+#
+# Validated fail-closed by the CLI (`bun run cli/sportsdesk_bet_flags_cli.ts rules --json`): an
+# unknown key/field/operator/severity, a duplicate id, an empty all/any, an invalid regex or an
+# aggregate without a condition refuses the WHOLE file. There is no partial pack.
+#
+# A rule is: id (stable slug), title, severity (info|low|medium|high|critical), enabled, and when.
+# `when` is a predicate over the wide IncomingBetRecord fields in lib/bet_flags.ts:
+#   leaf     { field: <field>, op: <op>, value: <scalar> }
+#   ops      eq neq gt gte lt lte in not_in contains matches exists between
+#   compose  { all: [...] } every child matches / { any: [...] } one child / { not: <predicate> }
+# Notes: eq is strict (a number is not a string); contains is a case-insensitive substring;
+# matches is a JavaScript RegExp source — there are no inline "(?i)" flags, so spell out character
+# classes (e.g. [Hh]alf) or use the case-insensitive `contains` op; between is inclusive [lo, hi].
+# Status flips need editing `enabled` and a CLI rerun.
+#
+# v2 depth: `context.<name>` fields (see lib/bet_context.ts BET_CONTEXT_FIELDS) exist once the scan
+# pipeline has enriched the batch (`enrichIncomingBets`, default window 300s); an unenriched record
+# has context null, so a context rule fails closed. Market fields (marketKey, eventKey, periodLabel,
+# side, playerName, isPlayerProp, isAltLine, marketType) come from lib/bet_market_parse.ts.
+#
+# v3 depth: a leaf `value` may be `{ fieldRef: <numeric field> }` on the comparison ops
+# (eq/neq/gt/gte/lt/lte) to compare two fields on the SAME record, e.g.
+#   { field: stakeUsd, op: gt, value: { fieldRef: toWinUsd } }
+# The referenced field must be a known NUMERIC field (americanOdds, impliedProb, line, the four
+# money fields, stakeToWinRatio, stakePerLeg, oddsFromEven, agentLevel, rotationNumber, ageSeconds);
+# string and context fields are refused, a field cannot reference itself, and nesting is refused.
+# When either side is null/absent the leaf does not match (fail closed). Derived numeric fields,
+# computed by every widener: stakeToWinRatio (stakeUsd/toWinUsd when to-win > 0),
+# stakePerLeg (stakeUsd / ticket legs when known, else stakeUsd), oddsFromEven (|americanOdds - 100|,
+# so +100 -> 0, +400 -> 300, -110 -> 210).
+#
+# `aggregate` turns a rule into a windowed group check anchored at the scan instant:
+#   groupBy       customerId | agentId | agentLogin | channel | marketKey | eventKey | periodLabel | sport
+#   windowSeconds integer 1..86400; only bets accepted within the last windowSeconds are counted
+#   where         optional extra predicate filtering the group members
+#   countAtLeast  minimum members for the group to flag
+#   sumField      stakeUsd | riskUsd | volumeUsd | toWinUsd (must be paired with sumAtLeast)
+#   distinctField customerId | marketKey | agentId (must be paired with distinctAtLeast)
+# At least one of countAtLeast/sumAtLeast/distinctAtLeast is required. An aggregate alert repeats
+# at most once per window bucket per group, not once per scan.
+
+schemaVersion: 1
+
+rules:
+  # Example (enabled): one bet staked at $10,000 or more. `gte` compares numbers.
+  - id: stake_over_10k
+    title: Single bet stake of $10,000 or more
+    severity: high
+    enabled: true
+    tags: [stake]
+    when:
+      all:
+        - { field: stakeUsd, op: gte, value: 10000 }
+
+  # Example (enabled): a live bet priced at +400 or longer. `all` needs every child to match.
+  - id: live_american_odds_400_plus
+    title: Live bet at +400 or longer
+    severity: medium
+    enabled: true
+    tags: [odds, live]
+    description: Long-shot live money is worth a look; the same price pregame is not flagged.
+    when:
+      all:
+        - { field: isLive, op: eq, value: true }
+        - { field: americanOdds, op: gte, value: 400 }
+
+  # Template (disabled): velocity. `aggregate.countAtLeast` counts matching bets per window.
+  - id: rapid_fire_5_in_60s
+    title: 5+ live bets in 60s by one customer
+    severity: high
+    enabled: false
+    tags: [velocity]
+    description: Copy a template, flip enabled and tune countAtLeast/windowSeconds.
+    when: { field: isLive, op: eq, value: true }
+    aggregate: { groupBy: customerId, windowSeconds: 60, countAtLeast: 5 }
+
+  # Template (disabled): aggregate sum. sumField is required with sumAtLeast; both must hold.
+  - id: agent_stake_100k_in_5m
+    title: One agent books $100,000+ in 5 minutes
+    severity: critical
+    enabled: false
+    tags: [stake, velocity]
+    when: { field: stakeUsd, op: exists, value: true }
+    aggregate:
+      {
+        groupBy: agentId,
+        windowSeconds: 300,
+        sumField: stakeUsd,
+        sumAtLeast: 100000,
+      }
+
+  # Template (disabled): VIP. `isVip` comes from the ticker's VIP wire field.
+  - id: vip_stake_over_20k
+    title: VIP bet staked at $20,000 or more
+    severity: high
+    enabled: false
+    tags: [vip, stake]
+    when:
+      all:
+        - { field: isVip, op: eq, value: true }
+        - { field: stakeUsd, op: gte, value: 20000 }
+
+  # Template (disabled): period. `matches` is a JavaScript regular expression source (no inline
+  # "(?i)" flag: JavaScript has none), so case variance is spelled with a character class.
+  - id: first_half_stake_over_10k
+    title: $10,000+ on a first-half market
+    severity: medium
+    enabled: false
+    tags: [period]
+    when:
+      all:
+        - { field: period, op: matches, value: "^1st [Hh]alf$" }
+        - { field: stakeUsd, op: gte, value: 10000 }
+
+  # Template (disabled): parlay. `wagerKind` is derived in lib/bet_flags.ts; `in` takes a list.
+  - id: parlay_stake_over_5k
+    title: Parlay staked at $5,000 or more
+    severity: medium
+    enabled: false
+    tags: [parlay]
+    when:
+      all:
+        - { field: wagerKind, op: in, value: [parlay, teaser] }
+        - { field: stakeUsd, op: gte, value: 5000 }
+
+  # v2 template (disabled): market crowding — many customers taking the same market. `distinctField`
+  # + `distinctAtLeast` count DISTINCT customers on the group (here groupBy marketKey); an empty
+  # identity never counts. Fires once per window bucket per market, not once per scan.
+  - id: market_crowding_3_customers
+    title: 3+ customers on one market in 5 minutes
+    severity: medium
+    enabled: false
+    tags: [market, crowd]
+    when: { field: marketKey, op: exists, value: true }
+    aggregate:
+      {
+        groupBy: marketKey,
+        windowSeconds: 300,
+        distinctField: customerId,
+        distinctAtLeast: 3,
+      }
+
+  # v2 template (disabled): stake escalation — a stake large against the customer's own history.
+  # `context.*` needs the enriched batch (CLI scan/alert/watch run enrichIncomingBets first);
+  # without it the field is absent and the rule fails closed.
+  - id: stake_escalation_3x
+    title: Stake 3x the customer's prior median
+    severity: high
+    enabled: false
+    tags: [stake, context]
+    when:
+      all:
+        - { field: context.customerPriorBets, op: gte, value: 3 }
+        - { field: context.stakeVsPriorMedian, op: gte, value: 3 }
+
+  # v2 template (disabled): period focus — repeated bets on one period by one customer.
+  # `context.customerPeriodBetsWindow` counts this customer's window bets on the same period.
+  - id: period_focus_5_bets
+    title: 5+ bets on one market period by one customer
+    severity: low
+    enabled: false
+    tags: [period, context]
+    when:
+      all:
+        - { field: periodLabel, op: exists, value: true }
+        - { field: context.customerPeriodBetsWindow, op: gte, value: 5 }
+
+  # v2 template (disabled): player-prop spike — a player prop at plus money. `between` is an
+  # inclusive numeric range [lo, hi] on one field (lo <= hi is validated).
+  - id: player_prop_spike
+    title: Player prop priced +150 to +600
+    severity: medium
+    enabled: false
+    tags: [prop, market]
+    when:
+      all:
+        - { field: isPlayerProp, op: eq, value: true }
+        - { field: americanOdds, op: between, value: [150, 600] }
+
+  # v2 template (disabled): alt-line live — an alternate line taken in-play. `isAltLine` comes
+  # from the market parser (a line/period outside the standard market).
+  - id: alt_line_live
+    title: Alternate line on a live bet
+    severity: medium
+    enabled: false
+    tags: [line, live, market]
+    when:
+      all:
+        - { field: isLive, op: eq, value: true }
+        - { field: isAltLine, op: eq, value: true }
+
+  # v3 template (disabled): cross-field reference. `value: { fieldRef: <numeric field> }` on
+  # eq/neq/gt/gte/lt/lte compares two fields on the SAME record; stake greater than the potential
+  # win is a short-priced bet (the book wins less than it risks). The ref must be numeric and
+  # cannot be the leaf's own field.
+  - id: stake_exceeds_to_win
+    title: Stake exceeds the potential to-win
+    severity: medium
+    enabled: false
+    tags: [stake, math]
+    when:
+      all:
+        - { field: stakeUsd, op: gt, value: { fieldRef: toWinUsd } }
+
+  # v3 template (disabled): derived odds distance. `oddsFromEven` is |americanOdds - 100|
+  # (0 at +100); pair it with a positive price so only plus-money longshots qualify. A null
+  # americanOdds fails closed (no match), never a false longshot.
+  - id: longshot_even_or_worse
+    title: Longshot at +400 or longer
+    severity: low
+    enabled: false
+    tags: [odds]
+    when:
+      all:
+        - { field: americanOdds, op: gt, value: 0 }
+        - { field: oddsFromEven, op: gte, value: 300 }

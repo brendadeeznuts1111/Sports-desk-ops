@@ -108,6 +108,7 @@ function decide(
     risk?: Partial<ExecutionRiskState>;
     venues?: VenueReadiness;
     liveConfirm?: string | null;
+    stylePreference?: "auto" | "taker" | "maker";
   } = {},
 ): ExecutionDecision {
   return decideExecution({
@@ -121,6 +122,9 @@ function decide(
     ...(overrides.liveConfirm === undefined
       ? {}
       : { liveConfirm: overrides.liveConfirm }),
+    ...(overrides.stylePreference === undefined
+      ? {}
+      : { stylePreference: overrides.stylePreference }),
   });
 }
 
@@ -313,6 +317,32 @@ describe("sizing and taker choice", () => {
     expect(decision.limitPrice).not.toBeNull();
     expect(decision.limitPrice ?? 1).toBeLessThan(decision.fairProb ?? 0);
     expect(decision.paper).toBe(true);
+  });
+
+  test("operator can prefer maker even when a taker fill would qualify", () => {
+    const maker = decide({ stylePreference: "maker" });
+    expect(maker.blocked).toBe(false);
+    expect(maker.style).toBe("maker");
+    expect(maker.reasons).toContain("style:maker_preferred");
+  });
+
+  test("taker-only preference refuses instead of falling back to a maker quote", () => {
+    const taker = decide({ stylePreference: "taker" });
+    expect(taker.style).toBe("taker");
+
+    // The same wide-spread book that auto-decides to maker must refuse under taker-only.
+    const refused = decide({
+      stylePreference: "taker",
+      join: {
+        book: {
+          yes: [{ price: 0.6, size: 100 }],
+          no: [{ price: 0.5, size: 100 }],
+        },
+      },
+      signal: { fairProb: 0.62 },
+    });
+    expect(refused.blocked).toBe(true);
+    expect(refused.blockReason).toBe("style_taker_no_fill");
   });
 
   test("no fair price and no book are explicit blocks", () => {

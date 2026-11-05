@@ -115,6 +115,7 @@ describe("Bun 1.4.1 streaming and backpressure", () => {
 
   test("util.inspect stops at maxArrayLength", async () => {
     const util = await import("node:util");
+    // oxlint-disable-next-line unicorn/no-new-array -- a 2M-element fixture is the point of the inspect truncation check.
     const out = util.inspect(new Array(2_000_000).fill(7), {
       maxArrayLength: 3,
     });

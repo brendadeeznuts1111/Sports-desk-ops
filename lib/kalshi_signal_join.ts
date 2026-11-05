@@ -115,6 +115,8 @@ export interface KalshiJoin {
   readonly book: KalshiOrderbook | null;
   readonly verdict: SignalVerdict;
   readonly reason: string | null;
+  /** Resolution rule text of the matched market, when the venue publishes it. */
+  readonly rulesPrimary?: string;
 }
 
 export interface JoinedSignal extends WatchlistSignal {
@@ -126,7 +128,7 @@ export interface JoinedSignal extends WatchlistSignal {
 /* -------------------------------------------------------------------------- */
 
 /** League × market kind → Kalshi series. A kind absent here is `no_market`, not a guess. */
-const SERIES_BY_LEAGUE: Readonly<
+export const SERIES_BY_LEAGUE: Readonly<
   Record<League, Readonly<Record<string, string>>>
 > = {
   NBA: {
@@ -151,6 +153,10 @@ const SERIES_BY_LEAGUE: Readonly<
     "1h_total": "KXNBA1HTOTAL",
     "1h_spread": "KXNBA1HSPREAD",
     "2h_spread": "KXNBA2HSPREAD",
+    // Catalog series discovered live; KXNBA2HTEAMTOTAL currently returns zero events under
+    // every status, so the join reports no_market rather than a fabricated market.
+    "2h_total": "KXNBA2HTOTAL",
+    "2h_team_total": "KXNBA2HTEAMTOTAL",
   },
   NFL: {
     moneyline: "KXNFLGAME",
@@ -183,8 +189,16 @@ const SERIES_BY_LEAGUE: Readonly<
     moneyline: "KXNHLGAME",
     spread: "KXNHLSPREAD",
     total: "KXNHLTOTAL",
+    // 2nd-period total discovered live (KXNHL2PTOTAL); other period kinds have no series
+    // mapping here until a live event verifies one.
+    "2p_total": "KXNHL2PTOTAL",
   },
-  MLB: {},
+  MLB: {
+    moneyline: "KXMLBGAME",
+    spread: "KXMLBSPREAD",
+    total: "KXMLBTOTAL",
+    team_total: "KXMLBTEAMTOTAL",
+  },
   UNKNOWN: {},
 };
 
@@ -709,6 +723,9 @@ export async function joinWatchlistSignals(
         book: orderbook.ok ? orderbook.value : null,
         verdict: decision.verdict,
         reason: failure ?? decision.reason,
+        ...(choice.market.rulesPrimary === undefined
+          ? {}
+          : { rulesPrimary: choice.market.rulesPrimary }),
       },
     });
   }

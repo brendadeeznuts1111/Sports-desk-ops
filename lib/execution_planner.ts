@@ -253,6 +253,8 @@ export interface ExecutionPlan {
   readonly kalshiTelemetry: ReturnType<KalshiClient["telemetry"]>;
   readonly polymarketTelemetry: ReturnType<PolymarketQuoteClient["telemetry"]>;
   /** Join results behind the decisions, for callers that want venue detail. */
+  /** The style preference this plan was built with (defaults to auto). */
+  readonly stylePreference?: "auto" | "taker" | "maker";
   readonly joins: readonly JoinedSignal[];
   readonly signals: readonly WatchlistSignal[];
   /** Current order books keyed `<venue>:<token>`, for sweeping resting maker quotes. */
@@ -279,6 +281,10 @@ export interface BuildExecutionPlanOptions {
   readonly ledger?: ExecutionLedgerState;
   /** Overall public-book lookup budget; the plan degrades instead of hanging a request. */
   readonly budgetMs?: number;
+  /** Operator order-style preference for every decision in this plan. */
+  readonly stylePreference?: "auto" | "taker" | "maker";
+  /** Restrict the plan to these signal ids (human-in-the-loop approval filters). */
+  readonly signalIds?: readonly string[];
 }
 
 function aggregateProvenance(
@@ -355,7 +361,13 @@ export async function buildExecutionPlan(
   const inputs = await loadWatchlistSignalInputs(options.root);
   const limit = Math.max(1, Math.min(200, options.limit ?? 25));
   const signals = deriveWatchlistSignals(inputs, { now });
-  const selected = signals.slice(0, limit);
+  const allowed =
+    options.signalIds === undefined ? null : new Set(options.signalIds);
+  const selected = (
+    allowed === null
+      ? signals
+      : signals.filter((signal) => allowed.has(signal.id))
+  ).slice(0, limit);
 
   const kalshi = new KalshiClient({
     ...(options.kalshiFetch === undefined
@@ -438,6 +450,9 @@ export async function buildExecutionPlan(
     ...(options.liveConfirm === undefined
       ? {}
       : { liveConfirm: options.liveConfirm }),
+    ...(options.stylePreference === undefined
+      ? {}
+      : { stylePreference: options.stylePreference }),
   });
 
   const venueBooks = new Map<string, QuoteBook>();
@@ -463,6 +478,7 @@ export async function buildExecutionPlan(
   return {
     generatedAt: now.toISOString(),
     mode,
+    stylePreference: options.stylePreference ?? "auto",
     killSwitch: mode === "paused",
     policy,
     venues,

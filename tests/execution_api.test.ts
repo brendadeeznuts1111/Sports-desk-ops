@@ -7,6 +7,7 @@ import {
   executionFixtureFetch,
   type ExecutionFixtureFetch,
 } from "./fixtures/execution/fixture_fetch.ts";
+import { appendExecutionApproval } from "../lib/execution_approvals.ts";
 
 /**
  * The execution API, fully offline: Kalshi + Polymarket fixtures through the server seams, a temp
@@ -184,6 +185,75 @@ describe("execution API", () => {
     };
     expect(liveBody.error).toBe("live_not_armed");
     expect(liveBody.reasons).toContain("EXECUTION_LIVE is not 1");
+    expect(fixture.orderCalls).toEqual([]);
+  });
+
+  test("style preference is validated and applied to the plan", async () => {
+    const makerPlan = await get("api/execution/plan?style=maker");
+    expect(makerPlan.status).toBe(200);
+    const makerBody = (await makerPlan.json()) as {
+      style?: unknown;
+      decisions?: Array<{ style?: unknown }>;
+    };
+    expect(makerBody.style).toBe("maker");
+    expect(
+      (makerBody.decisions ?? []).every(
+        (decision) => decision.style !== "taker",
+      ),
+    ).toBe(true);
+
+    const invalid = await get("api/execution/plan?style=limit");
+    expect(invalid.status).toBe(400);
+    expect(((await invalid.json()) as { error?: unknown }).error).toBe(
+      "invalid_style",
+    );
+  });
+
+  test("human approval gates a run and the latest decision wins", async () => {
+    const plan = (await (await get("api/execution/plan")).json()) as {
+      decisions?: Array<{ signalId?: string }>;
+    };
+    const signalId = plan.decisions?.[0]?.signalId;
+    expect(typeof signalId).toBe("string");
+
+    await appendExecutionApproval(ledgerRoot, {
+      signalId: signalId as string,
+      action: "approve",
+      actor: "operator-a",
+      style: "maker",
+    });
+
+    clockMs += 2_500;
+    const run = await post("api/execution/run", {
+      requireApproval: true,
+      style: "taker",
+    });
+    expect(run.status).toBe(200);
+    const runBody = (await run.json()) as {
+      style?: unknown;
+      approvals?: unknown[];
+      decisions?: Array<{ signalId?: string }>;
+    };
+    expect(runBody.style).toBe("taker");
+    expect(runBody.approvals).toHaveLength(1);
+    expect(
+      (runBody.decisions ?? []).every(
+        (decision) => decision.signalId === signalId,
+      ),
+    ).toBe(true);
+
+    await appendExecutionApproval(ledgerRoot, {
+      signalId: signalId as string,
+      action: "reject",
+      actor: "operator-b",
+      reason: "price moved",
+    });
+    clockMs += 2_500;
+    const rejected = await post("api/execution/run", { requireApproval: true });
+    expect(rejected.status).toBe(409);
+    expect(((await rejected.json()) as { error?: unknown }).error).toBe(
+      "no_approved_signals",
+    );
     expect(fixture.orderCalls).toEqual([]);
   });
 });

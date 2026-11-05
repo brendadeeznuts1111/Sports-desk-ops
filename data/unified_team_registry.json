@@ -3,6 +3,2580 @@
   "description": "Canonical SportsDesk team entities. Icons/logos are presentation aliases (portal CDN filenames); venue joins use codes and text (Kalshi event tickers, Polymarket gamma question/slug).",
   "teams": [
     {
+      "id": "cfb:aamu",
+      "league": "CFB",
+      "code": "AAMU",
+      "displayName": "Alabama A&M",
+      "f402Names": ["ALABAMA A&M"],
+      "kalshiCodes": ["AAMU"],
+      "polymarketHints": ["Alabama A&M"]
+    },
+    {
+      "id": "cfb:ac",
+      "league": "CFB",
+      "code": "AC",
+      "displayName": "Abilene Christian",
+      "f402Names": ["ABILENE CHRISTIAN"],
+      "kalshiCodes": ["AC"],
+      "polymarketHints": ["Abilene Christian"]
+    },
+    {
+      "id": "cfb:afa",
+      "league": "CFB",
+      "code": "AFA",
+      "displayName": "Air Force",
+      "f402Names": ["AIR FORCE"],
+      "kalshiCodes": ["AFA"],
+      "polymarketHints": ["Air Force"]
+    },
+    {
+      "id": "cfb:akr",
+      "league": "CFB",
+      "code": "AKR",
+      "displayName": "Akron",
+      "f402Names": ["AKRON"],
+      "kalshiCodes": ["AKR"],
+      "polymarketHints": ["Akron"]
+    },
+    {
+      "id": "cfb:ala",
+      "league": "CFB",
+      "code": "ALA",
+      "displayName": "Alabama",
+      "f402Names": ["ALABAMA"],
+      "kalshiCodes": ["ALA"],
+      "polymarketHints": ["Alabama"]
+    },
+    {
+      "id": "cfb:alby",
+      "league": "CFB",
+      "code": "ALBY",
+      "displayName": "University at Albany",
+      "f402Names": ["UNIVERSITY AT ALBANY"],
+      "kalshiCodes": ["ALBY"],
+      "polymarketHints": ["University at Albany"]
+    },
+    {
+      "id": "cfb:alcn",
+      "league": "CFB",
+      "code": "ALCN",
+      "displayName": "Alcorn St.",
+      "f402Names": ["ALCORN ST."],
+      "kalshiCodes": ["ALCN"],
+      "polymarketHints": ["Alcorn St."]
+    },
+    {
+      "id": "cfb:alst",
+      "league": "CFB",
+      "code": "ALST",
+      "displayName": "Alabama St.",
+      "f402Names": ["ALABAMA ST."],
+      "kalshiCodes": ["ALST"],
+      "polymarketHints": ["Alabama St."]
+    },
+    {
+      "id": "cfb:app",
+      "league": "CFB",
+      "code": "APP",
+      "displayName": "Appalachian St.",
+      "f402Names": ["APPALACHIAN ST."],
+      "kalshiCodes": ["APP"],
+      "polymarketHints": ["Appalachian St."]
+    },
+    {
+      "id": "cfb:ariz",
+      "league": "CFB",
+      "code": "ARIZ",
+      "displayName": "Arizona",
+      "f402Names": ["ARIZONA"],
+      "kalshiCodes": ["ARIZ"],
+      "polymarketHints": ["Arizona"]
+    },
+    {
+      "id": "cfb:ark",
+      "league": "CFB",
+      "code": "ARK",
+      "displayName": "Arkansas",
+      "f402Names": ["ARKANSAS"],
+      "kalshiCodes": ["ARK"],
+      "polymarketHints": ["Arkansas"]
+    },
+    {
+      "id": "cfb:army",
+      "league": "CFB",
+      "code": "ARMY",
+      "displayName": "Army",
+      "f402Names": ["ARMY"],
+      "kalshiCodes": ["ARMY"],
+      "polymarketHints": ["Army"]
+    },
+    {
+      "id": "cfb:arpb",
+      "league": "CFB",
+      "code": "ARPB",
+      "displayName": "Arkansas-Pine Bluff",
+      "f402Names": ["ARKANSAS-PINE BLUFF"],
+      "kalshiCodes": ["ARPB"],
+      "polymarketHints": ["Arkansas-Pine Bluff"]
+    },
+    {
+      "id": "cfb:arst",
+      "league": "CFB",
+      "code": "ARST",
+      "displayName": "Arkansas St.",
+      "f402Names": ["ARKANSAS ST."],
+      "kalshiCodes": ["ARST"],
+      "polymarketHints": ["Arkansas St."]
+    },
+    {
+      "id": "cfb:asu",
+      "league": "CFB",
+      "code": "ASU",
+      "displayName": "Arizona St.",
+      "f402Names": ["ARIZONA ST."],
+      "kalshiCodes": ["ASU"],
+      "polymarketHints": ["Arizona St."]
+    },
+    {
+      "id": "cfb:aub",
+      "league": "CFB",
+      "code": "AUB",
+      "displayName": "Auburn",
+      "f402Names": ["AUBURN"],
+      "kalshiCodes": ["AUB"],
+      "polymarketHints": ["Auburn"]
+    },
+    {
+      "id": "cfb:ball",
+      "league": "CFB",
+      "code": "BALL",
+      "displayName": "Ball St.",
+      "f402Names": ["BALL ST."],
+      "kalshiCodes": ["BALL"],
+      "polymarketHints": ["Ball St."]
+    },
+    {
+      "id": "cfb:bay",
+      "league": "CFB",
+      "code": "BAY",
+      "displayName": "Baylor",
+      "f402Names": ["BAYLOR"],
+      "kalshiCodes": ["BAY"],
+      "polymarketHints": ["Baylor"]
+    },
+    {
+      "id": "cfb:bc",
+      "league": "CFB",
+      "code": "BC",
+      "displayName": "Boston College",
+      "f402Names": ["BOSTON COLLEGE"],
+      "kalshiCodes": ["BC"],
+      "polymarketHints": ["Boston College"]
+    },
+    {
+      "id": "cfb:bgsu",
+      "league": "CFB",
+      "code": "BGSU",
+      "displayName": "Bowling Green",
+      "f402Names": ["BOWLING GREEN"],
+      "kalshiCodes": ["BGSU"],
+      "polymarketHints": ["Bowling Green"]
+    },
+    {
+      "id": "cfb:brwn",
+      "league": "CFB",
+      "code": "BRWN",
+      "displayName": "Brown",
+      "f402Names": ["BROWN"],
+      "kalshiCodes": ["BRWN"],
+      "polymarketHints": ["Brown"]
+    },
+    {
+      "id": "cfb:bry",
+      "league": "CFB",
+      "code": "BRY",
+      "displayName": "Bryant",
+      "f402Names": ["BRYANT"],
+      "kalshiCodes": ["BRY"],
+      "polymarketHints": ["Bryant"]
+    },
+    {
+      "id": "cfb:bsu",
+      "league": "CFB",
+      "code": "BSU",
+      "displayName": "Boise St.",
+      "f402Names": ["BOISE ST."],
+      "kalshiCodes": ["BSU"],
+      "polymarketHints": ["Boise St."]
+    },
+    {
+      "id": "cfb:buck",
+      "league": "CFB",
+      "code": "BUCK",
+      "displayName": "Bucknell",
+      "f402Names": ["BUCKNELL"],
+      "kalshiCodes": ["BUCK"],
+      "polymarketHints": ["Bucknell"]
+    },
+    {
+      "id": "cfb:buff",
+      "league": "CFB",
+      "code": "BUFF",
+      "displayName": "Buffalo",
+      "f402Names": ["BUFFALO"],
+      "kalshiCodes": ["BUFF"],
+      "polymarketHints": ["Buffalo"]
+    },
+    {
+      "id": "cfb:but",
+      "league": "CFB",
+      "code": "BUT",
+      "displayName": "Butler",
+      "f402Names": ["BUTLER"],
+      "kalshiCodes": ["BUT"],
+      "polymarketHints": ["Butler"]
+    },
+    {
+      "id": "cfb:byu",
+      "league": "CFB",
+      "code": "BYU",
+      "displayName": "BYU",
+      "f402Names": ["BYU"],
+      "kalshiCodes": ["BYU"],
+      "polymarketHints": ["BYU"]
+    },
+    {
+      "id": "cfb:cal",
+      "league": "CFB",
+      "code": "CAL",
+      "displayName": "California",
+      "f402Names": ["CALIFORNIA"],
+      "kalshiCodes": ["CAL"],
+      "polymarketHints": ["California"]
+    },
+    {
+      "id": "cfb:camp",
+      "league": "CFB",
+      "code": "CAMP",
+      "displayName": "Campbell",
+      "f402Names": ["CAMPBELL"],
+      "kalshiCodes": ["CAMP"],
+      "polymarketHints": ["Campbell"]
+    },
+    {
+      "id": "cfb:cark",
+      "league": "CFB",
+      "code": "CARK",
+      "displayName": "Central Arkansas",
+      "f402Names": ["CENTRAL ARKANSAS"],
+      "kalshiCodes": ["CARK"],
+      "polymarketHints": ["Central Arkansas"]
+    },
+    {
+      "id": "cfb:ccar",
+      "league": "CFB",
+      "code": "CCAR",
+      "displayName": "Coastal Carolina",
+      "f402Names": ["COASTAL CAROLINA"],
+      "kalshiCodes": ["CCAR"],
+      "polymarketHints": ["Coastal Carolina"]
+    },
+    {
+      "id": "cfb:ccsu",
+      "league": "CFB",
+      "code": "CCSU",
+      "displayName": "Central Connecticut St.",
+      "f402Names": ["CENTRAL CONNECTICUT ST."],
+      "kalshiCodes": ["CCSU"],
+      "polymarketHints": ["Central Connecticut St."]
+    },
+    {
+      "id": "cfb:char",
+      "league": "CFB",
+      "code": "CHAR",
+      "displayName": "Charlotte",
+      "f402Names": ["CHARLOTTE"],
+      "kalshiCodes": ["CHAR"],
+      "polymarketHints": ["Charlotte"]
+    },
+    {
+      "id": "cfb:chat",
+      "league": "CFB",
+      "code": "CHAT",
+      "displayName": "Chattanooga",
+      "f402Names": ["CHATTANOOGA"],
+      "kalshiCodes": ["CHAT"],
+      "polymarketHints": ["Chattanooga"]
+    },
+    {
+      "id": "cfb:chso",
+      "league": "CFB",
+      "code": "CHSO",
+      "displayName": "Charleston Southern",
+      "f402Names": ["CHARLESTON SOUTHERN"],
+      "kalshiCodes": ["CHSO"],
+      "polymarketHints": ["Charleston Southern"]
+    },
+    {
+      "id": "cfb:cin",
+      "league": "CFB",
+      "code": "CIN",
+      "displayName": "Cincinnati",
+      "f402Names": ["CINCINNATI"],
+      "kalshiCodes": ["CIN"],
+      "polymarketHints": ["Cincinnati"]
+    },
+    {
+      "id": "cfb:cit",
+      "league": "CFB",
+      "code": "CIT",
+      "displayName": "The Citadel",
+      "f402Names": ["THE CITADEL"],
+      "kalshiCodes": ["CIT"],
+      "polymarketHints": ["The Citadel"]
+    },
+    {
+      "id": "cfb:clem",
+      "league": "CFB",
+      "code": "CLEM",
+      "displayName": "Clemson",
+      "f402Names": ["CLEMSON"],
+      "kalshiCodes": ["CLEM"],
+      "polymarketHints": ["Clemson"]
+    },
+    {
+      "id": "cfb:clmb",
+      "league": "CFB",
+      "code": "CLMB",
+      "displayName": "Columbia",
+      "f402Names": ["COLUMBIA"],
+      "kalshiCodes": ["CLMB"],
+      "polymarketHints": ["Columbia"]
+    },
+    {
+      "id": "cfb:cmu",
+      "league": "CFB",
+      "code": "CMU",
+      "displayName": "Central Michigan",
+      "f402Names": ["CENTRAL MICHIGAN"],
+      "kalshiCodes": ["CMU"],
+      "polymarketHints": ["Central Michigan"]
+    },
+    {
+      "id": "cfb:colg",
+      "league": "CFB",
+      "code": "COLG",
+      "displayName": "Colgate",
+      "f402Names": ["COLGATE"],
+      "kalshiCodes": ["COLG"],
+      "polymarketHints": ["Colgate"]
+    },
+    {
+      "id": "cfb:colo",
+      "league": "CFB",
+      "code": "COLO",
+      "displayName": "Colorado",
+      "f402Names": ["COLORADO"],
+      "kalshiCodes": ["COLO"],
+      "polymarketHints": ["Colorado"]
+    },
+    {
+      "id": "cfb:conn",
+      "league": "CFB",
+      "code": "CONN",
+      "displayName": "UConn",
+      "f402Names": ["UCONN"],
+      "kalshiCodes": ["CONN"],
+      "polymarketHints": ["UConn"]
+    },
+    {
+      "id": "cfb:cook",
+      "league": "CFB",
+      "code": "COOK",
+      "displayName": "Bethune-Cookman",
+      "f402Names": ["BETHUNE-COOKMAN"],
+      "kalshiCodes": ["COOK"],
+      "polymarketHints": ["Bethune-Cookman"]
+    },
+    {
+      "id": "cfb:cor",
+      "league": "CFB",
+      "code": "COR",
+      "displayName": "Cornell",
+      "f402Names": ["CORNELL"],
+      "kalshiCodes": ["COR"],
+      "polymarketHints": ["Cornell"]
+    },
+    {
+      "id": "cfb:cp",
+      "league": "CFB",
+      "code": "CP",
+      "displayName": "Cal Poly",
+      "f402Names": ["CAL POLY"],
+      "kalshiCodes": ["CP"],
+      "polymarketHints": ["Cal Poly"]
+    },
+    {
+      "id": "cfb:csu",
+      "league": "CFB",
+      "code": "CSU",
+      "displayName": "Colorado St.",
+      "f402Names": ["COLORADO ST."],
+      "kalshiCodes": ["CSU"],
+      "polymarketHints": ["Colorado St."]
+    },
+    {
+      "id": "cfb:dart",
+      "league": "CFB",
+      "code": "DART",
+      "displayName": "Dartmouth",
+      "f402Names": ["DARTMOUTH"],
+      "kalshiCodes": ["DART"],
+      "polymarketHints": ["Dartmouth"]
+    },
+    {
+      "id": "cfb:dav",
+      "league": "CFB",
+      "code": "DAV",
+      "displayName": "Davidson",
+      "f402Names": ["DAVIDSON"],
+      "kalshiCodes": ["DAV"],
+      "polymarketHints": ["Davidson"]
+    },
+    {
+      "id": "cfb:day",
+      "league": "CFB",
+      "code": "DAY",
+      "displayName": "Dayton",
+      "f402Names": ["DAYTON"],
+      "kalshiCodes": ["DAY"],
+      "polymarketHints": ["Dayton"]
+    },
+    {
+      "id": "cfb:del",
+      "league": "CFB",
+      "code": "DEL",
+      "displayName": "Delaware",
+      "f402Names": ["DELAWARE"],
+      "kalshiCodes": ["DEL"],
+      "polymarketHints": ["Delaware"]
+    },
+    {
+      "id": "cfb:drke",
+      "league": "CFB",
+      "code": "DRKE",
+      "displayName": "Drake",
+      "f402Names": ["DRAKE"],
+      "kalshiCodes": ["DRKE"],
+      "polymarketHints": ["Drake"]
+    },
+    {
+      "id": "cfb:dsu",
+      "league": "CFB",
+      "code": "DSU",
+      "displayName": "Delaware St.",
+      "f402Names": ["DELAWARE ST."],
+      "kalshiCodes": ["DSU"],
+      "polymarketHints": ["Delaware St."]
+    },
+    {
+      "id": "cfb:duke",
+      "league": "CFB",
+      "code": "DUKE",
+      "displayName": "Duke",
+      "f402Names": ["DUKE"],
+      "kalshiCodes": ["DUKE"],
+      "polymarketHints": ["Duke"]
+    },
+    {
+      "id": "cfb:duq",
+      "league": "CFB",
+      "code": "DUQ",
+      "displayName": "Duquesne",
+      "f402Names": ["DUQUESNE"],
+      "kalshiCodes": ["DUQ"],
+      "polymarketHints": ["Duquesne"]
+    },
+    {
+      "id": "cfb:ecu",
+      "league": "CFB",
+      "code": "ECU",
+      "displayName": "East Carolina",
+      "f402Names": ["EAST CAROLINA"],
+      "kalshiCodes": ["ECU"],
+      "polymarketHints": ["East Carolina"]
+    },
+    {
+      "id": "cfb:eiu",
+      "league": "CFB",
+      "code": "EIU",
+      "displayName": "Eastern Illinois",
+      "f402Names": ["EASTERN ILLINOIS"],
+      "kalshiCodes": ["EIU"],
+      "polymarketHints": ["Eastern Illinois"]
+    },
+    {
+      "id": "cfb:eky",
+      "league": "CFB",
+      "code": "EKY",
+      "displayName": "Eastern Kentucky",
+      "f402Names": ["EASTERN KENTUCKY"],
+      "kalshiCodes": ["EKY"],
+      "polymarketHints": ["Eastern Kentucky"]
+    },
+    {
+      "id": "cfb:elon",
+      "league": "CFB",
+      "code": "ELON",
+      "displayName": "Elon",
+      "f402Names": ["ELON"],
+      "kalshiCodes": ["ELON"],
+      "polymarketHints": ["Elon"]
+    },
+    {
+      "id": "cfb:emu",
+      "league": "CFB",
+      "code": "EMU",
+      "displayName": "Eastern Michigan",
+      "f402Names": ["EASTERN MICHIGAN"],
+      "kalshiCodes": ["EMU"],
+      "polymarketHints": ["Eastern Michigan"]
+    },
+    {
+      "id": "cfb:etam",
+      "league": "CFB",
+      "code": "ETAM",
+      "displayName": "East Texas A&M",
+      "f402Names": ["EAST TEXAS A&M"],
+      "kalshiCodes": ["ETAM"],
+      "polymarketHints": ["East Texas A&M"]
+    },
+    {
+      "id": "cfb:etsu",
+      "league": "CFB",
+      "code": "ETSU",
+      "displayName": "East Tennessee St.",
+      "f402Names": ["EAST TENNESSEE ST."],
+      "kalshiCodes": ["ETSU"],
+      "polymarketHints": ["East Tennessee St."]
+    },
+    {
+      "id": "cfb:ewu",
+      "league": "CFB",
+      "code": "EWU",
+      "displayName": "Eastern Washington",
+      "f402Names": ["EASTERN WASHINGTON"],
+      "kalshiCodes": ["EWU"],
+      "polymarketHints": ["Eastern Washington"]
+    },
+    {
+      "id": "cfb:famu",
+      "league": "CFB",
+      "code": "FAMU",
+      "displayName": "Florida A&M",
+      "f402Names": ["FLORIDA A&M"],
+      "kalshiCodes": ["FAMU"],
+      "polymarketHints": ["Florida A&M"]
+    },
+    {
+      "id": "cfb:fau",
+      "league": "CFB",
+      "code": "FAU",
+      "displayName": "Florida Atlantic",
+      "f402Names": ["FLORIDA ATLANTIC"],
+      "kalshiCodes": ["FAU"],
+      "polymarketHints": ["Florida Atlantic"]
+    },
+    {
+      "id": "cfb:fiu",
+      "league": "CFB",
+      "code": "FIU",
+      "displayName": "Florida International",
+      "f402Names": ["FLORIDA INTERNATIONAL"],
+      "kalshiCodes": ["FIU"],
+      "polymarketHints": ["Florida International"]
+    },
+    {
+      "id": "cfb:fla",
+      "league": "CFB",
+      "code": "FLA",
+      "displayName": "Florida",
+      "f402Names": ["FLORIDA"],
+      "kalshiCodes": ["FLA"],
+      "polymarketHints": ["Florida"]
+    },
+    {
+      "id": "cfb:for",
+      "league": "CFB",
+      "code": "FOR",
+      "displayName": "Fordham",
+      "f402Names": ["FORDHAM"],
+      "kalshiCodes": ["FOR"],
+      "polymarketHints": ["Fordham"]
+    },
+    {
+      "id": "cfb:fres",
+      "league": "CFB",
+      "code": "FRES",
+      "displayName": "Fresno St.",
+      "f402Names": ["FRESNO ST."],
+      "kalshiCodes": ["FRES"],
+      "polymarketHints": ["Fresno St."]
+    },
+    {
+      "id": "cfb:fsu",
+      "league": "CFB",
+      "code": "FSU",
+      "displayName": "Florida St.",
+      "f402Names": ["FLORIDA ST."],
+      "kalshiCodes": ["FSU"],
+      "polymarketHints": ["Florida St."]
+    },
+    {
+      "id": "cfb:fur",
+      "league": "CFB",
+      "code": "FUR",
+      "displayName": "Furman",
+      "f402Names": ["FURMAN"],
+      "kalshiCodes": ["FUR"],
+      "polymarketHints": ["Furman"]
+    },
+    {
+      "id": "cfb:gaso",
+      "league": "CFB",
+      "code": "GASO",
+      "displayName": "Georgia Southern",
+      "f402Names": ["GEORGIA SOUTHERN"],
+      "kalshiCodes": ["GASO"],
+      "polymarketHints": ["Georgia Southern"]
+    },
+    {
+      "id": "cfb:gast",
+      "league": "CFB",
+      "code": "GAST",
+      "displayName": "Georgia St.",
+      "f402Names": ["GEORGIA ST."],
+      "kalshiCodes": ["GAST"],
+      "polymarketHints": ["Georgia St."]
+    },
+    {
+      "id": "cfb:gram",
+      "league": "CFB",
+      "code": "GRAM",
+      "displayName": "Grambling St.",
+      "f402Names": ["GRAMBLING ST."],
+      "kalshiCodes": ["GRAM"],
+      "polymarketHints": ["Grambling St."]
+    },
+    {
+      "id": "cfb:gt",
+      "league": "CFB",
+      "code": "GT",
+      "displayName": "Georgia Tech",
+      "f402Names": ["GEORGIA TECH"],
+      "kalshiCodes": ["GT"],
+      "polymarketHints": ["Georgia Tech"]
+    },
+    {
+      "id": "cfb:gtwn",
+      "league": "CFB",
+      "code": "GTWN",
+      "displayName": "Georgetown",
+      "f402Names": ["GEORGETOWN"],
+      "kalshiCodes": ["GTWN"],
+      "polymarketHints": ["Georgetown"]
+    },
+    {
+      "id": "cfb:hamp",
+      "league": "CFB",
+      "code": "HAMP",
+      "displayName": "Hampton",
+      "f402Names": ["HAMPTON"],
+      "kalshiCodes": ["HAMP"],
+      "polymarketHints": ["Hampton"]
+    },
+    {
+      "id": "cfb:harv",
+      "league": "CFB",
+      "code": "HARV",
+      "displayName": "Harvard",
+      "f402Names": ["HARVARD"],
+      "kalshiCodes": ["HARV"],
+      "polymarketHints": ["Harvard"]
+    },
+    {
+      "id": "cfb:haw",
+      "league": "CFB",
+      "code": "HAW",
+      "displayName": "Hawai'i",
+      "f402Names": ["HAWAI'I"],
+      "kalshiCodes": ["HAW"],
+      "polymarketHints": ["Hawai'i"]
+    },
+    {
+      "id": "cfb:hc",
+      "league": "CFB",
+      "code": "HC",
+      "displayName": "Holy Cross",
+      "f402Names": ["HOLY CROSS"],
+      "kalshiCodes": ["HC"],
+      "polymarketHints": ["Holy Cross"]
+    },
+    {
+      "id": "cfb:hcu",
+      "league": "CFB",
+      "code": "HCU",
+      "displayName": "Houston Christian",
+      "f402Names": ["HOUSTON CHRISTIAN"],
+      "kalshiCodes": ["HCU"],
+      "polymarketHints": ["Houston Christian"]
+    },
+    {
+      "id": "cfb:hou",
+      "league": "CFB",
+      "code": "HOU",
+      "displayName": "Houston",
+      "f402Names": ["HOUSTON"],
+      "kalshiCodes": ["HOU"],
+      "polymarketHints": ["Houston"]
+    },
+    {
+      "id": "cfb:how",
+      "league": "CFB",
+      "code": "HOW",
+      "displayName": "Howard",
+      "f402Names": ["HOWARD"],
+      "kalshiCodes": ["HOW"],
+      "polymarketHints": ["Howard"]
+    },
+    {
+      "id": "cfb:idho",
+      "league": "CFB",
+      "code": "IDHO",
+      "displayName": "Idaho",
+      "f402Names": ["IDAHO"],
+      "kalshiCodes": ["IDHO"],
+      "polymarketHints": ["Idaho"]
+    },
+    {
+      "id": "cfb:idst",
+      "league": "CFB",
+      "code": "IDST",
+      "displayName": "Idaho St.",
+      "f402Names": ["IDAHO ST."],
+      "kalshiCodes": ["IDST"],
+      "polymarketHints": ["Idaho St."]
+    },
+    {
+      "id": "cfb:ill",
+      "league": "CFB",
+      "code": "ILL",
+      "displayName": "Illinois",
+      "f402Names": ["ILLINOIS"],
+      "kalshiCodes": ["ILL"],
+      "polymarketHints": ["Illinois"]
+    },
+    {
+      "id": "cfb:ilst",
+      "league": "CFB",
+      "code": "ILST",
+      "displayName": "Illinois St.",
+      "f402Names": ["ILLINOIS ST."],
+      "kalshiCodes": ["ILST"],
+      "polymarketHints": ["Illinois St."]
+    },
+    {
+      "id": "cfb:ind",
+      "league": "CFB",
+      "code": "IND",
+      "displayName": "Indiana",
+      "f402Names": ["INDIANA"],
+      "kalshiCodes": ["IND"],
+      "polymarketHints": ["Indiana"]
+    },
+    {
+      "id": "cfb:inst",
+      "league": "CFB",
+      "code": "INST",
+      "displayName": "Indiana St.",
+      "f402Names": ["INDIANA ST."],
+      "kalshiCodes": ["INST"],
+      "polymarketHints": ["Indiana St."]
+    },
+    {
+      "id": "cfb:iowa",
+      "league": "CFB",
+      "code": "IOWA",
+      "displayName": "Iowa",
+      "f402Names": ["IOWA"],
+      "kalshiCodes": ["IOWA"],
+      "polymarketHints": ["Iowa"]
+    },
+    {
+      "id": "cfb:isu",
+      "league": "CFB",
+      "code": "ISU",
+      "displayName": "Iowa St.",
+      "f402Names": ["IOWA ST."],
+      "kalshiCodes": ["ISU"],
+      "polymarketHints": ["Iowa St."]
+    },
+    {
+      "id": "cfb:iw",
+      "league": "CFB",
+      "code": "IW",
+      "displayName": "Incarnate Word",
+      "f402Names": ["INCARNATE WORD"],
+      "kalshiCodes": ["IW"],
+      "polymarketHints": ["Incarnate Word"]
+    },
+    {
+      "id": "cfb:jkst",
+      "league": "CFB",
+      "code": "JKST",
+      "displayName": "Jackson St.",
+      "f402Names": ["JACKSON ST."],
+      "kalshiCodes": ["JKST"],
+      "polymarketHints": ["Jackson St."]
+    },
+    {
+      "id": "cfb:jmu",
+      "league": "CFB",
+      "code": "JMU",
+      "displayName": "James Madison",
+      "f402Names": ["JAMES MADISON"],
+      "kalshiCodes": ["JMU"],
+      "polymarketHints": ["James Madison"]
+    },
+    {
+      "id": "cfb:jvst",
+      "league": "CFB",
+      "code": "JVST",
+      "displayName": "Jacksonville St.",
+      "f402Names": ["JACKSONVILLE ST."],
+      "kalshiCodes": ["JVST"],
+      "polymarketHints": ["Jacksonville St."]
+    },
+    {
+      "id": "cfb:kenn",
+      "league": "CFB",
+      "code": "KENN",
+      "displayName": "Kennesaw St.",
+      "f402Names": ["KENNESAW ST."],
+      "kalshiCodes": ["KENN"],
+      "polymarketHints": ["Kennesaw St."]
+    },
+    {
+      "id": "cfb:kent",
+      "league": "CFB",
+      "code": "KENT",
+      "displayName": "Kent St.",
+      "f402Names": ["KENT ST."],
+      "kalshiCodes": ["KENT"],
+      "polymarketHints": ["Kent St."]
+    },
+    {
+      "id": "cfb:ksu",
+      "league": "CFB",
+      "code": "KSU",
+      "displayName": "Kansas St.",
+      "f402Names": ["KANSAS ST."],
+      "kalshiCodes": ["KSU"],
+      "polymarketHints": ["Kansas St."]
+    },
+    {
+      "id": "cfb:ku",
+      "league": "CFB",
+      "code": "KU",
+      "displayName": "Kansas",
+      "f402Names": ["KANSAS"],
+      "kalshiCodes": ["KU"],
+      "polymarketHints": ["Kansas"]
+    },
+    {
+      "id": "cfb:laf",
+      "league": "CFB",
+      "code": "LAF",
+      "displayName": "Lafayette",
+      "f402Names": ["LAFAYETTE"],
+      "kalshiCodes": ["LAF"],
+      "polymarketHints": ["Lafayette"]
+    },
+    {
+      "id": "cfb:lam",
+      "league": "CFB",
+      "code": "LAM",
+      "displayName": "Lamar",
+      "f402Names": ["LAMAR"],
+      "kalshiCodes": ["LAM"],
+      "polymarketHints": ["Lamar"]
+    },
+    {
+      "id": "cfb:leh",
+      "league": "CFB",
+      "code": "LEH",
+      "displayName": "Lehigh",
+      "f402Names": ["LEHIGH"],
+      "kalshiCodes": ["LEH"],
+      "polymarketHints": ["Lehigh"]
+    },
+    {
+      "id": "cfb:lib",
+      "league": "CFB",
+      "code": "LIB",
+      "displayName": "Liberty",
+      "f402Names": ["LIBERTY"],
+      "kalshiCodes": ["LIB"],
+      "polymarketHints": ["Liberty"]
+    },
+    {
+      "id": "cfb:linw",
+      "league": "CFB",
+      "code": "LINW",
+      "displayName": "Lindenwood",
+      "f402Names": ["LINDENWOOD"],
+      "kalshiCodes": ["LINW"],
+      "polymarketHints": ["Lindenwood"]
+    },
+    {
+      "id": "cfb:liu",
+      "league": "CFB",
+      "code": "LIU",
+      "displayName": "LIU",
+      "f402Names": ["LIU"],
+      "kalshiCodes": ["LIU"],
+      "polymarketHints": ["LIU"]
+    },
+    {
+      "id": "cfb:lou",
+      "league": "CFB",
+      "code": "LOU",
+      "displayName": "Louisville",
+      "f402Names": ["LOUISVILLE"],
+      "kalshiCodes": ["LOU"],
+      "polymarketHints": ["Louisville"]
+    },
+    {
+      "id": "cfb:lsu",
+      "league": "CFB",
+      "code": "LSU",
+      "displayName": "LSU",
+      "f402Names": ["LSU"],
+      "kalshiCodes": ["LSU"],
+      "polymarketHints": ["LSU"]
+    },
+    {
+      "id": "cfb:lt",
+      "league": "CFB",
+      "code": "LT",
+      "displayName": "Louisiana Tech",
+      "f402Names": ["LOUISIANA TECH"],
+      "kalshiCodes": ["LT"],
+      "polymarketHints": ["Louisiana Tech"]
+    },
+    {
+      "id": "cfb:mass",
+      "league": "CFB",
+      "code": "MASS",
+      "displayName": "UMass",
+      "f402Names": ["UMASS"],
+      "kalshiCodes": ["MASS"],
+      "polymarketHints": ["UMass"]
+    },
+    {
+      "id": "cfb:mcns",
+      "league": "CFB",
+      "code": "MCNS",
+      "displayName": "McNeese",
+      "f402Names": ["MCNEESE"],
+      "kalshiCodes": ["MCNS"],
+      "polymarketHints": ["McNeese"]
+    },
+    {
+      "id": "cfb:md",
+      "league": "CFB",
+      "code": "MD",
+      "displayName": "Maryland",
+      "f402Names": ["MARYLAND"],
+      "kalshiCodes": ["MD"],
+      "polymarketHints": ["Maryland"]
+    },
+    {
+      "id": "cfb:me",
+      "league": "CFB",
+      "code": "ME",
+      "displayName": "Maine",
+      "f402Names": ["MAINE"],
+      "kalshiCodes": ["ME"],
+      "polymarketHints": ["Maine"]
+    },
+    {
+      "id": "cfb:mem",
+      "league": "CFB",
+      "code": "MEM",
+      "displayName": "Memphis",
+      "f402Names": ["MEMPHIS"],
+      "kalshiCodes": ["MEM"],
+      "polymarketHints": ["Memphis"]
+    },
+    {
+      "id": "cfb:mer",
+      "league": "CFB",
+      "code": "MER",
+      "displayName": "Mercer",
+      "f402Names": ["MERCER"],
+      "kalshiCodes": ["MER"],
+      "polymarketHints": ["Mercer"]
+    },
+    {
+      "id": "cfb:mhu",
+      "league": "CFB",
+      "code": "MHU",
+      "displayName": "Mercyhurst",
+      "f402Names": ["MERCYHURST"],
+      "kalshiCodes": ["MHU"],
+      "polymarketHints": ["Mercyhurst"]
+    },
+    {
+      "id": "cfb:mia",
+      "league": "CFB",
+      "code": "MIA",
+      "displayName": "Miami (FL)",
+      "f402Names": ["MIAMI (FL)"],
+      "kalshiCodes": ["MIA"],
+      "polymarketHints": ["Miami (FL)"]
+    },
+    {
+      "id": "cfb:mich",
+      "league": "CFB",
+      "code": "MICH",
+      "displayName": "Michigan",
+      "f402Names": ["MICHIGAN"],
+      "kalshiCodes": ["MICH"],
+      "polymarketHints": ["Michigan"]
+    },
+    {
+      "id": "cfb:minn",
+      "league": "CFB",
+      "code": "MINN",
+      "displayName": "Minnesota",
+      "f402Names": ["MINNESOTA"],
+      "kalshiCodes": ["MINN"],
+      "polymarketHints": ["Minnesota"]
+    },
+    {
+      "id": "cfb:miss",
+      "league": "CFB",
+      "code": "MISS",
+      "displayName": "Ole Miss",
+      "f402Names": ["OLE MISS"],
+      "kalshiCodes": ["MISS"],
+      "polymarketHints": ["Ole Miss"]
+    },
+    {
+      "id": "cfb:mizz",
+      "league": "CFB",
+      "code": "MIZZ",
+      "displayName": "Missouri",
+      "f402Names": ["MISSOURI"],
+      "kalshiCodes": ["MIZZ"],
+      "polymarketHints": ["Missouri"]
+    },
+    {
+      "id": "cfb:moh",
+      "league": "CFB",
+      "code": "MOH",
+      "displayName": "Miami (OH)",
+      "f402Names": ["MIAMI (OH)"],
+      "kalshiCodes": ["MOH"],
+      "polymarketHints": ["Miami (OH)"]
+    },
+    {
+      "id": "cfb:monm",
+      "league": "CFB",
+      "code": "MONM",
+      "displayName": "Monmouth",
+      "f402Names": ["MONMOUTH"],
+      "kalshiCodes": ["MONM"],
+      "polymarketHints": ["Monmouth"]
+    },
+    {
+      "id": "cfb:mont",
+      "league": "CFB",
+      "code": "MONT",
+      "displayName": "Montana",
+      "f402Names": ["MONTANA"],
+      "kalshiCodes": ["MONT"],
+      "polymarketHints": ["Montana"]
+    },
+    {
+      "id": "cfb:more",
+      "league": "CFB",
+      "code": "MORE",
+      "displayName": "Morehead St.",
+      "f402Names": ["MOREHEAD ST."],
+      "kalshiCodes": ["MORE"],
+      "polymarketHints": ["Morehead St."]
+    },
+    {
+      "id": "cfb:morg",
+      "league": "CFB",
+      "code": "MORG",
+      "displayName": "Morgan St.",
+      "f402Names": ["MORGAN ST."],
+      "kalshiCodes": ["MORG"],
+      "polymarketHints": ["Morgan St."]
+    },
+    {
+      "id": "cfb:mosu",
+      "league": "CFB",
+      "code": "MOSU",
+      "displayName": "Missouri St.",
+      "f402Names": ["MISSOURI ST."],
+      "kalshiCodes": ["MOSU"],
+      "polymarketHints": ["Missouri St."]
+    },
+    {
+      "id": "cfb:mrmk",
+      "league": "CFB",
+      "code": "MRMK",
+      "displayName": "Merrimack",
+      "f402Names": ["MERRIMACK"],
+      "kalshiCodes": ["MRMK"],
+      "polymarketHints": ["Merrimack"]
+    },
+    {
+      "id": "cfb:mrsh",
+      "league": "CFB",
+      "code": "MRSH",
+      "displayName": "Marshall",
+      "f402Names": ["MARSHALL"],
+      "kalshiCodes": ["MRSH"],
+      "polymarketHints": ["Marshall"]
+    },
+    {
+      "id": "cfb:mrst",
+      "league": "CFB",
+      "code": "MRST",
+      "displayName": "Marist",
+      "f402Names": ["MARIST"],
+      "kalshiCodes": ["MRST"],
+      "polymarketHints": ["Marist"]
+    },
+    {
+      "id": "cfb:msst",
+      "league": "CFB",
+      "code": "MSST",
+      "displayName": "Mississippi St.",
+      "f402Names": ["MISSISSIPPI ST."],
+      "kalshiCodes": ["MSST"],
+      "polymarketHints": ["Mississippi St."]
+    },
+    {
+      "id": "cfb:msu",
+      "league": "CFB",
+      "code": "MSU",
+      "displayName": "Michigan St.",
+      "f402Names": ["MICHIGAN ST."],
+      "kalshiCodes": ["MSU"],
+      "polymarketHints": ["Michigan St."]
+    },
+    {
+      "id": "cfb:mtst",
+      "league": "CFB",
+      "code": "MTST",
+      "displayName": "Montana St.",
+      "f402Names": ["MONTANA ST."],
+      "kalshiCodes": ["MTST"],
+      "polymarketHints": ["Montana St."]
+    },
+    {
+      "id": "cfb:mtu",
+      "league": "CFB",
+      "code": "MTU",
+      "displayName": "Middle Tennessee",
+      "f402Names": ["MIDDLE TENNESSEE"],
+      "kalshiCodes": ["MTU"],
+      "polymarketHints": ["Middle Tennessee"]
+    },
+    {
+      "id": "cfb:murr",
+      "league": "CFB",
+      "code": "MURR",
+      "displayName": "Murray St.",
+      "f402Names": ["MURRAY ST."],
+      "kalshiCodes": ["MURR"],
+      "polymarketHints": ["Murray St."]
+    },
+    {
+      "id": "cfb:mvsu",
+      "league": "CFB",
+      "code": "MVSU",
+      "displayName": "Mississippi Valley St.",
+      "f402Names": ["MISSISSIPPI VALLEY ST."],
+      "kalshiCodes": ["MVSU"],
+      "polymarketHints": ["Mississippi Valley St."]
+    },
+    {
+      "id": "cfb:nau",
+      "league": "CFB",
+      "code": "NAU",
+      "displayName": "Northern Arizona",
+      "f402Names": ["NORTHERN ARIZONA"],
+      "kalshiCodes": ["NAU"],
+      "polymarketHints": ["Northern Arizona"]
+    },
+    {
+      "id": "cfb:navy",
+      "league": "CFB",
+      "code": "NAVY",
+      "displayName": "Navy",
+      "f402Names": ["NAVY"],
+      "kalshiCodes": ["NAVY"],
+      "polymarketHints": ["Navy"]
+    },
+    {
+      "id": "cfb:ncat",
+      "league": "CFB",
+      "code": "NCAT",
+      "displayName": "North Carolina A&T",
+      "f402Names": ["NORTH CAROLINA A&T"],
+      "kalshiCodes": ["NCAT"],
+      "polymarketHints": ["North Carolina A&T"]
+    },
+    {
+      "id": "cfb:nccu",
+      "league": "CFB",
+      "code": "NCCU",
+      "displayName": "North Carolina Central",
+      "f402Names": ["NORTH CAROLINA CENTRAL"],
+      "kalshiCodes": ["NCCU"],
+      "polymarketHints": ["North Carolina Central"]
+    },
+    {
+      "id": "cfb:ncst",
+      "league": "CFB",
+      "code": "NCST",
+      "displayName": "NC St.",
+      "f402Names": ["NC ST."],
+      "kalshiCodes": ["NCST"],
+      "polymarketHints": ["NC St."]
+    },
+    {
+      "id": "cfb:nd",
+      "league": "CFB",
+      "code": "ND",
+      "displayName": "Notre Dame",
+      "f402Names": ["NOTRE DAME"],
+      "kalshiCodes": ["ND"],
+      "polymarketHints": ["Notre Dame"]
+    },
+    {
+      "id": "cfb:ndsu",
+      "league": "CFB",
+      "code": "NDSU",
+      "displayName": "North Dakota St.",
+      "f402Names": ["NORTH DAKOTA ST."],
+      "kalshiCodes": ["NDSU"],
+      "polymarketHints": ["North Dakota St."]
+    },
+    {
+      "id": "cfb:neb",
+      "league": "CFB",
+      "code": "NEB",
+      "displayName": "Nebraska",
+      "f402Names": ["NEBRASKA"],
+      "kalshiCodes": ["NEB"],
+      "polymarketHints": ["Nebraska"]
+    },
+    {
+      "id": "cfb:nev",
+      "league": "CFB",
+      "code": "NEV",
+      "displayName": "Nevada",
+      "f402Names": ["NEVADA"],
+      "kalshiCodes": ["NEV"],
+      "polymarketHints": ["Nevada"]
+    },
+    {
+      "id": "cfb:nhc",
+      "league": "CFB",
+      "code": "NHC",
+      "displayName": "New Haven",
+      "f402Names": ["NEW HAVEN"],
+      "kalshiCodes": ["NHC"],
+      "polymarketHints": ["New Haven"]
+    },
+    {
+      "id": "cfb:nich",
+      "league": "CFB",
+      "code": "NICH",
+      "displayName": "Nicholls St.",
+      "f402Names": ["NICHOLLS ST."],
+      "kalshiCodes": ["NICH"],
+      "polymarketHints": ["Nicholls St."]
+    },
+    {
+      "id": "cfb:niu",
+      "league": "CFB",
+      "code": "NIU",
+      "displayName": "Northern Illinois",
+      "f402Names": ["NORTHERN ILLINOIS"],
+      "kalshiCodes": ["NIU"],
+      "polymarketHints": ["Northern Illinois"]
+    },
+    {
+      "id": "cfb:nmsu",
+      "league": "CFB",
+      "code": "NMSU",
+      "displayName": "New Mexico St.",
+      "f402Names": ["NEW MEXICO ST."],
+      "kalshiCodes": ["NMSU"],
+      "polymarketHints": ["New Mexico St."]
+    },
+    {
+      "id": "cfb:norf",
+      "league": "CFB",
+      "code": "NORF",
+      "displayName": "Norfolk St.",
+      "f402Names": ["NORFOLK ST."],
+      "kalshiCodes": ["NORF"],
+      "polymarketHints": ["Norfolk St."]
+    },
+    {
+      "id": "cfb:nw",
+      "league": "CFB",
+      "code": "NW",
+      "displayName": "Northwestern",
+      "f402Names": ["NORTHWESTERN"],
+      "kalshiCodes": ["NW"],
+      "polymarketHints": ["Northwestern"]
+    },
+    {
+      "id": "cfb:nwst",
+      "league": "CFB",
+      "code": "NWST",
+      "displayName": "Northwestern St.",
+      "f402Names": ["NORTHWESTERN ST."],
+      "kalshiCodes": ["NWST"],
+      "polymarketHints": ["Northwestern St."]
+    },
+    {
+      "id": "cfb:odu",
+      "league": "CFB",
+      "code": "ODU",
+      "displayName": "Old Dominion",
+      "f402Names": ["OLD DOMINION"],
+      "kalshiCodes": ["ODU"],
+      "polymarketHints": ["Old Dominion"]
+    },
+    {
+      "id": "cfb:ohio",
+      "league": "CFB",
+      "code": "OHIO",
+      "displayName": "Ohio",
+      "f402Names": ["OHIO"],
+      "kalshiCodes": ["OHIO"],
+      "polymarketHints": ["Ohio"]
+    },
+    {
+      "id": "cfb:okla",
+      "league": "CFB",
+      "code": "OKLA",
+      "displayName": "Oklahoma",
+      "f402Names": ["OKLAHOMA"],
+      "kalshiCodes": ["OKLA"],
+      "polymarketHints": ["Oklahoma"]
+    },
+    {
+      "id": "cfb:okst",
+      "league": "CFB",
+      "code": "OKST",
+      "displayName": "Oklahoma St.",
+      "f402Names": ["OKLAHOMA ST."],
+      "kalshiCodes": ["OKST"],
+      "polymarketHints": ["Oklahoma St."]
+    },
+    {
+      "id": "cfb:ore",
+      "league": "CFB",
+      "code": "ORE",
+      "displayName": "Oregon",
+      "f402Names": ["OREGON"],
+      "kalshiCodes": ["ORE"],
+      "polymarketHints": ["Oregon"]
+    },
+    {
+      "id": "cfb:orst",
+      "league": "CFB",
+      "code": "ORST",
+      "displayName": "Oregon St.",
+      "f402Names": ["OREGON ST."],
+      "kalshiCodes": ["ORST"],
+      "polymarketHints": ["Oregon St."]
+    },
+    {
+      "id": "cfb:osu",
+      "league": "CFB",
+      "code": "OSU",
+      "displayName": "Ohio St.",
+      "f402Names": ["OHIO ST."],
+      "kalshiCodes": ["OSU"],
+      "polymarketHints": ["Ohio St."]
+    },
+    {
+      "id": "cfb:peay",
+      "league": "CFB",
+      "code": "PEAY",
+      "displayName": "Austin Peay",
+      "f402Names": ["AUSTIN PEAY"],
+      "kalshiCodes": ["PEAY"],
+      "polymarketHints": ["Austin Peay"]
+    },
+    {
+      "id": "cfb:penn",
+      "league": "CFB",
+      "code": "PENN",
+      "displayName": "Penn",
+      "f402Names": ["PENN"],
+      "kalshiCodes": ["PENN"],
+      "polymarketHints": ["Penn"]
+    },
+    {
+      "id": "cfb:pitt",
+      "league": "CFB",
+      "code": "PITT",
+      "displayName": "Pittsburgh",
+      "f402Names": ["PITTSBURGH"],
+      "kalshiCodes": ["PITT"],
+      "polymarketHints": ["Pittsburgh"]
+    },
+    {
+      "id": "cfb:pre",
+      "league": "CFB",
+      "code": "PRE",
+      "displayName": "Presbyterian",
+      "f402Names": ["PRESBYTERIAN"],
+      "kalshiCodes": ["PRE"],
+      "polymarketHints": ["Presbyterian"]
+    },
+    {
+      "id": "cfb:prin",
+      "league": "CFB",
+      "code": "PRIN",
+      "displayName": "Princeton",
+      "f402Names": ["PRINCETON"],
+      "kalshiCodes": ["PRIN"],
+      "polymarketHints": ["Princeton"]
+    },
+    {
+      "id": "cfb:prst",
+      "league": "CFB",
+      "code": "PRST",
+      "displayName": "Portland St.",
+      "f402Names": ["PORTLAND ST."],
+      "kalshiCodes": ["PRST"],
+      "polymarketHints": ["Portland St."]
+    },
+    {
+      "id": "cfb:psu",
+      "league": "CFB",
+      "code": "PSU",
+      "displayName": "Penn St.",
+      "f402Names": ["PENN ST."],
+      "kalshiCodes": ["PSU"],
+      "polymarketHints": ["Penn St."]
+    },
+    {
+      "id": "cfb:pur",
+      "league": "CFB",
+      "code": "PUR",
+      "displayName": "Purdue",
+      "f402Names": ["PURDUE"],
+      "kalshiCodes": ["PUR"],
+      "polymarketHints": ["Purdue"]
+    },
+    {
+      "id": "cfb:pv",
+      "league": "CFB",
+      "code": "PV",
+      "displayName": "Prairie View A&M",
+      "f402Names": ["PRAIRIE VIEW A&M"],
+      "kalshiCodes": ["PV"],
+      "polymarketHints": ["Prairie View A&M"]
+    },
+    {
+      "id": "cfb:rice",
+      "league": "CFB",
+      "code": "RICE",
+      "displayName": "Rice",
+      "f402Names": ["RICE"],
+      "kalshiCodes": ["RICE"],
+      "polymarketHints": ["Rice"]
+    },
+    {
+      "id": "cfb:rich",
+      "league": "CFB",
+      "code": "RICH",
+      "displayName": "Richmond",
+      "f402Names": ["RICHMOND"],
+      "kalshiCodes": ["RICH"],
+      "polymarketHints": ["Richmond"]
+    },
+    {
+      "id": "cfb:rmu",
+      "league": "CFB",
+      "code": "RMU",
+      "displayName": "Robert Morris",
+      "f402Names": ["ROBERT MORRIS"],
+      "kalshiCodes": ["RMU"],
+      "polymarketHints": ["Robert Morris"]
+    },
+    {
+      "id": "cfb:rutg",
+      "league": "CFB",
+      "code": "RUTG",
+      "displayName": "Rutgers",
+      "f402Names": ["RUTGERS"],
+      "kalshiCodes": ["RUTG"],
+      "polymarketHints": ["Rutgers"]
+    },
+    {
+      "id": "cfb:sac",
+      "league": "CFB",
+      "code": "SAC",
+      "displayName": "Sacramento St.",
+      "f402Names": ["SACRAMENTO ST."],
+      "kalshiCodes": ["SAC"],
+      "polymarketHints": ["Sacramento St."]
+    },
+    {
+      "id": "cfb:sam",
+      "league": "CFB",
+      "code": "SAM",
+      "displayName": "Samford",
+      "f402Names": ["SAMFORD"],
+      "kalshiCodes": ["SAM"],
+      "polymarketHints": ["Samford"]
+    },
+    {
+      "id": "cfb:scar",
+      "league": "CFB",
+      "code": "SCAR",
+      "displayName": "South Carolina",
+      "f402Names": ["SOUTH CAROLINA"],
+      "kalshiCodes": ["SCAR"],
+      "polymarketHints": ["South Carolina"]
+    },
+    {
+      "id": "cfb:scst",
+      "league": "CFB",
+      "code": "SCST",
+      "displayName": "South Carolina St.",
+      "f402Names": ["SOUTH CAROLINA ST."],
+      "kalshiCodes": ["SCST"],
+      "polymarketHints": ["South Carolina St."]
+    },
+    {
+      "id": "cfb:sdak",
+      "league": "CFB",
+      "code": "SDAK",
+      "displayName": "South Dakota",
+      "f402Names": ["SOUTH DAKOTA"],
+      "kalshiCodes": ["SDAK"],
+      "polymarketHints": ["South Dakota"]
+    },
+    {
+      "id": "cfb:sdst",
+      "league": "CFB",
+      "code": "SDST",
+      "displayName": "South Dakota St.",
+      "f402Names": ["SOUTH DAKOTA ST."],
+      "kalshiCodes": ["SDST"],
+      "polymarketHints": ["South Dakota St."]
+    },
+    {
+      "id": "cfb:sdsu",
+      "league": "CFB",
+      "code": "SDSU",
+      "displayName": "San Diego St.",
+      "f402Names": ["SAN DIEGO ST."],
+      "kalshiCodes": ["SDSU"],
+      "polymarketHints": ["San Diego St."]
+    },
+    {
+      "id": "cfb:sela",
+      "league": "CFB",
+      "code": "SELA",
+      "displayName": "Southeastern Louisiana",
+      "f402Names": ["SOUTHEASTERN LOUISIANA"],
+      "kalshiCodes": ["SELA"],
+      "polymarketHints": ["Southeastern Louisiana"]
+    },
+    {
+      "id": "cfb:semo",
+      "league": "CFB",
+      "code": "SEMO",
+      "displayName": "Southeast Missouri St.",
+      "f402Names": ["SOUTHEAST MISSOURI ST."],
+      "kalshiCodes": ["SEMO"],
+      "polymarketHints": ["Southeast Missouri St."]
+    },
+    {
+      "id": "cfb:sfa",
+      "league": "CFB",
+      "code": "SFA",
+      "displayName": "Stephen F. Austin",
+      "f402Names": ["FERENCVAROS", "STEPHEN F AUSTIN"],
+      "kalshiCodes": ["SFA"],
+      "polymarketHints": ["Stephen F. Austin"]
+    },
+    {
+      "id": "cfb:shsu",
+      "league": "CFB",
+      "code": "SHSU",
+      "displayName": "Sam Houston",
+      "f402Names": ["SAM HOUSTON"],
+      "kalshiCodes": ["SHSU"],
+      "polymarketHints": ["Sam Houston"]
+    },
+    {
+      "id": "cfb:shu",
+      "league": "CFB",
+      "code": "SHU",
+      "displayName": "Sacred Heart",
+      "f402Names": ["SACRED HEART"],
+      "kalshiCodes": ["SHU"],
+      "polymarketHints": ["Sacred Heart"]
+    },
+    {
+      "id": "cfb:siu",
+      "league": "CFB",
+      "code": "SIU",
+      "displayName": "Southern Illinois",
+      "f402Names": ["SOUTHERN ILLINOIS"],
+      "kalshiCodes": ["SIU"],
+      "polymarketHints": ["Southern Illinois"]
+    },
+    {
+      "id": "cfb:sjsu",
+      "league": "CFB",
+      "code": "SJSU",
+      "displayName": "San Jose St.",
+      "f402Names": ["SAN JOSE ST."],
+      "kalshiCodes": ["SJSU"],
+      "polymarketHints": ["San Jose St."]
+    },
+    {
+      "id": "cfb:smu",
+      "league": "CFB",
+      "code": "SMU",
+      "displayName": "SMU",
+      "f402Names": ["SMU"],
+      "kalshiCodes": ["SMU"],
+      "polymarketHints": ["SMU"]
+    },
+    {
+      "id": "cfb:sou",
+      "league": "CFB",
+      "code": "SOU",
+      "displayName": "Southern University",
+      "f402Names": ["SOUTHERN UNIVERSITY"],
+      "kalshiCodes": ["SOU"],
+      "polymarketHints": ["Southern University"]
+    },
+    {
+      "id": "cfb:stan",
+      "league": "CFB",
+      "code": "STAN",
+      "displayName": "Stanford",
+      "f402Names": ["STANFORD"],
+      "kalshiCodes": ["STAN"],
+      "polymarketHints": ["Stanford"]
+    },
+    {
+      "id": "cfb:stet",
+      "league": "CFB",
+      "code": "STET",
+      "displayName": "Stetson",
+      "f402Names": ["STETSON"],
+      "kalshiCodes": ["STET"],
+      "polymarketHints": ["Stetson"]
+    },
+    {
+      "id": "cfb:stnh",
+      "league": "CFB",
+      "code": "STNH",
+      "displayName": "Stonehill",
+      "f402Names": ["STONEHILL"],
+      "kalshiCodes": ["STNH"],
+      "polymarketHints": ["Stonehill"]
+    },
+    {
+      "id": "cfb:ston",
+      "league": "CFB",
+      "code": "STON",
+      "displayName": "Stony Brook",
+      "f402Names": ["STONY BROOK"],
+      "kalshiCodes": ["STON"],
+      "polymarketHints": ["Stony Brook"]
+    },
+    {
+      "id": "cfb:suu",
+      "league": "CFB",
+      "code": "SUU",
+      "displayName": "Southern Utah",
+      "f402Names": ["SOUTHERN UTAH"],
+      "kalshiCodes": ["SUU"],
+      "polymarketHints": ["Southern Utah"]
+    },
+    {
+      "id": "cfb:syr",
+      "league": "CFB",
+      "code": "SYR",
+      "displayName": "Syracuse",
+      "f402Names": ["SYRACUSE"],
+      "kalshiCodes": ["SYR"],
+      "polymarketHints": ["Syracuse"]
+    },
+    {
+      "id": "cfb:tarl",
+      "league": "CFB",
+      "code": "TARL",
+      "displayName": "Tarleton St.",
+      "f402Names": ["TARLETON ST."],
+      "kalshiCodes": ["TARL"],
+      "polymarketHints": ["Tarleton St."]
+    },
+    {
+      "id": "cfb:tcu",
+      "league": "CFB",
+      "code": "TCU",
+      "displayName": "TCU",
+      "f402Names": ["TCU"],
+      "kalshiCodes": ["TCU"],
+      "polymarketHints": ["TCU"]
+    },
+    {
+      "id": "cfb:tem",
+      "league": "CFB",
+      "code": "TEM",
+      "displayName": "Temple",
+      "f402Names": ["TEMPLE"],
+      "kalshiCodes": ["TEM"],
+      "polymarketHints": ["Temple"]
+    },
+    {
+      "id": "cfb:tenn",
+      "league": "CFB",
+      "code": "TENN",
+      "displayName": "Tennessee",
+      "f402Names": ["TENNESSEE"],
+      "kalshiCodes": ["TENN"],
+      "polymarketHints": ["Tennessee"]
+    },
+    {
+      "id": "cfb:tex",
+      "league": "CFB",
+      "code": "TEX",
+      "displayName": "Texas",
+      "f402Names": ["TEXAS"],
+      "kalshiCodes": ["TEX"],
+      "polymarketHints": ["Texas"]
+    },
+    {
+      "id": "cfb:tlsa",
+      "league": "CFB",
+      "code": "TLSA",
+      "displayName": "Tulsa",
+      "f402Names": ["TULSA"],
+      "kalshiCodes": ["TLSA"],
+      "polymarketHints": ["Tulsa"]
+    },
+    {
+      "id": "cfb:tnst",
+      "league": "CFB",
+      "code": "TNST",
+      "displayName": "Tennessee St.",
+      "f402Names": ["TENNESSEE ST."],
+      "kalshiCodes": ["TNST"],
+      "polymarketHints": ["Tennessee St."]
+    },
+    {
+      "id": "cfb:tntc",
+      "league": "CFB",
+      "code": "TNTC",
+      "displayName": "Tennessee Tech",
+      "f402Names": ["TENNESSEE TECH"],
+      "kalshiCodes": ["TNTC"],
+      "polymarketHints": ["Tennessee Tech"]
+    },
+    {
+      "id": "cfb:tol",
+      "league": "CFB",
+      "code": "TOL",
+      "displayName": "Toledo",
+      "f402Names": ["TOLEDO"],
+      "kalshiCodes": ["TOL"],
+      "polymarketHints": ["Toledo"]
+    },
+    {
+      "id": "cfb:tows",
+      "league": "CFB",
+      "code": "TOWS",
+      "displayName": "Towson",
+      "f402Names": ["TOWSON"],
+      "kalshiCodes": ["TOWS"],
+      "polymarketHints": ["Towson"]
+    },
+    {
+      "id": "cfb:troy",
+      "league": "CFB",
+      "code": "TROY",
+      "displayName": "Troy",
+      "f402Names": ["TROY"],
+      "kalshiCodes": ["TROY"],
+      "polymarketHints": ["Troy"]
+    },
+    {
+      "id": "cfb:ttu",
+      "league": "CFB",
+      "code": "TTU",
+      "displayName": "Texas Tech",
+      "f402Names": ["TEXAS TECH"],
+      "kalshiCodes": ["TTU"],
+      "polymarketHints": ["Texas Tech"]
+    },
+    {
+      "id": "cfb:tuln",
+      "league": "CFB",
+      "code": "TULN",
+      "displayName": "Tulane",
+      "f402Names": ["TULANE"],
+      "kalshiCodes": ["TULN"],
+      "polymarketHints": ["Tulane"]
+    },
+    {
+      "id": "cfb:txam",
+      "league": "CFB",
+      "code": "TXAM",
+      "displayName": "Texas A&M",
+      "f402Names": ["TEXAS A&M"],
+      "kalshiCodes": ["TXAM"],
+      "polymarketHints": ["Texas A&M"]
+    },
+    {
+      "id": "cfb:txso",
+      "league": "CFB",
+      "code": "TXSO",
+      "displayName": "Texas Southern",
+      "f402Names": ["TEXAS SOUTHERN"],
+      "kalshiCodes": ["TXSO"],
+      "polymarketHints": ["Texas Southern"]
+    },
+    {
+      "id": "cfb:txst",
+      "league": "CFB",
+      "code": "TXST",
+      "displayName": "Texas St.",
+      "f402Names": ["TEXAS ST."],
+      "kalshiCodes": ["TXST"],
+      "polymarketHints": ["Texas St."]
+    },
+    {
+      "id": "cfb:uab",
+      "league": "CFB",
+      "code": "UAB",
+      "displayName": "UAB",
+      "f402Names": ["UAB"],
+      "kalshiCodes": ["UAB"],
+      "polymarketHints": ["UAB"]
+    },
+    {
+      "id": "cfb:ucd",
+      "league": "CFB",
+      "code": "UCD",
+      "displayName": "UC Davis",
+      "f402Names": ["UC DAVIS"],
+      "kalshiCodes": ["UCD"],
+      "polymarketHints": ["UC Davis"]
+    },
+    {
+      "id": "cfb:ucf",
+      "league": "CFB",
+      "code": "UCF",
+      "displayName": "UCF",
+      "f402Names": ["UCF"],
+      "kalshiCodes": ["UCF"],
+      "polymarketHints": ["UCF"]
+    },
+    {
+      "id": "cfb:ucla",
+      "league": "CFB",
+      "code": "UCLA",
+      "displayName": "UCLA",
+      "f402Names": ["UCLA"],
+      "kalshiCodes": ["UCLA"],
+      "polymarketHints": ["UCLA"]
+    },
+    {
+      "id": "cfb:uga",
+      "league": "CFB",
+      "code": "UGA",
+      "displayName": "Georgia",
+      "f402Names": ["GEORGIA"],
+      "kalshiCodes": ["UGA"],
+      "polymarketHints": ["Georgia"]
+    },
+    {
+      "id": "cfb:uk",
+      "league": "CFB",
+      "code": "UK",
+      "displayName": "Kentucky",
+      "f402Names": ["KENTUCKY"],
+      "kalshiCodes": ["UK"],
+      "polymarketHints": ["Kentucky"]
+    },
+    {
+      "id": "cfb:ull",
+      "league": "CFB",
+      "code": "ULL",
+      "displayName": "Louisiana",
+      "f402Names": ["LOUISIANA"],
+      "kalshiCodes": ["ULL"],
+      "polymarketHints": ["Louisiana"]
+    },
+    {
+      "id": "cfb:ulm",
+      "league": "CFB",
+      "code": "ULM",
+      "displayName": "Louisiana-Monroe",
+      "f402Names": ["LOUISIANA-MONROE"],
+      "kalshiCodes": ["ULM"],
+      "polymarketHints": ["Louisiana-Monroe"]
+    },
+    {
+      "id": "cfb:una",
+      "league": "CFB",
+      "code": "UNA",
+      "displayName": "North Alabama",
+      "f402Names": ["NORTH ALABAMA"],
+      "kalshiCodes": ["UNA"],
+      "polymarketHints": ["North Alabama"]
+    },
+    {
+      "id": "cfb:unc",
+      "league": "CFB",
+      "code": "UNC",
+      "displayName": "North Carolina",
+      "f402Names": ["NORTH CAROLINA"],
+      "kalshiCodes": ["UNC"],
+      "polymarketHints": ["North Carolina"]
+    },
+    {
+      "id": "cfb:unco",
+      "league": "CFB",
+      "code": "UNCO",
+      "displayName": "Northern Colorado",
+      "f402Names": ["NORTHERN COLORADO"],
+      "kalshiCodes": ["UNCO"],
+      "polymarketHints": ["Northern Colorado"]
+    },
+    {
+      "id": "cfb:und",
+      "league": "CFB",
+      "code": "UND",
+      "displayName": "North Dakota",
+      "f402Names": ["NORTH DAKOTA"],
+      "kalshiCodes": ["UND"],
+      "polymarketHints": ["North Dakota"]
+    },
+    {
+      "id": "cfb:unh",
+      "league": "CFB",
+      "code": "UNH",
+      "displayName": "New Hampshire",
+      "f402Names": ["NEW HAMPSHIRE"],
+      "kalshiCodes": ["UNH"],
+      "polymarketHints": ["New Hampshire"]
+    },
+    {
+      "id": "cfb:uni",
+      "league": "CFB",
+      "code": "UNI",
+      "displayName": "Northern Iowa",
+      "f402Names": ["NORTHERN IOWA"],
+      "kalshiCodes": ["UNI"],
+      "polymarketHints": ["Northern Iowa"]
+    },
+    {
+      "id": "cfb:unlv",
+      "league": "CFB",
+      "code": "UNLV",
+      "displayName": "UNLV",
+      "f402Names": ["UNLV"],
+      "kalshiCodes": ["UNLV"],
+      "polymarketHints": ["UNLV"]
+    },
+    {
+      "id": "cfb:unm",
+      "league": "CFB",
+      "code": "UNM",
+      "displayName": "New Mexico",
+      "f402Names": ["NEW MEXICO"],
+      "kalshiCodes": ["UNM"],
+      "polymarketHints": ["New Mexico"]
+    },
+    {
+      "id": "cfb:unt",
+      "league": "CFB",
+      "code": "UNT",
+      "displayName": "North Texas",
+      "f402Names": ["NORTH TEXAS"],
+      "kalshiCodes": ["UNT"],
+      "polymarketHints": ["North Texas"]
+    },
+    {
+      "id": "cfb:uri",
+      "league": "CFB",
+      "code": "URI",
+      "displayName": "Rhode Island",
+      "f402Names": ["RHODE ISLAND"],
+      "kalshiCodes": ["URI"],
+      "polymarketHints": ["Rhode Island"]
+    },
+    {
+      "id": "cfb:usa",
+      "league": "CFB",
+      "code": "USA",
+      "displayName": "South Alabama",
+      "f402Names": ["SOUTH ALABAMA"],
+      "kalshiCodes": ["USA"],
+      "polymarketHints": ["South Alabama"]
+    },
+    {
+      "id": "cfb:usc",
+      "league": "CFB",
+      "code": "USC",
+      "displayName": "USC",
+      "f402Names": ["USC"],
+      "kalshiCodes": ["USC"],
+      "polymarketHints": ["USC"]
+    },
+    {
+      "id": "cfb:usd",
+      "league": "CFB",
+      "code": "USD",
+      "displayName": "San Diego",
+      "f402Names": ["SAN DIEGO"],
+      "kalshiCodes": ["USD"],
+      "polymarketHints": ["San Diego"]
+    },
+    {
+      "id": "cfb:usf",
+      "league": "CFB",
+      "code": "USF",
+      "displayName": "South Florida",
+      "f402Names": ["SOUTH FLORIDA"],
+      "kalshiCodes": ["USF"],
+      "polymarketHints": ["South Florida"]
+    },
+    {
+      "id": "cfb:usm",
+      "league": "CFB",
+      "code": "USM",
+      "displayName": "Southern Miss",
+      "f402Names": ["SOUTHERN MISS"],
+      "kalshiCodes": ["USM"],
+      "polymarketHints": ["Southern Miss"]
+    },
+    {
+      "id": "cfb:ust",
+      "league": "CFB",
+      "code": "UST",
+      "displayName": "St. Thomas",
+      "f402Names": ["ST. THOMAS"],
+      "kalshiCodes": ["UST"],
+      "polymarketHints": ["St. Thomas"]
+    },
+    {
+      "id": "cfb:usu",
+      "league": "CFB",
+      "code": "USU",
+      "displayName": "Utah St.",
+      "f402Names": ["UTAH ST."],
+      "kalshiCodes": ["USU"],
+      "polymarketHints": ["Utah St."]
+    },
+    {
+      "id": "cfb:utah",
+      "league": "CFB",
+      "code": "UTAH",
+      "displayName": "Utah",
+      "f402Names": ["UTAH"],
+      "kalshiCodes": ["UTAH"],
+      "polymarketHints": ["Utah"]
+    },
+    {
+      "id": "cfb:utep",
+      "league": "CFB",
+      "code": "UTEP",
+      "displayName": "UTEP",
+      "f402Names": ["UTEP"],
+      "kalshiCodes": ["UTEP"],
+      "polymarketHints": ["UTEP"]
+    },
+    {
+      "id": "cfb:utm",
+      "league": "CFB",
+      "code": "UTM",
+      "displayName": "Tennessee-Martin",
+      "f402Names": ["TENNESSEE-MARTIN"],
+      "kalshiCodes": ["UTM"],
+      "polymarketHints": ["Tennessee-Martin"]
+    },
+    {
+      "id": "cfb:utrgv",
+      "league": "CFB",
+      "code": "UTRGV",
+      "displayName": "UT Rio Grande Valley",
+      "f402Names": ["UT RIO GRANDE VALLEY"],
+      "kalshiCodes": ["UTRGV"],
+      "polymarketHints": ["UT Rio Grande Valley"]
+    },
+    {
+      "id": "cfb:utsa",
+      "league": "CFB",
+      "code": "UTSA",
+      "displayName": "UTSA",
+      "f402Names": ["UTSA"],
+      "kalshiCodes": ["UTSA"],
+      "polymarketHints": ["UTSA"]
+    },
+    {
+      "id": "cfb:utu",
+      "league": "CFB",
+      "code": "UTU",
+      "displayName": "Utah Tech",
+      "f402Names": ["UTAH TECH"],
+      "kalshiCodes": ["UTU"],
+      "polymarketHints": ["Utah Tech"]
+    },
+    {
+      "id": "cfb:uva",
+      "league": "CFB",
+      "code": "UVA",
+      "displayName": "Virginia",
+      "f402Names": ["VIRGINIA"],
+      "kalshiCodes": ["UVA"],
+      "polymarketHints": ["Virginia"]
+    },
+    {
+      "id": "cfb:uwfl",
+      "league": "CFB",
+      "code": "UWFL",
+      "displayName": "West Florida",
+      "f402Names": ["WEST FLORIDA"],
+      "kalshiCodes": ["UWFL"],
+      "polymarketHints": ["West Florida"]
+    },
+    {
+      "id": "cfb:uwga",
+      "league": "CFB",
+      "code": "UWGA",
+      "displayName": "West Georgia",
+      "f402Names": ["WEST GEORGIA"],
+      "kalshiCodes": ["UWGA"],
+      "polymarketHints": ["West Georgia"]
+    },
+    {
+      "id": "cfb:valp",
+      "league": "CFB",
+      "code": "VALP",
+      "displayName": "Valparaiso",
+      "f402Names": ["VALPARAISO"],
+      "kalshiCodes": ["VALP"],
+      "polymarketHints": ["Valparaiso"]
+    },
+    {
+      "id": "cfb:van",
+      "league": "CFB",
+      "code": "VAN",
+      "displayName": "Vanderbilt",
+      "f402Names": ["VANDERBILT"],
+      "kalshiCodes": ["VAN"],
+      "polymarketHints": ["Vanderbilt"]
+    },
+    {
+      "id": "cfb:vill",
+      "league": "CFB",
+      "code": "VILL",
+      "displayName": "Villanova",
+      "f402Names": ["VILLANOVA"],
+      "kalshiCodes": ["VILL"],
+      "polymarketHints": ["Villanova"]
+    },
+    {
+      "id": "cfb:vmi",
+      "league": "CFB",
+      "code": "VMI",
+      "displayName": "VMI",
+      "f402Names": ["VMI"],
+      "kalshiCodes": ["VMI"],
+      "polymarketHints": ["VMI"]
+    },
+    {
+      "id": "cfb:vt",
+      "league": "CFB",
+      "code": "VT",
+      "displayName": "Virginia Tech",
+      "f402Names": ["VIRGINIA TECH"],
+      "kalshiCodes": ["VT"],
+      "polymarketHints": ["Virginia Tech"]
+    },
+    {
+      "id": "cfb:wag",
+      "league": "CFB",
+      "code": "WAG",
+      "displayName": "Wagner",
+      "f402Names": ["WAGNER"],
+      "kalshiCodes": ["WAG"],
+      "polymarketHints": ["Wagner"]
+    },
+    {
+      "id": "cfb:wake",
+      "league": "CFB",
+      "code": "WAKE",
+      "displayName": "Wake Forest",
+      "f402Names": ["WAKE FOREST"],
+      "kalshiCodes": ["WAKE"],
+      "polymarketHints": ["Wake Forest"]
+    },
+    {
+      "id": "cfb:wash",
+      "league": "CFB",
+      "code": "WASH",
+      "displayName": "Washington",
+      "f402Names": ["WASHINGTON"],
+      "kalshiCodes": ["WASH"],
+      "polymarketHints": ["Washington"]
+    },
+    {
+      "id": "cfb:wcu",
+      "league": "CFB",
+      "code": "WCU",
+      "displayName": "Western Carolina",
+      "f402Names": ["WESTERN CAROLINA"],
+      "kalshiCodes": ["WCU"],
+      "polymarketHints": ["Western Carolina"]
+    },
+    {
+      "id": "cfb:web",
+      "league": "CFB",
+      "code": "WEB",
+      "displayName": "Weber St.",
+      "f402Names": ["WEBER ST."],
+      "kalshiCodes": ["WEB"],
+      "polymarketHints": ["Weber St."]
+    },
+    {
+      "id": "cfb:webb",
+      "league": "CFB",
+      "code": "WEBB",
+      "displayName": "Gardner-Webb",
+      "f402Names": ["GARDNER-WEBB"],
+      "kalshiCodes": ["WEBB"],
+      "polymarketHints": ["Gardner-Webb"]
+    },
+    {
+      "id": "cfb:wis",
+      "league": "CFB",
+      "code": "WIS",
+      "displayName": "Wisconsin",
+      "f402Names": ["WISCONSIN"],
+      "kalshiCodes": ["WIS"],
+      "polymarketHints": ["Wisconsin"]
+    },
+    {
+      "id": "cfb:wiu",
+      "league": "CFB",
+      "code": "WIU",
+      "displayName": "Western Illinois",
+      "f402Names": ["WESTERN ILLINOIS"],
+      "kalshiCodes": ["WIU"],
+      "polymarketHints": ["Western Illinois"]
+    },
+    {
+      "id": "cfb:wku",
+      "league": "CFB",
+      "code": "WKU",
+      "displayName": "Western Kentucky",
+      "f402Names": ["WESTERN KENTUCKY"],
+      "kalshiCodes": ["WKU"],
+      "polymarketHints": ["Western Kentucky"]
+    },
+    {
+      "id": "cfb:wm",
+      "league": "CFB",
+      "code": "WM",
+      "displayName": "William & Mary",
+      "f402Names": ["WILLIAM & MARY"],
+      "kalshiCodes": ["WM"],
+      "polymarketHints": ["William & Mary"]
+    },
+    {
+      "id": "cfb:wmu",
+      "league": "CFB",
+      "code": "WMU",
+      "displayName": "Western Michigan",
+      "f402Names": ["WESTERN MICHIGAN"],
+      "kalshiCodes": ["WMU"],
+      "polymarketHints": ["Western Michigan"]
+    },
+    {
+      "id": "cfb:wof",
+      "league": "CFB",
+      "code": "WOF",
+      "displayName": "Wofford",
+      "f402Names": ["WOFFORD"],
+      "kalshiCodes": ["WOF"],
+      "polymarketHints": ["Wofford"]
+    },
+    {
+      "id": "cfb:wsu",
+      "league": "CFB",
+      "code": "WSU",
+      "displayName": "Washington St.",
+      "f402Names": ["WASHINGTON ST."],
+      "kalshiCodes": ["WSU"],
+      "polymarketHints": ["Washington St."]
+    },
+    {
+      "id": "cfb:wvu",
+      "league": "CFB",
+      "code": "WVU",
+      "displayName": "West Virginia",
+      "f402Names": ["WEST VIRGINIA"],
+      "kalshiCodes": ["WVU"],
+      "polymarketHints": ["West Virginia"]
+    },
+    {
+      "id": "cfb:wyo",
+      "league": "CFB",
+      "code": "WYO",
+      "displayName": "Wyoming",
+      "f402Names": ["WYOMING"],
+      "kalshiCodes": ["WYO"],
+      "polymarketHints": ["Wyoming"]
+    },
+    {
+      "id": "cfb:yale",
+      "league": "CFB",
+      "code": "YALE",
+      "displayName": "Yale",
+      "f402Names": ["YALE"],
+      "kalshiCodes": ["YALE"],
+      "polymarketHints": ["Yale"]
+    },
+    {
+      "id": "cfb:ysu",
+      "league": "CFB",
+      "code": "YSU",
+      "displayName": "Youngstown St.",
+      "f402Names": ["YOUNGSTOWN ST."],
+      "kalshiCodes": ["YSU"],
+      "polymarketHints": ["Youngstown St."]
+    },
+    {
+      "id": "epl:ars",
+      "league": "EPL",
+      "code": "ARS",
+      "displayName": "Arsenal",
+      "f402Names": ["ARSENAL"],
+      "kalshiCodes": ["ARS"],
+      "polymarketHints": ["Arsenal"]
+    },
+    {
+      "id": "epl:avl",
+      "league": "EPL",
+      "code": "AVL",
+      "displayName": "Aston Villa",
+      "f402Names": ["ASTON VILLA"],
+      "kalshiCodes": ["AVL"],
+      "polymarketHints": ["Aston Villa"]
+    },
+    {
+      "id": "epl:bou",
+      "league": "EPL",
+      "code": "BOU",
+      "displayName": "Bournemouth",
+      "f402Names": ["BOURNEMOUTH"],
+      "kalshiCodes": ["BOU"],
+      "polymarketHints": ["Bournemouth"]
+    },
+    {
+      "id": "epl:bre",
+      "league": "EPL",
+      "code": "BRE",
+      "displayName": "Brentford",
+      "f402Names": ["BRENTFORD"],
+      "kalshiCodes": ["BRE"],
+      "polymarketHints": ["Brentford"]
+    },
+    {
+      "id": "epl:bri",
+      "league": "EPL",
+      "code": "BRI",
+      "displayName": "Brighton",
+      "f402Names": ["BRIGHTON"],
+      "kalshiCodes": ["BRI"],
+      "polymarketHints": ["Brighton"]
+    },
+    {
+      "id": "epl:cfc",
+      "league": "EPL",
+      "code": "CFC",
+      "displayName": "Chelsea",
+      "f402Names": ["CHELSEA"],
+      "kalshiCodes": ["CFC"],
+      "polymarketHints": ["Chelsea"]
+    },
+    {
+      "id": "epl:cov",
+      "league": "EPL",
+      "code": "COV",
+      "displayName": "Coventry",
+      "f402Names": ["COVENTRY"],
+      "kalshiCodes": ["COV"],
+      "polymarketHints": ["Coventry"]
+    },
+    {
+      "id": "epl:cry",
+      "league": "EPL",
+      "code": "CRY",
+      "displayName": "Crystal Palace",
+      "f402Names": ["CRYSTAL PALACE"],
+      "kalshiCodes": ["CRY"],
+      "polymarketHints": ["Crystal Palace"]
+    },
+    {
+      "id": "epl:eve",
+      "league": "EPL",
+      "code": "EVE",
+      "displayName": "Everton",
+      "f402Names": ["EVERTON"],
+      "kalshiCodes": ["EVE"],
+      "polymarketHints": ["Everton"]
+    },
+    {
+      "id": "epl:ful",
+      "league": "EPL",
+      "code": "FUL",
+      "displayName": "Fulham",
+      "f402Names": ["FULHAM"],
+      "kalshiCodes": ["FUL"],
+      "polymarketHints": ["Fulham"]
+    },
+    {
+      "id": "epl:hul",
+      "league": "EPL",
+      "code": "HUL",
+      "displayName": "Hull City",
+      "f402Names": ["HULL CITY"],
+      "kalshiCodes": ["HUL"],
+      "polymarketHints": ["Hull City"]
+    },
+    {
+      "id": "epl:ips",
+      "league": "EPL",
+      "code": "IPS",
+      "displayName": "Ipswich Town",
+      "f402Names": ["IPSWICH TOWN"],
+      "kalshiCodes": ["IPS"],
+      "polymarketHints": ["Ipswich Town"]
+    },
+    {
+      "id": "epl:lee",
+      "league": "EPL",
+      "code": "LEE",
+      "displayName": "Leeds United",
+      "f402Names": ["LEEDS UNITED"],
+      "kalshiCodes": ["LEE"],
+      "polymarketHints": ["Leeds United"]
+    },
+    {
+      "id": "epl:lfc",
+      "league": "EPL",
+      "code": "LFC",
+      "displayName": "Liverpool",
+      "f402Names": ["LIVERPOOL"],
+      "kalshiCodes": ["LFC"],
+      "polymarketHints": ["Liverpool"]
+    },
+    {
+      "id": "epl:mci",
+      "league": "EPL",
+      "code": "MCI",
+      "displayName": "Manchester City",
+      "f402Names": ["MANCHESTER CITY"],
+      "kalshiCodes": ["MCI"],
+      "polymarketHints": ["Manchester City"]
+    },
+    {
+      "id": "epl:mun",
+      "league": "EPL",
+      "code": "MUN",
+      "displayName": "Manchester United",
+      "f402Names": ["MANCHESTER UNITED"],
+      "kalshiCodes": ["MUN"],
+      "polymarketHints": ["Manchester United"]
+    },
+    {
+      "id": "epl:new",
+      "league": "EPL",
+      "code": "NEW",
+      "displayName": "Newcastle",
+      "f402Names": ["NEWCASTLE"],
+      "kalshiCodes": ["NEW"],
+      "polymarketHints": ["Newcastle"]
+    },
+    {
+      "id": "epl:nfo",
+      "league": "EPL",
+      "code": "NFO",
+      "displayName": "Nottingham Forest",
+      "f402Names": ["NOTTINGHAM FOREST"],
+      "kalshiCodes": ["NFO"],
+      "polymarketHints": ["Nottingham Forest"]
+    },
+    {
+      "id": "epl:sun",
+      "league": "EPL",
+      "code": "SUN",
+      "displayName": "Sunderland",
+      "f402Names": ["SUNDERLAND"],
+      "kalshiCodes": ["SUN"],
+      "polymarketHints": ["Sunderland"]
+    },
+    {
+      "id": "epl:tie",
+      "league": "EPL",
+      "code": "TIE",
+      "displayName": "Tie",
+      "f402Names": ["TIE"],
+      "kalshiCodes": ["TIE"],
+      "polymarketHints": ["Tie"]
+    },
+    {
+      "id": "epl:tot",
+      "league": "EPL",
+      "code": "TOT",
+      "displayName": "Tottenham",
+      "f402Names": ["TOTTENHAM"],
+      "kalshiCodes": ["TOT"],
+      "polymarketHints": ["Tottenham"]
+    },
+    {
       "id": "nba:atl",
       "league": "NBA",
       "code": "ATL",
@@ -45,6 +2619,24 @@
       "polymarketHints": ["Charlotte", "Hornets"]
     },
     {
+      "id": "nba:chi",
+      "league": "NBA",
+      "code": "CHI",
+      "displayName": "Chicago",
+      "f402Names": ["CHICAGO"],
+      "kalshiCodes": ["CHI"],
+      "polymarketHints": ["Chicago"]
+    },
+    {
+      "id": "nba:cle",
+      "league": "NBA",
+      "code": "CLE",
+      "displayName": "Cleveland",
+      "f402Names": ["CLEVELAND"],
+      "kalshiCodes": ["CLE"],
+      "polymarketHints": ["Cleveland"]
+    },
+    {
       "id": "nba:clippers",
       "league": "NBA",
       "code": "LAC",
@@ -52,6 +2644,33 @@
       "nicknames": ["Clippers"],
       "portalLogoFile": "Los-Angeles-Clippers.png",
       "polymarketHints": ["Clippers", "Los Angeles Clippers"]
+    },
+    {
+      "id": "nba:dal",
+      "league": "NBA",
+      "code": "DAL",
+      "displayName": "Dallas",
+      "f402Names": ["DALLAS", "DALLAS MAVERICKS"],
+      "kalshiCodes": ["DAL"],
+      "polymarketHints": ["Dallas"]
+    },
+    {
+      "id": "nba:den",
+      "league": "NBA",
+      "code": "DEN",
+      "displayName": "Denver",
+      "f402Names": ["DENVER"],
+      "kalshiCodes": ["DEN"],
+      "polymarketHints": ["Denver"]
+    },
+    {
+      "id": "nba:det",
+      "league": "NBA",
+      "code": "DET",
+      "displayName": "Detroit",
+      "f402Names": ["DETROIT"],
+      "kalshiCodes": ["DET"],
+      "polymarketHints": ["Detroit"]
     },
     {
       "id": "nba:gsw",
@@ -64,6 +2683,33 @@
       "polymarketHints": ["Golden State", "Warriors"],
       "nicknames": ["Warriors"],
       "portalLogoFile": "Golden-State-Warriors.png"
+    },
+    {
+      "id": "nba:hou",
+      "league": "NBA",
+      "code": "HOU",
+      "displayName": "Houston",
+      "f402Names": ["HOUSTON"],
+      "kalshiCodes": ["HOU"],
+      "polymarketHints": ["Houston"]
+    },
+    {
+      "id": "nba:ind",
+      "league": "NBA",
+      "code": "IND",
+      "displayName": "Indiana",
+      "f402Names": ["INDIANA"],
+      "kalshiCodes": ["IND"],
+      "polymarketHints": ["Indiana"]
+    },
+    {
+      "id": "nba:lac",
+      "league": "NBA",
+      "code": "LAC",
+      "displayName": "Los Angeles C",
+      "f402Names": ["LOS ANGELES C"],
+      "kalshiCodes": ["LAC"],
+      "polymarketHints": ["Los Angeles C"]
     },
     {
       "id": "nba:lal",
@@ -86,6 +2732,24 @@
       "polymarketHints": ["Magic", "Orlando Magic"]
     },
     {
+      "id": "nba:mem",
+      "league": "NBA",
+      "code": "MEM",
+      "displayName": "Memphis",
+      "f402Names": ["MEMPHIS"],
+      "kalshiCodes": ["MEM"],
+      "polymarketHints": ["Memphis"]
+    },
+    {
+      "id": "nba:mia",
+      "league": "NBA",
+      "code": "MIA",
+      "displayName": "Miami",
+      "f402Names": ["MIAMI", "MIAMI HEAT"],
+      "kalshiCodes": ["MIA"],
+      "polymarketHints": ["Miami"]
+    },
+    {
       "id": "nba:mil",
       "league": "NBA",
       "code": "MIL",
@@ -93,6 +2757,15 @@
       "f402Names": ["MILWAUKEE BUCKS"],
       "kalshiCodes": ["MIL"],
       "polymarketHints": ["Milwaukee", "Bucks"]
+    },
+    {
+      "id": "nba:min",
+      "league": "NBA",
+      "code": "MIN",
+      "displayName": "Minnesota",
+      "f402Names": ["MINNESOTA"],
+      "kalshiCodes": ["MIN"],
+      "polymarketHints": ["Minnesota"]
     },
     {
       "id": "nba:nop",
@@ -114,6 +2787,24 @@
       "polymarketHints": ["New York Knicks", "Knicks"]
     },
     {
+      "id": "nba:okc",
+      "league": "NBA",
+      "code": "OKC",
+      "displayName": "Oklahoma City",
+      "f402Names": ["OKLAHOMA CITY"],
+      "kalshiCodes": ["OKC"],
+      "polymarketHints": ["Oklahoma City"]
+    },
+    {
+      "id": "nba:orl",
+      "league": "NBA",
+      "code": "ORL",
+      "displayName": "Orlando",
+      "f402Names": ["ORLANDO"],
+      "kalshiCodes": ["ORL"],
+      "polymarketHints": ["Orlando"]
+    },
+    {
       "id": "nba:pacers",
       "league": "NBA",
       "code": "IND",
@@ -121,6 +2812,15 @@
       "nicknames": ["Pacers"],
       "portalLogoFile": "Indiana-Pacers.png",
       "polymarketHints": ["Pacers", "Indiana Pacers"]
+    },
+    {
+      "id": "nba:phi",
+      "league": "NBA",
+      "code": "PHI",
+      "displayName": "Philadelphia",
+      "f402Names": ["PHILADELPHIA"],
+      "kalshiCodes": ["PHI"],
+      "polymarketHints": ["Philadelphia"]
     },
     {
       "id": "nba:phx",
@@ -133,6 +2833,15 @@
       "polymarketHints": ["Phoenix", "Suns"]
     },
     {
+      "id": "nba:por",
+      "league": "NBA",
+      "code": "POR",
+      "displayName": "Portland",
+      "f402Names": ["PORTLAND"],
+      "kalshiCodes": ["POR"],
+      "polymarketHints": ["Portland"]
+    },
+    {
       "id": "nba:raptors",
       "league": "NBA",
       "code": "TOR",
@@ -140,6 +2849,15 @@
       "nicknames": ["Raptors"],
       "portalLogoFile": "toronto.png",
       "polymarketHints": ["Raptors", "Raptors"]
+    },
+    {
+      "id": "nba:sac",
+      "league": "NBA",
+      "code": "SAC",
+      "displayName": "Sacramento",
+      "f402Names": ["SACRAMENTO", "SACRAMENTO KINGS"],
+      "kalshiCodes": ["SAC"],
+      "polymarketHints": ["Sacramento"]
     },
     {
       "id": "nba:sas",
@@ -152,6 +2870,24 @@
       "polymarketHints": ["San Antonio", "Spurs"]
     },
     {
+      "id": "nba:tor",
+      "league": "NBA",
+      "code": "TOR",
+      "displayName": "Toronto",
+      "f402Names": ["TORONTO"],
+      "kalshiCodes": ["TOR"],
+      "polymarketHints": ["Toronto"]
+    },
+    {
+      "id": "nba:uta",
+      "league": "NBA",
+      "code": "UTA",
+      "displayName": "Utah",
+      "f402Names": ["CHARLOTTE U", "UTAH"],
+      "kalshiCodes": ["UTA"],
+      "polymarketHints": ["Utah"]
+    },
+    {
       "id": "nba:was",
       "league": "NBA",
       "code": "WSH",
@@ -160,6 +2896,33 @@
       "kalshiCodes": ["WAS"],
       "polymarketHints": ["Washington", "Wizards"],
       "portalLogoFile": null
+    },
+    {
+      "id": "nfl:ari",
+      "league": "NFL",
+      "code": "ARI",
+      "displayName": "Arizona",
+      "f402Names": ["ARIZONA"],
+      "kalshiCodes": ["ARI"],
+      "polymarketHints": ["Arizona"]
+    },
+    {
+      "id": "nfl:atl",
+      "league": "NFL",
+      "code": "ATL",
+      "displayName": "Atlanta",
+      "f402Names": ["ATLANTA"],
+      "kalshiCodes": ["ATL"],
+      "polymarketHints": ["Atlanta"]
+    },
+    {
+      "id": "nfl:bal",
+      "league": "NFL",
+      "code": "BAL",
+      "displayName": "Baltimore",
+      "f402Names": ["BALTIMORE"],
+      "kalshiCodes": ["BAL"],
+      "polymarketHints": ["Baltimore"]
     },
     {
       "id": "nfl:bengals",
@@ -209,6 +2972,15 @@
       "portalLogoFile": "Buffalo-Bills.png"
     },
     {
+      "id": "nfl:car",
+      "league": "NFL",
+      "code": "CAR",
+      "displayName": "Carolina",
+      "f402Names": ["CAROLINA"],
+      "kalshiCodes": ["CAR"],
+      "polymarketHints": ["Carolina"]
+    },
+    {
       "id": "nfl:cardinals",
       "league": "NFL",
       "code": "ARI",
@@ -216,6 +2988,33 @@
       "nicknames": ["Cardinals"],
       "portalLogoFile": "Arizona-Cardinals.png",
       "polymarketHints": ["Cardinals", "Arizona Cardinals"]
+    },
+    {
+      "id": "nfl:chi",
+      "league": "NFL",
+      "code": "CHI",
+      "displayName": "Chicago",
+      "f402Names": ["CHICAGO"],
+      "kalshiCodes": ["CHI"],
+      "polymarketHints": ["Chicago"]
+    },
+    {
+      "id": "nfl:cin",
+      "league": "NFL",
+      "code": "CIN",
+      "displayName": "Cincinnati",
+      "f402Names": ["CINCINNATI"],
+      "kalshiCodes": ["CIN"],
+      "polymarketHints": ["Cincinnati"]
+    },
+    {
+      "id": "nfl:cle",
+      "league": "NFL",
+      "code": "CLE",
+      "displayName": "Cleveland",
+      "f402Names": ["CLEVELAND"],
+      "kalshiCodes": ["CLE"],
+      "polymarketHints": ["Cleveland"]
     },
     {
       "id": "nfl:colts",
@@ -236,6 +3035,33 @@
       "polymarketHints": ["Cowboys", "Dallas Cowboys"]
     },
     {
+      "id": "nfl:dal",
+      "league": "NFL",
+      "code": "DAL",
+      "displayName": "Dallas",
+      "f402Names": ["DALLAS"],
+      "kalshiCodes": ["DAL"],
+      "polymarketHints": ["Dallas"]
+    },
+    {
+      "id": "nfl:den",
+      "league": "NFL",
+      "code": "DEN",
+      "displayName": "Denver",
+      "f402Names": ["DENVER"],
+      "kalshiCodes": ["DEN"],
+      "polymarketHints": ["Denver"]
+    },
+    {
+      "id": "nfl:det",
+      "league": "NFL",
+      "code": "DET",
+      "displayName": "Detroit",
+      "f402Names": ["DETROIT"],
+      "kalshiCodes": ["DET"],
+      "polymarketHints": ["Detroit"]
+    },
+    {
       "id": "nfl:dolphins",
       "league": "NFL",
       "code": "MIA",
@@ -252,6 +3078,42 @@
       "nicknames": ["Falcons"],
       "portalLogoFile": "Atlanta-Falcons.png",
       "polymarketHints": ["Falcons", "Atlanta Falcons"]
+    },
+    {
+      "id": "nfl:gb",
+      "league": "NFL",
+      "code": "GB",
+      "displayName": "Green Bay",
+      "f402Names": ["GREEN BAY"],
+      "kalshiCodes": ["GB"],
+      "polymarketHints": ["Green Bay"]
+    },
+    {
+      "id": "nfl:hou",
+      "league": "NFL",
+      "code": "HOU",
+      "displayName": "Houston",
+      "f402Names": ["HOUSTON"],
+      "kalshiCodes": ["HOU"],
+      "polymarketHints": ["Houston"]
+    },
+    {
+      "id": "nfl:ind",
+      "league": "NFL",
+      "code": "IND",
+      "displayName": "Indianapolis",
+      "f402Names": ["INDIANAPOLIS"],
+      "kalshiCodes": ["IND"],
+      "polymarketHints": ["Indianapolis"]
+    },
+    {
+      "id": "nfl:jac",
+      "league": "NFL",
+      "code": "JAC",
+      "displayName": "Jacksonville",
+      "f402Names": ["JACKSONVILLE"],
+      "kalshiCodes": ["JAC"],
+      "polymarketHints": ["Jacksonville"]
     },
     {
       "id": "nfl:jax",
@@ -318,6 +3180,69 @@
       "polymarketHints": ["Lions", "Detroit Lions"]
     },
     {
+      "id": "nfl:lv",
+      "league": "NFL",
+      "code": "LV",
+      "displayName": "Las Vegas",
+      "f402Names": ["LAS VEGAS", "LAS VEGAS RAIDERS"],
+      "kalshiCodes": ["LV"],
+      "polymarketHints": ["Las Vegas"]
+    },
+    {
+      "id": "nfl:mia",
+      "league": "NFL",
+      "code": "MIA",
+      "displayName": "Miami",
+      "f402Names": ["MIAMI"],
+      "kalshiCodes": ["MIA"],
+      "polymarketHints": ["Miami"]
+    },
+    {
+      "id": "nfl:min",
+      "league": "NFL",
+      "code": "MIN",
+      "displayName": "Minnesota",
+      "f402Names": ["MINNESOTA"],
+      "kalshiCodes": ["MIN"],
+      "polymarketHints": ["Minnesota"]
+    },
+    {
+      "id": "nfl:ne",
+      "league": "NFL",
+      "code": "NE",
+      "displayName": "New England",
+      "f402Names": ["NEW ENGLAND"],
+      "kalshiCodes": ["NE"],
+      "polymarketHints": ["New England"]
+    },
+    {
+      "id": "nfl:no",
+      "league": "NFL",
+      "code": "NO",
+      "displayName": "New Orleans",
+      "f402Names": ["NEW ORLEANS"],
+      "kalshiCodes": ["NO"],
+      "polymarketHints": ["New Orleans"]
+    },
+    {
+      "id": "nfl:nyg",
+      "league": "NFL",
+      "code": "NYG",
+      "displayName": "New York G",
+      "f402Names": ["NEW YORK G"],
+      "kalshiCodes": ["NYG"],
+      "polymarketHints": ["New York G"]
+    },
+    {
+      "id": "nfl:nyj",
+      "league": "NFL",
+      "code": "NYJ",
+      "displayName": "New York J",
+      "f402Names": ["NEW YORK J"],
+      "kalshiCodes": ["NYJ"],
+      "polymarketHints": ["New York J"]
+    },
+    {
       "id": "nfl:patriots",
       "league": "NFL",
       "code": "NE",
@@ -338,6 +3263,15 @@
       "portalLogoFile": "Philadelphia-Eagles.png"
     },
     {
+      "id": "nfl:pit",
+      "league": "NFL",
+      "code": "PIT",
+      "displayName": "Pittsburgh",
+      "f402Names": ["PITTSBURGH"],
+      "kalshiCodes": ["PIT"],
+      "polymarketHints": ["Pittsburgh"]
+    },
+    {
       "id": "nfl:raiders",
       "league": "NFL",
       "code": "LV",
@@ -356,6 +3290,24 @@
       "polymarketHints": ["Ravens", "Baltimore Ravens"]
     },
     {
+      "id": "nfl:sea",
+      "league": "NFL",
+      "code": "SEA",
+      "displayName": "Seattle",
+      "f402Names": ["SEATTLE"],
+      "kalshiCodes": ["SEA"],
+      "polymarketHints": ["Seattle"]
+    },
+    {
+      "id": "nfl:sf",
+      "league": "NFL",
+      "code": "SF",
+      "displayName": "San Francisco",
+      "f402Names": ["SAN FRANCISCO", "SAN FRANCISCO 49ERS"],
+      "kalshiCodes": ["SF"],
+      "polymarketHints": ["San Francisco"]
+    },
+    {
       "id": "nfl:steelers",
       "league": "NFL",
       "code": "PIT",
@@ -363,6 +3315,24 @@
       "nicknames": ["Steelers"],
       "portalLogoFile": "Pittsburgh-Steelers.png",
       "polymarketHints": ["Steelers", "Pittsburgh Steelers"]
+    },
+    {
+      "id": "nfl:tb",
+      "league": "NFL",
+      "code": "TB",
+      "displayName": "Tampa Bay",
+      "f402Names": ["TAMPA BAY"],
+      "kalshiCodes": ["TB"],
+      "polymarketHints": ["Tampa Bay"]
+    },
+    {
+      "id": "nfl:ten",
+      "league": "NFL",
+      "code": "TEN",
+      "displayName": "Tennessee",
+      "f402Names": ["TENNESSEE"],
+      "kalshiCodes": ["TEN"],
+      "polymarketHints": ["Tennessee"]
     },
     {
       "id": "nfl:titans",
@@ -395,6 +3365,33 @@
       "portalLogoFile": "washington-commanders.png"
     },
     {
+      "id": "nhl:ana",
+      "league": "NHL",
+      "code": "ANA",
+      "displayName": "Anaheim",
+      "f402Names": ["ANAHEIM"],
+      "kalshiCodes": ["ANA"],
+      "polymarketHints": ["Anaheim"]
+    },
+    {
+      "id": "nhl:bos",
+      "league": "NHL",
+      "code": "BOS",
+      "displayName": "Boston",
+      "f402Names": ["BOSTON"],
+      "kalshiCodes": ["BOS"],
+      "polymarketHints": ["Boston"]
+    },
+    {
+      "id": "nhl:buf",
+      "league": "NHL",
+      "code": "BUF",
+      "displayName": "Buffalo",
+      "f402Names": ["BUFFALO"],
+      "kalshiCodes": ["BUF"],
+      "polymarketHints": ["Buffalo"]
+    },
+    {
       "id": "nhl:capitals",
       "league": "NHL",
       "code": "WSH",
@@ -404,6 +3401,69 @@
       "polymarketHints": ["Capitals", "Washington Capitals"]
     },
     {
+      "id": "nhl:car",
+      "league": "NHL",
+      "code": "CAR",
+      "displayName": "Carolina",
+      "f402Names": ["CAROLINA"],
+      "kalshiCodes": ["CAR"],
+      "polymarketHints": ["Carolina"]
+    },
+    {
+      "id": "nhl:cbj",
+      "league": "NHL",
+      "code": "CBJ",
+      "displayName": "Columbus",
+      "f402Names": ["COLUMBUS"],
+      "kalshiCodes": ["CBJ"],
+      "polymarketHints": ["Columbus"]
+    },
+    {
+      "id": "nhl:cgy",
+      "league": "NHL",
+      "code": "CGY",
+      "displayName": "Calgary",
+      "f402Names": ["CALGARY", "CALGARY FLAMES"],
+      "kalshiCodes": ["CGY"],
+      "polymarketHints": ["Calgary"]
+    },
+    {
+      "id": "nhl:chi",
+      "league": "NHL",
+      "code": "CHI",
+      "displayName": "Chicago",
+      "f402Names": ["CHICAGO"],
+      "kalshiCodes": ["CHI"],
+      "polymarketHints": ["Chicago"]
+    },
+    {
+      "id": "nhl:col",
+      "league": "NHL",
+      "code": "COL",
+      "displayName": "Colorado",
+      "f402Names": ["COLORADO", "COLORADO EAGLES"],
+      "kalshiCodes": ["COL"],
+      "polymarketHints": ["Colorado"]
+    },
+    {
+      "id": "nhl:dal",
+      "league": "NHL",
+      "code": "DAL",
+      "displayName": "Dallas",
+      "f402Names": ["DALLAS"],
+      "kalshiCodes": ["DAL"],
+      "polymarketHints": ["Dallas"]
+    },
+    {
+      "id": "nhl:det",
+      "league": "NHL",
+      "code": "DET",
+      "displayName": "Detroit",
+      "f402Names": ["DETROIT"],
+      "kalshiCodes": ["DET"],
+      "polymarketHints": ["Detroit"]
+    },
+    {
       "id": "nhl:ducks",
       "league": "NHL",
       "code": "ANA",
@@ -411,6 +3471,24 @@
       "nicknames": ["Ducks"],
       "portalLogoFile": "Anaheim-Ducks.png",
       "polymarketHints": ["Ducks", "Anaheim Ducks"]
+    },
+    {
+      "id": "nhl:edm",
+      "league": "NHL",
+      "code": "EDM",
+      "displayName": "Edmonton",
+      "f402Names": ["EDMONTON"],
+      "kalshiCodes": ["EDM"],
+      "polymarketHints": ["Edmonton"]
+    },
+    {
+      "id": "nhl:fla",
+      "league": "NHL",
+      "code": "FLA",
+      "displayName": "Florida",
+      "f402Names": ["FLORIDA"],
+      "kalshiCodes": ["FLA"],
+      "polymarketHints": ["Florida"]
     },
     {
       "id": "nhl:hurricanes",
@@ -431,6 +3509,69 @@
       "polymarketHints": ["Jets", "Winnipeg Jets"]
     },
     {
+      "id": "nhl:la",
+      "league": "NHL",
+      "code": "LA",
+      "displayName": "Los Angeles",
+      "f402Names": ["LOS ANGELES", "LOS ANGELES KINGS"],
+      "kalshiCodes": ["LA"],
+      "polymarketHints": ["Los Angeles"]
+    },
+    {
+      "id": "nhl:min",
+      "league": "NHL",
+      "code": "MIN",
+      "displayName": "Minnesota",
+      "f402Names": ["MINNESOTA"],
+      "kalshiCodes": ["MIN"],
+      "polymarketHints": ["Minnesota"]
+    },
+    {
+      "id": "nhl:mtl",
+      "league": "NHL",
+      "code": "MTL",
+      "displayName": "Montreal",
+      "f402Names": ["MONTREAL"],
+      "kalshiCodes": ["MTL"],
+      "polymarketHints": ["Montreal"]
+    },
+    {
+      "id": "nhl:nj",
+      "league": "NHL",
+      "code": "NJ",
+      "displayName": "New Jersey",
+      "f402Names": ["NEW JERSEY"],
+      "kalshiCodes": ["NJ"],
+      "polymarketHints": ["New Jersey"]
+    },
+    {
+      "id": "nhl:nsh",
+      "league": "NHL",
+      "code": "NSH",
+      "displayName": "Nashville",
+      "f402Names": ["NASHVILLE"],
+      "kalshiCodes": ["NSH"],
+      "polymarketHints": ["Nashville"]
+    },
+    {
+      "id": "nhl:nyi",
+      "league": "NHL",
+      "code": "NYI",
+      "displayName": "New York I",
+      "f402Names": ["NEW YORK I"],
+      "kalshiCodes": ["NYI"],
+      "polymarketHints": ["New York I"]
+    },
+    {
+      "id": "nhl:nyr",
+      "league": "NHL",
+      "code": "NYR",
+      "displayName": "New York R",
+      "f402Names": ["NEW YORK R"],
+      "kalshiCodes": ["NYR"],
+      "polymarketHints": ["New York R"]
+    },
+    {
       "id": "nhl:oilers",
       "league": "NHL",
       "code": "EDM",
@@ -438,6 +3579,33 @@
       "nicknames": ["Oilers"],
       "portalLogoFile": "Edmonton-Oilers.png",
       "polymarketHints": ["Oilers", "Edmonton Oilers"]
+    },
+    {
+      "id": "nhl:ott",
+      "league": "NHL",
+      "code": "OTT",
+      "displayName": "Ottawa",
+      "f402Names": ["OTTAWA"],
+      "kalshiCodes": ["OTT"],
+      "polymarketHints": ["Ottawa"]
+    },
+    {
+      "id": "nhl:phi",
+      "league": "NHL",
+      "code": "PHI",
+      "displayName": "Philadelphia",
+      "f402Names": ["PHILADELPHIA"],
+      "kalshiCodes": ["PHI"],
+      "polymarketHints": ["Philadelphia"]
+    },
+    {
+      "id": "nhl:pit",
+      "league": "NHL",
+      "code": "PIT",
+      "displayName": "Pittsburgh",
+      "f402Names": ["PITTSBURGH"],
+      "kalshiCodes": ["PIT"],
+      "polymarketHints": ["Pittsburgh"]
     },
     {
       "id": "nhl:rangers",
@@ -449,6 +3617,15 @@
       "polymarketHints": ["Rangers", "New York Rangers"]
     },
     {
+      "id": "nhl:sea",
+      "league": "NHL",
+      "code": "SEA",
+      "displayName": "Seattle",
+      "f402Names": ["SEATTLE", "SEATTLE KRAKEN"],
+      "kalshiCodes": ["SEA"],
+      "polymarketHints": ["Seattle"]
+    },
+    {
       "id": "nhl:senators",
       "league": "NHL",
       "code": "OTT",
@@ -458,6 +3635,69 @@
       "polymarketHints": ["Senators", "Ottawa Senators"]
     },
     {
+      "id": "nhl:sj",
+      "league": "NHL",
+      "code": "SJ",
+      "displayName": "San Jose",
+      "f402Names": ["SAN JOSE", "SAN JOSE BARRACUDA", "SAN JOSE SHARKS"],
+      "kalshiCodes": ["SJ"],
+      "polymarketHints": ["San Jose"]
+    },
+    {
+      "id": "nhl:stl",
+      "league": "NHL",
+      "code": "STL",
+      "displayName": "St. Louis",
+      "f402Names": ["ST LOUIS"],
+      "kalshiCodes": ["STL"],
+      "polymarketHints": ["St. Louis"]
+    },
+    {
+      "id": "nhl:tb",
+      "league": "NHL",
+      "code": "TB",
+      "displayName": "Tampa Bay",
+      "f402Names": ["TAMPA BAY"],
+      "kalshiCodes": ["TB"],
+      "polymarketHints": ["Tampa Bay"]
+    },
+    {
+      "id": "nhl:tor",
+      "league": "NHL",
+      "code": "TOR",
+      "displayName": "Toronto",
+      "f402Names": ["TORONTO"],
+      "kalshiCodes": ["TOR"],
+      "polymarketHints": ["Toronto"]
+    },
+    {
+      "id": "nhl:uta",
+      "league": "NHL",
+      "code": "UTA",
+      "displayName": "Utah",
+      "f402Names": ["UTAH"],
+      "kalshiCodes": ["UTA"],
+      "polymarketHints": ["Utah"]
+    },
+    {
+      "id": "nhl:van",
+      "league": "NHL",
+      "code": "VAN",
+      "displayName": "Vancouver",
+      "f402Names": ["VANCOUVER"],
+      "kalshiCodes": ["VAN"],
+      "polymarketHints": ["Vancouver"]
+    },
+    {
+      "id": "nhl:vgk",
+      "league": "NHL",
+      "code": "VGK",
+      "displayName": "Vegas",
+      "f402Names": ["VEGAS"],
+      "kalshiCodes": ["VGK"],
+      "polymarketHints": ["Vegas"]
+    },
+    {
       "id": "nhl:wild",
       "league": "NHL",
       "code": "MIN",
@@ -465,6 +3705,24 @@
       "nicknames": ["Wild"],
       "portalLogoFile": "Minnesota-Wild.png",
       "polymarketHints": ["Wild", "Minnesota Wild"]
+    },
+    {
+      "id": "nhl:wpg",
+      "league": "NHL",
+      "code": "WPG",
+      "displayName": "Winnipeg",
+      "f402Names": ["WINNIPEG"],
+      "kalshiCodes": ["WPG"],
+      "polymarketHints": ["Winnipeg"]
+    },
+    {
+      "id": "nhl:wsh",
+      "league": "NHL",
+      "code": "WSH",
+      "displayName": "Washington",
+      "f402Names": ["WASHINGTON"],
+      "kalshiCodes": ["WSH"],
+      "polymarketHints": ["Washington"]
     }
   ]
 }

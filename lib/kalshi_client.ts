@@ -45,6 +45,8 @@ export interface KalshiMarket {
   readonly floorStrike: number | null;
   readonly capStrike: number | null;
   readonly closeTime: string | null;
+  /** The market's resolution rule text (`rules_primary`); absent when the wire omits it. */
+  readonly rulesPrimary?: string;
 }
 
 export interface KalshiEvent {
@@ -127,6 +129,7 @@ export function parseKalshiMarket(value: unknown): KalshiMarket | null {
   if (!isRecordValue(value)) return null;
   const ticker = parseString(value["ticker"]);
   if (ticker === null) return null;
+  const rulesPrimary = parseString(value["rules_primary"]);
   return {
     ticker,
     title: parseString(value["title"]),
@@ -144,6 +147,8 @@ export function parseKalshiMarket(value: unknown): KalshiMarket | null {
     floorStrike: parseKalshiNumber(value["floor_strike"]),
     capStrike: parseKalshiNumber(value["cap_strike"]),
     closeTime: parseString(value["close_time"]),
+    // Only present when the wire carries it, so the parsed object shape stays stable otherwise.
+    ...(rulesPrimary === null ? {} : { rulesPrimary }),
   };
 }
 

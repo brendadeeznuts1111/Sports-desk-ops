@@ -89,8 +89,39 @@ describe("series map", () => {
     expect(seriesTickerFor(signal({ marketKind: "team_total" }))).toBe(
       "KXNBATEAMTOTAL",
     );
-    expect(seriesTickerFor(signal({ league: "MLB" }))).toBeNull();
     expect(seriesTickerFor(signal({ marketKind: "prop" }))).toBeNull();
+  });
+
+  test("measured gaps are closed: NBA 2H totals, NHL 2P total, MLB core", () => {
+    expect(
+      seriesTickerFor(signal({ marketKind: "2h_total", sideTeam: null })),
+    ).toBe("KXNBA2HTOTAL");
+    expect(
+      seriesTickerFor(signal({ marketKind: "2h_team_total", sideTeam: null })),
+    ).toBe("KXNBA2HTEAMTOTAL");
+    expect(
+      seriesTickerFor(signal({ league: "NHL", marketKind: "2p_total" })),
+    ).toBe("KXNHL2PTOTAL");
+    expect(seriesTickerFor(signal({ league: "MLB" }))).toBe("KXMLBGAME");
+    expect(
+      seriesTickerFor(
+        signal({ league: "MLB", marketKind: "spread", sideTeam: "ATL" }),
+      ),
+    ).toBe("KXMLBSPREAD");
+    expect(
+      seriesTickerFor(
+        signal({ league: "MLB", marketKind: "total", sideTeam: null }),
+      ),
+    ).toBe("KXMLBTOTAL");
+    expect(
+      seriesTickerFor(
+        signal({ league: "MLB", marketKind: "team_total", sideTeam: "ATL" }),
+      ),
+    ).toBe("KXMLBTEAMTOTAL");
+    // An unsupported period kind still refuses rather than guessing a series.
+    expect(
+      seriesTickerFor(signal({ league: "NHL", marketKind: "2p_spread" })),
+    ).toBeNull();
   });
 });
 
