@@ -550,6 +550,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["probe:crypto.compress"],
   },
   {
+    name: "readableStreamToArrayBuffer",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.readableStreamToArrayBuffer",
+    evidence: ["test:tests/bun_capabilities.test.ts"],
+  },
+  {
     name: "gunzipSync",
     kind: "value",
     subsystem: "crypto",

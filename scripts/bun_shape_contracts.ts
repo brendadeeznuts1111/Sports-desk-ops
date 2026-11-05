@@ -145,7 +145,7 @@ const sectionInvariants: Record<string, string[]> = {
     "`Bun.secrets.get` is covered by the `secrets.get` surface check.",
   ],
   crypto: [
-    '`new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a number; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.',
+    '`new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a bigint while `Bun.hash.crc32`/`adler32` return numbers; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.',
     "zstd and gzip round-trip: compress → decompress returns the input; `new Bun.ArrayBufferSink()` and `Bun.concatArrayBuffers` exist — `crypto.compress`.",
   ],
   network: [
