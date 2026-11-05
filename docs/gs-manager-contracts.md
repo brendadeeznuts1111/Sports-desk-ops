@@ -140,6 +140,7 @@ none are reproduced here.
 | `/manager-tools/ajax.php` (4 calls)                   | Report/data transport                               | `blocked_contract` — action, method, auth, body, response all unknown                                                                                                                                                   |
 | `/manager-tools/usersList/?t=<ms>`                    | Player/user list (JSON)                             | `blocked_contract`; unauthenticated `GET` → **401** (`text/html`, `no-store`) — see §2.7                                                                                                                                |
 | `/api/v3/manager-tools/signin/`                       | Session sign-in / bootstrap                         | **observed 2026-11-05**: `POST {"username","password"}` → **403** + "Username or password are incorrect" for rejected credentials; `POST {"checkSession":true}` → `ganchrowSessionId` when a session exists — see §2.10 |
+| `/api/v3/manager-tools/login/`                        | Legacy credential login                             | **observed 2026-11-05**: `POST {"username","password"}` → **403** for rejected credentials and only a pre-auth `GSID` cookie; the SPA uses `signin/` — see §2.10                                                        |
 | `/api/v3/manager-tools/common/`                       | Session bootstrap                                   | **observed**: unauthenticated `GET` → `200` `{"FLAVOR":"live","partner":118}` — see §2.5                                                                                                                                |
 | `/manager-tools/partnerConfig/`                       | Partner configuration                               | `blocked_contract`; responds **401** to an unauthenticated GET (verified 2026-11-02); one response body observed — see §2.3                                                                                             |
 | `/manager-tools/groups/`                              | Group/agent hierarchy (the SPA preloads it as JSON) | `blocked_contract`; 401 unauthenticated GET; client builds `GET {group, withSle:true}` — §2.8                                                                                                                           |
@@ -438,8 +439,15 @@ is recorded here.
 valid session as expired. `scripts/fetch-bet-tally.ts` now parses the body and treats only a
 leading `<` (or a non-JSON body) as the login page.
 
-Limits: one operator, one trace, one invalid-credential attempt. A successful credential login was
-not observed in this checkout, so the 200 response shape remains unconfirmed.
+**Second login route.** The legacy manager-tools bundle
+(`assets/JsModules-BiJR7A5n.js`) still posts credentials to
+`/api/v3/manager-tools/login/`, not `signin/`. That route also returned **403** for the keychain
+credentials in this checkout and set only a pre-auth `GSID`; it is not a session-establishing
+success. The bundle's `doServerRequest` also confirms `ajax.php` is the action dispatcher and that
+`window.managerTools.ganchrowSessionId` is required for it.
+
+Limits: one operator, one trace, one invalid-credential attempt per route. A successful credential
+login was not observed in this checkout, so the 200 response shape remains unconfirmed.
 
 ## 3. CLI interfaces — local orchestration, not HTTP endpoints
 
