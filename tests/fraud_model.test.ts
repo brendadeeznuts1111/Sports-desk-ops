@@ -217,20 +217,25 @@ describe("rowPrecisionAtK", () => {
 });
 
 describe("validateMetricMetadata", () => {
+  const validDefinitions = [
+    { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
+    { name: "pop", kind: "population", value: 24, positiveRows: 12 },
+    {
+      name: "metric",
+      kind: "ranking-metric",
+      baseline: "rate",
+      population: "pop",
+      k: 20,
+      maxAchievable: 0.6,
+      topKSamples: 20,
+      topKPositives: 12,
+      detailRef: "metrics.metric",
+    },
+  ];
+
   test("baseline and population references resolve by kind", () => {
     expect(() =>
-      validateMetricMetadata({
-        definitions: [
-          { name: "rate", kind: "baseline" },
-          { name: "pop", kind: "population" },
-          {
-            name: "metric",
-            kind: "ranking-metric",
-            baseline: "rate",
-            population: "pop",
-          },
-        ],
-      }),
+      validateMetricMetadata({ definitions: validDefinitions }),
     ).not.toThrow();
 
     expect(() =>
@@ -252,20 +257,20 @@ describe("validateMetricMetadata", () => {
   });
 
   test("a stored maxAchievable must match the population it names", () => {
-    const definitions = [
-      { name: "rate", kind: "baseline" },
-      { name: "pop", kind: "population", positiveRows: 12 },
-      {
-        name: "metric",
-        kind: "ranking-metric",
-        baseline: "rate",
-        population: "pop",
-        k: 20,
-        maxAchievable: 0.5,
-      },
-    ];
+    const definitions = validDefinitions.map((row) =>
+      row.name === "metric" ? { ...row, maxAchievable: 0.5 } : row,
+    );
     expect(() => validateMetricMetadata({ definitions })).toThrow(
       /maxAchievable 0.5 != min\(k=20, positiveRows=12\)\/k = 0.6/,
+    );
+  });
+
+  test("a baseline value must match positiveRows/rows", () => {
+    const definitions = validDefinitions.map((row) =>
+      row.name === "rate" ? { ...row, value: 0.6 } : row,
+    );
+    expect(() => validateMetricMetadata({ definitions })).toThrow(
+      /value 0.6 != positiveRows\/rows = 0.5/,
     );
   });
 
@@ -286,6 +291,56 @@ describe("validateMetricMetadata", () => {
         ],
       }),
     ).toThrow(/did you mean "noPriorBetPositiveRate"/);
+  });
+
+  test("multiple close candidates are all shown", () => {
+    expect(() =>
+      validateMetricMetadata({
+        definitions: [
+          { name: "alphaRate", kind: "baseline" },
+          { name: "alphaRateLong", kind: "baseline" },
+          {
+            name: "metric",
+            kind: "ranking-metric",
+            baseline: "alphaRat",
+            population: "pop",
+          },
+        ],
+      }),
+    ).toThrow(/nearest: "alphaRate", "alphaRateLong"/);
+  });
+
+  test("detailRef must resolve in the report root", () => {
+    expect(() =>
+      validateMetricMetadata(
+        { definitions: validDefinitions },
+        { metrics: { metric: [] } },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateMetricMetadata(
+        { definitions: validDefinitions },
+        { metrics: {} },
+      ),
+    ).toThrow(/detailRef/);
+  });
+
+  test("ranking metrics must carry top-k counts and detailRef", () => {
+    const definitions = [
+      { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
+      { name: "pop", kind: "population", value: 24, positiveRows: 12 },
+      {
+        name: "metric",
+        kind: "ranking-metric",
+        baseline: "rate",
+        population: "pop",
+        k: 20,
+        maxAchievable: 0.6,
+      },
+    ];
+    expect(() => validateMetricMetadata({ definitions })).toThrow(
+      /topKSamples/,
+    );
   });
 
   test("duplicate definition names are refused", () => {
@@ -730,8 +785,8 @@ describe("model artifact", () => {
         positiveRows?: number | null;
         k?: number;
         maxAchievable?: number | null;
-        samples?: number | null;
-        positives?: number | null;
+        topKSamples?: number | null;
+        topKPositives?: number | null;
         detailRef?: string;
         value?: unknown;
       }>;
@@ -764,8 +819,10 @@ describe("model artifact", () => {
       (row) => row.k === FRAUD_HEADLINE_K,
     );
     expect(rowMetric?.value).toBeCloseTo(rowHeadline?.precision ?? -1, 6);
-    expect(rowMetric?.samples).toBe(rowHeadline?.rowsReviewed ?? null);
-    expect(rowMetric?.positives).toBe(rowHeadline?.proxyPositiveRows ?? null);
+    expect(rowMetric?.topKSamples).toBe(rowHeadline?.rowsReviewed ?? null);
+    expect(rowMetric?.topKPositives).toBe(
+      rowHeadline?.proxyPositiveRows ?? null,
+    );
     const noPriorMetric = metadata.definitions.find(
       (definition) => definition.name === "rowPrecisionAtKNoPriorBet",
     );

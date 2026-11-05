@@ -1889,7 +1889,12 @@ export interface MetricMetadataDefinition {
   readonly subsetOf?: string;
   readonly k?: number;
   readonly maxAchievable?: number | null;
+  readonly topKSamples?: number | null;
+  readonly topKPositives?: number | null;
   readonly positiveRows?: number | null;
+  /** Population size (rows) or baseline rate, depending on `kind`. */
+  readonly value?: unknown;
+  readonly state?: string | undefined;
   /** Where the full table lives in the report, for a headline row. */
   readonly detailRef?: string;
 }
@@ -1920,29 +1925,32 @@ function commonPrefixLength(a: string, b: string): number {
   return index;
 }
 
-/** Nearest name by shared stem (>= 4 chars) or edit distance (<= 3), else null. */
-function suggestName(
+/** Up to three nearest names by distance, with the shared-stem OR edit-distance predicate. */
+function suggestNames(
   name: string,
   candidates: readonly string[],
-): string | null {
-  let best: {
-    readonly name: string;
-    readonly prefix: number;
-    readonly distance: number;
-  } | null = null;
-  for (const candidate of candidates) {
-    const prefix = commonPrefixLength(name, candidate);
-    const distance = editDistance(name, candidate);
-    if (prefix < 4 && distance > 3) continue;
-    if (
-      best === null ||
-      prefix > best.prefix ||
-      (prefix === best.prefix && distance < best.distance)
-    ) {
-      best = { name: candidate, prefix, distance };
-    }
-  }
-  return best?.name ?? null;
+): readonly string[] {
+  return candidates
+    .map((candidate) => ({
+      name: candidate,
+      prefix: commonPrefixLength(name, candidate),
+      distance: editDistance(name, candidate),
+    }))
+    .filter((candidate) => candidate.prefix >= 4 || candidate.distance <= 3)
+    .sort(
+      (a, b) =>
+        a.distance - b.distance ||
+        b.prefix - a.prefix ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, 3)
+    .map((candidate) => candidate.name);
+}
+
+function suggestionHint(names: readonly string[]): string {
+  if (names.length === 0) return "; no close candidates";
+  if (names.length === 1) return `; did you mean "${names[0]}"?`;
+  return `; nearest: ${names.map((name) => `"${name}"`).join(", ")}`;
 }
 
 /**
@@ -1950,9 +1958,27 @@ function suggestName(
  * `subsetOf` must name a `population` row, and names must be unique. Cheap enough to run on every
  * report; turns the convention into a checked invariant instead of a schema-version promise.
  */
-export function validateMetricMetadata(metadata: {
-  readonly definitions: readonly MetricMetadataDefinition[];
-}): void {
+/** Resolve a dot path in a report payload; undefined means the pointer is dangling. */
+function getPath(root: unknown, path: string): unknown {
+  let current = root;
+  for (const key of path.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/**
+ * Check the metadata contract: names are unique; baseline/population/subsetOf references resolve
+ * by kind; stored computed fields (maxAchievable, baseline value) match their inputs; and, when a
+ * report root is given, detailRef resolves in that report. Cheap enough to run on every report.
+ */
+export function validateMetricMetadata(
+  metadata: {
+    readonly definitions: readonly MetricMetadataDefinition[];
+  },
+  root?: unknown,
+): void {
   const byName = new Map<string, MetricMetadataDefinition>();
   for (const row of metadata.definitions) {
     if (byName.has(row.name)) {
@@ -1967,13 +1993,14 @@ export function validateMetricMetadata(metadata: {
     kind: string,
   ): void => {
     const target = byName.get(targetName);
-    const suggestion = suggestName(
-      targetName,
-      [...byName.values()]
-        .filter((row) => row.kind === kind)
-        .map((row) => row.name),
+    const hint = suggestionHint(
+      suggestNames(
+        targetName,
+        [...byName.values()]
+          .filter((row) => row.kind === kind)
+          .map((row) => row.name),
+      ),
     );
-    const hint = suggestion === null ? "" : `; did you mean "${suggestion}"?`;
     if (target === undefined) {
       throw new Error(
         `metricMetadata: ${source}.${field} -> "${targetName}" not found${hint}`,
@@ -1996,16 +2023,92 @@ export function validateMetricMetadata(metadata: {
       requireKind(row.name, "subsetOf", row.subsetOf, "population");
     }
   }
-  // A stored maxAchievable is a computed field; validate it against the population it names
-  // instead of trusting the writer to remember both sides of the edit.
+  // A baseline value is positiveRows / rows for the population it names.
   for (const row of metadata.definitions) {
-    if (row.kind !== "ranking-metric" || row.maxAchievable === null) continue;
-    if (row.maxAchievable === undefined || row.k === undefined) continue;
+    if (row.kind !== "baseline") continue;
+    if (row.value === null) {
+      if (row.state !== "not_measured") {
+        throw new Error(
+          `metricMetadata: ${row.name} has a null baseline value without state "not_measured"`,
+        );
+      }
+      continue;
+    }
+    if (typeof row.value !== "number") {
+      throw new Error(
+        `metricMetadata: ${row.name} baseline value must be a number or null`,
+      );
+    }
     const population =
       row.population === undefined ? undefined : byName.get(row.population);
     if (
-      population?.positiveRows === undefined ||
-      population.positiveRows === null
+      population === undefined ||
+      typeof population.value !== "number" ||
+      population.positiveRows === null ||
+      population.positiveRows === undefined
+    ) {
+      throw new Error(
+        `metricMetadata: ${row.name} baseline cannot resolve rows/positiveRows from "${row.population ?? "?"}"`,
+      );
+    }
+    const expected = population.positiveRows / population.value;
+    if (Math.abs(row.value - expected) > 1e-6) {
+      throw new Error(
+        `metricMetadata: ${row.name}.value ${row.value} != positiveRows/rows = ${expected}`,
+      );
+    }
+  }
+  // A stored maxAchievable is min(k, positiveRows) / k; the top-k counts must also fit k.
+  for (const row of metadata.definitions) {
+    if (row.kind !== "ranking-metric") continue;
+    if (row.maxAchievable === null) {
+      if (row.state !== "not_measured") {
+        throw new Error(
+          `metricMetadata: ${row.name} has a null maxAchievable without state "not_measured"`,
+        );
+      }
+      continue;
+    }
+    if (row.maxAchievable === undefined) {
+      throw new Error(
+        `metricMetadata: ${row.name} (ranking-metric) has no maxAchievable`,
+      );
+    }
+    if (row.k === undefined || !Number.isInteger(row.k) || row.k <= 0) {
+      throw new Error(
+        `metricMetadata: ${row.name} (ranking-metric) needs a positive integer k`,
+      );
+    }
+    if (row.topKSamples === null || row.topKSamples === undefined) {
+      throw new Error(
+        `metricMetadata: ${row.name} (ranking-metric) has no topKSamples`,
+      );
+    }
+    if (row.topKPositives === null || row.topKPositives === undefined) {
+      throw new Error(
+        `metricMetadata: ${row.name} (ranking-metric) has no topKPositives`,
+      );
+    }
+    if (row.topKSamples > row.k) {
+      throw new Error(
+        `metricMetadata: ${row.name}.topKSamples ${row.topKSamples} > k ${row.k}`,
+      );
+    }
+    if (row.topKPositives > row.topKSamples) {
+      throw new Error(
+        `metricMetadata: ${row.name}.topKPositives ${row.topKPositives} > topKSamples ${row.topKSamples}`,
+      );
+    }
+    if (row.detailRef === undefined) {
+      throw new Error(
+        `metricMetadata: ${row.name} (ranking-metric) has no detailRef`,
+      );
+    }
+    const population =
+      row.population === undefined ? undefined : byName.get(row.population);
+    if (
+      population?.positiveRows === null ||
+      population?.positiveRows === undefined
     ) {
       throw new Error(
         `metricMetadata: ${row.name} stores maxAchievable but population "${row.population ?? "?"}" has no positiveRows`,
@@ -2016,6 +2119,16 @@ export function validateMetricMetadata(metadata: {
       throw new Error(
         `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positiveRows=${population.positiveRows})/k = ${expected}`,
       );
+    }
+  }
+  if (root !== undefined) {
+    for (const row of metadata.definitions) {
+      if (row.detailRef === undefined) continue;
+      if (getPath(root, row.detailRef) === undefined) {
+        throw new Error(
+          `metricMetadata: ${row.name}.detailRef -> "${row.detailRef}" does not resolve in the report`,
+        );
+      }
     }
   }
 }
@@ -2097,6 +2210,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "temporalHoldout",
         value: roundReportNullable(holdoutRate, 6),
+        state: holdoutRate === null ? "not_measured" : undefined,
         description:
           "The overall desk_flag rate in the temporal holdout; rowPrecisionAtK is lift over this rate.",
       },
@@ -2107,6 +2221,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "noPriorBet",
         value: roundReportNullable(noPriorBetRate, 6),
+        state: noPriorBetRate === null ? "not_measured" : undefined,
         description:
           "The desk_flag rate in the no-prior-bet slice; rowPrecisionAtKNoPriorBet is lift over this rate.",
       },
@@ -2124,8 +2239,8 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
           maxAchievable(labelSupport.holdoutPositives),
           6,
         ),
-        samples: holdoutHeadline?.rowsReviewed ?? null,
-        positives: holdoutHeadline?.proxyPositiveRows ?? null,
+        topKSamples: holdoutHeadline?.rowsReviewed ?? null,
+        topKPositives: holdoutHeadline?.proxyPositiveRows ?? null,
         description:
           "Headline at k=20 (full table in metrics.rowPrecisionAtK): of the top-k holdout bet rows by model score, the share whose own desk_flag is true.",
       },
@@ -2136,15 +2251,19 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         label: artifact.proxy,
         population: "noPriorBet",
         baseline: "noPriorBetPositiveRate",
-        detailRef: "validation.noPriorBet.metrics.rowPrecisionAtK",
+        detailRef:
+          noPriorBet === null
+            ? "validation.noPriorBet"
+            : "validation.noPriorBet.metrics.rowPrecisionAtK",
+        state: noPriorBet === null ? "not_measured" : undefined,
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(noPriorHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
           maxAchievable(noPriorBet?.positiveRows ?? null),
           6,
         ),
-        samples: noPriorHeadline?.rowsReviewed ?? null,
-        positives: noPriorHeadline?.proxyPositiveRows ?? null,
+        topKSamples: noPriorHeadline?.rowsReviewed ?? null,
+        topKPositives: noPriorHeadline?.proxyPositiveRows ?? null,
         description:
           "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positiveRows) / k, so a slice with fewer than k positives cannot reach 1.0.",
       },
@@ -2206,7 +2325,6 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
       },
     ],
   };
-  validateMetricMetadata(metadata);
   return metadata;
 }
 
@@ -2223,12 +2341,13 @@ export function modelReportPayload(
   const metrics = artifact.metrics;
   const validation = artifact.validation;
   const noPriorBet = validation.noPriorBet ?? null;
-  return {
+  const metricMetadata = buildMetricMetadata(artifact);
+  const payload: Record<string, unknown> = {
     kind: FRAUD_MODEL_KIND,
     present: true,
     path: state.path,
     fittedAt: artifact.fittedAt,
-    metricMetadata: buildMetricMetadata(artifact),
+    metricMetadata,
     spec: artifact.spec,
     features: artifact.features.map((feature) => ({
       id: feature.id,
@@ -2313,6 +2432,8 @@ export function modelReportPayload(
       fixtureSourcesExcluded: artifact.provenance.fixtureSourcesExcluded,
     },
   };
+  validateMetricMetadata(metricMetadata, payload);
+  return payload;
 }
 
 /** Truthful refusal for every command that needs a fitted artifact. */
