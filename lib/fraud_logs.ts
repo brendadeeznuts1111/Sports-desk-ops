@@ -521,7 +521,9 @@ export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
     gslive_bet_report: { ...EMPTY_SOURCE_CONFIG },
     gslive_wagers_by_state: {
       ...EMPTY_SOURCE_CONFIG,
-      relPath: "Scratch/gslive-wagers-by-state.summary.json",
+      // `wagers:capture` writes the summary under lowercase `scratch/`; a capital `Scratch/`
+      // reader only resolves on a case-insensitive filesystem.
+      relPath: "scratch/gslive-wagers-by-state.summary.json",
       staleAfterSeconds: 259_200,
     },
     f402_live_bets: {
@@ -1989,7 +1991,7 @@ async function loadWagersByState(
     return missingSource(
       "gslive_wagers_by_state",
       root,
-      join(root, "Scratch/gslive-wagers-by-state.summary.json"),
+      join(root, "scratch/gslive-wagers-by-state.summary.json"),
       "no configured path",
       "Source path is not configured.",
     );

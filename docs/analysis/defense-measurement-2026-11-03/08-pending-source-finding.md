@@ -86,13 +86,13 @@ four combinations present for this customer.
 
 ## 3. Where pending state lives
 
-| Artifact/module                                  | Fields                                                                      | Granularity                 | Called when                       |
-| ------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------- | --------------------------------- |
-| `Scratch/f402-getInfoPlayer-BB55103.json`        | `PendingWagerCount`, `PendingWagerBalance`, `PendingCredit`                 | **per customer**            | player-info                       |
-| `Scratch/f402-probes/*/Pending.json`             | Pending array, `WagerStatus "P"`                                            | **per wager**               | `getPending` per customer         |
-| `Scratch/f402-customer-admin/list.redacted.json` | `PendingWagerBalance` only (2 rows)                                         | per customer row            | customer-admin table              |
-| `Scratch/f402-customer-admin/summary.json`       | `rowsWithPending: 2`, total balance                                         | local aggregate over 2 rows | derived artifact, not an endpoint |
-| pinned modules                                   | `getPending`, `getInfoPlayer`, `getCustomerAdmin`, `getTotalActiveCustomer` | per-customer/per-wager/list | existing client calls             |
+| Artifact/module                                            | Fields                                                                      | Granularity                 | Called when                                                                        |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| `Scratch/f402-getInfoPlayer-BB55103.json`                  | `PendingWagerCount`, `PendingWagerBalance`, `PendingCredit`                 | **per customer**            | player-info                                                                        |
+| `Scratch/f402-probes/*/Pending.json`                       | Pending array, `WagerStatus "P"`                                            | **per wager**               | `getPending` per customer                                                          |
+| `tests/fixtures/f402-customer-admin-list-snippet.json`     | `PendingWagerBalance` only (2 rows)                                         | per customer row            | committed shape fixture                                                            |
+| local `scratch/f402-customer-admin/summary.json` (removed) | `rowsWithPending: 2`, total balance                                         | local aggregate over 2 rows | derived, not an endpoint; the artifact was a 2-row diagnostic subset, not a master |
+| pinned modules                                             | `getPending`, `getInfoPlayer`, `getCustomerAdmin`, `getTotalActiveCustomer` | per-customer/per-wager/list | existing client calls                                                              |
 
 No artifact contains a **population count of customers with pending wagers**. The closest is
 `PendingWagerCount` per customer, which requires one `getInfoPlayer` call per customer.

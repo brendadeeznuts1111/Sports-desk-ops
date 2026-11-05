@@ -8,7 +8,8 @@
  * optional per-account score function, so the ranking can be unit-tested without a 55 MB corpus.
  *
  * Ranking is lexicographic over measured counts: direct desk-flag rows first, then account-subject
- * findings by severity, then the model's 0-100 proxy score, then bet rows, then account id.
+ * findings by severity, then odds-drift rows, then the model's 0-100 proxy score, then applied
+ * rule evidence (unreviewed, then confirmed), then bet rows, then account id.
  * Nothing is weighted — a "critical finding" does not become 100 points, it simply outranks a
  * "high" one. The current corpus's detectors are mostly book/agent-level aggregates, so
  * account-level finding counts are usually 0; the direct flag rows are what actually discriminate.

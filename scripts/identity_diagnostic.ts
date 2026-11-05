@@ -23,6 +23,8 @@ import { dirname, join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DEFAULTS = {
+  // Local 2-row shape snippet. It is absent after the scratch cleanup, so the report shows 0
+  // rows and labels the source as missing rather than substituting the committed fixture.
   admin: "scratch/f402-customer-admin/list.redacted.json",
   ticker: "data/live-wagers.json",
   customerDb: "scratch/customers.sqlite",
@@ -662,8 +664,10 @@ async function main(): Promise<void> {
     `- The full \`getListAgenstByAgent\` capture has **${players?.rows ?? 0} PLAYERS** and matches **${partnerMatchesNamespace} / ${gsliveAccounts}** GSLive accounts (${pct(partnerMatchesNamespace, gsliveAccounts)}) on \`customerID\` or \`Login\`.`,
     `- The customer-index capture has only **${customerIndex?.ids.size ?? 0}** ids and matches **${partnerMatchesCapture}** accounts (${pct(partnerMatchesCapture, gsliveAccounts)}). That 667-row index is where the earlier 3.94% came from, not the full master.`,
     `- The queue previously hashed \`userID\`; it now joins on \`partnerUserID\`, which is what makes the ${partnerMatchesNamespace} full-capture matches usable.`,
-    `- The ${unmatchedByNamespace} accounts absent from the primary namespace: ${unmatchedPartnerIds.join(", ") || "none"}. getInfoPlayer confirmed ${confirmedPresentIds.size}/${unmatchedPartnerIds.length} present and ${confirmedAbsentIds.size} absent. They are new/subaccount ids added after the 2026-11-01 PLAYERS capture, not missing identities.`,
-    `- The admin file in this checkout has **${admin?.rows ?? 0} row(s)**, so it is a snippet, not the master. The master was already present as \`${options.players}#PLAYERS\`.`,
+    unmatchedByNamespace === 0
+      ? `- No active partner id is absent from the primary namespace; all ${gsliveAccounts} GSLive accounts resolve on \`customerID\` or \`Login\`.`
+      : `- The ${unmatchedByNamespace} accounts absent from the primary namespace: ${unmatchedPartnerIds.join(", ") || "none"}. getInfoPlayer confirmed ${confirmedPresentIds.size}/${unmatchedPartnerIds.length} present and ${confirmedAbsentIds.size} absent. They are new/subaccount ids added after the 2026-11-01 PLAYERS capture, not missing identities.`,
+    `- The admin capture contributes **${admin?.rows ?? 0} row(s)** in this checkout; it is a 2-row diagnostic snippet when present, never the master. The master is \`${options.players}#PLAYERS\`.`,
     "",
     "## Probe results",
     "",
@@ -697,15 +701,23 @@ async function main(): Promise<void> {
     "      operation=getInfoPlayer, RRO=0",
     "```",
     "",
-    `A \`null\` INFO means the account was not found. ${probePlan.length === 0 ? "No unprobed unmatched accounts remain." : `The plan samples ${probePlan.length} of ${unprobedAccounts.length} unprobed accounts: ${options.probeOut}.`}`,
-    `The generated sample uses \`customerID = partnerUserID\`; confirm the padded \`CustomerID\` semantics on one known account before running the full sample.`,
+    `A \`null\` INFO means the account was not found. ${probePlan.length === 0 ? "No unprobed unmatched accounts remain, so no probe plan is written." : `The plan samples ${probePlan.length} of ${unprobedAccounts.length} unprobed accounts: ${options.probeOut}.`}`,
+    ...(probePlan.length === 0
+      ? []
+      : [
+          `The generated sample uses \`customerID = partnerUserID\`; confirm the padded \`CustomerID\` semantics on one known account before running the full sample.`,
+        ]),
     "",
     "## Recommendation",
     "",
-    "1. Refresh the `getListAgenstByAgent` PLAYERS capture and rerun this diagnostic. All 9 absent ids were confirmed present by `getInfoPlayer`; they are new accounts, not missing identities.",
-    "2. Re-run `queue build` after the refresh; the 9 should become `bridged` without changing the queue code.",
+    unmatchedByNamespace === 0
+      ? `1. Keep the PLAYERS capture refreshed. The current capture matches ${partnerMatchesNamespace}/${gsliveAccounts} GSLive accounts and needs no crosswalk.`
+      : `1. Refresh the \`getListAgenstByAgent\` PLAYERS capture and rerun this diagnostic. ${confirmedPresentIds.size} of the ${unmatchedPartnerIds.length} absent ids were confirmed present by \`getInfoPlayer\`; they are new accounts, not missing identities.`,
+    unmatchedByNamespace === 0
+      ? "2. Re-run `queue build`; every account should resolve as `bridged` without changing the queue code."
+      : `2. Re-run \`queue build\` after the refresh; the ${unmatchedPartnerIds.length} should become \`bridged\` without changing the queue code.`,
     "3. Keep `ruleEvidenceStatus` and the `partnerUserID` join; both are already shipped.",
-    "4. Do not build the crosswalk. The full PLAYERS capture covers 99.7% of GSLive accounts and the remaining 0.3% are confirmed present; a fuzzy crosswalk would be governance for a problem the master already solves.",
+    `4. Do not build the crosswalk. The full PLAYERS capture matches ${partnerMatchesNamespace}/${gsliveAccounts} GSLive accounts (${pct(partnerMatchesNamespace, gsliveAccounts)}); a fuzzy crosswalk would be governance for a problem the master already solves.`,
     "",
   ];
 

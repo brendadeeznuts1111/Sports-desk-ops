@@ -981,7 +981,7 @@ async function cmdQueueBuild(
   const limit = integerFlag("queue build", flags, "--limit", 25, 1, 100);
   // GSLive `userID` is a numeric player id, not the F402 login. `partnerUserID` is the login.
   // The plan's customerRef is `customer:<sha256("customer:"+login)[:12]>`, so hash the partner id,
-  // never the GSLive user id. The governed crosswalk will replace this interim namespace.
+  // never the GSLive user id. PLAYERS is the authoritative namespace; there is no crosswalk.
   const partnerByUser = new Map<string, string>();
   for (const record of corpus.records) {
     if (record.partnerUserId === null || record.partnerUserId === undefined) {
@@ -1096,9 +1096,10 @@ async function buildQueue(
 }
 
 /**
- * Ranked account triage queue. Deterministic and transparent: findings by severity, then the
- * fitted model's proxy score, then bet rows. The model is optional; without an artifact the queue
- * still ranks on findings/flags and reports the model as absent (never as zero scores).
+ * Ranked account triage queue. Deterministic and transparent: desk-flag rows, then findings by
+ * severity, then odds-drift rows, then the fitted model's proxy score, then applied-rule evidence
+ * and bets. The model is optional; without an artifact the queue still ranks on findings/flags and
+ * reports the model as absent (never as zero scores).
  */
 async function cmdQueue(
   tokens: readonly string[],
@@ -1962,14 +1963,19 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
   {
     name: "queue",
     summary:
-      "Ranked account triage queue: findings by severity, then model score, then bets",
+      "Ranked triage queue: flags, findings, model score, rule evidence, bets",
     usage: "queue [--limit N] [flags] | queue build --dry-run [flags]",
     detail: [
       "Orders the accounts with at least one non-data-quality account finding or one",
       "suspected-bot / reversed-credit / manual-log / odds-drift row. Order is lexicographic:",
       "direct desk-flag rows, then critical/high/medium/low/info account-finding counts, then",
-      "the fitted model's 0-100 proxy score (null last), then bet rows, then account id. No",
-      "finding is converted to an invented point score and the model column is not a",
+      "odds-drift rows, then the fitted model's 0-100 proxy score (null last), then unreviewed",
+      "applied-rule hits, then confirmed applied-rule hits, then bet rows, then account id.",
+      "Rule evidence is a tie-break after the model score and never adds points; only rules",
+      "the readiness gate applied after >= 5 confirmed reviews can contribute. Each row also",
+      "carries ruleEvidenceStatus: bridged (lookup ran), unmatched (identity join failed), or",
+      "not_applied (no rule reached the gate), so 'no hit' is distinct from 'could not check'.",
+      "No finding is converted to an invented point score and the model column is not a",
       "probability. Detectors are mostly book/agent-level aggregates, so account finding",
       "counts are usually 0; model-missing is reported as null scores, never as zeros.",
       "queue build reads two bridge artifacts: reports/security/bridge-coverage.json (the",

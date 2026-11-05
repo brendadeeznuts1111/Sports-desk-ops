@@ -810,7 +810,7 @@ export function apply(ctx, config) {
     defineTool({
       name: "fraud_queue",
       description:
-        "Ranked account triage queue: the accounts a human should look at first, ordered lexicographically by strong desk-flag rows (suspected bot, reversed credit, manual log), then account-subject findings by severity, then odds-drift rows, then the fitted model's 0-100 proxy score, then bet rows. Each row carries its reasons, finding counts, flag counts, bet count and last placement time; no finding is converted to an invented point score and the model column is not a probability. limit 1-100 (default 25).",
+        "Ranked account triage queue: the accounts a human should look at first, ordered lexicographically by strong desk-flag rows (suspected bot, reversed credit, manual log), then account-subject findings by severity, then odds-drift rows, then the fitted model's 0-100 proxy score, then unreviewed applied-rule hits, then confirmed applied-rule hits, then bet rows. Each row carries its reasons, finding counts, flag counts, bet count, last placement time and ruleEvidenceStatus (bridged / unmatched / not_applied, so 'no hit' is distinct from 'could not check'). No finding is converted to an invented point score and the model column is not a probability. limit 1-100 (default 25).",
       parameters: {
         type: "object",
         properties: {

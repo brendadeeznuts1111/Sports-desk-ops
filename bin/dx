@@ -280,7 +280,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx flags --review-report   Sampled rule precision for a review run
     ./bin/dx flags --review-status   Reviewed vs remaining for a run
     ./bin/dx flags --review-export --format=csv   Reviewer tracker
-    ./bin/dx queue [--limit N]      Ranked account triage queue (findings, model score, bets)
+    ./bin/dx queue [--limit N]      Ranked triage queue (flags, findings, model score, rule evidence, bets)
     ./bin/dx queue build --dry-run  Readiness gate: prints blockers and exits 1; no queue rows
 
   Surveillance / ingestion

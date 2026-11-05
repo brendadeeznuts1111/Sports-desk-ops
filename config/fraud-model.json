@@ -13,7 +13,7 @@
   },
   "sources": {
     "gslive_wagers_by_state": {
-      "relPath": "Scratch/gslive-wagers-by-state.summary.json",
+      "relPath": "scratch/gslive-wagers-by-state.summary.json",
       "staleAfterSeconds": 259200
     },
     "f402_live_bets": {

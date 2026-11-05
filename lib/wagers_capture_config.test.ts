@@ -12,6 +12,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   loadWagersCaptureConfig,
 } from "./wagers_capture_config.ts";
+import { DEFAULT_FRAUD_CONFIG } from "./fraud_logs.ts";
 import {
   DEFAULT_CADENCE_MINUTES,
   DEFAULT_CHURN_MIN,
@@ -55,6 +56,11 @@ describe("TOML capture config", () => {
     });
     expect(loaded.config.paths.artifact).toBe(WAGERS_ARTIFACT_PATH);
     expect(loaded.config.paths.status).toBe(WAGERS_STATUS_PATH);
+    // The fraud reader and the capture writer must agree on the exact path; a `Scratch/` vs
+    // `scratch/` mismatch only resolves on a case-insensitive filesystem.
+    expect(DEFAULT_FRAUD_CONFIG.sources.gslive_wagers_by_state.relPath).toBe(
+      WAGERS_ARTIFACT_PATH,
+    );
     expect(loaded.config.alerts).toEqual({
       pendingWarnHours: DEFAULT_PENDING_WARN_HOURS,
       spikePct: DEFAULT_SPIKE_PCT,
