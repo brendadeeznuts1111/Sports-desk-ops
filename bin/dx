@@ -166,7 +166,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live backtest poll watch pipeline stage deploy ship exec"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket backtest poll watch pipeline stage deploy ship exec"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -268,6 +268,9 @@ Usage: ./bin/dx <command> [args...]
   Wagers by state, day, event, player, agent (columns, groups, layout from config/wagers.json)
     ./bin/dx wagers-by-state --from=M/D/YYYY --to=M/D/YYYY [--state=X] [--nlegs=N] [--wager-number N] [--format=table|json|csv|summary|inspect|columns|grid] [--out=PATH] [--group-by=state|day|event|player|agent] [--top=N]
     ./bin/dx wagers-by-state-live   Same against live ajax.php (requires GSLIVE_SESSION_ID; --format/--out/--group-by/--top supported)
+
+  Ticket lookup
+    ./bin/dx ticket <wagerNumber>   One ticket from the latest getBetTicker capture [--file=PATH] [--json]
 
   Surveillance / ingestion
     ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix
@@ -505,6 +508,10 @@ VERSION_HELP
   wagers-by-state-live)
     cd "$REPO_ROOT"
     exec bun run scripts/wagers_by_state_live.ts -- "$@"
+    ;;
+  ticket)
+    cd "$REPO_ROOT"
+    exec bun run cli/sportsdesk_ticket_cli.ts "$@"
     ;;
   backtest)
     cd "$REPO_ROOT"
