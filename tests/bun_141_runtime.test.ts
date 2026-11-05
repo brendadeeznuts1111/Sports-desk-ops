@@ -113,6 +113,15 @@ describe("Bun 1.4.1 streaming and backpressure", () => {
     }
   });
 
+  test("util.inspect stops at maxArrayLength", async () => {
+    const util = await import("node:util");
+    const out = util.inspect(new Array(2_000_000).fill(7), {
+      maxArrayLength: 3,
+    });
+    expect(out).toBe("[ 7, 7, 7, ... 1999997 more items ]");
+    expect(out.length).toBeLessThan(100);
+  });
+
   test("crypto.argon2 async matches the sync tag", async () => {
     const crypto = (await import("node:crypto")) as unknown as {
       argon2: (
