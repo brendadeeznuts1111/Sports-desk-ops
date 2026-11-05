@@ -15,13 +15,24 @@ import {
   assertCents as assertDesignCents,
   isCents as isDesignCents,
   isPaddedCustomerId,
+  jsonText,
   padCustomerIdCanonical,
   parseAsCents as designCents,
   rotationNumber,
+  sqlCol,
+  sqlDomain,
+  sqlIndex,
+  sqlTable,
   type Cents as DesignCents,
+  type JsonText,
   type PaddedCustomerId,
   type RotationNumber as DesignRotation,
+  type SqlTableName,
 } from "../design/domain-branded-types.ts";
+import {
+  sqlTable as brandSqlTable,
+  type SqlTableName as BrandSqlTableName,
+} from "../lib/brand.ts";
 import {
   asCents as bridgeCents,
   type Cents as BridgeCents,
@@ -90,6 +101,22 @@ describe("brand engine is shared across modules", () => {
     expect(Number(asComboPackedKey15(0xffff))).toBe(0x7fff);
     expect(BigInt(asCustomerPackedHandle64(-1n))).toBe(0xffffffffffffffffn);
     expect(BigInt(asCustomerPackedKey64(0x1_0000_0000_0000_0001n))).toBe(1n);
+  });
+
+  test("schema and JSON brands re-export the shared engine", () => {
+    const table: SqlTableName = sqlTable("match_evaluations");
+    const same: BrandSqlTableName = table;
+    expect(same).toBe(brandSqlTable("match_evaluations"));
+    expect(String(sqlCol("run_id"))).toBe("run_id");
+    expect(String(sqlIndex("idx_match_eval_run_at"))).toBe(
+      "idx_match_eval_run_at",
+    );
+    expect(String(sqlDomain("candidate overlay audit"))).toBe(
+      "candidate overlay audit",
+    );
+    const json: JsonText = jsonText('{"a":1}');
+    expect(String(json)).toBe('{"a":1}');
+    expect(() => jsonText("")).toThrow(/non-empty/);
   });
 
   test("the brand still rejects an unbranded primitive", () => {

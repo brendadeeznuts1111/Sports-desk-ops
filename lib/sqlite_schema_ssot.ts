@@ -2,7 +2,11 @@
  * Compile-time SSOT column/index specs — invariants fail `tsc` when structure drifts.
  */
 
-import { sqlDomain, sqlIndex, sqlTable } from "./brand.ts";
+import {
+  sqlDomain,
+  sqlIndex,
+  sqlTable,
+} from "../design/domain-branded-types.ts";
 import type { Assert } from "./assert.ts";
 import type { TableInvariants } from "./invariants.ts";
 

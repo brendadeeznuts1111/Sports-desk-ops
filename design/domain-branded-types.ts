@@ -603,6 +603,25 @@ export function asComboPackedKey15(value: number): ComboPackedKey15 {
 }
 
 // ============================================================================
+// 6c. SCHEMA, JSON & VALIDATION BRANDS (SSOT: lib/brand.ts)
+// ============================================================================
+
+export type {
+  JsonText,
+  SqlColumnName,
+  SqlDomain,
+  SqlIndexName,
+  SqlTableName,
+} from "../lib/brand.ts";
+export {
+  jsonText,
+  sqlCol,
+  sqlDomain,
+  sqlIndex,
+  sqlTable,
+} from "../lib/brand.ts";
+
+// ============================================================================
 // 7. QWEN3.5-4B NEURON REGISTRY & DECOUPLED THREE-AXIS SCHEMAS (LAYERS 18-28)
 // ============================================================================
 

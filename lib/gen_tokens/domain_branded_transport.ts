@@ -77,4 +77,23 @@ export function asCustomerPackedKey64(value: bigint): CustomerPackedKey64 {
 export function asComboPackedKey15(value: number): ComboPackedKey15 {
   return (value & 0x7fff) as ComboPackedKey15;
 }
+
+// ============================================================================
+// 6c. SCHEMA, JSON & VALIDATION BRANDS (SSOT: lib/brand.ts)
+// ============================================================================
+
+export type {
+  JsonText,
+  SqlColumnName,
+  SqlDomain,
+  SqlIndexName,
+  SqlTableName,
+} from "../lib/brand.ts";
+export {
+  jsonText,
+  sqlCol,
+  sqlDomain,
+  sqlIndex,
+  sqlTable,
+} from "../lib/brand.ts";
 `;
