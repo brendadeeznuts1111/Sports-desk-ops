@@ -11,6 +11,17 @@
 
 export type PaceVersion = "0.4.x" | "1.x" | "unknown";
 
+export type CapturePhase = "authenticated" | "login-form" | "unknown";
+
+/** Login-form fingerprint only exists before `credentials()` wipes sessionStorage. */
+export function detectPhase(html: string): CapturePhase {
+  if (/<[^>]*data-security="form"/i.test(html)) return "login-form";
+  if (/pace-active|data-action="get-bet-ticker"/.test(html)) {
+    return "authenticated";
+  }
+  return "unknown";
+}
+
 export interface PaceState {
   readonly elementCount: number;
   readonly activeCount: number;
@@ -22,6 +33,8 @@ export interface PaceState {
   readonly cause: "ajaxComplete-restart" | "initial-load" | "unknown";
   /** Which Pace renderer produced the capture: 0.4.x styles `width`, 1.x styles `transform`. */
   readonly version: PaceVersion;
+  /** Restarts attributable to the 5-minute `System/renewToken` interval, when span is known. */
+  readonly refreshBaseline: number | null;
 }
 
 /** Fingerprint the Pace version from the progress element's inline style. */
@@ -37,7 +50,7 @@ export function detectPaceVersion(html: string): PaceVersion {
 }
 
 /** Parse the captured document's Pace DOM state. */
-export function inspectPace(html: string): PaceState {
+export function inspectPace(html: string, timeSpanMs = 0): PaceState {
   const version = detectPaceVersion(html);
   const paceEls = [
     ...html.matchAll(
@@ -87,6 +100,7 @@ export function inspectPace(html: string): PaceState {
     verdict,
     cause,
     version,
+    refreshBaseline: timeSpanMs > 0 ? Math.floor(timeSpanMs / 300_000) : null,
   };
 }
 
@@ -112,6 +126,10 @@ export interface CaptureInfo {
   readonly statusOk: boolean | null;
   readonly hasAmounts: boolean;
   readonly pace?: PaceState;
+  /** HTML phase; JSON captures do not carry a login form. */
+  readonly phase?: CapturePhase;
+  /** JSON `accountInfo` presence; `null` when not applicable. */
+  readonly hasAccountInfo?: boolean | null;
 }
 
 /** Parse `--require-confidence`/`--capture-info` confidence names. */
@@ -150,4 +168,31 @@ export function confidenceReason(info: CaptureInfo): string {
   }
   if (info.pace?.verdict === "complete") return "HTML, Pace complete";
   return "HTML, Pace state unknown";
+}
+
+export interface ExternalDep {
+  readonly origin: string;
+  readonly kind: "iframe" | "script" | "stylesheet";
+  readonly count: number;
+}
+
+/** Origins loaded by iframes, scripts and stylesheets, sorted by occurrence. */
+export function externalDeps(html: string): ExternalDep[] {
+  const by = new Map<
+    string,
+    { origin: string; kind: ExternalDep["kind"]; count: number }
+  >();
+  for (const match of html.matchAll(
+    /<(iframe|script|link)\b[^>]*(?:src|href)="(https?:\/\/[^/"]+)/gi,
+  )) {
+    const tag = (match[1] ?? "").toLowerCase();
+    if (tag !== "iframe" && tag !== "script" && tag !== "link") continue;
+    const origin = match[2] ?? "";
+    if (origin === "") continue;
+    const kind: ExternalDep["kind"] = tag === "link" ? "stylesheet" : tag;
+    const current = by.get(origin) ?? { origin, kind, count: 0 };
+    current.count += 1;
+    by.set(origin, current);
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count);
 }

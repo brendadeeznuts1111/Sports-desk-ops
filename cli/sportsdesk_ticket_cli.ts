@@ -23,6 +23,7 @@ import {
   assessConfidence,
   CONFIDENCE_ORDER,
   confidenceReason,
+  detectPhase,
   inspectPace,
   parseConfidenceArg,
   type CaptureInfo,
@@ -242,6 +243,29 @@ function enforceConfidence(
   }
 }
 
+function parseTimeOnly(value: string | null): number | null {
+  if (value === null) return null;
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i.exec(
+    value.trim(),
+  );
+  if (match === null) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] ?? "0");
+  const suffix = (match[4] ?? "").toUpperCase();
+  if (suffix === "PM" && hour !== 12) hour += 12;
+  if (suffix === "AM" && hour === 12) hour = 0;
+  return ((hour * 60 + minute) * 60 + second) * 1000;
+}
+
+function htmlTimeSpanMs(tickets: readonly HtmlBetTicket[]): number {
+  const times = tickets
+    .map((ticket) => parseTimeOnly(ticket.timeOnly))
+    .filter((value): value is number => value !== null);
+  if (times.length < 2) return 0;
+  return Math.max(...times) - Math.min(...times);
+}
+
 function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
   const level = assessConfidence(info);
   const lines = [`Capture: ${file}`, `Format: ${info.format}`, `Rows: ${rows}`];
@@ -259,6 +283,7 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
   } else {
     lines.push("Status: (not present — HTML capture)");
     lines.push("Amounts: none (HTML display scale)");
+    lines.push(`Phase: ${info.phase ?? "unknown"}`);
   }
   if (info.pace !== undefined) {
     lines.push(
@@ -277,10 +302,24 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
       );
     }
     lines.push(`  cause: ${info.pace.cause}`);
+    if (info.pace.refreshBaseline !== null) {
+      lines.push(
+        `  refresh baseline: ~${info.pace.refreshBaseline} from the 5-min renewToken interval`,
+      );
+    }
   } else {
     lines.push("Pace: (not applicable — JSON capture)");
   }
   lines.push("", `Confidence: ${level}`, `  reason: ${confidenceReason(info)}`);
+  if (
+    info.format === "json" &&
+    info.statusOk === true &&
+    info.hasAccountInfo === false
+  ) {
+    lines.push(
+      "⚠ status=1 but accountInfo is missing — the verifySession→getAccountInfo chain (manager.js) may not have completed",
+    );
+  }
   if (info.pace?.verdict === "mid-load") {
     const versionNote =
       info.pace.version === "0.4.x"
@@ -288,8 +327,12 @@ function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
         : info.pace.version === "1.x"
           ? "; this Pace version also restarts on WebSocket activity — restarts may mix AJAX and WS"
           : "";
+    const baseline =
+      info.pace.refreshBaseline === null
+        ? ""
+        : ` (~${info.pace.refreshBaseline} attributable to the 5-min token refresh interval, remainder from polling/UI navigation)`;
     lines.push(
-      `⚠ capture was taken mid-load: .pace-active at ${info.pace.activeProgress}% (Pace ${info.pace.version}, ${info.pace.runningTokens} accumulated restarts${versionNote}) — rows may be incomplete`,
+      `⚠ capture was taken mid-load: .pace-active at ${info.pace.activeProgress}% (Pace ${info.pace.version}, ${info.pace.runningTokens} accumulated restarts${baseline}${versionNote}) — rows may be incomplete`,
     );
   }
   console.log(lines.join("\n"));
@@ -524,7 +567,9 @@ if (text.trimStart().startsWith("<")) {
     format: "html",
     statusOk: null,
     hasAmounts: false,
-    pace: inspectPace(text),
+    pace: inspectPace(text, htmlTimeSpanMs(tickets)),
+    phase: detectPhase(text),
+    hasAccountInfo: null,
   };
   if (values.captureInfo === true) {
     printCaptureInfo(file, info, tickets.length);
@@ -681,7 +726,17 @@ const statusOk =
 const hasAmounts = artifact.wagers.some(
   (wager) => wager.amountWagered > 0 || wager.toWinAmount > 0,
 );
-const info: CaptureInfo = { format: "json", statusOk, hasAmounts };
+const accountInfo =
+  typeof payload === "object" && payload !== null
+    ? (payload as { accountInfo?: unknown }).accountInfo
+    : undefined;
+const hasAccountInfo = typeof accountInfo === "object" && accountInfo !== null;
+const info: CaptureInfo = {
+  format: "json",
+  statusOk,
+  hasAmounts,
+  hasAccountInfo,
+};
 if (values.captureInfo === true) {
   printCaptureInfo(file, info, artifact.wagers.length);
   process.exit(0);
