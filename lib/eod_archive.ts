@@ -79,6 +79,96 @@ export function sha256HexBytes(bytes: Uint8Array): string {
   return Bun.CryptoHasher.hash("sha256", bytes, "hex");
 }
 
+const TAR_BLOCK = 512;
+
+function readTarCString(
+  bytes: Uint8Array,
+  start: number,
+  length: number,
+): string {
+  const slice = bytes.subarray(start, start + length);
+  const nul = slice.indexOf(0);
+  return new TextDecoder().decode(nul === -1 ? slice : slice.subarray(0, nul));
+}
+
+function readTarSize(header: Uint8Array): number {
+  if (((header[124] ?? 0) & 0x80) !== 0) {
+    let value = 0;
+    for (let index = 125; index < 136; index++) {
+      value = value * 256 + (header[index] ?? 0);
+    }
+    return value;
+  }
+  const raw = readTarCString(header, 124, 12).trim();
+  const value = Number.parseInt(raw, 8);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function tarEntryName(header: Uint8Array): string {
+  const name = readTarCString(header, 0, 100);
+  if (readTarCString(header, 257, 6) !== "ustar") return name;
+  const prefix = readTarCString(header, 345, 155);
+  return prefix === "" ? name : `${prefix}/${name}`;
+}
+
+function isUnsafeTarName(name: string): boolean {
+  const normalized = name.replaceAll("\\", "/");
+  return (
+    normalized.startsWith("/") ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized.split("/").includes("..")
+  );
+}
+
+/**
+ * Reject entries that `extract()` would follow outside the destination.
+ *
+ * `Bun.Archive.extract()` remaps `../` and absolute names under the target, but it follows
+ * a symlink entry: a tar containing `link -> /outside` plus `link/evil` writes outside the
+ * target directory (measured on 1.4.4). EOD archives are generated locally and never carry
+ * links, so refusing links and unsafe names is the safe default before extracting.
+ */
+export function assertSafeTar(tar: Uint8Array): void {
+  let offset = 0;
+  let pendingPath: string | undefined;
+  while (offset + TAR_BLOCK <= tar.length) {
+    const header = tar.subarray(offset, offset + TAR_BLOCK);
+    if (header.every((byte) => byte === 0)) break;
+    const type = String.fromCharCode(header[156] ?? 0);
+    const size = readTarSize(header);
+    const dataStart = offset + TAR_BLOCK;
+    const data = tar.subarray(dataStart, dataStart + size);
+
+    if (type === "L") {
+      pendingPath = readTarCString(data, 0, data.length);
+    } else if (type === "x") {
+      const text = new TextDecoder().decode(data);
+      const match = /(?:^|\n)(?:\d+ )?path=([^\n]*)\n/.exec(text);
+      if (match?.[1] !== undefined) pendingPath = match[1];
+    } else if (type !== "g") {
+      const name = pendingPath ?? tarEntryName(header);
+      if (type !== "0" && type !== "\0" && type !== "5") {
+        throw new Error(
+          `eod archive: unsupported tar entry type ${JSON.stringify(type)} for ${name}`,
+        );
+      }
+      if (isUnsafeTarName(name)) {
+        throw new Error(
+          `eod archive: unsafe tar entry ${JSON.stringify(name)}`,
+        );
+      }
+      pendingPath = undefined;
+    }
+
+    offset = dataStart + Math.ceil(size / TAR_BLOCK) * TAR_BLOCK;
+  }
+}
+
+export function assertSafeTarGz(bytes: Uint8Array): void {
+  const gzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+  assertSafeTar(gzip ? Bun.gunzipSync(new Uint8Array(bytes)) : bytes);
+}
+
 /**
  * Hash selected members. Uses `.files(glob)` when small; `extract()` when large.
  */
@@ -116,6 +206,7 @@ export async function sha256MembersInTarGz(
     return out;
   }
 
+  assertSafeTarGz(bytes);
   const dir = mkdtempSync(join(tmpdir(), "eod-verify-"));
   try {
     await archive.extract(dir);
