@@ -166,7 +166,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket backtest poll watch pipeline stage deploy ship exec"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags backtest poll watch pipeline stage deploy ship exec"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -271,6 +271,10 @@ Usage: ./bin/dx <command> [args...]
 
   Ticket lookup
     ./bin/dx ticket <wagerNumber>|--list   One ticket or every ticket's leg count [--file=PATH] [--json]
+
+  Anomaly signatures
+    ./bin/dx flags --file=<capture> [--verbose] [--rule=NAME] [--strict] [--json]
+    ./bin/dx flags --rules          Deterministic rule catalog
 
   Surveillance / ingestion
     ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix
@@ -512,6 +516,10 @@ VERSION_HELP
   ticket)
     cd "$REPO_ROOT"
     exec bun run cli/sportsdesk_ticket_cli.ts "$@"
+    ;;
+  flags)
+    cd "$REPO_ROOT"
+    exec bun run cli/flags.ts "$@"
     ;;
   backtest)
     cd "$REPO_ROOT"

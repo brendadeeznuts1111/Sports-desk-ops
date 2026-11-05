@@ -16,6 +16,7 @@
  */
 
 import { decodeEntities } from "./ticket_html.ts";
+import { getTicketInternal, setTicketInternal } from "./ticket_internal.ts";
 import {
   normalizeLeg,
   normalizeTicket,
@@ -218,7 +219,7 @@ export function parseBetTickerHtml(html: string): HtmlBetTicket[] {
     const description = descriptionText(descCell.html);
     const ticketStructure = typeLabel === "" ? "Other" : typeLabel;
 
-    tickets.push({
+    const ticket: HtmlBetTicket = {
       wagerNumber,
       source: writer,
       ticketStructure,
@@ -230,7 +231,12 @@ export function parseBetTickerHtml(html: string): HtmlBetTicket[] {
       legs: parseDescription(description),
       vip: /data-vip="true"/i.test(attrs),
       live: /\bLIVE\b|\(live\)/i.test(description),
+    };
+    setTicketInternal(ticket, {
+      customer: cellText(cells[0]?.html ?? ""),
+      agent: cellText(cells[2]?.html ?? ""),
     });
+    tickets.push(ticket);
   }
   return tickets;
 }
@@ -272,13 +278,16 @@ export async function loadCapture(
   };
   const tickets: LoadedJsonTicket[] = artifact.wagers.map((wager) => {
     const view = normalizeTicket(wager, meta);
-    return {
+    const ticket: LoadedJsonTicket = {
       ...view,
       stake: view.stake * scale,
       toWin: view.toWin * scale,
       volume: view.volume === null ? null : view.volume * scale,
       amountSource: "json",
     };
+    const internal = getTicketInternal(view);
+    if (internal !== undefined) setTicketInternal(ticket, internal);
+    return ticket;
   });
 
   return { format: "json", tickets, provenance: meta };

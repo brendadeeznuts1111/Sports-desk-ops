@@ -11,6 +11,7 @@
 
 import { periodCode, wagerTypeLabel } from "./bet_ticker_labels.ts";
 import { portalWallClockIso } from "./gslive_manager_deeplink_sidecar.ts";
+import { setTicketInternal } from "./ticket_internal.ts";
 import {
   toLiveWager,
   type LiveWager,
@@ -131,7 +132,7 @@ export function normalizeTicket(
 ): NormalizedTicket {
   const wager = isLiveWager(input) ? input : toLiveWager(input);
   const ticketWriter = wager.ticketWriter.trim();
-  return {
+  const view: NormalizedTicket = {
     wagerNumber: String(wager.wagerNumber),
     product: ticketWriter === "" ? "OTHER" : ticketWriter.toUpperCase(),
     wagerType: wager.wagerType,
@@ -154,6 +155,11 @@ export function normalizeTicket(
       source: meta.source ?? "unlabelled",
     },
   };
+  setTicketInternal(view, {
+    customer: wager.login || wager.customerId,
+    agent: wager.agentLogin || wager.agentId,
+  });
+  return view;
 }
 
 /**
