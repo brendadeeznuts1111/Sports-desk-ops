@@ -386,6 +386,28 @@ observed; keep the types (a stream source may change) but the "may sit on a Shar
 comment is not reproducible on this binary. `Bun.JSONL.parse` over a SAB-backed view, `Bun.write(
 path, sabView)` and `Bun.file(sabPathBytes)` all work.
 
+**`ArrayBuffer` views: `subarray` vs `slice`, measured 1.4.4 (2026-11-05).** A normal
+`new ArrayBuffer(n)` starts zeroed; a `Uint8Array` view writes in place. `subarray(start, end)` is
+another view on the **same** buffer (no copy) — mutating the subview updates the parent. `slice(start,
+end)` allocates a **new** `ArrayBuffer` and copies that range — mutating the slice does not change
+the parent. JSONL resume uses byte offsets with `subarray` for that reason (see
+[`bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)). Slab
+allocators in this repo (`Bun.allocUnsafe`, tally SoA columns in
+[`lib/gslive_tally_rollup.ts`](../lib/gslive_tally_rollup.ts)) also slice windows with
+`subarray`, but **`allocUnsafe` does not zero** — only indices the code initializes are safe to read.
+Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts).
+
+```ts
+const buffer = new ArrayBuffer(8);
+const uint8 = new Uint8Array(buffer);
+uint8.set([1, 2, 3]); // [1,2,3,0,0,0,0,0]
+
+const sub = uint8.subarray(0, 4); // [1,2,3,0], shared backing
+sub[0] = 99; // uint8[0] becomes 99
+
+const copy = uint8.slice(0, 4); // independent copy
+```
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs

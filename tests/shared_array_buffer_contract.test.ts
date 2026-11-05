@@ -89,3 +89,22 @@ describe("SharedArrayBuffer contract", () => {
     expect(deserialize(serialized)).toEqual({ a: 1 });
   });
 });
+
+describe("ArrayBuffer Uint8Array views", () => {
+  test("subarray shares backing storage; slice copies", () => {
+    const buffer = new ArrayBuffer(8);
+    const uint8 = new Uint8Array(buffer);
+    uint8.set([1, 2, 3]);
+    expect([...uint8]).toEqual([1, 2, 3, 0, 0, 0, 0, 0]);
+
+    const sub = uint8.subarray(0, 4);
+    expect([...sub]).toEqual([1, 2, 3, 0]);
+
+    sub[0] = 99;
+    expect(uint8[0]).toBe(99);
+
+    const copy = uint8.slice(0, 4);
+    copy[1] = 88;
+    expect(uint8[1]).toBe(2);
+  });
+});
