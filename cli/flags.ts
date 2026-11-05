@@ -645,6 +645,8 @@ if (options.record) {
       verdict: options.verdict,
       reviewer: options.reviewer,
       notes: options.recordNotes,
+      customerRef: sample.customerRef ?? null,
+      agentRef: sample.agentRef ?? null,
     });
     console.log(
       `recorded ${options.verdict} · ${run.runId} seq ${options.seq} · ${sample.rule}`,

@@ -205,7 +205,7 @@ describe("flags CLI", () => {
     ]);
     expect(exported.code).toBe(0);
     expect(exported.stdout).toContain(
-      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,wager_numbers",
+      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,customer_ref,agent_ref,wager_numbers",
     );
     expect(exported.stdout).toContain("checked the market");
     expect(exported.stdout).toContain("900000001");

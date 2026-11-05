@@ -86,6 +86,8 @@ function reviewsFor(
     verdict: entry.verdict,
     reviewer: entry.reviewer ?? "analyst-a",
     reviewedAt: "2026-11-05T12:30:00.000Z",
+    customerRef: null,
+    agentRef: null,
     notes: null,
   }));
 }
@@ -157,6 +159,23 @@ describe("planReviews", () => {
     );
   });
 
+  test("carries hashed actor refs from the anomaly evidence", () => {
+    const rows = [
+      {
+        ...anomaly("period_correlation", 0),
+        evidence: {
+          customerRef: "customer:abc",
+          agentRef: "agent:def",
+        },
+      },
+    ];
+    const plan = planFor(rows);
+    expect(plan.samples[0]).toMatchObject({
+      customerRef: "customer:abc",
+      agentRef: "agent:def",
+    });
+  });
+
   test("a budget too small to census marks rules not_sampled", () => {
     const budget = {
       ...DEFAULT_SAMPLING_BUDGET,
@@ -193,6 +212,8 @@ describe("review ledger", () => {
       verdict: "false_positive",
       reviewer: "analyst-a",
       reviewedAt: "2026-11-05T12:30:00.000Z",
+      customerRef: null,
+      agentRef: null,
     });
     recordFlagReview(db, {
       runId: plan.runId,
@@ -203,6 +224,8 @@ describe("review ledger", () => {
       reviewer: "analyst-a",
       reviewedAt: "2026-11-05T12:31:00.000Z",
       notes: "market moved after placement",
+      customerRef: "customer:abc",
+      agentRef: "agent:def",
     });
     recordFlagReview(db, {
       runId: plan.runId,
@@ -220,6 +243,9 @@ describe("review ledger", () => {
     expect(
       stored.find((review) => review.reviewer === "analyst-a")?.notes,
     ).toBe("market moved after placement");
+    expect(
+      stored.find((review) => review.reviewer === "analyst-a")?.customerRef,
+    ).toBe("customer:abc");
     db.close();
   });
 
@@ -260,6 +286,8 @@ describe("review progress and export", () => {
       verdict: "confirmed",
       reviewer: "a",
       reviewedAt: "2026-11-05T12:30:00.000Z",
+      customerRef: null,
+      agentRef: null,
       notes: "look, a comma",
     },
     {
@@ -270,6 +298,8 @@ describe("review progress and export", () => {
       verdict: "confirmed",
       reviewer: "b",
       reviewedAt: "2026-11-05T12:31:00.000Z",
+      customerRef: null,
+      agentRef: null,
       notes: null,
     },
     {
@@ -280,6 +310,8 @@ describe("review progress and export", () => {
       verdict: "false_positive",
       reviewer: "a",
       reviewedAt: "2026-11-05T12:32:00.000Z",
+      customerRef: null,
+      agentRef: null,
       notes: 'quoted "note"',
     },
   ];
@@ -307,7 +339,7 @@ describe("review progress and export", () => {
     const csv = reviewsCsv(reviews);
     const lines = csv.split("\n");
     expect(lines[0]).toBe(
-      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,wager_numbers",
+      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,customer_ref,agent_ref,wager_numbers",
     );
     expect(lines).toHaveLength(4);
     expect(csv).toContain('"look, a comma"');
@@ -335,6 +367,42 @@ describe("flags metric metadata", () => {
     expect(values["period_correlation"]).toMatchObject({
       state: "not_measured",
       blockedBy: "noReviews",
+    });
+    expect(
+      metadata.definitions.find((definition) => definition.name === "flagRate"),
+    ).toMatchObject({ baselineRef: "flagRateReference" });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "flagRateReference",
+      ),
+    ).toMatchObject({
+      kind: "baseline",
+      state: "not_measured",
+      blockedBy: "captureHistory",
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "ruleHitWeight",
+      ),
+    ).toMatchObject({
+      kind: "parameter",
+      state: "not_measured",
+      blockedBy: "accountBridge",
+      value: {
+        perConfirmedHit: 0.02,
+        cap: 0.1,
+        appliedTo: "normalized-priority",
+        confirmedByRule: { period_correlation: 0 },
+      },
+    });
+    expect(
+      metadata.definitions.find(
+        (definition) => definition.name === "queueEscalation",
+      ),
+    ).toMatchObject({
+      kind: "caveat",
+      state: "not_measured",
+      blockedBy: "accountBridge",
     });
     expect(
       metadata.definitions.find((definition) => definition.name === "response"),

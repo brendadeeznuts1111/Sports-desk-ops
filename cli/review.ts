@@ -32,6 +32,9 @@ export const DEFAULT_ANALYST_MINUTES_PER_DAY = 60;
 export const DEFAULT_VOLUME_FLOOR = 10;
 /** n below this is not a precision estimate; report it as not_measured instead. */
 export const MIN_PRECISION_SAMPLE = 10;
+/** Bounded queue weight: reasons can reorder, never override the model score. */
+export const RULE_HIT_WEIGHT_PER_CONFIRMED = 0.02;
+export const RULE_HIT_WEIGHT_CAP = 0.1;
 
 /** Minutes to review one flag, by rule. Defaults are seeds to recalibrate after two weeks. */
 export const DEFAULT_COST_PER_FLAG: Readonly<Record<string, number>> = {
@@ -76,6 +79,8 @@ export interface ReviewSample {
   readonly rule: string;
   readonly severity: string;
   readonly wagerNumbers: readonly string[];
+  readonly customerRef: string | null;
+  readonly agentRef: string | null;
   readonly minutes: number;
   /** Every 20th sample gets a second reviewer for inter-rater agreement. */
   readonly doubleReview: boolean;
@@ -228,6 +233,14 @@ export function planReviews(
         rule: entry.anomaly.rule,
         severity: entry.anomaly.severity,
         wagerNumbers: entry.anomaly.tickets.map((ticket) => ticket.wagerNumber),
+        customerRef:
+          typeof entry.anomaly.evidence["customerRef"] === "string"
+            ? entry.anomaly.evidence["customerRef"]
+            : null,
+        agentRef:
+          typeof entry.anomaly.evidence["agentRef"] === "string"
+            ? entry.anomaly.evidence["agentRef"]
+            : null,
         minutes: candidate.cost,
         doubleReview: false,
       });
@@ -287,11 +300,19 @@ export interface FlagReviewInput {
   readonly reviewedAt?: string;
   /** Free text: kappa says whether reviewers disagree; notes say why. */
   readonly notes?: string | undefined;
+  /** Hashed F402 actor refs carried from the anomaly evidence; no raw login. */
+  readonly customerRef?: string | null;
+  readonly agentRef?: string | null;
 }
 
-export type StoredFlagReview = Omit<FlagReviewInput, "notes"> & {
+export type StoredFlagReview = Omit<
+  FlagReviewInput,
+  "notes" | "customerRef" | "agentRef"
+> & {
   readonly reviewedAt: string;
   readonly notes: string | null;
+  readonly customerRef: string | null;
+  readonly agentRef: string | null;
 };
 
 export function openReviewDb(path: string): Database {
@@ -318,6 +339,8 @@ export function openReviewDb(path: string): Database {
       reviewed_at    TEXT NOT NULL,
       reviewer       TEXT NOT NULL,
       notes          TEXT,
+      customer_ref   TEXT,
+      agent_ref      TEXT,
       PRIMARY KEY (run_id, seq, reviewer)
     );
 
@@ -328,8 +351,14 @@ export function openReviewDb(path: string): Database {
   const columns = db.query("PRAGMA table_info(flag_review)").all() as Array<{
     name: string;
   }>;
-  if (!columns.some((column) => column.name === "notes")) {
-    db.exec("ALTER TABLE flag_review ADD COLUMN notes TEXT");
+  for (const [name, type] of [
+    ["notes", "TEXT"],
+    ["customer_ref", "TEXT"],
+    ["agent_ref", "TEXT"],
+  ] as const) {
+    if (!columns.some((column) => column.name === name)) {
+      db.exec(`ALTER TABLE flag_review ADD COLUMN ${name} ${type}`);
+    }
   }
   return db;
 }
@@ -377,14 +406,16 @@ export function recordFlagReview(db: Database, review: FlagReviewInput): void {
     throw new Error("flag_review: seq must be a non-negative integer");
   }
   db.prepare(
-    `INSERT INTO flag_review (run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO flag_review (run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes, customer_ref, agent_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(run_id, seq, reviewer) DO UPDATE SET
        rule = excluded.rule,
        wager_numbers = excluded.wager_numbers,
        verdict = excluded.verdict,
        reviewed_at = excluded.reviewed_at,
-       notes = excluded.notes`,
+       notes = excluded.notes,
+       customer_ref = excluded.customer_ref,
+       agent_ref = excluded.agent_ref`,
   ).run(
     review.runId,
     review.seq,
@@ -394,6 +425,8 @@ export function recordFlagReview(db: Database, review: FlagReviewInput): void {
     review.reviewedAt ?? new Date().toISOString(),
     review.reviewer.trim(),
     review.notes?.trim() ? review.notes.trim() : null,
+    review.customerRef ?? null,
+    review.agentRef ?? null,
   );
 }
 
@@ -450,13 +483,13 @@ export function readFlagReviews(
     runId === undefined
       ? db
           .query(
-            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes
+            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes, customer_ref, agent_ref
              FROM flag_review ORDER BY run_id, seq, reviewer`,
           )
           .all()
       : db
           .query(
-            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes
+            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes, customer_ref, agent_ref
              FROM flag_review WHERE run_id = ?1 ORDER BY seq, reviewer`,
           )
           .all(runId);
@@ -471,6 +504,10 @@ export function readFlagReviews(
       reviewedAt: String(record["reviewed_at"]),
       reviewer: String(record["reviewer"]),
       notes: record["notes"] === null ? null : String(record["notes"]),
+      customerRef:
+        record["customer_ref"] === null ? null : String(record["customer_ref"]),
+      agentRef:
+        record["agent_ref"] === null ? null : String(record["agent_ref"]),
     };
   });
 }
@@ -573,6 +610,8 @@ export function reviewsCsv(reviews: readonly StoredFlagReview[]): string {
     "reviewer",
     "reviewed_at",
     "notes",
+    "customer_ref",
+    "agent_ref",
     "wager_numbers",
   ].join(",");
   const rows = [...reviews]
@@ -586,6 +625,8 @@ export function reviewsCsv(reviews: readonly StoredFlagReview[]): string {
         review.reviewer,
         review.reviewedAt,
         review.notes ?? "",
+        review.customerRef ?? "",
+        review.agentRef ?? "",
         review.wagerNumbers.join("|"),
       ]
         .map(csvCell)
@@ -799,6 +840,11 @@ export function buildFlagsMetricMetadata(
           };
 
   const reviewedFlags = new Set(reviews.map((review) => review.seq)).size;
+  const confirmedByRule = Object.fromEntries(
+    Object.entries(rulePrecision)
+      .filter(([, row]) => row.confirmed !== undefined)
+      .map(([rule, row]) => [rule, row.confirmed]),
+  );
   return {
     kind: "flags-metric-metadata",
     schemaVersion: 1,
@@ -809,11 +855,35 @@ export function buildFlagsMetricMetadata(
         kind: "metric",
         unit: "flag",
         population: "all-wagers",
+        baselineRef: "flagRateReference",
         value: plan.wagerCount === 0 ? null : plan.flagCount / plan.wagerCount,
         state: plan.wagerCount === 0 ? "not_measured" : undefined,
         blockedBy: plan.wagerCount === 0 ? "noWagers" : undefined,
         description:
-          "Flags fired divided by wagers scored; diagnostic only, not precision.",
+          "Flags fired divided by wagers scored; diagnostic only, not precision. Read it against flagRateReference, not in isolation.",
+      },
+      {
+        name: "flagRateReference",
+        kind: "baseline",
+        state: "not_measured",
+        blockedBy: "captureHistory",
+        value: null,
+        description:
+          "Historical per-rule flag-rate reference (P50 over recent captures); no capture-history index exists yet.",
+      },
+      {
+        name: "ruleHitWeight",
+        kind: "parameter",
+        state: "not_measured",
+        blockedBy: "accountBridge",
+        value: {
+          perConfirmedHit: RULE_HIT_WEIGHT_PER_CONFIRMED,
+          cap: RULE_HIT_WEIGHT_CAP,
+          appliedTo: "normalized-priority",
+          confirmedByRule,
+        },
+        description:
+          "Contract for the queue overlay: +0.02 per confirmed hit, capped at +0.10, applied to a normalized 0-1 priority; the displayed model score is 0-100. Not applied until the F402/GSLive account bridge is resolved.",
       },
       {
         name: "samplingRate",
@@ -841,6 +911,15 @@ export function buildFlagsMetricMetadata(
         reviewPolicy: DEFAULT_REVIEW_POLICY,
         description:
           "Sampled precision per rule over reviewed flags. A sampled 0.85 does not mean flag N is 85% likely to be real; it means the rule was right 85% of the time in the reviewed sample. Per-flag evaluation requires case-level review.",
+      },
+      {
+        name: "queueEscalation",
+        kind: "caveat",
+        state: "not_measured",
+        blockedBy: "accountBridge",
+        value: "not-applied",
+        description:
+          "Confirmed rule hits are not attached to fraud_queue: the review store keys on hashed F402 customerRef/agentRef, the queue keys on GSLive userID, and partnerUserID overlap is partial. The queue model score is 0-100; the weight contract uses a normalized 0-1 priority.",
       },
       {
         name: "response",
