@@ -23,5 +23,5 @@
     "types": ["bun"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "reports"]
+  "exclude": ["node_modules", "reports", "Scratch"]
 }
