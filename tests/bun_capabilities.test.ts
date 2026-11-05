@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -164,29 +158,115 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
-  test("FileSystemRouter applies nextjs options and scriptSrc", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bun-fs-router-"));
+  test("Bun.build plugin onLoad returns contents and loader", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-plugin-load-"));
     try {
-      await Bun.write(join(dir, "index.tsx"), "export default 1;\n");
-      await Bun.write(join(dir, "about.tsx"), "export default 2;\n");
-      await Bun.write(join(dir, "ignored.js"), "export default 3;\n");
+      const entry = join(dir, "entry.ts");
+      await Bun.write(
+        entry,
+        'import { answer } from "virtual:answer";\nconsole.log(answer);\n',
+      );
 
-      const router = new Bun.FileSystemRouter({
-        style: "nextjs",
-        dir,
-        origin: "https://example.test",
-        assetPrefix: "/static/",
-        fileExtensions: [".tsx"],
+      const build = await Bun.build({
+        entrypoints: [entry],
+        target: "bun",
+        plugins: [
+          {
+            name: "virtual-answer",
+            setup(build) {
+              build.onResolve({ filter: /^virtual:/ }, (args) => ({
+                path: args.path,
+                namespace: "virtual",
+              }));
+              build.onLoad({ filter: /.*/, namespace: "virtual" }, () => ({
+                contents: new TextEncoder().encode("export const answer = 42;"),
+                loader: "ts",
+              }));
+            },
+          },
+        ],
       });
 
-      expect(router.match("/missing")).toBeNull();
-      const about = router.match("/about");
-      expect(about).not.toBeNull();
-      expect(about!.filePath).toBe(join(realpathSync(dir), "about.tsx"));
-      expect(about!.kind).toBe("exact");
-      expect(about!.scriptSrc).toBe("https://example.test/static/about.tsx");
+      expect(build.success).toBe(true);
+      expect(await build.outputs[0]!.text()).toContain("42");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("FileSystemRouter applies nextjs options and scriptSrc", () => {
+    // An in-process `Bun.build()` switches a process-global asset mode: every router constructed
+    // afterwards reports `scriptSrc` as `origin + "/abs:" + filePath` instead of the
+    // assetPrefix-relative path. Run the probe in a child so this pins the documented contract and
+    // keeps passing if Bun stops leaking that state.
+    const probe = `
+      const { mkdtempSync, realpathSync, rmSync, writeFileSync } = require("node:fs");
+      const { tmpdir } = require("node:os");
+      const { join } = require("node:path");
+      const dir = mkdtempSync(join(tmpdir(), "bun-fs-router-"));
+      try {
+        writeFileSync(join(dir, "index.tsx"), "export default 1;");
+        writeFileSync(join(dir, "about.tsx"), "export default 2;");
+        writeFileSync(join(dir, "ignored.js"), "export default 3;");
+        const router = new Bun.FileSystemRouter({
+          style: "nextjs",
+          dir,
+          origin: "https://example.test",
+          assetPrefix: "/static/",
+          fileExtensions: [".tsx"],
+        });
+        const about = router.match("/about");
+        console.log(JSON.stringify({
+          dir: realpathSync(dir),
+          missing: router.match("/missing"),
+          filePath: about === null ? null : about.filePath,
+          kind: about === null ? null : about.kind,
+          scriptSrc: about === null ? null : about.scriptSrc,
+        }));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    `;
+    const child = Bun.spawnSync([process.execPath, "-e", probe], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = child.stdout.toString().trim();
+    const stderr = child.stderr.toString().trim();
+    expect({ code: child.exitCode, stderr }).toEqual({ code: 0, stderr: "" });
+
+    const result = JSON.parse(stdout) as {
+      dir: string;
+      missing: unknown;
+      filePath: string;
+      kind: string;
+      scriptSrc: string;
+    };
+    expect(result.missing).toBeNull();
+    expect(result.filePath).toBe(join(result.dir, "about.tsx"));
+    expect(result.kind).toBe("exact");
+    expect(result.scriptSrc).toBe("https://example.test/static/about.tsx");
+  });
+
+  test("StructuredSerializeOptions transfer detaches the source buffer", async () => {
+    const source = new ArrayBuffer(8);
+    new Uint8Array(source).set([1, 2, 3]);
+    const clone = structuredClone({ buffer: source }, { transfer: [source] });
+    expect(source.byteLength).toBe(0);
+    expect([...new Uint8Array(clone.buffer)]).toEqual([1, 2, 3, 0, 0, 0, 0, 0]);
+
+    const channel = new MessageChannel();
+    try {
+      const sent = new ArrayBuffer(4);
+      const received = new Promise<{ buffer: ArrayBuffer }>((resolve) => {
+        channel.port1.onmessage = (event) => resolve(event.data);
+      });
+      channel.port2.postMessage({ buffer: sent }, { transfer: [sent] });
+      const message = await received;
+      expect(sent.byteLength).toBe(0);
+      expect(message.buffer.byteLength).toBe(4);
+    } finally {
+      channel.port1.close();
     }
   });
 
