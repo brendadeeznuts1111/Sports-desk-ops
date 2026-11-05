@@ -146,6 +146,9 @@ describe("Bun Shell contract", () => {
         SOURCE_EXTENSIONS.some((ext) => entry.endsWith(ext)),
       )) {
       const text = codeOnly(await Bun.file(join(ROOT, path)).text());
+      // Presence pins in bin/bun_surface.ts read Bun.$ / $.escape / $.braces; they never invoke
+      // the template tag (see docs/bun-upstream-reference.md "Bun.$ — argv-only for credentials").
+      if (path === "bin/bun_surface.ts") continue;
       if (/Bun\.\$(?!\{)/.test(text) || importTag.test(text))
         offenders.push(path);
     }
