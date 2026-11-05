@@ -565,16 +565,16 @@ describe("fraud priority queue (CLI)", () => {
       "bridgeRepresentativeness",
       "reviewRows",
     ]);
-    expect(error.details.inputs.bridgeCoverage).toBeCloseTo(2577 / 2586, 12);
+    expect(error.details.inputs.bridgeCoverage).toBe(1);
     expect(error.details.inputs.bridgeRepresentative).toBeNull();
     expect(error.details.inputs.confirmedReviews).toBe(0);
     expect(error.details.bridge.coverage).toMatchObject({
-      matched: 2577,
+      matched: 2586,
       total: 2586,
       evidence: "committed-baseline",
       artifactReason: "missing",
     });
-    expect(error.details.bridge.coverage.value).toBeCloseTo(2577 / 2586, 12);
+    expect(error.details.bridge.coverage.value).toBe(1);
     expect(error.details.bridge.representativeness).toMatchObject({
       representative: null,
       reason: "missing",

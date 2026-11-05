@@ -1122,7 +1122,7 @@ export function buildFlagsMetricMetadata(
         ],
         value: "not_implemented",
         description:
-          "Bridge coverage is 99.65% (2,577/2586) against the 2026-11-01 getListAgenstByAgent PLAYERS capture; 9 accounts are unmatched and all 9 were confirmed present by getInfoPlayer on 2026-11-05 (BA109_0, CRB102, GAGCOF1052, ML117, PEP119, TD103, TD104, TD106, TD108), so the capture is stale, not the master; the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). hasRuleHit is a tie-break after the model score, not a promotion; all readiness gates must clear before the batch can run.",
+          "Bridge coverage is 100% (2,586/2586) against the refreshed getListAgenstByAgent PLAYERS capture on 2026-11-05; the 2026-11-01 capture missed 9 new accounts, all confirmed present by getInfoPlayer; the GSLive corpus ends 2026-11-04T05:59:59Z; the model was fitted 2026-11-05T05:36Z from that stale corpus; 0 confirmed reviews; top-100 median adjacent score gap is 0 (54 ties). hasRuleHit is a tie-break after the model score, not a promotion; all readiness gates must clear before the batch can run.",
       },
       {
         name: "response",
@@ -1226,10 +1226,10 @@ export function buildFlagsMetricMetadata(
         kind: "metric",
         unit: "account",
         population: "gslive-accounts",
-        value: 0.9965,
+        value: 1,
         derivedFrom: "measured",
         description:
-          "2,577/2,586 GSLive accounts resolve to the 2026-11-01 getListAgenstByAgent PLAYERS capture on customerID or Login (99.65%), measured 2026-11-05T07:03Z. The 9 unmatched ids were all confirmed present by getInfoPlayer on 2026-11-05; the capture is stale, not the master. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones. A measurement older than 30 days emits bridgeCoverageStaleness as a warning, not a blocker.",
+          "2,586/2,586 GSLive accounts resolve to the refreshed getListAgenstByAgent PLAYERS capture on customerID or Login (100%), measured 2026-11-05T07:11Z. The 2026-11-01 capture missed 9 new accounts, all confirmed present by getInfoPlayer. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones. A measurement older than 30 days emits bridgeCoverageStaleness as a warning, not a blocker.",
       },
       {
         name: "reviewedSamplePositiveRate",

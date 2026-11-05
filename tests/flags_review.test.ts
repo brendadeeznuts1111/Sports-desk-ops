@@ -503,7 +503,7 @@ describe("flags metric metadata", () => {
     ).toMatchObject({
       kind: "metric",
       derivedFrom: "measured",
-      value: 0.9965,
+      value: 1,
     });
     expect(
       metadata.definitions.find(

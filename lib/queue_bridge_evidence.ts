@@ -35,13 +35,13 @@ export interface QueueBridgeCoverage {
  * when present, overrides this baseline. The timestamp travels with the value.
  */
 export const QUEUE_BRIDGE_COVERAGE_BASELINE: QueueBridgeCoverage = {
-  measuredAt: "2026-11-05T07:03:09.970Z",
+  measuredAt: "2026-11-05T07:11:11.725Z",
   population: "gslive-accounts",
-  matched: 2577,
+  matched: 2586,
   total: 2586,
-  value: 2577 / 2586,
+  value: 1,
   source:
-    "getListAgenstByAgent PLAYERS capture 2026-11-01 vs GSLive getBetReport corpus 2026-11-03",
+    "refreshed getListAgenstByAgent PLAYERS capture 2026-11-05 vs GSLive getBetReport corpus 2026-11-03",
 };
 
 export interface QueueBridgeArm {
