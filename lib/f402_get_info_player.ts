@@ -13,9 +13,15 @@ export interface ParlaySpecRow {
 }
 
 export interface GetInfoPlayerData {
+  readonly CustomerID?: string;
   readonly Login?: string;
+  readonly AgentID?: string;
+  readonly AgentLogin?: string;
   readonly AgentType?: string;
   readonly Active?: string;
+  readonly Status?: string;
+  readonly NameFirst?: string;
+  readonly NameLast?: string;
   readonly CreditLimit?: number;
   readonly CurrentBalance?: number;
   readonly PendingWagerBalance?: number;
@@ -73,6 +79,33 @@ export function parseGetInfoPlayerEnvelope(
   return raw as GetInfoPlayerEnvelope;
 }
 
+export type GetInfoPlayerProbe =
+  | { readonly found: false }
+  | {
+      readonly found: true;
+      readonly envelope: GetInfoPlayerEnvelope;
+      readonly summary: GetInfoPlayerSummary;
+    };
+
+/**
+ * The UI treats `INFO: null` as "player not found" (`player-info.js`, the
+ * `#not-account-load` modal). This wrapper is the probe classifier; it does not throw on a
+ * legitimate absence.
+ */
+export function parseGetInfoPlayerProbe(raw: unknown): GetInfoPlayerProbe {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("getInfoPlayer response must be an object");
+  }
+  const info = (raw as { INFO?: unknown }).INFO;
+  if (info === null) return { found: false };
+  const envelope = parseGetInfoPlayerEnvelope(raw);
+  return {
+    found: true,
+    envelope,
+    summary: summarizeGetInfoPlayer(envelope),
+  };
+}
+
 /** Strip password-like fields from a parsed envelope (mutates a shallow copy). */
 export function redactGetInfoPlayer(
   envelope: GetInfoPlayerEnvelope,
@@ -92,6 +125,9 @@ export function redactGetInfoPlayer(
 export interface GetInfoPlayerSummary {
   readonly customerId: string;
   readonly login: string;
+  readonly agentId: string;
+  readonly agentLogin: string | null;
+  readonly status: string | null;
   readonly agentType: string | null;
   readonly active: string | null;
   readonly creditLimit: number | null;
@@ -111,6 +147,12 @@ export function summarizeGetInfoPlayer(
   return {
     customerId,
     login: trimPaddedId(data.Login),
+    agentId:
+      trimPaddedId(data.AgentID) ||
+      trimPaddedId(data.AgentLogin) ||
+      trimPaddedId(added?.CustomerID),
+    agentLogin: trimPaddedId(data.AgentLogin) || null,
+    status: data.Status ?? data.Active ?? null,
     agentType: data.AgentType ?? null,
     active: data.Active ?? null,
     creditLimit: typeof data.CreditLimit === "number" ? data.CreditLimit : null,

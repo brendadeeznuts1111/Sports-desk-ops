@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   parseGetInfoPlayerEnvelope,
+  parseGetInfoPlayerProbe,
   redactGetInfoPlayer,
   summarizeGetInfoPlayer,
   trimPaddedId,
@@ -43,5 +44,34 @@ describe("getInfoPlayer envelope", () => {
 
   test("rejects missing INFO.data", () => {
     expect(() => parseGetInfoPlayerEnvelope({ INFO: {} })).toThrow("INFO.data");
+  });
+
+  test("the probe treats INFO:null as player-not-found", () => {
+    expect(parseGetInfoPlayerProbe({ INFO: null })).toEqual({ found: false });
+    expect(() => parseGetInfoPlayerProbe({ INFO: true })).toThrow("INFO");
+  });
+
+  test("the probe summary carries the identity fields", () => {
+    const probe = parseGetInfoPlayerProbe({
+      INFO: {
+        data: {
+          Login: "BGD101   ",
+          AgentID: "BIGDAD   ",
+          AgentLogin: "BIGDAD",
+          Status: "Active",
+        },
+        added: { CustomerID: "BGD101    " },
+      },
+    });
+    expect(probe).toMatchObject({
+      found: true,
+      summary: {
+        customerId: "BGD101",
+        login: "BGD101",
+        agentId: "BIGDAD",
+        agentLogin: "BIGDAD",
+        status: "Active",
+      },
+    });
   });
 });
