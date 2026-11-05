@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -156,6 +162,38 @@ describe("Bun capabilities used by the ops tooling", () => {
     const png = Buffer.from(url.slice(url.indexOf(",") + 1), "base64");
     const blurAspect = png.readUInt32BE(16) / png.readUInt32BE(20);
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
+  });
+
+  test("FileSystemRouter applies nextjs options and scriptSrc", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-fs-router-"));
+    try {
+      await Bun.write(join(dir, "index.tsx"), "export default 1;\n");
+      await Bun.write(join(dir, "about.tsx"), "export default 2;\n");
+      await Bun.write(join(dir, "ignored.js"), "export default 3;\n");
+
+      const router = new Bun.FileSystemRouter({
+        style: "nextjs",
+        dir,
+        origin: "https://example.test",
+        assetPrefix: "/static/",
+        fileExtensions: [".tsx"],
+      });
+
+      expect(router.match("/missing")).toBeNull();
+      const about = router.match("/about");
+      expect(about).not.toBeNull();
+      expect(about!.filePath).toBe(join(realpathSync(dir), "about.tsx"));
+      expect(about!.kind).toBe("exact");
+      expect(about!.scriptSrc).toBe("https://example.test/static/about.tsx");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("GenericTransformStream exposes readable and writable", () => {
+    const stream = new CompressionStream("gzip");
+    expect(stream.readable).toBeInstanceOf(ReadableStream);
+    expect(stream.writable).toBeInstanceOf(WritableStream);
   });
 
   test("AddEventListenerOptions once, passive and signal are honored", () => {
