@@ -15,6 +15,7 @@
 import { parseArgs } from "node:util";
 
 import { wagerTypeLabel } from "../lib/game_admin.ts";
+import { normalizeTicket } from "../lib/live_ticket_view.ts";
 import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
 
 const DEFAULT_FILE = "data/live-wagers.json";
@@ -26,6 +27,7 @@ Usage: bun run ticket <wagerNumber> [--file <artifact>] [--json]
 
   --file <path>  Capture artifact (default: ${DEFAULT_FILE})
   --list         Every ticket with its leg count (safe fields only)
+  --normalized   Canonical public ticket shape; requires --json
   --json         Machine-readable safe view (no customer/agent identifiers)
   -h, --help     This text
 
@@ -92,6 +94,7 @@ let values: {
   readonly file?: string;
   readonly json?: boolean;
   readonly list?: boolean;
+  readonly normalized?: boolean;
   readonly help?: boolean;
 };
 let positionals: string[];
@@ -102,6 +105,7 @@ try {
       file: { type: "string", default: DEFAULT_FILE },
       json: { type: "boolean", default: false },
       list: { type: "boolean", default: false },
+      normalized: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
@@ -116,6 +120,9 @@ try {
 if (values.help === true) {
   console.log(HELP);
   process.exit(0);
+}
+if (values.normalized === true && values.json !== true) {
+  usage("--normalized requires --json");
 }
 
 const listing = values.list === true;
@@ -148,25 +155,56 @@ try {
 }
 
 const artifact = readWagerListArtifact(payload);
+const meta = {
+  file,
+  source: artifact.provenance.source,
+  capturedAt: artifact.provenance.observedAt,
+};
 
 if (listing) {
-  const tickets = artifact.wagers.map(safeWagerView);
-  const legs = tickets.reduce((total, ticket) => total + ticket.legs.length, 0);
   if (values.json === true) {
-    console.log(
-      JSON.stringify(
-        {
-          tickets,
-          totals: { tickets: tickets.length, legs },
-          provenance: artifact.provenance,
-        },
-        null,
-        2,
-      ),
-    );
+    if (values.normalized === true) {
+      const tickets = artifact.wagers.map((wager) =>
+        normalizeTicket(wager, meta),
+      );
+      const legs = tickets.reduce(
+        (total, ticket) => total + ticket.legs.length,
+        0,
+      );
+      console.log(
+        JSON.stringify(
+          {
+            tickets,
+            totals: { tickets: tickets.length, legs },
+            provenance: artifact.provenance,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      const tickets = artifact.wagers.map(safeWagerView);
+      const legs = tickets.reduce(
+        (total, ticket) => total + ticket.legs.length,
+        0,
+      );
+      console.log(
+        JSON.stringify(
+          {
+            tickets,
+            totals: { tickets: tickets.length, legs },
+            provenance: artifact.provenance,
+          },
+          null,
+          2,
+        ),
+      );
+    }
     process.exit(0);
   }
 
+  const tickets = artifact.wagers.map(safeWagerView);
+  const legs = tickets.reduce((total, ticket) => total + ticket.legs.length, 0);
   const table = Bun.inspect.table(
     tickets.map((ticket) => ({
       ticket: ticket.wagerNumber,
@@ -202,7 +240,13 @@ const view = safeWagerView(wager);
 
 if (values.json === true) {
   console.log(
-    JSON.stringify({ wager: view, provenance: artifact.provenance }, null, 2),
+    JSON.stringify(
+      values.normalized === true
+        ? normalizeTicket(wager, meta)
+        : { wager: view, provenance: artifact.provenance },
+      null,
+      2,
+    ),
   );
   process.exit(0);
 }

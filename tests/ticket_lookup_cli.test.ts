@@ -137,6 +137,78 @@ describe("sportsdesk_ticket_cli", () => {
     }
   });
 
+  test("--json --normalized emits the canonical public ticket", async () => {
+    const { code, stdout } = await run([
+      "767125863",
+      "--file",
+      FIXTURE,
+      "--json",
+      "--normalized",
+    ]);
+    expect(code).toBe(0);
+    const ticket = JSON.parse(stdout) as {
+      wagerNumber: string;
+      legs: Array<Record<string, unknown>>;
+      [key: string]: unknown;
+    };
+    expect(ticket).toMatchObject({
+      wagerNumber: "767125863",
+      product: "GSLIVE",
+      wagerType: "P",
+      wagerTypeLabel: "Parlay",
+      phase: "pregame",
+      stake: 1000,
+      toWin: 1395,
+      volume: null,
+      insertedAt: "2026-11-01T23:15:02.770Z",
+      descCode: "P.G319747616",
+      writer: null,
+      ticketWriter: "GSLIVE",
+      source: "unlabelled",
+      provenance: { file: FIXTURE, capturedAt: null },
+    });
+    expect(ticket.legs[0]).toEqual({
+      index: 1,
+      sport: "Football",
+      eventName: "Los Angeles Rams vs Los Angeles Chargers",
+      period: "Game",
+      market: "Winner (2 way)",
+      selection: "Los Angeles Rams",
+      price: "-140",
+      live: false,
+      gameNumber: "319747616",
+    });
+    for (const identifier of ["WC9001", "ADAM", "MARWES50", "JP1833"]) {
+      expect(stdout).not.toContain(identifier);
+    }
+  });
+
+  test("--list --json --normalized keeps the same totals", async () => {
+    const { code, stdout } = await run([
+      "--list",
+      "--file",
+      FIXTURE,
+      "--json",
+      "--normalized",
+    ]);
+    expect(code).toBe(0);
+    const payload = JSON.parse(stdout) as {
+      tickets: Array<{ wagerNumber: string; legs: unknown[] }>;
+      totals: { tickets: number; legs: number };
+    };
+    expect(payload.totals).toEqual({ tickets: 7, legs: 12 });
+    expect(payload.tickets.map((ticket) => ticket.wagerNumber)).toEqual([
+      "767125863",
+      "767126203",
+      "767126205",
+      "767126231",
+      "767126258",
+      "767126232",
+      "767126230",
+    ]);
+    expect(payload.tickets[2]?.legs).toHaveLength(3);
+  });
+
   test("an unknown wager exits 1 and names the artifact", async () => {
     const { code, stderr } = await run(["1", "--file", FIXTURE]);
     expect(code).toBe(1);
@@ -168,6 +240,17 @@ describe("sportsdesk_ticket_cli", () => {
     const listWithNumber = await run(["--list", "1", "--file", FIXTURE]);
     expect(listWithNumber.code).toBe(2);
     expect(listWithNumber.stderr).toContain("--list takes no wager number");
+
+    const normalizedWithoutJson = await run([
+      "767125863",
+      "--normalized",
+      "--file",
+      FIXTURE,
+    ]);
+    expect(normalizedWithoutJson.code).toBe(2);
+    expect(normalizedWithoutJson.stderr).toContain(
+      "--normalized requires --json",
+    );
   });
 
   test("--help prints usage and exits 0", async () => {
@@ -175,6 +258,7 @@ describe("sportsdesk_ticket_cli", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("bun run ticket <wagerNumber>");
     expect(stdout).toContain("bun run ticket --list");
+    expect(stdout).toContain("--normalized");
     expect(stdout).toContain("b767125863");
   });
 });

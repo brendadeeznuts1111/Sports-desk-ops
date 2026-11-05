@@ -194,6 +194,44 @@ function deskOffsetMsAt(instantMs: number): number {
 }
 
 /**
+ * Portal wall-clock (`getBetTicker` `InsertDateTime`, `Report/Pending` `acceptedAt`) → ISO UTC.
+ *
+ * The wire carries no zone; the desk writes America/Chicago time. An explicit zone is already
+ * an instant. Returns `null` for empty or unparseable values rather than guessing.
+ */
+export function portalWallClockIso(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text === "") return null;
+  const parsed = Date.parse(text);
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+  const wall =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(
+      text,
+    );
+  if (wall === null) {
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+  const [, year, month, day, hour, minute, second = "00", fraction = "0"] =
+    wall;
+  const wallMs = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(fraction.padEnd(3, "0")),
+  );
+  // Two passes, same as computeDeskDayStartEpochSeconds: DST can change between guesses.
+  const firstGuess = wallMs - deskOffsetMsAt(wallMs);
+  const resolved = wallMs - deskOffsetMsAt(firstGuess);
+  return new Date(resolved).toISOString();
+}
+
+/**
  * UTC epoch seconds for `00:00:00` on a desk calendar day. DST-aware: returns `05:00Z` under
  * CDT and `06:00Z` under CST. Never hardcode the offset — it changes on the DST transitions.
  */

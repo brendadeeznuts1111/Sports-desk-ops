@@ -14,6 +14,7 @@ import {
   deskDayBoundaryIso,
   deskWindowIso,
   formatGsLivePlayerToken,
+  portalWallClockIso,
   resolveDeskDateYmd,
 } from "../lib/gslive_manager_deeplink_sidecar.ts";
 import {
@@ -406,5 +407,25 @@ describe("GSLive Manager 7-Param Deep-Link Builder & Live Bet-History Sidecar", 
         `partnerUserId=${wallet.f402CustomerId}`,
       );
     }
+  });
+
+  test("test_portal_wall_clock_reads_as_desk_time_and_is_dst_aware", () => {
+    // Oct 31 17:15 is CDT (UTC-5); Nov 1 17:15 is CST (UTC-6) after the fall-back.
+    expect(portalWallClockIso("2026-10-31 17:15:02.770")).toBe(
+      "2026-10-31T22:15:02.770Z",
+    );
+    expect(portalWallClockIso("2026-11-01 17:15:02.770")).toBe(
+      "2026-11-01T23:15:02.770Z",
+    );
+    // An explicit zone is already an instant and must pass through unchanged.
+    expect(portalWallClockIso("2026-11-03T18:00:00.000Z")).toBe(
+      "2026-11-03T18:00:00.000Z",
+    );
+    expect(portalWallClockIso("2026-11-03T12:00:00-06:00")).toBe(
+      "2026-11-03T18:00:00.000Z",
+    );
+    expect(portalWallClockIso("")).toBeNull();
+    expect(portalWallClockIso("not a timestamp")).toBeNull();
+    expect(portalWallClockIso(1793469958152)).toBeNull();
   });
 });
