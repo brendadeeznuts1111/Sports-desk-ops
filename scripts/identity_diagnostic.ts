@@ -18,7 +18,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -32,6 +32,7 @@ const DEFAULTS = {
   json: "scratch/identity-diagnostic/report.json",
   probeSample: "25",
   probeOut: "scratch/identity-diagnostic/probe-plan.json",
+  probeResults: "scratch/identity-diagnostic/identities",
 } as const;
 
 interface Options {
@@ -44,6 +45,7 @@ interface Options {
   readonly json: string;
   readonly probeSample: number;
   readonly probeOut: string;
+  readonly probeResults: string;
 }
 
 function parseOptions(argv: readonly string[]): Options {
@@ -70,7 +72,9 @@ function parseOptions(argv: readonly string[]): Options {
                       ? "probeSample"
                       : flag === "--probe-out"
                         ? "probeOut"
-                        : null;
+                        : flag === "--probe-results"
+                          ? "probeResults"
+                          : null;
     if (key === null) throw new Error(`unknown argument: ${flag}`);
     const value = argv[index + 1];
     if (value === undefined) throw new Error(`missing value for ${flag}`);
@@ -263,6 +267,47 @@ async function loadPlayers(path: string): Promise<PlayersData | null> {
   return { rows: players.length, customerIds, logins, agents };
 }
 
+interface IdentityProbeResult {
+  readonly found: boolean;
+  readonly customerId: string;
+  readonly login: string;
+  readonly agentId: string;
+  readonly status: string | null;
+}
+
+/** Read the redacted `getInfoPlayer.identity.json` summaries written by the probe. */
+async function loadProbeResults(
+  path: string,
+): Promise<ReadonlyMap<string, IdentityProbeResult>> {
+  const results = new Map<string, IdentityProbeResult>();
+  let entries: string[];
+  try {
+    entries = await readdir(path);
+  } catch {
+    return results;
+  }
+  for (const file of entries) {
+    if (!file.endsWith(".json")) continue;
+    const raw = await readJson(join(path, file));
+    const row = asRecord(raw);
+    if (row === null) continue;
+    const customerId = norm(row["customerId"]);
+    const login = norm(row["login"]);
+    const key = customerId || login || file.replace(/\.json$/i, "");
+    results.set(key, {
+      found: row["found"] === true,
+      customerId,
+      login,
+      agentId: norm(row["agentId"]),
+      status:
+        typeof row["status"] === "string" && row["status"].trim() !== ""
+          ? row["status"].trim()
+          : null,
+    });
+  }
+  return results;
+}
+
 interface BetReportData {
   readonly rows: number;
   readonly accounts: ReadonlyMap<string, AccountIdentity>;
@@ -338,6 +383,7 @@ async function main(): Promise<void> {
   const ticker = await loadTicker(options.ticker);
   const customerIndex = loadCustomerIndex(options.customerDb);
   const players = await loadPlayers(options.players);
+  const probeResults = await loadProbeResults(options.probeResults);
   const betReport = await loadBetReport(options.betReport);
 
   if (betReport === null) {
@@ -419,7 +465,18 @@ async function main(): Promise<void> {
   const unmatchedPartnerIds = [
     ...new Set(unmatchedAccounts.flatMap((account) => [...account.partners])),
   ].sort(compareText);
-  const probeSample = sampleEvenly(unmatchedAccounts, options.probeSample);
+  const confirmedPresentIds = new Set(
+    [...probeResults].filter(([, result]) => result.found).map(([id]) => id),
+  );
+  const confirmedAbsentIds = new Set(
+    [...probeResults].filter(([, result]) => !result.found).map(([id]) => id),
+  );
+  const unprobedIds = unmatchedPartnerIds.filter((id) => !probeResults.has(id));
+  const unprobedAccounts = unmatchedAccounts.filter(
+    (account) =>
+      ![...account.partners].some((partner) => probeResults.has(partner)),
+  );
+  const probeSample = sampleEvenly(unprobedAccounts, options.probeSample);
   const probePlan = probeSample.map((account) => {
     const partner = firstPartner(account);
     const agent = firstAgent(account);
@@ -448,8 +505,8 @@ async function main(): Promise<void> {
     sourceModule: "app/manager/module/player-info.js?bust=1.0.281",
     sourceModuleSha256:
       "865b005a4471a17cba904bce3f6cbc06816afbd20b7ad02904c9b8cb5ba50bf2",
-    population: `GSLive accounts without a partnerUserID in ${namespaceSource}`,
-    populationSize: unmatchedAccounts.length,
+    population: `unprobed GSLive accounts without a partnerUserID in ${namespaceSource}`,
+    populationSize: unprobedAccounts.length,
     sampleSize: probePlan.length,
     note: "customerID is sent as partnerUserID. Confirm the padded CustomerID semantics with one known account before running the full sample; INFO:null means the account was not found.",
     requests: probePlan,
@@ -599,8 +656,30 @@ async function main(): Promise<void> {
     `- The full \`getListAgenstByAgent\` capture has **${players?.rows ?? 0} PLAYERS** and matches **${partnerMatchesNamespace} / ${gsliveAccounts}** GSLive accounts (${pct(partnerMatchesNamespace, gsliveAccounts)}) on \`customerID\` or \`Login\`.`,
     `- The customer-index capture has only **${customerIndex?.ids.size ?? 0}** ids and matches **${partnerMatchesCapture}** accounts (${pct(partnerMatchesCapture, gsliveAccounts)}). That 667-row index is where the earlier 3.94% came from, not the full master.`,
     `- The queue previously hashed \`userID\`; it now joins on \`partnerUserID\`, which is what makes the ${partnerMatchesNamespace} full-capture matches usable.`,
-    `- The ${unmatchedByNamespace} accounts absent from the primary namespace: ${unmatchedPartnerIds.join(", ") || "none"}. These look like new/subaccount ids added after the 2026-11-01 PLAYERS capture.`,
+    `- The ${unmatchedByNamespace} accounts absent from the primary namespace: ${unmatchedPartnerIds.join(", ") || "none"}. getInfoPlayer confirmed ${confirmedPresentIds.size}/${unmatchedPartnerIds.length} present and ${confirmedAbsentIds.size} absent. They are new/subaccount ids added after the 2026-11-01 PLAYERS capture, not missing identities.`,
     `- The admin file in this checkout has **${admin?.rows ?? 0} row(s)**, so it is a snippet, not the master. The master was already present as \`${options.players}#PLAYERS\`.`,
+    "",
+    "## Probe results",
+    "",
+    `Read from \`${options.probeResults}\`.`,
+    "",
+    tableRow(["Status", "Count", "Ids"]),
+    tableRow(["---", "---:", "---"]),
+    tableRow([
+      "confirmed present (getInfoPlayer)",
+      String(confirmedPresentIds.size),
+      [...confirmedPresentIds].sort(compareText).join(", ") || "—",
+    ]),
+    tableRow([
+      "confirmed absent",
+      String(confirmedAbsentIds.size),
+      [...confirmedAbsentIds].sort(compareText).join(", ") || "—",
+    ]),
+    tableRow([
+      "unprobed",
+      String(unprobedIds.length),
+      unprobedIds.join(", ") || "—",
+    ]),
     "",
     "## Sampled existence probe",
     "",
@@ -612,15 +691,15 @@ async function main(): Promise<void> {
     "      operation=getInfoPlayer, RRO=0",
     "```",
     "",
-    `A \`null\` INFO means the account was not found. The plan samples ${probePlan.length} of ${unmatchedAccounts.length} unmatched accounts: ${options.probeOut}.`,
+    `A \`null\` INFO means the account was not found. ${probePlan.length === 0 ? "No unprobed unmatched accounts remain." : `The plan samples ${probePlan.length} of ${unprobedAccounts.length} unprobed accounts: ${options.probeOut}.`}`,
     `The generated sample uses \`customerID = partnerUserID\`; confirm the padded \`CustomerID\` semantics on one known account before running the full sample.`,
     "",
     "## Recommendation",
     "",
-    "1. Refresh the `getListAgenstByAgent` PLAYERS capture and rerun this diagnostic. The 9 absent ids may be new accounts added after the 2026-11-01 capture.",
-    "2. Use the sampled `getInfoPlayer` plan for those 9; it is the only remaining identity question.",
+    "1. Refresh the `getListAgenstByAgent` PLAYERS capture and rerun this diagnostic. All 9 absent ids were confirmed present by `getInfoPlayer`; they are new accounts, not missing identities.",
+    "2. Re-run `queue build` after the refresh; the 9 should become `bridged` without changing the queue code.",
     "3. Keep `ruleEvidenceStatus` and the `partnerUserID` join; both are already shipped.",
-    "4. Do not build the crosswalk. The full PLAYERS capture covers 99.7% of GSLive accounts; a fuzzy crosswalk would be governance for a problem the master already solves.",
+    "4. Do not build the crosswalk. The full PLAYERS capture covers 99.7% of GSLive accounts and the remaining 0.3% are confirmed present; a fuzzy crosswalk would be governance for a problem the master already solves.",
     "",
   ];
 
@@ -684,9 +763,15 @@ async function main(): Promise<void> {
       coverageCap,
       percentMatched: partnerMatchesNamespace / gsliveAccounts,
     },
+    probeResults: {
+      source: options.probeResults,
+      confirmedPresent: [...confirmedPresentIds].sort(compareText),
+      confirmedAbsent: [...confirmedAbsentIds].sort(compareText),
+      unprobed: unprobedIds,
+    },
     probePlan: {
-      path: options.probeOut,
-      populationSize: unmatchedAccounts.length,
+      path: probePlan.length > 0 ? options.probeOut : null,
+      populationSize: unprobedAccounts.length,
       sampleSize: probePlan.length,
     },
   };

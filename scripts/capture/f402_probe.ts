@@ -85,6 +85,7 @@ import {
   probeUrl,
   selectProbeOps,
 } from "../../lib/f402_probe.ts";
+import { parseGetInfoPlayerProbe } from "../../lib/f402_get_info_player.ts";
 import { acquireProfileLock } from "../../lib/f402_profile_lock.ts";
 import { preflight, warmCaptureNetwork } from "../../lib/preflight.ts";
 import { buildDnsPrefetchExpression } from "../../lib/f402_report_context.ts";
@@ -769,6 +770,38 @@ async function main(): Promise<number> {
           const result = parseProbePageResult(raw);
           const { bodyText, ...scratchResult } = result;
           const capturedAt = new Date().toISOString();
+          // The probe preview is truncated and the promoted capture is value-free. For
+          // getInfoPlayer, write only the identity summary so a probe can be classified without
+          // persisting Password/Name fields.
+          let identityProbe: Record<string, unknown> | null = null;
+          if (op.operation === "getInfoPlayer" && bodyText !== undefined) {
+            try {
+              const parsed = parseGetInfoPlayerProbe(JSON.parse(bodyText));
+              identityProbe = parsed.found
+                ? {
+                    found: true,
+                    customerId: parsed.summary.customerId,
+                    login: parsed.summary.login,
+                    agentId: parsed.summary.agentId,
+                    agentLogin: parsed.summary.agentLogin,
+                    status: parsed.summary.status,
+                  }
+                : { found: false };
+            } catch (error) {
+              identityProbe = {
+                found: null,
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          }
+          const safeScratchResult =
+            identityProbe !== null
+              ? {
+                  ...scratchResult,
+                  preview:
+                    "[redacted getInfoPlayer body; see getInfoPlayer.identity.json]",
+                }
+              : scratchResult;
           const record = {
             schemaVersion: 1,
             kind: "webview-probe",
@@ -831,16 +864,23 @@ async function main(): Promise<number> {
                   ),
                 }
               : {}),
-            result: scratchResult,
-            extractedText: scratchResult.contentType.includes("text/html")
-              ? htmlToText(scratchResult.preview).slice(0, 2_000)
+            result: safeScratchResult,
+            extractedText: safeScratchResult.contentType.includes("text/html")
+              ? htmlToText(safeScratchResult.preview).slice(0, 2_000)
               : null,
             note: op.note,
+            ...(identityProbe !== null ? { identity: identityProbe } : {}),
           };
           await Bun.write(
             join(outDir, outFile),
             `${JSON.stringify(record, null, 2)}\n`,
           );
+          if (identityProbe !== null) {
+            await Bun.write(
+              join(outDir, "getInfoPlayer.identity.json"),
+              `${JSON.stringify(identityProbe, null, 2)}\n`,
+            );
+          }
           if (jsonl) jsonlLines.push(JSON.stringify(record));
 
           if (
