@@ -1384,7 +1384,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3191-3216` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3196-3221` · response not captured
 
 **Dispatch an instant Telegram alert**
 

@@ -2995,11 +2995,16 @@ export function startServer(options?: ServerOptions) {
           );
         }
         const { agents, version: betsVersion } = await loadLiveBets();
+        const hierarchy = tree.value as RawHierarchyTree;
+        const nodes = hierarchy.nodes ?? {};
         const counts: Record<
           string,
           { games: number; wagered: number; toWin: number }
         > = {};
         for (const agent of agents.agents) {
+          // The rollup can name an agent the tree capture does not contain; only nodes that
+          // exist can render exposure, so the join is restricted to them.
+          if (!Object.hasOwn(nodes, agent.key)) continue;
           counts[agent.key] = {
             games: agent.games,
             wagered: agent.wagered,
@@ -3009,7 +3014,7 @@ export function startServer(options?: ServerOptions) {
         if (url.searchParams.get("view") === "hierarchy") {
           // The flat map answers "does this agent exist"; only the folded view answers "how much
           // is under it", which is the question a tree UI asks on every render.
-          const view = buildHierarchy(tree.value as RawHierarchyTree, {
+          const view = buildHierarchy(hierarchy, {
             actionByAgent: counts as Record<string, HierarchyAction>,
           });
           return encodedResponse(req, {

@@ -758,8 +758,8 @@ spec is missing parameters/response fields and should be corrected from source:
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `GET /health`               | `services/sportsdesk_webview_server.ts:1480-1499`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3191-3216`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3219-3239`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3196-3221`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3224-3244`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3241-3249`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3246-3254`).
 
 ## P7 — the customer report surface (7 candidates)
 

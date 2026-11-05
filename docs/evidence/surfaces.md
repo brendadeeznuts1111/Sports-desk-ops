@@ -109,10 +109,10 @@ Real routes, no spec rows:
 
 | Route                               | Behaviour                                             | Source                                            |
 | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------- |
-| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `services/sportsdesk_webview_server.ts:3078-3097` |
-| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `services/sportsdesk_webview_server.ts:3113-3125` |
-| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `services/sportsdesk_webview_server.ts:3140-3151` |
-| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `services/sportsdesk_webview_server.ts:3153-3175` |
+| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `services/sportsdesk_webview_server.ts:3083-3102` |
+| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `services/sportsdesk_webview_server.ts:3118-3130` |
+| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `services/sportsdesk_webview_server.ts:3145-3156` |
+| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `services/sportsdesk_webview_server.ts:3158-3180` |
 | `OPTIONS *`                         | 204 preflight with CORS headers                       | `services/sportsdesk_webview_server.ts:1057-1059` |
 | `GET /api/test/error`               | Synthetic throw for the error boundary                | `services/sportsdesk_webview_server.ts:1050-1054` |
 
@@ -183,7 +183,7 @@ Evidence of absence:
 
 - `services/sportsdesk_webview_server.ts:1041-3017` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
-  404 JSON fallback at `services/sportsdesk_webview_server.ts:3241-3249`. No `/api/desk` prefix is matched.
+  404 JSON fallback at `services/sportsdesk_webview_server.ts:3246-3254`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
   (`tests/capture_apply.test.ts:84,96`; re-measured 2026-11-02 — `tests/api_reference.test.ts`, cited here before, no longer mentions `/api/desk`) and the generator that wrote the spec
   (`scripts/enhance_docs.mjs:115,237,249,269,289,301,321`).
@@ -207,7 +207,7 @@ present these as callable routes in the docs release.
 ## D-9. `surface.daemon-agent-tree`
 
 - `GET /api/agent-tree` serves `data/agent-tree.json` joined with per-agent exposure
-  (`services/sportsdesk_webview_server.ts:2978-3038`).
+  (`services/sportsdesk_webview_server.ts:2978-3043`).
 - The forest is built from the portal's own `baseHeriarchy` parent pointers
   (`scripts/build_agent_tree.ts`), keyed by canonical `agentLoginKey`.
 - A key owned by more than one `AgentID` keeps its node but is flagged `a: true` and never given a

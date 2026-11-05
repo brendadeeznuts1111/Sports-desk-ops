@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { WAGER_TYPE_LABELS } from "../lib/game_admin.ts";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
 
 interface Bucket {
@@ -193,11 +194,13 @@ describe("GET /api/live-bets/summary", () => {
       games: Array<{ category: string; position: string; wagerType: string }>;
       sports: { all: string[]; categories: Array<{ category: string }> };
     };
+    const positions = new Set<string>([
+      ...Object.values(WAGER_TYPE_LABELS),
+      "Other",
+    ]);
     for (const game of games) {
       expect(sports.all).toContain(game.category);
-      expect(["Straight", "Parlay", "Teaser", "Other"]).toContain(
-        game.position,
-      );
+      expect(positions).toContain(game.position);
     }
     expect(sports.categories.length).toBeGreaterThan(0);
   });

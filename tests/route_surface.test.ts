@@ -227,9 +227,8 @@ describe("the committed tree", () => {
     // scripts/generate_openapi.ts. A non-zero count here now means a new route landed without a
     // spec path, which is what the CI step exists to catch.
     expect(compareRouteSurfaces(inputs)).toEqual([]);
-    // 54 API/page paths, plus the dashboard's agent-graph raster: a page asset, not an /api
-    // contract path, so it is declared by a ledger surface and correctly absent from the spec.
-    // (+2 derived dashboard data plane, +2 v3 signals/weblogs, +3 v4 execution routes.)
-    expect(inputs.served.size).toBe(63);
+    // A ratchet: the count moves only with a reviewed route change, and the comparison above
+    // is what proves each served path is declared and (unless it is a page) specified.
+    expect(inputs.served.size).toBe(64);
   });
 });

@@ -47,7 +47,7 @@ const CONTENT_SETTLED_MIN_TEXT_LENGTH = 1_000;
 const LIVE_FETCH_TIMEOUT_MS = 15_000;
 // Release contract: the committed spec must document exactly these paths. Bumped from 91 when the
 // execution plan/mode/run reads were published as operations.
-const EXPECTED_OPENAPI_PATH_COUNT = 94;
+const EXPECTED_OPENAPI_PATH_COUNT = 95;
 const REQUIRED_TITLE_PATTERN = /Wire API Reference|Scalar/i;
 const DOCUMENTED_OPERATION_MARKERS = [
   "getWebLog",

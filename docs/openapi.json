@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:3191-3216",
+            "services/sportsdesk_webview_server.ts:3196-3221",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
