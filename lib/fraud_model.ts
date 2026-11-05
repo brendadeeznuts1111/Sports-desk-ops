@@ -124,29 +124,34 @@ export interface FraudMetricWindow {
   readonly toIso: string | null;
 }
 
-/** One operational queue size: what an analyst sees after reviewing the top `k` rows. */
-export interface FraudPrecisionAtK {
-  /** Requested queue size. */
+/**
+ * One review batch of **bet rows** (not accounts, sports or markets): what an analyst sees after
+ * reading the top `k` rows by model score.
+ */
+export interface FraudRowPrecisionAtK {
+  /** Requested review size in bet rows. */
   readonly k: number;
-  /** Rows actually available: `min(k, scores.length)`. */
-  readonly evaluated: number;
-  readonly hits: number;
-  readonly positives: number;
+  /** Bet rows actually available: `min(k, scored rows)`. */
+  readonly rowsReviewed: number;
+  /** Top-k rows whose own label is true. */
+  readonly proxyPositiveRows: number;
+  /** All rows in the scored population whose own label is true. */
+  readonly positiveRows: number;
   readonly precision: number | null;
   readonly recall: number | null;
-  /** Precision divided by the holdout prevalence; null when there are no positives. */
+  /** Precision divided by the label prevalence in the scored rows. */
   readonly lift: number | null;
 }
 
-/** Queue sizes an operator can staff; reported as a table rather than one guessed cutoff. */
-export const FRAUD_QUEUE_SIZES = [10, 20, 50, 100, 200, 500] as const;
+/** Review sizes in **bet rows**; reported as a table rather than one guessed cutoff. */
+export const FRAUD_ROW_REVIEW_SIZES = [10, 20, 50, 100, 200, 500] as const;
 
 export interface FraudClassificationMetrics {
   readonly aucRoc: number | null;
   readonly averagePrecision: number | null;
   readonly precisionAt1Pct: number | null;
   readonly precisionAt5Pct: number | null;
-  readonly precisionAtK: readonly FraudPrecisionAtK[];
+  readonly rowPrecisionAtK: readonly FraudRowPrecisionAtK[];
   readonly brier: number | null;
 }
 
@@ -166,7 +171,7 @@ export type FraudModelWarningCode =
   | "not_converged"
   | "stability_delta_gt_0.10"
   | "drift_shift_gt_1.0"
-  | "cold_start_precision_gap"
+  | "no_prior_bet_precision_gap"
   | "source_stale";
 
 export interface FraudModelWarning {
@@ -183,10 +188,10 @@ export interface FraudStability {
   readonly secondHalfRows: number;
 }
 
-/** Holdout rows with no prior bets: does the ranker find a new actor, or only repeat offenders? */
-export interface FraudColdStartValidation {
+/** Holdout **bet rows** whose account has no earlier bet in the corpus. */
+export interface FraudNoPriorBetValidation {
   readonly rows: number;
-  readonly positives: number;
+  readonly positiveRows: number;
   readonly metrics: FraudClassificationMetrics;
 }
 
@@ -197,7 +202,7 @@ export interface FraudFeatureDrift {
 
 export interface FraudModelValidation {
   readonly holdout: FraudClassificationMetrics;
-  readonly coldStart: FraudColdStartValidation | null;
+  readonly noPriorBet: FraudNoPriorBetValidation | null;
   readonly stability: FraudStability;
   readonly drift: readonly FraudFeatureDrift[];
   /**
@@ -302,7 +307,9 @@ export const FRAUD_MODEL_LIMITS: readonly string[] = [
   "class weights balance the weak label: the logistic probability is not calibrated; scores are train-CDF percentiles",
   "temporal split does not remove drift: thresholds may not hold on the next capture",
   "history features use only strictly earlier rows (logTime < logTime_i)",
-  "cold-start rows (no prior bets) are reported separately: overall rank precision is dominated by repeat offenders and must not be quoted for new accounts",
+  "no-prior-bet rows are reported separately: overall row precision is dominated by repeat offenders and must not be quoted for new accounts",
+  "row precision is not account precision: these tables rank bet rows, while fraud_queue ranks accounts",
+  "not stratified by sport, subSport, market or period: a stratum with few positives is noise, so the corpus does not support per-stratum precision claims",
 ];
 
 export function fraudModelLimits(): readonly string[] {
@@ -754,27 +761,28 @@ export function precisionAtFraction(
 
 /**
  * The decision-boundary table: precision, recall and lift after the analyst reviews the top
- * `k` rows. `k` is a staffing choice, so several are reported instead of one invented cutoff.
+ * `k` **bet rows** by score. `k` is a review-size choice, so several are reported instead of
+ * one invented cutoff. The labels are row-level; in this model they are the `desk_flag` proxy.
  */
-export function precisionAtK(
+export function rowPrecisionAtK(
   scores: readonly number[],
   labels: readonly boolean[],
   k: number,
-): FraudPrecisionAtK {
+): FraudRowPrecisionAtK {
   if (scores.length !== labels.length) {
-    throw new Error("precisionAtK: scores/labels length mismatch");
+    throw new Error("rowPrecisionAtK: scores/labels length mismatch");
   }
   if (!Number.isInteger(k) || k <= 0) {
-    throw new Error("precisionAtK: k must be a positive integer");
+    throw new Error("rowPrecisionAtK: k must be a positive integer");
   }
-  const positives = labels.filter(Boolean).length;
-  const evaluated = Math.min(k, scores.length);
-  if (evaluated === 0) {
+  const positiveRows = labels.filter(Boolean).length;
+  const rowsReviewed = Math.min(k, scores.length);
+  if (rowsReviewed === 0) {
     return {
       k,
-      evaluated: 0,
-      hits: 0,
-      positives,
+      rowsReviewed: 0,
+      proxyPositiveRows: 0,
+      positiveRows,
       precision: null,
       recall: null,
       lift: null,
@@ -783,29 +791,29 @@ export function precisionAtK(
   const order = scores
     .map((score, index) => ({ score, label: labels[index] === true, index }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, evaluated);
-  const hits = order.filter((entry) => entry.label).length;
-  const precision = hits / evaluated;
-  const recall = positives === 0 ? null : hits / positives;
-  const prevalence = positives / scores.length;
+    .slice(0, rowsReviewed);
+  const proxyPositiveRows = order.filter((entry) => entry.label).length;
+  const precision = proxyPositiveRows / rowsReviewed;
+  const recall = positiveRows === 0 ? null : proxyPositiveRows / positiveRows;
+  const prevalence = positiveRows / scores.length;
   return {
     k,
-    evaluated,
-    hits,
-    positives,
+    rowsReviewed,
+    proxyPositiveRows,
+    positiveRows,
     precision,
     recall,
     lift: prevalence === 0 ? null : precision / prevalence,
   };
 }
 
-/** The queue-size table; each `k` larger than the holdout is capped and says so. */
-export function precisionAtKTable(
+/** The review-size table; each `k` larger than the scored rows is capped and says so. */
+export function rowPrecisionAtKTable(
   scores: readonly number[],
   labels: readonly boolean[],
-  sizes: readonly number[] = FRAUD_QUEUE_SIZES,
-): readonly FraudPrecisionAtK[] {
-  return sizes.map((k) => precisionAtK(scores, labels, k));
+  sizes: readonly number[] = FRAUD_ROW_REVIEW_SIZES,
+): readonly FraudRowPrecisionAtK[] {
+  return sizes.map((k) => rowPrecisionAtK(scores, labels, k));
 }
 
 export function brierScore(
@@ -861,7 +869,7 @@ function classificationMetrics(
     averagePrecision: averagePrecision(scores, labels),
     precisionAt1Pct: precisionAtFraction(scores, labels, 0.01),
     precisionAt5Pct: precisionAtFraction(scores, labels, 0.05),
-    precisionAtK: precisionAtKTable(scores, labels),
+    rowPrecisionAtK: rowPrecisionAtKTable(scores, labels),
     brier: brierScore(scores, labels),
   };
 }
@@ -1181,7 +1189,7 @@ function featureStats(
 }
 
 /** A 25-point precision gap at the same queue size is a material repeat-offender effect. */
-const COLD_START_PRECISION_GAP = 0.25;
+const NO_PRIOR_BET_PRECISION_GAP = 0.25;
 
 /**
  * Fit the weak-label logistic model. Refuses with `insufficient_corpus` (exit 3) instead of
@@ -1306,10 +1314,10 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     holdoutLabels,
     options.calibrationBins,
   );
-  // A cold-start row has no earlier bet for its account. If precision collapses here, the
+  // A no-prior-bet row has no earlier bet for its account. If precision collapses here, the
   // ranker is finding repeat offenders rather than new ones, and the tier-1 claim must say so.
   const priorBetsColumn = matrix.featureIds.indexOf("acct_prior_bets");
-  let coldStart: FraudColdStartValidation | null = null;
+  let noPriorBet: FraudNoPriorBetValidation | null = null;
   if (priorBetsColumn >= 0) {
     const indices: number[] = [];
     for (let index = 0; index < holdoutCount; index += 1) {
@@ -1319,12 +1327,14 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       }
     }
     if (indices.length > 0) {
-      const coldScores = indices.map((index) => scoreList[index] ?? 0);
-      const coldLabels = indices.map((index) => holdoutLabels[index] === true);
-      coldStart = {
+      const noPriorScores = indices.map((index) => scoreList[index] ?? 0);
+      const noPriorLabels = indices.map(
+        (index) => holdoutLabels[index] === true,
+      );
+      noPriorBet = {
         rows: indices.length,
-        positives: coldLabels.filter(Boolean).length,
-        metrics: classificationMetrics(coldScores, coldLabels),
+        positiveRows: noPriorLabels.filter(Boolean).length,
+        metrics: classificationMetrics(noPriorScores, noPriorLabels),
       };
     }
   }
@@ -1362,7 +1372,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     averagePrecision: holdoutMetrics.averagePrecision,
     precisionAt1Pct: holdoutMetrics.precisionAt1Pct,
     precisionAt5Pct: holdoutMetrics.precisionAt5Pct,
-    precisionAtK: holdoutMetrics.precisionAtK,
+    rowPrecisionAtK: holdoutMetrics.rowPrecisionAtK,
     brier: holdoutMetrics.brier,
     calibrationBins: calibration,
     labelSupport: {
@@ -1413,21 +1423,24 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       observed: Math.round(maxDrift.standardizedMeanShift * 10_000) / 10_000,
     });
   }
-  const coldStartAt20 = coldStart?.metrics.precisionAtK.find(
+  const noPriorBetAt20 = noPriorBet?.metrics.rowPrecisionAtK.find(
     (row) => row.k === 20,
   );
-  const holdoutAt20 = holdoutMetrics.precisionAtK.find((row) => row.k === 20);
-  const coldPrecision = coldStartAt20?.precision ?? null;
-  const holdPrecision = holdoutAt20?.precision ?? null;
+  const holdoutAt20 = holdoutMetrics.rowPrecisionAtK.find(
+    (row) => row.k === 20,
+  );
+  const noPriorPrecision = noPriorBetAt20?.precision ?? null;
+  const holdoutPrecision = holdoutAt20?.precision ?? null;
   if (
-    coldPrecision !== null &&
-    holdPrecision !== null &&
-    holdPrecision - coldPrecision > COLD_START_PRECISION_GAP
+    noPriorPrecision !== null &&
+    holdoutPrecision !== null &&
+    holdoutPrecision - noPriorPrecision > NO_PRIOR_BET_PRECISION_GAP
   ) {
     warnings.push({
-      code: "cold_start_precision_gap",
-      message: `cold-start precision@20 is ${coldPrecision.toFixed(3)} vs ${holdPrecision.toFixed(3)} overall (n=${coldStart?.rows ?? 0} rows, ${coldStart?.positives ?? 0} positives): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
-      observed: Math.round((holdPrecision - coldPrecision) * 10_000) / 10_000,
+      code: "no_prior_bet_precision_gap",
+      message: `no-prior-bet precision@20 is ${noPriorPrecision.toFixed(3)} vs ${holdoutPrecision.toFixed(3)} overall (n=${noPriorBet?.rows ?? 0} rows, ${noPriorBet?.positiveRows ?? 0} positive rows): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
+      observed:
+        Math.round((holdoutPrecision - noPriorPrecision) * 10_000) / 10_000,
     });
   }
   const staleSources = (params.sources ?? [params.corpus.source]).filter(
@@ -1446,7 +1459,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   }
   const validation: FraudModelValidation = {
     holdout: holdoutMetrics,
-    coldStart,
+    noPriorBet,
     stability,
     drift,
     warnings,
@@ -1803,9 +1816,9 @@ function roundReportNullable(value: number | null, digits = 3): number | null {
   return value === null ? null : roundReportNumber(value, digits);
 }
 
-function roundPrecisionAtK(
-  rows: readonly FraudPrecisionAtK[] | undefined,
-): readonly FraudPrecisionAtK[] {
+function roundRowPrecisionAtK(
+  rows: readonly FraudRowPrecisionAtK[] | undefined,
+): readonly FraudRowPrecisionAtK[] {
   return (rows ?? []).map((row) => ({
     ...row,
     precision: roundReportNullable(row.precision),
@@ -1820,7 +1833,7 @@ function roundClassificationMetrics(metrics: FraudClassificationMetrics) {
     averagePrecision: roundReportNullable(metrics.averagePrecision),
     precisionAt1Pct: roundReportNullable(metrics.precisionAt1Pct),
     precisionAt5Pct: roundReportNullable(metrics.precisionAt5Pct),
-    precisionAtK: roundPrecisionAtK(metrics.precisionAtK),
+    rowPrecisionAtK: roundRowPrecisionAtK(metrics.rowPrecisionAtK),
     brier: roundReportNullable(metrics.brier),
   };
 }
@@ -1834,6 +1847,20 @@ export interface ModelReportPayloadOptions {
   readonly includeScoreMap?: boolean;
 }
 
+const MODEL_METRIC_DEFINITIONS = {
+  unit: "bet-row",
+  label:
+    "desk_flag proxy on the row (suspectedBot OR reversedCredit OR manualLog)",
+  holdout: "last 30% of rows by logTime (temporal split)",
+  rowPrecisionAtK:
+    "of the top-k holdout bet rows by model score, the share whose own desk_flag is true",
+  noPriorBet:
+    "the same row table restricted to holdout rows whose account has no earlier bet in the corpus",
+  notStratifiedBy: ["sport", "subSport", "market", "period", "agent"],
+  accountQueue:
+    "fraud_queue ranks accounts; these row metrics are not account precision",
+} as const;
+
 /**
  * The `model report` payload (contract shape; client half reads these keys). Numbers are rounded
  * to 6 decimals for display and the score-map quantiles are opt-in: the artifact keeps full
@@ -1846,11 +1873,12 @@ export function modelReportPayload(
 ): Record<string, unknown> {
   const metrics = artifact.metrics;
   const validation = artifact.validation;
-  const coldStart = validation.coldStart ?? null;
+  const noPriorBet = validation.noPriorBet ?? null;
   return {
     present: true,
     path: state.path,
     fittedAt: artifact.fittedAt,
+    metricDefinitions: MODEL_METRIC_DEFINITIONS,
     spec: artifact.spec,
     features: artifact.features.map((feature) => ({
       id: feature.id,
@@ -1872,7 +1900,7 @@ export function modelReportPayload(
       averagePrecision: roundReportNullable(metrics.averagePrecision),
       precisionAt1Pct: roundReportNullable(metrics.precisionAt1Pct),
       precisionAt5Pct: roundReportNullable(metrics.precisionAt5Pct),
-      precisionAtK: roundPrecisionAtK(metrics.precisionAtK),
+      rowPrecisionAtK: roundRowPrecisionAtK(metrics.rowPrecisionAtK),
       brier: roundReportNullable(metrics.brier),
       calibrationBins: metrics.calibrationBins.map((bin) => ({
         lower: roundReportNumber(bin.lower),
@@ -1890,13 +1918,13 @@ export function modelReportPayload(
     },
     validation: {
       holdout: roundClassificationMetrics(validation.holdout),
-      coldStart:
-        coldStart === null
+      noPriorBet:
+        noPriorBet === null
           ? null
           : {
-              rows: coldStart.rows,
-              positives: coldStart.positives,
-              metrics: roundClassificationMetrics(coldStart.metrics),
+              rows: noPriorBet.rows,
+              positiveRows: noPriorBet.positiveRows,
+              metrics: roundClassificationMetrics(noPriorBet.metrics),
             },
       stability: {
         firstHalfAuc: roundReportNullable(validation.stability.firstHalfAuc),

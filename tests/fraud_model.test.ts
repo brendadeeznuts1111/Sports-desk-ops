@@ -9,7 +9,7 @@ import {
   FRAUD_MODEL_FIT_COMMAND,
   FRAUD_MODEL_LIMITS,
   FRAUD_MODEL_REL_PATH,
-  FRAUD_QUEUE_SIZES,
+  FRAUD_ROW_REVIEW_SIZES,
   FraudModelError,
   bandForScore,
   extractFraudFeatures,
@@ -17,8 +17,8 @@ import {
   fraudModelArtifactDigest,
   modelMissingRefusal,
   modelReportPayload,
-  precisionAtK,
-  precisionAtKTable,
+  rowPrecisionAtK,
+  rowPrecisionAtKTable,
   readFraudModel,
   scoreAccountWithModel,
   scoreFromQuantiles,
@@ -166,15 +166,15 @@ function valueOf(
 /* Feature registry and leakage safety                                         */
 /* -------------------------------------------------------------------------- */
 
-describe("precisionAtK", () => {
+describe("rowPrecisionAtK", () => {
   test("reports precision, recall and lift at a staffed queue size", () => {
     const scores = [0.9, 0.8, 0.7, 0.6, 0.5];
     const labels = [true, false, true, false, false];
-    expect(precisionAtK(scores, labels, 2)).toEqual({
+    expect(rowPrecisionAtK(scores, labels, 2)).toEqual({
       k: 2,
-      evaluated: 2,
-      hits: 1,
-      positives: 2,
+      rowsReviewed: 2,
+      proxyPositiveRows: 1,
+      positiveRows: 2,
       precision: 0.5,
       recall: 0.5,
       lift: 1.25,
@@ -182,34 +182,34 @@ describe("precisionAtK", () => {
   });
 
   test("caps k at the holdout size instead of inventing rows", () => {
-    const row = precisionAtK([0.9, 0.8], [true, false], 10);
+    const row = rowPrecisionAtK([0.9, 0.8], [true, false], 10);
     expect(row.k).toBe(10);
-    expect(row.evaluated).toBe(2);
+    expect(row.rowsReviewed).toBe(2);
     expect(row.precision).toBe(0.5);
   });
 
   test("ties keep input order, so the table is deterministic", () => {
     const scores = [0.5, 0.5, 0.5];
     const labels = [false, true, false];
-    expect(precisionAtK(scores, labels, 1).precision).toBe(0);
-    expect(precisionAtK(scores, labels, 2).precision).toBe(0.5);
+    expect(rowPrecisionAtK(scores, labels, 1).precision).toBe(0);
+    expect(rowPrecisionAtK(scores, labels, 2).precision).toBe(0.5);
   });
 
   test("no positives reports zero precision and null recall/lift", () => {
-    const row = precisionAtK([0.9, 0.8], [false, false], 1);
+    const row = rowPrecisionAtK([0.9, 0.8], [false, false], 1);
     expect(row.precision).toBe(0);
     expect(row.recall).toBeNull();
     expect(row.lift).toBeNull();
   });
 
   test("the table covers the operational queue sizes", () => {
-    const rows = precisionAtKTable(
+    const rows = rowPrecisionAtKTable(
       [0.9, 0.8, 0.7],
       [true, false, true],
       [1, 2, 10],
     );
     expect(rows.map((row) => row.k)).toEqual([1, 2, 10]);
-    expect(rows.map((row) => row.evaluated)).toEqual([1, 2, 3]);
+    expect(rows.map((row) => row.rowsReviewed)).toEqual([1, 2, 3]);
   });
 });
 
@@ -422,25 +422,25 @@ describe("fraud model fit", () => {
     expect(metrics.averagePrecision).not.toBeNull();
     expect(metrics.precisionAt1Pct ?? 0).toBeGreaterThanOrEqual(0);
     expect(metrics.precisionAt5Pct ?? 0).toBeLessThanOrEqual(1);
-    expect(metrics.precisionAtK.map((row) => row.k)).toEqual([
-      ...FRAUD_QUEUE_SIZES,
+    expect(metrics.rowPrecisionAtK.map((row) => row.k)).toEqual([
+      ...FRAUD_ROW_REVIEW_SIZES,
     ]);
     expect(
-      metrics.precisionAtK.every(
+      metrics.rowPrecisionAtK.every(
         (row) =>
           row.precision === null || (row.precision >= 0 && row.precision <= 1),
       ),
     ).toBe(true);
-    expect(artifact.validation.holdout.precisionAtK).toEqual(
-      metrics.precisionAtK,
+    expect(artifact.validation.holdout.rowPrecisionAtK).toEqual(
+      metrics.rowPrecisionAtK,
     );
-    const coldStart = artifact.validation.coldStart;
-    if (coldStart !== null) {
-      expect(coldStart.rows).toBeGreaterThan(0);
-      expect(coldStart.rows).toBeLessThanOrEqual(metrics.rows.holdout);
-      expect(coldStart.positives).toBeLessThanOrEqual(coldStart.rows);
-      expect(coldStart.metrics.precisionAtK).toHaveLength(
-        FRAUD_QUEUE_SIZES.length,
+    const noPriorBet = artifact.validation.noPriorBet;
+    if (noPriorBet !== null) {
+      expect(noPriorBet.rows).toBeGreaterThan(0);
+      expect(noPriorBet.rows).toBeLessThanOrEqual(metrics.rows.holdout);
+      expect(noPriorBet.positiveRows).toBeLessThanOrEqual(noPriorBet.rows);
+      expect(noPriorBet.metrics.rowPrecisionAtK).toHaveLength(
+        FRAUD_ROW_REVIEW_SIZES.length,
       );
     }
     expect(metrics.brier ?? 1).toBeLessThanOrEqual(1);
