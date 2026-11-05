@@ -40,6 +40,37 @@ export function carryForwardJsonlBuffer(
   return buffer.subarray(result.read);
 }
 
+/**
+ * Expose only bytes the caller filled (e.g. after `readSync` / `handle.read`). Use with
+ * `Bun.allocUnsafe` slabs so the unfilled tail is never passed to parsers or I/O.
+ */
+export function writtenUint8Prefix(
+  buffer: JsonlByteBuffer,
+  bytesWritten: number,
+): JsonlByteBuffer {
+  if (bytesWritten <= 0) return buffer.subarray(0, 0);
+  if (bytesWritten > buffer.length) {
+    throw new RangeError(
+      `writtenUint8Prefix: ${bytesWritten} exceeds buffer length ${buffer.length}`,
+    );
+  }
+  return buffer.subarray(0, bytesWritten);
+}
+
+/**
+ * First index at or after `fromIndex` once trailing `0x0a` delimiters are skipped. Matches the
+ * bet-ticker rule: `parseChunk().read` excludes the record terminator; file offset must not replay it.
+ */
+export function jsonlAdvancePastLineFeedDelimiters(
+  buffer: JsonlByteBuffer,
+  fromIndex: number,
+  endIndex = buffer.length,
+): number {
+  let at = fromIndex;
+  while (at < endIndex && buffer[at] === 0x0a) at += 1;
+  return at;
+}
+
 export function skipPoisonJsonlLine(buffer: JsonlByteBuffer): JsonlByteBuffer {
   let at = 0;
   while (at < buffer.length && (buffer[at] === 0x0a || buffer[at] === 0x0d)) {

@@ -444,14 +444,17 @@ The SAB section above documents buffer-level `slice`; stream and JSONL code almo
 underlying buffer origin when `buf.byteOffset > 0`. The published docs say to resume with
 `TypedArray.subarray()` — https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
 
-This repo centralizes that in [`lib/jsonl_stream_replay.ts`](../lib/jsonl_stream_replay.ts):
+This repo centralizes byte-window rules in [`lib/jsonl_stream_replay.ts`](../lib/jsonl_stream_replay.ts):
 
-```ts
-export function carryForwardJsonlBuffer(buffer, result) {
-  if (result.read <= 0) return buffer;
-  return buffer.subarray(result.read); // drop parsed prefix, keep one live allocation
-}
-```
+| Helper                               | Role                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `mergeUint8JsonlChunks`              | Append stream chunks (`Bun.concatArrayBuffers`) — used by replay and [`lib/f402_weblog.ts`](../lib/f402_weblog.ts)  |
+| `carryForwardJsonlBuffer`            | Drop `parseChunk().read` prefix via `subarray`                                                                      |
+| `writtenUint8Prefix`                 | `subarray(0, bytesRead)` after disk read / `allocUnsafe` fill                                                       |
+| `jsonlAdvancePastLineFeedDelimiters` | File offset after `read` (skip trailing `0x0a`) — [`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts) |
+
+End-to-end stepping (slab → complete lines → held-back tail) is in
+[`tests/jsonl_stream_replay.test.ts`](../tests/jsonl_stream_replay.test.ts) (`worked example: bet-ticker slab read`).
 
 Partial-line streaming keeps one growing buffer (via `Bun.concatArrayBuffers` when appending
 chunks), parses complete records, then **`subarray(result.read)`** so the next `parseChunk` sees
@@ -474,8 +477,8 @@ passes the unfilled tail to consumers.
 ### Footguns (read before `allocUnsafe` or `subarray`)
 
 1. **Expose only the written prefix** — `Bun.write(path, buf)` or `Bun.hash(buf)` uses **full
-   `buf.length`**, not “bytes read”. Pair reads with `buf.subarray(0, bytesRead)` (see
-   `scripts/live_positions_cron.ts` in the allocUnsafe table).
+   `buf.length`**, not “bytes read”. Use `writtenUint8Prefix(buf, bytesRead)` or
+   `buf.subarray(0, bytesRead)` (see `scripts/live_positions_cron.ts` in the allocUnsafe table).
 2. **`[...view]` and `Array.from(view)` copy** — fine for tests; avoid on megabyte slabs in hot
    loops.
 3. **Assuming tail is zero** — safe after `new ArrayBuffer` / `new Uint8Array`; **false** after
@@ -483,7 +486,8 @@ passes the unfilled tail to consumers.
 4. **Detached buffers** — `ArrayBuffer.transfer` / resizing can invalidate views; this repo’s paths
    use fixed-size arenas and concat, not transfer, on these hot paths.
 
-Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts).
+Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts) and
+[tests/jsonl_stream_replay.test.ts](../tests/jsonl_stream_replay.test.ts).
 
 ## Bun docs MCP (live server; repo-native client)
 
@@ -769,7 +773,7 @@ This invariant — "every byte the consumer may read is written first" — is no
 
 | File:line                            | Fill pattern                                                                                                               | Why it is safe                                                                                                   |
 | :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                                      | `const view = buffer.subarray(0, read)` — only the written prefix is ever read; the tail is never exposed        |
+| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                                      | `writtenUint8Prefix(buffer, read)` — only the written prefix is ever read; the tail is never exposed             |
 | `scripts/live_positions_cron.ts:375` | `const bytesRead = readSync(fd, buf, 0, len, offset)` then `decoder.decode(buf.subarray(0, bytesRead))`                    | The `readSync` return is captured and used to slice the exposed prefix; migrating closed a latent short-read bug |
 | `lib/gslive_tally_rollup.ts:432-679` | Eight SoA `Uint8` columns; only indices `0..groupCount-1` / `0..cellCount-1` are read after insert paths write every field | ~131 KiB zeroing skipped per rollup; unfilled arena tail is never indexed                                        |
 

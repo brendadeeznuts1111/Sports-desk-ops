@@ -20,6 +20,8 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+
+import { writtenUint8Prefix } from "../lib/jsonl_stream_replay.ts";
 import {
   formatCronScheduleLine,
   installOsCronJob,
@@ -374,7 +376,7 @@ function computeCumulativeAndDelta(
         const len = Math.min(chunkSize, st.size - offset);
         // `Bun.allocUnsafe(len)` skips zeroing the 16 MiB chunk — a measurable win per read.
         // Safe here because (a) `readSync` returns the number of bytes actually read and we
-        // slice `buf.subarray(0, bytesRead)` before handing the buffer to the decoder; (b) the
+        // `writtenUint8Prefix(buf, bytesRead)` before handing the buffer to the decoder; (b) the
         // unfilled tail (when a short read happens on signal / disk issue) is never exposed.
         // The pre-migration code ignored the `readSync` return and would hand zeroed junk to
         // the decoder on a short read; capturing it closes that latent bug in the same change.
@@ -385,7 +387,7 @@ function computeCumulativeAndDelta(
         offset += bytesRead;
         const text =
           leftover +
-          decoder.decode(buf.subarray(0, bytesRead), {
+          decoder.decode(writtenUint8Prefix(buf, bytesRead), {
             stream: offset < st.size,
           });
         const lines = text.split("\n");
