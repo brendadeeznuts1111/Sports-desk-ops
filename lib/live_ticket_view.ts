@@ -2,8 +2,8 @@
  * @file live_ticket_view.ts
  * @description PII-free projection of a `getBetTicker` wager for CLIs, JSON responses and
  * dashboards. The parser's `LiveWager` keeps the wire's field names and raw leg line; this view
- * is the stable public shape: ticket id as a string, channel as `product`, desk-zone ISO time,
- * and legs split into `eventName` / `period` / `market` / `selection` / `price`.
+ * is the stable public shape: ticket id as a string, channel as `source`/`product`, desk-zone
+ * ISO time, and legs split into `eventName` / `period` / `market` / `selection` / `price`.
  *
  * Customer logins, customer ids and agent logins never cross this boundary. `writer` is always
  * `null`; `product` carries the channel that `TicketWriter` named.
@@ -55,10 +55,13 @@ export interface NormalizedTicket {
   readonly writer: null;
   readonly ticketWriter: string;
   readonly legs: readonly NormalizedTicketLeg[];
+  /** Trimmed `TicketWriter` channel (`Internet`, `GSLIVE`, …). */
   readonly source: string;
   readonly provenance: {
     readonly file: string | null;
     readonly capturedAt: string | null;
+    /** Artifact `source` (capture operation), not the channel. */
+    readonly source: string;
   };
 }
 
@@ -140,10 +143,93 @@ export function normalizeTicket(
     writer: null,
     ticketWriter,
     legs: wager.legs.map((leg, index) => normalizeLeg(leg, index + 1)),
-    source: meta.source ?? "unlabelled",
+    source: ticketWriter === "" ? "OTHER" : ticketWriter,
     provenance: {
       file: meta.file ?? null,
       capturedAt: meta.capturedAt ?? null,
+      source: meta.source ?? "unlabelled",
     },
   };
+}
+
+/**
+ * Wire fields `toSafeJson` keeps. Everything else (`CustomerID`, `Login`, `AgentID`,
+ * `AgentLogin`, and any future identity column) is dropped by construction rather than by a
+ * denylist, so a new column cannot leak by omission.
+ */
+const SAFE_ROW_FIELDS = [
+  "WagerNumber",
+  "WagerType",
+  "AmountWagered",
+  "ToWinAmount",
+  "VolumeAmount",
+  "TicketWriter",
+  "InsertDateTime",
+  "ShortDesc",
+  "VIP",
+] as const;
+
+/** Raw `LIST` row → the same row without customer, agent or login identifiers. */
+export function toSafeJson(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const key of SAFE_ROW_FIELDS) {
+    if (Object.hasOwn(row, key)) safe[key] = row[key];
+  }
+  return safe;
+}
+
+export interface DupePair {
+  /** Order-independent leg signature shared by every ticket in the group. */
+  readonly legSignature: string;
+  /** Distinct ticket ids, sorted. */
+  readonly wagerNumbers: readonly string[];
+  /** `P`, `M`, … present in the group (the portal's P/M duplicate pairs are the common case). */
+  readonly wagerTypes: readonly string[];
+}
+
+function legSignature(ticket: NormalizedTicket): string {
+  return ticket.legs
+    .map((leg) =>
+      [
+        leg.sport,
+        leg.eventName,
+        leg.period,
+        leg.market,
+        leg.selection,
+        leg.price ?? "",
+      ].join("\u0001"),
+    )
+    .sort()
+    .join("\u0002");
+}
+
+/**
+ * Groups tickets that carry the same legs under different ticket ids. A P ticket and an M
+ * ticket on the same selections are the usual pair; the caller can narrow on `wagerTypes`.
+ * Tickets with no legs are ignored, and a repeated id never forms a group by itself.
+ */
+export function findDupePairs(
+  tickets: readonly NormalizedTicket[],
+): readonly DupePair[] {
+  const groups = new Map<string, NormalizedTicket[]>();
+  for (const ticket of tickets) {
+    if (ticket.legs.length === 0) continue;
+    const signature = legSignature(ticket);
+    const group = groups.get(signature);
+    if (group === undefined) groups.set(signature, [ticket]);
+    else group.push(ticket);
+  }
+  const pairs: DupePair[] = [];
+  for (const [legSignature, group] of groups) {
+    const wagerNumbers = [...new Set(group.map((t) => t.wagerNumber))].sort();
+    if (wagerNumbers.length < 2) continue;
+    pairs.push({
+      legSignature,
+      wagerNumbers,
+      wagerTypes: [...new Set(group.map((t) => t.wagerType))].sort(),
+    });
+  }
+  return pairs;
 }

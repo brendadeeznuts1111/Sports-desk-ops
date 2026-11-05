@@ -164,8 +164,12 @@ describe("sportsdesk_ticket_cli", () => {
       descCode: "P.G319747616",
       writer: null,
       ticketWriter: "GSLIVE",
-      source: "unlabelled",
-      provenance: { file: FIXTURE, capturedAt: null },
+      source: "GSLIVE",
+      provenance: {
+        file: FIXTURE,
+        capturedAt: null,
+        source: "unlabelled",
+      },
     });
     expect(ticket.legs[0]).toEqual({
       index: 1,

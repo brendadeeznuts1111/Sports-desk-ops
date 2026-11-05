@@ -49,8 +49,12 @@ describe("live_ticket_view", () => {
           gameNumber: "319747616",
         },
       ],
-      source: "unlabelled",
-      provenance: { file: FIXTURE, capturedAt: null },
+      source: "GSLIVE",
+      provenance: {
+        file: FIXTURE,
+        capturedAt: null,
+        source: "unlabelled",
+      },
     });
   });
 
@@ -73,7 +77,7 @@ describe("live_ticket_view", () => {
         capturedAt: "2026-11-04T00:00:00.000Z",
       }),
     );
-    expect(view.source).toBe("capture:test");
+    expect(view.provenance.source).toBe("capture:test");
     expect(view.provenance.capturedAt).toBe("2026-11-04T00:00:00.000Z");
   });
 
