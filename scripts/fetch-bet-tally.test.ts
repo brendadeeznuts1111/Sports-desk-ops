@@ -43,6 +43,14 @@ function htmlResponse(): Response {
   });
 }
 
+/** GSLive labels real JSON as text/html; the body is still the contract. */
+function mislabeledJsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
 /** A fetch stub that records calls and replies from a queue. */
 function queuedFetch(responses: readonly Response[]): {
   readonly calls: FetchCall[];
@@ -142,6 +150,9 @@ describe("extractBetRows", () => {
     expect(extractBetRows({ data: [{ state: "push" }] })).toEqual([
       { state: "push" },
     ]);
+    expect(
+      extractBetRows({ r: { bets: [{ state: "win" }] }, e: 0, d: "" }),
+    ).toEqual([{ state: "win" }]);
   });
 
   test("throws on a shape that cannot be rows instead of reporting zero bets", () => {
@@ -392,6 +403,16 @@ describe("supplied ajax.php payload", () => {
     expect(rows).toEqual([{ state: "win" }]);
     expect(JSON.parse(String(calls[0]?.body))).toEqual(payload);
   });
+
+  test("reads a JSON row body labeled text/html", async () => {
+    const rows = await fetchBetReportRowsFromPayload({
+      payload,
+      cookieHeader: "GSID=fixture-session",
+      fetchImpl: async () =>
+        mislabeledJsonResponse({ bets: [{ state: "win" }] }),
+    });
+    expect(rows).toEqual([{ state: "win" }]);
+  });
 });
 
 describe("session bootstrap (x-gs-session)", () => {
@@ -415,6 +436,15 @@ describe("session bootstrap (x-gs-session)", () => {
     });
     const headers = new Headers(calls[0]?.init.headers);
     expect(headers.get("cookie")).toBe("GSID=fixture-session");
+  });
+
+  test("accepts a JSON signin body labeled text/html", async () => {
+    const id = await bootstrapGanchrowSession({
+      cookieHeader: "GSID=fixture-session",
+      fetchImpl: async () =>
+        mislabeledJsonResponse({ ganchrowSessionId: "ganchrow-fixture" }),
+    });
+    expect(id).toBe("ganchrow-fixture");
   });
 
   test("fails closed on an HTML login page or a missing id, without leaking the cookie", async () => {

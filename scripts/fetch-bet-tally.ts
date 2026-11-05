@@ -249,8 +249,16 @@ export function extractBetRows(payload: unknown): readonly unknown[] {
     const value = parsed.data[key];
     if (Array.isArray(value)) return value;
   }
+  // Live `getBetReport` wraps the rows one level down: `{ r: { bets: [...] }, e, d, from, to }`.
+  const nested = parsed.data["r"];
+  if (nested !== null && typeof nested === "object" && !Array.isArray(nested)) {
+    for (const key of ROW_COLLECTIONS) {
+      const value = (nested as Record<string, unknown>)[key];
+      if (Array.isArray(value)) return value;
+    }
+  }
   throw new Error(
-    `unexpected getBetReport envelope: object without an array under ${ROW_COLLECTIONS.join("/")} (keys: ${
+    `unexpected getBetReport envelope: object without an array under ${ROW_COLLECTIONS.join("/")} or r.<collection> (keys: ${
       Object.keys(parsed.data).join(", ") || "(none)"
     })`,
   );
@@ -343,6 +351,42 @@ function payloadSignature(rows: readonly unknown[]): string {
   );
 }
 
+/**
+ * GSLive labels JSON bodies as `text/html` on both `signin` and `ajax.php`; the body, not the
+ * header, is the reliable signal. Detect a login page by its leading `<`, keep the status/content
+ * type in the error, and never echo the request (the cookie is in it).
+ */
+async function readManagerJson(
+  response: Response,
+  label: string,
+): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!response.ok) {
+    throw new Error(
+      `${label} returned HTTP ${response.status} (${contentType || "no content-type"})` +
+        (contentType.includes("html")
+          ? "; an HTML login page means the session expired"
+          : ""),
+    );
+  }
+  const text = await response.text();
+  const trimmed = text.trimStart();
+  if (trimmed === "" || trimmed.startsWith("<")) {
+    throw new Error(
+      `${label} returned HTTP ${response.status} (${contentType || "no content-type"}); ` +
+        "an HTML login page means the session expired",
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `${label} returned HTTP ${response.status} (${contentType || "no content-type"}) ` +
+        "with a non-JSON body",
+    );
+  }
+}
+
 async function postBetReport(opts: {
   // Generated or supplied verbatim; both are JSON-serialised unchanged.
   readonly payload: unknown;
@@ -370,14 +414,14 @@ async function postBetReport(opts: {
   });
 
   const contentType = response.headers.get("content-type") ?? "";
-  if (!response.ok || !contentType.includes("json")) {
+  if (!response.ok) {
     // Never echo the request headers or body: the cookie is in them.
     throw new Error(
       `getBetReport returned HTTP ${response.status} (${contentType || "no content-type"}); ` +
         "an HTML login page means the session expired",
     );
   }
-  return await response.json();
+  return await readManagerJson(response, "getBetReport");
 }
 
 export interface FetchBetRowsOptions {
@@ -510,13 +554,15 @@ export async function bootstrapGanchrowSession(
     signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000),
   });
   const contentType = response.headers.get("content-type") ?? "";
-  if (!response.ok || !contentType.includes("json")) {
+  if (!response.ok) {
     throw new Error(
       `signin returned HTTP ${response.status} (${contentType || "no content-type"}); ` +
         "an HTML response means the GSID session is expired",
     );
   }
-  const parsed = signinResponseSchema.safeParse(await response.json());
+  const parsed = signinResponseSchema.safeParse(
+    await readManagerJson(response, "signin"),
+  );
   if (!parsed.success) {
     throw new Error(
       "signin response did not match { ganchrowSessionId, adminUserName, agentName }",

@@ -433,6 +433,11 @@ this endpoint, sends `x-gs-session` on the verification probe, and persists a GS
 session verifies; it never installs a pre-auth cookie. No username, password, cookie or session id
 is recorded here.
 
+**Content-type trap:** the live console labels both the `signin` JSON and the `getBetReport` JSON as
+`text/html`. The body, not the header, is the contract; parsing by `content-type` alone reports a
+valid session as expired. `scripts/fetch-bet-tally.ts` now parses the body and treats only a
+leading `<` (or a non-JSON body) as the login page.
+
 Limits: one operator, one trace, one invalid-credential attempt. A successful credential login was
 not observed in this checkout, so the 200 response shape remains unconfirmed.
 
