@@ -60,6 +60,20 @@ plugin_manager({ action: "install_bundle",
 plugin_manager({ action: "remove_bundle", target: "dsh-plugin-sportsdesk-desk-status" })
 ```
 
+## Verification
+
+```sh
+node dsh-plugin-ui/verify-load.mjs   # dependency-free; also runs under Bun
+```
+
+`verify-load.mjs` proves the wiring without a DSH Host: the manifest (`dsh.client`, exports,
+`files`, locale, icon), the deliberately empty Host half, the Client loader id and inject list,
+the single `conversation.composer.dock` registration (id `sportsdesk-desk-status`, order 40),
+that every visible `t(...)` key exists in both the embedded en and zh dictionaries (and that
+`locale/en.json` and `locale/zh.json` agree), that the poll effect clears its timer on dispose,
+and that the chrome is token-only, DOM-safe and fetches only the desk's two routes. The repo gate
+`tests/plugin_bundles.test.ts` runs this harness for every bundle in `bun test tests/`.
+
 ## Verification status
 
 The bundle installs and the client slot registration is inspectable through
