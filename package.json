@@ -28,6 +28,7 @@
     "wagers:watch": "bun --no-orphans run scripts/wagers_by_state_capture.ts --watch",
     "ticket": "bun run cli/sportsdesk_ticket_cli.ts",
     "flags": "bun run cli/flags.ts",
+    "identity:diagnostic": "bun run scripts/identity_diagnostic.ts",
     "parse:graded-wagers": "bun run scripts/parse_graded_wagers_html.ts",
     "parse:pending-panel": "bun run scripts/parse_data_tables_html.ts",
     "build:agent-tree": "bun run scripts/build_agent_tree.ts",
