@@ -354,6 +354,41 @@ describe("sportsdesk_ticket_cli", () => {
     expect(invalid.stderr).toContain("positive");
   });
 
+  test("--capture-info reports Pace and --require-confidence gates HTML", async () => {
+    const htmlInfo = await run(["--capture-info", "--file", HTML_FIXTURE]);
+    expect(htmlInfo.code).toBe(0);
+    expect(htmlInfo.stdout).toContain("Confidence: low");
+    expect(htmlInfo.stdout).toContain("ajaxComplete-restart");
+    expect(htmlInfo.stdout).toContain("71× pace-running");
+
+    const htmlGate = await run([
+      "--analyze",
+      "--require-confidence=medium",
+      "--file",
+      HTML_FIXTURE,
+    ]);
+    expect(htmlGate.code).toBe(1);
+    expect(htmlGate.stderr).toContain("capture confidence low");
+    expect(htmlGate.stderr).toContain("ajaxComplete restarts");
+
+    const jsonInfo = await run(["--capture-info", "--file", FIXTURE]);
+    expect(jsonInfo.code).toBe(0);
+    expect(jsonInfo.stdout).toContain("Status: 1 (OK)");
+    expect(jsonInfo.stdout).toContain("Confidence: high");
+
+    const jsonGate = await run([
+      "--analyze",
+      "--require-confidence=medium",
+      "--file",
+      FIXTURE,
+    ]);
+    expect(jsonGate.code).toBe(0);
+
+    const invalid = await run(["--require-confidence=bogus"]);
+    expect(invalid.code).toBe(2);
+    expect(invalid.stderr).toContain("one of none|low|medium|high");
+  });
+
   test("--help prints usage and exits 0", async () => {
     const { code, stdout } = await run(["--help"]);
     expect(code).toBe(0);

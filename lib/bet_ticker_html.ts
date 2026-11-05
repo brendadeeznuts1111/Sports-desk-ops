@@ -52,9 +52,16 @@ export interface LoadedJsonTicket extends NormalizedTicket {
   readonly amountSource: "json";
 }
 
+export interface CaptureProvenance {
+  readonly file: string;
+  readonly source: string;
+  readonly capturedAt: string | null;
+}
+
 export interface LoadedCapture {
   readonly format: "html" | "json";
   readonly tickets: readonly (HtmlBetTicket | LoadedJsonTicket)[];
+  readonly provenance: CaptureProvenance;
 }
 
 const ROW = /<tr\b([^>]*)>([\s\S]*?)<\/tr>/gi;
@@ -189,7 +196,11 @@ export async function loadCapture(
   const trimmed = text.trimStart();
 
   if (trimmed.startsWith("<")) {
-    return { format: "html", tickets: parseBetTickerHtml(text) };
+    return {
+      format: "html",
+      tickets: parseBetTickerHtml(text),
+      provenance: { file: path, source: "html-capture", capturedAt: null },
+    };
   }
 
   let payload: unknown;
@@ -222,5 +233,5 @@ export async function loadCapture(
     };
   });
 
-  return { format: "json", tickets };
+  return { format: "json", tickets, provenance: meta };
 }

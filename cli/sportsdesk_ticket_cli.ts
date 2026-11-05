@@ -17,12 +17,16 @@ import { parseArgs } from "node:util";
 import { wagerTypeLabel } from "../lib/bet_ticker_labels.ts";
 import { normalizeTicket } from "../lib/live_ticket_view.ts";
 import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
+import { parseBetTickerHtml, type HtmlBetTicket } from "./html.ts";
 import {
-  htmlHeaderMap,
-  parseBetTickerHtml,
-  type HtmlBetTicket,
-  type HtmlHeader,
-} from "./html.ts";
+  assessConfidence,
+  CONFIDENCE_ORDER,
+  confidenceReason,
+  inspectPace,
+  parseConfidenceArg,
+  type CaptureInfo,
+  type Confidence,
+} from "./info.ts";
 
 export { toSafeJson } from "../lib/live_ticket_view.ts";
 import {
@@ -52,6 +56,8 @@ Usage: bun run ticket <wagerNumber> [--file <artifact>] [--json]
   --file <path>       Capture artifact (default: ${DEFAULT_FILE})
   --list              Every ticket with its leg count (safe fields only)
   --analyze           Totals by ticket structure (Straight/Parlay/Teaser/If Bet)
+  --capture-info      Print format, status, Pace and confidence diagnostics
+  --require-confidence <level>  Exit 1 when confidence is below none|low|medium|high
   --normalized        Canonical public ticket shape; requires --json
   --json              Machine-readable safe view (no customer/agent identifiers)
   --lang <code>       Render labels from the portal's own ui.json: ${languageList()}
@@ -211,6 +217,76 @@ function normalizedView(
   };
 }
 
+function enforceConfidence(
+  info: CaptureInfo,
+  required: Confidence | undefined,
+  file: string,
+): void {
+  if (required === undefined) return;
+  const level = assessConfidence(info);
+  if (CONFIDENCE_ORDER[level] < CONFIDENCE_ORDER[required]) {
+    console.error(
+      `capture confidence ${level} is below required ${required}\n` +
+        `  reason: ${confidenceReason(info)}\n` +
+        `  file:   ${file}`,
+    );
+    process.exit(1);
+  }
+}
+
+function printCaptureInfo(file: string, info: CaptureInfo, rows: number): void {
+  const level = assessConfidence(info);
+  const lines = [`Capture: ${file}`, `Format: ${info.format}`, `Rows: ${rows}`];
+  if (info.format === "json") {
+    lines.push(
+      `Status: ${
+        info.statusOk === true
+          ? "1 (OK)"
+          : info.statusOk === false
+            ? "not 1"
+            : "(not present)"
+      }`,
+    );
+    lines.push(`Amounts: ${info.hasAmounts ? "present" : "none"}`);
+  } else {
+    lines.push("Status: (not present — HTML capture)");
+    lines.push("Amounts: none (HTML display scale)");
+  }
+  if (info.pace !== undefined) {
+    lines.push(
+      `Pace: ${info.pace.elementCount} .pace elements, ${info.pace.activeCount} active at ${
+        info.pace.activeProgress ?? "?"
+      }%, ${info.pace.runningTokens}× pace-running, ${info.pace.doneTokens}× pace-done`,
+    );
+    lines.push(`  version: ${info.pace.version}`);
+    if (info.pace.version === "0.4.x") {
+      lines.push(
+        "  note: this Pace version tracks AJAX only — restarts are pure ajaxComplete + pushState/replaceState",
+      );
+    } else if (info.pace.version === "1.x") {
+      lines.push(
+        "  note: this Pace version also restarts on WebSocket activity — restarts may mix AJAX and WS",
+      );
+    }
+    lines.push(`  cause: ${info.pace.cause}`);
+  } else {
+    lines.push("Pace: (not applicable — JSON capture)");
+  }
+  lines.push("", `Confidence: ${level}`, `  reason: ${confidenceReason(info)}`);
+  if (info.pace?.verdict === "mid-load") {
+    const versionNote =
+      info.pace.version === "0.4.x"
+        ? "; this Pace version tracks AJAX only — restarts are pure ajaxComplete + pushState/replaceState"
+        : info.pace.version === "1.x"
+          ? "; this Pace version also restarts on WebSocket activity — restarts may mix AJAX and WS"
+          : "";
+    lines.push(
+      `⚠ capture was taken mid-load: .pace-active at ${info.pace.activeProgress}% (Pace ${info.pace.version}, ${info.pace.runningTokens} accumulated restarts${versionNote}) — rows may be incomplete`,
+    );
+  }
+  console.log(lines.join("\n"));
+}
+
 function sourceLine(
   provenance: {
     readonly source: string;
@@ -238,6 +314,8 @@ let values: {
   readonly fromHtml?: string | undefined;
   readonly uiTable?: string | undefined;
   readonly currencyScale?: string | undefined;
+  readonly captureInfo?: boolean;
+  readonly requireConfidence?: string | undefined;
   readonly help?: boolean;
 };
 let positionals: string[];
@@ -256,6 +334,8 @@ try {
       "from-html": { type: "string" },
       "ui-table": { type: "string" },
       "currency-scale": { type: "string" },
+      "capture-info": { type: "boolean", default: false },
+      "require-confidence": { type: "string" },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: true,
@@ -273,6 +353,8 @@ try {
     fromHtml: parsed.values["from-html"],
     uiTable: parsed.values["ui-table"],
     currencyScale: parsed.values["currency-scale"],
+    captureInfo: parsed.values["capture-info"],
+    requireConfidence: parsed.values["require-confidence"],
     help: parsed.values.help,
   };
   positionals = parsed.positionals;
@@ -318,6 +400,15 @@ if (!Number.isFinite(currencyScale) || currencyScale <= 0) {
   usage("--currency-scale must be a positive number");
 }
 
+let requiredConfidence: Confidence | undefined;
+if (values.requireConfidence !== undefined) {
+  const parsed = parseConfidenceArg(values.requireConfidence);
+  if (parsed === null) {
+    usage("--require-confidence: one of none|low|medium|high");
+  }
+  requiredConfidence = parsed;
+}
+
 const LANG_COVERAGE_SAMPLE = 5;
 
 if (values.langCoverage === true) {
@@ -354,48 +445,50 @@ if (values.langCoverage === true) {
 }
 
 if (values.htmlHeaderMap === true) {
-  const candidate = values.fromHtml ?? values.file;
-  let headers: readonly HtmlHeader[] | null = null;
-  if (candidate !== undefined) {
-    const handle = Bun.file(candidate);
-    if (await handle.exists()) {
-      const text = await handle.text();
-      if (text.trimStart().startsWith("<")) {
-        headers = htmlHeaderMap(text);
-        if (headers.length === 0) {
-          fail(
-            `${candidate}: no <th data-language="L-..."> headers found; is this a Manager capture?`,
-          );
-        }
-      }
-    } else if (values.fromHtml !== undefined) {
-      fail(`cannot read --from-html ${candidate}: file not found`);
+  let keys: readonly string[];
+  if (values.fromHtml !== undefined) {
+    let html: string;
+    try {
+      html = await Bun.file(values.fromHtml).text();
+    } catch (error) {
+      fail(
+        `cannot read --from-html ${values.fromHtml}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
+    const found: string[] = [];
+    for (const match of html.matchAll(/data-language="(L-[0-9]+)"/g)) {
+      const key = match[1];
+      if (key !== undefined && !found.includes(key)) found.push(key);
+    }
+    if (found.length === 0) {
+      fail(
+        `${values.fromHtml}: no data-language="L-..." attributes found; is this a Manager capture?`,
+      );
+    }
+    keys = found;
+  } else {
+    keys = HTML_HEADER_KEYS;
   }
-  if (values.fromHtml !== undefined && headers === null) {
-    fail(`${values.fromHtml}: not an HTML capture`);
-  }
-  const rows =
-    headers ?? HTML_HEADER_KEYS.map((key, index) => ({ index, key, text: "" }));
-  for (const header of rows) {
-    const key = header.key;
-    console.log(
-      `${key ?? "—"}  ${
-        key === null ? header.text : labelOrKey(key, "ENGLISH", uiTable)
-      }`,
-    );
+  for (const key of keys) {
+    console.log(`${key}  ${labelOrKey(key, "ENGLISH", uiTable)}`);
   }
   process.exit(0);
 }
 
 const analyze = values.analyze === true;
 const listing = values.list === true;
+const captureInfo = values.captureInfo === true;
 if (analyze && listing) usage("--analyze and --list are mutually exclusive");
-if (analyze && positionals.length !== 0)
-  usage("--analyze takes no wager number");
+if ((analyze || captureInfo) && positionals.length !== 0) {
+  usage(
+    captureInfo
+      ? "--capture-info takes no wager number"
+      : "--analyze takes no wager number",
+  );
+}
 
 let target: number | null = null;
-if (!analyze) {
+if (!analyze && !captureInfo) {
   if (listing) {
     if (positionals.length !== 0) usage("--list takes no wager number");
   } else {
@@ -419,6 +512,17 @@ const text = await handle.text();
 if (text.trimStart().startsWith("<")) {
   const tickets = parseBetTickerHtml(text);
   const provenance = { source: "html-capture", observedAt: null };
+  const info: CaptureInfo = {
+    format: "html",
+    statusOk: null,
+    hasAmounts: false,
+    pace: inspectPace(text),
+  };
+  if (values.captureInfo === true) {
+    printCaptureInfo(file, info, tickets.length);
+    process.exit(0);
+  }
+  enforceConfidence(info, requiredConfidence, file);
 
   if (analyze) {
     const groups = new Map<
@@ -559,6 +663,22 @@ const meta = {
   source: artifact.provenance.source,
   capturedAt: artifact.provenance.observedAt,
 };
+
+const rawStatus =
+  typeof payload === "object" && payload !== null && "status" in payload
+    ? (payload as { status?: unknown }).status
+    : undefined;
+const statusOk =
+  rawStatus === undefined ? null : rawStatus === 1 || rawStatus === true;
+const hasAmounts = artifact.wagers.some(
+  (wager) => wager.amountWagered > 0 || wager.toWinAmount > 0,
+);
+const info: CaptureInfo = { format: "json", statusOk, hasAmounts };
+if (values.captureInfo === true) {
+  printCaptureInfo(file, info, artifact.wagers.length);
+  process.exit(0);
+}
+enforceConfidence(info, requiredConfidence, file);
 
 if (analyze) {
   const groups = new Map<
