@@ -270,6 +270,36 @@ describe("Bun capabilities used by the ops tooling", () => {
     }
   });
 
+  test("MessagePort travels through StructuredSerializeOptions.transfer", async () => {
+    const carrier = new MessageChannel();
+    const transferred = new MessageChannel();
+    try {
+      const received = new Promise<MessagePort>((resolve, reject) => {
+        carrier.port2.onmessage = (event) => {
+          const port = event.ports[0];
+          if (port) resolve(port);
+          else reject(new Error("transfer delivered no MessagePort"));
+        };
+      });
+      carrier.port1.postMessage(null, { transfer: [transferred.port2] });
+
+      const port = await received;
+      try {
+        expect(port).toBeInstanceOf(MessagePort);
+        const reply = new Promise((resolve) => {
+          port.onmessage = (event) => resolve(event.data);
+        });
+        transferred.port1.postMessage("hello");
+        expect(await reply).toBe("hello");
+      } finally {
+        port.close();
+        transferred.port1.close();
+      }
+    } finally {
+      carrier.port1.close();
+    }
+  });
+
   test("GenericTransformStream exposes readable and writable", () => {
     const stream = new CompressionStream("gzip");
     expect(stream.readable).toBeInstanceOf(ReadableStream);
