@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   betTickerFile,
   isTickerNoise,
+  parseBetTickerXml,
   parseShortDesc,
   readWagerList,
   readWagerListArtifact,
@@ -33,6 +34,39 @@ describe("readWagerList", () => {
     expect(readWagerList([{ AgentID: "X" }, ...list.slice(0, 1)])).toHaveLength(
       1,
     );
+  });
+
+  test("accepts a one-item LIST object from the compact XML shape", () => {
+    const first = (payload as { LIST: unknown[] }).LIST[0];
+    expect(readWagerList({ LIST: first })).toHaveLength(1);
+    expect(
+      betTickerFile({ LIST: first }, "2026-11-05T00:00:00.000Z").LIST,
+    ).toEqual([first]);
+
+    // End to end: compact XML collapses <LIST> to an object when it has one child.
+    const doc = parseBetTickerXml(
+      "<LIST><WagerNumber>99001</WagerNumber><ShortDesc>S.Basketball #1 Team -2 -110 - For Game</ShortDesc><AmountWagered>100</AmountWagered><ToWinAmount>90</ToWinAmount></LIST>",
+    ) as { LIST: Record<string, unknown> };
+    const file = betTickerFile(doc, "2026-11-05T00:00:00.000Z");
+    expect(file.LIST).toHaveLength(1);
+    expect(readWagerList(file)).toHaveLength(1);
+  });
+
+  test("accepts an empty LIST but still rejects a missing or non-list value", () => {
+    expect(readWagerList({ LIST: [] })).toEqual([]);
+    expect(readWagerList({ LIST: "" })).toEqual([]);
+    expect(
+      betTickerFile({ LIST: [] }, "2026-11-05T00:00:00.000Z").LIST,
+    ).toEqual([]);
+    expect(
+      betTickerFile({ LIST: "" }, "2026-11-05T00:00:00.000Z").LIST,
+    ).toEqual([]);
+    expect(() => betTickerFile({}, "2026-11-05T00:00:00.000Z")).toThrow(
+      /no LIST/,
+    );
+    expect(() =>
+      betTickerFile({ LIST: "login" }, "2026-11-05T00:00:00.000Z"),
+    ).toThrow(/no LIST/);
   });
 
   test("returns nothing for unrelated payloads", () => {

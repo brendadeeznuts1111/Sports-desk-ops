@@ -130,6 +130,17 @@ function text(value: unknown): string {
   return value === null || value === undefined ? "" : String(value).trim();
 }
 
+/**
+ * The compact XML shape collapses a one-item list to the item (`LIST: {...}`), while JSON
+ * captures keep `LIST: [{...}]`. Normalize both before iterating.
+ */
+function oneOrMany(value: unknown): unknown[] | undefined {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === "") return [];
+  if (typeof value === "object") return [value];
+  return undefined;
+}
+
 function number(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -376,11 +387,12 @@ export function betTickerFile(
   readonly partial: false;
   readonly LIST: readonly unknown[];
 } {
-  const list =
-    typeof payload === "object" && payload !== null
-      ? (payload as { LIST?: unknown }).LIST
-      : undefined;
-  if (!Array.isArray(list)) {
+  const hasList =
+    typeof payload === "object" && payload !== null && "LIST" in payload;
+  const list = hasList
+    ? oneOrMany((payload as { LIST?: unknown }).LIST)
+    : undefined;
+  if (list === undefined) {
     throw new Error("getBetTicker body has no LIST array");
   }
   return {
@@ -396,10 +408,8 @@ export function betTickerFile(
 export function readWagerListArtifact(payload: unknown): WagerListArtifact {
   const rows = Array.isArray(payload)
     ? payload
-    : typeof payload === "object" &&
-        payload !== null &&
-        Array.isArray((payload as { LIST?: unknown }).LIST)
-      ? ((payload as { LIST: unknown[] }).LIST ?? [])
+    : typeof payload === "object" && payload !== null
+      ? (oneOrMany((payload as { LIST?: unknown }).LIST) ?? [])
       : [];
 
   const wagers = rows
