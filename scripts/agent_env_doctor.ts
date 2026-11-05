@@ -268,14 +268,23 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
   });
 
   const daemonPort = resolveBunServePort(Bun.env);
-  const daemonUp = await probe(`http://127.0.0.1:${daemonPort}/health`);
+  const daemonUp =
+    daemonPort === 0
+      ? false
+      : await probe(`http://127.0.0.1:${daemonPort}/health`);
   checks.push({
     id: "daemon",
     status: daemonUp ? "ok" : "warn",
-    title: daemonUp
-      ? `webview daemon up on :${daemonPort} (WS hub reachable)`
-      : `webview daemon not running on :${daemonPort} (live WS panel falls back to polling)`,
-    fix: `PORT=${daemonPort} bun run serve`,
+    title:
+      daemonPort === 0
+        ? "webview daemon port is 0 (random); /health cannot be probed"
+        : daemonUp
+          ? `webview daemon up on :${daemonPort} (WS hub reachable)`
+          : `webview daemon not running on :${daemonPort} (live WS panel falls back to polling)`,
+    fix:
+      daemonPort === 0
+        ? "set BUN_PORT, PORT or NODE_PORT to a fixed port"
+        : `PORT=${daemonPort} bun run serve`,
   });
 
   const dshDir = path.join(os.homedir(), ".dsh");

@@ -12,7 +12,11 @@ export const BUN_SERVE_PORT_NAMES = ["BUN_PORT", "PORT", "NODE_PORT"] as const;
 
 /**
  * Resolve the port Bun would pick: `BUN_PORT` → `PORT` → `NODE_PORT` → 3000.
- * Invalid or non-positive values are skipped, matching a server that ignores them.
+ *
+ * `0` is a valid value: it asks the OS for a random port and stops the cascade.
+ * Negative or non-numeric values are skipped. Measured on 1.4.4, an environment
+ * variable also wins over the `--port` CLI flag (the docs list the flag first);
+ * this helper covers the environment half only.
  */
 export function resolveBunServePort(
   environment: Readonly<Record<string, string | undefined>>,
@@ -21,7 +25,7 @@ export function resolveBunServePort(
     const raw = environment[name];
     if (raw === undefined || raw.trim() === "") continue;
     const value = Number(raw);
-    if (Number.isInteger(value) && value > 0) return value;
+    if (Number.isInteger(value) && value >= 0) return value;
   }
   return 3000;
 }

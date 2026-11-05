@@ -50,13 +50,18 @@ describe("service supervisor", () => {
     );
   });
 
-  test("skips empty or invalid port variables", () => {
+  test("skips invalid values but keeps 0 as the random-port request", () => {
     expect(resolveBunServePort({ BUN_PORT: "nope", PORT: "4200" })).toBe(4200);
-    expect(resolveBunServePort({ BUN_PORT: "0", PORT: "4200" })).toBe(4200);
+    expect(resolveBunServePort({ BUN_PORT: "-1", PORT: "4200" })).toBe(4200);
+    expect(resolveBunServePort({ BUN_PORT: "0", PORT: "4200" })).toBe(0);
     expect(
       resolveBunServePort({ BUN_PORT: "", PORT: "  ", NODE_PORT: "4300" }),
     ).toBe(4300);
     expect(resolveBunServePort({})).toBe(3000);
+  });
+
+  test("refuses to supervise a random port", () => {
+    expect(() => supervisedServices({ BUN_PORT: "0" })).toThrow(/random/);
   });
 
   test("resolves BLOB tokens from Bun.secrets without env leakage", async () => {

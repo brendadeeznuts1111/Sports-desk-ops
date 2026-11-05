@@ -62,6 +62,11 @@ export function supervisedServices(
   environment: Readonly<Record<string, string | undefined>> = env,
 ): readonly ServiceSpec[] {
   const webviewPort = resolveBunServePort(environment);
+  if (webviewPort === 0) {
+    throw new Error(
+      "supervisor: webview port is 0 (random); set BUN_PORT, PORT or NODE_PORT to a fixed port",
+    );
+  }
   const blobPort = portFrom(environment, "BLOB_PORT", 4021);
   const services: ServiceSpec[] = [
     {

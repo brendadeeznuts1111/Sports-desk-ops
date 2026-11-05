@@ -47,10 +47,17 @@ describe("Server Port Cascade Resolution", () => {
     const resolvePort = async (
       options: string,
       env: Record<string, string>,
+      argv: readonly string[] = [],
     ): Promise<number> => {
+      const ambient = Object.fromEntries(
+        Object.entries(Bun.env).filter(
+          ([name]) =>
+            name !== "BUN_PORT" && name !== "PORT" && name !== "NODE_PORT",
+        ),
+      );
       const proc = Bun.spawn({
-        cmd: [process.execPath, "-e", serve(options)],
-        env: { ...Bun.env, ...env },
+        cmd: [process.execPath, ...argv, "-e", serve(options)],
+        env: { ...ambient, ...env },
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -81,6 +88,12 @@ describe("Server Port Cascade Resolution", () => {
         NODE_PORT: "47153",
       }),
     ).toBe(47154);
+
+    // The docs list --port first, but measured on 1.4.4 an env var wins over the flag.
+    expect(await resolvePort("", {}, ["--port=47155"])).toBe(47155);
+    expect(await resolvePort("", { BUN_PORT: "47151" }, ["--port=47155"])).toBe(
+      47151,
+    );
   });
 
   test("development accepts the HMR-off object without breaking the daemon", async () => {
