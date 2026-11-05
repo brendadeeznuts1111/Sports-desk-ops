@@ -138,6 +138,22 @@ describe("planReviews", () => {
     expect(doubleReviews).toHaveLength(Math.ceil(plan.samples.length / 20));
   });
 
+  test("double review is global, not one per rule", () => {
+    const plan = planFor(
+      anomalies({ period_correlation: 25, batch_replay: 25 }),
+      {
+        budget: {
+          ...DEFAULT_SAMPLING_BUDGET,
+          analystMinutesPerDay: 120,
+        },
+      },
+    );
+    expect(plan.samples).toHaveLength(50);
+    expect(plan.samples.filter((sample) => sample.doubleReview)).toHaveLength(
+      3,
+    );
+  });
+
   test("a budget too small to census marks rules not_sampled", () => {
     const budget = {
       ...DEFAULT_SAMPLING_BUDGET,
@@ -339,6 +355,44 @@ describe("flags metric metadata", () => {
       overlapSamples: 2,
     });
     expect(typeof agreement?.value).toBe("number");
+  });
+
+  test("all-agree double reviews report kappa undefined, not no double review", () => {
+    const reviews = reviewsFor(plan, [
+      {
+        seq: 0,
+        rule: "period_correlation",
+        verdict: "confirmed",
+        reviewer: "a",
+      },
+      {
+        seq: 0,
+        rule: "period_correlation",
+        verdict: "confirmed",
+        reviewer: "b",
+      },
+      {
+        seq: 1,
+        rule: "period_correlation",
+        verdict: "confirmed",
+        reviewer: "a",
+      },
+      {
+        seq: 1,
+        rule: "period_correlation",
+        verdict: "confirmed",
+        reviewer: "b",
+      },
+    ]);
+    const metadata = buildFlagsMetricMetadata(plan, reviews);
+    const agreement = metadata.definitions.find(
+      (definition) => definition.name === "reviewerAgreement",
+    );
+    expect(agreement).toMatchObject({
+      state: "not_measured",
+      blockedBy: "kappaUndefined",
+      overlapSamples: 2,
+    });
   });
 
   test("refuses a classification metric that claims per-flag evaluation", () => {

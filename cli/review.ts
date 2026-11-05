@@ -216,14 +216,14 @@ export function planReviews(
       })
       .slice(0, candidate.selected)
       .sort((a, b) => a.seq - b.seq);
-    chosen.forEach((entry, index) => {
+    chosen.forEach((entry) => {
       samples.push({
         seq: entry.seq,
         rule: entry.anomaly.rule,
         severity: entry.anomaly.severity,
         wagerNumbers: entry.anomaly.tickets.map((ticket) => ticket.wagerNumber),
         minutes: candidate.cost,
-        doubleReview: index % 20 === 0,
+        doubleReview: false,
       });
     });
   }
@@ -243,6 +243,12 @@ export function planReviews(
     }))
     .sort((a, b) => a.rule.localeCompare(b.rule));
 
+  const ordered = samples
+    .sort((a, b) => a.seq - b.seq)
+    .map((sample, index) => ({
+      ...sample,
+      doubleReview: index % 20 === 0,
+    }));
   return {
     runId: options.runId,
     generatedAt: (options.now ?? new Date()).toISOString(),
@@ -251,7 +257,7 @@ export function planReviews(
     estimatedMinutes: rules.reduce((sum, rule) => sum + rule.minutes, 0),
     wagerCount: options.wagerCount,
     flagCount: anomalies.length,
-    samples: samples.sort((a, b) => a.seq - b.seq),
+    samples: ordered,
     rules,
   };
 }
@@ -637,17 +643,23 @@ export function buildFlagsMetricMetadata(
   const pairs = reviewerPairs(reviews);
   const kappa = cohenKappa(pairs);
   const reviewerAgreement =
-    kappa === null
+    pairs.length === 0
       ? {
           state: "not_measured" as const,
           blockedBy: "noDoubleReview",
-          overlapSamples: pairs.length,
+          overlapSamples: 0,
         }
-      : {
-          value: kappa,
-          method: "cohen-kappa",
-          overlapSamples: pairs.length,
-        };
+      : kappa === null
+        ? {
+            state: "not_measured" as const,
+            blockedBy: "kappaUndefined",
+            overlapSamples: pairs.length,
+          }
+        : {
+            value: kappa,
+            method: "cohen-kappa",
+            overlapSamples: pairs.length,
+          };
 
   const reviewedFlags = new Set(reviews.map((review) => review.seq)).size;
   return {
