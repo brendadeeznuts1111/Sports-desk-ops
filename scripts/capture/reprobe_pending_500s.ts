@@ -5,6 +5,7 @@
  * Requires keychain F402 credentials or F402_AGENT_ID / F402_PASSWORD.
  */
 import { Glob } from "bun";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 
 const args = process.argv.slice(2);
@@ -121,7 +122,11 @@ async function latestScratchDir(root: string): Promise<string | null> {
   const glob = new Glob("scratch/f402-probes/2026-*");
   const dirs: string[] = [];
   for await (const rel of glob.scan({ cwd: root, onlyFiles: false })) {
-    if (rel.endsWith("/")) continue;
+    try {
+      if (!statSync(join(root, rel)).isDirectory()) continue;
+    } catch {
+      continue; // broken symlink or raced deletion
+    }
     dirs.push(rel);
   }
   dirs.sort();
