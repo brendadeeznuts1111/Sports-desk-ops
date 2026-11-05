@@ -192,9 +192,10 @@ out.push(
 );
 out.push("");
 out.push(`---`);
+out.push("");
 
 for (const [sub, title] of Object.entries(SHAPE_SECTIONS)) {
-  out.push("");
+  // The block above (or the previous section's shape) already left one blank line.
   out.push(`## ${title}`);
   out.push("");
   for (const line of sectionInvariants[sub] ?? []) out.push(`- ${line}`);
@@ -210,6 +211,8 @@ for (const [sub, title] of Object.entries(SHAPE_SECTIONS)) {
         ? "type-only: declared, no runtime value"
         : `value: \`${d.label}\` · writable ${d.writable} · enumerable ${d.enumerable}`;
     out.push(`#### ${shape.heading}`);
+    // Markdown formatter keeps a blank line after a heading; emit it so --write and bun fmt agree.
+    out.push("");
     out.push(
       `- **Source:** declared in \`bun-types@${BUN_SHAPE_PINS.typesVersion}\` · ${link(shape.name, permalinks.get(shape.name))}`,
     );

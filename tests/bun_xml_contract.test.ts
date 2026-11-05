@@ -74,6 +74,25 @@ describe("Bun.XML contract", () => {
     ).toEqual({ foo: "&xxe;" });
   });
 
+  test("DTD attribute defaults, CDATA and namespace attributes", () => {
+    expect(
+      Bun.XML.parse(`<!DOCTYPE a [<!ATTLIST a x CDATA "d">]><a/>`),
+    ).toEqual({ a: { "@x": "d" } });
+
+    // CDATA and character references are expanded; adjacent text merges into one string.
+    expect(Bun.XML.parse(`<p>a<![CDATA[<b>&]]>c&#233;</p>`)).toEqual({
+      p: "a<b>&cé",
+    });
+    expect(
+      Bun.XML.parse(`<p>a<![CDATA[<b>&]]>c&#233;</p>`, { compact: false }),
+    ).toEqual({ name: "p", attributes: {}, children: ["a<b>&cé"] });
+
+    // Namespace declarations are ordinary attributes; prefixes stay in the element name.
+    expect(Bun.XML.parse(`<soap:Envelope xmlns:soap="urn:x"/>`)).toEqual({
+      "soap:Envelope": { "@xmlns:soap": "urn:x" },
+    });
+  });
+
   test("bytes honor the BOM or the XML encoding declaration", () => {
     const encoder = new TextEncoder();
     const iso = new Uint8Array([
@@ -117,5 +136,37 @@ describe("Bun.XML contract", () => {
     expect(() => Bun.XML.stringify({ "bad name": "x" })).toThrow(
       /not a valid XML element name/,
     );
+  });
+
+  test("stringify renders scalars, comments, PIs and indentation", () => {
+    expect(
+      Bun.XML.stringify({
+        name: "n",
+        children: [1, true, 2n, new Date("2020-01-01T00:00:00.000Z")],
+      }),
+    ).toBe("<n>1true22020-01-01T00:00:00.000Z</n>");
+
+    // Element-only content is indented; a text child keeps the element on one line.
+    expect(
+      Bun.XML.stringify(
+        { name: "a", children: [{ name: "b", children: ["x"] }] },
+        null,
+        2,
+      ),
+    ).toBe("<a>\n  <b>x</b>\n</a>");
+    expect(
+      Bun.XML.stringify(
+        { name: "a", children: ["t", { name: "b", children: ["x"] }] },
+        null,
+        2,
+      ),
+    ).toBe("<a>t<b>x</b></a>");
+
+    expect(
+      Bun.XML.stringify({
+        name: "a",
+        children: [{ comment: "x" }, { target: "go", data: "now" }],
+      }),
+    ).toBe("<a><!--x--><?go now?></a>");
   });
 });
