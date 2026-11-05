@@ -142,11 +142,11 @@ describe("queue readiness gate", () => {
     ]);
   });
 
-  test("a divergent study closes the gate even at full coverage", () => {
+  test("a divergent study closes the gate below full coverage", () => {
     const readiness = assessQueueReadiness({
       corpusAgeHours: 2,
       modelAgeDays: 2,
-      bridgeCoverage: 1,
+      bridgeCoverage: 0.99,
       bridgeRepresentative: false,
       confirmedReviews: 10,
       rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
@@ -159,11 +159,11 @@ describe("queue readiness gate", () => {
     });
   });
 
-  test("coverage alone does not satisfy the bridge gate", () => {
+  test("coverage alone does not satisfy the bridge gate below full coverage", () => {
     const readiness = assessQueueReadiness({
       corpusAgeHours: 2,
       modelAgeDays: 2,
-      bridgeCoverage: 1,
+      bridgeCoverage: 0.99,
       bridgeRepresentative: null,
       confirmedReviews: 10,
       rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
@@ -172,6 +172,21 @@ describe("queue readiness gate", () => {
     expect(readiness.blockers.map((blocker) => blocker.name)).toEqual([
       "bridgeRepresentativeness",
     ]);
+  });
+
+  test("full coverage makes the representativeness study vacuous", () => {
+    const readiness = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 1,
+      bridgeRepresentative: null,
+      confirmedReviews: 10,
+      rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
+    });
+    expect(readiness.ready).toBe(true);
+    expect(readiness.blockers.map((blocker) => blocker.name)).not.toContain(
+      "bridgeRepresentativeness",
+    );
   });
 
   test("the batch stub refuses closed gates and carries applied/notApplied", () => {

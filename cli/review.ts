@@ -1098,7 +1098,7 @@ export function buildFlagsMetricMetadata(
           study: "missing",
         },
         description:
-          "The other three execution gates (corpus, model, reviews) clear as data lands. This one requires a written study artifact at reports/security/bridge-representativeness.json; the gate reads `representative` and refuses if it is false or missing. The reader verifies `representative` against the covered and uncovered Wilson intervals, so the field cannot contradict the arms. Coverage is measured separately and is not a substitute for this study.",
+          "The other three execution gates (corpus, model, reviews) clear as data lands. This one requires a written study artifact at reports/security/bridge-representativeness.json; the gate reads `representative` and refuses if it is false or missing below full coverage. The reader verifies `representative` against the covered and uncovered Wilson intervals, so the field cannot contradict the arms. At 100% coverage there is no uncovered arm, so the study is not applicable. Coverage is measured separately and is not a substitute for this study.",
       },
       {
         name: "queueEscalation",

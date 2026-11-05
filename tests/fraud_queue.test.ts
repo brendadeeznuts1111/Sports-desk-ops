@@ -559,12 +559,7 @@ describe("fraud priority queue (CLI)", () => {
     expect(error.details.readiness.ready).toBe(false);
     expect(
       error.details.readiness.blockers.map((blocker) => blocker.name),
-    ).toEqual([
-      "corpusFreshness",
-      "modelFreshness",
-      "bridgeRepresentativeness",
-      "reviewRows",
-    ]);
+    ).toEqual(["corpusFreshness", "modelFreshness", "reviewRows"]);
     expect(error.details.inputs.bridgeCoverage).toBe(1);
     expect(error.details.inputs.bridgeRepresentative).toBeNull();
     expect(error.details.inputs.confirmedReviews).toBe(0);
@@ -576,8 +571,9 @@ describe("fraud priority queue (CLI)", () => {
     });
     expect(error.details.bridge.coverage.value).toBe(1);
     expect(error.details.bridge.representativeness).toMatchObject({
-      representative: null,
-      reason: "missing",
+      representative: true,
+      state: "not_applicable",
+      reason: "full-coverage",
     });
     expect(error.details.inputs.rules).toHaveLength(9);
     expect(error.details.readiness.ruleApplication.notApplied).toHaveLength(9);

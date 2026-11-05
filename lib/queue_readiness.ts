@@ -114,7 +114,11 @@ export function assessQueueReadiness(
       required: `<= ${policy.maxModelAgeDays}d`,
     });
   }
-  if (input.bridgeRepresentative !== true) {
+  // At 100% coverage there is no uncovered arm, so representativeness is vacuous. Below full
+  // coverage the study is the gate.
+  const fullCoverage =
+    input.bridgeCoverage !== null && input.bridgeCoverage >= 1;
+  if (!fullCoverage && input.bridgeRepresentative !== true) {
     blockers.push({
       name: "bridgeRepresentativeness",
       current:

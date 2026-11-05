@@ -818,20 +818,28 @@ function bridgePayload(
       artifactReason: coverageReason,
     },
     representativeness:
-      study.present && study.artifact !== null
+      coverage.value >= 1
         ? {
-            representative: study.artifact.representative,
-            measuredAt: study.artifact.measuredAt,
-            corpusSha: study.artifact.corpusSha,
-            covered: study.artifact.covered,
-            uncovered: study.artifact.uncovered,
-            method: study.artifact.method,
+            representative: true,
+            state: "not_applicable",
+            reason: "full-coverage",
+            description:
+              "No uncovered arm exists at 100% coverage; the study is vacuous.",
           }
-        : {
-            representative: null,
-            state: "not_measured",
-            reason: study.reason,
-          },
+        : study.present && study.artifact !== null
+          ? {
+              representative: study.artifact.representative,
+              measuredAt: study.artifact.measuredAt,
+              corpusSha: study.artifact.corpusSha,
+              covered: study.artifact.covered,
+              uncovered: study.artifact.uncovered,
+              method: study.artifact.method,
+            }
+          : {
+              representative: null,
+              state: "not_measured",
+              reason: study.reason,
+            },
   };
 }
 
@@ -844,7 +852,11 @@ function renderBridge(
   lines.push(
     `    coverage: ${(coverage.value * 100).toFixed(2)}% (${coverage.matched}/${coverage.total}, ${coverage.population}, measured ${coverage.measuredAt}, ${coverageSource})`,
   );
-  if (study.present && study.artifact !== null) {
+  if (coverage.value >= 1) {
+    lines.push(
+      "    representativeness: not applicable (100% coverage; no uncovered arm)",
+    );
+  } else if (study.present && study.artifact !== null) {
     const artifact = study.artifact;
     lines.push(
       `    representativeness: ${artifact.representative ? "representative" : "divergent"} (n=${artifact.covered.n}+${artifact.uncovered.n}, measured ${artifact.measuredAt})`,
