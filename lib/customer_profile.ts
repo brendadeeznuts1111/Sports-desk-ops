@@ -18,27 +18,27 @@
 export type Channel = "GSLIVE" | "GSBUILDER" | "Internet" | string;
 
 /** Parse a customer-profile XML document with Bun's native parser (compact shape). */
-export function parseCustomerProfileXml(text: string): unknown {
+export function parseCustomerProfileXml(text: string): Bun.XML.Document {
   return Bun.XML.parse(text);
 }
 
 /** Parse a customer-performance XML document with Bun's native parser (compact shape). */
-export function parseCustomerPerformanceXml(text: string): unknown {
+export function parseCustomerPerformanceXml(text: string): Bun.XML.Document {
   return Bun.XML.parse(text);
 }
 
 /** Parse a transactions XML document with Bun's native parser (compact shape). */
-export function parseTransactionsXml(text: string): unknown {
+export function parseTransactionsXml(text: string): Bun.XML.Document {
   return Bun.XML.parse(text);
 }
 
 /** Parse an AJAX-delivered XML response with Bun's native parser (compact shape). */
-export function parseAjaxXml(text: string): unknown {
+export function parseAjaxXml(text: string): Bun.XML.Document {
   return Bun.XML.parse(text);
 }
 
 /** Parse a Fantasy402 AJAX XML response with Bun's native parser (compact shape). */
-export function parseFantasy402AjaxXml(text: string): unknown {
+export function parseFantasy402AjaxXml(text: string): Bun.XML.Document {
   return Bun.XML.parse(text);
 }
 

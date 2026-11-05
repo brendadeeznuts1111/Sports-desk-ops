@@ -54,6 +54,15 @@ describe("Bun.XML contract", () => {
     expect(Bun.XML.parse(`<p>a<!--x-->b<?go?></p>`)).toEqual({ p: "ab" });
   });
 
+  test("parse returns the documented Document/Node types", () => {
+    const compact: Bun.XML.Document = Bun.XML.parse("<a>1</a>");
+    const full: Bun.XML.Node = Bun.XML.parse("<a>1</a>", {
+      compact: false,
+    });
+    expect(compact).toEqual({ a: "1" });
+    expect(full.name).toBe("a");
+  });
+
   test("importing .xml evaluates to the compact Document", async () => {
     const path = join(
       import.meta.dir,
