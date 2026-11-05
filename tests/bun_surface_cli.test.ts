@@ -96,7 +96,6 @@ describe("dx bun", () => {
     ]);
     expect(compat.every((check) => check.ok)).toBe(true);
 
-    // The text summary names the group, so a human run shows the same three facts.
     const text = await run([]);
     expect(text.code).toBe(0);
     expect(text.stdout).toContain("compat 3/3");

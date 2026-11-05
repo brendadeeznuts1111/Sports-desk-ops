@@ -258,12 +258,133 @@ Two consequences for code here:
 - **Each row carries its own style codes.** An open SGR style is closed with that style's matching reset at the end of every row (`ESC[31m`→`ESC[39m`, `ESC[1m`→`ESC[22m`, `ESC[4m`→`ESC[24m` in the probes above) and re-opened at the start of the next; only the final row keeps the original closing code. Exact bytes therefore depend on per-row style bookkeeping — do not hash or byte-snapshot wrapped output as evidence; compare the rendered text or per-row `Bun.stringWidth()`.
 - **Width is not `.length`.** Use `Bun.stringWidth()` for any column math (padding, table alignment, `Bun.inspect.table` widths); `.length` counts UTF-16 units, not columns.
 
+## Bun Shell (`Bun.$`) — measured 2026-11-04
+
+`Bun.$` is a lazy template tag: a command starts no process until the promise is awaited or an
+output method is called. Measured: a command's marker file was absent before the first `await`
+and present after it.
+
+- **Awaited → `ShellOutput`**, with **synchronous** `text(encoding?)`, `json()`, `bytes()`,
+  `arrayBuffer()` and `blob()`.
+- **Un-awaited → `ShellPromise`**, with the same names returning promises plus `.lines()` (an
+  async iterable), `.quiet()`, `.nothrow()`, `.throws(bool)`, `.cwd(str)` and `.env(obj)`.
+  Iterating the promise itself throws (`iterable should have an iterator symbol`); iterate
+  `.lines()`. bun-types 1.4.4 declares `text()` on the promise but **not** `bytes()`; await the
+  output first (or cast) when reading bytes.
+- **Bytes over text, lines over split.** Use `.bytes()` for byte-level work and `.lines()` for
+  line scanning. `printf 'one\ntwo\nthree\n'` through `.lines()` yields
+  `["one", "two", "three", ""]` — the trailing newline is a final empty line.
+- **Output methods quietly capture.** A bare `await` of the tag echoes the process stdout
+  (measured: `BARE-ECHO` appeared before the next `console.log`); call `.quiet()` when that is
+  unwanted. Calling an output method already implies quiet.
+- **Failures still yield bytes.** `ShellError` carries `exitCode`, `stdout` and `stderr` as
+  `Buffer`s; the stderr bytes are available even though the promise rejected.
+- **Do not copy the `T[P<P>]` generic signatures** from the reference page; they are malformed.
+
+**Where it may be used:** tooling only (`scripts/`, `bin/`), and every command must capture its
+output (`.text()`/`.bytes()`/`.lines()`/…) or call `.quiet()` — a bare await would echo. The tag
+quotes interpolations, which is safer than building an `sh -c` string: `scripts/compute_dump_lag.ts`
+now passes a fixture path through the tag instead of `execSync("… \"${dumpPath}\"")`. Library and
+daemon code (`lib/`, `services/`, `cli/`) uses `Bun.spawn` with an argv array, and credentials/TTY
+reads never use a shell (`lib/f402_credentials_policy.ts`). `tests/bun_shell_contract.test.ts`
+enforces that split and the capture rule.
+
 ## Live docs and reference (check behavior on 1.4.4)
 
 - Docs: [bun.com/docs](https://bun.com/docs)
 - API reference (generated declarations, per-symbol permalinks): [bun.com/reference](https://bun.com/reference), [`globals/bun`](https://bun.com/reference/globals/bun)
 - Walkthroughs: [bun.com/guides](https://bun.com/guides)
 - PM topics that match this repo: [install](https://bun.com/docs/pm/cli/install), [add](https://bun.com/docs/pm/cli/add), [remove](https://bun.com/docs/pm/cli/remove), [workspaces](https://bun.com/docs/pm/workspaces), [lifecycle](https://bun.com/docs/pm/lifecycle), [lockfile](https://bun.com/docs/pm/lockfile), [isolated installs](https://bun.com/docs/pm/isolated-installs), [patch](https://bun.com/docs/pm/cli/patch)
+
+**Ahead of the release — the `/docs/lint` linter.** [bun.com/docs/lint](https://bun.com/docs/lint)
+documents a built-in `bun lint` (rules in `bunfig.toml [lint]`, `--type-aware` backed by
+`bun check`, `--no-script`, `--doctor`). Measured 2026-11-04 on this machine: the latest GitHub
+release is **v1.4.4**, whose tag `bun-v1.4.4` is commit `38afee6c84…` — exactly the installed
+binary's revision (`1.4.4+38afee6c8`) — and the v1.4.4 blog post announces `bun fmt`, not a
+linter (`bun lint` appears zero times there; the only "lint" is `lint-staged` in the `bun fmt
+--staged` section). The command is absent from the binary: `bun --help` lists `fmt` but no `lint`,
+and `bun lint` (with or without `--no-script`) in a directory with no `lint` script fails with
+`Script not found "lint"`. In this repo the `package.json` `lint` script shadows the name, so
+`bun lint --type-aware` executes `oxlint --fix --type-aware` — a mutating oxlint run, not the
+documented linter. Until a release ships the command, `bun run lint:check` (oxlint 1.90.0 plus
+`.oxlintrc.type-aware.json`) remains the gate; after an upgrade, run `bun lint --doctor` to see
+which oxlint/ESLint rules run natively, then decide whether the shadowing script becomes
+`bun lint --fix` (inside that script `bun lint` is the linter, per the docs) or `--no-script`.
+
+**Type-aware parity, measured on oxlint 1.90.0 (2026-11-04).** oxlint implements the same 61
+type-aware rules the docs describe (the docs' `@typescript-eslint/*` names map to `typescript/*`),
+but with two operational differences the docs' builtin would remove:
+
+- Type-aware runs require the pinned native package `oxlint-tsgolint@7.0.2005` (declared in
+  `package.json`; platform binaries ship as optional deps). Outside a project that installs it,
+  `oxlint --type-aware` fails with `Failed to find tsgolint executable` — so the gate is not
+  self-contained the way a builtin would be.
+- oxlint's `--type-check` reports TypeScript diagnostics: on this checkout it reproduced exactly
+  the three `tsc` errors in `lib/bridge_and_channel_router.ts` (TS2412 + 2×TS2379) in 1.6 s over
+  925 files. `bun run typecheck` (tsc) is faster (~0.2 s) and remains the type-error SSOT; adding
+  `--type-check` to lint would only duplicate it. `--tsconfig` with a narrower `include` did not
+  change those type-check diagnostics, confirming the docs' caveat: next to an oxlint config it
+  sets import resolution, not the tsconfig used to type-check each file.
+
+**Ahead of the release — `import.meta.glob` and the `bun test` env view.** The
+[`ImportMeta` reference](https://bun.com/reference/globals/bun/ImportMeta) documents
+`import.meta.glob()` (lazy and `{ eager: true }`) as a transpiler/bundler transform and says that
+under `bun test` `import.meta.env` also carries Vite's `MODE`, `DEV`, `PROD`, `SSR` and
+`BASE_URL`. Measured on 1.4.4 (2026-11-04), neither holds, and both are absent from the pinned
+`bun-types@1.4.4` as well:
+
+- `import.meta.glob` is `undefined` in `.ts`, `.tsx`, `.js` and `.mjs` at runtime (calling it
+  throws `TypeError: import.meta.glob is not a function`), and `bun --hot` does not add it.
+  `Bun.build({ entrypoints, target: "bun" })` and `bun build --target=bun|browser` report success
+  but leave the `import.meta.glob(...)` call untransformed; running that bundle throws the same
+  TypeError. `bun-types@1.4.4` has no `glob`/`ImportMetaGlobOptions` declaration, so any use is a
+  TS2339 until a release declares it.
+- Under `bun test`: `import.meta.env === process.env` and `NODE_ENV=test` hold, but `MODE`, `DEV`,
+  `PROD`, `SSR` and `BASE_URL` are absent (`"MODE" in env === false`, values undefined).
+
+Everything else on the page measured as documented: `dir`/`dirname` (equal), `file` (basename),
+`filename`/`path` (equal), `url` (`file:`), `main`, `env === process.env`, `require` (loads CJS),
+`resolve` (file URL; accepts a parent URL or path; **does not check existence** — a missing path
+still resolves), and `hot` as `undefined` in a normal run and even under `bun --hot` on a plain
+script. The two gaps are pinned as tripwires in
+[tests/import_meta_contract.test.ts](../tests/import_meta_contract.test.ts).
+
+**Runtime ahead of the docs — `Bun.file` metadata.** The
+[`file` reference](https://bun.sh/reference/globals/bun#file) says `size` "is not valid until the
+contents of the file are read at least once" and documents `BlobPropertyBag.type` as "Set a
+default 'type'. Not yet implemented." Measured on 1.4.4 (2026-11-04), both statements are stale:
+`.size` stats lazily on the first property access (18 for an 18-byte file before any read; 0 for a
+missing path, which rejects only when read, with `ENOENT`), and
+`Bun.file(path, { type: "text/plain" }).type` returns `text/plain;charset=utf-8`. Inference
+appends `;charset=utf-8` for `.json` (`application/json;charset=utf-8`; the reference example
+shows no charset), while unknown extensions and the `fd` overload report
+`application/octet-stream`. The byte-buffer path overload copies its input (mutating the buffer
+after creation did not change the target); URL and `fd` overloads work. Ten repo call sites
+already read `.size` before any read (e.g. `services/sportsdesk_telegram_bot.ts:1114`'s max-bytes
+guard and `lib/dod6_v54_lifetime_reader.ts`), which is correct on this binary, and no site passes
+`{ type }` today. The pinned `bun-types@1.4.4` still carries the stale "Not yet implemented"
+comment. Pinned by [tests/bun_file_response.test.ts](../tests/bun_file_response.test.ts).
+
+**`SharedArrayBuffer`, measured 1.4.4 (2026-11-04).** Growable SABs work:
+`new SharedArrayBuffer(16, { maxByteLength: 64 })` reports `growable: true` / `maxByteLength: 64`,
+and `grow(32)` grows in place (byteLength 16→32, an existing `Uint8Array` view's length follows to
+32, new bytes zeroed, old bytes preserved). Growing past `maxByteLength` and any shrink throw
+`RangeError`; a fixed SAB reports `growable: false` and `grow()` throws `TypeError:
+SharedArrayBuffer is not growable`. `slice()` returns a copied, non-growable `SharedArrayBuffer`
+(subclass species is respected). One reference mismatch: the page's second overload
+`grow(size): SharedArrayBuffer` returns **`undefined`** at runtime — matching the first
+`grow(newByteLength?): void` overload and TypeScript's `lib.es2024.sharedmemory.d.ts` — so do not
+chain the call. The repo's only SAB use is the `Atomics.wait` sleep in
+[lib/f402_profile_lock.ts:145](../lib/f402_profile_lock.ts), measured working.
+
+Byte streams measured **`ArrayBuffer`-backed, not SAB-backed**, across `Bun.file().stream()`,
+`DecompressionStream` output, `Response` bodies (including one built from a SAB view), request
+bodies, `fetch` bodies, `spawn` stdout and TCP `Bun.listen`/`Bun.connect` data. The
+`Uint8Array<ArrayBufferLike>` annotations in [lib/f402_weblog.ts](../lib/f402_weblog.ts) and
+[lib/jsonl_stream_replay.ts](../lib/jsonl_stream_replay.ts) are therefore conservative rather than
+observed; keep the types (a stream source may change) but the "may sit on a SharedArrayBuffer"
+comment is not reproducible on this binary. `Bun.JSONL.parse` over a SAB-backed view, `Bun.write(
+path, sabView)` and `Bun.file(sabPathBytes)` all work.
 
 ## Bun docs MCP (live server; repo-native client)
 
@@ -547,10 +668,11 @@ This invariant — "every byte the consumer may read is written first" — is no
 
 **Where this repo uses it (pinned 2026-11-04):**
 
-| File:line                            | Fill pattern                                                                                            | Why it is safe                                                                                                   |
-| :----------------------------------- | :------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
-| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                   | `const view = buffer.subarray(0, read)` — only the written prefix is ever read; the tail is never exposed        |
-| `scripts/live_positions_cron.ts:375` | `const bytesRead = readSync(fd, buf, 0, len, offset)` then `decoder.decode(buf.subarray(0, bytesRead))` | The `readSync` return is captured and used to slice the exposed prefix; migrating closed a latent short-read bug |
+| File:line                            | Fill pattern                                                                                                               | Why it is safe                                                                                                   |
+| :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                                      | `const view = buffer.subarray(0, read)` — only the written prefix is ever read; the tail is never exposed        |
+| `scripts/live_positions_cron.ts:375` | `const bytesRead = readSync(fd, buf, 0, len, offset)` then `decoder.decode(buf.subarray(0, bytesRead))`                    | The `readSync` return is captured and used to slice the exposed prefix; migrating closed a latent short-read bug |
+| `lib/gslive_tally_rollup.ts:432-679` | Eight SoA `Uint8` columns; only indices `0..groupCount-1` / `0..cellCount-1` are read after insert paths write every field | ~131 KiB zeroing skipped per rollup; unfilled arena tail is never indexed                                        |
 
 **When to migrate a `new Uint8Array(n)` call site to `Bun.allocUnsafe(n)`:**
 

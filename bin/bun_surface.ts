@@ -156,8 +156,8 @@ const CHECKS: readonly Check[] = [
     // Up to 3.5x faster than `new Uint8Array(size)` because the bytes are not zeroed; see
     // bun.com/reference/globals/bun#bun.allocUnsafe and the "When to use `Bun.allocUnsafe`"
     // section in docs/bun-upstream-reference.md. Pinned so a downgrade cannot silently drop
-    // the primitive our two production call sites assume (f402_bet_ticker_jsonl.ts,
-    // live_positions_cron.ts).
+    // the primitive our production call sites assume (f402_bet_ticker_jsonl.ts,
+    // live_positions_cron.ts, gslive_tally_rollup.ts SoA columns).
     name: "allocUnsafe",
     read: () => Bun.allocUnsafe,
   },

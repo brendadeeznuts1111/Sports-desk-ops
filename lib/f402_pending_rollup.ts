@@ -116,13 +116,15 @@ export function selectedRotation(row: Record<string, unknown>): number {
   return normalizeRotation(useTeam2 ? row.Team2RotNum : row.Team1RotNum);
 }
 
+const CHICAGO_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Chicago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function chicagoDate(iso: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(iso));
+  const parts = CHICAGO_YMD_FORMAT.formatToParts(new Date(iso));
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }

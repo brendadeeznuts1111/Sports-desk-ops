@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "SportsDesk 工作台",
-    "description": "在左侧边栏添加 SportsDesk 入口，打开的工作台面板通过本地 webview 服务的 /health 与 /api/status 路由报告其状态。"
+    "description": "在左侧边栏添加 SportsDesk 入口，打开只读的工作台概览，从五个同源路由测量本地 SportsDesk webview 服务：服务状态（/health、/api/status）、市场行情与仓库证据（/api/graph/summary）、带来源信息的账目指标（/api/kpis）以及模拟执行计划（/api/execution/plan）。每个数据源独立探测：失败或缺失的源会被明确标注而不是显示为零；上次成功加载的数据会保留并标记为过期。"
   }
 }

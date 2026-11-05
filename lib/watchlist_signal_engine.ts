@@ -111,6 +111,14 @@ function toOverUnder(value: string | null | undefined): OverUnder | null {
   return null;
 }
 
+/**
+ * A JSON text field. The captures are untyped JSON at the boundary; `String(unknown)` silently
+ * produces `[object Object]` for a non-string, so a non-string is treated as absent instead.
+ */
+function textField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 /** `-750`/`+150`/`5450` (hundredths) → `-7.5`/`+1.5`/`54.5`; decimal strings pass through. */
 function parseLineToken(token: string | undefined): number | null {
   if (token === undefined) return null;
@@ -364,34 +372,260 @@ const LIVE_BETS_SPORT_TO_LEAGUE: Readonly<Record<string, League>> = {
   BASEBALL: "MLB",
 };
 
-/** A `data/live-bets.json` game row, best effort; `null` when its market is not readable. */
+/** `team1`/`team2` carry the sport ("Soccer") and the market type ("Market") on some rows. */
+function isPlaceholderTeamName(name: string, sport: string): boolean {
+  const upper = name.trim().toUpperCase();
+  return (
+    upper === "" || upper === "MARKET" || upper === sport.trim().toUpperCase()
+  );
+}
+
+const FRACTION_VALUES: Readonly<Record<string, number>> = {
+  "½": 0.5,
+  "¼": 0.25,
+  "¾": 0.75,
+};
+
+/** A line token: `1`, `1.5`, `1½`, `½` — the capture writes halves as U+00BD. */
+const LINE_TOKEN = String.raw`\d{1,2}(?:\.\d+)?[½¼¾]?|[½¼¾]`;
+
+const SIGNED_LINE_PATTERN = new RegExp(`^([+-]?)\\s*(${LINE_TOKEN})$`);
+/** A signed spread selection: `Arsenal -1½`, `Betis +½,+1`. */
+const SPREAD_SELECTION_PATTERN = new RegExp(
+  `^(.*?)\\s+([+-](?:${LINE_TOKEN})(?:,(?:[+-])?(?:${LINE_TOKEN}))?)$`,
+);
+
+/** `2½` → 2.5, `½` → 0.5, `2.5` → 2.5; `null` when the token is not a line number. */
+function parseLineNumber(token: string): number | null {
+  const trimmed = token.trim();
+  if (trimmed === "") return null;
+  const match = /^(\d+)?\s*([½¼¾])?$/.exec(trimmed);
+  if (match !== null && (match[1] !== undefined || match[2] !== undefined)) {
+    const whole = match[1] === undefined ? 0 : Number(match[1]);
+    const fraction =
+      match[2] === undefined ? 0 : (FRACTION_VALUES[match[2]] ?? 0);
+    return whole + fraction;
+  }
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** A signed line token (`-1½`, `+1`, `½`) → its number; `null` when it is not a line. */
+function parseSignedLine(token: string): number | null {
+  const match = SIGNED_LINE_PATTERN.exec(token.trim());
+  if (match === null) return null;
+  const magnitude = parseLineNumber(match[2] ?? "");
+  if (magnitude === null) return null;
+  return (match[1] === "-" ? -1 : 1) * magnitude;
+}
+
+/** A split line (`2½,3`, `+½,+1`) is one market; its effective line is the midpoint. */
+function parseLineExpression(token: string): number | null {
+  const parts = token.split(",");
+  if (parts.length === 0 || parts.length > 2) return null;
+  const values: number[] = [];
+  for (const part of parts) {
+    const value = parseSignedLine(part);
+    if (value === null) return null;
+    values.push(value);
+  }
+  if (values.length === 1) return values[0] ?? null;
+  return ((values[0] ?? 0) + (values[1] ?? 0)) / 2;
+}
+
+/**
+ * The selection text of one live-bets row.
+ *
+ * `chosenTeam` is the leg's selection (`Arsenal -1½ -120`); `description` may hold every leg of
+ * a parlay, so it is only a fallback and is cut down to its first leg.
+ */
+function liveBetsSelectionText(row: Record<string, unknown>): string {
+  const chosen = textField(row["chosenTeam"]).trim();
+  if (chosen !== "") return chosen;
+  const description = textField(row["description"]);
+  const firstLeg =
+    (description.split("|")[0] ?? "").split(
+      /\s+-\s+For\s+(?:Game|1st Half|2nd Half)/i,
+    )[0] ?? "";
+  return firstLeg.replace(/^[A-Za-z.]*\s*#\d+\s+/, "").trim();
+}
+
+interface LiveBetsSelection {
+  readonly teams: readonly string[];
+  readonly marketKind: "moneyline" | "spread" | "total" | "team_total";
+  readonly sideTeam: string | null;
+  readonly line: number | null;
+  readonly overUnder: OverUnder | null;
+}
+
+/**
+ * Parse a soccer selection label.
+ *
+ * The capture names the pick, not the sides: `Arsenal -380` (moneyline), `Arsenal -1½ -120`
+ * (spread), `Arsenal/Slavia Praha O 2½ -130` (match total), `Como O 1½ -140` (team total),
+ * `Draw ( Betis vs Borussia Dortmund ) +160`, with `½`/`¼`/`¾` fractions and split lines
+ * (`-½,-1`). Returns `null` when the label holds no readable market.
+ */
+function parseSoccerSelection(text: string): LiveBetsSelection | null {
+  let cleaned = text.replace(/\s+/g, " ").trim();
+  // A futures label prefixes the pick with `#`-separated path segments.
+  if (cleaned.startsWith("#")) {
+    const lastSegment = cleaned.lastIndexOf(" - ");
+    if (lastSegment >= 0) cleaned = cleaned.slice(lastSegment + 3);
+    cleaned = cleaned.replace(/#/g, " ").replace(/\s+/g, " ").trim();
+  }
+  cleaned = cleaned.replace(/\s+(?:-\s*)?for\s+game\s*$/i, "").trim();
+  // American odds are the trailing signed 3-5 digit token; a price is never a line.
+  const priceMatch = /\s([+-]\d{3,5})\s*$/.exec(cleaned);
+  const body = (
+    priceMatch === null ? cleaned : cleaned.slice(0, priceMatch.index)
+  ).trim();
+  if (body === "") return null;
+
+  const total = /^(.*?)\s+(Over|Under|O|U)\s+([0-9½¼¾.,+-]+)$/i.exec(body);
+  if (total !== null) {
+    const subject = (total[1] ?? "").trim();
+    const marker = (total[2] ?? "").toUpperCase();
+    const line = parseLineExpression(total[3] ?? "");
+    if (subject === "" || line === null) return null;
+    const overUnder: OverUnder = marker.startsWith("O") ? "over" : "under";
+    const halves = subject
+      .split("/")
+      .map((part) => part.trim())
+      .filter((part) => part !== "");
+    if (halves.length === 2) {
+      return {
+        teams: halves.map((part) => part.toUpperCase()),
+        marketKind: "total",
+        sideTeam: null,
+        line,
+        overUnder,
+      };
+    }
+    return {
+      teams: [subject.toUpperCase()],
+      marketKind: "team_total",
+      sideTeam: subject.toUpperCase(),
+      line,
+      overUnder,
+    };
+  }
+
+  // A spread line is signed and small (`-1½`); a price is three or more digits.
+  const spread = SPREAD_SELECTION_PATTERN.exec(body);
+  if (spread !== null) {
+    const subject = (spread[1] ?? "").trim();
+    const line = parseLineExpression(spread[2] ?? "");
+    if (subject === "" || line === null) return null;
+    const names = subject
+      .split("/")
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    return {
+      teams: names,
+      marketKind: "spread",
+      sideTeam: names[0] ?? null,
+      line,
+      overUnder: null,
+    };
+  }
+
+  const spreadPk = /^(.*?)\s+PK$/i.exec(body);
+  if (spreadPk !== null) {
+    const subject = (spreadPk[1] ?? "").trim();
+    if (subject === "") return null;
+    const names = subject
+      .split("/")
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    return {
+      teams: names,
+      marketKind: "spread",
+      sideTeam: names[0] ?? null,
+      line: 0,
+      overUnder: null,
+    };
+  }
+
+  const draw = /^Draw\s*\(\s*(.+?)\s+vs\.?\s+(.+?)\s*\)$/i.exec(body);
+  if (draw !== null) {
+    const teams = [draw[1] ?? "", draw[2] ?? ""]
+      .map((part) => part.trim().toUpperCase())
+      .filter((part) => part !== "");
+    if (teams.length === 2) {
+      return {
+        teams,
+        marketKind: "moneyline",
+        sideTeam: "DRAW",
+        line: null,
+        overUnder: null,
+      };
+    }
+  }
+
+  const names = body
+    .split("/")
+    .map((part) => part.trim().toUpperCase())
+    .filter((part) => part !== "");
+  if (names.length === 0) return null;
+  return {
+    teams: names,
+    marketKind: "moneyline",
+    sideTeam: names[0] ?? null,
+    line: null,
+    overUnder: null,
+  };
+}
+
+/**
+ * A `data/live-bets.json` game row, best effort; `null` when its market is not readable.
+ *
+ * Soccer rows put the sport and the market type in `team1`/`team2` (`Soccer`/`Market`), so the
+ * sides and the market come from the selection text; every other sport keeps the description
+ * parse, where the captured team names are real.
+ */
 export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
   if (typeof value !== "object" || value === null) return null;
   const row = value as Record<string, unknown>;
-  const sport = String(row["sport"] ?? "").toUpperCase();
+  const sport = textField(row["sport"]).toUpperCase();
   const league = LIVE_BETS_SPORT_TO_LEAGUE[sport] ?? "UNKNOWN";
-  const team1 = row["team1"];
-  const team2 = row["team2"];
-  const teams: string[] = [];
-  if (typeof team1 === "object" && team1 !== null) {
-    const name = String(
-      (team1 as Record<string, unknown>)["shortName"] ?? "",
-    ).trim();
-    if (name !== "") teams.push(name.toUpperCase());
-  }
-  if (typeof team2 === "object" && team2 !== null) {
-    const name = String(
-      (team2 as Record<string, unknown>)["shortName"] ?? "",
-    ).trim();
-    if (name !== "") teams.push(name.toUpperCase());
-  }
-  const description = String(row["description"] ?? "");
-  const periodText = String(row["period"] ?? "");
+  const teamName = (side: unknown): string => {
+    if (typeof side !== "object" || side === null) return "";
+    return textField((side as Record<string, unknown>)["shortName"]).trim();
+  };
+  const description = textField(row["description"]);
+  const periodText = textField(row["period"]);
   const periodToken = /^1st Quarter/i.test(periodText)
     ? "1q"
     : /^1st Half/i.test(periodText)
       ? "1h"
       : null;
+  const marketKind = (kind: string): string =>
+    periodToken === null ? kind : `${periodToken}_${kind}`;
+
+  if (sport === "SOCCER") {
+    const selectionText = liveBetsSelectionText(row);
+    const selection = parseSoccerSelection(selectionText);
+    if (selection !== null) {
+      const captured = [teamName(row["team1"]), teamName(row["team2"])]
+        .filter((name) => !isPlaceholderTeamName(name, sport))
+        .map((name) => name.toUpperCase());
+      return {
+        league,
+        marketKind: marketKind(selection.marketKind),
+        teams: captured.length === 2 ? captured : [...selection.teams],
+        sideTeam: selection.sideTeam,
+        line: selection.line,
+        overUnder: selection.overUnder,
+        raw: selectionText === "" ? description : selectionText,
+      };
+    }
+  }
+
+  const teams = [teamName(row["team1"]), teamName(row["team2"])]
+    .filter((name) => name !== "")
+    .map((name) => name.toUpperCase());
+  const chosen = textField(row["chosenTeam"]).trim().toUpperCase();
   // A spread line carries a decimal (`-1.5`); a moneyline price is a whole number (`-110`).
   const kind = /total/i.test(description)
     ? "total"
@@ -399,9 +633,6 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
       ? "spread"
       : "moneyline";
   const overMatch = /\b(Over|Under)\s+(\d+(?:\.\d+)?)/i.exec(description);
-  const chosen = String(row["chosenTeam"] ?? "")
-    .trim()
-    .toUpperCase();
   const lineToken = /([+-]\d+(?:\.\d+)?)/.exec(description);
   const line =
     kind === "total"
@@ -413,7 +644,7 @@ export function parseLiveBetsGame(value: unknown): ParsedMarket | null {
         : Number(lineToken[1]);
   return {
     league,
-    marketKind: periodToken === null ? kind : `${periodToken}_${kind}`,
+    marketKind: marketKind(kind),
     teams,
     sideTeam: kind === "total" ? null : chosen === "" ? null : chosen,
     line: line !== null && Number.isFinite(line) ? line : null,
@@ -454,11 +685,22 @@ function registryLookup(
 
 const FEED_STALE_SECONDS = 180;
 const CAPTURE_STALE_SECONDS = 3_600;
+// Both are defaults only: a caller that supplies a window (the CLI passes
+// config.maxSignalAgeSeconds) overrides them, so status, the board chip, the engine's
+// `provenance.stale` and the freshness gate all measure the same thing.
 
 interface RowProvenance {
   readonly source: string;
   readonly fixture: boolean;
-  readonly asOf: string | null;
+  /**
+   * The observation instant as epoch milliseconds, never a string.
+   *
+   * Timestamps arrive as strings and are converted exactly once at the artifact boundary; the
+   * row layout carries the number so age, staleness, aggregation and candidate ranking never
+   * re-parse (or re-format) the same instant. ISO strings are materialized at the public
+   * boundary, once per signal rather than once per row.
+   */
+  readonly asOfMs: number | null;
   readonly dataMode: string | null;
   readonly stale: boolean;
 }
@@ -474,31 +716,200 @@ interface SignalRow {
   readonly provenance: RowProvenance;
 }
 
-function ageSeconds(asOf: string | null, now: Date): number | null {
-  if (asOf === null) return null;
-  const parsed = Date.parse(asOf);
-  return Number.isFinite(parsed)
-    ? Math.max(0, Math.floor((now.getTime() - parsed) / 1000))
-    : null;
+function ageSecondsFromMs(asOfMs: number | null, nowMs: number): number | null {
+  return asOfMs === null
+    ? null
+    : Math.max(0, Math.floor((nowMs - asOfMs) / 1000));
+}
+
+function isoToEpochMs(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function rowProvenance(
   source: string,
-  recordedAsOf: string | null,
-  fallbackAsOf: string | null,
+  recordedAsOfMs: number | null,
+  fallbackAsOfMs: number | null,
   staleAfterSeconds: number,
-  now: Date,
+  nowMs: number,
   options: { fixture: boolean; dataMode: string | null },
 ): RowProvenance {
-  const asOf = recordedAsOf ?? fallbackAsOf;
-  const age = ageSeconds(asOf, now);
+  const asOfMs = recordedAsOfMs ?? fallbackAsOfMs;
+  const age = ageSecondsFromMs(asOfMs, nowMs);
+  // A bet cannot be accepted after it was read. A clock that lands in the future is a
+  // broken/unknown clock, never evidence of freshness, so it is refused as stale.
+  const future =
+    asOfMs !== null && asOfMs - nowMs > FUTURE_TOLERANCE_SECONDS * 1_000;
   return {
     source,
     fixture: options.fixture,
-    asOf,
+    asOfMs,
     dataMode: options.dataMode,
-    stale: age !== null && age > staleAfterSeconds,
+    stale: future || (age !== null && age > staleAfterSeconds),
   };
+}
+
+/** How far ahead of "now" a portal timestamp may sit before the clock is treated as wrong. */
+const FUTURE_TOLERANCE_SECONDS = 120;
+
+/** The portal's wall-clock zone. Evidence (2026-11-04): live-captured rows land 3.7 min
+ * before the measurement instant only when read as America/New_York — UTC is ~5 h early
+ * and the desk's own Central clock is ~56 min in the future — so the portal writes Eastern. */
+const PORTAL_TIME_ZONE = "America/New_York";
+
+/**
+ * One `Intl.DateTimeFormat` per zone, built once and reused.
+ *
+ * Constructing a formatter costs ~25 µs (measured 2026-11-04), while `formatToParts` on a
+ * shared instance costs ~1 µs. A per-row `new Intl.DateTimeFormat(...)` therefore turned a
+ * 550-row capture into ~28 ms of pure formatter allocation; the zone offset is a property of
+ * the instant, not of the row, so the formatter belongs to the layout, not the row loop.
+ */
+const ZONE_PARTS_FORMATTERS: Record<string, Intl.DateTimeFormat> = {
+  [PORTAL_TIME_ZONE]: new Intl.DateTimeFormat("en-US", {
+    timeZone: PORTAL_TIME_ZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }),
+};
+
+function zonePartsFormatter(timeZone: string): Intl.DateTimeFormat {
+  const known = ZONE_PARTS_FORMATTERS[timeZone];
+  if (known !== undefined) return known;
+  const created = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  ZONE_PARTS_FORMATTERS[timeZone] = created;
+  return created;
+}
+
+/** Offset of `timeZone` from UTC at the instant whose *wall clock* is `wallMs` (two-pass for DST). */
+function zoneOffsetMs(timeZone: string, wallMs: number): number {
+  return offsetAt(timeZone, wallMs - offsetAt(timeZone, wallMs));
+}
+
+function offsetAt(timeZone: string, instantMs: number): number {
+  const parts = zonePartsFormatter(timeZone).formatToParts(new Date(instantMs));
+  const part = (type: string): number => {
+    const value = parts.find((entry) => entry.type === type)?.value;
+    return value === undefined ? Number.NaN : Number(value);
+  };
+  const asUtc = Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+  return asUtc - instantMs;
+}
+
+/**
+ * Portal wall-clock → epoch milliseconds. `getBetTicker` `InsertDateTime` and
+ * `Report/Pending` `acceptedAt` carry no zone. Reading them as host-local (what `Date.parse`
+ * does) put the desk's own Central offset on an Eastern clock, i.e. ~56 min *in the future*
+ * for a just-captured row; that made old activity look indefinitely fresh. The point is the
+ * clock the portal wrote — when the bet was placed — not the moment this capture re-read a
+ * frozen page, so a capture that keeps returning the same tickets cannot read as fresh.
+ *
+ * Returns the instant as a number: the row layout carries epoch milliseconds, so downstream
+ * age/staleness/aggregation arithmetic never re-parses a string.
+ */
+function portalClockEpochMs(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text === "") return null;
+  // An explicit zone is already an instant; let Date.parse own it.
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const wall =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(
+      text,
+    );
+  if (wall === null) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  const [, year, month, day, hour, minute, second = "00", fraction = "0"] =
+    wall;
+  const wallMs = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(fraction.padEnd(3, "0")),
+  );
+  return wallMs - zoneOffsetMs(PORTAL_TIME_ZONE, wallMs);
+}
+
+/** Candidate logins come from the same fields as signal logins; trailing dots are noise. */
+function candidateLogin(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\.+$/, "");
+}
+
+/** `AgentID` is a string on the ticker; `Report/Pending` carries an `{ id, key }` object. */
+function agentIdFrom(value: unknown): string | null {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value.trim().toUpperCase();
+  }
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    for (const key of ["id", "key", "agentId"]) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim() !== "") {
+        return candidate.trim().toUpperCase();
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * One parsed-but-unwatched observation. The signal engine deliberately ignores logins
+ * that are not on the watchlist rather than attributing them to someone else; this is the
+ * advisory trail those rows leave so a genuinely new account is visible instead of silent.
+ */
+export interface WatchlistCandidateObservation {
+  readonly login: string;
+  readonly agentId: string | null;
+  readonly riskUsd: number;
+  readonly source: string;
+  readonly betAtMs: number | null;
+  readonly parsed: ParsedMarket | null;
+}
+
+type CandidateSink = (observation: WatchlistCandidateObservation) => void;
+
+/** A login seen in the captures that the watchlist registry does not cover. */
+export interface WatchlistCandidate {
+  readonly login: string;
+  readonly agentId: string | null;
+  readonly riskUsd: number;
+  readonly wagers: number;
+  readonly sources: readonly string[];
+  readonly leagues: readonly League[];
+  readonly lastBetAt: string | null;
+  readonly ageSeconds: number | null;
+  readonly sampleMarkets: readonly string[];
 }
 
 export interface WatchlistSignalInputs {
@@ -514,7 +925,9 @@ export interface WatchlistSignalInputs {
 function rowsFromFeed(
   feed: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
-  now: Date,
+  nowMs: number,
+  onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof feed !== "object" || feed === null) return [];
   const record = feed as Record<string, unknown>;
@@ -532,10 +945,11 @@ function rowsFromFeed(
     f402["source"] === "fixture" ||
     dataMode === "FIXTURE" ||
     (typeof f402["source"] === "string" && f402["source"].includes("fixture"));
-  const asOf =
+  const asOfMs = isoToEpochMs(
     typeof record["lastUpdatedIso"] === "string"
       ? record["lastUpdatedIso"]
-      : null;
+      : null,
+  );
   const rows: SignalRow[] = [];
   const pending = Array.isArray(record["pendingBets"])
     ? record["pendingBets"]
@@ -543,29 +957,38 @@ function rowsFromFeed(
   for (const raw of pending) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["f402CustomerId"] ?? "")
-      .trim()
-      .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
-    const canonical = String(row["canonicalMarket"] ?? "");
-    const parsed = parseCanonicalMarket(canonical);
-    if (parsed === null) continue;
+    const login = textField(row["f402CustomerId"]).trim().toUpperCase();
+    if (login === "") continue;
+    const parsed = parseCanonicalMarket(textField(row["canonicalMarket"]));
     const risk = Number(row["riskUsd"]);
+    const riskUsd = Number.isFinite(risk) ? Math.max(0, risk) : 0;
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["agentOwner"]),
+        riskUsd,
+        source: "docs/graph-live-feed.json",
+        betAtMs: portalClockEpochMs(row["placedAtUtc"]),
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
-      agentId: String(row["agentOwner"] ?? entry.agentId),
+      agentId: textField(row["agentOwner"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(risk) ? Math.max(0, risk) : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(row["oddsAmerican"]),
       parsed,
       provenance: rowProvenance(
         "docs/graph-live-feed.json",
-        asOf,
+        asOfMs,
         null,
-        FEED_STALE_SECONDS,
-        now,
+        staleAfterSeconds ?? FEED_STALE_SECONDS,
+        nowMs,
         { fixture, dataMode },
       ),
     });
@@ -577,7 +1000,9 @@ function rowsFromWagers(
   wagers: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
   fallbackAsOf: string | null,
-  now: Date,
+  nowMs: number,
+  onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof wagers !== "object" || wagers === null) return [];
   const record = wagers as Record<string, unknown>;
@@ -586,44 +1011,59 @@ function rowsFromWagers(
     : Array.isArray(record["list"])
       ? record["list"]
       : [];
-  const observedAt =
-    typeof record["observedAt"] === "string" ? record["observedAt"] : null;
+  const observedAtMs = isoToEpochMs(
+    typeof record["observedAt"] === "string" ? record["observedAt"] : null,
+  );
+  const fallbackAsOfMs = isoToEpochMs(fallbackAsOf);
+  const fixture =
+    typeof record["source"] === "string" &&
+    record["source"].includes("fixture");
   const rows: SignalRow[] = [];
   for (const raw of list) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["Login"] ?? row["CustomerID"] ?? "")
+    const login = textField(row["Login"] ?? row["CustomerID"])
       .trim()
       .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
-    const parsed = parseWagerShortDesc(String(row["ShortDesc"] ?? ""));
-    if (parsed === null) continue;
+    if (login === "") continue;
+    const parsed = parseWagerShortDesc(textField(row["ShortDesc"]));
     const wageredCents = Number(row["AmountWagered"]);
+    const riskUsd = Number.isFinite(wageredCents)
+      ? Math.max(0, wageredCents / 100)
+      : 0;
+    // The bet's own clock, not the capture's: a re-read of the same ticker rows can be
+    // seconds old while the wagers themselves are days old.
+    const betAtMs = portalClockEpochMs(row["InsertDateTime"]);
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["AgentID"]),
+        riskUsd,
+        source: "data/live-wagers.json",
+        betAtMs,
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
-      agentId: String(row["AgentID"] ?? entry.agentId),
+      agentId: textField(row["AgentID"] ?? entry.agentId),
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(wageredCents)
-        ? Math.max(0, wageredCents / 100)
-        : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(
-        /([+-]\d{3,4})\b/.exec(String(row["ShortDesc"] ?? ""))?.[1] ?? null,
+        /([+-]\d{3,4})\b/.exec(textField(row["ShortDesc"]))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
         "data/live-wagers.json",
-        observedAt,
-        fallbackAsOf,
-        CAPTURE_STALE_SECONDS,
-        now,
-        {
-          fixture:
-            typeof record["source"] === "string" &&
-            record["source"].includes("fixture"),
-          dataMode: null,
-        },
+        betAtMs ?? observedAtMs,
+        fallbackAsOfMs,
+        staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
+        nowMs,
+        { fixture, dataMode: null },
       ),
     });
   }
@@ -633,45 +1073,59 @@ function rowsFromWagers(
 function rowsFromLiveBets(
   liveBets: unknown,
   registry: Map<string, WatchlistUnifiedEntry>,
-  now: Date,
+  nowMs: number,
+  onCandidate?: CandidateSink,
+  staleAfterSeconds?: number,
 ): SignalRow[] {
   if (typeof liveBets !== "object" || liveBets === null) return [];
   const record = liveBets as Record<string, unknown>;
   const games = Array.isArray(record["games"]) ? record["games"] : [];
-  const capturedAt =
-    typeof record["capturedAt"] === "string" ? record["capturedAt"] : null;
+  const capturedAtMs = isoToEpochMs(
+    typeof record["capturedAt"] === "string" ? record["capturedAt"] : null,
+  );
   const dataSource =
     typeof record["dataSource"] === "string" ? record["dataSource"] : "";
   const rows: SignalRow[] = [];
   for (const raw of games) {
     if (typeof raw !== "object" || raw === null) continue;
     const row = raw as Record<string, unknown>;
-    const login = String(row["customerID"] ?? "")
-      .trim()
-      .toUpperCase();
-    const entry = registry.get(login);
-    if (entry === undefined) continue;
+    const login = textField(row["customerID"]).trim().toUpperCase();
+    if (login === "") continue;
     const parsed = parseLiveBetsGame(raw);
-    if (parsed === null) continue;
     const wageredCents = Number(row["wagered"]);
+    const riskUsd = Number.isFinite(wageredCents)
+      ? Math.max(0, wageredCents / 100)
+      : 0;
+    const betAtMs = portalClockEpochMs(row["acceptedAt"]);
+    const entry = registry.get(login);
+    if (entry === undefined) {
+      onCandidate?.({
+        login: candidateLogin(login),
+        agentId: agentIdFrom(row["agent"]),
+        riskUsd,
+        source: "data/live-bets.json",
+        betAtMs,
+        parsed,
+      });
+      continue;
+    }
+    if (parsed === null) continue;
     rows.push({
       login: entry.customerLogin,
       agentId: entry.agentId,
       archetype: entry.archetype,
       sourceCategory: entry.sourceCategory,
-      riskUsd: Number.isFinite(wageredCents)
-        ? Math.max(0, wageredCents / 100)
-        : 0,
+      riskUsd,
       oddsAmerican: parseAmericanOdds(
-        /([+-]\d{3,4})\b/.exec(String(row["description"] ?? ""))?.[1] ?? null,
+        /([+-]\d{3,4})\b/.exec(textField(row["description"]))?.[1] ?? null,
       ),
       parsed,
       provenance: rowProvenance(
         "data/live-bets.json",
-        capturedAt,
+        betAtMs ?? capturedAtMs,
         null,
-        CAPTURE_STALE_SECONDS,
-        now,
+        staleAfterSeconds ?? CAPTURE_STALE_SECONDS,
+        nowMs,
         { fixture: dataSource.includes("fixture"), dataMode: null },
       ),
     });
@@ -707,6 +1161,7 @@ export function aggregateWatchlistSignals(
   rows: readonly SignalRow[],
   now: Date = new Date(),
 ): WatchlistSignal[] {
+  const nowMs = now.getTime();
   const baseGroups = new Map<string, SignalRow[]>();
   for (const row of rows) {
     const baseKey = [
@@ -761,12 +1216,17 @@ export function aggregateWatchlistSignals(
       }
       const first = sideRows[0];
       if (first === undefined) continue;
-      const asOfTimes = sideRows
-        .map((row) => row.provenance.asOf)
-        .filter((value): value is string => value !== null)
-        .sort();
-      const asOf = asOfTimes[asOfTimes.length - 1] ?? null;
-      const age = ageSeconds(asOf, now);
+      // One number per row; the newest wins without sorting strings, and the ISO form is
+      // materialized once for the signal rather than once per contributing row.
+      let asOfMs: number | null = null;
+      for (const row of sideRows) {
+        const value = row.provenance.asOfMs;
+        if (value !== null && (asOfMs === null || value > asOfMs)) {
+          asOfMs = value;
+        }
+      }
+      const asOf = asOfMs === null ? null : new Date(asOfMs).toISOString();
+      const age = ageSecondsFromMs(asOfMs, nowMs);
       const parsed = first.parsed;
       signals.push({
         id: signalId(parsed, side),
@@ -810,6 +1270,12 @@ export function aggregateWatchlistSignals(
 export interface DeriveWatchlistSignalsOptions {
   readonly now?: Date;
   readonly registry?: readonly WatchlistUnifiedEntry[];
+  /**
+   * Single freshness window applied to every source (`row.provenance.stale`). Omitted,
+   * each source keeps its cadence default; the CLI supplies `config.maxSignalAgeSeconds`
+   * so the inspector's stale chip and the freshness gate cannot disagree.
+   */
+  readonly maxAgeSeconds?: number;
 }
 
 /** Pure derivation: parsed inputs in, signals out. */
@@ -818,15 +1284,141 @@ export function deriveWatchlistSignals(
   options: DeriveWatchlistSignalsOptions = {},
 ): WatchlistSignal[] {
   const now = options.now ?? new Date();
+  const nowMs = now.getTime();
   const registry = registryLookup(
     options.registry ?? getUnifiedWatchlistRegistry(),
   );
+  const staleAfterSeconds = options.maxAgeSeconds;
   const rows = [
-    ...rowsFromFeed(inputs.feed, registry, now),
-    ...rowsFromWagers(inputs.wagers, registry, inputs.wagersAsOf ?? null, now),
-    ...rowsFromLiveBets(inputs.liveBets, registry, now),
+    ...rowsFromFeed(inputs.feed, registry, nowMs, undefined, staleAfterSeconds),
+    ...rowsFromWagers(
+      inputs.wagers,
+      registry,
+      inputs.wagersAsOf ?? null,
+      nowMs,
+      undefined,
+      staleAfterSeconds,
+    ),
+    ...rowsFromLiveBets(
+      inputs.liveBets,
+      registry,
+      nowMs,
+      undefined,
+      staleAfterSeconds,
+    ),
   ];
   return aggregateWatchlistSignals(rows, now);
+}
+
+export interface CollectWatchlistCandidatesOptions {
+  readonly now?: Date;
+  readonly registry?: readonly WatchlistUnifiedEntry[];
+  /** Max candidates returned after ranking (default: all). */
+  readonly limit?: number;
+  /** Drop accounts whose summed risk is below this USD amount (default 0). */
+  readonly minRiskUsd?: number;
+  /** Max sample markets kept per candidate (default 3). */
+  readonly sampleLimit?: number;
+}
+
+/**
+ * Advisory discovery pass: every login in the three captures that the registry does not
+ * watch, ranked by the risk the captures show. This never gates and never writes — the
+ * signal engine still ignores these rows for derivation; the operator decides whether an
+ * account is promoted onto the watchlist.
+ */
+export function collectWatchlistCandidates(
+  inputs: WatchlistSignalInputs,
+  options: CollectWatchlistCandidatesOptions = {},
+): WatchlistCandidate[] {
+  const now = options.now ?? new Date();
+  const registry = registryLookup(
+    options.registry ?? getUnifiedWatchlistRegistry(),
+  );
+  const sampleLimit = Math.max(0, options.sampleLimit ?? 3);
+  const byLogin = new Map<
+    string,
+    {
+      login: string;
+      agentId: string | null;
+      riskUsd: number;
+      wagers: number;
+      sources: Set<string>;
+      leagues: Set<League>;
+      lastBetAtMs: number | null;
+      markets: Set<string>;
+    }
+  >();
+
+  const sink: CandidateSink = (observation) => {
+    if (observation.login === "") return;
+    const entry = byLogin.get(observation.login) ?? {
+      login: observation.login,
+      agentId: null as string | null,
+      riskUsd: 0,
+      wagers: 0,
+      sources: new Set<string>(),
+      leagues: new Set<League>(),
+      lastBetAtMs: null as number | null,
+      markets: new Set<string>(),
+    };
+    entry.riskUsd += Math.max(0, observation.riskUsd);
+    entry.wagers += 1;
+    entry.sources.add(observation.source);
+    if (entry.agentId === null && observation.agentId !== null) {
+      entry.agentId = observation.agentId;
+    }
+    if (observation.parsed !== null) {
+      entry.leagues.add(observation.parsed.league);
+      if (entry.markets.size < sampleLimit) {
+        entry.markets.add(observation.parsed.raw.slice(0, 96));
+      }
+    }
+    if (
+      observation.betAtMs !== null &&
+      (entry.lastBetAtMs === null || observation.betAtMs > entry.lastBetAtMs)
+    ) {
+      entry.lastBetAtMs = observation.betAtMs;
+    }
+    byLogin.set(observation.login, entry);
+  };
+
+  const nowMs = now.getTime();
+  rowsFromFeed(inputs.feed, registry, nowMs, sink);
+  rowsFromWagers(
+    inputs.wagers,
+    registry,
+    inputs.wagersAsOf ?? null,
+    nowMs,
+    sink,
+  );
+  rowsFromLiveBets(inputs.liveBets, registry, nowMs, sink);
+
+  const minRiskUsd = Math.max(0, options.minRiskUsd ?? 0);
+  const ranked = [...byLogin.values()]
+    .filter((candidate) => candidate.riskUsd >= minRiskUsd)
+    .map<WatchlistCandidate>((candidate) => ({
+      login: candidate.login,
+      agentId: candidate.agentId,
+      riskUsd: Math.round(candidate.riskUsd * 100) / 100,
+      wagers: candidate.wagers,
+      sources: [...candidate.sources].sort(),
+      leagues: [...candidate.leagues].sort(),
+      lastBetAt:
+        candidate.lastBetAtMs === null
+          ? null
+          : new Date(candidate.lastBetAtMs).toISOString(),
+      ageSeconds: ageSecondsFromMs(candidate.lastBetAtMs, nowMs),
+      sampleMarkets: [...candidate.markets],
+    }))
+    .sort(
+      (a, b) =>
+        b.riskUsd - a.riskUsd ||
+        b.wagers - a.wagers ||
+        a.login.localeCompare(b.login),
+    );
+  const limit = options.limit;
+  return limit === undefined ? ranked : ranked.slice(0, Math.max(0, limit));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -846,7 +1438,7 @@ const LIVE_BETS_PATH = "data/live-bets.json";
  * `/api/kpis` arm then read `provenance` off a raw object and 500'd). These are small,
  * per-request reads; correctness over an 0.1 ms saving.
  */
-async function readArtifact(path: string): Promise<unknown | null> {
+async function readArtifact(path: string): Promise<unknown> {
   try {
     return await Bun.file(path).json();
   } catch {

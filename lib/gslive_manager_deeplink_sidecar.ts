@@ -45,6 +45,28 @@ export const GSLIVE_MANAGER_BASE_URL =
 /** Chicago (Partner 118 desk) timezone — day windows are operator-local, not UTC. */
 export const GSLIVE_DESK_TIME_ZONE = "America/Chicago";
 
+/**
+ * Desk-zone formatters, built once. `new Intl.DateTimeFormat` costs ~20 us (measured
+ * 2026-11-04) while a shared instance costs ~1 us per `formatToParts`, and these helpers
+ * run per day boundary and per resolved "today".
+ */
+const DESK_OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: GSLIVE_DESK_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+const DESK_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: GSLIVE_DESK_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 /** Inclusive historical churn-study window used by the CHURN_* cohort analysis. */
 const GSLIVE_CHURN_WINDOW = {
   fromYmd: "2026-10-18",
@@ -156,16 +178,7 @@ export function formatGsLivePartnerUserId(rawLogin: string): string {
  * and `-6h` during CST. Derived from Intl so US DST transitions are handled automatically.
  */
 function deskOffsetMsAt(instantMs: number): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: GSLIVE_DESK_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(instantMs));
+  const parts = DESK_OFFSET_FORMAT.formatToParts(new Date(instantMs));
   const part = (type: string) =>
     Number(parts.find((p) => p.type === type)?.value ?? 0);
   const hour = part("hour") % 24; // some engines render midnight as 24
@@ -222,12 +235,7 @@ export function computeCdtDayStartEpochSeconds(dateYmd = "2026-10-31"): number {
  * Never derive "today" from `Date#toISOString()` — that is UTC and rolls at 19:00/20:00 desk time.
  */
 export function resolveDeskDateYmd(now: Date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: GSLIVE_DESK_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
+  const parts = DESK_YMD_FORMAT.formatToParts(now);
   const part = (type: string) =>
     parts.find((p) => p.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}`;

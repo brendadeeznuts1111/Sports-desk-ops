@@ -1,10 +1,12 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   // ast-grep-ignore: node-fs-read-write-file -- sync CLI fixtures; the CLI under test is sync.
   writeFileSync,
 } from "node:fs";
@@ -454,6 +456,62 @@ function writeSignalArtifacts(
 
 function ledgerFile(root: string): string {
   return join(root, "Scratch", "watchlist-autobet", "ledger.jsonl");
+}
+
+/** The default artifacts plus two accounts the registry does not watch. */
+function writeCandidateArtifacts(root: string): void {
+  writeSignalArtifacts(root, { observedAt: "2026-11-04T11:59:00.000Z" });
+  writeFileSync(
+    join(root, "data/live-wagers.json"),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        source: "capture:/cloud/api/Manager/getBetTicker",
+        observedAt: "2026-11-04T11:59:00.000Z",
+        LIST: [
+          {
+            WagerNumber: "767173499",
+            AgentID: "MARWES50",
+            CustomerID: "JP1833",
+            Login: "JP1833",
+            WagerType: "M",
+            AmountWagered: 21_600,
+            InsertDateTime: "2026-11-01 17:18:20",
+            TicketWriter: "Internet",
+            ShortDesc:
+              "M.G319748913\r\nFootball - Denver Broncos vs Kansas City Chiefs / Game / Total / Over 46.5 -108",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(root, "data/live-bets.json"),
+    JSON.stringify(
+      {
+        capturedAt: "2026-11-04T11:59:00.000Z",
+        dataSource: "capture:/cloud/api/Report/Pending",
+        games: [
+          {
+            customerID: "CC364",
+            agent: { id: "HRGROUP", key: "HRGROUP", level: 6 },
+            wagered: 22_400_000,
+            acceptedAt: "2026-11-01 14:33:47.900",
+            sport: "Basketball",
+            period: "1st Quarter",
+            description: "Basketball #501 LAL -1.5 -110 - 1st Quarter",
+            chosenTeam: "LAL",
+            team1: { shortName: "LAL" },
+            team2: { shortName: "BOS" },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2101,5 +2159,166 @@ describe("concurrency safety", () => {
     expect(ran).toBe(false);
     expect(statSync(lockPath).isFile()).toBe(true);
     rmSync(lockPath, { force: true });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Discovery: candidates CLI                                                   */
+/* -------------------------------------------------------------------------- */
+
+describe("candidates discovery", () => {
+  test("candidates lists unwatched accounts and stays advisory", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    writeCandidateArtifacts(root);
+
+    const result = runCli(root, ["candidates"]);
+    expect(result.code).toBe(0);
+    expect(stringValue(result.body["command"])).toBe("candidates");
+    const counts = recordValue(result.body["counts"]);
+    expect(numberValue(counts["total"])).toBe(2);
+    expect(numberValue(counts["returned"])).toBe(2);
+    expect(numberValue(counts["riskUsd"])).toBe(224_216);
+    const candidates = arrayValue(result.body["candidates"]);
+    expect(candidates).toHaveLength(2);
+    const first = recordValue(candidates[0]);
+    expect(stringValue(first["login"])).toBe("CC364");
+    expect(stringValue(first["agentId"])).toBe("HRGROUP");
+    expect(numberValue(first["riskUsd"])).toBe(224_000);
+    expect(arrayValue(first["sources"])).toEqual(["data/live-bets.json"]);
+    // Advisory only: nothing is queued and no ledger is created.
+    expect(existsSync(ledgerFile(root))).toBe(false);
+    const queue = runCli(root, ["list"]);
+    expect(queue.code).toBe(0);
+    expect(arrayValue(queue.body["intents"])).toHaveLength(0);
+  });
+
+  test("limit and min-risk-usd bound the list; bad values are usage errors", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    writeCandidateArtifacts(root);
+
+    const limited = runCli(root, ["candidates", "--limit", "1"]);
+    expect(limited.code).toBe(0);
+    expect(numberValue(recordValue(limited.body["counts"])["returned"])).toBe(
+      1,
+    );
+    expect(arrayValue(limited.body["candidates"])).toHaveLength(1);
+
+    const filtered = runCli(root, ["candidates", "--min-risk-usd", "1000"]);
+    expect(filtered.code).toBe(0);
+    expect(
+      arrayValue(filtered.body["candidates"]).map((entry) =>
+        stringValue(recordValue(entry)["login"]),
+      ),
+    ).toEqual(["CC364"]);
+
+    const cases: ReadonlyArray<readonly string[]> = [
+      ["candidates", "--limit", "0"],
+      ["candidates", "--limit", "500"],
+      ["candidates", "--min-risk-usd", "-5"],
+      ["candidates", "--bogus"],
+    ];
+    for (const args of cases) {
+      const error = runCli(root, args);
+      expect(error.code).toBe(2);
+      expect(stringValue(recordValue(error.body["error"])["code"])).toBe(
+        "usage_error",
+      );
+    }
+  });
+
+  test("the signals payload carries the discovery summary", () => {
+    const root = makeTemporaryRoot();
+    writeAutobetConfig(root);
+    writeCandidateArtifacts(root);
+
+    const result = runCli(root, ["signals", "--include-rejected"]);
+    expect(result.code).toBe(0);
+    expect(numberValue(recordValue(result.body["counts"])["candidates"])).toBe(
+      2,
+    );
+    const candidates = arrayValue(result.body["candidates"]);
+    expect(candidates).toHaveLength(2);
+    expect(stringValue(recordValue(candidates[0])["login"])).toBe("CC364");
+    // Advisory data never enters derivation: candidate logins are not in any signal.
+    const signalLogins = arrayValue(result.body["signals"]).flatMap((entry) =>
+      arrayValue(recordValue(recordValue(entry)["signal"])["accounts"]).map(
+        (account) => stringValue(recordValue(account)["login"]),
+      ),
+    );
+    expect(signalLogins).not.toContain("CC364");
+    expect(signalLogins).not.toContain("JP1833");
+  });
+
+  test("the command table and help document candidates", () => {
+    const rootHelp = runCliRaw(["--help"]);
+    expect(rootHelp.code).toBe(0);
+    expect(rootHelp.stdout).toContain("candidates");
+    const help = runCliRaw(["candidates", "--help"]);
+    expect(help.code).toBe(0);
+    expect(help.stdout).toContain(
+      "candidates [--limit N] [--min-risk-usd 0..]",
+    );
+    expect(help.stdout).toContain("--min-risk-usd");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Freshness window: one truth across status and the gate                      */
+/* -------------------------------------------------------------------------- */
+
+function freshnessCheckOf(result: CliResult): Record<string, unknown> | null {
+  const first = recordValue(arrayValue(result.body["signals"])[0]);
+  const checks = arrayValue(recordValue(first["gate"])["checks"]);
+  const found = checks.find(
+    (check) => stringValue(recordValue(check)["check"]) === "freshness",
+  );
+  return found === undefined ? null : recordValue(found);
+}
+
+function feedSourceOf(result: CliResult): Record<string, unknown> | null {
+  const found = arrayValue(result.body["sources"]).find(
+    (source) =>
+      stringValue(recordValue(source)["path"]) === "docs/graph-live-feed.json",
+  );
+  return found === undefined ? null : recordValue(found);
+}
+
+describe("freshness window", () => {
+  test("config.maxSignalAgeSeconds governs the source chip and the gate alike", () => {
+    const observedAt = "2026-11-04T11:50:00.000Z";
+
+    const wide = makeTemporaryRoot();
+    writeAutobetConfig(wide, validConfigRaw({ maxSignalAgeSeconds: 900 }));
+    writeSignalArtifacts(wide, { observedAt });
+    const wideMtime = new Date(NOW.getTime() - 600_000);
+    utimesSync(join(wide, "docs/graph-live-feed.json"), wideMtime, wideMtime);
+
+    const wideSignals = runCli(wide, ["signals", "--include-rejected"]);
+    expect(wideSignals.code).toBe(0);
+    const wideFreshness = freshnessCheckOf(wideSignals);
+    expect(booleanValue(wideFreshness?.["ok"])).toBe(true);
+    const wideStatus = runCli(wide, ["status"]);
+    expect(booleanValue(feedSourceOf(wideStatus)?.["stale"])).toBe(false);
+
+    // Tighten the one window below the signal's age: chip and gate flip together.
+    const tight = makeTemporaryRoot();
+    writeAutobetConfig(tight, validConfigRaw({ maxSignalAgeSeconds: 300 }));
+    writeSignalArtifacts(tight, { observedAt });
+    const tightMtime = new Date(NOW.getTime() - 600_000);
+    utimesSync(
+      join(tight, "docs/graph-live-feed.json"),
+      tightMtime,
+      tightMtime,
+    );
+
+    const tightSignals = runCli(tight, ["signals", "--include-rejected"]);
+    expect(tightSignals.code).toBe(0);
+    const tightFreshness = freshnessCheckOf(tightSignals);
+    expect(booleanValue(tightFreshness?.["ok"])).toBe(false);
+    expect(recordValue(tightFreshness?.["actual"])["ageSeconds"]).toBe(600);
+    const tightStatus = runCli(tight, ["status"]);
+    expect(booleanValue(feedSourceOf(tightStatus)?.["stale"])).toBe(true);
   });
 });

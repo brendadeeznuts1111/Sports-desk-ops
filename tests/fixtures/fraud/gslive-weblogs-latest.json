@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "gslive-weblogs",
+  "generatedAtIso": "2026-11-04T19:00:00.000Z",
+  "window": {
+    "fromIso": "2026-11-03T19:00:00.000Z",
+    "toIso": "2026-11-04T19:00:00.000Z"
+  },
+  "session": {
+    "configured": true,
+    "source": "session-file"
+  },
+  "source": "fixture:getBetReport+getBetLog",
+  "accounts": [
+    {
+      "customerLogin": "C001",
+      "gsLivePlayerId": "983516",
+      "agentId": "AG1",
+      "sourceCategory": "watchlist",
+      "archetype": "sharp",
+      "betCount": 5,
+      "placedAtIso": "2026-11-04T18:00:00.000Z",
+      "flags": [
+        {
+          "code": "SUB_15S_SCORE_SNIPE",
+          "severity": "CRITICAL",
+          "count": 2
+        },
+        {
+          "code": "ACCEPTED_WHILE_BLOCKED",
+          "severity": "CRITICAL",
+          "count": 1
+        }
+      ],
+      "lastLogIso": "2026-11-04T18:00:00.000Z"
+    },
+    {
+      "customerLogin": "C002",
+      "gsLivePlayerId": "111222",
+      "agentId": "AG2",
+      "sourceCategory": "watchlist",
+      "archetype": "bot",
+      "betCount": 3,
+      "placedAtIso": "2026-11-04T17:00:00.000Z",
+      "flags": [
+        {
+          "code": "MANUAL_ADMIN_INTERVENTION",
+          "severity": "HIGH",
+          "count": 2
+        },
+        {
+          "code": "FROZEN_CLOCK_SCORING_OR_PLAY",
+          "severity": "HIGH",
+          "count": 1
+        }
+      ],
+      "lastLogIso": "2026-11-04T17:00:00.000Z"
+    }
+  ],
+  "summary": {
+    "accounts": 2,
+    "bets": 8,
+    "flagsByCode": {
+      "SUB_15S_SCORE_SNIPE": 2,
+      "ACCEPTED_WHILE_BLOCKED": 1,
+      "MANUAL_ADMIN_INTERVENTION": 2,
+      "FROZEN_CLOCK_SCORING_OR_PLAY": 1
+    }
+  },
+  "parseErrors": 0
+}

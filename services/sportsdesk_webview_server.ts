@@ -125,6 +125,8 @@ import {
   type WatchlistSignal,
 } from "../lib/watchlist_signal_engine.ts";
 import { loadGsliveWeblogActivity } from "../lib/gslive_weblog_activity.ts";
+import { createGsliveSessionMonitor } from "../lib/gslive_session_health.ts";
+import { resolveManagerSession } from "../lib/manager_session.ts";
 import {
   buildExecutionPlan,
   placeKalshiLiveOrder,
@@ -357,6 +359,11 @@ const analysisReportArtifact = cachedJsonFile(
   resolve(repoRoot, ANALYSIS_REPORT_PATH),
   readAnalysisReport,
 );
+/** Lazily resolves the GSID and caches the cookie-only v4 probe for two minutes. */
+const gsliveSessionMonitor = createGsliveSessionMonitor({
+  resolveSession: () => resolveManagerSession(),
+});
+
 const contestsArtifact = cachedJsonFile(
   resolve(repoRoot, "data/contests.json"),
   readContestFile,
@@ -459,7 +466,7 @@ function newerWagerList(
  * The newest valid wager list among `sources`.
  *
  * Ranking uses the artifact's own `observedAt` (via `recordedTime`), not the file mtime alone: a
- * checkout rewrites the committed paste's mtime to now, and that must not shadow a real capture.
+ * checkout rewrites a local artifact's mtime to now, and that must not shadow a real capture.
  * A file that is not a list (or not JSON) is skipped rather than served as zero wagers or a 500.
  */
 async function loadWagerList(
@@ -1986,6 +1993,42 @@ export function startServer(options?: ServerOptions) {
               command: "bun run gslive:weblogs:refresh",
             },
             { headers },
+          );
+        }
+      }
+
+      // 11.4b GSLive Manager Tools session health. The probe is a cookie-only v4 GET; the
+      // response carries cookie names and probe status, never the cookie value.
+      if (pathname === "/api/gslive/session-health" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        try {
+          const health = await gsliveSessionMonitor.read(
+            url.searchParams.get("probe") === "1",
+          );
+          return Response.json(
+            { success: true, ...health },
+            {
+              headers: {
+                ...cors,
+                "Cache-Control": "no-store",
+                Vary: "Origin, Authorization",
+              },
+            },
+          );
+        } catch {
+          return Response.json(
+            { success: false, error: "GSLive session probe failed" },
+            { status: 500, headers: cors },
           );
         }
       }

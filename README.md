@@ -31,6 +31,10 @@ Always use **`./bin/dx`** as your primary entrypoint—it configures sandbox/hos
 SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 ```
 
+> Without `SPORTSDESK_LIVE_INGEST=1`, `stage`/`deploy` poll in **fixture mode** and would publish
+> placeholder rows. The poller now warns loudly (naming the prior mode it replaces), and
+> `./bin/dx poll --help` prints usage without polling.
+
 **Operator tools:**
 
 - `./bin/dx status` — measured, not asserted: git, R2 S3 and Pages credentials, and a 3-second HEAD probe of the R2 portal (`DX_STATUS_OFFLINE=1` skips the probe). Each line says what it checked.

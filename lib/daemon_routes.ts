@@ -208,6 +208,14 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-graph-data-plane",
   }),
   defineRoute({
+    path: "/api/gslive/session-health",
+    method: "GET",
+    guard: "pii",
+    // Credential provenance and cookie-only probe status; no cookie value leaves the daemon.
+    dataClass: "operational",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
     path: "/api/kpis",
     method: "ANY",
     guard: "none",

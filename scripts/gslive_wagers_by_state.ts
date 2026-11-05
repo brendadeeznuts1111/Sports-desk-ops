@@ -2330,12 +2330,11 @@ export async function parseJsonlChunks(
     const window =
       carry.length === 0
         ? chunk
-        : (() => {
-            const joined = new Uint8Array(carry.length + chunk.length);
-            joined.set(carry, 0);
-            joined.set(chunk, carry.length);
-            return joined;
-          })();
+        : Bun.concatArrayBuffers(
+            [carry, chunk],
+            carry.length + chunk.length,
+            true,
+          );
     const parsed = JSONL.parseChunk(window);
     for (const value of parsed.values) values.push(value);
     if (parsed.error !== null) {

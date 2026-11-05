@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-11-04T12:00:00.000Z",
+  "targetAccount": "--help",
+  "targetAgent": "ROYAL",
+  "windowStart": "2026-10-28",
+  "windowEnd": "2026-11-03",
+  "endpoints": {},
+  "boardStateSummaryCsv": {},
+  "topCanceledBoardAccounts": [],
+  "accountAudit": {
+    "account": "--help"
+  }
+}

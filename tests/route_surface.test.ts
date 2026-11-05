@@ -231,6 +231,6 @@ describe("the committed tree", () => {
     // contract path, so it is declared by a ledger surface and correctly absent from the spec.
     // (+2 derived dashboard data plane, +2 v3 signals/weblogs, +3 v4 execution routes, +1 the
     // `/tracker` ops page: a page, so it is correctly absent from the spec like `/status`.)
-    expect(inputs.served.size).toBe(64);
+    expect(inputs.served.size).toBe(65);
   });
 });

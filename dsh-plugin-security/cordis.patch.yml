@@ -1,0 +1,20 @@
+# Bundle layer: insert the SportsDesk security/fraud console into any DSH profile that
+# installs this package.
+#
+# READ-ONLY. The eight tools shell `bun run cli/sportsdesk_fraud_cli.ts …` with
+# cwd=repoPath, so the log normalization, detectors, model and provenance rules have one
+# implementation. The only write any tool can cause is `fraud_model` with
+# action "fit" + confirm: true + write: true, which writes a derived model artifact under
+# reports/security/ (gitignored) — never a captured log, never a bet, never a live order.
+#
+# The Web UI page reads the same CLI through the Host's allowlisted same-origin GET routes.
+#
+# repoPath is this checkout. bunPath may be a bare `bun` (resolved from the Host's PATH/known
+# install locations) or an absolute path.
+- insert:
+    - id: sportsdesk-security
+      name: dsh-plugin-sportsdesk-security
+      config:
+        repoPath: /Users/nolarose/code/sportsdesk-ops
+        bunPath: bun
+        timeoutMs: 60000

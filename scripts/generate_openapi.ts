@@ -2645,9 +2645,9 @@ function surfaceOperationSpecs(
       tag: TAG_DAEMON,
       summary: "Live wager ticker list with parsed legs",
       description:
-        "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts#/api/live-wagers). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Candidates are data/bet-ticker.json (a full Manager/getBetTicker capture written by `bun run capture:bet-ticker`, gitignored) and the committed data/live-wagers.json paste; a file is valid only if it parses as JSON and is a wager list ({LIST: [...]} or a bare array), and the valid one observed later wins: a provenance.observedAt that parses and is not in the future outranks any file mtime (a checkout rewrites the committed paste's mtime), mtime only orders two undated files, and a tie goes to bet-ticker — services/sportsdesk_webview_server.ts#/api/live-wagers, shared with /api/kpis. `freshness` ({asOf, asOfFrom, stale}, stale after 3600 s) dates the chosen file — no ageSeconds, because the body is cached by version and the page derives the age from asOf, and `skipped` lists each present file that was not served with its reason (invalid JSON, no LIST array, older than the other); the 404 carries `skipped` too, so a malformed capture is reported rather than answered with a 500 or zero wagers. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
+        "The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumber is the ticket id and ShortDesc carries one line per leg (services/sportsdesk_webview_server.ts#/api/live-wagers). Both ShortDesc grammars are parsed and the compact one is flagged; VolumeAmount differing from AmountWagered is reported, not reconciled. The response carries the file's own provenance — source, observedAt and captureNote — so a partial list reads as partial instead of as the whole ticker. Candidates are data/bet-ticker.json (a full Manager/getBetTicker capture written by `bun run capture:bet-ticker`, gitignored) and the local gitignored data/live-wagers.json artifact; a file is valid only if it parses as JSON and is a wager list ({LIST: [...]} or a bare array), and the valid one observed later wins: a provenance.observedAt that parses and is not in the future outranks any file mtime (the file's mtime changes on checkout), mtime only orders two undated files, and a tie goes to bet-ticker — services/sportsdesk_webview_server.ts#/api/live-wagers, shared with /api/kpis. `freshness` ({asOf, asOfFrom, stale}, stale after 3600 s) dates the chosen file — no ageSeconds, because the body is cached by version and the page derives the age from asOf, and `skipped` lists each present file that was not served with its reason (invalid JSON, no LIST array, older than the other); the 404 carries `skipped` too, so a malformed capture is reported rather than answered with a 500 or zero wagers. Loopback-gated. Surface: surface.daemon-live-wagers (tier D).",
       requiredCapture:
-        "An HTTP capture of GET /api/live-wagers serving a `capture:bet-ticker` artifact. No such run has been recorded; data/live-wagers.json holds 17 rows salvaged from a partial clipboard paste, and both its `partial: true` flag and its captureNote say so.",
+        "An HTTP capture of GET /api/live-wagers serving a `capture:bet-ticker` artifact. No such run has been recorded; a local data/live-wagers.json artifact may hold a partial clipboard paste, and its `partial` flag and captureNote must say so.",
       responses: {
         "200": jsonSurfaceResponse(
           "Wagers with aggregates and their provenance.",
@@ -3219,6 +3219,131 @@ function surfaceOperationSpecs(
                   summary: { type: "object", additionalProperties: true },
                   reason: { type: "string" },
                   command: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/gslive/session-health",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary:
+        "GSLive Manager Tools session health (GET /api/gslive/session-health)",
+      description:
+        "Reports the resolved credential source and a cached cookie-only probe of `GET /manager-tools/partnerConfig/` (lib/gslive_session_health.ts, lib/manager_session.ts). Never returns the GSID value: only cookie names, source, probe status/httpStatus/latency, and an advisory. A 403 with `cf-mitigated` is a human challenge; 302/401/HTML-200 is an expired cookie. The v4 GETs need no `x-gs-session`, and the daemon holds no per-run signin session. Uses the graph plane's `pii` guard. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/gslive/session-health (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "200": {
+          description:
+            "Session health: resolution source, cookie names only, cached probe classification and advisory.",
+          headers: daemonHeaders(),
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: [
+                  "success",
+                  "schemaVersion",
+                  "generatedAt",
+                  "authModel",
+                  "session",
+                  "probe",
+                  "surfaceMap",
+                  "advisory",
+                ],
+                properties: {
+                  success: { type: "boolean", const: true },
+                  schemaVersion: { type: "integer", const: 1 },
+                  generatedAt: { type: "string", format: "date-time" },
+                  authModel: {
+                    type: "object",
+                    required: ["durable", "modern", "legacy"],
+                    properties: {
+                      durable: { type: "string" },
+                      modern: { type: "string" },
+                      legacy: { type: "string" },
+                    },
+                  },
+                  session: {
+                    type: "object",
+                    required: [
+                      "configured",
+                      "source",
+                      "cookieName",
+                      "cookieNames",
+                    ],
+                    properties: {
+                      configured: { type: "boolean" },
+                      source: { type: "string" },
+                      cookieName: { type: "string", const: "GSID" },
+                      cookieNames: {
+                        type: "array",
+                        items: { type: "string" },
+                      },
+                    },
+                  },
+                  probe: {
+                    type: "object",
+                    required: [
+                      "status",
+                      "httpStatus",
+                      "latencyMs",
+                      "checkedAt",
+                      "cfMitigated",
+                      "detail",
+                      "cached",
+                    ],
+                    properties: {
+                      status: {
+                        type: "string",
+                        enum: [
+                          "ok",
+                          "expired",
+                          "challenge",
+                          "forbidden",
+                          "throttled",
+                          "unreachable",
+                          "unconfigured",
+                        ],
+                      },
+                      httpStatus: { type: "number", nullable: true },
+                      latencyMs: { type: "number", nullable: true },
+                      checkedAt: { type: "string", format: "date-time" },
+                      cfMitigated: { type: "string", nullable: true },
+                      detail: { type: "string" },
+                      cached: { type: "boolean" },
+                    },
+                  },
+                  surfaceMap: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: [
+                        "capability",
+                        "legacy",
+                        "modern",
+                        "status",
+                        "note",
+                      ],
+                      properties: {
+                        capability: { type: "string" },
+                        legacy: { type: "string" },
+                        modern: { type: "string" },
+                        status: {
+                          type: "string",
+                          enum: ["v4", "listed", "legacy", "unverified"],
+                        },
+                        note: { type: "string" },
+                      },
+                    },
+                  },
+                  advisory: { type: "string" },
                 },
               },
             },

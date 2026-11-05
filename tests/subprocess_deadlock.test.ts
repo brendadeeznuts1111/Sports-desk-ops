@@ -62,8 +62,10 @@ describe("Subprocess pipe output integrity", () => {
 
   test("Bun Shell drains complete output from a naturally exiting child", async () => {
     const { $ } = await import("bun");
-    const result =
-      await $`${process.execPath} -e 'await Bun.write(Bun.stdout, "X".repeat(1024 * 1024))'`.text();
-    expect(result).toBe("X".repeat(ONE_MEGABYTE));
+    const output =
+      await $`${process.execPath} -e 'await Bun.write(Bun.stdout, "X".repeat(1024 * 1024))'`.quiet();
+    const result = output.bytes();
+    expect(result.byteLength).toBe(ONE_MEGABYTE);
+    expect(result.every((byte: number) => byte === 0x58)).toBe(true);
   });
 });

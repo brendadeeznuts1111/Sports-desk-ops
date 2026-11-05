@@ -36,6 +36,7 @@ import type {
   OverUnder,
   SignalProvenance,
   WatchlistSignal,
+  WatchlistSignalInputs,
 } from "./watchlist_signal_engine.ts";
 import {
   deriveWatchlistSignals,
@@ -604,6 +605,8 @@ export async function describeSignalSources(
 export interface AutobetSignalSnapshot {
   readonly signals: readonly WatchlistSignal[];
   readonly sources: readonly AutobetSourceStatus[];
+  /** The parsed artifacts this snapshot read, so a caller runs the advisory candidate pass once. */
+  readonly inputs: WatchlistSignalInputs;
 }
 
 /** Load the local artifacts, derive signals with the existing engine, and report source ages. */
@@ -613,13 +616,19 @@ export async function loadAutobetSignals(
   now: Date,
 ): Promise<AutobetSignalSnapshot> {
   const inputs = await loadWatchlistSignalInputs(root);
-  const signals = deriveWatchlistSignals(inputs, { now });
+  // One window for every layer: the same config value feeds the source chips above and the
+  // engine's per-row `stale` flag, so the inspector cannot show "sources fresh" while the
+  // freshness gate refuses on "engine marked this signal's provenance stale".
+  const signals = deriveWatchlistSignals(inputs, {
+    now,
+    maxAgeSeconds: config.maxSignalAgeSeconds,
+  });
   const sources = await describeSignalSources(
     root,
     config.maxSignalAgeSeconds,
     now,
   );
-  return { signals, sources };
+  return { signals, sources, inputs };
 }
 
 /* -------------------------------------------------------------------------- */

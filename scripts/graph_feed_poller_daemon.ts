@@ -189,19 +189,21 @@ export interface GraphLiveFeedPayload {
   readonly gsliveWagers?: WagersLiveEvent;
 }
 
+const CDT_TIMESTAMP_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  timeZoneName: "short",
+});
+
 function formatCdtTimestamp(date: Date): string {
   try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-      timeZoneName: "short",
-    }).format(date);
+    return CDT_TIMESTAMP_FORMAT.format(date);
   } catch {
     return date.toISOString();
   }
@@ -1316,6 +1318,19 @@ export async function writeGraphLiveFeedOnce(
   const distDir = path.join(repoRoot, "dist");
   const distTarget = path.join(distDir, "graph-live-feed.json");
 
+  // Read the mode we are about to replace so a fixture run cannot silently downgrade a
+  // live/partial feed (the exact accident a bare `dx poll` or a help probe used to cause).
+  const priorDataMode = (() => {
+    try {
+      const prior = JSON.parse(fs.readFileSync(docsTarget, "utf8")) as {
+        dataMode?: unknown;
+      };
+      return typeof prior.dataMode === "string" ? prior.dataMode : null;
+    } catch {
+      return null;
+    }
+  })();
+
   const serialized = JSON.stringify(payload, null, 2) + "\n";
   fs.writeFileSync(docsTarget, serialized, "utf8");
   if (payload.backtest4Wk && options?.writeBacktestArtifact !== false) {
@@ -1340,7 +1355,23 @@ export async function writeGraphLiveFeedOnce(
     `[GraphPoller] ✓ Poll #${payload.pollSequence} [${payload.dataMode}]: Synced ${payload.pendingBets.length} pending clusters (${payload.totalOpenLegsCount} legs / $${payload.totalOpenExposureUsd.toLocaleString()}) & ${payload.walletProfiles.length} wallet profiles @ ${payload.lastUpdatedCdt} (${payload.lastUpdatedIso})`,
   );
 
+  if (payload.dataMode === "FIXTURE") {
+    console.error(
+      "[GraphPoller] WARNING: FIXTURE feed written — live ingest is disabled (pass --live or set SPORTSDESK_LIVE_INGEST=1); docs/graph-live-feed.json now contains placeholder rows, not desk data.",
+    );
+    if (priorDataMode !== null && priorDataMode !== "FIXTURE") {
+      console.error(
+        `[GraphPoller] WARNING: this run overwrote a ${priorDataMode} feed with fixture rows.`,
+      );
+    }
+  }
+
   if (syncR2) {
+    if (payload.dataMode === "FIXTURE") {
+      console.error(
+        "[GraphPoller] WARNING: publishing a FIXTURE feed to the public R2 edge.",
+      );
+    }
     const res = spawnSync(
       process.execPath,
       [path.join(repoRoot, "scripts", "publish_r2_graph.mjs")],

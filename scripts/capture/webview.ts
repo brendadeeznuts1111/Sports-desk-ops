@@ -271,7 +271,7 @@ export function registerExitCleanup(): void {
   exitCleanupRegistered = true;
   process.once("exit", () => {
     try {
-      void Bun.WebView.closeAll();
+      Bun.WebView.closeAll();
     } catch {
       // Process exit: nothing actionable left to do.
     }

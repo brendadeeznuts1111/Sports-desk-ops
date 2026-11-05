@@ -183,6 +183,32 @@ describe("streaming rollup", () => {
     expect(rollup.totals.ticketCount).toBe(6);
   });
 
+  test("non-numeric or zero-padded betGroupId is malformed, not folded", async () => {
+    const rollup = await buildGsliveTallyRollup(
+      await report([
+        bet({ betGroupId: "001", ticketNumber: "900001" }),
+        bet({ betGroupId: "abc", ticketNumber: "900002" }),
+        bet({ betGroupId: "2", ticketNumber: "900003" }),
+      ]),
+    );
+    expect(rollup.malformedRowCount).toBe(2);
+    expect(rollup.distinctBetGroupCount).toBe(1);
+    expect(rollup.totals.ticketCount).toBe(1);
+  });
+
+  test("label cardinality beyond 64 fails closed at GATE-02", async () => {
+    const rows = Array.from({ length: 65 }, (_, index) =>
+      bet({
+        betGroupId: String(1000 + index),
+        ticketNumber: String(910000 + index),
+        period: `p${index}`,
+      }),
+    );
+    await expect(buildGsliveTallyRollup(await report(rows))).rejects.toThrow(
+      /period label cardinality exceeds 64/,
+    );
+  });
+
   test("CLV stays null when fc is missing and sums when present", async () => {
     const missing = [1, 2, 3, 4, 5].map((n) =>
       bet({

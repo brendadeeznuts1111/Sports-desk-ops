@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "source": "fixture",
+  "agentCount": 4,
+  "agents": {
+    "AG1": {
+      "i": "AG1",
+      "l": 5,
+      "t": "A",
+      "s": 1
+    },
+    "AG2": {
+      "i": "AG2",
+      "l": 6,
+      "t": "M",
+      "s": 2
+    },
+    "ROOT": {
+      "i": "ROOT",
+      "l": 1,
+      "t": "M",
+      "s": 3
+    },
+    "C001": {
+      "i": "C001",
+      "l": 2,
+      "t": "A",
+      "s": 4
+    }
+  }
+}

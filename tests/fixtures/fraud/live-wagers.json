@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "source": "fixture",
+  "observedAt": "2026-11-04T19:58:30.000Z",
+  "partial": false,
+  "LIST": [
+    {
+      "WagerNumber": 601,
+      "AgentID": "AG1",
+      "CustomerID": "C001",
+      "Login": "C001",
+      "WagerType": "M",
+      "AmountWagered": 10000,
+      "InsertDateTime": "2026-11-04 14:00:00.000",
+      "ToWinAmount": 50000,
+      "TicketWriter": "Internet",
+      "VolumeAmount": 10000,
+      "ShortDesc": "M.xxx",
+      "VIP": "0",
+      "AgentLogin": "AG1"
+    },
+    {
+      "WagerNumber": 602,
+      "AgentID": "AG1",
+      "CustomerID": "C001",
+      "Login": "C001",
+      "WagerType": "M",
+      "AmountWagered": 10000,
+      "InsertDateTime": "2026-11-04 14:00:10.000",
+      "ToWinAmount": 50000,
+      "TicketWriter": "BADACTOR",
+      "VolumeAmount": 10000,
+      "ShortDesc": "M.xxx",
+      "VIP": "0",
+      "AgentLogin": "AG1"
+    },
+    {
+      "WagerNumber": 603,
+      "AgentID": "AG1",
+      "CustomerID": "C002",
+      "Login": "C002",
+      "WagerType": "M",
+      "AmountWagered": 10000,
+      "InsertDateTime": "2026-11-04 14:00:20.000",
+      "ToWinAmount": 40000,
+      "TicketWriter": "Internet",
+      "VolumeAmount": 10000,
+      "ShortDesc": "M.xxx",
+      "VIP": "0",
+      "AgentLogin": "AG1"
+    },
+    {
+      "WagerNumber": 604,
+      "AgentID": "AG2",
+      "CustomerID": "C002",
+      "Login": "C002",
+      "WagerType": "S",
+      "AmountWagered": 100000,
+      "InsertDateTime": "2026-11-04 14:00:30.000",
+      "ToWinAmount": 20000,
+      "TicketWriter": "Internet",
+      "VolumeAmount": 10000,
+      "ShortDesc": "S.xxx",
+      "VIP": "0",
+      "AgentLogin": "AG2"
+    },
+    {
+      "WagerNumber": 605,
+      "AgentID": "AG2",
+      "CustomerID": "C003",
+      "Login": "C003",
+      "WagerType": "S",
+      "AmountWagered": 500000,
+      "InsertDateTime": "2026-11-04 14:00:40.000",
+      "ToWinAmount": 40000,
+      "TicketWriter": "ALERT",
+      "VolumeAmount": 50000,
+      "ShortDesc": "S.xxx",
+      "VIP": "1",
+      "AgentLogin": "AG2"
+    }
+  ]
+}

@@ -1,0 +1,691 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-04",
+  "scope": "Research catalog behind the SportsDesk security/fraud detectors and model. Every threshold below is measured from this repo at the cited module:line; nothing here is invented. External prior art is listed separately and is terminology-only, not a threshold source.",
+  "terminology": [
+    {
+      "term": "courtsiding",
+      "aliases": [
+        "court-siding",
+        "rink-side",
+        "sideline scouting",
+        "latency arbitrage"
+      ],
+      "definition": "Placing a bet while physically or electronically closer to live action than the operator's feed, so the bet is placed after the outcome is effectively known.",
+      "detectorIds": [
+        "STEAM_15S_5S",
+        "CLINCH_AT_PLACEMENT",
+        "EXECUTION_SNIPERS",
+        "SNIPER_TWINS",
+        "MANUAL_ADMIN_INTERVENTION",
+        "DELAY_MISMATCH_BET"
+      ]
+    },
+    {
+      "term": "execution sniper",
+      "aliases": ["sniper", "fast-finger bettor"],
+      "definition": "An account whose wager lands within seconds of its session starting or of the previous wager \u2014 the pattern of a scripted or feed-assisted executor rather than a browsing customer.",
+      "detectorIds": ["EXECUTION_SNIPERS", "SNIPER_TWINS", "TICKET_BURST"]
+    },
+    {
+      "term": "sniper twins",
+      "aliases": ["twin accounts", "co-located executors"],
+      "definition": "Two or more logins on the same /24 (or IPv6 /64) that place fast wagers within a minute of each other on the same skin \u2014 separate identities driven from one location.",
+      "detectorIds": [
+        "SNIPER_TWINS",
+        "SHARED_IP_CLUSTER",
+        "CROSS_OFFICE_BEARDS"
+      ]
+    },
+    {
+      "term": "bot ring",
+      "aliases": ["bot-rings", "hosting-range accounts"],
+      "definition": "A cluster of accounts whose traffic originates from a hosting/provider address range rather than a residential carrier, indicating automated account farming.",
+      "detectorIds": [
+        "BOT_RING_IP_RANGE",
+        "BOT_RING_ACCOUNTS",
+        "DATACENTER_IP_CLASS"
+      ]
+    },
+    {
+      "term": "line shopper",
+      "aliases": ["line-shopping", "zero-wager session"],
+      "definition": "A session that spends a long time viewing prices without wagering, or an account that repeatedly places only after a price has moved in its favour.",
+      "detectorIds": ["LINE_SHOPPERS", "ODDS_DRIFT_BET", "DELAY_MISMATCH_BET"]
+    },
+    {
+      "term": "beard",
+      "aliases": ["cross-office beard", "front account", "stooge"],
+      "definition": "An account used to conceal the identity or volume of the real bettor, often sharing an office IP with other logins while appearing independent.",
+      "detectorIds": [
+        "CROSS_OFFICE_BEARDS",
+        "SHARED_IP_CLUSTER",
+        "ACCOUNT_IP_FANOUT"
+      ]
+    },
+    {
+      "term": "donor shield",
+      "aliases": ["donor account", "loss-shifted account"],
+      "definition": "A high-value account whose steady losses subsidise a linked cluster; enforcement that closes the cluster must not also lose the donor's revenue.",
+      "detectorIds": ["DONOR_SHIELD", "AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "term": "trojan horse",
+      "aliases": ["step-up asymmetry", "small-then-large"],
+      "definition": "A pattern where an account shows a small or losing baseline and then a sudden large step-up with strong ROI \u2014 the profile the desk's GATE-SURV-02 treats as fraud-suspected.",
+      "detectorIds": ["TROJAN_HORSE", "AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "term": "confirmation-window bypass",
+      "aliases": ["confirm bypass", "fast settle"],
+      "definition": "Wins that settle inside the confirmation delay window (or immediately after a pre-bet score), which is only possible if the operator's confirmation control failed.",
+      "detectorIds": ["CONFIRM_BYPASS"]
+    },
+    {
+      "term": "clinch at placement",
+      "aliases": ["clinch", "already-won bet"],
+      "definition": "A wager placed after the relevant score already guarantees the selection wins \u2014 a placement control failure or courtsiding signal.",
+      "detectorIds": ["CLINCH_AT_PLACEMENT"]
+    },
+    {
+      "term": "steam move",
+      "aliases": ["steam", "market snap"],
+      "definition": "A fast, coordinated price move immediately before a score; a bet placed within 15s (or 5s) of a score is the desk's steam-adjacent window.",
+      "detectorIds": ["STEAM_15S_5S"]
+    },
+    {
+      "term": "multi-accounting",
+      "aliases": ["sybil", "account farming", "bonus abuse"],
+      "definition": "One person operating multiple identities to multiply limits, bonuses or exposure. Detected through shared infrastructure (IP, /24, /64) and coordinated timing.",
+      "detectorIds": [
+        "SHARED_IP_CLUSTER",
+        "ACCOUNT_IP_FANOUT",
+        "BOT_RING_ACCOUNTS",
+        "BOT_RING_IP_RANGE"
+      ]
+    },
+    {
+      "term": "reversed credit",
+      "aliases": ["reversal", "credit reversal"],
+      "definition": "A graded wager whose credit was reversed by hand or by the platform \u2014 a strong desk-side signal that something about the ticket or the account was disputed.",
+      "detectorIds": ["REVERSED_CREDIT_BET"]
+    },
+    {
+      "term": "manual log",
+      "aliases": ["manual entry", "admin intervention"],
+      "definition": "A wager whose lifecycle includes a manual operator action. Manual handling correlates with exceptions and disputed tickets.",
+      "detectorIds": ["MANUAL_LOG_BET", "MANUAL_ADMIN_INTERVENTION"]
+    }
+  ],
+  "thresholdProvenance": [
+    {
+      "constant": "TROJAN_BASE_MAX_NET_CENTS",
+      "value": -1,
+      "unit": "cents",
+      "module": "lib/gslive_surveillance_governor.ts:34",
+      "usedBy": ["TROJAN_HORSE"]
+    },
+    {
+      "constant": "TROJAN_STEPUP_MIN_NET_CENTS",
+      "value": 100000,
+      "unit": "cents",
+      "module": "lib/gslive_surveillance_governor.ts:35",
+      "usedBy": ["TROJAN_HORSE"]
+    },
+    {
+      "constant": "TROJAN_STEPUP_MIN_ROI_BPS",
+      "value": 1500,
+      "unit": "basis points",
+      "module": "lib/gslive_surveillance_governor.ts:36",
+      "usedBy": ["TROJAN_HORSE"]
+    },
+    {
+      "constant": "DONOR_SHIELD_MIN_LIFETIME_HOUSE_NET_CENTS",
+      "value": 5000000,
+      "unit": "cents",
+      "module": "lib/gslive_surveillance_governor.ts:37",
+      "usedBy": ["DONOR_SHIELD"]
+    },
+    {
+      "constant": "CONFIRM_BYPASS_MAX_SETTLE_MS",
+      "value": 30000,
+      "unit": "milliseconds",
+      "module": "lib/gslive_surveillance_governor.ts:38",
+      "usedBy": ["CONFIRM_BYPASS"]
+    },
+    {
+      "constant": "CONFIRM_BYPASS_MIN_CORROBORATED_COUNT",
+      "value": 2,
+      "unit": "wins",
+      "module": "lib/gslive_surveillance_governor.ts:39",
+      "usedBy": ["CONFIRM_BYPASS"]
+    },
+    {
+      "constant": "PRE_BET_SCORE_LATENCY_TAU_SEC",
+      "value": 2,
+      "unit": "seconds",
+      "module": "lib/gslive_surveillance_governor.ts:117,137,155",
+      "usedBy": ["CLINCH_AT_PLACEMENT"]
+    },
+    {
+      "constant": "POST_BET_30S_RACE_WINDOW_SEC",
+      "value": 35,
+      "unit": "seconds (0, 35] after placement",
+      "module": "lib/gslive_surveillance_governor.ts:165",
+      "usedBy": ["CLINCH_AT_PLACEMENT"]
+    },
+    {
+      "constant": "FEED_STALL_AT_PLACEMENT_DEFAULT_MS",
+      "value": 5000,
+      "unit": "milliseconds",
+      "module": "lib/gslive_bet_event_log.ts:525",
+      "usedBy": ["DELAY_MISMATCH_BET"]
+    },
+    {
+      "constant": "EXTENDED_FEED_OUTAGE_MS",
+      "value": 60000,
+      "unit": "milliseconds",
+      "module": "lib/gslive_bet_event_log.ts:256",
+      "usedBy": ["DELAY_MISMATCH_BET"]
+    },
+    {
+      "constant": "STEAM_WITHIN_15S_SEC / STEAM_WITHIN_5S_SEC",
+      "value": 15,
+      "unit": "seconds (absolute timeUntilScore)",
+      "module": "lib/gslive_steam_index.ts:33-43",
+      "usedBy": ["STEAM_15S_5S"]
+    },
+    {
+      "constant": "EXECUTION_SNIPER_WINDOW_MS",
+      "value": 15000,
+      "unit": "milliseconds",
+      "module": "lib/f402_weblog.ts:826-847",
+      "usedBy": ["EXECUTION_SNIPERS"]
+    },
+    {
+      "constant": "WEBLOG_SESSION_IDLE_MS / WEBLOG_CLOCK_SKEW_MS",
+      "value": 1800000,
+      "unit": "milliseconds (idle 30 min; skew tolerance 120000 ms)",
+      "module": "lib/f402_weblog.ts:14-15",
+      "usedBy": ["EXECUTION_SNIPERS", "LINE_SHOPPERS"]
+    },
+    {
+      "constant": "SNIPER_TWIN_WINDOW_MS",
+      "value": 60000,
+      "unit": "milliseconds",
+      "module": "lib/f402_weblog.ts:853-895",
+      "usedBy": ["SNIPER_TWINS"]
+    },
+    {
+      "constant": "LINE_SHOPPER_MIN_SESSION_MS",
+      "value": 120000,
+      "unit": "milliseconds of zero-wager session",
+      "module": "lib/f402_weblog.ts:820-823",
+      "usedBy": ["LINE_SHOPPERS"]
+    },
+    {
+      "constant": "BOT_RING_PREFIX",
+      "value": "140.248.0.0/16",
+      "unit": "IPv4 range",
+      "module": "lib/f402_weblog.ts:179-182,907",
+      "usedBy": ["BOT_RING_IP_RANGE", "BOT_RING_ACCOUNTS"]
+    },
+    {
+      "constant": "IP_CLASS_TABLE",
+      "value": "CGNAT / T_MOBILE / VERIZON / ICLOUD_RELAY / BOT_RING / IPv6 carrier classes",
+      "unit": "classification labels",
+      "module": "lib/f402_weblog.ts:114-183",
+      "usedBy": ["DATACENTER_IP_CLASS", "IP_CLASS_ANOMALY"]
+    },
+    {
+      "constant": "SHARP_SCORE_THRESHOLD / CLV_POSITIVE",
+      "value": 70,
+      "unit": "score (or clv_bps > 0)",
+      "module": "lib/customer_rankings.ts:250-290",
+      "usedBy": ["AGENT_FLAG_CONCENTRATION"],
+      "note": "Customer-book scorecard context only; the book is a fixture and is excluded from fitting."
+    },
+    {
+      "constant": "BAYES_SHARP_SHRINK_N",
+      "value": 25,
+      "unit": "pseudo-count",
+      "module": "design/domain-branded-types.ts:488-503",
+      "usedBy": ["AGENT_FLAG_CONCENTRATION"],
+      "note": "Context for how the desk shrinks a raw sharp score today; not used as a model feature."
+    },
+    {
+      "constant": "WATCHLIST_SIGNAL_WEIGHTS",
+      "value": "40/35/30/30/20/15 by source category",
+      "unit": "weights",
+      "module": "lib/watchlist_signal_engine.ts:70-84",
+      "usedBy": ["AGENT_CONCENTRATION", "VIP_STAKE_OUTLIER"],
+      "note": "The paper watchlist's own weighting; the fraud model does not reuse it."
+    },
+    {
+      "constant": "CLV_MIN_LEGS_SUPPRESSION",
+      "value": 5,
+      "unit": "legs (cells below 5 suppressed)",
+      "module": "lib/gslive_tally_rollup.ts:30,34",
+      "usedBy": ["AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "constant": "GATE_SURV_ENFORCEMENT_LIMITS",
+      "value": "non-donor probation 1000c / 12s; donor containment 50000c / 10s; 24h review SLA",
+      "unit": "cents / seconds / hours",
+      "module": "lib/gslive_surveillance_governor.ts:41-45",
+      "usedBy": ["TROJAN_HORSE", "DONOR_SHIELD"]
+    }
+  ],
+  "priorArtRegister": [
+    {
+      "detectorIds": [
+        "SHARED_IP_CLUSTER",
+        "ACCOUNT_IP_FANOUT",
+        "BOT_RING_ACCOUNTS",
+        "SNIPER_TWINS"
+      ],
+      "pattern": "multi-accounting / sybil clusters",
+      "basis": "shared infrastructure and coordinated timing rather than identity documents",
+      "externalTerm": "multi-accounting, bonus abuse, account farming"
+    },
+    {
+      "detectorIds": [
+        "STEAM_15S_5S",
+        "CLINCH_AT_PLACEMENT",
+        "CONFIRM_BYPASS",
+        "EXECUTION_SNIPERS"
+      ],
+      "pattern": "courtsiding / latency arbitrage",
+      "basis": "bet-to-event latency smaller than the operator's own feed and confirmation delay",
+      "externalTerm": "courtsiding, rink-side betting, latency arbitrage"
+    },
+    {
+      "detectorIds": ["LINE_SHOPPERS", "ODDS_DRIFT_BET", "DELAY_MISMATCH_BET"],
+      "pattern": "price-based abuse / line shopping",
+      "basis": "session or placement behaviour consistent with scraping and accepting only stale prices",
+      "externalTerm": "line shopping, price scraping"
+    },
+    {
+      "detectorIds": [
+        "TROJAN_HORSE",
+        "DONOR_SHIELD",
+        "AGENT_FLAG_CONCENTRATION"
+      ],
+      "pattern": "agent/office schemes",
+      "basis": "an account or office whose losses subsidise a flagged cluster; step-up asymmetry",
+      "externalTerm": "agent fraud, chip dumping, layoff"
+    },
+    {
+      "detectorIds": [
+        "WEBLOG_GATE_FAIL",
+        "STATE_MIX_ANOMALY",
+        "SUSPECT_AUDIT_DEFECT",
+        "SOURCE_STALE",
+        "SOURCE_EPHEMERAL",
+        "EVIDENCE_ROWS_MISSING"
+      ],
+      "pattern": "data-integrity failure (a security finding in its own right)",
+      "basis": "a detector computed on stale, missing or fixture data is worse than no detector",
+      "externalTerm": "model/data governance, evidence provenance"
+    }
+  ],
+  "modelLimits": [
+    "The model predicts a weak proxy label built from the desk's own flags (suspected-bot / reversed-credit / manual-log), not a confirmed fraud outcome.",
+    "The corpus is a single live GSLive export snapshot; it is not a longitudinal history of the same accounts.",
+    "The source corpus is ephemeral and untracked (Scratch/), so a missing corpus must be reported as missing, never as a zero-row or clean result.",
+    "Fixture-derived sources (the bundled customer book, hardcoded IP-tracker clusters) are excluded from fitting and appear only as labelled context.",
+    "There is no account\u2194login bridge between the GSLive report corpus (numeric userID) and the F402 ticker (string Login); cross-source account joins are not claimed.",
+    "IP addresses are masked; findings identify clusters by masked value + stable tag + /24 prefix, never by raw address.",
+    "The model has no enforcement power: findings are evidence for an operator decision, not an action against an account.",
+    "No detector in this plugin has been validated against confirmed fraud cases; their thresholds are the desk's own constants and are reported with provenance."
+  ],
+  "dataQualityRules": [
+    "MISSING is a measured state, never zero.",
+    "A stale source is still shown, labelled stale with its age.",
+    "A fixture source carries provenance \"fixture\" and is never fitted.",
+    "An empty capture (e.g. getWebLog responseBytes 21) means rows are MISSING, not that zero events occurred.",
+    "A derived audit with a known argument defect (targetAccount \"--help\") is surfaced as SUSPECT_AUDIT_DEFECT rather than trusted."
+  ],
+  "briefDocument": "dsh-plugin-security/RESEARCH.md",
+  "priorArtNaming": "courtsiding / courtside data-scouting; late-bet abuse / latency arbitrage / live time delay; multi-accounting / sybil accounts / promo (bonus) abuse / device farm / account takeover; match-fixing / spot-fixing / suspicious betting alert / steam move / line movement; chip dumping / soft play / collusion / whipsawing / value transfer / money mule; weak supervision / proxy label / PR-AUC / precision@k / model risk management / explainability. 'Donor' and 'donor shield' are this desk's jargon, not standard industry terms.",
+  "externalPriorArt": [
+    {
+      "id": "ukgc-rts-15",
+      "tier": "regulator-standard",
+      "publisher": "UK Gambling Commission",
+      "title": "RTS 15 \u2014 In-play betting",
+      "url": "https://www.gamblingcommission.gov.uk/standards/remote-gambling-and-software-technical-standards/rts-15-in-play-betting",
+      "claim": "Live TV is delayed and customers must be told others may have more up-to-date information, so a bet-to-event latency below the operator's own delay is the structural courtsiding window.",
+      "supports": ["STEAM_15S_5S", "CLINCH_AT_PLACEMENT", "DELAY_MISMATCH_BET"]
+    },
+    {
+      "id": "ukgc-rts-11",
+      "tier": "regulator-standard",
+      "publisher": "UK Gambling Commission",
+      "title": "RTS 11 \u2014 Limiting collusion and cheating",
+      "url": "https://www.gamblingcommission.gov.uk/standards/remote-gambling-and-software-technical-standards/rts-11-limiting-collusion-and-cheating",
+      "claim": "Operators must deter, prevent and detect collusion/cheating, detect shared-table/address players and chip dumping, and keep investigation records (reason, outcome, evidence).",
+      "supports": [
+        "SHARED_IP_CLUSTER",
+        "CROSS_OFFICE_BEARDS",
+        "TROJAN_HORSE",
+        "DONOR_SHIELD"
+      ]
+    },
+    {
+      "id": "ukgc-lc17-blog",
+      "tier": "regulator-standard",
+      "publisher": "UK Gambling Commission",
+      "title": "Reminder of identity verification requirements for remote operators",
+      "url": "https://www.gamblingcommission.gov.uk/blog/post/reminder-of-identity-verification-requirements-for-remote-operators",
+      "claim": "Name/address/DOB must be verified before gambling; initials, nicknames, commercial addresses and fuzzy matches are insufficient.",
+      "supports": ["BOT_RING_ACCOUNTS", "ACCOUNT_IP_FANOUT"]
+    },
+    {
+      "id": "mga-player-protection",
+      "tier": "regulator-standard",
+      "publisher": "Malta Gaming Authority",
+      "title": "Directive 2 of 2018 \u2014 Player Protection Directive",
+      "url": "https://www.mga.org.mt/app/uploads/Directive-2-of-2018-Player-Protection-Directive.pdf",
+      "claim": "Multiple accounts are contemplated but limits and self-exclusion must apply across them; operators must run analytical/behaviour-monitoring tools with designed or evolving parameters and retain investigation records.",
+      "supports": [
+        "SHARED_IP_CLUSTER",
+        "ACCOUNT_IP_FANOUT",
+        "AGENT_FLAG_CONCENTRATION"
+      ]
+    },
+    {
+      "id": "sportradar-lbs",
+      "tier": "supplier-doc",
+      "publisher": "Sportradar",
+      "title": "Late Bet Score (LBS) API \u2014 FAQ",
+      "url": "https://docs.sportradar.com/itservices/models/late-bet-score-lbs-api/faqs.md",
+      "claim": "A production per-account ML score (0.00-1.00) for late-bet abuse built on timing anomalies and value spikes; >=0.90 is strong likelihood and drives a dynamic live time delay or manual review.",
+      "supports": ["STEAM_15S_5S", "DELAY_MISMATCH_BET", "CLINCH_AT_PLACEMENT"]
+    },
+    {
+      "id": "sportradar-latency",
+      "tier": "supplier-doc",
+      "publisher": "Sportradar",
+      "title": "Latency Indicator (beta)",
+      "url": "https://docs.sportradar.com/live-data/latency-indicator-beta.md",
+      "claim": "Each match carries an expected latency level (0-2s low .. 16s+ exceptional), updated live when delay crosses a threshold \u2014 the feed-side context needed to separate a fast bettor from a stalled feed.",
+      "supports": ["STEAM_15S_5S", "DELAY_MISMATCH_BET"]
+    },
+    {
+      "id": "sportradar-integrity-2024",
+      "tier": "supplier-report",
+      "publisher": "Sportradar",
+      "title": "Integrity in Action 2024",
+      "url": "http://web.archive.org/web/20250209132910/https://storage.pardot.com/533382/1736355595fvYFfMLa/Sportradar_Integrity_in_Action_2024.pdf",
+      "claim": "1,108 suspicious matches across 12 sports in 95 countries in 2024; AI became the primary monitoring tool for four sports; a 117-operator Integrity Exchange produced 291 suspicious-match identifications from operator data.",
+      "supports": ["WEBLOG_GATE_FAIL", "AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "id": "itia-scoring-device",
+      "tier": "tribunal-ruling",
+      "publisher": "International Tennis Integrity Agency",
+      "title": "ITIA v Khudoiani & Movsisyan \u2014 decision",
+      "url": "https://itia.tennis/media/u1bjcbve/decision-itia-v-khudoiani-movsisyan-am-_redacted.pdf",
+      "claim": "Two chair umpires manipulated a handheld electronic scoring device to facilitate third-party betting \u2014 official-data manipulation produces the same bet-to-score timing signature as courtsiding.",
+      "supports": ["CLINCH_AT_PLACEMENT", "MANUAL_ADMIN_INTERVENTION"]
+    },
+    {
+      "id": "esic-nv-presentation",
+      "tier": "industry-body",
+      "publisher": "Esports Integrity Commission",
+      "title": "ESIC integrity-in-esports presentation (Nevada Gaming Policy Committee)",
+      "url": "https://gaming.nv.gov/uploadedFiles/gamingnvgov/content/about/committees/ESIC-Integrity-in-esports-Presentation.pdf",
+      "claim": "Integrity monitoring draws on supplier and bookmaker alerts (450 bookmakers referenced), an intelligence database and participant alerts.",
+      "supports": ["AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "id": "arxiv-inplay-baseline",
+      "tier": "preprint",
+      "publisher": "arXiv",
+      "title": "In-play betting volume baseline and outlier detection (2605.30209)",
+      "url": "https://arxiv.org/abs/2605.30209",
+      "claim": "In-play is roughly 40% of volume with scarce verified fixing ground truth; the published approach models expected in-play volume from match state and flags deviations instead of claiming outcome labels.",
+      "supports": ["AGENT_CONCENTRATION", "STEAM_15S_5S"]
+    },
+    {
+      "id": "sumsub-chip-dumping",
+      "tier": "vendor-claim",
+      "publisher": "Sumsub",
+      "title": "Chip dumping guide",
+      "url": "https://sumsub.com/blog/chip-dumping-guide/",
+      "claim": "Chip dumping transfers value to an accomplice through deliberate losing play; intent is hard to prove, so operators use linked identities, one-directional value and funding anomalies.",
+      "supports": ["DONOR_SHIELD", "TROJAN_HORSE"]
+    },
+    {
+      "id": "nist-ai-rmf",
+      "tier": "standard",
+      "publisher": "NIST",
+      "title": "AI Risk Management Framework 1.0 (AI 100-1)",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf",
+      "claim": "Explainability/interpretability are trustworthiness characteristics; training-data provenance supports transparency, audit and accountability.",
+      "supports": [
+        "SOURCE_STALE",
+        "SOURCE_EPHEMERAL",
+        "SUSPECT_AUDIT_DEFECT",
+        "EVIDENCE_ROWS_MISSING"
+      ]
+    },
+    {
+      "id": "sr-11-7",
+      "tier": "standard",
+      "publisher": "US Federal Reserve",
+      "title": "SR 11-7 \u2014 Guidance on Model Risk Management",
+      "url": "https://web.archive.org/web/2025id_/https://www.federalreserve.gov/supervisionreg/srletters/sr1107a1.pdf",
+      "claim": "Validation has three elements (conceptual soundness, ongoing monitoring, outcomes analysis) and documentation must let an unfamiliar party understand operation, limitations and key assumptions.",
+      "supports": ["AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "id": "snorkel-weak-supervision",
+      "tier": "preprint",
+      "publisher": "arXiv",
+      "title": "Snorkel: Fast Training Set Generation for Weak Supervision (1711.10160)",
+      "url": "https://arxiv.org/abs/1711.10160",
+      "claim": "Labelling functions written by experts can have unknown accuracies and correlations; a model trained on their denoised consensus is a model of the rules, not of adjudicated outcomes.",
+      "supports": ["AGENT_FLAG_CONCENTRATION"]
+    },
+    {
+      "id": "saito-rehmsmeier",
+      "tier": "peer-reviewed",
+      "publisher": "PLOS ONE",
+      "title": "The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets",
+      "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0118432",
+      "claim": "On strongly imbalanced data ROC can be deceptive; precision-recall and precision@k describe the analyst queue honestly.",
+      "supports": []
+    },
+    {
+      "id": "heirene-account-features",
+      "tier": "peer-reviewed",
+      "publisher": "Journal of Behavioral Addictions (via REAL)",
+      "title": "Account-behaviour predictors in a 1,470-customer sports/race betting study",
+      "url": "https://real.mtak.hu/243558/",
+      "claim": "Behavioural account aggregates (age, deposits per active day, average stake, days since betting) were the most predictive variables with roughly 30 days of data.",
+      "supports": ["TICKET_BURST", "VIP_STAKE_OUTLIER"]
+    },
+    {
+      "id": "arxiv-closing-line",
+      "tier": "preprint",
+      "publisher": "arXiv",
+      "title": "Beating the bookies with their own numbers (1710.02824)",
+      "url": "https://arxiv.org/abs/1710.02824",
+      "claim": "Closing odds are the standard reference for whether a bet beat the market, and operator limiting is a confounder for later behaviour \u2014 CLV is a sharp-account feature, not a fraud label.",
+      "supports": []
+    },
+    {
+      "id": "arxiv-graph-fraud",
+      "tier": "preprint",
+      "publisher": "arXiv",
+      "title": "Graph-based fraud detection survey (1910.11299)",
+      "url": "https://arxiv.org/abs/1910.11299",
+      "claim": "Fraud can appear as a distinctive edge, node or subgraph (e.g. money-laundering groups), so shared-infrastructure graphs are evidence in their own right.",
+      "supports": ["SHARED_IP_CLUSTER", "ACCOUNT_IP_FANOUT"]
+    },
+    {
+      "id": "seon-igaming",
+      "tier": "vendor-claim",
+      "publisher": "SEON",
+      "title": "iGaming registration fraud detection",
+      "url": "https://seon.io/resources/igaming-registration-fraud-detection/",
+      "claim": "Detection stacks device fingerprinting, identity enrichment, IP intelligence and behavioural signals; data-centre/VPN classes are supporting evidence, never a single conclusive flag.",
+      "supports": ["DATACENTER_IP_CLASS", "ACCOUNT_IP_FANOUT"]
+    },
+    {
+      "id": "geocomply-promo-abuse",
+      "tier": "vendor-claim",
+      "publisher": "GeoComply",
+      "title": "Promo abuse",
+      "url": "https://www.geocomply.com/promo-abuse/",
+      "claim": "Promo abusers reset devices, spoof location and script the same play across hundreds of accounts; detection pairs location, device and behaviour as network graphs.",
+      "supports": ["BOT_RING_ACCOUNTS", "ACCOUNT_IP_FANOUT"]
+    },
+    {
+      "id": "sportradar-mts",
+      "tier": "supplier-doc",
+      "publisher": "Sportradar",
+      "title": "Managed Trading Services (MTS)",
+      "url": "https://docs.sportradar.com/mts/managed-trading-services.md",
+      "claim": "Trading systems are explicitly risk and liability management services \u2014 the desk's own liability limits belong in the same control plane as the fraud findings.",
+      "supports": ["AGENT_CONCENTRATION"]
+    },
+    {
+      "id": "sportradar-liability-limit",
+      "tier": "supplier-doc",
+      "publisher": "Sportradar",
+      "title": "Transaction 3.0 \u2014 rejected liability limit",
+      "url": "https://docs.sportradar.com/transaction30api/sandbox/user-manual/rejected_liability_limit.md",
+      "claim": "Tickets can be rejected with a liability-limit error; acceptance/rejection behaviour is itself a measurable signal.",
+      "supports": ["STATE_MIX_ANOMALY"]
+    },
+    {
+      "id": "ibia-monitoring",
+      "tier": "industry-body",
+      "publisher": "International Betting Integrity Association",
+      "title": "Global Monitoring & Alert Platform",
+      "url": "https://www.ibia.bet/monitoring",
+      "claim": "Industry monitoring is a distinct function with its own alert platform across operators.",
+      "supports": ["AGENT_FLAG_CONCENTRATION"]
+    }
+  ],
+  "proposedDetectors": [
+    {
+      "id": "COURTSIDE_WINDOW",
+      "status": "proposed",
+      "mapsToContractId": "STEAM_15S_5S",
+      "rationale": "Per bet, compute t_accept - t_last_score and t_place - t_last_score for the same event/period; flag accounts clustering in the final seconds before a score change, normalised by the match latency level.",
+      "fields": ["userID", "eID", "period", "logTime", "accept"],
+      "needs": "getEventLog / scoreboard score-event timestamps"
+    },
+    {
+      "id": "FEED_STALL_DIVERGENCE",
+      "status": "proposed",
+      "mapsToContractId": "DELAY_MISMATCH_BET",
+      "rationale": "Join feed-latency level/change events to bet arrivals; flag a burst accepted while the feed is stalled or just after a stall.",
+      "fields": ["logTime", "accept", "delay"],
+      "needs": "latency-indicator / feed-stall events"
+    },
+    {
+      "id": "DELAY_ACCEPT_MISMATCH",
+      "status": "proposed",
+      "mapsToContractId": "DELAY_MISMATCH_BET",
+      "rationale": "Compare accept-delay with the account's effective live delay and the house default; flag sub-delay acceptances.",
+      "fields": ["delay", "accept", "state", "agent"]
+    },
+    {
+      "id": "LATE_BET_SCORE",
+      "status": "proposed",
+      "mapsToContractId": "STEAM_15S_5S",
+      "rationale": "Transparent daily per-account score (0-100) over late-bet rate, median accept-to-score gap, odds drift at accept and stake spike, published with contributions and cutoffs.",
+      "fields": ["logTime", "accept", "delay", "fVal", "fVal_new", "bet"]
+    },
+    {
+      "id": "OVERRIDE_AUDIT",
+      "status": "proposed",
+      "mapsToContractId": "MANUAL_ADMIN_INTERVENTION",
+      "rationale": "Flag manual overrides and their effect: post-override accept latency, odds change and settlement time.",
+      "fields": ["manualLogExists", "adminUser", "logTime", "accept", "state"]
+    },
+    {
+      "id": "IP_SUBNET_GRAPH",
+      "status": "implemented",
+      "mapsToContractId": "SHARED_IP_CLUSTER",
+      "rationale": "Account nodes from ipAddress, /24 and /64 prefixes, masked clusters with account/agent counts and cross-agent links.",
+      "fields": ["ipAddress", "userID", "agent"]
+    },
+    {
+      "id": "ACCOUNT_BURST",
+      "status": "proposed",
+      "mapsToContractId": "ACCOUNT_IP_FANOUT",
+      "rationale": "New accounts and first bets per device/IP-subnet/payment instrument per hour; flag >k with a minimum cluster size and at least two independent signals.",
+      "fields": ["ipAddress", "userID", "agent"],
+      "needs": "registration/first-bet timestamps and device/payment ids"
+    },
+    {
+      "id": "KYC_STAGE_GATE",
+      "status": "proposed",
+      "mapsToContractId": null,
+      "rationale": "Flag bonus claims or withdrawals before full verification, name/DOB mismatch and a payment instrument shared across accounts; insufficientData when KYC/payment fields are absent.",
+      "fields": [],
+      "needs": "KYC state, bonus/withdrawal events, payment tokens"
+    },
+    {
+      "id": "AGENT_DONOR_FLOW",
+      "status": "proposed",
+      "mapsToContractId": "DONOR_SHIELD",
+      "rationale": "Per agent-account pair, one-directional net flow, stake concentration and same-event pairing; flag extreme flow plus a shared IP/device link.",
+      "fields": ["agent", "userID", "bet", "toWin", "result", "ipAddress"]
+    },
+    {
+      "id": "DONOR_SHIELD",
+      "status": "implemented",
+      "mapsToContractId": "DONOR_SHIELD",
+      "rationale": "Qualify a donor at the repo constant (>= $50k lifetime house net) then require >=2 independent links to a flagged cluster; surface donor value as a review reason, never as exculpation.",
+      "fields": ["lifetime net", "graph links", "rule hits"]
+    },
+    {
+      "id": "TROJAN_ASYMMETRY",
+      "status": "implemented",
+      "mapsToContractId": "TROJAN_HORSE",
+      "rationale": "Detect the base-loss -> step-up-win sequence using the repo constants (base net <= -$0.01, step-up net >= $1,000, step-up ROI >= 15%).",
+      "fields": ["bet", "toWin", "result", "account age"]
+    },
+    {
+      "id": "CLV_DEVIATION",
+      "status": "proposed",
+      "mapsToContractId": null,
+      "rationale": "Per account, stake-weighted mean CLV against the closing line; flag persistent positive CLV plus high stake (sharp) separately from late-bet abuse.",
+      "fields": ["fVal", "bet", "userID"],
+      "needs": "closing-odds snapshot"
+    },
+    {
+      "id": "MARKET_ENTROPY",
+      "status": "proposed",
+      "mapsToContractId": "AGENT_CONCENTRATION",
+      "rationale": "Shannon entropy over sport/period/wagerType/line per account; low entropy plus high volume is a specialisation signal. Mark derived, not validated fraud evidence.",
+      "fields": ["sport", "period", "wagerType", "line"]
+    },
+    {
+      "id": "SETTLE_BYPASS",
+      "status": "implemented",
+      "mapsToContractId": "CONFIRM_BYPASS",
+      "rationale": "Flag bets settled unusually fast (< 30s) with >=2 corroborating signals (manual log, override, late placement).",
+      "fields": [
+        "state",
+        "settlement timestamp",
+        "manualLogExists",
+        "adminUser"
+      ]
+    },
+    {
+      "id": "EVIDENCE_ENVELOPE",
+      "status": "implemented",
+      "mapsToContractId": "SOURCE_STALE",
+      "rationale": "Every finding carries source id, path, sha256, age, provenance (live-api/derived/fixture/missing), masked ids and rule version; refuse to fit or score on fixture sources.",
+      "fields": []
+    }
+  ]
+}

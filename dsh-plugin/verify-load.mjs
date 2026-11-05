@@ -1373,10 +1373,30 @@ await checkAsync(
       `leads ${bridge.leads?.length}, source ${bridgeSource.leads.length}`,
     );
     const priorities = bridge.leads.map((lead) => Number(lead.priorityUsd));
-    assert(
-      priorities[0] >= priorities[1] && priorities[1] >= priorities[2],
-      `leads not ranked: ${JSON.stringify(priorities)}`,
+    // A staged bridge artifact may honestly carry ZERO leads (no observed wallets, e.g. the
+    // fixture-evidence artifact measured 2026-11-04). Ranking is only meaningful when two or
+    // more leads exist, so the check is vacuous on an empty artifact instead of failing the
+    // tool for reporting an empty state. A non-empty list must still be sorted descending.
+    const descending = priorities.every(
+      (value, index) => index === 0 || priorities[index - 1] >= value,
     );
+    assert(descending, `leads not ranked: ${JSON.stringify(priorities)}`);
+    // The empty case is only acceptable when the TOOL surfaces the evidence that produced it:
+    // the artifact's evidence label and its invalid-wallet count must reach the answer.
+    assert(
+      bridge.evidence === bridgeSource.evidence,
+      `evidence ${bridge.evidence} != source ${bridgeSource.evidence}`,
+    );
+    assert(
+      bridge.coverage?.invalidWallets === bridgeSource.coverage.invalidWallets,
+      `invalidWallets ${bridge.coverage?.invalidWallets} != source ${bridgeSource.coverage.invalidWallets}`,
+    );
+    if (bridgeSource.leads.length === 0) {
+      assert(
+        bridge.coverage?.observedWallets === 0,
+        "an empty lead list must be explained by observedWallets 0",
+      );
+    }
     const backtest = await tool.execute({ report: "backtest", limit: 2 });
     assert(backtest.available === true, "backtest unavailable");
     assert(
@@ -1546,7 +1566,32 @@ await checkAsync(
       wagers.scope === "clipboard-ticker-sample",
       `wagers scope ${wagers.scope}`,
     );
-    assert(wagers.parseWarnings === 0, `parseWarnings ${wagers.parseWarnings}`);
+    // The ticker capture rotates between verifier runs, so an absolute "0 warnings" assertion
+    // is not drift-proof (a 20:00Z capture carried 12 rows with an EMPTY ShortDesc). Assert the
+    // counter is honest instead: bounded, split into missing-description vs unknown-type, and
+    // consistent with the UNKNOWN buckets the tool itself derives.
+    assert(
+      Number.isInteger(wagers.parseWarnings) &&
+        wagers.parseWarnings >= 0 &&
+        wagers.parseWarnings <= wagersSource.LIST.length,
+      `parseWarnings out of range: ${wagers.parseWarnings}`,
+    );
+    const expectedEmptyDesc = wagersSource.LIST.filter(
+      (wager) => String(wager?.ShortDesc ?? "").trim() === "",
+    ).length;
+    assert(
+      wagers.parseWarningKinds?.emptyShortDesc === expectedEmptyDesc,
+      `emptyShortDesc ${wagers.parseWarningKinds?.emptyShortDesc} != source ${expectedEmptyDesc}`,
+    );
+    assert(
+      wagers.parseWarningKinds?.unknownWagerType ===
+        wagers.parseWarnings - expectedEmptyDesc,
+      "unknownWagerType must be parseWarnings minus the missing descriptions",
+    );
+    assert(
+      (wagers.byWagerType?.UNKNOWN ?? 0) === wagers.parseWarnings,
+      `UNKNOWN wager types ${wagers.byWagerType?.UNKNOWN} != parseWarnings ${wagers.parseWarnings}`,
+    );
     assert(
       typeof wagers.wagerTypeLegend === "string",
       "wagerTypeLegend missing",
@@ -1557,15 +1602,55 @@ await checkAsync(
     );
 
     const reconcile = await tool.execute({ report: "reconcile" });
-    assert(
-      reconcile.scope === "disjoint",
-      `reconcile scope ${reconcile.scope}`,
+    // The relationship between the two captures is MEASURED, not asserted: the fresh
+    // 2026-11-04 captures share 221 of 250 pending ticket ids with the ticker. Derive the
+    // expected overlap from the sources and require the tool to report exactly that.
+    const expectedPending = new Set(
+      (pendingSource.games ?? [])
+        .map((game) => String(game?.ticketNumber ?? ""))
+        .filter((key) => key !== ""),
     );
-    assert(reconcile.overlapKeys === 0, "reconcile found an overlap");
+    const expectedTicker = new Set(
+      (wagersSource.LIST ?? [])
+        .map((wager) => String(wager?.WagerNumber ?? ""))
+        .filter((key) => key !== ""),
+    );
+    const expectedOverlap = [...expectedPending].filter((key) =>
+      expectedTicker.has(key),
+    ).length;
+    const expectedScope = expectedOverlap > 0 ? "overlapping" : "disjoint";
+    // Both side reports must carry the same MEASURED overlap, not a static claim.
+    assert(
+      pending.tickerOverlap?.keys === expectedOverlap,
+      `pending tickerOverlap ${pending.tickerOverlap?.keys} != measured ${expectedOverlap}`,
+    );
+    assert(
+      wagers.pendingOverlap?.keys === expectedOverlap,
+      `wagers pendingOverlap ${wagers.pendingOverlap?.keys} != measured ${expectedOverlap}`,
+    );
+    assert(
+      pending.tickerOverlap?.measured === true &&
+        wagers.pendingOverlap?.measured === true,
+      "both captures are present, so overlap must be measured",
+    );
+    assert(
+      reconcile.scope === expectedScope,
+      `reconcile scope ${reconcile.scope} != measured ${expectedScope}`,
+    );
+    assert(
+      reconcile.overlapKeys === expectedOverlap,
+      `reconcile overlap ${reconcile.overlapKeys} != measured ${expectedOverlap}`,
+    );
     assert(
       typeof reconcile.magnitudeGapWagered === "number",
       "magnitude gap missing",
     );
+    if (expectedOverlap > 0) {
+      assert(
+        /NOT disjoint/.test(String(reconcile.note ?? "")),
+        "an overlapping capture must not be described as disjoint",
+      );
+    }
 
     const unknown = await tool.execute({ report: "nope" });
     assert(

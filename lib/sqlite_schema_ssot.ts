@@ -180,12 +180,9 @@ type InvariantFailed<T extends SsotTableName> = [SsotInvariant<T>] extends [
     : never;
 
 /** Compile error surface when SSOT structure is invalid. */
-export type SsotInvariantFailures =
-  | InvariantFailed<"match_evaluations">
-  | InvariantFailed<"wager_settlement_observations">
-  | InvariantFailed<"combo_legs">
-  | InvariantFailed<"candidate_tickets">
-  | InvariantFailed<"ingestion_trades">;
+export type SsotInvariantFailures = {
+  [K in SsotTableName]: InvariantFailed<K>;
+}[SsotTableName];
 
 type SsotIsClean = [SsotInvariantFailures] extends [never] ? true : false;
 

@@ -15,7 +15,7 @@
     "lib/combo_uniqueness.ts": "b91b9ba442125f9cc16ed05f5ffad640155682036528f0adb769207954cfe6a6",
     "lib/customer_poly_bridge.ts": "8a70dcc91b48d082022c0ed0b4d4e4569dd4235b5e25288a1c1cc725064d3858",
     "lib/layoff_risk_engine.ts": "55385a43aa741c4a3e9805cad3cb67bd455cf28d06287121d5840550ee440dd0",
-    "lib/parlay_combo_backtest_engine.ts": "59cfa4a516fdbf70f0e76cbb48d87753f313dc1c9d5a2b65768e0fd24c96e8a6",
+    "lib/parlay_combo_backtest_engine.ts": "60221184eb8fbe2d7fea5c9c76ea0355da590152dc65bd0bdc29aedacbe8d26c",
     "lib/polymarket_combo.ts": "7cc58bfdc0b7fc0f374824941c3885c7f5298f3e8285c26337e4e7ebc6fde6a6",
     "lib/polymarket_profile.ts": "62bd1c170a700b758b0d88c072edcf2ee3f28adf56eacaa0ed43cb2e6fcd02fa",
     "scripts/generate_value_artifacts.ts": "f1c4b28185f089d1e2bc9e29dbb7d2b2b8dd33ddfbdc3514930c627dd10a79cf"

@@ -2,11 +2,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Node-compatible utility: import.meta.path is Bun-only.
-// ast-grep-ignore: bun-import-meta-path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const rootDir = resolve(__dirname, "..");
+// Node-compatible utility: fileURLToPath keeps this script runnable outside Bun.
+const filename = fileURLToPath(import.meta.url);
+const dir = dirname(filename);
+const rootDir = resolve(dir, "..");
 const openapiPath = resolve(rootDir, "docs/openapi.json");
 const apiRefPath = resolve(rootDir, "docs/api-reference.md");
 

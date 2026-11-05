@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "dataSource": "fixture",
+  "capturedAt": "2026-11-04T19:58:00.000Z",
+  "operation": "fixture",
+  "pendingCount": 4,
+  "agents": {
+    "agents": []
+  },
+  "games": [
+    {
+      "ticketNumber": "501",
+      "wagerNumber": "1",
+      "ticketKey": "501-1",
+      "agent": {
+        "key": "AG1",
+        "id": "AG1",
+        "level": 5,
+        "agentType": "A"
+      },
+      "customerID": "C001",
+      "status": "P",
+      "sport": "Football",
+      "subSport": "PREGAME",
+      "wagerType": "S",
+      "picks": 1,
+      "wagered": 100000,
+      "toWin": 300000,
+      "gameDateTime": "2026-11-04 14:00:00.000",
+      "acceptedAt": "2026-11-04 14:00:00.000"
+    },
+    {
+      "ticketNumber": "502",
+      "wagerNumber": "2",
+      "ticketKey": "502-2",
+      "agent": {
+        "key": "AG1",
+        "id": "AG1",
+        "level": 5,
+        "agentType": "A"
+      },
+      "customerID": "C001",
+      "status": "P",
+      "sport": "Football",
+      "subSport": "PREGAME",
+      "wagerType": "S",
+      "picks": 1,
+      "wagered": 50000,
+      "toWin": 260000,
+      "gameDateTime": "2026-11-04 14:00:30.000",
+      "acceptedAt": "2026-11-04 14:00:30.000"
+    },
+    {
+      "ticketNumber": "503",
+      "wagerNumber": "3",
+      "ticketKey": "503-3",
+      "agent": {
+        "key": "AG2",
+        "id": "AG2",
+        "level": 4,
+        "agentType": "M"
+      },
+      "customerID": "C002",
+      "status": "P",
+      "sport": "Basketball",
+      "subSport": "PREGAME",
+      "wagerType": "M",
+      "picks": 1,
+      "wagered": 20000,
+      "toWin": 20000,
+      "gameDateTime": "2026-11-04 14:01:00.000",
+      "acceptedAt": "2026-11-04 14:01:00.000"
+    },
+    {
+      "ticketNumber": "504",
+      "wagerNumber": "4",
+      "ticketKey": "504-4",
+      "agent": {
+        "key": "AG2",
+        "id": "AG2",
+        "level": 4,
+        "agentType": "M"
+      },
+      "customerID": "C002",
+      "status": "P",
+      "sport": "Basketball",
+      "subSport": "PREGAME",
+      "wagerType": "M",
+      "picks": 1,
+      "wagered": 70000,
+      "toWin": 140000,
+      "gameDateTime": "2026-11-04 14:01:20.000",
+      "acceptedAt": "2026-11-04 14:01:20.000"
+    }
+  ]
+}

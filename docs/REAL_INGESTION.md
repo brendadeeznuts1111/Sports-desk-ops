@@ -178,6 +178,10 @@ one-line summary: `ok=23 failed=16 stale=0 truncated=0`.
   never echoed; only `cookieNames` may be logged.
 - Polymarket requests are public and carry no identity.
 - The live path is opt-in: `--live` or `SPORTSDESK_LIVE_INGEST=1`. CI and tests run fixtures only.
+- Probing is safe and failures are labelled: `./bin/dx poll --help` prints usage and exits without
+  polling; a run without `--live` writes `dataMode: FIXTURE` over `docs/graph-live-feed.json` and
+  prints a loud stderr warning naming the mode it replaced; `--r2` warns before publishing fixture
+  rows to the public edge.
 
 ## 7. Rollout
 

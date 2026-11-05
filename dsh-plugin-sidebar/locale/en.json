@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "SportsDesk desk",
-    "description": "Adds a SportsDesk entry to the left sidebar; it opens a desk panel that reports the local SportsDesk webview service from its /health and /api/status routes."
+    "description": "Adds a SportsDesk entry to the left sidebar; it opens a read-only desk overview that measures the local SportsDesk webview service from five same-origin routes: service state (/health, /api/status), market feed and repo evidence (/api/graph/summary), book KPIs with provenance (/api/kpis) and the paper execution plan (/api/execution/plan). Each source is probed independently, so a failed or missing source is named instead of zeroed, and a payload that previously loaded stays visible labelled stale."
   }
 }
