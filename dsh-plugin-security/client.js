@@ -16,6 +16,11 @@
  *              per-row score+band, critical/high counts, desk-flag counts, bets
  *              and reasons; clicking a row loads that account's dossier without
  *              leaving the tab.
+ *   Explore    descriptive exploration under frozen constants: corpus/constants,
+ *              the detector backlog with field-availability chips, and three
+ *              "exploratory — not a finding" candidates (market entropy,
+ *              unattributed override, stake concentration) with their
+ *              question/method/caveat and compact tables.
  *   IP graph   masked IP-network clusters plus the distinct/shared-IP summary.
  *   Findings   named detectors with severity/category filters, expandable
  *              evidence, observed/threshold values and insufficient-data chips.
@@ -32,8 +37,8 @@
  *
  *   /api/security/status      /api/security/bets       /api/security/ip-graph
  *   /api/security/weblog      /api/security/patterns   /api/security/model
- *   /api/security/queue?limit=25  /api/security/dossier?id=
- *   /api/security/research
+ *   /api/security/queue?limit=25  /api/security/explore?limit=10
+ *   /api/security/dossier?id=     /api/security/research
  *
  * A 200 body is `{ ok: true, ...CLI payload }`; a CLI failure is a 502
  * `{ ok: false, reason, message }`; a 404 means the installed Host bundle does
@@ -100,6 +105,8 @@ window.__ModuleLoader__.load({
       model: "/api/security/model",
       /** The triage queue always requests the frozen page size. */
       queue: "/api/security/queue?limit=25",
+      /** Exploration asks for the frozen candidate row limit. */
+      explore: "/api/security/explore?limit=10",
       dossier: "/api/security/dossier",
       research: "/api/security/research",
     });
@@ -114,6 +121,7 @@ window.__ModuleLoader__.load({
     const TAB_ORDER = Object.freeze([
       "overview",
       "queue",
+      "explore",
       "ip",
       "findings",
       "model",
@@ -142,15 +150,22 @@ window.__ModuleLoader__.load({
     const TAB_SOURCE_KEYS = Object.freeze({
       overview: Object.freeze(["status", "weblog", "bets"]),
       queue: Object.freeze(["queue"]),
+      explore: Object.freeze(["explore"]),
       ip: Object.freeze(["ipGraph"]),
       findings: Object.freeze(["patterns"]),
       model: Object.freeze(["model", "research"]),
       dossier: Object.freeze(["dossier"]),
     });
+    /** Exploration backlog status value -> locale key. */
+    const EXPLORE_STATUS_LABEL_KEYS = Object.freeze({
+      implemented: "exploreStatusImplemented",
+      proposed: "exploreStatusProposed",
+    });
     /** Locale key per tab; the tablist and the keyboard order share TAB_ORDER. */
     const TAB_LABEL_KEYS = Object.freeze({
       overview: "tabOverview",
       queue: "tabQueue",
+      explore: "tabExplore",
       ip: "tabIpGraph",
       findings: "tabFindings",
       model: "tabModel",
@@ -226,6 +241,7 @@ window.__ModuleLoader__.load({
         tabsLabel: "Security console tabs",
         tabOverview: "Overview",
         tabQueue: "Queue",
+        tabExplore: "Explore",
         tabIpGraph: "IP graph",
         tabFindings: "Findings",
         tabModel: "Model",
@@ -354,6 +370,53 @@ window.__ModuleLoader__.load({
           "No accounts in the queue — the measured eligible set is empty.",
         queueDossierHint:
           "Dossier for {account} loaded — open the Dossier tab to review it.",
+        /* Explore */
+        exploreTitle: "Explore",
+        exploreSub:
+          "Descriptive exploration of the logs under frozen constants. Candidates are exploratory, not findings; backlog fields are availability facts, not implementation claims.",
+        exploreFrozenDetectors: "{count} frozen detectors",
+        exploreCatalogPresent: "catalog present",
+        exploreCatalogMissing: "catalog missing",
+        exploreCatalogPath: "Catalog path",
+        exploreCatalogMissingBody:
+          "The research catalog is absent, so proposed backlog entries come from the frozen fallback list; no catalog content is implied by them.",
+        exploreConstantsTitle: "Constants",
+        exploreConstantMinBets: "Min bets",
+        exploreConstantMaxRows: "Max rows",
+        exploreConstantEntropyBucket: "Entropy bucket",
+        exploreBacklogTitle: "Detector backlog",
+        exploreBacklogNote:
+          "Field availability is a fact about the listed source fields only: `allListedFieldsAvailable` is not an implementability verdict, and a proposed detector is not running.",
+        exploreColDetector: "Detector",
+        exploreColStatus: "Status",
+        exploreColFields: "Fields / accessor",
+        exploreStatusImplemented: "implemented",
+        exploreStatusProposed: "proposed",
+        exploreFieldAvailable: "available",
+        exploreFieldMissing: "missing",
+        exploreFieldsAllAvailable: "all listed fields available",
+        exploreFieldsMissing: "some listed fields missing",
+        exploreNotAFinding: "exploratory — not a finding",
+        exploreQuestion: "Question",
+        exploreMethod: "Method",
+        exploreCaveat: "Caveat",
+        exploreOmittedRows:
+          "{count} more eligible rows omitted by the row limit",
+        exploreNoRows:
+          "No rows under the frozen constants — this candidate is empty, not zero.",
+        exploreCandidateEntropyTitle: "Market entropy (exploratory)",
+        exploreCandidateOverrideTitle: "Unattributed override (exploratory)",
+        exploreCandidateStakeTitle: "Stake concentration (exploratory)",
+        exploreColAccount: "Account",
+        exploreColAgent: "Agent",
+        exploreColBets: "Bets",
+        exploreColEntropyBits: "Entropy bits",
+        exploreColBuckets: "Buckets",
+        exploreColTopShare: "Top share",
+        exploreColManualRows: "Manual rows",
+        exploreColWithoutAdmin: "Without admin",
+        exploreColShare: "Share",
+        exploreColTopStakeUsd: "Top stake USD",
         /* IP graph */
         ipTitle: "IP-network clusters",
         ipSub:
@@ -519,6 +582,7 @@ window.__ModuleLoader__.load({
         tabsLabel: "安全控制台标签页",
         tabOverview: "概览",
         tabQueue: "队列",
+        tabExplore: "探索",
         tabIpGraph: "IP 图谱",
         tabFindings: "发现",
         tabModel: "模型",
@@ -642,6 +706,51 @@ window.__ModuleLoader__.load({
         queueFlagsDrift: "漂移",
         queueEmpty: "队列中没有账户 — 实测符合条件集合为空。",
         queueDossierHint: "已加载 {account} 的档案 — 打开“档案”标签页查看。",
+        /* Explore */
+        exploreTitle: "探索",
+        exploreSub:
+          "在冻结常量下对日志的描述性探索。候选仅为探索性结果，并非发现；待办字段是可用性事实，并非实现声明。",
+        exploreFrozenDetectors: "{count} 个冻结检测器",
+        exploreCatalogPresent: "目录存在",
+        exploreCatalogMissing: "目录缺失",
+        exploreCatalogPath: "目录路径",
+        exploreCatalogMissingBody:
+          "研究目录缺失，因此拟议待办条目来自冻结的备用列表；它们不代表任何目录内容。",
+        exploreConstantsTitle: "常量",
+        exploreConstantMinBets: "最少投注数",
+        exploreConstantMaxRows: "最大行数",
+        exploreConstantEntropyBucket: "熵分桶字段",
+        exploreBacklogTitle: "检测器待办",
+        exploreBacklogNote:
+          "字段可用性仅说明所列来源字段的情况：`allListedFieldsAvailable` 不是可实施性结论，拟议检测器并未运行。",
+        exploreColDetector: "检测器",
+        exploreColStatus: "状态",
+        exploreColFields: "字段 / 访问路径",
+        exploreStatusImplemented: "已实现",
+        exploreStatusProposed: "拟议",
+        exploreFieldAvailable: "可用",
+        exploreFieldMissing: "缺失",
+        exploreFieldsAllAvailable: "所列字段均可用",
+        exploreFieldsMissing: "部分所列字段缺失",
+        exploreNotAFinding: "探索性 — 并非发现",
+        exploreQuestion: "问题",
+        exploreMethod: "方法",
+        exploreCaveat: "注意",
+        exploreOmittedRows: "另有 {count} 行符合条件的记录被行数上限截断",
+        exploreNoRows: "在冻结常量下没有行 — 该候选为空，并非 0。",
+        exploreCandidateEntropyTitle: "市场熵（探索性）",
+        exploreCandidateOverrideTitle: "未归属的人工干预（探索性）",
+        exploreCandidateStakeTitle: "注额集中度（探索性）",
+        exploreColAccount: "账户",
+        exploreColAgent: "代理",
+        exploreColBets: "投注数",
+        exploreColEntropyBits: "熵（比特）",
+        exploreColBuckets: "分桶数",
+        exploreColTopShare: "最高占比",
+        exploreColManualRows: "人工行数",
+        exploreColWithoutAdmin: "无管理员行数",
+        exploreColShare: "占比",
+        exploreColTopStakeUsd: "最高注额 USD",
         /* IP graph */
         ipTitle: "IP 网络聚类",
         ipSub:
@@ -1092,6 +1201,7 @@ window.__ModuleLoader__.load({
       "status",
       "bets",
       "queue",
+      "explore",
       "weblog",
       "ipGraph",
       "patterns",
@@ -1642,6 +1752,128 @@ window.__ModuleLoader__.load({
         rows,
         insufficient: asArray(payload.insufficient).filter(
           (item) => typeof item === "string",
+        ),
+      };
+    }
+
+    /**
+     * Normalize one backlog field-availability row.
+     * @param {unknown} value
+     * @returns {{ field: string, available: boolean, via: string | null } | null}
+     */
+    function readBacklogField(value) {
+      if (!isRecord(value)) return null;
+      const field = readText(value.field);
+      if (field === null) return null;
+      return {
+        field,
+        available: value.available === true,
+        via: readText(value.via),
+      };
+    }
+
+    /**
+     * One backlog entry: a detector id with its listed source fields'
+     * availability. `allListedFieldsAvailable` is field-level only.
+     * @param {unknown} value
+     * @returns {{ id: string, status: string | null, implemented: boolean, fields: NonNullable<ReturnType<typeof readBacklogField>>[], allListedFieldsAvailable: boolean, rationale: string | null } | null}
+     */
+    function readBacklogEntry(value) {
+      if (!isRecord(value)) return null;
+      const id = readText(value.id);
+      if (id === null) return null;
+      const fields = [];
+      for (const raw of asArray(value.fields)) {
+        const field = readBacklogField(raw);
+        if (field !== null) fields.push(field);
+      }
+      return {
+        id,
+        status: readText(value.status),
+        implemented: value.implemented === true,
+        fields,
+        allListedFieldsAvailable: value.allListedFieldsAvailable === true,
+        rationale: readText(value.rationale),
+      };
+    }
+
+    /**
+     * One exploration candidate wrapper. Rows stay raw records: each candidate
+     * renderer reads exactly the columns it can state honestly.
+     * @param {unknown} value
+     * @returns {{ id: string | null, status: string | null, question: string | null, method: string | null, caveat: string | null, rows: Record<string, unknown>[], omittedRows: number | null } | null}
+     */
+    function readExploreCandidate(value) {
+      if (!isRecord(value)) return null;
+      return {
+        id: readText(value.id),
+        status: readText(value.status),
+        question: readText(value.question),
+        method: readText(value.method),
+        caveat: readText(value.caveat),
+        rows: asArray(value.rows).filter(isRecord),
+        omittedRows: readNumber(value.omittedRows),
+      };
+    }
+
+    /**
+     * The exploration payload: constants, corpus, frozen detector ids, catalog
+     * presence, backlog and the three candidates. Every field is optional at the
+     * boundary; the renderer states absence instead of inventing a value.
+     * @param {Record<string, unknown> | null} payload
+     * @returns {{ constants: { minBets: number | null, maxRows: number | null, entropyBucket: string | null } | null, corpus: { rows: number | null, accounts: number | null, agents: number | null } | null, frozenDetectors: string[], catalogPresent: boolean, catalogPath: string | null, backlog: NonNullable<ReturnType<typeof readBacklogEntry>>[], candidates: { marketEntropy: ReturnType<typeof readExploreCandidate>, unattributedOverride: ReturnType<typeof readExploreCandidate>, stakeConcentration: ReturnType<typeof readExploreCandidate> }, limits: string[] } | null}
+     */
+    function readExplore(payload) {
+      if (payload === null) return null;
+      const constants = isRecord(payload.constants) ? payload.constants : null;
+      const corpus = isRecord(payload.corpus) ? payload.corpus : null;
+      const candidates = isRecord(payload.candidates)
+        ? payload.candidates
+        : null;
+      const backlog = [];
+      for (const raw of asArray(payload.backlog)) {
+        const entry = readBacklogEntry(raw);
+        if (entry !== null) backlog.push(entry);
+      }
+      return {
+        constants:
+          constants === null
+            ? null
+            : {
+                minBets: readNumber(constants.minBets),
+                maxRows: readNumber(constants.maxRows),
+                entropyBucket: readText(constants.entropyBucket),
+              },
+        corpus:
+          corpus === null
+            ? null
+            : {
+                rows: readNumber(corpus.rows),
+                accounts: readNumber(corpus.accounts),
+                agents: readNumber(corpus.agents),
+              },
+        frozenDetectors: asArray(payload.frozenDetectors).filter(
+          (id) => typeof id === "string",
+        ),
+        catalogPresent: payload.catalogPresent === true,
+        catalogPath: readText(payload.catalogPath),
+        backlog,
+        candidates: {
+          marketEntropy:
+            candidates === null
+              ? null
+              : readExploreCandidate(candidates.marketEntropy),
+          unattributedOverride:
+            candidates === null
+              ? null
+              : readExploreCandidate(candidates.unattributedOverride),
+          stakeConcentration:
+            candidates === null
+              ? null
+              : readExploreCandidate(candidates.stakeConcentration),
+        },
+        limits: asArray(payload.limits).filter(
+          (limit) => typeof limit === "string",
         ),
       };
     }
@@ -2711,6 +2943,568 @@ window.__ModuleLoader__.load({
             );
           }),
           { sub: t("queueSub") },
+        ),
+      );
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* Explore                                                               */
+    /* -------------------------------------------------------------------- */
+
+    /**
+     * Account cell used by every exploration table: a real button that loads the
+     * account's dossier through the panel's existing path, without leaving the
+     * tab. The cells are not rows of a findings list, so no severity styling.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {string | null} account
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function exploreAccountCell(t, account, onOpenDossier) {
+      if (account === null) {
+        return h("td", null, t("notAvailable"));
+      }
+      return h(
+        "td",
+        null,
+        h(
+          "button",
+          {
+            type: "button",
+            className: "sec-link-btn",
+            "data-action": "open-dossier",
+            "data-account": account,
+            onClick: (event) => {
+              if (event && typeof event.stopPropagation === "function") {
+                event.stopPropagation();
+              }
+              onOpenDossier(account);
+            },
+          },
+          account,
+        ),
+      );
+    }
+
+    /**
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {string | null} value
+     */
+    function exploreTextCell(t, value) {
+      return h("td", null, value ?? t("notAvailable"));
+    }
+
+    /**
+     * @param {unknown} value
+     */
+    function exploreIntegerCell(value) {
+      return h("td", { className: "sec-mono" }, formatInteger(value) ?? "—");
+    }
+
+    /**
+     * @param {unknown} value
+     * @param {number} digits
+     */
+    function exploreFixedCell(value, digits) {
+      return h(
+        "td",
+        { className: "sec-mono" },
+        formatFixed(value, digits) ?? "—",
+      );
+    }
+
+    /**
+     * @param {unknown} value
+     */
+    function explorePercentCell(value) {
+      return h("td", { className: "sec-mono" }, formatPercent(value) ?? "—");
+    }
+
+    /**
+     * @param {unknown} value
+     */
+    function exploreUsdCell(value) {
+      return h("td", { className: "sec-mono" }, formatUsd(value) ?? "—");
+    }
+
+    /**
+     * Column cells for the market-entropy candidate.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, unknown>} row
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function exploreEntropyCells(t, row, onOpenDossier) {
+      return [
+        exploreAccountCell(t, readText(row.account), onOpenDossier),
+        exploreTextCell(t, readText(row.agent)),
+        exploreIntegerCell(row.bets),
+        exploreFixedCell(row.entropyBits, 2),
+        exploreIntegerCell(row.bucketCount),
+        explorePercentCell(row.topBucketShare),
+      ];
+    }
+
+    /**
+     * Column cells for the unattributed-override candidate.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, unknown>} row
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function exploreOverrideCells(t, row, onOpenDossier) {
+      return [
+        exploreAccountCell(t, readText(row.account), onOpenDossier),
+        exploreTextCell(t, readText(row.agent)),
+        exploreIntegerCell(row.manualLogRows),
+        exploreIntegerCell(row.rowsWithoutAdminUser),
+        explorePercentCell(row.share),
+      ];
+    }
+
+    /**
+     * Column cells for the stake-concentration candidate.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, unknown>} row
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function exploreStakeCells(t, row, onOpenDossier) {
+      return [
+        exploreAccountCell(t, readText(row.account), onOpenDossier),
+        exploreTextCell(t, readText(row.agent)),
+        exploreIntegerCell(row.bets),
+        explorePercentCell(row.topStakeShare),
+        exploreUsdCell(row.topStakeUsd),
+      ];
+    }
+
+    /**
+     * One exploration candidate section: the explicit "not a finding" badge, the
+     * question/method/caveat text, the compact table and the omitted-row count.
+     * A candidate with no rows states that it is empty instead of rendering a
+     * table of zeros.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {string} titleKey
+     * @param {ReturnType<typeof readExploreCandidate>} candidate
+     * @param {string[]} columns
+     * @param {(t: (key: string, params?: Record<string, unknown>) => string, row: Record<string, unknown>, onOpenDossier: (account: string) => void) => unknown[]} rowCells
+     * @param {(account: string) => void} onOpenDossier
+     */
+    function exploreCandidateBlock(
+      t,
+      titleKey,
+      candidate,
+      columns,
+      rowCells,
+      onOpenDossier,
+    ) {
+      const title = h("h3", { className: "sec-subtitle" }, t(titleKey));
+      if (candidate === null) {
+        return h(
+          "div",
+          { className: "sec-subsection", key: titleKey },
+          title,
+          h("p", { className: "sec-empty" }, t("notAvailable")),
+        );
+      }
+      const badges = h(
+        "div",
+        { className: "sec-chips", key: "badge" },
+        h(
+          "span",
+          { className: "sec-badge sec-explore-badge" },
+          t("exploreNotAFinding"),
+        ),
+        candidate.id === null ? null : chip(candidate.id, { key: "id" }),
+      );
+      const infoRows = [
+        candidate.question === null
+          ? null
+          : {
+              label: t("exploreQuestion"),
+              value: candidate.question,
+              key: "question",
+            },
+        candidate.method === null
+          ? null
+          : {
+              label: t("exploreMethod"),
+              value: candidate.method,
+              key: "method",
+            },
+        candidate.caveat === null
+          ? null
+          : {
+              label: t("exploreCaveat"),
+              value: candidate.caveat,
+              key: "caveat",
+            },
+      ].filter((row) => row !== null);
+      const table =
+        candidate.rows.length === 0
+          ? h("p", { className: "sec-empty", key: "empty" }, t("exploreNoRows"))
+          : h(
+              "div",
+              { className: "sec-table-wrap", key: "table" },
+              h(
+                "table",
+                { className: "sec-table" },
+                h(
+                  "thead",
+                  null,
+                  h(
+                    "tr",
+                    null,
+                    columns.map((key) => h("th", { key }, t(key))),
+                  ),
+                ),
+                h(
+                  "tbody",
+                  null,
+                  candidate.rows.map((row, index) =>
+                    h(
+                      "tr",
+                      { key: `row-${index}` },
+                      rowCells(t, row, onOpenDossier),
+                    ),
+                  ),
+                ),
+              ),
+            );
+      return h(
+        "div",
+        { className: "sec-subsection", key: titleKey },
+        title,
+        badges,
+        infoRows.length === 0 ? null : metaList(infoRows),
+        table,
+        candidate.omittedRows === null
+          ? null
+          : h(
+              "p",
+              { className: "sec-muted" },
+              t("exploreOmittedRows", {
+                count:
+                  formatInteger(candidate.omittedRows) ?? t("notAvailable"),
+              }),
+            ),
+      );
+    }
+
+    /**
+     * One backlog row: detector id + rationale, status chip and the per-field
+     * availability chips with their bounded `via` accessor.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readBacklogEntry>>} entry
+     */
+    function exploreBacklogRow(t, entry) {
+      const status =
+        entry.status === null
+          ? entry.implemented
+            ? t("exploreStatusImplemented")
+            : t("exploreStatusProposed")
+          : labelOf(t, EXPLORE_STATUS_LABEL_KEYS, entry.status);
+      const fields = entry.fields.map((field) =>
+        h(
+          "div",
+          { className: "sec-explore-field", key: field.field },
+          chip(
+            `${field.field}: ${
+              field.available
+                ? t("exploreFieldAvailable")
+                : t("exploreFieldMissing")
+            }`,
+            { key: "availability", state: field.available ? "ok" : "missing" },
+          ),
+          field.via === null
+            ? null
+            : h(
+                "span",
+                { className: "sec-muted sec-explore-via", title: field.via },
+                truncateText(field.via, MAX_NOTE_CHARS),
+              ),
+        ),
+      );
+      fields.push(
+        chip(
+          entry.allListedFieldsAvailable
+            ? t("exploreFieldsAllAvailable")
+            : t("exploreFieldsMissing"),
+          {
+            key: "all-fields",
+            state: entry.allListedFieldsAvailable ? "ok" : "missing",
+          },
+        ),
+      );
+      return h(
+        "tr",
+        { key: entry.id },
+        h(
+          "td",
+          null,
+          h("span", { className: "sec-mono" }, entry.id),
+          entry.rationale === null
+            ? null
+            : h(
+                "div",
+                { className: "sec-muted", title: entry.rationale },
+                truncateText(entry.rationale, MAX_NOTE_CHARS),
+              ),
+        ),
+        h(
+          "td",
+          null,
+          chip(status, {
+            key: "status",
+            state: entry.implemented ? "ok" : null,
+          }),
+        ),
+        h("td", null, h("div", { className: "sec-explore-fields" }, fields)),
+      );
+    }
+
+    /**
+     * The Explore payload body: corpus/constants/catalog chips, the backlog
+     * table and the three exploratory candidates. No candidate is styled as a
+     * finding; the badge and the copy say "exploratory — not a finding".
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {NonNullable<ReturnType<typeof readExplore>>} explore
+     * @param {(account: string) => void} onOpenDossier
+     * @param {string | null} loadedDossierAccount
+     */
+    function exploreBody(t, explore, onOpenDossier, loadedDossierAccount) {
+      const corpus = explore.corpus;
+      const constants = explore.constants;
+      const corpusGrid =
+        corpus === null
+          ? null
+          : metricGrid([
+              {
+                label: t("corpusRows"),
+                value: formatInteger(corpus.rows),
+              },
+              {
+                label: t("corpusAccounts"),
+                value: formatInteger(corpus.accounts),
+              },
+              {
+                label: t("corpusAgents"),
+                value: formatInteger(corpus.agents),
+              },
+            ]);
+      const catalogChips = h(
+        "div",
+        { className: "sec-chips", key: "catalog" },
+        explore.catalogPresent
+          ? chip(t("exploreCatalogPresent"), { key: "present", state: "ok" })
+          : chip(t("exploreCatalogMissing"), {
+              key: "missing",
+              state: "missing",
+            }),
+        chip(
+          t("exploreFrozenDetectors", {
+            count:
+              formatInteger(explore.frozenDetectors.length) ??
+              t("notAvailable"),
+          }),
+          {
+            key: "frozen",
+            title:
+              explore.frozenDetectors.length === 0
+                ? undefined
+                : explore.frozenDetectors.join(" · "),
+          },
+        ),
+      );
+      const catalogInfo =
+        explore.catalogPath === null
+          ? null
+          : metaList([
+              {
+                label: t("exploreCatalogPath"),
+                value: h(
+                  "span",
+                  { className: "sec-mono" },
+                  explore.catalogPath,
+                ),
+                key: "catalog-path",
+              },
+            ]);
+      const catalogMissing = explore.catalogPresent
+        ? null
+        : h("p", { className: "sec-muted" }, t("exploreCatalogMissingBody"));
+      const constantsBlock =
+        constants === null
+          ? null
+          : h(
+              "div",
+              { className: "sec-subsection", key: "constants" },
+              h(
+                "h3",
+                { className: "sec-subtitle" },
+                t("exploreConstantsTitle"),
+              ),
+              metaList([
+                {
+                  label: t("exploreConstantMinBets"),
+                  value: formatInteger(constants.minBets) ?? t("notAvailable"),
+                  key: "min-bets",
+                },
+                {
+                  label: t("exploreConstantMaxRows"),
+                  value: formatInteger(constants.maxRows) ?? t("notAvailable"),
+                  key: "max-rows",
+                },
+                {
+                  label: t("exploreConstantEntropyBucket"),
+                  value:
+                    constants.entropyBucket === null
+                      ? t("notAvailable")
+                      : h(
+                          "span",
+                          { className: "sec-mono" },
+                          constants.entropyBucket,
+                        ),
+                  key: "entropy-bucket",
+                },
+              ]),
+            );
+      const backlogBlock = h(
+        "div",
+        { className: "sec-subsection", key: "backlog" },
+        h("h3", { className: "sec-subtitle" }, t("exploreBacklogTitle")),
+        h("p", { className: "sec-muted" }, t("exploreBacklogNote")),
+        explore.backlog.length === 0
+          ? h("p", { className: "sec-empty" }, t("notAvailable"))
+          : h(
+              "div",
+              { className: "sec-table-wrap" },
+              h(
+                "table",
+                { className: "sec-table" },
+                h(
+                  "thead",
+                  null,
+                  h(
+                    "tr",
+                    null,
+                    h("th", null, t("exploreColDetector")),
+                    h("th", null, t("exploreColStatus")),
+                    h("th", null, t("exploreColFields")),
+                  ),
+                ),
+                h(
+                  "tbody",
+                  null,
+                  explore.backlog.map((entry) => exploreBacklogRow(t, entry)),
+                ),
+              ),
+            ),
+      );
+      const candidateBlocks = [
+        exploreCandidateBlock(
+          t,
+          "exploreCandidateEntropyTitle",
+          explore.candidates.marketEntropy,
+          [
+            "exploreColAccount",
+            "exploreColAgent",
+            "exploreColBets",
+            "exploreColEntropyBits",
+            "exploreColBuckets",
+            "exploreColTopShare",
+          ],
+          exploreEntropyCells,
+          onOpenDossier,
+        ),
+        exploreCandidateBlock(
+          t,
+          "exploreCandidateOverrideTitle",
+          explore.candidates.unattributedOverride,
+          [
+            "exploreColAccount",
+            "exploreColAgent",
+            "exploreColManualRows",
+            "exploreColWithoutAdmin",
+            "exploreColShare",
+          ],
+          exploreOverrideCells,
+          onOpenDossier,
+        ),
+        exploreCandidateBlock(
+          t,
+          "exploreCandidateStakeTitle",
+          explore.candidates.stakeConcentration,
+          [
+            "exploreColAccount",
+            "exploreColAgent",
+            "exploreColBets",
+            "exploreColTopShare",
+            "exploreColTopStakeUsd",
+          ],
+          exploreStakeCells,
+          onOpenDossier,
+        ),
+      ];
+      const limitsBlock =
+        explore.limits.length === 0
+          ? null
+          : h(
+              "div",
+              { className: "sec-subsection", key: "limits" },
+              h("h3", { className: "sec-subtitle" }, t("limitsTitle")),
+              boundedTextList(explore.limits, t("noLimits"), "explore-limits"),
+            );
+      return h(
+        "div",
+        null,
+        corpusGrid,
+        catalogChips,
+        catalogInfo,
+        catalogMissing,
+        constantsBlock,
+        backlogBlock,
+        candidateBlocks,
+        limitsBlock,
+        loadedDossierAccount === null
+          ? null
+          : h(
+              "p",
+              { className: "sec-note" },
+              t("queueDossierHint", { account: loadedDossierAccount }),
+            ),
+      );
+    }
+
+    /**
+     * The Explore tab: one measured section for the whole payload.
+     * @param {(key: string, params?: Record<string, unknown>) => string} t
+     * @param {Record<string, ReturnType<typeof initialEntry>>} snapshot
+     * @param {() => void} onRetry
+     * @param {(account: string) => void} onOpenDossier
+     * @param {string | null} loadedDossierAccount
+     */
+    function renderExplore(
+      t,
+      snapshot,
+      onRetry,
+      onOpenDossier,
+      loadedDossierAccount,
+    ) {
+      const entry = snapshot.explore;
+      return h(
+        "div",
+        {
+          className: "sec-tabpanel",
+          id: "sec-panel-explore",
+          role: "tabpanel",
+        },
+        card(
+          t("exploreTitle"),
+          measuredSection(t, entry, onRetry, () => {
+            const explore = readExplore(entry.payload);
+            return explore === null
+              ? h("p", { className: "sec-empty" }, t("loading"))
+              : exploreBody(t, explore, onOpenDossier, loadedDossierAccount);
+          }),
+          { sub: t("exploreSub") },
         ),
       );
     }
@@ -4211,6 +5005,10 @@ window.__ModuleLoader__.load({
 .sec-queue-row:hover { background: var(--dsw-alias-bg-layer-2); }
 .sec-queue-model { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .sec-queue-reasons { max-width: 320px; overflow-wrap: anywhere; }
+.sec-explore-badge { border-style: dashed; }
+.sec-explore-fields { display: flex; flex-direction: column; gap: 4px; }
+.sec-explore-field { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.sec-explore-via { overflow-wrap: anywhere; }
 .sec-tabpanel > .sec-note { margin-top: 4px; }
 `;
 
@@ -4280,6 +5078,8 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (tab === "queue") {
           ensureSource("queue");
+        } else if (tab === "explore") {
+          ensureSource("explore");
         } else if (tab === "ip") {
           ensureSource("ipGraph");
         } else if (tab === "findings") {
@@ -4388,6 +5188,14 @@ window.__ModuleLoader__.load({
         body = renderOverview(t, snapshot, refresh);
       } else if (tab === "queue") {
         body = renderQueue(
+          t,
+          snapshot,
+          refresh,
+          openDossier,
+          loadedDossierAccount,
+        );
+      } else if (tab === "explore") {
+        body = renderExplore(
           t,
           snapshot,
           refresh,

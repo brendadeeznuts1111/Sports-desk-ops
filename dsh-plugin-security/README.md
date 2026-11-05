@@ -105,10 +105,9 @@ A transparent, reproducible **weak-label risk ranker**, not a supervised fraud c
 ## Web UI page
 
 Sidebar entry `sportsdesk-security` opens a read-only page with tabs **Overview** (source matrix,
-corpus, weblog posture, model summary + limits), **Queue**, **IP graph**, **Findings**, **Model** and
-**Dossier**. The page reads nine same-origin GET routes from the Host half:
-`/api/security/{status,bets,queue,ip-graph,weblog,patterns,model,dossier?id=,research}`; the tenth,
-`/api/security/explore`, is served for tools but has no tab yet. A route that
+corpus, weblog posture, model summary + limits), **Queue**, **Explore**, **IP graph**, **Findings**,
+**Model** and **Dossier**. The page reads ten same-origin GET routes from the Host half:
+`/api/security/{status,bets,queue,explore,ip-graph,weblog,patterns,model,dossier?id=,research}`. A route that
 does not exist is reported as "update the Host bundle"; a source that is missing is reported as
 missing, never as zero; a failed refresh keeps the last payload labelled stale.
 
