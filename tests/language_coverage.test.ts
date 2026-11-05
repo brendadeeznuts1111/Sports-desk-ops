@@ -172,7 +172,8 @@ describe("language coverage", () => {
     for (const extension of ["xml", "svg"]) {
       for (const path of filesWith(extension)) {
         try {
-          Bun.XML.parse(await Bun.file(join(ROOT, path)).text());
+          // Bytes, not text: Bun.XML decodes the BOM/encoding declaration itself.
+          Bun.XML.parse(await Bun.file(join(ROOT, path)).bytes());
         } catch (error) {
           failures.push(`${path}: ${String(error)}`);
         }
