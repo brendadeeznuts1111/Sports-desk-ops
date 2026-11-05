@@ -48,10 +48,31 @@ export interface GetInfoPlayerEnvelope {
 }
 
 const SENSITIVE_INFO_DATA_KEYS = new Set([
+  // credentials
   "Password",
   "Passwordt",
   "EncryptTempPassExpiredDate",
+  // customer PII / free text
+  "NameFirst",
+  "NameLast",
+  "NameMI",
+  "HomePhone",
+  "BusinessPhone",
+  "Fax",
+  "SMSPhoneNumber",
+  "email",
+  "address",
+  "city",
+  "state",
+  "PlayerNotes",
+  "CommentsForCustomer",
+  "CommentsForTW",
+  "TickerMessage",
+  "ImportantMessage",
+  "TelegramID",
 ]);
+
+const SENSITIVE_INFO_ADDED_KEYS = new Set(["TelegramID"]);
 
 export function trimPaddedId(raw: string | undefined): string {
   return (raw ?? "").trim();
@@ -106,18 +127,27 @@ export function parseGetInfoPlayerProbe(raw: unknown): GetInfoPlayerProbe {
   };
 }
 
-/** Strip password-like fields from a parsed envelope (mutates a shallow copy). */
+/** Strip password and PII/free-text fields from a parsed envelope (shallow copy). */
 export function redactGetInfoPlayer(
   envelope: GetInfoPlayerEnvelope,
 ): GetInfoPlayerEnvelope {
-  const data = { ...envelope.INFO.data };
+  const data: Record<string, unknown> = { ...envelope.INFO.data };
   for (const key of SENSITIVE_INFO_DATA_KEYS) {
     if (key in data) data[key] = "<redacted>";
+  }
+  const sourceAdded = envelope.INFO.added;
+  const added: Record<string, unknown> | undefined =
+    sourceAdded === undefined ? undefined : { ...sourceAdded };
+  if (added !== undefined) {
+    for (const key of SENSITIVE_INFO_ADDED_KEYS) {
+      if (key in added) added[key] = "<redacted>";
+    }
   }
   return {
     INFO: {
       ...envelope.INFO,
       data,
+      ...(added === undefined ? {} : { added }),
     },
   };
 }

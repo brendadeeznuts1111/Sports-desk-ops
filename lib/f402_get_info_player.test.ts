@@ -34,12 +34,25 @@ describe("getInfoPlayer envelope", () => {
     expect(summary.agentType).toBe("M");
   });
 
-  test("redactGetInfoPlayer removes password fields", () => {
+  test("redactGetInfoPlayer removes password and PII fields", () => {
     const raw = JSON.parse(readFileSync(fixture, "utf8"));
+    raw.INFO.data.NameFirst = "Fixture Name";
+    raw.INFO.data.HomePhone = "555-0100";
+    raw.INFO.data.email = "fixture@example.test";
+    raw.INFO.data.address = "1 Fixture Way";
+    raw.INFO.data.PlayerNotes = "fixture note";
+    raw.INFO.added.TelegramID = "fixture-telegram";
     const env = parseGetInfoPlayerEnvelope(raw);
     const redacted = redactGetInfoPlayer(env);
     expect(redacted.INFO.data.Password).toBe("<redacted>");
     expect(redacted.INFO.data.Passwordt).toBe("<redacted>");
+    expect(redacted.INFO.data.NameFirst).toBe("<redacted>");
+    expect(redacted.INFO.data.HomePhone).toBe("<redacted>");
+    expect(redacted.INFO.data.email).toBe("<redacted>");
+    expect(redacted.INFO.data.address).toBe("<redacted>");
+    expect(redacted.INFO.data.PlayerNotes).toBe("<redacted>");
+    expect(redacted.INFO.added?.TelegramID).toBe("<redacted>");
+    expect(redacted.INFO.added?.CustomerID).toBe("BILLY666  ");
   });
 
   test("rejects missing INFO.data", () => {
