@@ -111,6 +111,105 @@ describe("flags CLI", () => {
     expect(one.stdout).toBe("");
   });
 
+  test("--review plans, --record stores and --review-report emits metadata", async () => {
+    const path = capture();
+    const db = join(TMP, "flags-review.sqlite");
+    const runId = "cli-review-run";
+
+    const planned = await run([
+      "--file",
+      path,
+      "--review",
+      "--db",
+      db,
+      "--run-id",
+      runId,
+      "--budget-minutes",
+      "60",
+      "--seed",
+      "dx-2026-q4",
+      "--json",
+    ]);
+    expect(planned.code).toBe(0);
+    const plan = JSON.parse(planned.stdout) as {
+      runId: string;
+      flagCount: number;
+      wagerCount: number;
+      samples: Array<{ seq: number; rule: string }>;
+      rules: Array<{
+        rule: string;
+        fired: number;
+        selected: number;
+        mode: string;
+      }>;
+    };
+    expect(plan.runId).toBe(runId);
+    expect(plan.flagCount).toBe(1);
+    expect(plan.wagerCount).toBe(4);
+    expect(plan.samples[0]).toMatchObject({
+      seq: 0,
+      rule: "period_correlation",
+    });
+    expect(plan.rules[0]).toMatchObject({
+      rule: "period_correlation",
+      fired: 1,
+      selected: 1,
+      mode: "census",
+    });
+
+    const recorded = await run([
+      "--record",
+      "--db",
+      db,
+      "--run-id",
+      runId,
+      "--seq",
+      "0",
+      "--verdict",
+      "confirmed",
+      "--reviewer",
+      "analyst-a",
+    ]);
+    expect(recorded.code).toBe(0);
+    expect(recorded.stdout).toContain("recorded confirmed");
+
+    const reported = await run([
+      "--review-report",
+      "--db",
+      db,
+      "--run-id",
+      runId,
+      "--json",
+    ]);
+    expect(reported.code).toBe(0);
+    const payload = JSON.parse(reported.stdout) as {
+      kind: string;
+      metricMetadata: {
+        kind: string;
+        definitions: Array<{
+          name: string;
+          evaluates?: string;
+          doesNotEvaluate?: string;
+          value?: Record<string, unknown>;
+        }>;
+      };
+    };
+    expect(payload.kind).toBe("flags-review-report");
+    expect(payload.metricMetadata.kind).toBe("flags-metric-metadata");
+    const precision = payload.metricMetadata.definitions.find(
+      (definition) => definition.name === "rulePrecision",
+    );
+    expect(precision).toMatchObject({
+      evaluates: "rule",
+      doesNotEvaluate: "individual-flag",
+    });
+    expect(precision?.value?.["period_correlation"]).toMatchObject({
+      state: "not_measured",
+      blockedBy: "reviewedSampleSize",
+      sampleSize: 1,
+    });
+  });
+
   test("--dir globs captures and --week keeps the last seven days", async () => {
     const dir = mkdtempSync(join(TMP, "dir-"));
     const write = (
