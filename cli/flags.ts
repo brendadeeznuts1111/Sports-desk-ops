@@ -187,8 +187,12 @@ function fromHtml(ticket: HtmlBetTicket): RuleTicket {
 }
 
 async function loadFile(path: string): Promise<RuleTicket[]> {
+  const handle = Bun.file(path);
+  if (!(await handle.exists())) {
+    fail(`${path} not found; pass --file=<capture>`);
+  }
   if (path.endsWith(".jsonl")) {
-    const text = await Bun.file(path).text();
+    const text = await handle.text();
     const tickets: RuleTicket[] = [];
     for (const line of text.split(/\r?\n/)) {
       const trimmed = line.trim();
@@ -218,7 +222,12 @@ async function loadFile(path: string): Promise<RuleTicket[]> {
 }
 
 async function loadDir(path: string): Promise<RuleTicket[]> {
-  const entries = readdirSync(path, { withFileTypes: true });
+  let entries;
+  try {
+    entries = readdirSync(path, { withFileTypes: true });
+  } catch {
+    fail(`${path} is not a readable directory; pass --dir=<dir>`);
+  }
   const tickets: RuleTicket[] = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;

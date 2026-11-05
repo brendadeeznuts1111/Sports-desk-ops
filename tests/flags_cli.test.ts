@@ -97,6 +97,13 @@ describe("flags CLI", () => {
     expect(strict.stdout).toContain("1 flag from 4 wagers");
   });
 
+  test("a missing capture is a clean error", async () => {
+    const missing = await run(["--file", join(TMP, "missing.json")]);
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain("not found");
+    expect(missing.stderr).not.toContain("ENOENT");
+  });
+
   test("--rule narrows the run and empty captures exit 0", async () => {
     const path = capture();
     const one = await run(["--file", path, "--rule=batch_replay"]);
