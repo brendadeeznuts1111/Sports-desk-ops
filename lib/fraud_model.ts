@@ -144,7 +144,7 @@ export interface FraudRowPrecisionAtK {
   /** Top-k rows whose own label is true. */
   readonly kPositives: number;
   /** All rows in the scored population whose own label is true. */
-  readonly positive: number;
+  readonly positives: number;
   readonly precision: number | null;
   readonly recall: number | null;
   /** Precision divided by the label prevalence in the scored rows. */
@@ -202,7 +202,7 @@ export interface FraudStability {
 /** Holdout **bet rows** whose account has no earlier bet in the corpus. */
 export interface FraudNoPriorBetValidation {
   readonly rows: number;
-  readonly positive: number;
+  readonly positives: number;
   readonly metrics: FraudClassificationMetrics;
 }
 
@@ -795,14 +795,14 @@ export function rowPrecisionAtK(
   if (!Number.isInteger(k) || k <= 0) {
     throw new Error("rowPrecisionAtK: k must be a positive integer");
   }
-  const positive = labels.filter(Boolean).length;
+  const positives = labels.filter(Boolean).length;
   const kSamples = Math.min(k, scores.length);
   if (kSamples === 0) {
     return {
       k,
       kSamples: 0,
       kPositives: 0,
-      positive,
+      positives,
       precision: null,
       recall: null,
       lift: null,
@@ -814,13 +814,13 @@ export function rowPrecisionAtK(
     .slice(0, kSamples);
   const kPositives = order.filter((entry) => entry.label).length;
   const precision = kPositives / kSamples;
-  const recall = positive === 0 ? null : kPositives / positive;
-  const prevalence = positive / scores.length;
+  const recall = positives === 0 ? null : kPositives / positives;
+  const prevalence = positives / scores.length;
   return {
     k,
     kSamples,
     kPositives,
-    positive,
+    positives,
     precision,
     recall,
     lift: prevalence === 0 ? null : precision / prevalence,
@@ -1241,7 +1241,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       `insufficient corpus to fit: ${rowCount} rows, ${positives} positive rows, ${positiveAccounts.size} accounts with proxy "${options.proxy}" (need >= ${options.minRows} rows and >= ${options.minLabeledAccounts} labeled accounts)`,
       {
         rows: rowCount,
-        positive: positives,
+        positives,
         accountsWithProxyLabel: positiveAccounts.size,
         proxy: options.proxy,
         minRows: options.minRows,
@@ -1353,7 +1353,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       );
       noPriorBet = {
         rows: indices.length,
-        positive: noPriorLabels.filter(Boolean).length,
+        positives: noPriorLabels.filter(Boolean).length,
         metrics: classificationMetrics(noPriorScores, noPriorLabels),
       };
     }
@@ -1475,7 +1475,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   ) {
     warnings.push({
       code: "no_prior_bet_precision_gap",
-      message: `no-prior-bet precision@20 is ${noPriorPrecision.toFixed(3)} vs ${holdoutPrecision.toFixed(3)} overall (n=${noPriorBet?.rows ?? 0} rows, ${noPriorBet?.positive ?? 0} positive rows): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
+      message: `no-prior-bet precision@20 is ${noPriorPrecision.toFixed(3)} vs ${holdoutPrecision.toFixed(3)} overall (n=${noPriorBet?.rows ?? 0} rows, ${noPriorBet?.positives ?? 0} positive rows): the ranker mostly finds repeat offenders, so do not quote the overall precision for new accounts`,
       observed:
         Math.round((holdoutPrecision - noPriorPrecision) * 10_000) / 10_000,
     });
@@ -1886,8 +1886,11 @@ export interface ModelReportPayloadOptions {
 
 /** The reference-bearing fields a metric-metadata definition can carry. */
 export interface MetricMetadataDefinition {
+  readonly unit?: string;
+  readonly label?: string;
   readonly name: string;
   readonly kind: string;
+  readonly description?: string;
   readonly baselineRef?: string;
   readonly population?: string;
   readonly subsetOf?: string;
@@ -1897,7 +1900,7 @@ export interface MetricMetadataDefinition {
   readonly maxAchievable?: number | null;
   readonly kSamples?: number | null;
   readonly kPositives?: number | null;
-  readonly positive?: number | null;
+  readonly positives?: number | null;
   /** Population size (rows) or baseline rate, depending on `kind`. */
   readonly value?: unknown;
   readonly state?: string | undefined;
@@ -1905,6 +1908,12 @@ export interface MetricMetadataDefinition {
   readonly blockedBy?: string | undefined;
   /** Where the full table lives in the report, for a headline row. */
   readonly detailRef?: string;
+  readonly derivedFrom?: string;
+}
+
+export interface MetricVocabulary {
+  readonly unit?: Readonly<Record<string, string>>;
+  readonly label?: Readonly<Record<string, string>>;
 }
 
 /** Levenshtein distance over short definition names; candidates are fewer than 20. */
@@ -1983,10 +1992,17 @@ function getPath(root: unknown, path: string): unknown {
  */
 export function validateMetricMetadata(
   metadata: {
+    readonly schemaVersion: number;
+    readonly vocabulary?: MetricVocabulary;
     readonly definitions: readonly MetricMetadataDefinition[];
   },
   root?: unknown,
 ): void {
+  if (metadata.schemaVersion !== FRAUD_MODEL_SCHEMA_VERSION) {
+    throw new Error(
+      `metricMetadata: schemaVersion ${metadata.schemaVersion} but validator expects ${FRAUD_MODEL_SCHEMA_VERSION}; re-run "model fit --write"`,
+    );
+  }
   const byName = new Map<string, MetricMetadataDefinition>();
   for (const row of metadata.definitions) {
     if (!isMetricMetadataKind(row.kind)) {
@@ -2026,6 +2042,22 @@ export function validateMetricMetadata(
     }
   };
   for (const row of metadata.definitions) {
+    if (row.unit !== undefined) {
+      const declaration = metadata.vocabulary?.unit?.[row.unit];
+      if (declaration === undefined) {
+        throw new Error(
+          `metricMetadata: ${row.name}.unit "${row.unit}" has no vocabulary entry`,
+        );
+      }
+    }
+    if (row.label !== undefined) {
+      const declaration = metadata.vocabulary?.label?.[row.label];
+      if (declaration === undefined) {
+        throw new Error(
+          `metricMetadata: ${row.name}.label "${row.label}" has no vocabulary entry`,
+        );
+      }
+    }
     if (row.baselineRef !== undefined) {
       requireKind(row.name, "baselineRef", row.baselineRef, "baseline");
     }
@@ -2034,6 +2066,12 @@ export function validateMetricMetadata(
     }
     if (row.subsetOf !== undefined) {
       requireKind(row.name, "subsetOf", row.subsetOf, "population");
+      const parent = byName.get(row.subsetOf);
+      if (parent?.subsets?.includes(row.name) !== true) {
+        throw new Error(
+          `metricMetadata: ${row.name}.subsetOf = "${row.subsetOf}" but parent.subsets does not list "${row.name}"`,
+        );
+      }
     }
     if (row.subsets !== undefined) {
       for (const subset of row.subsets) {
@@ -2046,7 +2084,7 @@ export function validateMetricMetadata(
       }
     }
   }
-  // A baseline value is positive / rows for the population it names.
+  // A baseline value is positives / rows for the population it names.
   for (const row of metadata.definitions) {
     if (row.kind !== "baseline") continue;
     if (row.value === null) {
@@ -2067,21 +2105,21 @@ export function validateMetricMetadata(
     if (
       population === undefined ||
       typeof population.rows !== "number" ||
-      population.positive === null ||
-      population.positive === undefined
+      population.positives === null ||
+      population.positives === undefined
     ) {
       throw new Error(
-        `metricMetadata: ${row.name} baseline cannot resolve rows/positive from "${row.population ?? "?"}"`,
+        `metricMetadata: ${row.name} baseline cannot resolve rows/positives from "${row.population ?? "?"}"`,
       );
     }
-    const expected = population.positive / population.rows;
+    const expected = population.positives / population.rows;
     if (Math.abs(row.value - expected) > 1e-6) {
       throw new Error(
-        `metricMetadata: ${row.name}.value ${row.value} != positive/rows = ${expected}`,
+        `metricMetadata: ${row.name}.value ${row.value} != positives/rows = ${expected}`,
       );
     }
   }
-  // A stored maxAchievable is min(k, positive) / k; the top-k counts must also fit k.
+  // A stored maxAchievable is min(k, positives) / k; the top-k counts must also fit k.
   for (const row of metadata.definitions) {
     if (row.kind !== "metric") continue;
     if (row.k === undefined) continue;
@@ -2130,15 +2168,15 @@ export function validateMetricMetadata(
     }
     const population =
       row.population === undefined ? undefined : byName.get(row.population);
-    if (population?.positive === null || population?.positive === undefined) {
+    if (population?.positives === null || population?.positives === undefined) {
       throw new Error(
         `metricMetadata: ${row.name} stores maxAchievable but population "${row.population ?? "?"}" has no positive`,
       );
     }
-    const expected = Math.min(row.k, population.positive) / row.k;
+    const expected = Math.min(row.k, population.positives) / row.k;
     if (Math.abs(row.maxAchievable - expected) > 1e-6) {
       throw new Error(
-        `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positive=${population.positive})/k = ${expected}`,
+        `metricMetadata: ${row.name}.maxAchievable ${row.maxAchievable} != min(k=${row.k}, positives=${population.positives})/k = ${expected}`,
       );
     }
   }
@@ -2193,7 +2231,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
   const noPriorBetRate =
     noPriorBet === null || noPriorBet.rows === 0
       ? null
-      : noPriorBet.positive / noPriorBet.rows;
+      : noPriorBet.positives / noPriorBet.rows;
   const signals = labelSupport.holdoutBySignal ?? {
     suspectedBot: 0,
     reversedCredit: 0,
@@ -2207,32 +2245,37 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
     noPriorBet?.metrics.rowPrecisionAtK.find(
       (row) => row.k === FRAUD_HEADLINE_K,
     ) ?? null;
-  const maxAchievable = (positive: number | null): number | null =>
-    positive === null
+  const maxAchievable = (positives: number | null): number | null =>
+    positives === null
       ? null
-      : Math.min(FRAUD_HEADLINE_K, positive) / FRAUD_HEADLINE_K;
+      : Math.min(FRAUD_HEADLINE_K, positives) / FRAUD_HEADLINE_K;
   const metadata = {
     kind: "fraud-model-metric-metadata",
     schemaVersion: FRAUD_MODEL_SCHEMA_VERSION,
     proxy: artifact.proxy,
-    definitions: [
-      {
-        name: "unit",
-        kind: "parameter",
-        description:
+    vocabulary: {
+      unit: {
+        "bet-row":
           "One getBetReport bet row; not an account, sport, sub-sport, market, or period.",
+        account: "One account; the queue subject, not a bet row.",
       },
-      {
-        name: "label",
-        kind: "parameter",
-        description:
-          "The row's desk_flag proxy (suspectedBot OR reversedCredit OR manualLog), never a confirmed fraud outcome.",
+      label: {
+        desk_flag:
+          "suspectedBot OR reversedCredit OR manualLog; never a confirmed fraud outcome.",
+        suspected_bot:
+          "suspectedBot row flag; never a confirmed fraud outcome.",
+        reversed_credit:
+          "reversedCredit row flag; never a confirmed fraud outcome.",
+        "account-disposition":
+          "An adjudicated account outcome; no account holdout exists yet.",
       },
+    },
+    definitions: [
       {
         name: "temporalHoldout",
         kind: "population",
         rows: rows.holdout,
-        positive: labelSupport.holdoutPositives,
+        positives: labelSupport.holdoutPositives,
         subsets: ["noPriorBet"],
         description: "The last 30% of rows by logTime (temporal split).",
       },
@@ -2241,7 +2284,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         kind: "population",
         subsetOf: "temporalHoldout",
         rows: noPriorBet?.rows ?? null,
-        positive: noPriorBet?.positive ?? null,
+        positives: noPriorBet?.positives ?? null,
         description:
           "The same row table restricted to holdout rows whose account has no earlier bet in the corpus.",
       },
@@ -2304,13 +2347,13 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
         k: FRAUD_HEADLINE_K,
         value: roundReportNullable(noPriorHeadline?.precision ?? null),
         maxAchievable: roundReportNullable(
-          maxAchievable(noPriorBet?.positive ?? null),
+          maxAchievable(noPriorBet?.positives ?? null),
           6,
         ),
         kSamples: noPriorHeadline?.kSamples ?? null,
         kPositives: noPriorHeadline?.kPositives ?? null,
         description:
-          "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positive) / k, so a slice with fewer than k positives cannot reach 1.0.",
+          "The same headline and cap on accounts with no earlier bet: maxAchievable = min(k, positives) / k, so a slice with fewer than k positives cannot reach 1.0.",
       },
       {
         name: "labelComposition",
@@ -2322,7 +2365,7 @@ function buildMetricMetadata(artifact: FraudModelArtifact) {
           manualLog: signals.manualLog,
         },
         description:
-          "Counts of the composite desk_flag holdout positives by signal; the signals overlap, so counts can sum above positive. labelComposition describes the composite desk_flag. Metric rows measure against the fitted proxy (see metricMetadata.proxy); the two labels have different positive sets, and correlation between them is not measured here.",
+          "Counts of the composite desk_flag holdout positives by signal; the signals overlap, so counts can sum above positives. labelComposition describes the composite desk_flag. Metric rows measure against the fitted proxy (see metricMetadata.proxy); the two labels have different positive sets, and correlation between them is not measured here.",
       },
       {
         name: "accountHoldout",
@@ -2426,7 +2469,7 @@ export function modelReportPayload(
           ? { state: "not_measured" }
           : {
               rows: noPriorBet.rows,
-              positive: noPriorBet.positive,
+              positives: noPriorBet.positives,
               metrics: roundClassificationMetrics(noPriorBet.metrics),
             },
       stability: {

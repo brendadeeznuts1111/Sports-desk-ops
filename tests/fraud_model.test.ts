@@ -177,7 +177,7 @@ describe("rowPrecisionAtK", () => {
       k: 2,
       kSamples: 2,
       kPositives: 1,
-      positive: 2,
+      positives: 2,
       precision: 0.5,
       recall: 0.5,
       lift: 1.25,
@@ -219,7 +219,7 @@ describe("rowPrecisionAtK", () => {
 describe("validateMetricMetadata", () => {
   const validDefinitions = [
     { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
-    { name: "pop", kind: "population", rows: 24, positive: 12 },
+    { name: "pop", kind: "population", rows: 24, positives: 12 },
     {
       name: "metric",
       kind: "metric",
@@ -235,11 +235,15 @@ describe("validateMetricMetadata", () => {
 
   test("baseline and population references resolve by kind", () => {
     expect(() =>
-      validateMetricMetadata({ definitions: validDefinitions }),
+      validateMetricMetadata({
+        schemaVersion: 2,
+        definitions: validDefinitions,
+      }),
     ).not.toThrow();
 
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "metric", kind: "metric", baselineRef: "missing" },
         ],
@@ -248,6 +252,7 @@ describe("validateMetricMetadata", () => {
 
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "rate", kind: "caveat" },
           { name: "metric", kind: "metric", baselineRef: "rate" },
@@ -260,26 +265,27 @@ describe("validateMetricMetadata", () => {
     const definitions = validDefinitions.map((row) =>
       row.name === "metric" ? { ...row, maxAchievable: 0.5 } : row,
     );
-    expect(() => validateMetricMetadata({ definitions })).toThrow(
-      /maxAchievable 0.5 != min\(k=20, positive=12\)\/k = 0.6/,
-    );
+    expect(() =>
+      validateMetricMetadata({ schemaVersion: 2, definitions }),
+    ).toThrow(/maxAchievable 0.5 != min\(k=20, positives=12\)\/k = 0.6/);
   });
 
-  test("a baseline value must match positive/rows", () => {
+  test("a baseline value must match positives/rows", () => {
     const definitions = validDefinitions.map((row) =>
       row.name === "rate" ? { ...row, value: 0.6 } : row,
     );
-    expect(() => validateMetricMetadata({ definitions })).toThrow(
-      /value 0.6 != positive\/rows = 0.5/,
-    );
+    expect(() =>
+      validateMetricMetadata({ schemaVersion: 2, definitions }),
+    ).toThrow(/value 0.6 != positives\/rows = 0.5/);
   });
 
   test("a missing reference suggests the nearest name", () => {
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "noPriorBetPositiveRate", kind: "baseline" },
-          { name: "pop", kind: "population", positive: 12 },
+          { name: "pop", kind: "population", positives: 12 },
           {
             name: "rowPrecisionAtKNoPriorBet",
             kind: "metric",
@@ -296,6 +302,7 @@ describe("validateMetricMetadata", () => {
   test("multiple close candidates are all shown", () => {
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "alphaRate", kind: "baseline" },
           { name: "alphaRateLong", kind: "baseline" },
@@ -313,13 +320,13 @@ describe("validateMetricMetadata", () => {
   test("detailRef must resolve in the report root", () => {
     expect(() =>
       validateMetricMetadata(
-        { definitions: validDefinitions },
+        { schemaVersion: 2, definitions: validDefinitions },
         { metrics: { metric: [] } },
       ),
     ).not.toThrow();
     expect(() =>
       validateMetricMetadata(
-        { definitions: validDefinitions },
+        { schemaVersion: 2, definitions: validDefinitions },
         { metrics: {} },
       ),
     ).toThrow(/detailRef/);
@@ -328,7 +335,7 @@ describe("validateMetricMetadata", () => {
   test("ranking metrics must carry top-k counts and detailRef", () => {
     const definitions = [
       { name: "rate", kind: "baseline", value: 0.5, population: "pop" },
-      { name: "pop", kind: "population", rows: 24, positive: 12 },
+      { name: "pop", kind: "population", rows: 24, positives: 12 },
       {
         name: "metric",
         kind: "metric",
@@ -338,7 +345,9 @@ describe("validateMetricMetadata", () => {
         maxAchievable: 0.6,
       },
     ];
-    expect(() => validateMetricMetadata({ definitions })).toThrow(/kSamples/);
+    expect(() =>
+      validateMetricMetadata({ schemaVersion: 2, definitions }),
+    ).toThrow(/kSamples/);
   });
 
   test("not-measured detailRef resolves to a state container without metrics", () => {
@@ -353,19 +362,19 @@ describe("validateMetricMetadata", () => {
     ];
     expect(() =>
       validateMetricMetadata(
-        { definitions },
+        { schemaVersion: 2, definitions },
         { validation: { noPriorBet: { state: "not_measured" } } },
       ),
     ).not.toThrow();
     expect(() =>
       validateMetricMetadata(
-        { definitions },
+        { schemaVersion: 2, definitions },
         { validation: { noPriorBet: {} } },
       ),
     ).toThrow(/state "not_measured"/);
     expect(() =>
       validateMetricMetadata(
-        { definitions },
+        { schemaVersion: 2, definitions },
         { validation: { noPriorBet: { state: "not_measured", metrics: {} } } },
       ),
     ).toThrow(/carries metrics/);
@@ -374,6 +383,7 @@ describe("validateMetricMetadata", () => {
   test("not-measured rows must say what blocks them", () => {
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "metric", kind: "metric", state: "not_measured" },
         ],
@@ -381,9 +391,66 @@ describe("validateMetricMetadata", () => {
     ).toThrow(/blockedBy/);
   });
 
+  test("refuses a stale schemaVersion", () => {
+    expect(() =>
+      validateMetricMetadata({
+        schemaVersion: 1,
+        definitions: validDefinitions,
+      }),
+    ).toThrow(/schemaVersion/);
+  });
+
+  test("a measured metric with k must carry maxAchievable", () => {
+    const definitions = validDefinitions.map((row) =>
+      row.name === "metric"
+        ? {
+            name: "metric",
+            kind: "metric",
+            baselineRef: "rate",
+            population: "pop",
+            k: 20,
+            kSamples: 20,
+            kPositives: 12,
+            detailRef: "metrics.metric",
+          }
+        : row,
+    );
+    expect(() =>
+      validateMetricMetadata({ schemaVersion: 2, definitions }),
+    ).toThrow(/maxAchievable/);
+  });
+
+  test("subsets and subsetOf must agree", () => {
+    const definitions = [
+      {
+        name: "parent",
+        kind: "population",
+        rows: 10,
+        positives: 1,
+        subsets: ["child"],
+      },
+      { name: "child", kind: "population", rows: 5, positives: 1 },
+    ];
+    expect(() =>
+      validateMetricMetadata({ schemaVersion: 2, definitions }),
+    ).toThrow(/subsetOf/);
+  });
+
+  test("a unit or label must be declared in the vocabulary", () => {
+    expect(() =>
+      validateMetricMetadata({
+        schemaVersion: 2,
+        definitions: [
+          { name: "m", kind: "metric", unit: "bet-row", description: "x" },
+        ],
+      }),
+    ).toThrow(/vocabulary/);
+  });
+
   test("duplicate definition names are refused", () => {
     expect(() =>
       validateMetricMetadata({
+        schemaVersion: 2,
         definitions: [
           { name: "unit", kind: "parameter" },
           { name: "unit", kind: "parameter" },
@@ -618,7 +685,7 @@ describe("fraud model fit", () => {
     if (noPriorBet !== null) {
       expect(noPriorBet.rows).toBeGreaterThan(0);
       expect(noPriorBet.rows).toBeLessThanOrEqual(metrics.rows.holdout);
-      expect(noPriorBet.positive).toBeLessThanOrEqual(noPriorBet.rows);
+      expect(noPriorBet.positives).toBeLessThanOrEqual(noPriorBet.rows);
       expect(noPriorBet.metrics.rowPrecisionAtK).toHaveLength(
         FRAUD_ROW_REVIEW_SIZES.length,
       );
@@ -820,7 +887,7 @@ describe("model artifact", () => {
         baselineRef?: string;
         subsetOf?: string;
         state?: string;
-        positive?: number | null;
+        positives?: number | null;
         k?: number;
         maxAchievable?: number | null;
         kSamples?: number | null;
@@ -837,9 +904,16 @@ describe("model artifact", () => {
       expect(typeof definition.kind).toBe("string");
       expect(typeof definition.description).toBe("string");
     }
-    expect(
-      metadata.definitions.find((definition) => definition.name === "unit"),
-    ).toMatchObject({ kind: "parameter" });
+    const vocabulary = (
+      metadata as unknown as {
+        vocabulary: {
+          unit: Record<string, string>;
+          label: Record<string, string>;
+        };
+      }
+    ).vocabulary;
+    expect(vocabulary.unit["bet-row"]).toContain("getBetReport");
+    expect(vocabulary.label["desk_flag"]).toContain("suspectedBot");
     const rowMetric = metadata.definitions.find(
       (definition) => definition.name === "rowPrecisionAtK",
     );
@@ -869,14 +943,14 @@ describe("model artifact", () => {
     if (noPriorHeadline !== undefined) {
       expect(noPriorMetric).toMatchObject({
         k: FRAUD_HEADLINE_K,
-        samples: noPriorHeadline.kSamples,
-        positives: noPriorHeadline.kPositives,
+        kSamples: noPriorHeadline.kSamples,
+        kPositives: noPriorHeadline.kPositives,
         detailRef: "validation.noPriorBet.metrics.rowPrecisionAtK",
       });
       expect(noPriorMetric?.maxAchievable).toBeCloseTo(
         Math.min(
           FRAUD_HEADLINE_K,
-          artifact.validation.noPriorBet?.positive ?? 0,
+          artifact.validation.noPriorBet?.positives ?? 0,
         ) / FRAUD_HEADLINE_K,
         6,
       );
@@ -887,7 +961,7 @@ describe("model artifact", () => {
     expect(holdoutRow).toMatchObject({
       kind: "population",
       rows: artifact.metrics.rows.holdout,
-      positive: artifact.metrics.labelSupport.holdoutPositives,
+      positives: artifact.metrics.labelSupport.holdoutPositives,
       subsets: ["noPriorBet"],
     });
     const noPriorRow = metadata.definitions.find(
@@ -897,7 +971,7 @@ describe("model artifact", () => {
       kind: "population",
       subsetOf: "temporalHoldout",
       rows: artifact.validation.noPriorBet?.rows ?? null,
-      positive: artifact.validation.noPriorBet?.positive ?? null,
+      positives: artifact.validation.noPriorBet?.positives ?? null,
     });
     const baseline = metadata.definitions.find(
       (definition) => definition.name === "temporalHoldoutPositiveRate",

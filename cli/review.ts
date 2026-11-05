@@ -11,7 +11,9 @@ import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite, sqlInt } from "../lib/sportsdesk_sqlite.ts";
 import {
   METRIC_METADATA_KINDS,
+  isMetricDerivedFrom,
   isMetricMetadataKind,
+  type MetricDerivedFrom,
 } from "../lib/metric_metadata.ts";
 import type { Anomaly, RuleName } from "./rules.ts";
 
@@ -479,7 +481,7 @@ export interface FlagsMetricDefinition {
   readonly value?: unknown;
   readonly sampledFrom?: number;
   readonly n?: number;
-  readonly derivedFrom?: string;
+  readonly derivedFrom?: MetricDerivedFrom;
   readonly reviewPolicy?: string;
   readonly description: string;
 }
@@ -740,6 +742,11 @@ export function validateFlagsMetricMetadata(
   metadata: FlagsMetricMetadata,
   root?: unknown,
 ): void {
+  if (metadata.schemaVersion !== 1) {
+    throw new Error(
+      `flagsMetricMetadata: schemaVersion ${metadata.schemaVersion} but validator expects 1`,
+    );
+  }
   const byName = new Map(metadata.definitions.map((row) => [row.name, row]));
   if (byName.size !== metadata.definitions.length) {
     throw new Error("flagsMetricMetadata: duplicate definition name");
@@ -766,6 +773,14 @@ export function validateFlagsMetricMetadata(
     ) {
       throw new Error(
         `flagsMetricMetadata: ${row.name}.baselineRef -> "${row.baselineRef}" is not a baseline`,
+      );
+    }
+    if (
+      row.derivedFrom !== undefined &&
+      !isMetricDerivedFrom(row.derivedFrom)
+    ) {
+      throw new Error(
+        `flagsMetricMetadata: ${row.name}.derivedFrom "${row.derivedFrom}" is not sampled|measured|computed|extrapolated`,
       );
     }
     if (row.state === "not_measured" && (row.blockedBy ?? "").trim() === "") {

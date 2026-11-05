@@ -255,6 +255,7 @@ describe("flags metric metadata", () => {
       kind: "metric",
       evaluates: "rule",
       notApplicableTo: "individual-flag",
+      derivedFrom: "sampled",
     });
     const values = rulePrecision?.value as Record<string, unknown>;
     expect(values["period_correlation"]).toMatchObject({
@@ -393,6 +394,29 @@ describe("flags metric metadata", () => {
       blockedBy: "kappaUndefined",
       n: 2,
     });
+  });
+
+  test("refuses an unknown derivedFrom", () => {
+    const metadata = buildFlagsMetricMetadata(plan, []);
+    const bad = {
+      ...metadata,
+      definitions: metadata.definitions.map((definition) =>
+        definition.name === "rulePrecision"
+          ? { ...definition, derivedFrom: "guessed" as never }
+          : definition,
+      ),
+    };
+    expect(() => validateFlagsMetricMetadata(bad)).toThrow(/derivedFrom/);
+  });
+
+  test("refuses a stale schemaVersion", () => {
+    const metadata = buildFlagsMetricMetadata(plan, []);
+    expect(() =>
+      validateFlagsMetricMetadata({
+        ...metadata,
+        schemaVersion: 2 as never,
+      }),
+    ).toThrow(/schemaVersion/);
   });
 
   test("refuses a classification metric that claims per-flag evaluation", () => {
