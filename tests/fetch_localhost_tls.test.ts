@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 
 import { createTlsFixture } from "./support/tls_fixture.ts";
 
@@ -74,6 +75,32 @@ describe("localhost resolution and TLS identity", () => {
       await expect(
         fetch(`https://127.0.0.1:${port}/`, { tls: { ca } }),
       ).rejects.toThrow();
+    } finally {
+      server.stop(true);
+      fixture.cleanup();
+    }
+  });
+
+  test("the docs' a.example + Host b.example case over a unix socket", async () => {
+    const fixture = await createTlsFixture("a.example");
+    if (fixture === null) return;
+    const unix = join(fixture.dir, "tls.sock");
+    const server = Bun.serve({
+      unix,
+      tls: {
+        key: await Bun.file(fixture.keyPath).text(),
+        cert: await Bun.file(fixture.certPath).text(),
+      },
+      fetch: (request) => Response.json({ host: request.headers.get("host") }),
+    });
+    try {
+      const response = await fetch("https://a.example/", {
+        unix,
+        headers: { Host: "b.example" },
+        tls: { ca: await Bun.file(fixture.caPath).text() },
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ host: "b.example" });
     } finally {
       server.stop(true);
       fixture.cleanup();
