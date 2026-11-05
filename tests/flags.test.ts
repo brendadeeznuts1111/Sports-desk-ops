@@ -115,26 +115,33 @@ describe("clone_bet", () => {
     expect(cloneBet(three)[0]?.severity).toBe("warning");
   });
 
-  test("keeps the writer hashed in the evidence", () => {
+  test("keeps the agent hashed in the evidence", () => {
     const legs = [leg("Lakers vs Kings", "Game", "Lakers", "-110", "Winner")];
     const two = [
       ticket({
         insertedAt: "2026-11-04T22:00:00",
         legs,
+        agent: "AGENT1",
         ticketWriter: "ALERT",
       }),
       ticket({
         insertedAt: "2026-11-04T22:00:10",
         legs,
-        ticketWriter: "ALERT",
+        agent: "AGENT2",
+        ticketWriter: "Internet",
       }),
     ];
     const hit = cloneBet(two)[0];
-    const writerRefs = hit?.evidence.writerRefs as readonly string[];
-    expect(writerRefs).toHaveLength(2);
-    expect(writerRefs[0]).toMatch(/^agent:[0-9a-f]{12}$/);
-    expect(hit?.evidence).not.toHaveProperty("writer");
-    expect(JSON.stringify(hit?.evidence)).not.toContain("ALERT");
+    const agentRefs = hit?.evidence.agentRefs as readonly string[];
+    expect(agentRefs).toHaveLength(2);
+    expect(agentRefs[0]).toMatch(/^agent:[0-9a-f]{12}$/);
+    expect(agentRefs[0]).not.toBe(agentRefs[1]);
+    expect(hit?.evidence).not.toHaveProperty("writerRefs");
+    const serialized = JSON.stringify(hit?.evidence);
+    expect(serialized).not.toContain("AGENT1");
+    expect(serialized).not.toContain("AGENT2");
+    expect(serialized).not.toContain("ALERT");
+    expect(serialized).not.toContain("Internet");
   });
 });
 

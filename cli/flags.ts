@@ -502,7 +502,7 @@ function ruleCatalog(): string {
     "  opposite_sides_same_customer    same customer · opposite sides · 60 min",
     "  opposite_sides_across_customers different customers · opposite sides · 5 min",
     "  batch_replay                    2+ wagers · ≤100ms · same agent",
-    "  clone_bet                       2+ identical tickets · 60 min",
+    "  clone_bet                       2+ identical tickets · same customer · 60 min",
     "  velocity_customer               10/5min · 30/30min · 100/60min",
     "  velocity_market                 5/30s · 20/5min · 100/30min",
     "  period_order_anomaly            later-then-earlier periods · >10 min gap",
@@ -520,7 +520,7 @@ function evidenceLine(anomaly: Anomaly): string {
     case "batch_replay":
       return `${evidence.count} wagers · ${evidence.spanMs}ms · ${evidence.agentRef}`;
     case "clone_bet":
-      return `${evidence.cloneCount} clones · ${(evidence.writerRefs as readonly string[]).join("/")}`;
+      return `${evidence.cloneCount} clones · ${(evidence.agentRefs as readonly string[]).join("/")}`;
     case "velocity_customer":
       return `${evidence.count} wagers · ${evidence.windowMinutes} min · ${evidence.customerRef}`;
     case "velocity_market":
