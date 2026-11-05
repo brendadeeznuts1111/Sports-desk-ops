@@ -481,6 +481,32 @@ no response body, row shape or auth failure was recorded.
 The legacy component is not the React SPA; a React render crash in `index-DB17VVxN.js` is a
 different surface.
 
+### 2.12 Source-observed route strings (2026-11-05)
+
+These strings come from the public SPA bundle (`index-DB17VVxN.js`) and the legacy module loader
+(`JsModules-BiJR7A5n.js`). They are route/action names, not captured exchanges: no method, status,
+body or row shape is implied. The §2.2 table remains the browser-observed surface.
+
+| Surface          | Route strings                                                                                                                                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agents / users   | `/manager-tools/agents/`, `/manager-tools/agents/?name=`, `/manager-tools/users/`, `/manager-tools/usersList/`                                                                                                                                              |
+| Groups / ratings | `/manager-tools/groups/`, `/manager-tools/groups/settings/`, `/manager-tools/groups/externalLimits/`, `/manager-tools/groups/index.php`, `/manager-tools/playerRatings/`, `/manager-tools/playerRatings/index.php`, `/manager-tools/partnerRatingTranches/` |
+| Reports / vigs   | `/manager-tools/reports/`, `/manager-tools/reports/periods/index.php`, `/manager-tools/vigs/`                                                                                                                                                               |
+| Limits / prefs   | `/manager-tools/externalLimits/books/`, `/manager-tools/partnerPreferences/`, `/manager-tools/partnerPreferences/index.php`, `/manager-tools/partnerPreferences/protected/index.php`, `/manager-tools/partnerPreferences/types/`                            |
+| Fixed odds       | `/manager-tools/fixedOddsParlays/index.php`                                                                                                                                                                                                                 |
+| Lines / events   | `/manager-tools/eventsWarehouse/getLines.php`, `/manager-tools/liveEvents/` (§2.11)                                                                                                                                                                         |
+| Translations     | `/manager-tools/translations/v2/index.php`, `/manager-tools/translations/v2/getByKey/index.php`, `/manager-tools/translations/v2/getI18nResources/index.php?lng=`                                                                                           |
+| Legacy admin     | `/manager-tools/login/`, `/manager-tools/outcomes/`, `/manager-tools/ajax.php`                                                                                                                                                                              |
+
+**Observed actions.** SPA: `getBetReport`, `getBetLog`, `getEventLog`, `changeBetResult`,
+`modifyTicketNumber`, `addBetLogEntries`, `deleteBetNote`, `removeOpenSpots`, `logout`.
+Legacy: `cancelBet`, `winningBet`, `losingBet`, `halfWinningBet`, `halfLosingBet`, `ungradeBet`,
+`markDeadHeatResults`, `toggleBetOffline`, `toggleOffline`, `toggleBlockDiffusion`,
+`toggleBlockPrimaryLinesFeed`, `getEventsFinishedWithNoResult`, `addBetLogEntries`, `logout`.
+
+The address-bar route `/manager-tools/block/?group=<id>` is a client-side view; it is not present
+in either bundle's API strings, so it is not listed as a transport route.
+
 ## 3. CLI interfaces — local orchestration, not HTTP endpoints
 
 The CLI is real and tested: six Node tests cover DST bounds, invalid scope/date input, schedule
