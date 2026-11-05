@@ -30,7 +30,9 @@ Options:
   -h, --help         This text
 
 Environment:
-  R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT (or CLOUDFLARE_R2_API_TOKEN)
+  R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_ENDPOINT or CLOUDFLARE_ACCOUNT_ID
+  (the endpoint is derived from the account id when R2_ENDPOINT is unset, the same rule
+  R2S3Client.fromEnvOrSecrets uses)
 
 Examples:
   bun run r2:verify:local
@@ -55,14 +57,23 @@ const bucket = flagValue(
   Bun.env.R2_BUCKET_NAME ?? "sportsdesk-ops-reports",
 );
 const strict = hasFlag(parsed, "--strict");
-const endpoint = Bun.env.R2_ENDPOINT ?? "";
 const accessKeyId = Bun.env.R2_ACCESS_KEY_ID ?? "";
 const secretAccessKey = Bun.env.R2_SECRET_ACCESS_KEY ?? "";
+// Mirror `R2S3Client.fromEnvOrSecrets`: an explicit endpoint wins, otherwise derive it from the
+// account id. That keeps R2_ENDPOINT a single optional override instead of a second config surface
+// (and a drift risk) next to the keychain-injected CLOUDFLARE_ACCOUNT_ID.
+const accountId = Bun.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+const endpoint =
+  Bun.env.R2_ENDPOINT ??
+  (accountId === ""
+    ? undefined
+    : `https://${accountId}.r2.cloudflarestorage.com`);
 
-if (endpoint === "" || accessKeyId === "" || secretAccessKey === "") {
+if (endpoint === undefined || accessKeyId === "" || secretAccessKey === "") {
   console.error("r2:verify:local: R2 credentials are not configured.");
   console.error(
-    "  R2_ENDPOINT=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... bun run r2:verify:local",
+    "  Need CLOUDFLARE_ACCOUNT_ID (to derive the endpoint) or R2_ENDPOINT, plus R2_ACCESS_KEY_ID " +
+      "and R2_SECRET_ACCESS_KEY; or run ./bin/dx exec --with r2 -- bun run r2:verify:local.",
   );
   process.exit(2);
 }
