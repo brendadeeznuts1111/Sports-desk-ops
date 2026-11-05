@@ -276,3 +276,104 @@ describe("GET /api/live-wagers source selection", () => {
     expect(typeof body.freshness?.asOf).toBe("string");
   });
 });
+
+describe("GET /api/live-wagers deterministic flags", () => {
+  // Four periods of one event from one customer: the one shape period_correlation names.
+  const periods = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
+  const rows = periods.map((period, index) => ({
+    WagerNumber: 930000001 + index,
+    AgentID: "RULEAGENT",
+    AgentLogin: "RULEAGENT",
+    CustomerID: "RULECUST",
+    Login: "RULECUST",
+    WagerType: "S",
+    AmountWagered: 100,
+    ToWinAmount: 90,
+    VolumeAmount: 100,
+    TicketWriter: "Internet",
+    InsertDateTime: `2026-11-04 21:${15 + index}:00.000`,
+    ShortDesc: `S.G999999001\r\nBasketball - Lakers vs Kings / ${period} / Total / Over 55 -110&#x0D;\n`,
+    VIP: "0",
+  }));
+
+  let dir: string;
+  let server: ReturnType<typeof startServer>;
+
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), "live-wagers-flags-"));
+    await Bun.write(
+      join(dir, "live-wagers.json"),
+      JSON.stringify({
+        status: 1,
+        accountInfo: { Language: "ENGLISH" },
+        LIST: rows,
+      }),
+    );
+    server = startServer({
+      port: 0,
+      hostname: "127.0.0.1",
+      development: false,
+      wagerListDir: dir,
+    });
+  });
+
+  afterAll(() => {
+    server.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const get = () => fetch(`${server.url}api/live-wagers`);
+
+  test("runs the deterministic rules over the same rows the ticker shows", async () => {
+    const res = await get();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      wagers: unknown[];
+      flags: Array<{
+        rule: string;
+        severity: string;
+        evidence: Record<string, unknown>;
+        wagerNumbers: string[];
+      }>;
+      byRule: Record<string, number>;
+    };
+    expect(body.wagers).toHaveLength(4);
+    expect(body.flags).toHaveLength(1);
+    expect(body.byRule.period_correlation).toBe(1);
+    expect(body.flags[0]?.rule).toBe("period_correlation");
+    expect(body.flags[0]?.severity).toBe("warning");
+    expect(body.flags[0]?.wagerNumbers).toEqual([
+      "930000001",
+      "930000002",
+      "930000003",
+      "930000004",
+    ]);
+  });
+
+  test("the flags payload carries hashed references, never identifiers", async () => {
+    const body = (await (await get()).json()) as {
+      flags: Array<{ evidence: Record<string, unknown> }>;
+    };
+    const payload = JSON.stringify(body.flags);
+    expect(payload).not.toContain("RULECUST");
+    expect(payload).not.toContain("RULEAGENT");
+    expect(payload).not.toContain("CustomerID");
+    expect(payload).not.toContain("Login");
+    expect(String(body.flags[0]?.evidence.customerRef)).toStartWith(
+      "customer:",
+    );
+  });
+
+  test("filters flags with the rows they describe", async () => {
+    const body = (await (
+      await fetch(`${server.url}api/live-wagers?type=NOPE`)
+    ).json()) as {
+      wagers: unknown[];
+      flags: unknown[];
+      byRule: Record<string, number>;
+    };
+    expect(body.wagers).toHaveLength(0);
+    expect(body.flags).toHaveLength(0);
+    expect(body.byRule).toEqual({});
+  });
+});

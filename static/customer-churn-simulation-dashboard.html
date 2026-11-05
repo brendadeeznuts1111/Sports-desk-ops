@@ -2123,6 +2123,51 @@
         </table>
       </section>
 
+      <!-- Deterministic anomaly signatures computed from the same ticker response -->
+      <section
+        class="section-card"
+        id="anomaly-flags"
+        aria-labelledby="af-title"
+      >
+        <div class="section-title">
+          <span id="af-title">Anomaly Signatures — Deterministic Rules</span>
+          <span class="badge badge-primary" id="af-badge">LOADING</span>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0" id="af-note">
+          Deterministic signatures over the ticker rows (period correlation,
+          batch replay, clones, velocity, opposite sides). Evidence uses hashed
+          references; customer and agent identifiers never leave the server.
+        </p>
+
+        <dl class="lw-stats" id="af-stats" hidden>
+          <div class="lw-stat">
+            <dt>Flags</dt>
+            <dd id="af-count">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Wagers</dt>
+            <dd id="af-wagers">–</dd>
+          </div>
+        </dl>
+
+        <table class="lw-table" aria-label="Deterministic anomaly signatures">
+          <thead>
+            <tr>
+              <th scope="col">Rule</th>
+              <th scope="col">Severity</th>
+              <th scope="col">Hits</th>
+              <th scope="col">Sample wagers</th>
+            </tr>
+          </thead>
+          <tbody id="af-rows">
+            <tr>
+              <td class="empty-row" colspan="4">Loading signatures…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       <!-- Contest / futures list (sports nav get-games-prop anchors) -->
       <section class="section-card" id="contests" aria-labelledby="ct-title">
         <div class="section-title">
@@ -4560,6 +4605,12 @@
         const stats = document.getElementById("lw-stats");
         const writersBar = document.getElementById("lw-writers");
         const typesBar = document.getElementById("lw-types");
+        const afBadge = document.getElementById("af-badge");
+        const afNote = document.getElementById("af-note");
+        const afStats = document.getElementById("af-stats");
+        const afRows = document.getElementById("af-rows");
+        const afCount = document.getElementById("af-count");
+        const afWagers = document.getElementById("af-wagers");
 
         const make = (tag, className, text) => {
           const node = document.createElement(tag);
@@ -4569,6 +4620,7 @@
         };
 
         const defaultNote = note.textContent.replace(/\s+/g, " ").trim();
+        const defaultFlagNote = afNote.textContent.replace(/\s+/g, " ").trim();
         const noiseTitle = {
           alert:
             "ALERT row: mirrors a real ticket, so its stake is excluded from the totals.",
@@ -4701,8 +4753,72 @@
           buildBars(summaryData);
         };
 
+        /**
+         * The server runs the deterministic rules over the same rows and sends
+         * `{rule, severity, evidence, wagerNumbers}` — never a customer or agent
+         * identifier. Group by rule so nine rules read as nine rows, not as one
+         * row per hit.
+         */
+        const renderFlags = (flags, wagerCount) => {
+          const byRule = new Map();
+          for (const flag of flags) {
+            const entry = byRule.get(flag.rule) ?? {
+              severity: flag.severity || "notice",
+              hits: 0,
+              wagers: [],
+            };
+            entry.hits += 1;
+            entry.severity = flag.severity || entry.severity;
+            for (const wagerNumber of flag.wagerNumbers ?? []) {
+              if (entry.wagers.length < 6) entry.wagers.push(wagerNumber);
+            }
+            byRule.set(flag.rule, entry);
+          }
+
+          afBadge.textContent =
+            byRule.size === 0 ? "CLEAR" : `${flags.length} FLAGS`;
+          afBadge.className =
+            byRule.size === 0 ? "badge badge-accent" : "badge badge-warning";
+          afNote.textContent = defaultFlagNote;
+          afCount.textContent = String(flags.length);
+          afWagers.textContent = String(wagerCount);
+          afStats.hidden = false;
+
+          if (byRule.size === 0) {
+            const tr = make("tr");
+            const td = make(
+              "td",
+              "empty-row",
+              "No deterministic signatures fired.",
+            );
+            td.colSpan = 4;
+            tr.append(td);
+            afRows.replaceChildren(tr);
+            return;
+          }
+
+          const rows = [...byRule].map(([rule, entry]) => {
+            const tr = make("tr");
+            tr.append(make("td", "mono-cell", rule));
+            tr.append(make("td", "", entry.severity));
+            tr.append(make("td", "", String(entry.hits)));
+
+            const sample = make("td", "mono-cell");
+            sample.textContent = entry.wagers.map(String).join(", ");
+            if (entry.hits > entry.wagers.length) {
+              sample.append(make("span", "", " …"));
+            }
+            tr.append(sample);
+            return tr;
+          });
+          afRows.replaceChildren(...rows);
+        };
+
         /** A failed load must not leave the last list's rows and totals on screen. */
-        const clearPanel = (message) => {
+        const clearPanel = (
+          message,
+          flagMessage = "No signatures to show.",
+        ) => {
           all = [];
           summaryData = { count: 0, byWriter: {}, byType: {} };
           stats.hidden = true;
@@ -4713,6 +4829,17 @@
           td.colSpan = 9;
           tr.append(td);
           list.replaceChildren(tr);
+          afBadge.textContent = "UNAVAILABLE";
+          afBadge.className = "badge badge-warning";
+          afNote.textContent = defaultFlagNote;
+          afStats.hidden = true;
+          afCount.textContent = "–";
+          afWagers.textContent = "–";
+          const afTr = make("tr");
+          const afTd = make("td", "empty-row", flagMessage);
+          afTd.colSpan = 4;
+          afTr.append(afTd);
+          afRows.replaceChildren(afTr);
         };
 
         const loadLiveWagers = async () => {
@@ -4723,14 +4850,20 @@
               badge.className = "badge badge-warning";
               note.textContent =
                 "No bet ticker capture yet. Run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json.";
-              clearPanel("No wager list.");
+              clearPanel(
+                "No wager list.",
+                "No wager list to check for signatures.",
+              );
               return;
             }
             if (res.status === 401 || res.status === 503) {
               badge.textContent = "TOKEN REQUIRED";
               badge.className = "badge badge-warning";
               note.textContent = tokenHint(res.status);
-              clearPanel("Wagers hidden until an admin token is set.");
+              clearPanel(
+                "Wagers hidden until an admin token is set.",
+                "Signatures hidden until an admin token is set.",
+              );
               return;
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -4823,10 +4956,14 @@
             note.textContent =
               parts.length === 0 ? defaultNote : parts.join(" ");
             render();
+            renderFlags(body.flags ?? [], all.length);
           } catch (err) {
             badge.textContent = "UNAVAILABLE";
             badge.className = "badge badge-alert";
-            clearPanel(`Could not load wagers: ${String(err)}`);
+            clearPanel(
+              `Could not load wagers: ${String(err)}`,
+              `Could not load signatures: ${String(err)}`,
+            );
           }
         };
 

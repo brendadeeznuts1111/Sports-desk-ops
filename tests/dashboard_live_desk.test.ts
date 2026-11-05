@@ -387,6 +387,46 @@ describe("Live wager ticker panel", () => {
     }
   });
 
+  test("declares the anomaly-flags panel hooks", () => {
+    for (const id of [
+      "anomaly-flags",
+      "af-badge",
+      "af-note",
+      "af-stats",
+      "af-rows",
+      "af-count",
+      "af-wagers",
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    // The panel follows the ticker it reads from, before the next API panel.
+    expect(html.indexOf('id="anomaly-flags"')).toBeGreaterThan(
+      html.indexOf('id="live-wagers"'),
+    );
+    expect(html.indexOf('id="anomaly-flags"')).toBeLessThan(
+      html.indexOf('id="contests"'),
+    );
+  });
+
+  test("renders the server's flags from the ticker response", () => {
+    expect(panel).toContain("renderFlags");
+    expect(panel).toContain("renderFlags(body.flags ?? [], all.length)");
+    expect(panel).toContain("byRule");
+    expect(panel).toContain("No deterministic signatures fired.");
+    expect(panel).toContain("FLAGS");
+    expect(panel).toContain("CLEAR");
+  });
+
+  test("a failed ticker load clears the flag rows too", () => {
+    const clear = panel.slice(
+      panel.indexOf("const clearPanel"),
+      panel.indexOf("const loadLiveWagers"),
+    );
+    expect(clear).toContain("afStats.hidden = true");
+    expect(clear).toContain("afRows.replaceChildren(afTr)");
+    expect(clear).toContain("afCount.textContent");
+  });
+
   test("reads the ticker endpoint and handles its empty state", () => {
     expect(panel).toContain("/api/live-wagers");
     expect(panel).toContain("NOT CAPTURED");

@@ -57,6 +57,8 @@ import {
   summarizeLiveWagers,
   type WagerListArtifact,
 } from "../lib/live_wagers.ts";
+import { normalizeTicket } from "../lib/live_ticket_view.ts";
+import { DETERMINISTIC_RULES, toRuleTicket } from "../cli/rules.ts";
 import {
   BOARD_WINDOWS,
   biggestSide,
@@ -2495,6 +2497,36 @@ export function startServer(options?: ServerOptions) {
             (type === "" || wager.wagerType === type),
         );
 
+        const ruleTickets = filtered.map((wager) =>
+          toRuleTicket(normalizeTicket(wager)),
+        );
+        const flags: Array<{
+          rule: string;
+          severity: string;
+          evidence: Readonly<
+            Record<string, string | number | readonly string[]>
+          >;
+          wagerNumbers: readonly string[];
+        }> = [];
+        const byRule: Record<string, number> = {};
+        for (const [rule, run] of Object.entries(DETERMINISTIC_RULES)) {
+          let hits: ReturnType<typeof run> = [];
+          try {
+            hits = run(ruleTickets);
+          } catch {
+            hits = [];
+          }
+          for (const hit of hits) {
+            byRule[rule] = (byRule[rule] ?? 0) + 1;
+            flags.push({
+              rule: hit.rule,
+              severity: hit.severity,
+              evidence: hit.evidence,
+              wagerNumbers: hit.tickets.map((ticket) => ticket.wagerNumber),
+            });
+          }
+        }
+
         return encodedResponse(req, {
           // Every input to the bytes is in the version: the query, which file won, what was
           // skipped, and whether it has gone stale.
@@ -2513,6 +2545,8 @@ export function startServer(options?: ServerOptions) {
                 freshness: fresh,
                 skipped,
                 wagers: filtered,
+                flags,
+                byRule,
               }),
             ),
           headers: { ...cors, "Cache-Control": "no-store" },
