@@ -401,11 +401,11 @@ async function main(): Promise<void> {
   const playerIds = players?.customerIds ?? new Set<string>();
   const playerLogins = players?.logins ?? new Set<string>();
   const playerNamespace = new Set([...playerIds, ...playerLogins]);
-  const namespace = playerNamespace.size > 0 ? playerNamespace : captureIds;
+  // The full PLAYERS capture is the primary namespace. The 667-row getBetTicker index is a
+  // diagnostic subset, never a fallback; falling back to it is what produced the 3.94% number.
+  const namespace = playerNamespace;
   const namespaceSource =
-    playerNamespace.size > 0
-      ? `${options.players}#PLAYERS`
-      : options.customerDb;
+    playerNamespace.size > 0 ? `${options.players}#PLAYERS` : "none";
   const tickerLogins = ticker?.logins ?? new Set<string>();
   const tickerCustomers = ticker?.customerIds ?? new Set<string>();
   const adminLogins = admin?.logins ?? new Set<string>();

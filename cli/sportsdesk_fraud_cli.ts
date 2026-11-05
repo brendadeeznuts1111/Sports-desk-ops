@@ -698,13 +698,13 @@ function loadQueueLedger(path: string): QueueLedger {
 }
 
 /**
- * Interim F402 namespace for the rule-evidence join. The governed crosswalk will replace this.
- * The customer index is the getBetTicker capture; the ticker snapshot is the fallback. Only
- * `source='capture'` rows count; artifact/demo/fixture rows must not look live.
+ * The only authoritative F402 namespace is the full `getListAgenstByAgent` PLAYERS capture.
+ * `scratch/customers.sqlite` (getBetTicker, 667 rows) and `data/live-wagers.json` (127 rows) are
+ * partial diagnostic captures; using either as a queue fallback silently drops coverage to the
+ * subset that happened to be captured. If PLAYERS is absent, return an empty namespace and let
+ * `ruleEvidenceStatus` say "unmatched".
  */
 const F402_PLAYERS_REL_PATH = "scratch/raw-f402-list-agents.json";
-const F402_CUSTOMER_INDEX_REL_PATH = "scratch/customers.sqlite";
-const F402_TICKER_REL_PATH = "data/live-wagers.json";
 
 interface F402Namespace {
   readonly ids: ReadonlySet<string>;
@@ -712,81 +712,31 @@ interface F402Namespace {
 }
 
 async function loadF402Namespace(root: string): Promise<F402Namespace> {
-  // Full manager hierarchy capture. PLAYERS may contain plaintext passwords; only the
-  // identifier fields are read, and the file itself is 0600 under scratch/.
   const playersPath = join(root, F402_PLAYERS_REL_PATH);
-  if (existsSync(playersPath)) {
-    try {
-      const raw = (await Bun.file(playersPath).json()) as {
-        PLAYERS?: unknown;
-      };
-      const rows = Array.isArray(raw.PLAYERS) ? raw.PLAYERS : [];
-      const ids = new Set<string>();
-      for (const row of rows) {
-        if (row === null || typeof row !== "object") continue;
-        const record = row as Record<string, unknown>;
-        for (const key of ["customerID", "Login"]) {
-          const value = record[key];
-          if (typeof value !== "string") continue;
-          const normalized = value.trim().toUpperCase();
-          if (normalized !== "") ids.add(normalized);
-        }
-      }
-      if (ids.size > 0) {
-        return { ids, source: `${F402_PLAYERS_REL_PATH}#PLAYERS` };
-      }
-    } catch {
-      // Fall through to the smaller captures.
-    }
+  if (!existsSync(playersPath)) {
+    return { ids: new Set(), source: "none" };
   }
-
-  const dbPath = join(root, F402_CUSTOMER_INDEX_REL_PATH);
-  if (existsSync(dbPath)) {
-    try {
-      const db = openSportsdeskSqliteReadonly(dbPath);
-      try {
-        const rows = db
-          .query("SELECT id FROM customers WHERE source = 'capture'")
-          .all() as Array<{ id: string }>;
-        const ids = new Set(
-          rows.map((row) => row.id.trim().toUpperCase()).filter(Boolean),
-        );
-        if (ids.size > 0) {
-          return { ids, source: F402_CUSTOMER_INDEX_REL_PATH };
-        }
-      } finally {
-        db.close();
+  try {
+    const raw = (await Bun.file(playersPath).json()) as { PLAYERS?: unknown };
+    const rows = Array.isArray(raw.PLAYERS) ? raw.PLAYERS : [];
+    const ids = new Set<string>();
+    for (const row of rows) {
+      if (row === null || typeof row !== "object") continue;
+      const record = row as Record<string, unknown>;
+      for (const key of ["customerID", "Login"]) {
+        const value = record[key];
+        if (typeof value !== "string") continue;
+        const normalized = value.trim().toUpperCase();
+        if (normalized !== "") ids.add(normalized);
       }
-    } catch {
-      // Fall through to the ticker snapshot; a missing/foreign DB is not a refusal.
     }
+    return {
+      ids,
+      source: ids.size > 0 ? `${F402_PLAYERS_REL_PATH}#PLAYERS` : "none",
+    };
+  } catch {
+    return { ids: new Set(), source: "none" };
   }
-
-  const tickerPath = join(root, F402_TICKER_REL_PATH);
-  if (existsSync(tickerPath)) {
-    try {
-      const raw = (await Bun.file(tickerPath).json()) as {
-        LIST?: unknown;
-      };
-      const rows = Array.isArray(raw.LIST) ? raw.LIST : [];
-      const ids = new Set<string>();
-      for (const row of rows) {
-        if (row === null || typeof row !== "object") continue;
-        const record = row as Record<string, unknown>;
-        for (const key of ["Login", "CustomerID"]) {
-          const value = record[key];
-          if (typeof value !== "string") continue;
-          const normalized = value.trim().toUpperCase();
-          if (normalized !== "") ids.add(normalized);
-        }
-      }
-      return { ids, source: F402_TICKER_REL_PATH };
-    } catch {
-      // Fall through to the empty namespace.
-    }
-  }
-
-  return { ids: new Set(), source: "none" };
 }
 
 function queueBlockers(readiness: QueueReadiness): string[] {

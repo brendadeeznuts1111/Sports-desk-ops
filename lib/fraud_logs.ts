@@ -503,6 +503,8 @@ const EMPTY_SOURCE_CONFIG: FraudSourceConfig = {
 export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
   schemaVersion: 1,
   kind: "fraud-model-config",
+  // Live captures come from capture:gslive-corpus -> captureWagersSnapshot. The blob/live-bets
+  // gateway is a downstream sink for normalized events, never the raw getBetReport source.
   corpus: {
     primaryRelPath: "Scratch/security/corpus/gslive-betreport-latest.json",
     fallbackRelPaths: [

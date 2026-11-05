@@ -3,6 +3,9 @@
  * Capture a fresh GSLive `getBetReport` corpus into the shape the fraud pipeline reads:
  * `{ r: { bets: [...] }, from, to }`, plus a sha256 sidecar and a capture manifest.
  *
+ * Reuses `captureWagersSnapshot` so there is one GSLive fetch/session path. The blob/live-bets
+ * gateway is a downstream sink for normalized events, not the raw row source.
+ *
  * The session comes from the manager-session SSOT (keychain/session file). The cookie is never
  * printed. A failed or empty capture never overwrites the previous corpus.
  *
