@@ -158,6 +158,25 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
+  test("BunFile.slice treats end as an absolute byte offset", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bunfile-slice-"));
+    try {
+      const path = join(dir, "bytes.txt");
+      await Bun.write(path, "abcdefghij");
+
+      expect(await Bun.file(path).slice(2, 5).text()).toBe("cde");
+      expect(await Bun.file(path).slice(0, 5).text()).toBe("abcde");
+      expect(await Bun.file(path).slice(2).text()).toBe("cdefghij");
+      expect(Bun.file(path).slice(2, 5).size).toBe(3);
+
+      const typed = Bun.file(path).slice(2, "text/plain");
+      expect(typed.type).toContain("text/plain");
+      expect(await typed.text()).toBe("cdefghij");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("file().image().resize().webp().write() writes a WebP chain", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bun-image-chain-"));
     try {
