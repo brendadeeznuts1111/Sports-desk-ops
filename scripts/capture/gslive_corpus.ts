@@ -16,9 +16,9 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import {
   bootstrapGanchrowSession,
-  fetchBetReportRows,
   type DateFilterBy,
 } from "../fetch-bet-tally.ts";
+import { captureWagersSnapshot } from "../gslive_wagers_by_state.ts";
 import {
   resolveManagerSession,
   sessionGateFromEnv,
@@ -188,13 +188,16 @@ async function main(): Promise<void> {
     }
   }
 
-  const rows = await fetchBetReportRows({
+  // Reuse the live wagers pipeline so the session, fetch, normalization and retry semantics are
+  // the same ones the scheduled capture uses. `rawRows` is the untouched getBetReport table.
+  const snapshot = await captureWagersSnapshot({
     fromEpochSec,
     toEpochSec,
     cookieHeader: session.cookieHeader,
     sessionGate,
     dateFilterBy: options.dateFilterBy,
   });
+  const rows = snapshot.rawRows;
   if (rows.length === 0) {
     throw new Error(
       "getBetReport returned zero rows; refusing to overwrite the previous corpus",

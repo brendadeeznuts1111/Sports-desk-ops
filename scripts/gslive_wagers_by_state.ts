@@ -2866,6 +2866,8 @@ export function hasBlockingAlert(alerts: readonly WagersAlert[]): boolean {
 export interface WagersCaptureSnapshot {
   readonly report: WagerReport;
   readonly legs: readonly WagerLeg[];
+  /** The raw getBetReport rows behind the snapshot, for other consumers (e.g. the fraud corpus). */
+  readonly rawRows: readonly Record<string, unknown>[];
 }
 
 export async function captureWagersSnapshot(
@@ -2891,7 +2893,11 @@ export async function captureWagersSnapshot(
     capturedAt: live.capturedAt,
     ...(opts.ajaxUrl === undefined ? {} : { url: opts.ajaxUrl }),
   });
-  return { report, legs: toLiveWagerLegs(live.legsOrdered).legs };
+  return {
+    report,
+    legs: toLiveWagerLegs(live.legsOrdered).legs,
+    rawRows: live.legsOrdered.map((leg) => leg.raw),
+  };
 }
 
 async function main(args: readonly string[]): Promise<void> {
