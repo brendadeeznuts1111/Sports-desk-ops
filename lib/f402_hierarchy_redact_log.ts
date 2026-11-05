@@ -11,6 +11,9 @@ let sinkPath: string | null = null;
 
 function captureSink(path: string): Bun.FileSink {
   if (sink !== null && sinkPath === path) return sink;
+  // `Bun.file(path).writer()` truncates; close the previous sink before switching paths so its
+  // buffered bytes are flushed instead of being abandoned.
+  if (sink !== null) sink.end();
   sink = Bun.file(path).writer();
   sinkPath = path;
   return sink;
