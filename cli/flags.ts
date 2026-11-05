@@ -36,11 +36,14 @@ import {
   planReviews,
   readFlagReviews,
   readReviewRun,
+  reviewProgress,
+  reviewsCsv,
   recordFlagReview,
   recordReviewPlan,
   validateFlagsMetricMetadata,
   type FlagsMetricMetadata,
   type ReviewPlan,
+  type ReviewProgress,
   type ReviewRunSummary,
   type ReviewVerdict,
 } from "./review.ts";
@@ -68,6 +71,8 @@ Usage: bun run flags --file=<capture> [--verbose] [--json] [--strict]
   --review                 Plan a stratified review ledger for this run
   --record                 Record one review: --run-id --seq --verdict --reviewer
   --review-report          Print flags-metric-metadata for a run
+  --review-status          Reviewed vs remaining for a run
+  --review-export          CSV of recorded reviews (--format=csv)
   --db <path>              Review ledger (default: ${FLAGS_REVIEW_DB_REL_PATH})
   --run-id <id>            Reuse a run id
   --budget-minutes <n>     Analyst minutes/day for --review (default: ${DEFAULT_ANALYST_MINUTES_PER_DAY})
@@ -75,6 +80,8 @@ Usage: bun run flags --file=<capture> [--verbose] [--json] [--strict]
   --seq <n>                With --record: anomaly sequence in the run
   --verdict <v>            confirmed | false_positive | needs_more_info
   --reviewer <name>        With --record: reviewer identity
+  --notes <text>           With --record: free-text note on the verdict
+  --format <csv>           With --review-export: output format (csv)
   -h, --help               This text
 
 Rules are deterministic signatures, not statistical scores. Customer and agent identities
@@ -125,6 +132,25 @@ function reviewPlanText(plan: ReviewPlan): string {
       `Not sampled: ${notSampled.map((rule) => rule.rule).join(", ")}`,
     );
   }
+  return lines.join("\n");
+}
+
+function reviewStatusText(progress: ReviewProgress): string {
+  const lines = [
+    `Review ${progress.runId} — ${progress.reviewed}/${progress.sampled} sampled flags reviewed, ${progress.remaining} remaining`,
+  ];
+  for (const rule of progress.rules) {
+    if (rule.selected === 0) continue;
+    const verdicts = REVIEW_VERDICTS.map(
+      (verdict) => `${verdict}=${rule.verdicts[verdict]}`,
+    ).join(" ");
+    lines.push(
+      `  ${rule.rule}: ${rule.reviewed}/${rule.selected} (${rule.remaining} left) · ${verdicts}`,
+    );
+  }
+  lines.push(
+    `  double review: ${progress.doubleReviewCovered}/${progress.doubleReviewPlanned} covered`,
+  );
   return lines.join("\n");
 }
 
@@ -195,6 +221,10 @@ interface Options {
   review: boolean;
   record: boolean;
   reviewReport: boolean;
+  reviewStatus: boolean;
+  reviewExport: boolean;
+  recordNotes?: string;
+  reviewFormat: string;
   db: string;
   runId?: string;
   budgetMinutes: number;
@@ -223,6 +253,8 @@ function parseOptions(argv: readonly string[]): Options {
         "--seq",
         "--verdict",
         "--reviewer",
+        "--notes",
+        "--format",
       ].includes(arg)
     ) {
       const value = argv[index + 1];
@@ -245,6 +277,9 @@ function parseOptions(argv: readonly string[]): Options {
     review: false,
     record: false,
     reviewReport: false,
+    reviewStatus: false,
+    reviewExport: false,
+    reviewFormat: "csv",
     db: FLAGS_REVIEW_DB_REL_PATH,
     budgetMinutes: DEFAULT_ANALYST_MINUTES_PER_DAY,
     seed: DEFAULT_REVIEW_SEED,
@@ -291,6 +326,10 @@ function parseOptions(argv: readonly string[]): Options {
       options.record = true;
     } else if (arg === "--review-report") {
       options.reviewReport = true;
+    } else if (arg === "--review-status") {
+      options.reviewStatus = true;
+    } else if (arg === "--review-export") {
+      options.reviewExport = true;
     } else if (arg.startsWith("--db=")) {
       const value = arg.slice("--db=".length).trim();
       if (value === "") usage("--db requires a path");
@@ -325,6 +364,12 @@ function parseOptions(argv: readonly string[]): Options {
       const value = arg.slice("--reviewer=".length).trim();
       if (value === "") usage("--reviewer requires a value");
       options.reviewer = value;
+    } else if (arg.startsWith("--notes=")) {
+      options.recordNotes = arg.slice("--notes=".length);
+    } else if (arg.startsWith("--format=")) {
+      const value = arg.slice("--format=".length).trim().toLowerCase();
+      if (value !== "csv") usage("--format supports csv");
+      options.reviewFormat = value;
     } else {
       usage(`unknown argument ${JSON.stringify(arg)}`);
     }
@@ -599,10 +644,42 @@ if (options.record) {
       wagerNumbers: sample.wagerNumbers,
       verdict: options.verdict,
       reviewer: options.reviewer,
+      notes: options.recordNotes,
     });
     console.log(
       `recorded ${options.verdict} · ${run.runId} seq ${options.seq} · ${sample.rule}`,
     );
+  } finally {
+    db.close();
+  }
+  process.exit(0);
+}
+
+if (options.reviewStatus) {
+  const db = openReviewLedger(options.db);
+  try {
+    const run = readReviewRun(db, options.runId);
+    if (run === null) fail(`no review run in ${options.db}`);
+    const progress = reviewProgress(run.plan, readFlagReviews(db, run.runId));
+    if (options.json) {
+      console.log(JSON.stringify(progress, null, 2));
+    } else {
+      console.log(reviewStatusText(progress));
+    }
+  } finally {
+    db.close();
+  }
+  process.exit(0);
+}
+
+if (options.reviewExport) {
+  if (options.reviewFormat !== "csv")
+    usage("--review-export supports --format=csv");
+  const db = openReviewLedger(options.db);
+  try {
+    const run = readReviewRun(db, options.runId);
+    if (run === null) fail(`no review run in ${options.db}`);
+    console.log(reviewsCsv(readFlagReviews(db, run.runId)));
   } finally {
     db.close();
   }

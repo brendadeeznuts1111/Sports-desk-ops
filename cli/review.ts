@@ -285,11 +285,14 @@ export interface FlagReviewInput {
   readonly verdict: ReviewVerdict;
   readonly reviewer: string;
   readonly reviewedAt?: string;
+  /** Free text: kappa says whether reviewers disagree; notes say why. */
+  readonly notes?: string | undefined;
 }
 
-export interface StoredFlagReview extends FlagReviewInput {
+export type StoredFlagReview = Omit<FlagReviewInput, "notes"> & {
   readonly reviewedAt: string;
-}
+  readonly notes: string | null;
+};
 
 export function openReviewDb(path: string): Database {
   const db = openSportsdeskSqlite(path);
@@ -314,12 +317,20 @@ export function openReviewDb(path: string): Database {
       verdict        TEXT NOT NULL CHECK (verdict IN ('confirmed', 'false_positive', 'needs_more_info')),
       reviewed_at    TEXT NOT NULL,
       reviewer       TEXT NOT NULL,
+      notes          TEXT,
       PRIMARY KEY (run_id, seq, reviewer)
     );
 
     CREATE INDEX IF NOT EXISTS idx_flag_review_run  ON flag_review(run_id);
     CREATE INDEX IF NOT EXISTS idx_flag_review_rule ON flag_review(rule);
   `);
+  // Add notes to a ledger created before the column existed.
+  const columns = db.query("PRAGMA table_info(flag_review)").all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((column) => column.name === "notes")) {
+    db.exec("ALTER TABLE flag_review ADD COLUMN notes TEXT");
+  }
   return db;
 }
 
@@ -366,13 +377,14 @@ export function recordFlagReview(db: Database, review: FlagReviewInput): void {
     throw new Error("flag_review: seq must be a non-negative integer");
   }
   db.prepare(
-    `INSERT INTO flag_review (run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO flag_review (run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(run_id, seq, reviewer) DO UPDATE SET
        rule = excluded.rule,
        wager_numbers = excluded.wager_numbers,
        verdict = excluded.verdict,
-       reviewed_at = excluded.reviewed_at`,
+       reviewed_at = excluded.reviewed_at,
+       notes = excluded.notes`,
   ).run(
     review.runId,
     review.seq,
@@ -381,6 +393,7 @@ export function recordFlagReview(db: Database, review: FlagReviewInput): void {
     review.verdict,
     review.reviewedAt ?? new Date().toISOString(),
     review.reviewer.trim(),
+    review.notes?.trim() ? review.notes.trim() : null,
   );
 }
 
@@ -437,13 +450,13 @@ export function readFlagReviews(
     runId === undefined
       ? db
           .query(
-            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer
+            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes
              FROM flag_review ORDER BY run_id, seq, reviewer`,
           )
           .all()
       : db
           .query(
-            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer
+            `SELECT run_id, seq, rule, wager_numbers, verdict, reviewed_at, reviewer, notes
              FROM flag_review WHERE run_id = ?1 ORDER BY seq, reviewer`,
           )
           .all(runId);
@@ -457,8 +470,128 @@ export function readFlagReviews(
       verdict: String(record["verdict"]) as ReviewVerdict,
       reviewedAt: String(record["reviewed_at"]),
       reviewer: String(record["reviewer"]),
+      notes: record["notes"] === null ? null : String(record["notes"]),
     };
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Review progress and export                                                 */
+/* -------------------------------------------------------------------------- */
+
+function emptyVerdicts(): Record<ReviewVerdict, number> {
+  return { confirmed: 0, false_positive: 0, needs_more_info: 0 };
+}
+
+export interface ReviewRuleProgress {
+  readonly rule: string;
+  readonly selected: number;
+  readonly reviewed: number;
+  readonly remaining: number;
+  /** Review rows, not flags: a double-reviewed flag contributes two. */
+  readonly verdicts: Record<ReviewVerdict, number>;
+}
+
+export interface ReviewProgress {
+  readonly runId: string;
+  readonly flagCount: number;
+  readonly sampled: number;
+  readonly reviewed: number;
+  readonly remaining: number;
+  readonly doubleReviewPlanned: number;
+  readonly doubleReviewCovered: number;
+  readonly verdicts: Record<ReviewVerdict, number>;
+  readonly rules: readonly ReviewRuleProgress[];
+}
+
+/** What a reviewer still has to do, from the persisted plan and the review rows. */
+export function reviewProgress(
+  plan: ReviewPlan,
+  reviews: readonly StoredFlagReview[],
+): ReviewProgress {
+  const sampleSeqs = new Set(plan.samples.map((sample) => sample.seq));
+  const bySeq = new Map<number, StoredFlagReview[]>();
+  for (const review of reviews) {
+    if (!sampleSeqs.has(review.seq)) continue;
+    const list = bySeq.get(review.seq) ?? [];
+    list.push(review);
+    bySeq.set(review.seq, list);
+  }
+  const verdicts = emptyVerdicts();
+  for (const list of bySeq.values()) {
+    for (const review of list) verdicts[review.verdict] += 1;
+  }
+  const rules = plan.rules.map((rule) => {
+    const sampled = plan.samples.filter((sample) => sample.rule === rule.rule);
+    const reviewed = sampled.filter((sample) => bySeq.has(sample.seq));
+    const ruleVerdicts = emptyVerdicts();
+    for (const sample of reviewed) {
+      for (const review of bySeq.get(sample.seq) ?? []) {
+        ruleVerdicts[review.verdict] += 1;
+      }
+    }
+    return {
+      rule: rule.rule,
+      selected: sampled.length,
+      reviewed: reviewed.length,
+      remaining: sampled.length - reviewed.length,
+      verdicts: ruleVerdicts,
+    };
+  });
+  const doubleReviewPlanned = plan.samples.filter(
+    (sample) => sample.doubleReview,
+  ).length;
+  const doubleReviewCovered = plan.samples.filter(
+    (sample) =>
+      sample.doubleReview && (bySeq.get(sample.seq)?.length ?? 0) >= 2,
+  ).length;
+  const reviewed = bySeq.size;
+  return {
+    runId: plan.runId,
+    flagCount: plan.flagCount,
+    sampled: plan.samples.length,
+    reviewed,
+    remaining: plan.samples.length - reviewed,
+    doubleReviewPlanned,
+    doubleReviewCovered,
+    verdicts,
+    rules,
+  };
+}
+
+function csvCell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+/** The reviewer's tracker, separate from the measurement report. */
+export function reviewsCsv(reviews: readonly StoredFlagReview[]): string {
+  const header = [
+    "run_id",
+    "seq",
+    "rule",
+    "verdict",
+    "reviewer",
+    "reviewed_at",
+    "notes",
+    "wager_numbers",
+  ].join(",");
+  const rows = [...reviews]
+    .sort((a, b) => a.seq - b.seq || a.reviewer.localeCompare(b.reviewer))
+    .map((review) =>
+      [
+        review.runId,
+        String(review.seq),
+        review.rule,
+        review.verdict,
+        review.reviewer,
+        review.reviewedAt,
+        review.notes ?? "",
+        review.wagerNumbers.join("|"),
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+  return [header, ...rows].join("\n");
 }
 
 /* -------------------------------------------------------------------------- */

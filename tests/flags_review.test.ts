@@ -11,6 +11,8 @@ import {
   readFlagReviews,
   readReviewRun,
   recordFlagReview,
+  reviewProgress,
+  reviewsCsv,
   recordReviewPlan,
   validateFlagsMetricMetadata,
   wilsonInterval,
@@ -84,6 +86,7 @@ function reviewsFor(
     verdict: entry.verdict,
     reviewer: entry.reviewer ?? "analyst-a",
     reviewedAt: "2026-11-05T12:30:00.000Z",
+    notes: null,
   }));
 }
 
@@ -199,6 +202,7 @@ describe("review ledger", () => {
       verdict: "confirmed",
       reviewer: "analyst-a",
       reviewedAt: "2026-11-05T12:31:00.000Z",
+      notes: "market moved after placement",
     });
     recordFlagReview(db, {
       runId: plan.runId,
@@ -213,6 +217,9 @@ describe("review ledger", () => {
     expect(
       stored.find((review) => review.reviewer === "analyst-a")?.verdict,
     ).toBe("confirmed");
+    expect(
+      stored.find((review) => review.reviewer === "analyst-a")?.notes,
+    ).toBe("market moved after placement");
     db.close();
   });
 
@@ -239,6 +246,73 @@ describe("review ledger", () => {
       }),
     ).toThrow(/unknown verdict/);
     db.close();
+  });
+});
+
+describe("review progress and export", () => {
+  const plan = planFor(anomalies({ period_correlation: 12 }));
+  const reviews: StoredFlagReview[] = [
+    {
+      runId: plan.runId,
+      seq: 0,
+      rule: "period_correlation",
+      wagerNumbers: ["1", "2"],
+      verdict: "confirmed",
+      reviewer: "a",
+      reviewedAt: "2026-11-05T12:30:00.000Z",
+      notes: "look, a comma",
+    },
+    {
+      runId: plan.runId,
+      seq: 0,
+      rule: "period_correlation",
+      wagerNumbers: ["1", "2"],
+      verdict: "confirmed",
+      reviewer: "b",
+      reviewedAt: "2026-11-05T12:31:00.000Z",
+      notes: null,
+    },
+    {
+      runId: plan.runId,
+      seq: 1,
+      rule: "period_correlation",
+      wagerNumbers: ["3"],
+      verdict: "false_positive",
+      reviewer: "a",
+      reviewedAt: "2026-11-05T12:32:00.000Z",
+      notes: 'quoted "note"',
+    },
+  ];
+
+  test("reports reviewed, remaining and double coverage", () => {
+    const progress = reviewProgress(plan, reviews);
+    expect(progress).toMatchObject({
+      runId: plan.runId,
+      sampled: 12,
+      reviewed: 2,
+      remaining: 10,
+      doubleReviewPlanned: 1,
+      doubleReviewCovered: 1,
+      verdicts: { confirmed: 2, false_positive: 1, needs_more_info: 0 },
+    });
+    expect(progress.rules[0]).toMatchObject({
+      rule: "period_correlation",
+      selected: 12,
+      reviewed: 2,
+      remaining: 10,
+    });
+  });
+
+  test("exports CSV with escaped notes and wager numbers", () => {
+    const csv = reviewsCsv(reviews);
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe(
+      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,wager_numbers",
+    );
+    expect(lines).toHaveLength(4);
+    expect(csv).toContain('"look, a comma"');
+    expect(csv).toContain('"quoted ""note"""');
+    expect(csv).toContain("1|2");
   });
 });
 

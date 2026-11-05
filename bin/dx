@@ -278,6 +278,8 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx flags --review          Plan a stratified review ledger (--budget-minutes, --seed)
     ./bin/dx flags --record          Record one review (--run-id --seq --verdict --reviewer)
     ./bin/dx flags --review-report   Sampled rule precision for a review run
+    ./bin/dx flags --review-status   Reviewed vs remaining for a run
+    ./bin/dx flags --review-export --format=csv   Reviewer tracker
 
   Surveillance / ingestion
     ./bin/dx modes [1..10]          10-mode forensic / risk / cross-market matrix

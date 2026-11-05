@@ -169,9 +169,46 @@ describe("flags CLI", () => {
       "confirmed",
       "--reviewer",
       "analyst-a",
+      "--notes",
+      "checked the market",
     ]);
     expect(recorded.code).toBe(0);
     expect(recorded.stdout).toContain("recorded confirmed");
+
+    const status = await run([
+      "--review-status",
+      "--db",
+      db,
+      "--run-id",
+      runId,
+      "--json",
+    ]);
+    expect(status.code).toBe(0);
+    expect(JSON.parse(status.stdout)).toMatchObject({
+      runId,
+      sampled: 1,
+      reviewed: 1,
+      remaining: 0,
+      doubleReviewPlanned: 1,
+      doubleReviewCovered: 0,
+      verdicts: { confirmed: 1, false_positive: 0, needs_more_info: 0 },
+    });
+
+    const exported = await run([
+      "--review-export",
+      "--db",
+      db,
+      "--run-id",
+      runId,
+      "--format",
+      "csv",
+    ]);
+    expect(exported.code).toBe(0);
+    expect(exported.stdout).toContain(
+      "run_id,seq,rule,verdict,reviewer,reviewed_at,notes,wager_numbers",
+    );
+    expect(exported.stdout).toContain("checked the market");
+    expect(exported.stdout).toContain("900000001");
 
     const reported = await run([
       "--review-report",
