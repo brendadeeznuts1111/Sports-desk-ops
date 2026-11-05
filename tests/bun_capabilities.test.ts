@@ -158,6 +158,30 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
+  test("AddEventListenerOptions once, passive and signal are honored", () => {
+    const target = new EventTarget();
+    let once = 0;
+    target.addEventListener("once", () => (once += 1), { once: true });
+    target.dispatchEvent(new Event("once"));
+    target.dispatchEvent(new Event("once"));
+    expect(once).toBe(1);
+
+    let passive = 0;
+    target.addEventListener("passive", () => (passive += 1), { passive: true });
+    target.dispatchEvent(new Event("passive"));
+    expect(passive).toBe(1);
+
+    const controller = new AbortController();
+    let signalled = 0;
+    target.addEventListener("signal", () => (signalled += 1), {
+      signal: controller.signal,
+    });
+    target.dispatchEvent(new Event("signal"));
+    controller.abort();
+    target.dispatchEvent(new Event("signal"));
+    expect(signalled).toBe(1);
+  });
+
   test("readableStreamToArrayBuffer concatenates typed chunks", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
