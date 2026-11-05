@@ -45,7 +45,7 @@ export function sha256HexOfBytes(bytes: Uint8Array): Sha256Hex {
 
 export async function sha256HexOfFile(path: string): Promise<Sha256Hex | null> {
   if (!existsSync(path)) return null;
-  const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
+  const bytes = await Bun.file(path).bytes();
   return sha256HexOfBytes(bytes);
 }
 

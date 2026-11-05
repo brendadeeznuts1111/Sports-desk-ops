@@ -530,7 +530,7 @@ async function emitShot(
   });
   const blob = options.uploadBlob
     ? await uploadScreenshotToGateway(
-        new Uint8Array(await Bun.file(captured.screenshot).arrayBuffer()),
+        await Bun.file(captured.screenshot).bytes(),
         captured.mimeType,
         {
           gatewayUrl: options.blobGateway ?? resolveBlobGatewayUrl(),

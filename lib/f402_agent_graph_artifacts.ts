@@ -95,7 +95,7 @@ export function resolveDefaultAgentGraphEnvelope(
 }
 
 export async function sha256HexFile(path: string): Promise<string> {
-  const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
+  const bytes = await Bun.file(path).bytes();
   return sha256Hex(bytes);
 }
 

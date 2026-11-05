@@ -29,7 +29,7 @@ export async function loadPinnedManifest(): Promise<PinnedManifest> {
 }
 
 export async function sha256HexFile(path: string): Promise<string> {
-  const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
+  const bytes = await Bun.file(path).bytes();
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Buffer.from(digest).toString("hex");
 }

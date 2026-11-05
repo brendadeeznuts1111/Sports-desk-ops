@@ -99,13 +99,13 @@ const mode = values["players-mode"]
 
 async function readInputBytes(): Promise<Uint8Array<ArrayBuffer>> {
   if (values.stdin) {
-    return new Uint8Array(await Bun.stdin.arrayBuffer());
+    return await Bun.stdin.bytes();
   }
   const filePath = values.file ?? positionals[0];
   if (filePath === undefined) {
     throw new Error("Provide --file, --stdin, or --fetch");
   }
-  return new Uint8Array(await Bun.file(filePath).arrayBuffer());
+  return await Bun.file(filePath).bytes();
 }
 
 async function writeOutputs(
