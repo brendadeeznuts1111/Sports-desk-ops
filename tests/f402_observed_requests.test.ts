@@ -241,8 +241,8 @@ describe("the filtered CP request", () => {
   });
 
   test("wagerType and betType stay raw codes", () => {
-    // M and S are carried as sent. The repo has no documented meaning for M, so nothing here may
-    // translate them into "Moneyline" and "Straight".
+    // M and S are carried as sent. The client config documents M as Moneyline and S as Spread;
+    // this request fixture still keeps the raw codes, and neither is rewritten in the body.
     expect(variant().wagerType).toBe("M");
     expect(variant().betType).toBe("S");
   });

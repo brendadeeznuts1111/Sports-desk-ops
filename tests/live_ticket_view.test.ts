@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
   findDupePairs,
+  normalizeLeg,
   normalizeTicket,
   splitPickPrice,
 } from "../lib/live_ticket_view.ts";
@@ -94,6 +95,33 @@ describe("live_ticket_view", () => {
     expect(view.stake).toBe(3500);
     expect(view.volume).toBe(2188);
     expect(view.product).toBe("INTERNET");
+  });
+
+  test("wire labels come from the client getTypeInfo map", () => {
+    const wagers = readWagerList(payload);
+    const moneyline = wagers.find((wager) => wager.wagerNumber === 767126203)!;
+    const spread = wagers.find((wager) => wager.wagerNumber === 767126231)!;
+    expect(normalizeTicket(moneyline).wagerTypeLabel).toBe("Moneyline");
+    expect(normalizeTicket(spread).wagerTypeLabel).toBe("Spread");
+  });
+
+  test("periods use the canonical typePeriod code", () => {
+    expect(
+      normalizeLeg(
+        {
+          sport: "Football",
+          game: "A vs B",
+          period: "1st Half",
+          market: "Winner (2 way)",
+          pick: "A -110",
+          raw: "Football - A vs B / 1st Half / Winner (2 way) / A -110",
+          compact: false,
+          live: false,
+          gameNumber: null,
+        },
+        1,
+      ).period,
+    ).toBe("1H");
   });
 
   test("the public view carries no customer, agent or login identifiers", () => {

@@ -14,7 +14,7 @@
 
 import { parseArgs } from "node:util";
 
-import { wagerTypeLabel } from "../lib/game_admin.ts";
+import { wagerTypeLabel } from "../lib/bet_ticker_labels.ts";
 import { normalizeTicket } from "../lib/live_ticket_view.ts";
 import { readWagerListArtifact, type LiveWager } from "../lib/live_wagers.ts";
 

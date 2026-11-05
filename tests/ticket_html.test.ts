@@ -25,6 +25,10 @@ describe("ticket html", () => {
       "a & b <c> $2 A  ",
     );
     expect(decodeEntities("&unknown; stays")).toBe("&unknown; stays");
+    expect(decodeEntities("Culiac&aacute;n &amp; Cañeros")).toBe(
+      "Culiacán & Cañeros",
+    );
+    expect(htmlToText("<p>Culiac&aacute;n</p>")).toBe("Culiacán");
   });
 
   test("strips script, style and noscript bodies", () => {

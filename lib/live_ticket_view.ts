@@ -9,7 +9,7 @@
  * `null`; `product` carries the channel that `TicketWriter` named.
  */
 
-import { wagerTypeLabel } from "./game_admin.ts";
+import { periodCode, wagerTypeLabel } from "./bet_ticker_labels.ts";
 import { portalWallClockIso } from "./gslive_manager_deeplink_sidecar.ts";
 import {
   toLiveWager,
@@ -22,6 +22,7 @@ export interface NormalizedTicketLeg {
   readonly index: number;
   readonly sport: string;
   readonly eventName: string;
+  /** Canonical period code (`Game`, `1H`, `2Q`, …) from the client `typePeriod` map. */
   readonly period: string;
   readonly market: string;
   /** The pick with the American price removed: `"Los Angeles Rams"`. */
@@ -92,13 +93,16 @@ export function splitPickPrice(pick: string): {
   };
 }
 
-function normalizeLeg(leg: LiveWagerLeg, index: number): NormalizedTicketLeg {
+export function normalizeLeg(
+  leg: LiveWagerLeg,
+  index: number,
+): NormalizedTicketLeg {
   const { selection, price } = splitPickPrice(leg.pick);
   return {
     index,
     sport: leg.sport,
     eventName: leg.game,
-    period: leg.period,
+    period: periodCode(leg.period),
     market: leg.market,
     selection,
     price,
@@ -169,10 +173,44 @@ const SAFE_ROW_FIELDS = [
   "VIP",
 ] as const;
 
+/** Public ticket fields shared by the JSON and HTML projections; identities are absent. */
+const SAFE_TICKET_FIELDS = [
+  "wagerNumber",
+  "product",
+  "source",
+  "wagerType",
+  "wagerTypeLabel",
+  "ticketStructure",
+  "phase",
+  "live",
+  "vip",
+  "stake",
+  "toWin",
+  "volume",
+  "insertedAt",
+  "descCode",
+  "writer",
+  "ticketWriter",
+  "legs",
+  "timeOnly",
+  "amountSource",
+  "provenance",
+] as const;
+
 /** Raw `LIST` row → the same row without customer, agent or login identifiers. */
 export function toSafeJson(
   row: Record<string, unknown>,
 ): Record<string, unknown> {
+  if (
+    !Object.hasOwn(row, "WagerNumber") &&
+    typeof row.wagerNumber === "string"
+  ) {
+    const safe: Record<string, unknown> = {};
+    for (const key of SAFE_TICKET_FIELDS) {
+      if (Object.hasOwn(row, key)) safe[key] = row[key];
+    }
+    return safe;
+  }
   const safe: Record<string, unknown> = {};
   for (const key of SAFE_ROW_FIELDS) {
     if (Object.hasOwn(row, key)) safe[key] = row[key];

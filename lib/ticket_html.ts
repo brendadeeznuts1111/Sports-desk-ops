@@ -26,6 +26,31 @@ const NAMED: Record<string, string> = {
   quot: '"',
   apos: "'",
   nbsp: " ",
+  aacute: "á",
+  Aacute: "Á",
+  eacute: "é",
+  Eacute: "É",
+  iacute: "í",
+  Iacute: "Í",
+  oacute: "ó",
+  Oacute: "Ó",
+  uacute: "ú",
+  Uacute: "Ú",
+  ntilde: "ñ",
+  Ntilde: "Ñ",
+  ccedil: "ç",
+  Ccedil: "Ç",
+  iexcl: "¡",
+  iquest: "¿",
+  deg: "°",
+  middot: "·",
+  ndash: "–",
+  mdash: "—",
+  hellip: "…",
+  lsquo: "‘",
+  rsquo: "’",
+  ldquo: "“",
+  rdquo: "”",
 };
 
 export function decodeEntities(text: string): string {
@@ -37,7 +62,7 @@ export function decodeEntities(text: string): string {
           : Number.parseInt(code.slice(1), 10);
       return Number.isFinite(value) ? String.fromCodePoint(value) : match;
     }
-    return NAMED[code.toLowerCase()] ?? match;
+    return NAMED[code] ?? NAMED[code.toLowerCase()] ?? match;
   });
 }
 

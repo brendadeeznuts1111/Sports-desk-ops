@@ -15,7 +15,11 @@
 
 import type { LiveBetGame } from "./live_bets.ts";
 
-/** The portal's `WagerType` codes, as used by `Report/Pending` rows. */
+/**
+ * Legacy Game Admin position labels (ticket structure), not the wire `WagerType` codes.
+ * The client config maps `S` to Spread and `M` to Moneyline; `bet_ticker_labels.ts` carries
+ * those labels. This map stays for the Position view until it derives structure from `picks`.
+ */
 export const WAGER_TYPE_LABELS = {
   S: "Straight",
   P: "Parlay",
