@@ -69,6 +69,8 @@ describe("period_correlation", () => {
     const hits = periodCorrelation(rows);
     expect(hits).toHaveLength(1);
     expect(hits[0]?.evidence.periodCount).toBe(4);
+    expect(hits[0]?.evidence.customerRef).toMatch(/^customer:[0-9a-f]{12}$/);
+    expect(JSON.stringify(hits[0]?.evidence)).not.toContain("MH521");
   });
 
   test("silent with only two periods", () => {
@@ -88,6 +90,8 @@ describe("batch_replay", () => {
     const hits = batchReplay(rows);
     expect(hits).toHaveLength(1);
     expect(hits[0]?.evidence.count).toBe(2);
+    expect(hits[0]?.evidence.agentRef).toMatch(/^agent:[0-9a-f]{12}$/);
+    expect(JSON.stringify(hits[0]?.evidence)).not.toContain("CRYPTO91");
   });
 
   test("silent across different agents", () => {
@@ -209,5 +213,39 @@ describe("past_post", () => {
     expect(pastPost(rows)).toHaveLength(0);
     const schedule = new Map([["kings vs lakers", "2026-11-04T22:00:00"]]);
     expect(pastPost(rows, { schedule })).toHaveLength(1);
+  });
+});
+
+describe("evidence references", () => {
+  test("the kind is hashed with the value", () => {
+    const customerRows = ["1Q", "2Q", "3Q", "4Q"].map((period, index) =>
+      ticket({
+        wagerNumber: `c${index}`,
+        insertedAt: `2026-11-04T21:${15 + index}:00`,
+        customer: "SAME",
+        legs: [leg("Lakers vs Kings", period, "Over 55")],
+      }),
+    );
+    const agentRows = [
+      ticket({
+        wagerNumber: "a1",
+        insertedAt: "2026-11-04T21:56:50.683",
+        agent: "SAME",
+      }),
+      ticket({
+        wagerNumber: "a2",
+        insertedAt: "2026-11-04T21:56:50.687",
+        agent: "SAME",
+      }),
+    ];
+
+    const customerRef =
+      periodCorrelation(customerRows)[0]?.evidence.customerRef;
+    const agentRef = batchReplay(agentRows)[0]?.evidence.agentRef;
+    expect(customerRef).toMatch(/^customer:[0-9a-f]{12}$/);
+    expect(agentRef).toMatch(/^agent:[0-9a-f]{12}$/);
+    expect(String(customerRef).slice("customer:".length)).not.toBe(
+      String(agentRef).slice("agent:".length),
+    );
   });
 });

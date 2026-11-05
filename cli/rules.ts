@@ -146,10 +146,16 @@ function agentOf(ticket: RuleTicket): string | undefined {
   return value === undefined || value === "" ? undefined : value;
 }
 
+/**
+ * The kind is hashed with the value: a customer and an agent sharing a login must not
+ * produce the same reference. SHA-256 truncated to 12 hex chars stays stable across runs
+ * without retaining the raw identity anywhere the evidence can reach.
+ */
 function ref(kind: "customer" | "agent", value: string | undefined): string {
-  return value === undefined
-    ? `${kind}:?`
-    : `${kind}:${Bun.hash(value).toString(16)}`;
+  if (value === undefined) return `${kind}:?`;
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(`${kind}:${value}`);
+  return `${kind}:${hasher.digest("hex").slice(0, 12)}`;
 }
 
 function wagerNumbers(tickets: readonly RuleTicket[]): string[] {
