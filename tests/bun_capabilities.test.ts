@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Guards the runtime surface the capture and docs tooling actually calls.
@@ -153,6 +156,36 @@ describe("Bun capabilities used by the ops tooling", () => {
     const png = Buffer.from(url.slice(url.indexOf(",") + 1), "base64");
     const blurAspect = png.readUInt32BE(16) / png.readUInt32BE(20);
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
+  });
+
+  test("file().image().resize().webp().write() writes a WebP chain", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-image-chain-"));
+    try {
+      const source = join(dir, "photo.png");
+      const target = join(dir, "thumb.webp");
+      // 1x1 transparent PNG.
+      await Bun.write(
+        source,
+        Uint8Array.fromBase64(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nH0AAAAASUVORK5CYII=",
+        ),
+      );
+
+      const written = await Bun.file(source)
+        .image()
+        .resize(400)
+        .webp()
+        .write(target);
+      expect(written).toBeGreaterThan(0);
+      expect(await Bun.file(target).exists()).toBe(true);
+
+      const meta = await new Bun.Image(
+        await Bun.file(target).bytes(),
+      ).metadata();
+      expect(meta).toMatchObject({ width: 400, height: 400, format: "webp" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("inspect.table takes the whitelist only as a string array", () => {
