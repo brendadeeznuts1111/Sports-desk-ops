@@ -158,6 +158,22 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
+  test("FileSink accepts highWaterMark and end() flushes the write", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-filesink-"));
+    try {
+      const path = join(dir, "sink.txt");
+      const sink = Bun.file(path).writer({ highWaterMark: 8 });
+      const written = sink.write("x".repeat(1024));
+      if (written instanceof Promise) await written;
+      const ended = sink.end();
+      if (ended instanceof Promise) await ended;
+
+      expect(await Bun.file(path).text()).toHaveLength(1024);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("BunFile.slice is lazy, does not open a missing file, and does not clamp size", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bunfile-slice-lazy-"));
     try {
