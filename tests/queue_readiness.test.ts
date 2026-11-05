@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_QUEUE_READINESS_POLICY,
   assessQueueReadiness,
+  queueBatchBody,
 } from "../lib/queue_readiness.ts";
 
 describe("queue readiness gate", () => {
@@ -133,6 +134,78 @@ describe("queue readiness gate", () => {
     expect(readiness.blockers.map((blocker) => blocker.name)).toEqual([
       "bridgeRepresentativeness",
     ]);
+  });
+
+  test("the batch stub refuses closed gates and carries applied/notApplied", () => {
+    const closed = assessQueueReadiness({
+      corpusAgeHours: 24,
+      modelAgeDays: 9,
+      bridgeCoverage: 0.0394,
+      bridgeRepresentative: null,
+      confirmedReviews: 0,
+      rules: [],
+    });
+    expect(() => queueBatchBody(closed)).toThrow(/gate is closed/);
+    const open = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 0.6,
+      bridgeRepresentative: true,
+      confirmedReviews: 6,
+      rules: [
+        { rule: "period_correlation", confirmedReviews: 6 },
+        { rule: "velocity_market", confirmedReviews: 3 },
+      ],
+    });
+    expect(queueBatchBody(open)).toEqual({
+      rows: [],
+      ruleApplication: {
+        ready: true,
+        applied: ["period_correlation"],
+        notApplied: [
+          { rule: "velocity_market", reason: "reviewedSampleSize", n: 3 },
+        ],
+        blockers: [],
+        state: "partial",
+      },
+    });
+    const complete = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 0.6,
+      bridgeRepresentative: true,
+      confirmedReviews: 6,
+      rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
+    });
+    expect(queueBatchBody(complete).ruleApplication.state).toBe("measured");
+    const none = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 0.6,
+      bridgeRepresentative: true,
+      confirmedReviews: 1,
+      rules: [{ rule: "period_correlation", confirmedReviews: 1 }],
+    });
+    expect(queueBatchBody(none).ruleApplication.state).toBe("not_applied");
+  });
+
+  test("a missing corpus or model reports 'missing', not an infinity string", () => {
+    const readiness = assessQueueReadiness({
+      corpusAgeHours: Number.POSITIVE_INFINITY,
+      modelAgeDays: Number.POSITIVE_INFINITY,
+      bridgeCoverage: null,
+      bridgeRepresentative: null,
+      confirmedReviews: 0,
+      rules: [],
+    });
+    expect(readiness.blockers[0]).toMatchObject({
+      name: "corpusFreshness",
+      current: "missing",
+    });
+    expect(readiness.blockers[1]).toMatchObject({
+      name: "modelFreshness",
+      current: "missing",
+    });
   });
 
   test("accepts a stricter policy", () => {

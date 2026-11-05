@@ -14,8 +14,11 @@ export interface QueueReadinessInput {
   readonly corpusAgeHours: number;
   /** Age of the fitted model artifact. */
   readonly modelAgeDays: number;
-  /** Fraction of GSLive queue accounts that resolve to a durable F402 identity. */
-  readonly bridgeCoverage: number;
+  /**
+   * Fraction of GSLive queue accounts that resolve to a durable F402 identity. Reported, not
+   * gated: null means the bridge coverage has not been measured for this run.
+   */
+  readonly bridgeCoverage: number | null;
   /**
    * Whether covered and uncovered accounts are statistically comparable. Null means the
    * representativeness study has not been run; coverage alone is not enough.
@@ -71,6 +74,10 @@ export interface QueueReadiness {
   };
 }
 
+function formatAge(value: number, unit: "h" | "d"): string {
+  return Number.isFinite(value) ? `${value.toFixed(1)}${unit}` : "missing";
+}
+
 export function assessQueueReadiness(
   input: QueueReadinessInput,
   policy: QueueReadinessPolicy = DEFAULT_QUEUE_READINESS_POLICY,
@@ -79,14 +86,14 @@ export function assessQueueReadiness(
   if (input.corpusAgeHours > policy.maxCorpusAgeHours) {
     blockers.push({
       name: "corpusFreshness",
-      current: `${input.corpusAgeHours.toFixed(1)}h`,
+      current: formatAge(input.corpusAgeHours, "h"),
       required: `<= ${policy.maxCorpusAgeHours}h`,
     });
   }
   if (input.modelAgeDays > policy.maxModelAgeDays) {
     blockers.push({
       name: "modelFreshness",
-      current: `${input.modelAgeDays.toFixed(1)}d`,
+      current: formatAge(input.modelAgeDays, "d"),
       required: `<= ${policy.maxModelAgeDays}d`,
     });
   }
@@ -139,6 +146,41 @@ export function assessQueueReadiness(
       applied,
       notApplied,
       blockers: applicationBlockers,
+    },
+  };
+}
+
+/**
+ * Stub batch body. It is deliberately unreachable until the gate clears; when it does, this is
+ * the shape the real reason-attachment pass must fill in. Keeping it executable prevents the gate
+ * from becoming a function nobody calls.
+ */
+export type QueueRuleApplicationState = "measured" | "partial" | "not_applied";
+
+export interface QueueBatchStub {
+  readonly rows: readonly never[];
+  readonly ruleApplication: QueueReadiness["ruleApplication"] & {
+    /** measured = every reviewed rule applied; partial = some did; not_applied = none did. */
+    readonly state: QueueRuleApplicationState;
+  };
+}
+
+function ruleApplicationState(
+  application: QueueReadiness["ruleApplication"],
+): QueueRuleApplicationState {
+  if (application.applied.length === 0) return "not_applied";
+  return application.notApplied.length === 0 ? "measured" : "partial";
+}
+
+export function queueBatchBody(readiness: QueueReadiness): QueueBatchStub {
+  if (!readiness.ready) {
+    throw new Error("queueBatchBody: readiness gate is closed");
+  }
+  return {
+    rows: [],
+    ruleApplication: {
+      ...readiness.ruleApplication,
+      state: ruleApplicationState(readiness.ruleApplication),
     },
   };
 }

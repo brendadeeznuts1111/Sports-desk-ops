@@ -19,6 +19,7 @@
  * the measured source states in `error.details.sources`.
  */
 
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import {
@@ -77,6 +78,19 @@ import {
   type FraudQueueScore,
 } from "../lib/fraud_queue.ts";
 import { buildFraudExploration } from "../lib/fraud_explore.ts";
+import { openSportsdeskSqliteReadonly } from "../lib/sportsdesk_sqlite.ts";
+import {
+  assessQueueReadiness,
+  queueBatchBody,
+  type QueueReadiness,
+  type QueueReadinessInput,
+  type QueueRuleSupport,
+} from "../lib/queue_readiness.ts";
+import {
+  FLAGS_REVIEW_DB_REL_PATH,
+  readFlagReviews,
+  type StoredFlagReview,
+} from "./review.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -642,6 +656,162 @@ async function cmdStatus(
   return emitSuccess(context, "status", payload);
 }
 
+function ageIn(
+  nowMs: number,
+  isoTimestamp: string | null,
+  unitMs: number,
+): number {
+  if (isoTimestamp === null) return Number.POSITIVE_INFINITY;
+  const thenMs = Date.parse(isoTimestamp);
+  return Number.isFinite(thenMs)
+    ? (nowMs - thenMs) / unitMs
+    : Number.POSITIVE_INFINITY;
+}
+
+function loadQueueReviews(path: string): readonly StoredFlagReview[] {
+  if (!existsSync(path)) return [];
+  const db = openSportsdeskSqliteReadonly(path);
+  try {
+    return readFlagReviews(db);
+  } finally {
+    db.close();
+  }
+}
+
+function queueBlockers(readiness: QueueReadiness): string[] {
+  return [
+    ...readiness.blockers.map((blocker) => blocker.name),
+    ...readiness.ruleApplication.blockers.map((blocker) => blocker.name),
+  ];
+}
+
+function formatInputAge(value: number, unit: "h" | "d"): string {
+  return Number.isFinite(value) ? `${value.toFixed(1)}${unit}` : "missing";
+}
+
+function renderQueueReadiness(
+  readiness: QueueReadiness,
+  inputs: QueueReadinessInput,
+): string {
+  const lines = [
+    "queue build: NOT READY (dry run; no queue rows produced)",
+    `  measured: corpus=${formatInputAge(inputs.corpusAgeHours, "h")}, model=${formatInputAge(inputs.modelAgeDays, "d")}, confirmedReviews=${inputs.confirmedReviews}`,
+    "  execution:",
+  ];
+  if (readiness.blockers.length === 0) {
+    lines.push("    ok");
+  }
+  for (const blocker of readiness.blockers) {
+    lines.push(
+      `    ${blocker.name}: ${blocker.current} (required ${blocker.required})`,
+    );
+  }
+  lines.push("  rule application:");
+  if (readiness.ruleApplication.applied.length === 0) {
+    lines.push("    applied: none");
+  } else {
+    lines.push(`    applied: ${readiness.ruleApplication.applied.join(", ")}`);
+  }
+  for (const entry of readiness.ruleApplication.notApplied) {
+    lines.push(
+      `    not applied: ${entry.rule} (${entry.reason}, n=${entry.n})`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * `queue build --dry-run`: call the readiness gate before any batch work. A closed gate exits 1
+ * and prints every blocker; the batch body is only reachable when the gate is open.
+ */
+async function cmdQueueBuild(
+  flags: CommandFlags,
+  context: CliContext,
+): Promise<number> {
+  if (!flags.switches.has("--dry-run")) {
+    usageError(
+      "queue build",
+      "--dry-run is required; the batch is not enabled",
+    );
+  }
+  const perception = await perceptionOf(context);
+  const corpus = requireCorpus(perception, "queue build");
+  const model = await readFraudModel(context.root);
+  const reviewArg = flags.values.get("--review-db");
+  const reviewPath =
+    reviewArg === undefined
+      ? join(context.root, FLAGS_REVIEW_DB_REL_PATH)
+      : resolve(context.root, reviewArg);
+  const reviews = loadQueueReviews(reviewPath);
+
+  // seq is per run; the same seq in two runs is two different flags. reviewer is not part of the
+  // key because a double review of one flag is one confirmed flag, not two.
+  const confirmedFlags = new Set<string>();
+  const confirmedByRule = new Map<string, Set<string>>();
+  for (const review of reviews) {
+    if (review.verdict !== "confirmed") continue;
+    const key = `${review.runId}\u0000${review.seq}`;
+    confirmedFlags.add(key);
+    const set = confirmedByRule.get(review.rule) ?? new Set<string>();
+    set.add(key);
+    confirmedByRule.set(review.rule, set);
+  }
+  const rules: QueueRuleSupport[] = [...confirmedByRule].map(
+    ([rule, keys]) => ({ rule, confirmedReviews: keys.size }),
+  );
+
+  const nowMs = context.now.getTime();
+  const inputs: QueueReadinessInput = {
+    corpusAgeHours: ageIn(nowMs, corpus.window.toIso, 3_600_000),
+    modelAgeDays:
+      model.artifact === null
+        ? Number.POSITIVE_INFINITY
+        : ageIn(nowMs, model.artifact.fittedAt, 86_400_000),
+    // Not measured in a dry run. Coverage is reported, not gated; representativeness is the gate
+    // and stays blocked until the bridge study is run.
+    bridgeCoverage: null,
+    bridgeRepresentative: null,
+    confirmedReviews: confirmedFlags.size,
+    rules,
+  };
+  const readiness = assessQueueReadiness(inputs);
+
+  if (!readiness.ready) {
+    const names = queueBlockers(readiness);
+    const message = `queue build: readiness gate is closed (${names.join(", ") || "no input measured"})`;
+    if (context.json) {
+      return emitFailure(
+        "queue",
+        new CliError(
+          "queue_not_ready",
+          message,
+          {
+            subcommand: "build",
+            dryRun: true,
+            readiness,
+            inputs,
+          },
+          EXIT_ERROR,
+        ),
+        true,
+      );
+    }
+    process.stdout.write(`${renderQueueReadiness(readiness, inputs)}\n`);
+    process.stderr.write(`queue_not_ready: ${message}\n`);
+    return EXIT_ERROR;
+  }
+
+  const batch = queueBatchBody(readiness);
+  return emitSuccess(context, "queue", {
+    subcommand: "build",
+    dryRun: true,
+    readiness,
+    inputs,
+    batch,
+    sources: sourceStates(perception),
+  });
+}
+
 /**
  * Ranked account triage queue. Deterministic and transparent: findings by severity, then the
  * fitted model's proxy score, then bet rows. The model is optional; without an artifact the queue
@@ -652,9 +822,22 @@ async function cmdQueue(
   context: CliContext,
 ): Promise<number> {
   const flags = parseCommandFlags("queue", tokens, {
-    valueFlags: ["--limit"],
+    valueFlags: ["--limit", "--review-db"],
+    switchFlags: ["--dry-run"],
     shortAliases: { "-l": "--limit" },
   });
+  if (flags.positionals[0] === "build") {
+    if (flags.positionals.length > 1) {
+      usageError("queue build", "unexpected argument after build");
+    }
+    return cmdQueueBuild(flags, context);
+  }
+  if (flags.switches.has("--dry-run") || flags.values.has("--review-db")) {
+    usageError(
+      "queue",
+      "--dry-run and --review-db are only valid with `queue build`",
+    );
+  }
   assertNoPositionals("queue", flags);
   const limit = integerFlag("queue", flags, "--limit", 25, 1, 100);
   const perception = await perceptionOf(context);
@@ -1535,7 +1718,7 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     name: "queue",
     summary:
       "Ranked account triage queue: findings by severity, then model score, then bets",
-    usage: "queue [--limit N] [flags]",
+    usage: "queue [--limit N] [flags] | queue build --dry-run [flags]",
     detail: [
       "Orders the accounts with at least one non-data-quality account finding or one",
       "suspected-bot / reversed-credit / manual-log / odds-drift row. Order is lexicographic:",
@@ -1550,10 +1733,20 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
         flags: "-l, --limit <N>",
         description: "Rows to return (1-100, default 25).",
       },
+      {
+        flags: "build --dry-run",
+        description:
+          "Call the readiness gate, print every blocker, and produce no queue rows.",
+      },
+      {
+        flags: "--review-db <path>",
+        description: "Review ledger used by the queue-build readiness gate.",
+      },
     ],
     examples: [
       "bun run cli/sportsdesk_fraud_cli.ts queue --json",
       "bun run cli/sportsdesk_fraud_cli.ts queue --limit 10 --json",
+      "bun run cli/sportsdesk_fraud_cli.ts queue build --dry-run --json",
     ],
   },
   {

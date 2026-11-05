@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
+import { openReviewDb, recordFlagReview } from "../cli/review.ts";
 import { loadFraudPerception } from "../lib/fraud_logs.ts";
 import type { FraudFinding } from "../lib/fraud_logs.ts";
 import { runFraudPatterns } from "../lib/fraud_patterns.ts";
@@ -252,5 +255,112 @@ describe("fraud priority queue (CLI)", () => {
     expect(second.rows).toEqual(first.rows);
     expect(second.totals).toEqual(first.totals);
     expect(second.model).toEqual(first.model);
+  });
+
+  test("queue build --dry-run exits 1 with every readiness blocker and no rows", () => {
+    const root = track(buildFixtureRoot());
+    const result = runCli(root, ["queue", "build", "--dry-run"]);
+    expect(result.code).toBe(1);
+    expect(result.body.success).toBe(false);
+    const error = result.body.error as {
+      code: string;
+      details: {
+        readiness: {
+          ready: boolean;
+          blockers: { name: string }[];
+        };
+        inputs: {
+          bridgeCoverage: number | null;
+          bridgeRepresentative: boolean | null;
+          confirmedReviews: number;
+        };
+      };
+    };
+    expect(error.code).toBe("queue_not_ready");
+    expect(error.details.readiness.ready).toBe(false);
+    expect(
+      error.details.readiness.blockers.map((blocker) => blocker.name),
+    ).toEqual([
+      "corpusFreshness",
+      "modelFreshness",
+      "bridgeRepresentativeness",
+      "reviewRows",
+    ]);
+    expect(error.details.inputs.bridgeCoverage).toBeNull();
+    expect(error.details.inputs.bridgeRepresentative).toBeNull();
+    expect(error.details.inputs.confirmedReviews).toBe(0);
+    expect(result.body.rows).toBeUndefined();
+    expect(result.body.batch).toBeUndefined();
+  });
+
+  test("queue build requires --dry-run", () => {
+    const root = track(buildFixtureRoot());
+    const result = runCli(root, ["queue", "build"]);
+    expect(result.code).toBe(2);
+    expect((result.body.error as { code: string }).code).toBe("usage_error");
+  });
+
+  test("queue build counts confirmed flags per run, not just per seq", () => {
+    const root = track(buildFixtureRoot());
+    const dbPath = join(root, "reports/security/flags-review.sqlite");
+    mkdirSync(dirname(dbPath), { recursive: true });
+    const db = openReviewDb(dbPath);
+    try {
+      for (let seq = 0; seq < 3; seq += 1) {
+        recordFlagReview(db, {
+          runId: "run-a",
+          seq,
+          rule: "period_correlation",
+          wagerNumbers: [String(seq)],
+          verdict: "confirmed",
+          reviewer: "analyst-a",
+        });
+      }
+      // Same seq in a second run is a different flag; a double review of run-a/0 is not.
+      for (let seq = 0; seq < 2; seq += 1) {
+        recordFlagReview(db, {
+          runId: "run-b",
+          seq,
+          rule: "period_correlation",
+          wagerNumbers: [String(seq)],
+          verdict: "confirmed",
+          reviewer: "analyst-a",
+        });
+      }
+      recordFlagReview(db, {
+        runId: "run-a",
+        seq: 0,
+        rule: "period_correlation",
+        wagerNumbers: ["0"],
+        verdict: "confirmed",
+        reviewer: "analyst-b",
+      });
+    } finally {
+      db.close();
+    }
+
+    const result = runCli(root, ["queue", "build", "--dry-run"]);
+    expect(result.code).toBe(1);
+    const details = (
+      result.body.error as {
+        details: {
+          inputs: {
+            confirmedReviews: number;
+            rules: { rule: string; confirmedReviews: number }[];
+          };
+          readiness: {
+            ruleApplication: { applied: string[]; notApplied: unknown[] };
+          };
+        };
+      }
+    ).details;
+    expect(details.inputs.confirmedReviews).toBe(5);
+    expect(details.inputs.rules).toEqual([
+      { rule: "period_correlation", confirmedReviews: 5 },
+    ]);
+    expect(details.readiness.ruleApplication.applied).toEqual([
+      "period_correlation",
+    ]);
+    expect(details.readiness.ruleApplication.notApplied).toEqual([]);
   });
 });
