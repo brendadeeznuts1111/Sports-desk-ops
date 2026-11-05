@@ -294,7 +294,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
 - **Here:** `lib/bun_xml_golden_ast.ts`, `lib/customer_profile.ts`
-- **Evidence:** `surface:XML`, `probe:data.parse`
+- **Evidence:** `surface:XML`, `probe:data.parse`, `test:tests/bun_xml_contract.test.ts`
 
 #### Bun.YAML
 

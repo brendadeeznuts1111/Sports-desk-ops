@@ -396,7 +396,11 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "data",
     heading: "Bun.XML",
-    evidence: ["surface:XML", "probe:data.parse"],
+    evidence: [
+      "surface:XML",
+      "probe:data.parse",
+      "test:tests/bun_xml_contract.test.ts",
+    ],
   },
   {
     name: "YAML",
