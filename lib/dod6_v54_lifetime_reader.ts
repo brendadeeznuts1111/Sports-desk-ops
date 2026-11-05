@@ -15,7 +15,14 @@
  * key halves and the four radix slots, compare the 8-byte key column as two little-endian u32
  * words (no BigInt read), and read the signed 64-bit net column as two u32 words (no BigInt read).
  */
-import { existsSync, fstatSync, openSync, readSync, closeSync } from "node:fs";
+import {
+  existsSync,
+  fstatSync,
+  openSync,
+  readSync,
+  closeSync,
+  statSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 import {
@@ -168,7 +175,7 @@ function readHeaderBuffer(absolute: string): ArrayBuffer | null {
 
 /** Read the whole file exactly once into one owned allocation (no `ArrayBuffer.slice` copy). */
 function readFileBufferOwned(absolute: string): ArrayBuffer {
-  const stat = Bun.file(absolute).size;
+  const stat = statSync(absolute).size;
   const fd = openSync(absolute, "r");
   try {
     const bytes = new Uint8Array(stat);
@@ -421,7 +428,7 @@ export async function createDod6V54LifetimeReader(
   const meta = metaFromHeader(header, absolute);
   if (meta === null) return null;
   if (meta.sectionCount !== DOD_NUM_SECTION_OFFSETS) return null;
-  const fileBytes = Bun.file(absolute).size;
+  const fileBytes = statSync(absolute).size;
   if (meta.totalFileBytes !== fileBytes) return null;
 
   const buffer = readFileBufferOwned(absolute);
