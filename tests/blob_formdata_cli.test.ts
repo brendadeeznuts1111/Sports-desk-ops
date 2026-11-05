@@ -106,6 +106,33 @@ describe("blob:formdata", () => {
     expect(JSON.parse(result.stdout)).toEqual({ a: "1", b: "two words" });
   });
 
+  test("FileBlob.formData handles urlencoded, slice sets type, multipart is the 1.4.4 gap", async () => {
+    const path = join(dir, "direct.txt");
+    await Bun.write(path, "a=1&b=two+words");
+
+    const direct = await Bun.file(path, {
+      type: "application/x-www-form-urlencoded",
+    }).formData();
+    expect([...direct.entries()]).toEqual([
+      ["a", "1"],
+      ["b", "two words"],
+    ]);
+
+    const sliced = Bun.file(path).slice(0, "application/x-www-form-urlencoded");
+    expect(sliced.type).toContain("application/x-www-form-urlencoded");
+    expect([...(await sliced.formData()).entries()]).toEqual([
+      ["a", "1"],
+      ["b", "two words"],
+    ]);
+
+    const { bytes, contentType } = await multipart();
+    const multipartPath = join(dir, "direct-multipart.bin");
+    await Bun.write(multipartPath, bytes);
+    await expect(
+      Bun.file(multipartPath, { type: contentType }).formData(),
+    ).rejects.toThrow(/invalid encoding|missing final boundary/i);
+  });
+
   test("reports malformed multipart without a stack trace", async () => {
     const path = join(dir, "broken.bin");
     await Bun.write(
