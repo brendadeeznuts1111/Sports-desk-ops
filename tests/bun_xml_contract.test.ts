@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+
+import rssFixture from "./fixtures/bun-xml-golden-ast/rss-multi-item-channel-semver.xml";
 
 /**
  * Pins the documented `Bun.XML` contract the ingestion paths depend on: the two result shapes,
@@ -41,6 +44,24 @@ describe("Bun.XML contract", () => {
     });
   });
 
+  test("compact keys follow first appearance and drop comments/PIs", () => {
+    const doc = Bun.XML.parse(`<r a="1"><x/><y/><x/><z/></r>`) as {
+      r: Record<string, unknown>;
+    };
+    // Duplicate child names collapse to one array-valued key at first appearance; document
+    // order is otherwise preserved and attributes come first.
+    expect(Object.keys(doc.r)).toEqual(["@a", "x", "y", "z"]);
+    expect(Bun.XML.parse(`<p>a<!--x-->b<?go?></p>`)).toEqual({ p: "ab" });
+  });
+
+  test("importing .xml evaluates to the compact Document", async () => {
+    const path = join(
+      import.meta.dir,
+      "fixtures/bun-xml-golden-ast/rss-multi-item-channel-semver.xml",
+    );
+    expect(rssFixture).toEqual(Bun.XML.parse(await Bun.file(path).text()));
+  });
+
   test("the full shape keeps document order, comments and processing instructions", () => {
     expect(
       Bun.XML.parse(`<p>Hello <b>world</b>!<!-- bye --><?go now?></p>`, {
@@ -72,6 +93,11 @@ describe("Bun.XML contract", () => {
         `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>`,
       ),
     ).toEqual({ foo: "&xxe;" });
+
+    // An external DTD declaration is not read either: the document parses, the DTD is ignored.
+    expect(
+      Bun.XML.parse(`<!DOCTYPE foo SYSTEM "file:///etc/passwd"><foo/>`),
+    ).toEqual({ foo: "" });
   });
 
   test("DTD attribute defaults, CDATA and namespace attributes", () => {
@@ -93,6 +119,19 @@ describe("Bun.XML contract", () => {
     });
   });
 
+  test("entity amplification and nesting depth fail closed", () => {
+    const entities = [`<!ENTITY e0 "x">`];
+    for (let level = 1; level <= 6; level++) {
+      entities.push(`<!ENTITY e${level} "${`&e${level - 1};`.repeat(10)}">`);
+    }
+    expect(() =>
+      Bun.XML.parse(`<!DOCTYPE r [${entities.join("")}]><r>&e6;</r>`),
+    ).toThrow(/amplification limit/);
+
+    const deep = `${"<a>".repeat(50_000)}x${"</a>".repeat(50_000)}`;
+    expect(() => Bun.XML.parse(deep)).toThrow(/call stack|too deeply/i);
+  });
+
   test("bytes honor the BOM or the XML encoding declaration", () => {
     const encoder = new TextEncoder();
     const iso = new Uint8Array([
@@ -109,10 +148,30 @@ describe("Bun.XML contract", () => {
     ]);
     expect(Bun.XML.parse(utf16)).toEqual({ a: "é" });
 
+    const le = Buffer.from("<a>é</a>", "utf16le");
+    const utf16be = new Uint8Array(2 + le.length);
+    utf16be[0] = 0xfe;
+    utf16be[1] = 0xff;
+    for (let i = 0; i < le.length; i += 2) {
+      utf16be[2 + i] = le[i + 1] as number;
+      utf16be[2 + i + 1] = le[i] as number;
+    }
+    expect(Bun.XML.parse(utf16be)).toEqual({ a: "é" });
+
     const unsupported = encoder.encode(
       `<?xml version="1.0" encoding="Shift_JIS"?><a>1</a>`,
     );
     expect(() => Bun.XML.parse(unsupported)).toThrow(/Unsupported encoding/);
+  });
+
+  test("parse accepts Blob, ArrayBuffer and DataView", () => {
+    expect(Bun.XML.parse(new Blob(["<a>1</a>"]))).toEqual({ a: "1" });
+    expect(Bun.XML.parse(new TextEncoder().encode("<a>2</a>").buffer)).toEqual({
+      a: "2",
+    });
+    expect(
+      Bun.XML.parse(new DataView(new TextEncoder().encode("<a>3</a>").buffer)),
+    ).toEqual({ a: "3" });
   });
 
   test("stringify round-trips both shapes", () => {
@@ -125,6 +184,12 @@ describe("Bun.XML contract", () => {
       compact: false,
     });
     expect(Bun.XML.parse(serialize(node), { compact: false })).toEqual(node);
+
+    // Neither shape represents the XML declaration or the DTD; stringify emits the element only.
+    const declared = Bun.XML.parse(
+      `<?xml version="1.0" encoding="UTF-8"?><a>1</a>`,
+    );
+    expect(serialize(declared)).toBe("<a>1</a>");
   });
 
   test("stringify escapes text and rejects invalid names", () => {
@@ -133,6 +198,9 @@ describe("Bun.XML contract", () => {
         order: { "@id": "A&1", item: ["<Tea>"], paid: null },
       }),
     ).toBe('<order id="A&amp;1"><item>&lt;Tea&gt;</item><paid/></order>');
+    expect(Bun.XML.stringify({ a: { "@x": null, "@y": "1" } })).toBe(
+      '<a y="1"/>',
+    );
     expect(() => Bun.XML.stringify({ "bad name": "x" })).toThrow(
       /not a valid XML element name/,
     );
@@ -168,5 +236,34 @@ describe("Bun.XML contract", () => {
         children: [{ comment: "x" }, { target: "go", data: "now" }],
       }),
     ).toBe("<a><!--x--><?go now?></a>");
+  });
+
+  test("stringify rejects values XML cannot represent", () => {
+    expect(() => Bun.XML.stringify({ a: "\u0000" })).toThrow(/U\+0000/);
+    expect(() =>
+      Bun.XML.stringify({ name: "a", children: [{ comment: "x--y" }] }),
+    ).toThrow(/comment/);
+    expect(() =>
+      Bun.XML.stringify({
+        name: "a",
+        children: [{ target: "go", data: "x?>y" }],
+      }),
+    ).toThrow(/processing instruction/);
+
+    type CircularNode = { name: string; children: CircularNode[] };
+    const circular: CircularNode = { name: "a", children: [] };
+    circular.children.push(circular);
+    expect(() => Bun.XML.stringify(circular)).toThrow(/circular/i);
+
+    expect(Bun.XML.stringify(undefined)).toBeUndefined();
+    expect(Bun.XML.stringify(() => 1)).toBeUndefined();
+  });
+
+  test("stringify caps indentation at ten characters", () => {
+    const node = { name: "a", children: [{ name: "b" }] };
+    expect(Bun.XML.stringify(node, null, 20)).toBe("<a>\n          <b/>\n</a>");
+    expect(Bun.XML.stringify(node, null, "abcdefghijkl")).toBe(
+      "<a>\nabcdefghij<b/>\n</a>",
+    );
   });
 });

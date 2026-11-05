@@ -174,7 +174,18 @@ describe("language coverage", () => {
       for (const path of filesWith(extension)) {
         try {
           // Bytes, not text: Bun.XML decodes the BOM/encoding declaration itself.
-          Bun.XML.parse(await Bun.file(join(ROOT, path)).bytes());
+          const node = Bun.XML.parse(await Bun.file(join(ROOT, path)).bytes(), {
+            compact: false,
+          });
+          const serialized = Bun.XML.stringify(node);
+          if (serialized === undefined) {
+            failures.push(`${path}: XML.stringify returned undefined`);
+            continue;
+          }
+          const roundTrip = Bun.XML.parse(serialized, { compact: false });
+          if (!Bun.deepEquals(node, roundTrip)) {
+            failures.push(`${path}: XML.stringify round-trip changed the tree`);
+          }
         } catch (error) {
           failures.push(`${path}: ${String(error)}`);
         }
