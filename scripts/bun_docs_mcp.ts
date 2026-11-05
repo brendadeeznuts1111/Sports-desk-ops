@@ -13,7 +13,6 @@
  * Override the endpoint with BUN_DOCS_MCP_URL (declared in types/env.d.ts).
  */
 
-import { env } from "bun";
 import { z } from "zod";
 import { BUN_SHAPES, type BunShape } from "../lib/bun_shapes.ts";
 
@@ -85,7 +84,7 @@ export class BunDocsMcp {
   private nextId = 1;
 
   constructor(
-    private readonly url = env.BUN_DOCS_MCP_URL ?? DEFAULT_BUN_DOCS_MCP_URL,
+    private readonly url = Bun.env.BUN_DOCS_MCP_URL ?? DEFAULT_BUN_DOCS_MCP_URL,
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
 

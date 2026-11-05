@@ -1,5 +1,6 @@
 /** F402 WebLog + Mode 6 overlap bridge: streaming corpus profiling, IP clusters, sessions, gates. */
 import { sha256Hex } from "./f402_bet_ticker_delta.ts";
+import { mergeUint8JsonlChunks } from "./jsonl_stream_replay.ts";
 
 export const WEBLOG_KIND = "f402-weblog";
 export const NEGATIVE_CONTROLS = [
@@ -250,18 +251,6 @@ function positiveIntOption(
     : fallback;
 }
 
-function mergeBytes(
-  left: WeblogJsonlBytes,
-  right: WeblogJsonlBytes,
-): WeblogJsonlBytes {
-  if (right.length === 0) return left;
-  if (left.length === 0) return right;
-  const merged = new Uint8Array(left.length + right.length);
-  merged.set(left);
-  merged.set(right, left.length);
-  return merged;
-}
-
 /** Index of the last LF, or -1. LF terminates a record; CRLF is tolerated as its delimiter. */
 function lastLineFeed(bytes: WeblogJsonlBytes): number {
   for (let index = bytes.length - 1; index >= 0; index -= 1) {
@@ -397,7 +386,7 @@ async function scanWeblogJsonl(
   for await (const streamed of widenByteSource(source)) {
     if (streamed.length === 0) continue;
     for (let offset = 0; offset < streamed.length; offset += windowBytes) {
-      pending = mergeBytes(
+      pending = mergeUint8JsonlChunks(
         pending,
         streamed.subarray(offset, offset + windowBytes),
       );

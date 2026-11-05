@@ -108,7 +108,6 @@ declare module "bun" {
     readonly TELEGRAM_WEBHOOK_SECRET?: string;
     readonly TELEGRAM_ACTIVITY_LOG?: string;
     readonly TELEGRAM_ALERT_THRESHOLD_CENTS?: string;
-    readonly TELEGRAM_REPORT_SCHEDULE?: string;
   }
 }
 

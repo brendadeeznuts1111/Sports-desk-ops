@@ -189,7 +189,8 @@ one-line summary: `ok=23 failed=16 stale=0 truncated=0`.
    summaries become observed; pending bets and F402 remain fixture and are labelled.
 2. **4b (shipped as a preview):** F402 session cache — one WebView login (`F402_LIVE_LOGIN=1`),
    cookie file `0600` at `~/.cache/sportsdesk/f402-session.json` (override `F402_SESSION_FILE`),
-   TTL 30 min (`F402_SESSION_TTL_MIN`), refresh once on 401. `getBetTicker` (tier A) rows are
+   TTL 24h (`F402_SESSION_TTL_MIN`; raised from 30 min in [PR #45](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/45)
+   after the 2026-11-04 bridge outage), refresh once on 401. `getBetTicker` (tier A) rows are
    normalized into `liveTicks[]` (login, agent, writer, wager number, description, raw timestamp)
    and shown in the portal's Pending Bets tab. Money columns are withheld until their units are
    captured; `pendingBets` remains fixture and `mapped: false` is explicit. `getPending` stays out

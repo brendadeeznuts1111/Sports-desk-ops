@@ -71,6 +71,13 @@ const CHECKS: readonly Check[] = [
   { group: "core", name: "file", read: () => Bun.file },
   { group: "core", name: "write", read: () => Bun.write },
   { group: "core", name: "spawn", read: () => Bun.spawn },
+  // `Bun.$` is the shell-tag used by dev scripts; the repo-wide rule is
+  // **argv-only for credential paths** (see lib/f402_credentials_policy.ts and the
+  // "Bun.$" section in docs/bun-upstream-reference.md). The pin exists so a runtime
+  // downgrade cannot drop the primitive out from under the tests/scripts that use it.
+  { group: "core", name: "$", read: () => Bun.$ },
+  { group: "core", name: "$.escape", read: () => Bun.$.escape },
+  { group: "core", name: "$.braces", read: () => Bun.$.braces },
   { group: "core", name: "sleep", read: () => Bun.sleep },
   { group: "core", name: "which", read: () => Bun.which },
   { group: "core", name: "inspect.table", read: () => Bun.inspect.table },
@@ -79,6 +86,11 @@ const CHECKS: readonly Check[] = [
   { group: "core", name: "JSON5", read: () => Bun.JSON5.parse },
   { group: "core", name: "JSONL.parse", read: () => Bun.JSONL.parse },
   { group: "core", name: "JSONL.parseChunk", read: () => Bun.JSONL.parseChunk },
+  {
+    group: "capture",
+    name: "readableStreamToArrayBuffer",
+    read: () => Bun.readableStreamToArrayBuffer,
+  },
   { group: "core", name: "CSRF", read: () => Bun.CSRF.generate },
   {
     group: "core",
@@ -143,6 +155,16 @@ const CHECKS: readonly Check[] = [
     name: "WebSocket.pause",
     read: () =>
       (WebSocket.prototype as unknown as Record<string, unknown>)["pause"],
+  },
+  {
+    group: "compat",
+    // Up to 3.5x faster than `new Uint8Array(size)` because the bytes are not zeroed; see
+    // bun.com/reference/globals/bun#bun.allocUnsafe and the "When to use `Bun.allocUnsafe`"
+    // section in docs/bun-upstream-reference.md. Pinned so a downgrade cannot silently drop
+    // the primitive our production call sites assume (f402_bet_ticker_jsonl.ts,
+    // live_positions_cron.ts, gslive_tally_rollup.ts SoA columns).
+    name: "allocUnsafe",
+    read: () => Bun.allocUnsafe,
   },
 ];
 

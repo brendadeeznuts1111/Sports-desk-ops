@@ -332,3 +332,9 @@ See [docs/runbooks/README.md](docs/runbooks/README.md) for the full index. Highl
 - [VPS Domain Setup Runbook](docs/runbooks/vps_domain_setup_runbook.md) — Production VPS deployment guide.
 - [GSLive report surfaces](docs/report-surfaces.md) — Operator map of the `#/reports/users` deep link and the `#/events/bet-history` sidecar, with an evidence level per surface.
 - [Real ingestion](docs/REAL_INGESTION.md) — Phase 4: live Polymarket positions (`--live`), provenance and stale-cache rules, and the F402 session plan.
+
+### Incidents
+
+Post-mortem write-ups for production outages that shipped behavioral guarantees worth preserving. Read before editing the files called out in the "Guarantees to preserve" table of each incident.
+
+- [2026-11-04 — Silent F402 bridge outage (14h49m), full recovery shipped](docs/incidents/2026-11-04-bridge-outage-recovery.md) — PRs [#43](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/43), [#44](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/44), [#45](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/45), [#46](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/46): external R2 alerter, launchd session refresh, 24h TTL default, SHELL_CAPTURE drop-at-start.

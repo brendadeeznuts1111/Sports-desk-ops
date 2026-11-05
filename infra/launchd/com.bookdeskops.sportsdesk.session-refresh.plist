@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  F402 session auto-refresh LaunchAgent (template).
+
+  Supervises `scripts/f402_session_refresh.ts` on a 5-minute interval so the 30-min default
+  session TTL cannot silently kill the bridge again. The script is idempotent — when the
+  session is fresh it is a no-op and the exit code is 0; it only spawns `session:login
+  --from-keychain --ttl-min 1440` when the current session is missing, expired, or within
+  5 min of expiring.
+
+  Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
+    __OPERATOR_HOME__   absolute path to $HOME on the target machine
+    __REPO_PATH__       absolute path to the sportsdesk-ops working copy
+    __BUN_BIN__         absolute path to `bun` (`$(which bun)`)
+
+  This file deliberately does not ship a prefilled plist: the operator home and the repo path
+  are machine-specific, and `~/Library/LaunchAgents/` writes require the plist to live outside
+  the repo. The installer copies-with-substitution into the user LaunchAgent directory.
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.bookdeskops.sportsdesk.session-refresh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>__BUN_BIN__</string>
+      <string>run</string>
+      <string>scripts/f402_session_refresh.ts</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>HOME</key>
+      <string>__OPERATOR_HOME__</string>
+      <!--
+        PATH here is minimal on purpose; the script spawns `bun run session:login` which
+        resolves through the WorkingDirectory's package.json script entry (no PATH lookup).
+      -->
+      <key>PATH</key>
+      <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Fire every 5 minutes. StartInterval is wall-clock seconds, not elapsed. -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Also run once immediately after `launchctl load` so the first tick is not 5 min away. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      KeepAlive would be wrong here: this is a one-shot per tick, not a long-running daemon.
+      StartInterval + RunAtLoad is the correct supervision shape for an idempotent cron script.
+    -->
+
+    <!--
+      Logs land in scratch/ next to the other cron journals; the script writes JSONL there too
+      (`scratch/f402-session-refresh.jsonl`). The stdout/stderr files below exist only to catch
+      an unhandled throw from the runner itself, which should never print anything sensitive.
+    -->
+    <key>StandardOutPath</key>
+    <string>__REPO_PATH__/scratch/f402-session-refresh.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_PATH__/scratch/f402-session-refresh.stderr.log</string>
+
+    <!-- Nice level: slightly background; a 5-min keychain read is not interactive. -->
+    <key>Nice</key>
+    <integer>5</integer>
+
+    <!-- Don't keep the process pool populated; this is a short-lived refresher. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+  </dict>
+</plist>

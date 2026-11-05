@@ -91,6 +91,7 @@
     "CryptoHasher": ["algorithms", "hash"],
     "concatArrayBuffers": [],
     "readableStreamToArrayBuffer": [],
+    "allocUnsafe": [],
     "gunzipSync": [],
     "gzipSync": [],
     "hash": [

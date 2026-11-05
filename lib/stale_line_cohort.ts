@@ -252,6 +252,10 @@ export function parseStaleTicketInput(source: string): StaleTicketInput[] {
       }
       return [mapRecord(parsed as Record<string, unknown>)];
     } catch {
+      // Intentional hand-rolled JSONL loop: must throw on malformed line (caller treats that as
+      // "input is not JSONL either"); `Bun.JSONL.parse()` would return the parsed prefix silently
+      // and the caller would see a partial, wrong cohort. See
+      // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
       return trimmed
         .split(/\r?\n/)
         .filter((line) => line.trim() !== "")

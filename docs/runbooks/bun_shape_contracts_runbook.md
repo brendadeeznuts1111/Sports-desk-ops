@@ -39,7 +39,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/argv)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `scripts/audit_bun_surface.ts`, `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/build_agent_graph.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.$
@@ -54,7 +54,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/file)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `lib/fraud_logs.ts`
+- **Here:** `dsh-plugin/verify-load.mjs`, `lib/f402_agent_graph_view_http.ts`
 - **Evidence:** `surface:file`
 
 #### Bun.fileURLToPath
@@ -68,7 +68,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/gc)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scratch/bench_dod6_into.ts`, `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/probe/parse-tree-only.ts`
 - **Evidence:** `probe:proc.spawn`
 
 #### Bun.main
@@ -82,7 +82,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/nanoseconds)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scratch/bench_dod6.ts`, `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/bench_capture.ts`
 - **Evidence:** `probe:proc.timing`
 
 #### Bun.openInEditor
@@ -124,7 +124,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/spawnSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/artifacts_cron.ts`, `scripts/catalog_probe.ts`
+- **Here:** `lib/bun_cli_flags.ts`, `scripts/artifacts_cron.ts`
 - **Evidence:** `probe:proc.spawn`
 
 #### Bun.stdin
@@ -186,7 +186,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/escapeHTML)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `services/sportsdesk_telegram_bot.ts`, `lib/dashboard_render.ts`
+- **Here:** `services/sportsdesk_telegram_bot.ts`, `lib/r2_staleness.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.inspect
@@ -253,7 +253,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Glob)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/pm_policy.ts`, `scripts/audit_data_handling.ts`
+- **Here:** `lib/pm_policy.ts`, `dsh-plugin/verify-load.mjs`
 - **Evidence:** `probe:data.glob`
 
 #### Bun.JSON5
@@ -308,7 +308,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/deepEquals)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `dsh-plugin-sidebar/verify-load.mjs`
+- **Here:** `dsh-plugin/verify-load.mjs`, `catalog/fantasy402_sport_catalog_diff.ts`
 - **Evidence:** `probe:data.compare`
 
 #### Bun.semver
@@ -418,7 +418,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 ## Crypto, hashing and compression
 
-- `new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a bigint while `Bun.hash.crc32`/`adler32` return numbers; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.
+- `new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a number; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.
 - zstd and gzip round-trip: compress → decompress returns the input; `new Bun.ArrayBufferSink()` and `Bun.concatArrayBuffers` exist — `crypto.compress`.
 
 #### Bun.CSRF
@@ -448,15 +448,23 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/concatArrayBuffers)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/jsonl_stream_replay.ts`, `lib/schema_binary.ts`
+- **Here:** `lib/schema_binary.ts`, `lib/jsonl_stream_replay.ts`
 - **Evidence:** `probe:crypto.compress`
 
 #### Bun.readableStreamToArrayBuffer
 
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Here:** `bin/bun_surface.ts`, `lib/jsonl_stream_replay.ts`
+- **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/jsonl_stream_replay.test.ts`
+- **Note:** Drains a byte stream to one `ArrayBuffer`; chunks must be TypedArrays or ArrayBuffers. Prefer incremental JSONL replay for multi‑MB ticker archives — see `docs/bun-upstream-reference.md` (TypedArray views → Draining ReadableStreams).
+
+#### Bun.allocUnsafe
+
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/f402_credentials_policy.ts`
-- **Evidence:** `test:tests/bun_capabilities.test.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/f402_bet_ticker_jsonl.ts`
+- **Evidence:** `surface:allocUnsafe`, `test:tests/bun_capabilities.test.ts`
 
 #### Bun.gunzipSync
 
@@ -636,5 +644,5 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version_with_sha)
 - **Shape:** value: `string` · writable false · enumerable false
-- **Here:** `scripts/probe_bun.ts`, `scratch/bench_dod6_into.ts`
+- **Here:** `scripts/probe_bun.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`

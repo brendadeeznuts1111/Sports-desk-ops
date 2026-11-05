@@ -17,7 +17,7 @@ import {
 } from "./wagers_by_state_capture.ts";
 import type { WagersLiveSink } from "../lib/wagers_live_sink.ts";
 import { WAGERS_ARTIFACT_PATH } from "./gslive_wagers_by_state.ts";
-import { Archive, CryptoHasher, file, serve, version, write } from "bun";
+import { Archive, CryptoHasher } from "bun";
 
 const PAYLOAD = {
   action: "getBetReport",
@@ -92,14 +92,14 @@ const ROWS = [
 interface Harness {
   readonly ajaxUrl: string;
   readonly calls: { url: string; body: string }[];
-  readonly server: ReturnType<typeof serve>;
+  readonly server: ReturnType<typeof Bun.serve>;
   readonly setMode: (mode: "ok" | "fail") => void;
 }
 
 function startAjaxStandIn(): Harness {
   const calls: { url: string; body: string }[] = [];
   let mode: "ok" | "fail" = "ok";
-  const server = serve({
+  const server = Bun.serve({
     port: 0,
     async fetch(request) {
       calls.push({ url: request.url, body: await request.text() });
@@ -206,7 +206,7 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
       // Artifact on disk is byte-identical to the returned report, written atomically.
       const written = z
         .object({ source: z.object({ kind: z.string() }) })
-        .parse(await file(paths.artifact).json());
+        .parse(await Bun.file(paths.artifact).json());
       expect(written.source.kind).toBe("live-ajax.php");
       const names = await readdir(paths.dir);
       expect(names.filter((name) => name.includes(".tmp-"))).toEqual([]);
@@ -223,7 +223,7 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
             })
             .nullable(),
         })
-        .parse(await file(paths.status).json());
+        .parse(await Bun.file(paths.status).json());
       expect(journal.schemaVersion).toBe(1);
       expect(journal.lastSuccess?.legs).toBe(5);
       expect(journal.lastSuccess?.wagers).toBe(4);
@@ -307,9 +307,9 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
     const stand = startAjaxStandIn();
     const paths = await tempPaths();
     const sentinel = JSON.stringify({ schemaVersion: 2, marker: "last-good" });
-    await write(paths.artifact, sentinel);
+    await Bun.write(paths.artifact, sentinel);
     const shaPath = sha256PathForArtifact(paths.artifact);
-    await write(shaPath, "a".repeat(64) + "\n");
+    await Bun.write(shaPath, "a".repeat(64) + "\n");
     const archivePath = `${paths.dir}/bundle.tar`;
     try {
       stand.setMode("fail");
@@ -327,15 +327,15 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
 
       expect(outcome.ok).toBe(false);
       expect(outcome.error).toContain("HTTP 500");
-      expect(await file(paths.artifact).text()).toBe(sentinel);
-      expect((await file(shaPath).text()).trim()).toBe("a".repeat(64));
-      expect(await file(archivePath).exists()).toBe(false);
+      expect(await Bun.file(paths.artifact).text()).toBe(sentinel);
+      expect((await Bun.file(shaPath).text()).trim()).toBe("a".repeat(64));
+      expect(await Bun.file(archivePath).exists()).toBe(false);
       const journal = z
         .object({
           lastSuccess: z.unknown().nullable(),
           lastFailure: z.object({ error: z.string() }).nullable(),
         })
-        .parse(await file(paths.status).json());
+        .parse(await Bun.file(paths.status).json());
       expect(journal.lastSuccess).toBeNull();
       expect(journal.lastFailure?.error).toContain("HTTP 500");
     } finally {
@@ -359,10 +359,10 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
       expect(outcome.ok).toBe(false);
       expect(outcome.error).toContain("No manager session");
       expect(stand.calls).toHaveLength(0);
-      expect(await file(paths.artifact).exists()).toBe(false);
+      expect(await Bun.file(paths.artifact).exists()).toBe(false);
       const journal = z
         .object({ lastFailure: z.object({ error: z.string() }).nullable() })
-        .parse(await file(paths.status).json());
+        .parse(await Bun.file(paths.status).json());
       expect(journal.lastFailure?.error).toContain("No manager session");
     } finally {
       stand.server.stop(true);
@@ -373,7 +373,7 @@ describe("wagers:capture derives the v2 artifact from ajax.php only", () => {
     expect(WAGERS_ARTIFACT_PATH).toBe(
       "scratch/gslive-wagers-by-state.summary.json",
     );
-    const plugin = await file("dsh-plugin/index.js").text();
+    const plugin = await Bun.file("dsh-plugin/index.js").text();
     expect(plugin).toContain("scratch/gslive-wagers-by-state.summary.json");
     expect(plugin).toContain("wagersArtifact");
   });
@@ -392,7 +392,7 @@ describe("transient retry and duration", () => {
   test("retries a 5xx with sleep backoff, then succeeds and journals each attempt", async () => {
     const paths = await tempPaths();
     let calls = 0;
-    const server = serve({
+    const server = Bun.serve({
       port: 0,
       fetch() {
         calls += 1;
@@ -438,7 +438,7 @@ describe("transient retry and duration", () => {
           lastSuccess: z.unknown().nullable(),
           lastFailure: z.object({ error: z.string() }).nullable(),
         })
-        .parse(await file(paths.status).json());
+        .parse(await Bun.file(paths.status).json());
       expect(journal.runs.map((run) => run.ok)).toEqual([false, false, true]);
       expect(journal.lastSuccess).not.toBeNull();
       expect(journal.lastFailure?.error).toContain("HTTP 503");
@@ -450,7 +450,7 @@ describe("transient retry and duration", () => {
   test("does not retry a 401 or an HTML login page", async () => {
     const paths = await tempPaths();
     let calls = 0;
-    const server = serve({
+    const server = Bun.serve({
       port: 0,
       fetch() {
         calls += 1;
@@ -485,7 +485,7 @@ describe("artifact integrity sidecar and Archive bundle", () => {
   test("writes a sha256 sidecar matching the artifact and a tar bundle without tickets", async () => {
     const paths = await tempPaths();
     const archivePath = `${paths.dir}/bundle.tar`;
-    const server = serve({
+    const server = Bun.serve({
       port: 0,
       fetch: () =>
         Response.json({
@@ -521,14 +521,14 @@ describe("artifact integrity sidecar and Archive bundle", () => {
         archivePath,
       });
       expect(outcome.ok).toBe(true);
-      const artifactText = await file(paths.artifact).text();
+      const artifactText = await Bun.file(paths.artifact).text();
       const expectedSha = new CryptoHasher("sha256")
         .update(artifactText)
         .digest("hex");
       expect(outcome.artifactSha256).toBe(expectedSha);
       expect(outcome.archivePath).toBe(archivePath);
 
-      const archive = new Archive(await file(archivePath).bytes());
+      const archive = new Archive(await Bun.file(archivePath).bytes());
       const files = await archive.files();
       const names = [...files.keys()].sort();
       expect(names).toContain("artifact.json");
@@ -547,7 +547,7 @@ describe("artifact integrity sidecar and Archive bundle", () => {
         })
         .parse(JSON.parse((await files.get("manifest.json")?.text()) ?? "{}"));
       expect(manifest.artifactSha256).toBe(expectedSha);
-      expect(manifest.runtime.bun).toBe(version);
+      expect(manifest.runtime.bun).toBe(Bun.version);
       expect(manifest.runtime.revision.length).toBeGreaterThan(0);
       expect(manifest.excluded.join(" ")).toContain("ticket");
       expect(await files.get("artifact.json")?.text()).toBe(artifactText);
@@ -562,8 +562,11 @@ describe("artifact integrity sidecar and Archive bundle", () => {
   test("writeCaptureArchive excludes a sibling tickets file even when it exists", async () => {
     const paths = await tempPaths();
     const artifactText = JSON.stringify({ marker: "artifact" });
-    await write(paths.artifact, artifactText);
-    await write(`${paths.dir}/wagers-by-state.tickets.json`, '{"tickets":{}}');
+    await Bun.write(paths.artifact, artifactText);
+    await Bun.write(
+      `${paths.dir}/wagers-by-state.tickets.json`,
+      '{"tickets":{}}',
+    );
     const archivePath = `${paths.dir}/manual.tar`;
     await writeCaptureArchive(archivePath, {
       artifactText,
@@ -589,7 +592,7 @@ describe("artifact integrity sidecar and Archive bundle", () => {
         },
       },
     });
-    const archive = new Archive(await file(archivePath).bytes());
+    const archive = new Archive(await Bun.file(archivePath).bytes());
     const names = [...(await archive.files()).keys()];
     expect(names).toContain("artifact.json");
     expect(names.some((name) => name.includes("tickets"))).toBe(false);
@@ -602,7 +605,7 @@ describe("--debug-wire full-shape trace", () => {
     try {
       const responsePath = join(dir, "response.json");
       const logs: string[] = [];
-      const server = serve({
+      const server = Bun.serve({
         port: 0,
         async fetch(request) {
           await request.text();
@@ -662,7 +665,7 @@ describe("--debug-wire full-shape trace", () => {
         expect(text).toContain("row fields: rows 1 (1 objects)");
         expect(text).toContain("unknown [Unexpected]");
         expect(text).toContain("not-present [");
-        expect(await file(responsePath).text()).toContain('"Ticket":"T1"');
+        expect(await Bun.file(responsePath).text()).toContain('"Ticket":"T1"');
       } finally {
         server.stop(true);
       }

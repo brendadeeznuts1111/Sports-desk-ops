@@ -24,6 +24,11 @@ import {
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
+import {
+  jsonlAdvancePastLineFeedDelimiters,
+  writtenUint8Prefix,
+} from "./jsonl_stream_replay.ts";
+
 import { numericWagerNumber } from "./f402_bet_ticker_delta.ts";
 import { parseF402TickerRow, type F402TickerRow } from "./f402_ingest.ts";
 
@@ -98,6 +103,10 @@ export async function readF402TickerJsonl(
     const rows: F402TickerRow[] = [];
     let skippedLines = 0;
     let watermark = previousWatermark;
+    // Intentional hand-rolled JSONL loop on the compressed-file path: we need the per-line
+    // `skippedLines` count, which `Bun.JSONL.parse()` / `parseChunk` (used on the uncompressed
+    // byte-range path below) do not report. See
+    // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
       let payload: unknown;
@@ -162,7 +171,13 @@ export async function readF402TickerJsonl(
   }
 
   const length = fileSize - start;
-  const buffer = new Uint8Array(length);
+  // `Bun.allocUnsafe(length)` skips the ~length-byte zeroing — a measurable win on multi-MB
+  // ticker windows. Safe here because:
+  //   1. The read loop fills `buffer[0..read]` byte-for-byte via `handle.read()`.
+  //   2. The ONLY consumer is `buffer.subarray(0, read)` below; the unfilled tail (bytes
+  //      `[read..length]` when `chunk.bytesRead === 0` hits before completion) is never read.
+  // See docs/bun-upstream-reference.md "When to use `Bun.allocUnsafe` (and when NOT to)".
+  const buffer = Bun.allocUnsafe(length);
   const handle = await open(path, "r");
   try {
     let read = 0;
@@ -176,7 +191,7 @@ export async function readF402TickerJsonl(
       if (chunk.bytesRead === 0) break;
       read += chunk.bytesRead;
     }
-    const view = buffer.subarray(0, read);
+    const view = writtenUint8Prefix(buffer, read);
 
     // Only complete lines are consumed; anything after the final newline is left for the next read.
     let lastNewline = -1;
@@ -246,8 +261,11 @@ export async function readF402TickerJsonl(
         // input; moving a byte buffer here would corrupt every multi-byte UTF-8 record). It also
         // excludes the newline that terminates the final parsed record, so advance over the
         // delimiter: the recorded offset must be the first unread byte, never a replayed newline.
-        consumed = skip + chunk.read;
-        while (consumed < completeEnd && view[consumed] === 0x0a) consumed += 1;
+        consumed = jsonlAdvancePastLineFeedDelimiters(
+          view,
+          skip + chunk.read,
+          completeEnd,
+        );
       } else {
         // Malformed line mid-chunk: fall back to per-line parsing of complete lines so valid
         // records before/after the bad one are still consumed deterministically.

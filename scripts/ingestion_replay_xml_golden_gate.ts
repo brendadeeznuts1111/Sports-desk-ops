@@ -42,6 +42,10 @@ async function main(): Promise<number> {
     }
   }
 
+  // Intentional hand-rolled JSONL loop: the gate MUST throw on a malformed line; `Bun.JSONL.parse()`
+  // would silently truncate the prefix. The non-string-xml branch also preserves the original line
+  // text byte-for-byte (JSON.stringify would normalize). See
+  // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
   const lines = readFileSync(domainJsonl, "utf8").trim().split("\n");
   const enriched = lines
     .filter((l) => l.trim())

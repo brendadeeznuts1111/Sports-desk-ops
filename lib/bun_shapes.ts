@@ -554,7 +554,17 @@ export const BUN_SHAPES: readonly BunShape[] = [
     kind: "value",
     subsystem: "crypto",
     heading: "Bun.readableStreamToArrayBuffer",
-    evidence: ["test:tests/bun_capabilities.test.ts"],
+    evidence: [
+      "surface:readableStreamToArrayBuffer",
+      "test:tests/jsonl_stream_replay.test.ts",
+    ],
+  },
+  {
+    name: "allocUnsafe",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.allocUnsafe",
+    evidence: ["surface:allocUnsafe", "test:tests/bun_capabilities.test.ts"],
   },
   {
     name: "gunzipSync",

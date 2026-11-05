@@ -8,7 +8,6 @@ import {
   chromeFailureAdvice,
   classifyChromeFailure,
   diagnoseChromeBackend,
-  resolveChromeBinary,
   type ChromeProbeResult,
 } from "../lib/webview_backend_diagnostics.ts";
 
@@ -18,10 +17,13 @@ sandbox initialization failed: Operation not permitted
 ERROR:file_io_posix.cc:153] open /Users/x/Library/Application Support/Google/Chrome/Crashpad/new/a.dmp: Operation not permitted (1)
 FATAL:gpu_data_manager_impl_private.cc:389] GPU process isn't usable. Goodbye.`;
 
+// `/bin/sh` is on every POSIX test runner; BUN_CHROME_PATH's existsSync() check short-circuits
+// resolveChromeBinary without the previous resolveBinary injection point.
+const FAKE_CHROME = "/bin/sh";
+
 function diagnosisWith(result: ChromeProbeResult) {
   return diagnoseChromeBackend({
-    env: { BUN_CHROME_PATH: "/fake/chrome" },
-    resolveBinary: () => "/fake/chrome",
+    env: { BUN_CHROME_PATH: FAKE_CHROME },
     runProbe: async () => result,
   });
 }
@@ -46,45 +48,6 @@ describe("classifyChromeFailure", () => {
   });
 });
 
-describe("resolveChromeBinary", () => {
-  test("BUN_CHROME_PATH wins when it exists", () => {
-    expect(
-      resolveChromeBinary(
-        { BUN_CHROME_PATH: "/opt/chrome" },
-        () => null,
-        (p) => p === "/opt/chrome",
-      ),
-    ).toBe("/opt/chrome");
-  });
-
-  test("a configured but missing path is null, not a fallback", () => {
-    expect(
-      resolveChromeBinary(
-        { BUN_CHROME_PATH: "/missing/chrome" },
-        () => "/usr/bin/google-chrome",
-        () => false,
-      ),
-    ).toBeNull();
-  });
-
-  test("falls back to PATH then the standard install locations", () => {
-    expect(
-      resolveChromeBinary(
-        {},
-        (name) => (name === "chromium" ? "/usr/bin/chromium" : null),
-        () => false,
-      ),
-    ).toBe("/usr/bin/chromium");
-    expect(
-      resolveChromeBinary(
-        {},
-        () => null,
-        (p) => p.includes("Google Chrome.app"),
-      ),
-    ).toContain("Google Chrome.app");
-  });
-});
-
 describe("diagnoseChromeBackend", () => {
   test("a sandbox denial is unavailable with remediation, and never suggests --no-sandbox", async () => {
     const diagnosis = await diagnosisWith({
@@ -94,7 +57,7 @@ describe("diagnoseChromeBackend", () => {
     });
     expect(diagnosis.available).toBe(false);
     expect(diagnosis.failure).toBe("sandbox-denied");
-    expect(diagnosis.binary).toBe("/fake/chrome");
+    expect(diagnosis.binary).toBe(FAKE_CHROME);
     expect(diagnosis.stderrTail).toContain("Operation not permitted");
     const advice = chromeFailureAdvice(diagnosis);
     expect(advice.join("\n")).toContain("outside the agent/harness sandbox");
@@ -112,9 +75,12 @@ describe("diagnoseChromeBackend", () => {
   });
 
   test("no binary is reported as not-found with an install hint", async () => {
+    // Force resolveChromeBinary's `exists(configured) ? configured : null` to return null by
+    // pointing BUN_CHROME_PATH at a path that genuinely does not exist on the test machine.
     const diagnosis = await diagnoseChromeBackend({
-      env: {},
-      resolveBinary: () => null,
+      env: {
+        BUN_CHROME_PATH: "/nonexistent-chrome-for-diagnostics-test-20261104",
+      },
     });
     expect(diagnosis.available).toBe(false);
     expect(diagnosis.failure).toBe("not-found");

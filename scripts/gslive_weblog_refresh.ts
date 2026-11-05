@@ -21,8 +21,6 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { argv, env } from "bun";
-
 import {
   fetchBetLog,
   fetchEventLog,
@@ -262,7 +260,7 @@ function printDryRun(plan: RefreshPlan): void {
 }
 
 async function livePass(plan: RefreshPlan): Promise<void> {
-  const resolvedSession = await resolveManagerSession(env);
+  const resolvedSession = await resolveManagerSession(Bun.env);
   if (resolvedSession.source === "none") {
     fail(
       "no manager session. Provision a GSID in the OS keychain via " +
@@ -285,7 +283,7 @@ async function livePass(plan: RefreshPlan): Promise<void> {
     configured: true,
     source: sessionSourceFor(resolvedSession.source),
   };
-  const sessionGate = sessionGateFromEnv(env);
+  const sessionGate = sessionGateFromEnv(Bun.env);
   const window = windowIso(plan);
   const registry = getUnifiedWatchlistRegistry();
 
@@ -454,7 +452,7 @@ async function main(args: readonly string[]): Promise<void> {
 
 if (import.meta.main) {
   try {
-    await main(argv.slice(2));
+    await main(Bun.argv.slice(2));
   } catch (error) {
     console.error(
       `gslive-weblogs: ${error instanceof Error ? error.message : String(error)}`,

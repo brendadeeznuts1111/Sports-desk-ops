@@ -19,6 +19,18 @@ export type HistoricalLogReplayHandlers = {
   ) => void | Promise<void>;
 };
 
+/**
+ * Drain an entire byte stream into one contiguous buffer. Chunks must be TypedArrays or
+ * ArrayBuffers (same contract as [`Bun.readableStreamToArrayBuffer`](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)).
+ * For large JSONL logs prefer {@link replayHistoricalJsonlStream} (incremental merge + parseChunk).
+ */
+export async function drainReadableStreamToUint8(
+  stream: ReadableStream<JsonlByteBuffer>,
+): Promise<JsonlByteBuffer> {
+  const ab = await Bun.readableStreamToArrayBuffer(stream);
+  return new Uint8Array(ab);
+}
+
 export function mergeUint8JsonlChunks(
   buffer: JsonlByteBuffer,
   chunk: JsonlByteBuffer,
@@ -38,6 +50,37 @@ export function carryForwardJsonlBuffer(
 ): JsonlByteBuffer {
   if (result.read <= 0) return buffer;
   return buffer.subarray(result.read);
+}
+
+/**
+ * Expose only bytes the caller filled (e.g. after `readSync` / `handle.read`). Use with
+ * `Bun.allocUnsafe` slabs so the unfilled tail is never passed to parsers or I/O.
+ */
+export function writtenUint8Prefix(
+  buffer: JsonlByteBuffer,
+  bytesWritten: number,
+): JsonlByteBuffer {
+  if (bytesWritten <= 0) return buffer.subarray(0, 0);
+  if (bytesWritten > buffer.length) {
+    throw new RangeError(
+      `writtenUint8Prefix: ${bytesWritten} exceeds buffer length ${buffer.length}`,
+    );
+  }
+  return buffer.subarray(0, bytesWritten);
+}
+
+/**
+ * First index at or after `fromIndex` once trailing `0x0a` delimiters are skipped. Matches the
+ * bet-ticker rule: `parseChunk().read` excludes the record terminator; file offset must not replay it.
+ */
+export function jsonlAdvancePastLineFeedDelimiters(
+  buffer: JsonlByteBuffer,
+  fromIndex: number,
+  endIndex = buffer.length,
+): number {
+  let at = fromIndex;
+  while (at < endIndex && buffer[at] === 0x0a) at += 1;
+  return at;
 }
 
 export function skipPoisonJsonlLine(buffer: JsonlByteBuffer): JsonlByteBuffer {

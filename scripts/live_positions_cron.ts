@@ -20,6 +20,8 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+
+import { writtenUint8Prefix } from "../lib/jsonl_stream_replay.ts";
 import {
   formatCronScheduleLine,
   installOsCronJob,
@@ -49,11 +51,19 @@ import {
   type PendingRow,
 } from "../lib/live_bets.ts";
 import {
+  collectLocalArtifacts,
+  publishArtifactsToR2,
+  publishLivePositionsToR2,
+  type LocalArtifactSpec,
+  type R2PublishResult,
+} from "../lib/live_positions_r2_publisher.ts";
+import {
   betTickerFile,
   isTickerNoise,
   toLiveWager,
   type LiveWager,
 } from "../lib/live_wagers.ts";
+import { R2S3Client } from "../lib/r2_s3_client.ts";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
 import {
   loadDodCustomerLifetimeMap,
@@ -68,6 +78,19 @@ export const OS_CRON_TITLE = "sportsdesk-live-positions-10m";
 export const DEFAULT_SCHEDULE = "*/10 * * * *";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
+
+/**
+ * Factory for an `observedAtFromBody` extractor the local-artifact loader accepts: returns the
+ * value of `fieldName` when the parsed body is an object with a string under that key, otherwise
+ * `null` so the loader falls back to file mtime.
+ */
+function readIsoField(fieldName: string): (body: unknown) => string | null {
+  return (body) => {
+    if (body === null || typeof body !== "object") return null;
+    const value = (body as Record<string, unknown>)[fieldName];
+    return typeof value === "string" && value !== "" ? value : null;
+  };
+}
 const DEFAULT_BETS_JSONL =
   Bun.env.F402_BETS_JSONL ??
   "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
@@ -235,6 +258,10 @@ export interface LivePositionsPulseSummary {
     readonly liveBetsPath: string;
     readonly liveBetsCount: number;
     readonly captureHealthPath: string;
+    readonly r2Publish: {
+      readonly ok: boolean;
+      readonly summary: string;
+    };
   };
   readonly telegramDelivery: {
     readonly ok: boolean;
@@ -347,14 +374,29 @@ function computeCumulativeAndDelta(
 
       while (offset < st.size) {
         const len = Math.min(chunkSize, st.size - offset);
-        const buf = new Uint8Array(len);
-        readSync(fd, buf, 0, len, offset);
-        offset += len;
+        // `Bun.allocUnsafe(len)` skips zeroing the 16 MiB chunk — a measurable win per read.
+        // Safe here because (a) `readSync` returns the number of bytes actually read and we
+        // `writtenUint8Prefix(buf, bytesRead)` before handing the buffer to the decoder; (b) the
+        // unfilled tail (when a short read happens on signal / disk issue) is never exposed.
+        // The pre-migration code ignored the `readSync` return and would hand zeroed junk to
+        // the decoder on a short read; capturing it closes that latent bug in the same change.
+        // See docs/bun-upstream-reference.md "When to use `Bun.allocUnsafe` (and when NOT to)".
+        const buf = Bun.allocUnsafe(len);
+        const bytesRead = readSync(fd, buf, 0, len, offset);
+        if (bytesRead === 0) break; // EOF — stop before the no-op decode/split
+        offset += bytesRead;
         const text =
-          leftover + decoder.decode(buf, { stream: offset < st.size });
+          leftover +
+          decoder.decode(writtenUint8Prefix(buf, bytesRead), {
+            stream: offset < st.size,
+          });
         const lines = text.split("\n");
         leftover = lines.pop() ?? "";
 
+        // Intentional hand-rolled JSONL loop; `Bun.JSONL.parseChunk` would stop at the first
+        // malformed line and lose cumulative state. The writer may truncate mid-line on signal,
+        // so middle-line corruption must not blind the reader. See
+        // `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -943,15 +985,103 @@ export async function runLivePositionsPulse(options?: {
       provenanceClass: "api",
     },
   ];
-  await writeCaptureHealth(
-    healthPath,
-    mergeCaptureHealth(
-      prevHealth,
-      newHealthRecords,
-      nowIso,
-      "f402-live-stream-bridge",
-    ),
+  const mergedHealth = mergeCaptureHealth(
+    prevHealth,
+    newHealthRecords,
+    nowIso,
+    "f402-live-stream-bridge",
   );
+  await writeCaptureHealth(healthPath, mergedHealth);
+
+  // 4. Mirror the local KPI artifacts to R2 under `<prefix>/latest.json`. The sinks pull their
+  //    credentials from Bun.secrets (`r2` group); if the keychain has no R2 entry the publish is a
+  //    logged no-op so unseeded laptops still run the local path. R2 errors never fail the tick
+  //    that already wrote to disk; `live-positions-cron.jsonl` records the outcome.
+  //
+  //    First batch: the three artifacts this cron just wrote. Second batch: whatever optional
+  //    local files exist (agent-tree, agent-index, customer-profiles) — those are refreshed by
+  //    other jobs so they can be stale but we still mirror them with their file mtime as
+  //    observed-at so a remote reader can decide freshness themselves.
+  let r2Publish: R2PublishResult | { ok: false; summary: string } = {
+    ok: false,
+    summary: "R2 publish: skipped (no credentials)",
+  };
+  try {
+    const client = await R2S3Client.fromEnvOrSecrets();
+    if (client !== null) {
+      const first = await publishLivePositionsToR2(client, {
+        liveWagersText,
+        liveBetsText,
+        captureHealthText: JSON.stringify(mergedHealth),
+        observedAtIso: nowIso,
+        schemaVersions: {
+          liveWagers: liveWagersPayload.schemaVersion,
+          liveBets: liveBetsArtifact.schemaVersion,
+          captureHealth: mergedHealth.schemaVersion ?? 1,
+        },
+      });
+
+      const optionalSpecs: LocalArtifactSpec[] = [
+        {
+          key: "agent-tree/latest.json",
+          relativePath: "data/agent-tree.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("observedAt"),
+        },
+        {
+          key: "agent-index/latest.json",
+          relativePath: "data/agent-index.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("observedAt"),
+        },
+        {
+          key: "customer-profiles/latest.json",
+          relativePath: "data/customer-profiles.json",
+          schemaVersion: 1,
+          observedAtFromBody: readIsoField("generatedAt"),
+        },
+      ];
+      const { artifacts: optional, skipped } = await collectLocalArtifacts(
+        REPO_ROOT,
+        optionalSpecs,
+      );
+      const second =
+        optional.length === 0
+          ? {
+              ok: true,
+              writes: [],
+              summary: "R2 publish: 0/0 optional (none present)",
+            }
+          : await publishArtifactsToR2(client, optional);
+
+      const combinedOk = first.ok && second.ok;
+      const combinedBytes = [...first.writes, ...second.writes].reduce(
+        (sum, write) => sum + write.bytes,
+        0,
+      );
+      const combinedFails = [...first.writes, ...second.writes].filter(
+        (write) => !write.ok,
+      );
+      const skippedNote =
+        skipped.length === 0
+          ? ""
+          : ` (skipped=${skipped.map((s) => s.relativePath).join(",")})`;
+      const combinedSummary = combinedOk
+        ? `R2 publish: ${first.writes.length + second.writes.length}/${first.writes.length + second.writes.length} ok (${combinedBytes} bytes to ${client.bucket})${skippedNote}`
+        : `R2 publish: ${first.writes.length + second.writes.length - combinedFails.length}/${first.writes.length + second.writes.length} ok, failed=${combinedFails.map((w) => w.key).join(",")}${skippedNote}`;
+      r2Publish = {
+        ok: combinedOk,
+        writes: [...first.writes, ...second.writes],
+        summary: combinedSummary,
+      };
+    }
+  } catch (error) {
+    r2Publish = {
+      ok: false,
+      summary: `R2 publish: client-init failed (${error instanceof Error ? error.message : String(error)})`,
+    };
+  }
+  console.log(`[live-positions-cron] ${r2Publish.summary}`);
 
   const latestCountedWagers = parsedWagers
     .filter((x) => !isTickerNoise(x.wager))
@@ -1030,6 +1160,10 @@ export async function runLivePositionsPulse(options?: {
       liveBetsPath: "data/live-bets.json",
       liveBetsCount: liveBetsArtifact.pendingCount,
       captureHealthPath: CAPTURE_HEALTH_PATH,
+      r2Publish: {
+        ok: r2Publish.ok,
+        summary: r2Publish.summary,
+      },
     },
     telegramDelivery: {
       ok: true,

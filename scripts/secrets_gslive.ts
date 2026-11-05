@@ -18,7 +18,6 @@ import {
   GSID_SECRET_LEGACY,
   GSID_SECRET_PRE_RENAME,
 } from "./fetch-bet-tally.ts";
-import { secrets, stdin } from "bun";
 
 const HELP = `
 secrets:gslive — store the GSLive manager session (GSLIVE_SESSION_ID) in the OS keychain
@@ -50,11 +49,11 @@ export interface SecretStore {
 
 export function defaultSecretStore(): SecretStore {
   return {
-    get: (options) => secrets.get(options),
+    get: (options) => Bun.secrets.get(options),
     set: async (options) => {
-      await secrets.set(options);
+      await Bun.secrets.set(options);
     },
-    delete: (options) => secrets.delete(options),
+    delete: (options) => Bun.secrets.delete(options),
   };
 }
 
@@ -107,7 +106,7 @@ export async function deleteGsliveSecret(
 /** Read one stdin line; the value is not echoed, stored in shell history, or put on argv. */
 async function readStdInValue(): Promise<string> {
   const chunks: string[] = [];
-  for await (const chunk of stdin.stream()) {
+  for await (const chunk of Bun.stdin.stream()) {
     chunks.push(new TextDecoder().decode(chunk));
     if (chunks.join("").includes("\n")) break;
   }

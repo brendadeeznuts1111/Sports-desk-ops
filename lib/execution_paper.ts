@@ -158,6 +158,8 @@ export function readExecutionLedger(root: string): ExecutionLedgerState {
     return { rows: [], fills: [], openQuotes: [], modeChanges: [] };
   }
   const rows: ExecutionLedgerRow[] = [];
+  // Intentional hand-rolled JSONL loop; `Bun.JSONL.parse()` would drop every valid row after
+  // the first malformed line. See `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
     try {

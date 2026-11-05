@@ -141,9 +141,21 @@ Watch the mtimes to confirm:
 stat -f '%Sm %N' data/agent-tree.json data/live-bets.json data/bet-ticker.json data/customer-profiles.json
 ```
 
-Each capture is credential-gated: a missing requirement logs
-`[Shell Capture] bun run build:agent-tree: skipped (missing F402_BEARER_TOKEN)` without spawning
-the CLI, so cron cannot hammer a tool that would exit 2. Values are never printed.
+Each capture is credential-gated at two layers (defense in depth):
+
+1. **Registration-time filter** ([PR #45](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/45),
+   `ReportingSchedulerService.start()`): a SHELL_CAPTURE whose `requires` are unmet is dropped
+   before being armed, with a single startup log line like
+   `[Scheduler] sched_agent_tree_hourly: not armed (missing F402_BEARER_TOKEN); restart after
+the requirement is satisfied`. No cron timer is ever registered for it; the scheduler must be
+   restarted after the requirement is satisfied.
+2. **Fire-time skip** (`runShellCaptureDefault`): if an env var changes mid-run after a schedule
+   was armed, the fire-time check logs
+   `[Shell Capture] bun run build:agent-tree: skipped (missing F402_BEARER_TOKEN)` and returns
+   without spawning the CLI. Values are never printed.
+
+Together these guarantee cron cannot hammer a tool that would exit 2 either at startup or
+mid-run.
 
 The engine badge on `http://127.0.0.1:4020/` reads `/api/kpis` every 60 seconds and flips from
 `DATA UNAVAILABLE` to `MIXED DATA` to `LIVE DATA` as the four artifacts come up to date.

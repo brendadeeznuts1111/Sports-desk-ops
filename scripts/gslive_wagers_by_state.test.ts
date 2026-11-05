@@ -36,7 +36,6 @@ import {
   wrapTokenCell,
   type WagerReport,
 } from "./gslive_wagers_by_state.ts";
-import { env, stringWidth, stripANSI } from "bun";
 
 const HEADER = [
   "State",
@@ -1159,7 +1158,7 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
     const lines = wrapProseCell(summary, 40);
     expect(lines.length).toBeGreaterThan(1);
     for (const line of lines) {
-      expect(stringWidth(line)).toBeLessThanOrEqual(40);
+      expect(Bun.stringWidth(line)).toBeLessThanOrEqual(40);
     }
     expect(lines.join(" ")).toBe(summary);
   });
@@ -1168,9 +1167,9 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
     const styled = `[1mLate-clock clinched snipe: 30 basketball quarter bets[22m placed before the horn`;
     const lines = wrapProseCell(styled, 40);
     expect(lines.length).toBeGreaterThan(1);
-    expect(stripANSI(lines.join(" "))).toBe(stripANSI(styled));
+    expect(Bun.stripANSI(lines.join(" "))).toBe(Bun.stripANSI(styled));
     for (const line of lines) {
-      expect(stringWidth(line)).toBeLessThanOrEqual(40);
+      expect(Bun.stringWidth(line)).toBeLessThanOrEqual(40);
     }
   });
 
@@ -1181,7 +1180,7 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join("")).toBe(url);
     for (const line of lines) {
-      expect(stringWidth(line)).toBeLessThanOrEqual(40);
+      expect(Bun.stringWidth(line)).toBeLessThanOrEqual(40);
     }
     expect(lines.some((line) => line.includes(" "))).toBe(false);
   });
@@ -1192,8 +1191,8 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
   });
 
   test("emoji and ambiguous widths count as the terminal does", () => {
-    expect(stringWidth("🎰")).toBe(2);
-    expect(stringWidth("pending 🎰")).toBe(10);
+    expect(Bun.stringWidth("🎰")).toBe(2);
+    expect(Bun.stringWidth("pending 🎰")).toBe(10);
   });
 
   test("a long state name wraps but the table stays rectangular", () => {
@@ -1215,7 +1214,7 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
     const table = formatWagerTable(reportOf(csv));
     const lines = table.split("\n");
     expect(lines.length).toBeGreaterThan(4); // header + sep + rows + TOTAL, with a wrap
-    const widths = new Set(lines.map((line) => stringWidth(line)));
+    const widths = new Set(lines.map((line) => Bun.stringWidth(line)));
     expect(widths.size).toBe(1); // separator and every row share one display width
     expect(table).toContain("TOTAL");
   });
@@ -1223,31 +1222,31 @@ describe("wrapAnsi cells: prose vs token, width-aware measure", () => {
 
 describe("Bun-native render widths and wrapping", () => {
   const widthOf = (line: string): number =>
-    stringWidth(line, { ambiguousIsNarrow: true });
+    Bun.stringWidth(line, { ambiguousIsNarrow: true });
 
   test("reportColumns reads COLUMNS with sane clamps and restores the env", () => {
-    const previous = env.COLUMNS;
+    const previous = Bun.env.COLUMNS;
     try {
-      delete env.COLUMNS;
+      delete Bun.env.COLUMNS;
       expect(reportColumns()).toBe(100);
-      env.COLUMNS = "60";
+      Bun.env.COLUMNS = "60";
       expect(reportColumns()).toBe(60);
-      env.COLUMNS = "10";
+      Bun.env.COLUMNS = "10";
       expect(reportColumns()).toBe(40);
-      env.COLUMNS = "9999";
+      Bun.env.COLUMNS = "9999";
       expect(reportColumns()).toBe(200);
-      env.COLUMNS = "not-a-number";
+      Bun.env.COLUMNS = "not-a-number";
       expect(reportColumns()).toBe(100);
     } finally {
-      if (previous === undefined) delete env.COLUMNS;
-      else env.COLUMNS = previous;
+      if (previous === undefined) delete Bun.env.COLUMNS;
+      else Bun.env.COLUMNS = previous;
     }
   });
 
   test("wrapReportLine preserves indent, wraps prose and hard-breaks long tokens", () => {
-    const previous = env.COLUMNS;
+    const previous = Bun.env.COLUMNS;
     try {
-      env.COLUMNS = "40";
+      Bun.env.COLUMNS = "40";
       const prose = wrapReportLine(
         "  note: this is a deliberately long explanatory sentence that must wrap at the configured width",
       );
@@ -1263,8 +1262,8 @@ describe("Bun-native render widths and wrapping", () => {
       expect(token.length).toBeGreaterThan(1);
       for (const line of token) expect(widthOf(line)).toBeLessThanOrEqual(40);
     } finally {
-      if (previous === undefined) delete env.COLUMNS;
-      else env.COLUMNS = previous;
+      if (previous === undefined) delete Bun.env.COLUMNS;
+      else Bun.env.COLUMNS = previous;
     }
   });
 

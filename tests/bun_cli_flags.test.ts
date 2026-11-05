@@ -2,8 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import { z } from "zod";
 
-import { file, semver, version } from "bun";
-
 import {
   bunFlagsInScripts,
   missingRequiredFlags,
@@ -30,14 +28,18 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
         engines: z.object({ bun: z.string() }).optional(),
         scripts: z.record(z.string(), z.string()).optional(),
       })
-      .parse(await file(new URL("../package.json", import.meta.url)).json());
+      .parse(
+        await Bun.file(new URL("../package.json", import.meta.url)).json(),
+      );
     const scripts = pkg.scripts ?? {};
     expect(unsupportedScriptFlags(scripts, SURFACE)).toEqual([]);
     // The watch daemon is the one long-running script: it must not outlive its parent.
     expect(scripts["wagers:watch"]).toContain("--no-orphans");
     // Bun.semver gates the pinned runtime against package.json engines.
     expect(pkg.engines?.bun).toBeDefined();
-    expect(semver.satisfies(version, pkg.engines?.bun ?? "")).toBe(true);
+    expect(Bun.semver.satisfies(Bun.version, pkg.engines?.bun ?? "")).toBe(
+      true,
+    );
   });
 
   test("help parsing reads flag declarations, not prose or values", () => {

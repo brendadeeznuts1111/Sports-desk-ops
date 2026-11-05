@@ -70,8 +70,14 @@ const MAC_INSTALL_PATHS = [
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 ] as const;
 
-/** Bun's documented search order, minus the Playwright cache (not needed on the desk machines). */
-export function resolveChromeBinary(
+/**
+ * Bun's documented search order, minus the Playwright cache (not needed on the desk machines).
+ *
+ * Private: there is no production caller outside this module. Tests drive `diagnoseChromeBackend`
+ * and control this function's return via `BUN_CHROME_PATH` (set to a nonexistent path to force
+ * the null return, set to any existing file to force a hit).
+ */
+function resolveChromeBinary(
   env: Readonly<Record<string, string | undefined>> = Bun.env,
   which: (name: string) => string | null = (name) => Bun.which(name),
   exists: (path: string) => boolean = existsSync,
@@ -96,7 +102,6 @@ export interface ChromeProbeResult {
 
 export interface DiagnoseChromeOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly resolveBinary?: typeof resolveChromeBinary;
   /** Injectable runner so tests never spawn a browser. */
   readonly runProbe?: (argv: readonly string[]) => Promise<ChromeProbeResult>;
   readonly timeoutMs?: number;
@@ -158,8 +163,7 @@ const REASON: Record<ChromeFailureClass, string> = {
 export async function diagnoseChromeBackend(
   options: DiagnoseChromeOptions = {},
 ): Promise<ChromeBackendDiagnosis> {
-  const resolveBinary = options.resolveBinary ?? resolveChromeBinary;
-  const binary = resolveBinary(options.env ?? Bun.env);
+  const binary = resolveChromeBinary(options.env ?? Bun.env);
   if (binary === null) {
     return {
       available: false,

@@ -508,6 +508,16 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     dataClass: "operational",
     surface: "surface.daemon-telegram-admin-routes",
   }),
+  // The ops tracker (tasks, PRs, secret inventory). `pii`, not `admin`: it is a page a browser
+  // navigates to, so it cannot carry a bearer header; loopback reads it and any other peer needs the
+  // token. Secret *names* and sources only, never values. Not available on the VPS (no gh/git there).
+  defineRoute({
+    path: "/tracker",
+    method: "GET",
+    guard: "pii",
+    dataClass: "operational",
+    surface: null,
+  }),
 ];
 
 /** Paths only, for the surface comparison. */

@@ -4,8 +4,6 @@
  * receives (after the file) is not Bun's flag and is not checked here.
  */
 
-import { spawnSync } from "bun";
-
 /** Flags our tooling relies on; a runtime upgrade/downgrade must keep them. */
 export const REQUIRED_BUN_CLI_FLAGS = [
   "--eval",
@@ -43,7 +41,7 @@ export function readBunHelpFlags(
   args: readonly string[],
   bunPath = "bun",
 ): ReadonlySet<string> {
-  const result = spawnSync([bunPath, ...args], {
+  const result = Bun.spawnSync([bunPath, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -57,7 +55,7 @@ export function readBunHelpFlags(
 
 /** Read the runtime's own help once; never hand-maintain the flag list. */
 export function readBunCliSurface(bunPath = "bun"): BunCliSurface {
-  const result = spawnSync([bunPath, "--help"], {
+  const result = Bun.spawnSync([bunPath, "--help"], {
     stdout: "pipe",
     stderr: "pipe",
   });

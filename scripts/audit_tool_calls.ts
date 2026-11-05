@@ -107,6 +107,9 @@ export function sessionRootFor(project: string): string {
 }
 
 function readJsonLines(text: string): unknown[] {
+  // Intentional hand-rolled JSONL loop; DSH session files can have bad MIDDLE lines (crashed
+  // mid-write), not just a partial final line, so `Bun.JSONL.parseChunk` would drop everything
+  // after the first bad row. See `docs/bun-upstream-reference.md` "When NOT to migrate to Bun.JSONL".
   const events: unknown[] = [];
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;

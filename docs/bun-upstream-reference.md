@@ -386,6 +386,125 @@ observed; keep the types (a stream source may change) but the "may sit on a Shar
 comment is not reproducible on this binary. `Bun.JSONL.parse` over a SAB-backed view, `Bun.write(
 path, sabView)` and `Bun.file(sabPathBytes)` all work.
 
+## TypedArray views, slabs, and zero-copy windows (measured 1.4.4, 2026-11-05)
+
+A **`ArrayBuffer`** is raw bytes. A **`Uint8Array`** (or any TypedArray) is a **view**: a triple of
+`(buffer, byteOffset, byteLength)` into that store. Several views can overlap the same bytes; they
+are not copies unless you explicitly copy.
+
+```text
+ArrayBuffer  [ 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 ]
+Uint8Array   ^---------------- byteLength=8, byteOffset=0
+Uint8Array(,,4) at offset 2     ^-- bytes 2..5 only
+subarray(0,4) on full view      ^-- bytes 0..3 (same backing as parent)
+```
+
+### Zero initialization vs `Bun.allocUnsafe`
+
+| Source               | Unwritten bytes                   | Typical use                                                                                     |
+| -------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `new ArrayBuffer(n)` | **0**                             | Trust “empty tail is zero”                                                                      |
+| `new Uint8Array(n)`  | **0** (new buffer under the hood) | Same                                                                                            |
+| `Bun.allocUnsafe(n)` | **Undefined** (prior RAM)         | Hot slabs when every **read** index is written first or the consumer only sees `subarray(0, k)` |
+
+The tally SoA path ([`lib/gslive_tally_rollup.ts`](../lib/gslive_tally_rollup.ts)) and ticker read
+([`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts)) rely on the last row of that
+table. Full audit rules live under
+[When to use `Bun.allocUnsafe`](#when-to-use-bunallocunsafe-and-when-not--2026-11-04-audit) below.
+
+### `subarray` vs `slice` (TypedArray)
+
+| API                          | Allocates               | Same `ArrayBuffer`?       | Index base                                        |
+| ---------------------------- | ----------------------- | ------------------------- | ------------------------------------------------- |
+| `view.subarray(start, end?)` | No                      | Yes — shared mutation     | **Relative to this view** (respects `byteOffset`) |
+| `view.slice(start, end?)`    | Yes — new buffer        | No                        | Relative to this view                             |
+| `buffer.slice(start, end?)`  | Yes — new `ArrayBuffer` | N/A (on buffer, not view) | Absolute byte indices in the buffer               |
+
+```ts
+const buffer = new ArrayBuffer(8);
+const uint8 = new Uint8Array(buffer);
+uint8.set([1, 2, 3, 0, 0, 0, 0, 0]);
+
+const sub = uint8.subarray(0, 4); // [1,2,3,0], shared backing
+sub[0] = 99; // uint8[0] becomes 99
+
+const copy = uint8.slice(0, 4); // new ArrayBuffer; uint8[1] stays 2 if copy[1]=88
+
+const window = new Uint8Array(buffer, 2, 4); // bytes [2..5] → [3,0,0,0]
+const tail = window.subarray(1); // still into `buffer`, starts at byte 3
+```
+
+**Do not confuse** `SharedArrayBuffer.slice` (copy of a region) with `Uint8Array.subarray` (alias).
+The SAB section above documents buffer-level `slice`; stream and JSONL code almost always mean
+**view `subarray`**.
+
+### JSONL: byte `read` and carry-forward (no memcpy)
+
+`Bun.JSONL.parseChunk(buf)` returns `read`: bytes consumed from **`buf`’s index 0**, not from the
+underlying buffer origin when `buf.byteOffset > 0`. The published docs say to resume with
+`TypedArray.subarray()` — https://bun.com/docs/runtime/jsonl#byte-offsets-with-uint8array
+
+This repo centralizes byte-window rules in [`lib/jsonl_stream_replay.ts`](../lib/jsonl_stream_replay.ts):
+
+| Helper                               | Role                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `mergeUint8JsonlChunks`              | Append stream chunks (`Bun.concatArrayBuffers`) — used by replay and [`lib/f402_weblog.ts`](../lib/f402_weblog.ts)  |
+| `carryForwardJsonlBuffer`            | Drop `parseChunk().read` prefix via `subarray`                                                                      |
+| `writtenUint8Prefix`                 | `subarray(0, bytesRead)` after disk read / `allocUnsafe` fill                                                       |
+| `jsonlAdvancePastLineFeedDelimiters` | File offset after `read` (skip trailing `0x0a`) — [`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts) |
+
+End-to-end stepping (slab → complete lines → held-back tail) is in
+[`tests/jsonl_stream_replay.test.ts`](../tests/jsonl_stream_replay.test.ts) (`worked example: bet-ticker slab read`).
+
+Partial-line streaming keeps one growing buffer (via `Bun.concatArrayBuffers` when appending
+chunks), parses complete records, then **`subarray(result.read)`** so the next `parseChunk` sees
+the remainder at index 0. Using `String.slice` or copying to a new `Uint8Array` on every chunk
+would work but adds allocations; the runbook’s “zero-copy byte slices” note refers to this pattern
+([`bun_server_runtime_shapes_runbook.md`](./runbooks/bun_server_runtime_shapes_runbook.md)).
+
+Weblog ingestion uses the same idea on a sliding pending buffer:
+[`lib/f402_weblog.ts`](../lib/f402_weblog.ts) (`pending.subarray(cut)` after a consumed window).
+
+### Draining `ReadableStream`s (whole buffer vs incremental JSONL)
+
+[`Bun.readableStreamToArrayBuffer(stream)`](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)
+reads until close/error and concatenates chunks into **one** `ArrayBuffer`. Each chunk must be a
+**TypedArray or `ArrayBuffer`**; mixed chunk types (strings + bytes) need
+[`Bun.readableStreamToBlob`](https://bun.com/reference/globals/bun/readableStreamToBlob) instead.
+
+| Goal                                           | API                                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Small/medium body; need exact byte length once | `await Bun.readableStreamToArrayBuffer(body)` → `new Uint8Array(ab)` (see [`lib/http_body.ts`](../lib/http_body.ts) — uses `Response.arrayBuffer()`, equivalent drain) |
+| Known JSONL file; bounded memory via windows   | [`replayHistoricalJsonlStream`](../lib/jsonl_stream_replay.ts) — `mergeUint8JsonlChunks` + `parseChunk` + `carryForwardJsonlBuffer`                                    |
+| “Give me all stream bytes” SSOT wrapper        | `drainReadableStreamToUint8(stream)` in the same module                                                                                                                |
+
+Do **not** replace the JSONL replay loop with a full-stream drain on multi‑hundred‑MB ticker archives:
+that duplicates the file in RAM. Drain helpers fit probes, tests, and bodies that are already size-capped.
+
+### SoA slabs and “logical length”
+
+Structure-of-arrays rollup storage keeps **fixed-capacity** typed columns (`Uint32Array`,
+`BigInt64Array`, `Bun.allocUnsafe` byte labels, …). Logical row count (`groupCount`, `cellCount`)
+is always **≤ capacity**; only indices `< count` are read. There is no `array.length = n` shrink —
+capacity is the arena size. **`subarray(0, count)`** is the pattern when an API needs a dense
+prefix (file read, hash, decode); the tally path instead indexes `0..count-1` in place and never
+passes the unfilled tail to consumers.
+
+### Footguns (read before `allocUnsafe` or `subarray`)
+
+1. **Expose only the written prefix** — `Bun.write(path, buf)` or `Bun.hash(buf)` uses **full
+   `buf.length`**, not “bytes read”. Use `writtenUint8Prefix(buf, bytesRead)` or
+   `buf.subarray(0, bytesRead)` (see `scripts/live_positions_cron.ts` in the allocUnsafe table).
+2. **`[...view]` and `Array.from(view)` copy** — fine for tests; avoid on megabyte slabs in hot
+   loops.
+3. **Assuming tail is zero** — safe after `new ArrayBuffer` / `new Uint8Array`; **false** after
+   `Bun.allocUnsafe` unless you zero or slice.
+4. **Detached buffers** — `ArrayBuffer.transfer` / resizing can invalidate views; this repo’s paths
+   use fixed-size arenas and concat, not transfer, on these hot paths.
+
+Pinned by [tests/shared_array_buffer_contract.test.ts](../tests/shared_array_buffer_contract.test.ts) and
+[tests/jsonl_stream_replay.test.ts](../tests/jsonl_stream_replay.test.ts).
+
 ## Bun docs MCP (live server; repo-native client)
 
 `https://bun.sh/docs/mcp` (also `https://bun.com/docs/mcp`) is Bun's **MCP server**, not a docs
@@ -562,6 +681,178 @@ BUN_CPU_PROFILE=1 BUN_CPU_PROFILE_DIR=scratch/profiles BUN_CPU_PROFILE_NAME=supe
 
 Profiles are diagnostics, not artifacts: write them under `scratch/profiles/` (gitignored), never `docs/` or `dist/`, and do not attach them to commits. Use CPU profiles for the poll loops and heap profiles for the supervisor/webview children when memory pressure is reported.
 
+## When NOT to migrate to `Bun.JSONL` (2026-11-04 audit)
+
+The repo reaches for `Bun.JSONL.parse()` / `Bun.JSONL.parseChunk()` by default on new JSONL work
+(25+ call sites; see the long-tail table above, [`lib/f402_bet_ticker_jsonl.ts`](../lib/f402_bet_ticker_jsonl.ts),
+[`lib/cron_journal.ts`](../lib/cron_journal.ts), [`services/sportsdesk_ingestion_replay.ts`](../services/sportsdesk_ingestion_replay.ts)).
+A sweep of the remaining hand-rolled `for (line of text.split("\n")) { try { JSON.parse(line) } catch {…} }`
+sites found **six intentional holdouts**, each because `Bun.JSONL` lacks a specific semantic they
+depend on. Future "migrate to `Bun.JSONL`" audits should stop here before touching these files.
+
+| File:line                                        | Pattern                                     | Semantic `Bun.JSONL` does not provide                                                       |
+| :----------------------------------------------- | :------------------------------------------ | :------------------------------------------------------------------------------------------ |
+| `lib/execution_paper.ts:161`                     | per-line try/catch, skip malformed          | Ledger reads skip malformed lines; `parse()` stops at the first bad line and drops the rest |
+| `lib/f402_bet_ticker_jsonl.ts:101` (zst/gz path) | per-line try/catch + `skippedLines` counter | Per-line skip count; `parseChunk` reports one aggregate `error`, not a per-row tally        |
+| `scripts/live_positions_cron.ts:355`             | chunked streaming + per-line skip           | Crash-tolerant reader for a 16 MB chunked stream (writer may truncate mid-line on signal)   |
+| `scripts/audit_tool_calls.ts:109`                | per-line try/catch                          | DSH session files can have bad **middle** lines, not just a partial trailing one            |
+| `scripts/ingestion_replay_xml_golden_gate.ts:45` | strict parse + original-text passthrough    | Gate must throw on malformed; preserves the exact original line text when `xml` is absent   |
+| `lib/stale_line_cohort.ts:256`                   | strict parse in a `catch` fallback          | Must throw on malformed input; `parse()` returns the parsed prefix silently                 |
+
+### Decision rule
+
+- **Use `Bun.JSONL.parse(text | Uint8Array)`** when every line is expected to be valid JSON and
+  a malformed line should either throw (if nothing parsed) or be acceptable as silent truncation
+  of the prefix. Drop-in replacement for the `.split("\n").filter(…).map(JSON.parse)` pipeline.
+  With `Uint8Array` input, Bun skips a UTF-8 BOM at byte 0.
+- **Use `Bun.JSONL.parseChunk(input, start?, end?)`** for streaming or zero-copy byte handling.
+  The return shape is `{ values, read, done, error }`:
+  - `read` is a **byte** offset when `input` is a `Uint8Array` (character offset for strings) and
+    always points into the original buffer, so `buf = buf.subarray(result.read)` is the correct
+    zero-copy continuation.
+  - `done: true` means the entire input was consumed; prefer that over
+    `result.read < input.length` to decide whether to hold a tail.
+  - The optional `start` / `end` **byte** offsets (`Uint8Array` only) let you reparse a subrange
+    of an existing buffer without a `.subarray()` allocation.
+  - A malformed middle line stops parsing and reports `error`; no per-line recovery. If you
+    need skip-middle-line semantics on top of `parseChunk`, you must find the next `\n` after
+    `result.read` and re-call with that as the new `start` — at which point the hand-rolled loop
+    is simpler and that site belongs in the holdout table above.
+- **Keep the hand-rolled `for (line of text.split("\n")) { try { JSON.parse(line) } catch {…} }`
+  loop** when any of the following holds:
+  - Skip-malformed is the intended semantic (append-only ledgers, audit logs).
+  - A per-line error count is needed in the output.
+  - The reader must tolerate bad middle lines (concurrent writers, crash recovery, chunked
+    streaming where the writer may die mid-line).
+  - The gate must **throw** on the first bad line — `Bun.JSONL.parse()` returns the parsed
+    prefix silently instead.
+
+If you migrate one of the six holdouts above, remove its row from this table in the same PR.
+
+## `Bun.$` — available, but argv-only for credentials (2026-11-04 audit)
+
+[`Bun.$`](https://bun.com/reference/globals/bun#bun.$) is the shell-tag that runs a command
+through a parser, with a fluent `.env()` / `.cwd()` / `.nothrow()` / `.text()` API plus pure
+helpers `Bun.$.escape(str)` (shell-safe quote) and `Bun.$.braces(pattern)` (bash-brace
+expansion). It is pinned in `bin/bun_surface.ts` and covered by
+`tests/bun_capabilities.test.ts` ("Bun.$ exposes the shell-tag…").
+
+**The repo-wide rule is argv-only for anything that touches a credential.** This codifies what
+[`lib/f402_credentials_policy.ts`](../lib/f402_credentials_policy.ts) says in prose:
+
+> Never `Bun.$` — interpolation routes bytes through a shell parser.
+
+**What to use where (audit measured 2026-11-04: 80 call sites use `Bun.spawn(argv, …)`, 1 test
+uses `Bun.$`, 0 production uses):**
+
+| Scenario                                                                        | Use                                                                                       | Why                                                                                                                           |
+| :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| Anything that reads/writes a credential, API key, cookie, or session ID         | **`Bun.spawn([argv…], { env: buildMinimalSpawnEnv() })`**                                 | Argv array bypasses the shell parser; minimal env allowlist denies `LD_PRELOAD`-class attacks                                 |
+| A test or dev script that needs stdout as a single string from a static command | `Bun.$\`…\`.text()` with **no interpolation of untrusted input**                          | Fluent API reads cleaner than `Bun.spawn + Response(proc.stdout).text()`                                                      |
+| A test or dev script that needs to interpolate a path we control                | `Bun.$\`…${path}…\``**only if`path`is repo-internal** or wrapped with`Bun.$.escape(path)` | `$` auto-quotes template values, but the safe habit is to assume every interpolated value is tainted and `.escape` it anyway  |
+| Any production daemon reading stdout line-by-line                               | `Bun.spawn(argv, { stdout: "pipe" })` + `proc.stdout` reader                              | Independent `proc.exited` / `proc.stdout` / `proc.stderr` reads are clearer than `$\`…\`.lines()` for the 3-stream assertions |
+| Pure bash brace expansion without running a shell                               | `Bun.$.braces("logs/{2024,2025}-*.jsonl")`                                                | No I/O, no shell spawn, no injection surface                                                                                  |
+
+**Do not migrate the existing 80 `Bun.spawn([argv…])` sites.** The current argv form is the
+defensive default; `Bun.$` is only a readability win on one-liner dev scripts. Migrating a
+daemon or capture path would re-introduce the exact injection surface the policy was written to
+prevent.
+
+**Before adopting `Bun.$` in a new file**, check the capability test and this rule table. If a
+dev script needs to interpolate a user-provided value, use `Bun.$.escape(value)` inside the
+template; if the script touches credentials at all, fall back to `Bun.spawn`.
+
+## When to use `Bun.allocUnsafe` (and when NOT to) — 2026-11-04 audit
+
+[`Bun.allocUnsafe(size)`](https://bun.com/reference/globals/bun#bun.allocUnsafe) returns a
+`Uint8Array` **without zeroing the bytes**. Bun's docs claim up to 3.5× faster than
+`new Uint8Array(size)`; measured on this machine (Bun 1.4.4, Apple Silicon, 2026-11-04) the win
+scales with size:
+
+| Allocation size | `new Uint8Array(n)` | `Bun.allocUnsafe(n)` | Speedup |
+| --------------: | ------------------: | -------------------: | ------: |
+|            1 KB |              166 ns |               200 ns |   0.83× |
+|           64 KB |             1134 ns |               312 ns |   3.64× |
+|            1 MB |           37,535 ns |             2,540 ns |  14.78× |
+|           16 MB |          314,321 ns |             8,385 ns |  37.49× |
+
+Below ~a page the per-call overhead dominates; above 64 KB the win is real and matches the docs.
+The docs warn, verbatim:
+
+> if you send uninitialized memory to your users (even unintentionally), it can leak anything
+> recently in memory.
+
+This invariant — "every byte the consumer may read is written first" — is not something
+`bun check` or `oxlint` can enforce. Every call site needs a per-site argument.
+
+**Where this repo uses it (pinned 2026-11-04):**
+
+| File:line                            | Fill pattern                                                                                                               | Why it is safe                                                                                                   |
+| :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `lib/f402_bet_ticker_jsonl.ts:169`   | `while (read < length) { chunk = await handle.read(buffer, read, length - read, …) }`                                      | `writtenUint8Prefix(buffer, read)` — only the written prefix is ever read; the tail is never exposed             |
+| `scripts/live_positions_cron.ts:375` | `const bytesRead = readSync(fd, buf, 0, len, offset)` then `decoder.decode(buf.subarray(0, bytesRead))`                    | The `readSync` return is captured and used to slice the exposed prefix; migrating closed a latent short-read bug |
+| `lib/gslive_tally_rollup.ts:432-679` | Eight SoA `Uint8` columns; only indices `0..groupCount-1` / `0..cellCount-1` are read after insert paths write every field | ~131 KiB zeroing skipped per rollup; unfilled arena tail is never indexed                                        |
+
+**When to migrate a `new Uint8Array(n)` call site to `Bun.allocUnsafe(n)`:**
+
+1. **Every byte the consumer sees must be written first.** A full fill is enough; a partial fill
+   is only safe if the exposed prefix is sliced to the actual-written length (`.subarray(0, k)`).
+2. **`n` is large enough for the zeroing cost to matter.** Bun's 3.5× number is on large
+   allocations; micro-allocations (≤ a few KB) have no visible win and burn the audit budget.
+3. **The allocation is on a hot path.** A one-shot allocation during startup is not worth the
+   foot-gun — keep `new Uint8Array(n)`.
+
+**When to keep `new Uint8Array(n)`:**
+
+- **Size 0 sentinels** (`new Uint8Array(0)`) — no allocation to speak of; no win.
+- **Small fixed buffers** (≤ a few KB, header slots, 1-byte peek) — the zeroing cost is ns-scale.
+- **Any site that may pass the buffer to a consumer before it is fully written** — fetch
+  responses, log writes, hash inputs where the length is set upstream, decoder inputs without a
+  matching bytes-read capture.
+- **Buffers whose consumer trusts "unwritten = zero"** — do not swap silently; `Bun.allocUnsafe`
+  bytes are whatever was last in that RAM page.
+
+Before adding a third call site, open `tests/bun_capabilities.test.ts` ("Bun.allocUnsafe returns
+a Uint8Array of the requested length (unzeroed)") and add the new file:line to the table above.
+
+## Future: `bun lint --type-check` unification (2026-11-04 audit)
+
+Bun ships `bun check` (type errors) and `bun fmt` as built-ins on 1.4.4; **`bun lint` is not in
+1.4.4** (`bun --help` does not list it; `cd /tmp/empty && bun lint` returns `error: Script not
+found "lint"`). The [`/docs/lint`](https://bun.com/docs/lint) page describes a future feature
+whose relevant surface for this repo is:
+
+- `bun lint --type-aware --type-check` — reports type errors too, the way `bun check` does, in a
+  single pass that also runs the type-aware lint rules.
+- `bun lint --tsconfig <path>` — pins one `tsconfig.json` for the whole run, bypassing per-file
+  auto-discovery. A `tsconfig.json` without `"include"` triggers a `warn: Loaded N files in Ts to
+lint foo.ts` warning because it covers every file below it.
+
+**What the repo already looks like, measured 2026-11-04:**
+
+| Audit                                   | This repo                                                                                                                                     | Future `bun lint` implication                                                                                                                      |
+| :-------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root `tsconfig.json` has `"include"`?   | `"include": ["**/*.ts"]`                                                                                                                      | Won't trigger the "no `include`" warning.                                                                                                          |
+| Monorepo with multiple `tsconfig.json`? | No — one root tsconfig, plus `Scratch/security/tsconfig.scoped.json` (scratch area, ignored by `.oxlintrc.type-aware.json` `ignorePatterns`). | Per-file tsconfig discovery is unambiguous; no `--tsconfig` flag needed.                                                                           |
+| Current lint pass shape                 | `lint:check` runs oxlint twice: regular + `--type-aware -c .oxlintrc.type-aware.json`.                                                        | Could collapse to one `bun lint --type-check --type-aware -c .oxlintrc.type-aware.json` call.                                                      |
+| Current typecheck pass shape            | `typecheck` runs `bun check --no-script -p tsconfig.json` after `ensure:deep-tsconfig`.                                                       | The `bun check` invocation could merge into the single `bun lint --type-check` pass, cutting one full-repo type-check cycle out of the gate chain. |
+
+**When Bun ships `bun lint`, the migration shape is:**
+
+1. Confirm the Bun version in `AGENTS.md` ships `bun lint` built-in (not just the docs page);
+   `bun --help | grep -w lint` must list it.
+2. Rename the `package.json` `"lint"` script to `"oxlint"` (or similar) to clear the shadow —
+   see `/docs/lint`: _"If `package.json` has a `lint` script, `bun lint` runs that script."_
+3. Collapse `lint:check` + `typecheck` into one call:
+   `bun lint --type-check --type-aware -c .oxlintrc.type-aware.json --no-script`
+4. Keep `ensure:deep-tsconfig` — it's a strict-flags gate on the single tsconfig, orthogonal
+   to whichever linter reads it.
+5. Measure: time the before/after, and verify the oxlint `-f github` CI annotation path
+   ([PR #50](https://github.com/bw496915-cmyk/Sports-desk-ops/pull/50)) still works
+   (`bun lint -f github` is documented).
+
+Do not pre-migrate before `bun --help` lists `lint`; the docs have been ahead of the binary.
+
 ## v1.4.0 feed/transport primitives in use
 
 - **`.jsonl.zst` / `.jsonl.gz`**: `lib/f402_bet_ticker_jsonl.ts` detects compressed paths and pipes `Bun.file(path).stream()` through `new DecompressionStream("zstd" | "gzip")`, then `new Response(stream).textStream()` into the JSONL reader. Tested with both formats.
@@ -642,8 +933,8 @@ but got 2`. Repo code therefore uses the object form exclusively, and `lib/secre
   the API is marked "Unstable API" — https://bun.com/docs/runtime/markdown
 - `Bun.markdown.react()` SSR lives in `lib/markdown_react_ssr.ts`: `renderMarkdownSsr(markdownText(s))`
   returns a `RenderedHtml` brand, so Markdown input and rendered HTML cannot be passed in the wrong
-  direction. React 18 clients must render with React 18's `react-dom/server` and pass
-  `reactVersion: 18`; React 19's renderer rejects the legacy element symbol.
+  direction. The repo pins `react`/`react-dom` 18.3.1, so it passes `reactVersion: 18`; React 18's
+  renderer rejects React 19 elements and React 19's renderer rejects the legacy element symbol.
 - Child processes expose `.terminal.close()` and `exited` —
   https://bun.com/docs/runtime/child-process#reusable-terminal
 - `--no-env-file` disables automatic `.env` loading —

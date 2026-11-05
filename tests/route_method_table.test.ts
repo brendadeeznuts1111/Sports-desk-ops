@@ -17,7 +17,20 @@ import { startServer } from "../services/sportsdesk_webview_server.ts";
  * the safe default.
  */
 
-const server = startServer({ port: 0, hostname: "127.0.0.1" });
+// `/tracker` is probed with its named method (GET) on this loopback server. Its real loader runs
+// `gh` and `git` and sweeps the keychain, which a test must not do, so it gets a state that
+// makes no calls.
+const server = startServer({
+  port: 0,
+  hostname: "127.0.0.1",
+  trackerState: async () => ({
+    generatedAt: "2026-11-04T00:00:00.000Z",
+    mainCi: null,
+    tasks: { kind: "unavailable", reason: "test" },
+    prs: { kind: "unavailable", reason: "test" },
+    secrets: { kind: "unavailable", reason: "test" },
+  }),
+});
 const base = `http://127.0.0.1:${server.port}`;
 
 async function statusOf(path: string, method: string): Promise<number> {
