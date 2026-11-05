@@ -158,6 +158,11 @@ function ref(kind: "customer" | "agent", value: string | undefined): string {
   return `${kind}:${hasher.digest("hex").slice(0, 12)}`;
 }
 
+/** The stable customer hash carried in anomaly evidence; used to join queue accounts. */
+export function customerRefOf(value: string | undefined): string {
+  return ref("customer", value);
+}
+
 function wagerNumbers(tickets: readonly RuleTicket[]): string[] {
   return tickets.map((ticket) => ticket.wagerNumber);
 }

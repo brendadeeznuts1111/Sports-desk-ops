@@ -5,10 +5,21 @@ import { dirname, join } from "node:path";
 
 import { openReviewDb, recordFlagReview } from "../cli/review.ts";
 import { loadFraudPerception } from "../lib/fraud_logs.ts";
-import type { FraudFinding } from "../lib/fraud_logs.ts";
+import type {
+  FraudBetRecord,
+  FraudCorpus,
+  FraudFinding,
+} from "../lib/fraud_logs.ts";
 import { fitFraudModel, writeFraudModelArtifact } from "../lib/fraud_model.ts";
 import { runFraudPatterns } from "../lib/fraud_patterns.ts";
-import { buildFraudQueue } from "../lib/fraud_queue.ts";
+import {
+  buildFraudQueue,
+  type FraudQueueRuleEvidence,
+} from "../lib/fraud_queue.ts";
+import {
+  assessQueueReadiness,
+  queueBatchBody,
+} from "../lib/queue_readiness.ts";
 import {
   CLI_PATH,
   CORPUS_PRIMARY_REL,
@@ -69,6 +80,158 @@ function runCli(root: string, args: readonly string[]): CliResult {
     body,
     stderr: proc.stderr.toString(),
   };
+}
+
+/** One eligible account with exactly one suspected-bot row and no other ranking signal. */
+function queueRecord(userId: string): FraudBetRecord {
+  return {
+    betId: `${userId}-bet`,
+    userId,
+    agentId: null,
+    placedAtMs: Date.parse(FIXED_NOW_ISO),
+    acceptedAtMs: null,
+    delaySec: null,
+    acceptSec: null,
+    stateCode: 2,
+    oddsPlaced: null,
+    oddsAccepted: null,
+    oddsDrift: null,
+    stakeCents: 10_000,
+    toWinCents: 9_000,
+    lineHundredths: null,
+    sport: null,
+    subSport: null,
+    period: null,
+    wagerType: null,
+    eventId: null,
+    resultCode: null,
+    ipMasked: null,
+    ipTag: null,
+    ipPrefix24: null,
+    suspectedBot: true,
+    reversedCredit: false,
+    manualLog: false,
+    adminUser: null,
+    ipClass: "unknown",
+    botRingRange: false,
+    stakeUsd: 100,
+    toWinUsd: 90,
+    hourOfDayUtc: 0,
+    dayOfWeekUtc: 0,
+    periodCode: null,
+    resultCodeNum: 0,
+  };
+}
+
+function tiedCorpus(): FraudCorpus {
+  const records = [queueRecord("A"), queueRecord("Z")];
+  return {
+    source: {
+      id: "gslive_bet_report",
+      label: "synthetic queue tie corpus",
+      path: "synthetic.json",
+      exists: true,
+      bytes: null,
+      mtimeIso: null,
+      ageSeconds: 0,
+      stale: false,
+      provenance: "fixture",
+      records: records.length,
+      sha256: null,
+      state: "ok",
+      note: "synthetic",
+      reason: null,
+    },
+    path: "synthetic.json",
+    sha256: null,
+    rows: records.length,
+    malformed: 0,
+    records,
+    window: {
+      fromEpochSec: null,
+      toEpochSec: null,
+      fromIso: null,
+      toIso: null,
+      measuredFromIso: null,
+      measuredToIso: null,
+    },
+    ipIndex: {
+      byIp: new Map(),
+      byPrefix24: new Map(),
+      byAccount: new Map(),
+      distinctIps: 0,
+    },
+    accounts: records.length,
+    agents: 0,
+    parseMs: 0,
+    timerSource: "mock",
+  };
+}
+
+function readyWith(rule: string, confirmedReviews: number) {
+  return assessQueueReadiness({
+    corpusAgeHours: 1,
+    modelAgeDays: 1,
+    bridgeCoverage: 0.6,
+    bridgeRepresentative: true,
+    confirmedReviews,
+    rules: [{ rule, confirmedReviews }],
+  });
+}
+
+function evidenceFor(
+  account: string,
+  confirmed: boolean,
+): [string, FraudQueueRuleEvidence] {
+  return [
+    account,
+    {
+      hasRuleHit: true,
+      hasConfirmedRuleHit: confirmed,
+      ruleHits: ["period_correlation"],
+      confirmedRuleHits: confirmed ? ["period_correlation"] : [],
+    },
+  ];
+}
+
+interface TiedBatch {
+  readonly rows: readonly {
+    readonly account: string;
+    readonly hasRuleHit: boolean;
+    readonly hasConfirmedRuleHit: boolean;
+  }[];
+  readonly ruleApplication: {
+    readonly state: string;
+    readonly applied: readonly string[];
+    readonly notApplied: readonly unknown[];
+  };
+}
+
+function tiedBatch(
+  ruleApplied: boolean,
+  evidence: ReadonlyMap<string, FraudQueueRuleEvidence>,
+  scoreOf: (account: string) => { score: number; band: string },
+): TiedBatch {
+  const readiness = readyWith("period_correlation", ruleApplied ? 5 : 4);
+  // The CLI only builds evidence for rules the gate applied; mirror that here.
+  const active = ruleApplied
+    ? evidence
+    : new Map<string, FraudQueueRuleEvidence>();
+  return queueBatchBody(readiness, () =>
+    buildFraudQueue({
+      corpus: tiedCorpus(),
+      findings: [],
+      model: {
+        present: true,
+        fittedAt: FIXED_NOW_ISO,
+        proxy: "desk_flag",
+        corpusSha256: null,
+      },
+      scoreOf,
+      ruleEvidenceOf: (account) => active.get(account) ?? null,
+      limit: 10,
+    }),
+  );
 }
 
 function accountFinding(
@@ -221,6 +384,65 @@ describe("fraud priority queue (lib)", () => {
   });
 });
 
+describe("queue rule tie-break", () => {
+  test("an applied rule hit breaks a model-score tie, even for a later account id", () => {
+    const batch = tiedBatch(true, new Map([evidenceFor("Z", false)]), () => ({
+      score: 82.5,
+      band: "medium",
+    }));
+    expect(batch.rows.map((row) => row.account)).toEqual(["Z", "A"]);
+    expect(batch.rows[0]).toMatchObject({
+      hasRuleHit: true,
+      hasConfirmedRuleHit: false,
+    });
+    expect(batch.ruleApplication.state).toBe("measured");
+    expect(batch.ruleApplication.applied).toEqual(["period_correlation"]);
+  });
+
+  test("a confirmed hit outranks an unreviewed hit at the same score", () => {
+    const batch = tiedBatch(
+      true,
+      new Map([evidenceFor("Z", true), evidenceFor("A", false)]),
+      () => ({ score: 82.5, band: "medium" }),
+    );
+    expect(batch.rows.map((row) => row.account)).toEqual(["Z", "A"]);
+    expect(batch.rows[0]).toMatchObject({
+      hasRuleHit: true,
+      hasConfirmedRuleHit: true,
+    });
+    expect(batch.rows[1]).toMatchObject({
+      hasRuleHit: true,
+      hasConfirmedRuleHit: false,
+    });
+  });
+
+  test("a higher score still beats a lower score with a rule hit", () => {
+    const batch = tiedBatch(
+      true,
+      new Map([evidenceFor("A", false)]),
+      (account) =>
+        account === "A"
+          ? { score: 82.5, band: "medium" }
+          : { score: 95, band: "high" },
+    );
+    expect(batch.rows.map((row) => row.account)).toEqual(["Z", "A"]);
+    expect(batch.rows[1]?.hasRuleHit).toBe(true);
+  });
+
+  test("the tie-break is inert when no rule has five confirmed reviews", () => {
+    const batch = tiedBatch(false, new Map([evidenceFor("Z", false)]), () => ({
+      score: 82.5,
+      band: "medium",
+    }));
+    expect(batch.rows.map((row) => row.account)).toEqual(["A", "Z"]);
+    expect(batch.rows.find((row) => row.account === "Z")?.hasRuleHit).toBe(
+      false,
+    );
+    expect(batch.ruleApplication.state).toBe("not_applied");
+    expect(batch.ruleApplication.applied).toEqual([]);
+  });
+});
+
 describe("fraud priority queue (CLI)", () => {
   test("queue --json reports rows, totals and sources without a fitted model", () => {
     const root = track(buildFixtureRoot());
@@ -340,11 +562,49 @@ describe("fraud priority queue (CLI)", () => {
     expect(result.body.batch).toBeUndefined();
   });
 
-  test("queue build requires --dry-run", () => {
+  test("stale coverage warns but does not add a blocker", () => {
+    const root = track(buildFixtureRoot());
+    writeAt(root, "reports/security/bridge-coverage.json", {
+      schemaVersion: 1,
+      kind: "queue-bridge-coverage",
+      measuredAt: "2026-09-01T00:00:00.000Z",
+      population: "gslive-accounts",
+      matched: 102,
+      total: 2586,
+    });
+    const result = runCli(root, ["queue", "build", "--dry-run"]);
+    expect(result.code).toBe(1);
+    const details = (
+      result.body.error as {
+        details: {
+          readiness: {
+            blockers: { name: string }[];
+            warnings: { name: string; current: string; required: string }[];
+          };
+          bridge: { coverage: { evidence: string } };
+        };
+      }
+    ).details;
+    expect(details.readiness.warnings).toEqual([
+      {
+        name: "bridgeCoverageStaleness",
+        current: expect.any(String),
+        required: "<= 30d",
+      },
+    ]);
+    expect(
+      details.readiness.blockers.map((blocker) => blocker.name),
+    ).not.toContain("bridgeCoverageStaleness");
+    expect(details.bridge.coverage.evidence).toBe("artifact");
+  });
+
+  test("queue build requires --dry-run and says write mode is pending", () => {
     const root = track(buildFixtureRoot());
     const result = runCli(root, ["queue", "build"]);
     expect(result.code).toBe(2);
-    expect((result.body.error as { code: string }).code).toBe("usage_error");
+    const error = result.body.error as { code: string; message: string };
+    expect(error.code).toBe("usage_error");
+    expect(error.message).toContain("only the read-only build is implemented");
   });
 
   test("queue build counts confirmed flags per run, not just per seq", () => {

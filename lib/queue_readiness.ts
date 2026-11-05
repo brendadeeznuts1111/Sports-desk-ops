@@ -28,6 +28,17 @@ export interface QueueReadinessInput {
   readonly confirmedReviews: number;
   /** Per-rule confirmed-review support; a rule is applied only at the policy minimum. */
   readonly rules: readonly QueueRuleSupport[];
+  /**
+   * Age of the coverage measurement. Coverage is reported, not gated; a stale measurement emits a
+   * warning so a 200-day-old fallback does not look authoritative.
+   */
+  readonly bridgeCoverageAgeDays?: number | null | undefined;
+}
+
+export interface QueueReadinessWarning {
+  readonly name: "bridgeCoverageStaleness";
+  readonly current: string;
+  readonly required: string;
 }
 
 export interface QueueReadinessBlocker {
@@ -46,6 +57,8 @@ export interface QueueReadinessPolicy {
   readonly maxModelAgeDays: number;
   readonly minConfirmedReviews: number;
   readonly minConfirmedReviewsPerRule: number;
+  /** Coverage is not gated; an older measurement is a warning, not a refusal. */
+  readonly maxBridgeCoverageAgeDays: number;
 }
 
 export const DEFAULT_QUEUE_READINESS_POLICY: QueueReadinessPolicy = {
@@ -53,6 +66,7 @@ export const DEFAULT_QUEUE_READINESS_POLICY: QueueReadinessPolicy = {
   maxModelAgeDays: 7,
   minConfirmedReviews: 1,
   minConfirmedReviewsPerRule: 5,
+  maxBridgeCoverageAgeDays: 30,
 };
 
 export interface QueueRuleApplication {
@@ -65,6 +79,8 @@ export interface QueueReadiness {
   /** The batch may execute: fresh corpus/model, representative bridge, at least one review. */
   readonly ready: boolean;
   readonly blockers: readonly QueueReadinessBlocker[];
+  /** Reported problems that do not close the gate. */
+  readonly warnings: readonly QueueReadinessWarning[];
   /** Which rules may contribute a tie-break, and which are excluded and why. */
   readonly ruleApplication: {
     readonly ready: boolean;
@@ -83,6 +99,7 @@ export function assessQueueReadiness(
   policy: QueueReadinessPolicy = DEFAULT_QUEUE_READINESS_POLICY,
 ): QueueReadiness {
   const blockers: QueueReadinessBlocker[] = [];
+  const warnings: QueueReadinessWarning[] = [];
   if (input.corpusAgeHours > policy.maxCorpusAgeHours) {
     blockers.push({
       name: "corpusFreshness",
@@ -116,6 +133,18 @@ export function assessQueueReadiness(
       required: `>= ${policy.minConfirmedReviews} confirmed`,
     });
   }
+  const coverageAgeDays = input.bridgeCoverageAgeDays;
+  if (
+    coverageAgeDays !== null &&
+    coverageAgeDays !== undefined &&
+    coverageAgeDays > policy.maxBridgeCoverageAgeDays
+  ) {
+    warnings.push({
+      name: "bridgeCoverageStaleness",
+      current: `${coverageAgeDays.toFixed(1)}d`,
+      required: `<= ${policy.maxBridgeCoverageAgeDays}d`,
+    });
+  }
 
   const applied = input.rules
     .filter(
@@ -141,6 +170,7 @@ export function assessQueueReadiness(
   return {
     ready: blockers.length === 0,
     blockers,
+    warnings,
     ruleApplication: {
       ready: applicationBlockers.length === 0,
       applied,

@@ -23,6 +23,7 @@ describe("queue readiness gate", () => {
     ).toEqual({
       ready: true,
       blockers: [],
+      warnings: [],
       ruleApplication: {
         ready: true,
         applied: ["period_correlation", "batch_replay"],
@@ -30,6 +31,26 @@ describe("queue readiness gate", () => {
         blockers: [],
       },
     });
+  });
+
+  test("stale coverage warns without closing the gate", () => {
+    const readiness = assessQueueReadiness({
+      corpusAgeHours: 2,
+      modelAgeDays: 2,
+      bridgeCoverage: 0.0394,
+      bridgeRepresentative: true,
+      bridgeCoverageAgeDays: 45,
+      confirmedReviews: 10,
+      rules: [{ rule: "period_correlation", confirmedReviews: 6 }],
+    });
+    expect(readiness.ready).toBe(true);
+    expect(readiness.warnings).toEqual([
+      {
+        name: "bridgeCoverageStaleness",
+        current: "45.0d",
+        required: "<= 30d",
+      },
+    ]);
   });
 
   test("names every blocker and every rule that did not apply", () => {
@@ -246,6 +267,7 @@ describe("queue readiness gate", () => {
         maxModelAgeDays: 2,
         minConfirmedReviews: 10,
         minConfirmedReviewsPerRule: 10,
+        maxBridgeCoverageAgeDays: 30,
       },
     );
     expect(readiness.blockers.map((blocker) => blocker.name)).toEqual([

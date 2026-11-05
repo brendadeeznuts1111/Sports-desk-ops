@@ -50,11 +50,25 @@ export type FraudQueueModelSummary =
     }
   | { readonly present: false; readonly reason: string | null };
 
+/** Applied-rule evidence for one account. Unreviewed hits and reviewer-confirmed hits stay separate. */
+export interface FraudQueueRuleEvidence {
+  readonly hasRuleHit: boolean;
+  readonly hasConfirmedRuleHit: boolean;
+  readonly ruleHits: readonly string[];
+  readonly confirmedRuleHits: readonly string[];
+}
+
 export interface FraudQueueRow {
   readonly rank: number;
   readonly account: string;
   readonly agent: string | null;
   readonly model: FraudQueueScore | null;
+  /** Tie-break after the model score, never a bucket promotion or score bonus. */
+  readonly hasRuleHit: boolean;
+  /** Reviewer evidence for the same tie slot; confirmed hits sort ahead of unreviewed ones. */
+  readonly hasConfirmedRuleHit: boolean;
+  readonly ruleHits: readonly string[];
+  readonly confirmedRuleHits: readonly string[];
   readonly findings: Readonly<Record<FraudFindingSeverity, number>> & {
     readonly total: number;
   };
@@ -99,6 +113,12 @@ export interface FraudQueueInput {
   /** Per-account model score; omit when no artifact is fitted. Called once per eligible account. */
   readonly scoreOf?:
     ((accountId: string) => FraudQueueScore | null) | undefined;
+  /**
+   * Per-account evidence from rules the readiness gate applied. Omit when no rule reached the
+   * review minimum; the tie-break then contributes nothing.
+   */
+  readonly ruleEvidenceOf?:
+    ((accountId: string) => FraudQueueRuleEvidence | null) | undefined;
   readonly model?: FraudQueueModelSummary | undefined;
   readonly limit: number;
   readonly insufficient?: readonly string[] | undefined;
@@ -151,6 +171,13 @@ function compareRows(left: FraudQueueRow, right: FraudQueueRow): number {
     if (rightScore === null) return -1;
     return rightScore - leftScore;
   }
+  // Literal tie-break after the score: a 95 without a rule hit still beats an 82.5 with one.
+  if (left.hasRuleHit !== right.hasRuleHit) {
+    return left.hasRuleHit ? -1 : 1;
+  }
+  if (left.hasConfirmedRuleHit !== right.hasConfirmedRuleHit) {
+    return left.hasConfirmedRuleHit ? -1 : 1;
+  }
   if (left.bets !== right.bets) return right.bets - left.bets;
   return left.account < right.account
     ? -1
@@ -163,6 +190,7 @@ function reasonsFor(row: {
   findings: FraudQueueRow["findings"];
   flags: FraudQueueRow["flags"];
   model: FraudQueueScore | null;
+  ruleEvidence: FraudQueueRuleEvidence | null;
 }): string[] {
   const reasons: string[] = [];
   if (row.flags.suspectedBot > 0) {
@@ -202,6 +230,20 @@ function reasonsFor(row: {
       row.model.band === null
         ? `model score ${row.model.score}`
         : `model score ${row.model.score} (${row.model.band})`,
+    );
+  }
+  if (row.ruleEvidence !== null && row.ruleEvidence.hasRuleHit) {
+    reasons.push(
+      row.ruleEvidence.ruleHits.length === 0
+        ? "rule hit"
+        : `rule hit: ${row.ruleEvidence.ruleHits.join(", ")}`,
+    );
+  }
+  if (row.ruleEvidence !== null && row.ruleEvidence.hasConfirmedRuleHit) {
+    reasons.push(
+      row.ruleEvidence.confirmedRuleHits.length === 0
+        ? "confirmed rule hit"
+        : `confirmed rule hit: ${row.ruleEvidence.confirmedRuleHits.join(", ")}`,
     );
   }
   return reasons;
@@ -293,12 +335,22 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
       flags.suspectedBot + flags.reversedCredit + flags.manualLog;
     if (total === 0 && flagRows === 0) continue;
     const model = input.scoreOf?.(aggregate.account) ?? null;
+    const ruleEvidence = input.ruleEvidenceOf?.(aggregate.account) ?? null;
+    // Confirmed evidence is a subset of a hit; normalize so a direct caller cannot promote an
+    // account on confirmed evidence with no hit.
+    const hasRuleHit =
+      ruleEvidence?.hasRuleHit === true ||
+      ruleEvidence?.hasConfirmedRuleHit === true;
     const findingsBlock = { ...counts, total };
     candidates.push({
       rank: 0,
       account: aggregate.account,
       agent: aggregate.agent,
       model,
+      hasRuleHit,
+      hasConfirmedRuleHit: ruleEvidence?.hasConfirmedRuleHit === true,
+      ruleHits: ruleEvidence?.ruleHits ?? [],
+      confirmedRuleHits: ruleEvidence?.confirmedRuleHits ?? [],
       findings: findingsBlock,
       categories: [...(counted?.categories ?? [])].sort(),
       flags,
@@ -306,7 +358,12 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
       deskFlagRows,
       bets: aggregate.bets,
       lastBetAt: isoOrNull(aggregate.lastBetAtMs),
-      reasons: reasonsFor({ findings: findingsBlock, flags, model }),
+      reasons: reasonsFor({
+        findings: findingsBlock,
+        flags,
+        model,
+        ruleEvidence,
+      }),
     });
   }
 
@@ -326,6 +383,8 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
   rankBasis.push(
     "oddsDriftRows desc",
     "modelScore desc (null last)",
+    "hasRuleHit desc (applied rules only)",
+    "hasConfirmedRuleHit desc",
     "bets desc",
     "account asc",
   );
@@ -336,8 +395,9 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
       "finding or one desk-flag row (suspected bot, reversed credit, manual log, odds drift). " +
       "Order is lexicographic: the three strong desk interventions (suspected bot, reversed " +
       "credit, manual log), then account-subject findings by severity, then odds-drift rows, " +
-      "then the fitted model's 0-100 proxy score, then bet rows, then account id — no finding " +
-      "is turned into an invented point score. Odds drift is a corpus-wide line-movement signal " +
+      "then the fitted model's 0-100 proxy score, then applied-rule evidence (unreviewed hit, " +
+      "then confirmed hit), then bet rows, then account id — no finding is turned into an " +
+      "invented point score. Odds drift is a corpus-wide line-movement signal " +
       "(17.5% of rows here), so it ranks after the interventions and findings. The corpus's " +
       "detectors are mostly book/agent-level aggregates, so account-level finding counts are " +
       "usually 0; the model column is not a probability.",
@@ -357,6 +417,9 @@ export function buildFraudQueue(input: FraudQueueInput): FraudQueueResult {
         "of all accounts.",
       "No IP data is included here — use fraud_ip_graph for masked network clusters.",
       "Findings with insufficientData or the data_quality category do not rank an account.",
+      "Rule evidence is a tie-break after the model score and never adds points; only rules " +
+        "the readiness gate applied after >= 5 confirmed reviews can contribute. An account with " +
+        "a 95 without a rule hit still ranks ahead of an 82.5 with one.",
     ],
     model: input.model ?? { present: false, reason: null },
     totals: {

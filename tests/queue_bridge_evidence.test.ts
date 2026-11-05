@@ -99,12 +99,44 @@ describe("queue bridge evidence", () => {
     });
   });
 
-  test("a representative:false study is readable; the gate does the refusing", async () => {
+  test("a representative:false study with divergent intervals is readable", async () => {
     const dir = root();
-    writeAt(dir, QUEUE_BRIDGE_STUDY_REL_PATH, study({ representative: false }));
+    writeAt(
+      dir,
+      QUEUE_BRIDGE_STUDY_REL_PATH,
+      study({
+        representative: false,
+        covered: { n: 34, precision: 0.9, wilson: [0.75, 0.98] },
+        uncovered: { n: 21, precision: 0.2, wilson: [0.08, 0.42] },
+      }),
+    );
     const read = await readQueueBridgeStudy(dir);
     expect(read.present).toBe(true);
     expect(read.artifact?.representative).toBe(false);
+  });
+
+  test("representative:true is rejected when the intervals do not overlap", async () => {
+    const dir = root();
+    writeAt(
+      dir,
+      QUEUE_BRIDGE_STUDY_REL_PATH,
+      study({
+        representative: true,
+        covered: { n: 34, precision: 0.9, wilson: [0.75, 0.98] },
+        uncovered: { n: 21, precision: 0.2, wilson: [0.08, 0.42] },
+      }),
+    );
+    const read = await readQueueBridgeStudy(dir);
+    expect(read.present).toBe(false);
+    expect(read.reason).toContain("contradicts the Wilson intervals");
+  });
+
+  test("representative:false is rejected when the intervals overlap", async () => {
+    const dir = root();
+    writeAt(dir, QUEUE_BRIDGE_STUDY_REL_PATH, study({ representative: false }));
+    const read = await readQueueBridgeStudy(dir);
+    expect(read.present).toBe(false);
+    expect(read.reason).toContain("contradicts the Wilson intervals");
   });
 
   test("rejects an inverted Wilson interval", async () => {

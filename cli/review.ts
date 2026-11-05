@@ -1098,7 +1098,7 @@ export function buildFlagsMetricMetadata(
           study: "missing",
         },
         description:
-          "The other three execution gates (corpus, model, reviews) clear as data lands. This one requires a written study artifact at reports/security/bridge-representativeness.json; the gate reads `representative` and refuses if it is false or missing. Coverage is measured separately and is not a substitute for this study.",
+          "The other three execution gates (corpus, model, reviews) clear as data lands. This one requires a written study artifact at reports/security/bridge-representativeness.json; the gate reads `representative` and refuses if it is false or missing. The reader verifies `representative` against the covered and uncovered Wilson intervals, so the field cannot contradict the arms. Coverage is measured separately and is not a substitute for this study.",
       },
       {
         name: "queueEscalation",
@@ -1229,7 +1229,7 @@ export function buildFlagsMetricMetadata(
         value: 0.0394,
         derivedFrom: "measured",
         description:
-          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%), measured 2026-11-05T05:50Z. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones.",
+          "102/2,586 GSLive accounts resolve to a live F402 CustomerID (3.94%), measured 2026-11-05T05:50Z. Coverage is reported, not gated: representativeness decides whether the covered accounts stand in for the uncovered ones. A measurement older than 30 days emits bridgeCoverageStaleness as a warning, not a blocker.",
       },
       {
         name: "reviewedSamplePositiveRate",

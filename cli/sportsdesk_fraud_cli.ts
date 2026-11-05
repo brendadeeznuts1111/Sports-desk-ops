@@ -76,6 +76,7 @@ import {
   buildFraudQueue,
   type FraudQueueModelSummary,
   type FraudQueueResult,
+  type FraudQueueRuleEvidence,
   type FraudQueueScore,
 } from "../lib/fraud_queue.ts";
 import { buildFraudExploration } from "../lib/fraud_explore.ts";
@@ -95,12 +96,15 @@ import {
   type QueueReadinessInput,
   type QueueRuleSupport,
 } from "../lib/queue_readiness.ts";
+import { buildRuleEvidenceByCustomerRef } from "../lib/queue_rule_evidence.ts";
 import {
   FLAGS_REVIEW_DB_REL_PATH,
   readFlagReviews,
+  readReviewRuns,
+  type ReviewRunSummary,
   type StoredFlagReview,
 } from "./review.ts";
-import { DETERMINISTIC_RULES, type RuleName } from "./rules.ts";
+import { DETERMINISTIC_RULES, customerRefOf, type RuleName } from "./rules.ts";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 2;
@@ -678,11 +682,16 @@ function ageIn(
     : Number.POSITIVE_INFINITY;
 }
 
-function loadQueueReviews(path: string): readonly StoredFlagReview[] {
-  if (!existsSync(path)) return [];
+interface QueueLedger {
+  readonly reviews: readonly StoredFlagReview[];
+  readonly runs: readonly ReviewRunSummary[];
+}
+
+function loadQueueLedger(path: string): QueueLedger {
+  if (!existsSync(path)) return { reviews: [], runs: [] };
   const db = openSportsdeskSqliteReadonly(path);
   try {
-    return readFlagReviews(db);
+    return { reviews: readFlagReviews(db), runs: readReviewRuns(db) };
   } finally {
     db.close();
   }
@@ -777,6 +786,14 @@ function renderQueueReadiness(
       `    ${blocker.name}: ${blocker.current} (required ${blocker.required})`,
     );
   }
+  if (readiness.warnings.length > 0) {
+    lines.push("  warnings:");
+    for (const warning of readiness.warnings) {
+      lines.push(
+        `    ${warning.name}: ${warning.current} (required ${warning.required})`,
+      );
+    }
+  }
   lines.push("  rule application:");
   if (readiness.ruleApplication.applied.length === 0) {
     lines.push("    applied: none");
@@ -803,7 +820,7 @@ async function cmdQueueBuild(
   if (!flags.switches.has("--dry-run")) {
     usageError(
       "queue build",
-      "--dry-run is required; the batch is not enabled",
+      "--dry-run is required: only the read-only build is implemented; write mode is pending a persistence contract",
     );
   }
   const perception = await perceptionOf(context);
@@ -814,7 +831,8 @@ async function cmdQueueBuild(
     reviewArg === undefined
       ? join(context.root, FLAGS_REVIEW_DB_REL_PATH)
       : resolve(context.root, reviewArg);
-  const reviews = loadQueueReviews(reviewPath);
+  const ledger = loadQueueLedger(reviewPath);
+  const reviews = ledger.reviews;
   const coverageRead = await readQueueBridgeCoverage(context.root);
   const coverage =
     coverageRead.present && coverageRead.artifact !== null
@@ -866,6 +884,7 @@ async function cmdQueueBuild(
       study.present && study.artifact !== null
         ? study.artifact.representative
         : null,
+    bridgeCoverageAgeDays: ageIn(nowMs, coverage.measuredAt, 86_400_000),
     confirmedReviews: confirmedFlags.size,
     rules,
   };
@@ -906,7 +925,24 @@ async function cmdQueueBuild(
   }
 
   const limit = integerFlag("queue build", flags, "--limit", 25, 1, 100);
-  const queue = await buildQueue(context, perception, corpus, limit, model);
+  // The plan's customerRef is `customer:<sha256("customer:"+login)[:12]>`; hashing the queue
+  // account id is a conservative exact-identity join. Accounts whose F402 login differs from the
+  // GSLive user id need the durable customer master and will not match here.
+  const evidenceByRef = buildRuleEvidenceByCustomerRef(
+    ledger.runs,
+    ledger.reviews,
+    new Set(readiness.ruleApplication.applied),
+  );
+  const ruleEvidenceOf = (accountId: string): FraudQueueRuleEvidence | null =>
+    evidenceByRef.get(customerRefOf(accountId)) ?? null;
+  const queue = await buildQueue(
+    context,
+    perception,
+    corpus,
+    limit,
+    model,
+    ruleEvidenceOf,
+  );
   const batch = queueBatchBody(readiness, () => queue);
   return emitSuccess(context, "queue", {
     subcommand: "build",
@@ -927,6 +963,7 @@ async function buildQueue(
   corpus: FraudCorpus,
   limit: number,
   modelIn?: FraudModelRead,
+  ruleEvidenceOf?: (accountId: string) => FraudQueueRuleEvidence | null,
 ): Promise<FraudQueueResult> {
   const patterns = runFraudPatterns(perception);
   const model = modelIn ?? (await readFraudModel(context.root));
@@ -963,6 +1000,7 @@ async function buildQueue(
     corpus,
     findings: patterns.findings,
     scoreOf,
+    ruleEvidenceOf,
     model: modelSummary,
     limit,
     insufficient: patterns.insufficient,
@@ -1860,7 +1898,7 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       {
         flags: "build --dry-run",
         description:
-          "Call the readiness gate, print every blocker, and produce no queue rows.",
+          "Only mode implemented: call the readiness gate and build the queue in memory. Write mode is pending a persistence contract.",
       },
       {
         flags: "--review-db <path>",

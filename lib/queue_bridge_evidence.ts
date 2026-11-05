@@ -5,7 +5,8 @@
  *
  * `reports/security/bridge-coverage.json` counts the join. `reports/security/
  * bridge-representativeness.json` is the study; the readiness gate reads `representative` and
- * refuses when it is false or missing.
+ * refuses when it is false or missing. The reader also verifies `representative` against the two
+ * Wilson intervals, so a hand-written `true` cannot open the gate on divergent arms.
  */
 import { join } from "node:path";
 
@@ -223,6 +224,19 @@ export async function readQueueBridgeStudy(
   const representative = row["representative"];
   if (typeof representative !== "boolean") {
     return invalid(path, "representative must be a boolean");
+  }
+  // The field is a conclusion, not an independent input: covered and uncovered intervals must
+  // support it. Otherwise a hand-written `true` opens the gate on divergent arms.
+  const overlap =
+    covered.arm.wilson[0] <= uncovered.arm.wilson[1] &&
+    uncovered.arm.wilson[0] <= covered.arm.wilson[1];
+  if (representative !== overlap) {
+    return invalid(
+      path,
+      `representative=${String(representative)} contradicts the Wilson intervals, which ${
+        overlap ? "overlap" : "do not overlap"
+      }`,
+    );
   }
   const method = nonEmptyText(row["method"]);
   return {
