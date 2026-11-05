@@ -58,6 +58,7 @@
     "bench:capture": "bun run scripts/bench_capture.ts",
     "bench:score-layout": "bun run scripts/bench_score_layout.ts",
     "bench:graded-wager": "bun run scripts/bench_graded_wager.ts",
+    "bench:node-builtins": "bun run scripts/bench_node_builtins.ts",
     "graph:agent:views": "bun run scripts/build_agent_graph_views.ts",
     "graph:agent:readability": "bun run scripts/agent_graph_readability.ts",
     "graph:agent:judge": "bun run scripts/agent_graph_judge.ts",
