@@ -119,7 +119,7 @@ async function main(): Promise<void> {
         "--no-show-security-notice",
       ],
       cwd: REPO,
-      stdout: "pipe",
+      stdout: "ignore",
       stderr: "pipe",
     });
     const [code, err] = await Promise.all([proc.exited, proc.stderr.text()]);

@@ -123,7 +123,7 @@ async function readMacOsKeychainValue(
 ): Promise<string> {
   const proc = Bun.spawn(
     ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
-    { stdout: "pipe", stderr: "pipe", env: buildMinimalSpawnEnv() },
+    { stdout: "pipe", stderr: "ignore", env: buildMinimalSpawnEnv() },
   );
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<"timeout">((resolve) => {

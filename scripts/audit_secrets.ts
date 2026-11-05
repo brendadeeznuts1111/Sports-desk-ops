@@ -45,7 +45,7 @@ function isTestPath(path: string): boolean {
 async function trackedFiles(): Promise<string[]> {
   const child = Bun.spawn(["git", "ls-files", "*.ts", "*.js", "*.mjs"], {
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
   });
   const [out, code] = await Promise.all([child.stdout.text(), child.exited]);
   if (code !== 0) {
