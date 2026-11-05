@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 /**
  * Guards the runtime surface the capture and docs tooling actually calls.
@@ -529,6 +529,67 @@ describe("Bun capabilities used by the ops tooling", () => {
     ]) {
       expect(bun[name]).toBeUndefined();
     }
+  });
+
+  test("documented Bun variables keep their runtime kinds", () => {
+    // The 22 `const Bun.*` variables on the reference page. Access only: cron/plugin/sql/redis
+    // would schedule or connect if called, and password hashing is deliberately slow.
+    expect(Array.isArray(Bun.argv)).toBe(true);
+    expect(Bun.argv.every((arg) => typeof arg === "string")).toBe(true);
+    expect(Bun.argv[0]).toBe(process.execPath);
+
+    expect(typeof Bun.cron).toBe("function");
+    expect(typeof Bun.cron.parse).toBe("function");
+    expect(typeof Bun.cron.remove).toBe("function");
+
+    expect(Array.isArray(Bun.embeddedFiles)).toBe(true);
+    expect(typeof Bun.enableANSIColors).toBe("boolean");
+    expect(Bun.env).toBe(process.env);
+    expect(typeof Bun.fetch).toBe("function");
+
+    expect(typeof Bun.hash).toBe("function");
+    expect(typeof Bun.hash("x")).toBe("bigint");
+    for (const name of [
+      "adler32",
+      "crc32",
+      "cityHash32",
+      "murmur32v2",
+      "murmur32v3",
+      "xxHash32",
+    ] as const) {
+      expect(typeof Bun.hash[name]("x")).toBe("number");
+    }
+    for (const name of [
+      "wyhash",
+      "cityHash64",
+      "murmur64v2",
+      "rapidhash",
+      "xxHash3",
+      "xxHash64",
+    ] as const) {
+      expect(typeof Bun.hash[name]("x")).toBe("bigint");
+    }
+
+    expect(Bun.isMainThread).toBe(true);
+    expect(typeof Bun.isStandaloneExecutable).toBe("boolean");
+    expect(typeof Bun.main).toBe("string");
+    expect(isAbsolute(Bun.main)).toBe(true);
+
+    expect(typeof Bun.password.hash).toBe("function");
+    expect(typeof Bun.password.verify).toBe("function");
+    expect(typeof Bun.plugin).toBe("function");
+    expect(Bun.redis).toBeInstanceOf(Bun.RedisClient);
+    expect(typeof Bun.revision).toBe("string");
+    expect(Bun.s3).toBeInstanceOf(Bun.S3Client);
+    expect(typeof Bun.secrets.get).toBe("function");
+    expect(typeof Bun.secrets.set).toBe("function");
+    expect(typeof Bun.secrets.delete).toBe("function");
+    expect(Bun.sql).toBeInstanceOf(Bun.SQL);
+    for (const stream of [Bun.stdin, Bun.stdout, Bun.stderr]) {
+      expect(typeof stream.text).toBe("function");
+      expect(typeof stream.writer).toBe("function");
+    }
+    expect(Bun.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   test("version_with_sha is the version plus the short commit", () => {
