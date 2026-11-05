@@ -18,6 +18,7 @@ import {
   recordReviewPlan,
   validateFlagsMetricMetadata,
   wilsonInterval,
+  type BlockedByRef,
   type ReviewPlan,
   type StoredFlagReview,
 } from "../cli/review.ts";
@@ -294,9 +295,18 @@ describe("review ledger", () => {
       });
       recordReviewPlan(db, plan);
     }
+    const sampleOnly = planReviews(anomalies({ period_correlation: 100 }), {
+      runId: "history-sample-only",
+      wagerCount: 1000,
+      budget: DEFAULT_SAMPLING_BUDGET,
+      captureKey: "capture-sample-only",
+    });
+    const { flags: _flags, ...oldPlan } = sampleOnly;
+    recordReviewPlan(db, oldPlan);
     const runs = readReviewRuns(db);
     const history = buildFlagRateHistory(runs);
-    expect(history?.runs).toBe(3);
+    expect(history?.runs).toBe(4);
+    expect(history?.runsWithFullFlags).toBe(3);
     expect(history?.p50["period_correlation"]).toBeCloseTo(0.02, 10);
     const metadata = buildFlagsMetricMetadata(runs[2]!.plan, [], {
       flagRateHistory: history,
@@ -308,7 +318,11 @@ describe("review ledger", () => {
     ).toMatchObject({
       kind: "baseline",
       state: "measured",
-      value: { runs: 3, p50: { period_correlation: 0.02 } },
+      value: {
+        runs: 4,
+        runsWithFullFlags: 3,
+        p50: { period_correlation: 0.02 },
+      },
     });
     db.close();
   });
@@ -448,13 +462,10 @@ describe("flags metric metadata", () => {
         appliedTo: "normalized-priority",
       },
     });
-    expect(
-      (
-        metadata.definitions.find(
-          (definition) => definition.name === "ruleHitWeight",
-        )?.value as { confirmedByRule: Record<string, number> }
-      ).confirmedByRule["period_correlation"],
-    ).toBe(0);
+    const ruleHitWeight = metadata.definitions.find(
+      (definition) => definition.name === "ruleHitWeight",
+    )?.value as { confirmedByRule: Record<string, number> } | undefined;
+    expect(ruleHitWeight?.confirmedByRule["period_correlation"]).toBe(0);
     expect(
       metadata.definitions.find(
         (definition) => definition.name === "queuePriorityOrder",
@@ -521,16 +532,24 @@ describe("flags metric metadata", () => {
       blockedBy: "bridgeRepresentativenessStudy",
       value: { covered: 102, uncovered: 2484, measured: false },
     });
-    expect(
-      metadata.definitions.find(
-        (definition) => definition.name === "ruleApplication",
-      ),
-    ).toMatchObject({
+    const ruleApplication = metadata.definitions.find(
+      (definition) => definition.name === "ruleApplication",
+    );
+    expect(ruleApplication).toMatchObject({
       kind: "parameter",
       state: "not_measured",
       blockedBy: { name: "reviewRowsPerRule", layer: "application" },
-      value: { applied: [], notApplied: [] },
     });
+    const applicationValue = ruleApplication?.value as
+      | { applied: string[]; notApplied: { rule: string; n: number }[] }
+      | undefined;
+    expect(applicationValue?.applied).toEqual([]);
+    expect(applicationValue?.notApplied).toEqual(
+      expect.arrayContaining([
+        { rule: "period_correlation", n: 0 },
+        { rule: "batch_replay", n: 0 },
+      ]),
+    );
     expect(
       metadata.definitions.find(
         (definition) => definition.name === "allFlagRows",
@@ -575,6 +594,19 @@ describe("flags metric metadata", () => {
         { name: "reviewRowsPerRule", layer: "application" },
       ],
     });
+    const escalation = metadata.definitions.find(
+      (definition) => definition.name === "queueEscalation",
+    );
+    const blocked = escalation?.blockedBy;
+    const master = Array.isArray(blocked)
+      ? (blocked as readonly BlockedByRef[]).find(
+          (entry) => entry.name === "durableCustomerMaster",
+        )
+      : undefined;
+    expect(master?.layer).toBe("escalation");
+    expect(master?.description).toContain(
+      "full coverage is required only for escalation",
+    );
     expect(
       metadata.definitions.find((definition) => definition.name === "response"),
     ).toMatchObject({ kind: "caveat", value: "measurement-only" });
@@ -633,6 +665,64 @@ describe("flags metric metadata", () => {
       blockedBy: "reviewedSampleSize",
       n: 5,
     });
+  });
+
+  test("ruleApplication is partial until every reviewed rule clears the minimum", () => {
+    const partial = buildFlagsMetricMetadata(
+      plan,
+      reviewsFor(
+        plan,
+        Array.from({ length: 5 }, (_, index) => ({
+          seq: index,
+          rule: "batch_replay",
+          verdict: "confirmed" as const,
+        })),
+      ),
+    );
+    expect(
+      partial.definitions.find(
+        (definition) => definition.name === "ruleApplication",
+      ),
+    ).toMatchObject({
+      state: "partial",
+      blockedBy: { name: "reviewRowsPerRule", layer: "application" },
+      value: {
+        applied: ["batch_replay"],
+        notApplied: [{ rule: "period_correlation", n: 0 }],
+      },
+    });
+    expect(() => validateFlagsMetricMetadata(partial)).not.toThrow();
+
+    const complete = buildFlagsMetricMetadata(
+      plan,
+      reviewsFor(plan, [
+        ...Array.from({ length: 5 }, (_, index) => ({
+          seq: index,
+          rule: "batch_replay",
+          verdict: "confirmed" as const,
+        })),
+        ...Array.from({ length: 5 }, (_, index) => ({
+          seq: 100 + index,
+          rule: "period_correlation",
+          verdict: "confirmed" as const,
+        })),
+      ]),
+    );
+    const completeApplication = complete.definitions.find(
+      (definition) => definition.name === "ruleApplication",
+    );
+    expect(completeApplication).toMatchObject({
+      state: "measured",
+      value: { notApplied: [] },
+    });
+    const applied = (
+      completeApplication?.value as { applied: string[] } | undefined
+    )?.applied;
+    expect([...(applied ?? [])].sort()).toEqual([
+      "batch_replay",
+      "period_correlation",
+    ]);
+    expect(() => validateFlagsMetricMetadata(complete)).not.toThrow();
   });
 
   test("measures reviewer agreement from double reviews", () => {
@@ -747,6 +837,25 @@ describe("flags metric metadata", () => {
       ),
     };
     expect(() => validateFlagsMetricMetadata(good)).not.toThrow();
+
+    const blankDescription = {
+      ...good,
+      definitions: good.definitions.map((definition) =>
+        definition.name === "ruleApplication"
+          ? {
+              ...definition,
+              blockedBy: {
+                name: "reviewRowsPerRule",
+                layer: "application" as const,
+                description: "   ",
+              },
+            }
+          : definition,
+      ),
+    };
+    expect(() => validateFlagsMetricMetadata(blankDescription)).toThrow(
+      /empty description/,
+    );
   });
 
   test("refuses an unknown derivedFrom", () => {

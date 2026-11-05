@@ -10,11 +10,13 @@
 import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite, sqlInt } from "../lib/sportsdesk_sqlite.ts";
 import {
+  METRIC_DERIVED_FROM,
   METRIC_METADATA_KINDS,
   isMetricDerivedFrom,
   isMetricMetadataKind,
   type MetricDerivedFrom,
 } from "../lib/metric_metadata.ts";
+import { DEFAULT_QUEUE_READINESS_POLICY } from "../lib/queue_readiness.ts";
 import type { Anomaly, RuleName } from "./rules.ts";
 
 export const REVIEW_VERDICTS = [
@@ -519,20 +521,26 @@ export function readReviewRuns(db: Database): readonly ReviewRunSummary[] {
 
 export interface FlagRateHistory {
   readonly runs: number;
+  readonly runsWithFullFlags: number;
   readonly p50: Readonly<Record<string, number>>;
 }
 
-/** Per-rule median flag rate over persisted runs; null until enough history exists. */
+/**
+ * Per-rule median flag rate over runs that persisted every flag. Sample-only runs are counted in
+ * `runs` but excluded from the median: their denominator is the sample, not the wager count.
+ */
+
 export function buildFlagRateHistory(
   runs: readonly ReviewRunSummary[],
   minRuns = 3,
 ): FlagRateHistory | null {
-  const usable = runs.filter(
+  const timed = runs.filter(
     (run) => run.wagerCount > 0 && run.plan.rules.length > 0,
   );
-  if (usable.length < minRuns) return null;
+  const full = timed.filter((run) => (run.plan.flags?.length ?? 0) > 0);
+  if (full.length < minRuns) return null;
   const rates = new Map<string, number[]>();
-  for (const run of usable) {
+  for (const run of full) {
     for (const rule of run.plan.rules) {
       const list = rates.get(rule.rule) ?? [];
       list.push(rule.fired / run.wagerCount);
@@ -548,7 +556,11 @@ export function buildFlagRateHistory(
         ? sorted[middle]!
         : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
   }
-  return { runs: usable.length, p50 };
+  return {
+    runs: timed.length,
+    runsWithFullFlags: full.length,
+    p50,
+  };
 }
 
 export function readFlagReviews(
@@ -721,6 +733,8 @@ export type BlockedByLayer =
 export interface BlockedByRef {
   readonly name: string;
   readonly layer: BlockedByLayer;
+  /** Why this blocker exists and what clearing it would unlock; shown next to the layer. */
+  readonly description?: string;
 }
 
 export type BlockedBy =
@@ -938,6 +952,19 @@ export function buildFlagsMetricMetadata(
       .filter(([, row]) => row.confirmed !== undefined)
       .map(([rule, row]) => [rule, row.confirmed]),
   );
+  const minPerRule = DEFAULT_QUEUE_READINESS_POLICY.minConfirmedReviewsPerRule;
+  const appliedRules = Object.entries(confirmedByRule)
+    .filter(([, count]) => count >= minPerRule)
+    .map(([rule]) => rule);
+  const notAppliedRules = Object.entries(confirmedByRule)
+    .filter(([, count]) => count < minPerRule)
+    .map(([rule, n]) => ({ rule, n }));
+  const ruleApplicationState =
+    appliedRules.length === 0
+      ? "not_measured"
+      : notAppliedRules.length === 0
+        ? "measured"
+        : "partial";
   return {
     kind: "flags-metric-metadata",
     schemaVersion: 1,
@@ -968,12 +995,13 @@ export function buildFlagsMetricMetadata(
               },
               value: null,
               description:
-                "Historical per-rule flag-rate reference (P50 over recent captures); persist at least three runs to measure it.",
+                "Historical per-rule flag-rate reference (P50 over recent captures); needs at least three runs that persisted every flag. Sample-only runs use a different denominator and are excluded from the median.",
             }
           : {
               state: "measured",
               value: {
                 runs: options.flagRateHistory.runs,
+                runsWithFullFlags: options.flagRateHistory.runsWithFullFlags,
                 p50: options.flagRateHistory.p50,
               },
               description:
@@ -1045,17 +1073,20 @@ export function buildFlagsMetricMetadata(
       {
         name: "ruleApplication",
         kind: "parameter",
-        state: "not_measured",
-        blockedBy: {
-          name: "reviewRowsPerRule",
-          layer: "application",
-        },
+        state: ruleApplicationState,
+        blockedBy:
+          ruleApplicationState === "measured"
+            ? undefined
+            : {
+                name: "reviewRowsPerRule",
+                layer: "application",
+              },
         value: {
-          applied: [],
-          notApplied: [],
+          applied: appliedRules,
+          notApplied: notAppliedRules,
         },
         description:
-          "Per-run applied/not_applied rules. A rule below 5 confirmed reviews contributes no tie-break and appears in notApplied with its n, so a promoted account never hides which rule was excluded.",
+          "Per-run applied/not_applied rules. A rule below 5 confirmed reviews contributes no tie-break and appears in notApplied with its n, so a promoted account never hides which rule was excluded. partial means some rules applied and some did not.",
       },
       {
         name: "bridgeRepresentativeness",
@@ -1075,7 +1106,12 @@ export function buildFlagsMetricMetadata(
         kind: "caveat",
         state: "not_measured",
         blockedBy: [
-          { name: "durableCustomerMaster", layer: "escalation" },
+          {
+            name: "durableCustomerMaster",
+            layer: "escalation",
+            description:
+              "Execution proceeds at current coverage if bridgeRepresentativeness clears; full coverage is required only for escalation. The two blockers are the same data problem at different severity, so they do not resolve together.",
+          },
           { name: "corpusFreshness", layer: "execution" },
           { name: "modelFreshness", layer: "execution" },
           { name: "bridgeRepresentativeness", layer: "execution" },
@@ -1101,7 +1137,12 @@ export function buildFlagsMetricMetadata(
         kind: "parameter",
         state: "not_measured",
         blockedBy: [
-          { name: "durableCustomerMaster", layer: "escalation" },
+          {
+            name: "durableCustomerMaster",
+            layer: "escalation",
+            description:
+              "Execution proceeds at current coverage if bridgeRepresentativeness clears; full coverage is required only for escalation. The two blockers are the same data problem at different severity, so they do not resolve together.",
+          },
           { name: "reviewRowsPerRule", layer: "application" },
         ],
         value: [
@@ -1121,7 +1162,12 @@ export function buildFlagsMetricMetadata(
         kind: "parameter",
         state: "not_measured",
         blockedBy: [
-          { name: "durableCustomerMaster", layer: "escalation" },
+          {
+            name: "durableCustomerMaster",
+            layer: "escalation",
+            description:
+              "Execution proceeds at current coverage if bridgeRepresentativeness clears; full coverage is required only for escalation. The two blockers are the same data problem at different severity, so they do not resolve together.",
+          },
           ...(flagsPersisted
             ? []
             : [{ name: "allFlagRows", layer: "application" as const }]),
@@ -1258,7 +1304,7 @@ export function validateFlagsMetricMetadata(
       !isMetricDerivedFrom(row.derivedFrom)
     ) {
       throw new Error(
-        `flagsMetricMetadata: ${row.name}.derivedFrom "${row.derivedFrom}" is not sampled|measured|computed|extrapolated`,
+        `flagsMetricMetadata: ${row.name}.derivedFrom "${row.derivedFrom}" is not ${METRIC_DERIVED_FROM.join("|")}`,
       );
     }
     if (row.state === "not_measured" || row.state === "partial") {
@@ -1298,6 +1344,14 @@ export function validateFlagsMetricMetadata(
           if (entry.name.trim() === "") {
             throw new Error(
               `flagsMetricMetadata: ${row.name}.blockedBy has an empty name`,
+            );
+          }
+          if (
+            entry.description !== undefined &&
+            entry.description.trim() === ""
+          ) {
+            throw new Error(
+              `flagsMetricMetadata: ${row.name}.blockedBy "${entry.name}" has an empty description`,
             );
           }
         }
