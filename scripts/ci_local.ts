@@ -7,9 +7,12 @@
  *   bun run ci:local --keep-going    run every step, report all failures
  *   bun run ci:local --list          print the steps without running them
  *   bun run ci:local --install       include the `bun install --frozen-lockfile` step
+ *   bun run ci:local --event schedule replay the scheduled workflow (live CDN pin included)
  */
 import path from "node:path";
 import { parseArgs } from "node:util";
+
+import { stepMatchesEvent } from "../lib/ci_event_filter.ts";
 
 type Step = {
   job: string;
@@ -20,7 +23,8 @@ type Step = {
 
 const ROOT = path.join(import.meta.dir, "..");
 const WORKFLOW = path.join(ROOT, ".github/workflows/ci.yml");
-const USAGE = "usage: bun run ci:local [--list] [--keep-going] [--install]";
+const USAGE =
+  "usage: bun run ci:local [--list] [--keep-going] [--install] [--event <name>] [--scheduled]";
 
 function parseCli() {
   try {
@@ -30,6 +34,8 @@ function parseCli() {
         list: { type: "boolean", default: false },
         "keep-going": { type: "boolean", default: false },
         install: { type: "boolean", default: false },
+        event: { type: "string" },
+        scheduled: { type: "boolean", default: false },
       },
       strict: true,
     }).values;
@@ -66,24 +72,19 @@ async function loadSteps(): Promise<Step[]> {
 }
 
 const values = parseCli();
+const event = values.event ?? (values.scheduled ? "schedule" : "push");
 const steps = (await loadSteps()).filter(
   (step) => values.install || !step.run.startsWith("bun install"),
 );
-
-/**
- * Steps the workflow reserves for `schedule` or `workflow_dispatch`. Running them locally would
- * hit live origins (the CDN pin) and fail for a reason the push/PR workflow never exercises.
- */
-const workflowOnly = (step: Step): boolean =>
-  step.condition !== undefined &&
-  /\b(schedule|workflow_dispatch)\b/.test(step.condition) &&
-  !/\b(push|pull_request)\b/.test(step.condition);
+const runsForEvent = (step: Step): boolean =>
+  stepMatchesEvent(step.condition, event);
 
 if (values.list) {
+  console.log(`event: ${event}\n`);
   for (const [index, step] of steps.entries()) {
     console.log(
       `${String(index + 1).padStart(2)}. ${step.name}\n    ${step.run}${
-        workflowOnly(step) ? "\n    (workflow-only; skipped locally)" : ""
+        runsForEvent(step) ? "" : `\n    (skipped: ${step.condition ?? "if"})`
       }`,
     );
   }
@@ -91,11 +92,13 @@ if (values.list) {
 }
 
 const failed: string[] = [];
+let skipped = 0;
 const started = Bun.nanoseconds();
 for (const [index, step] of steps.entries()) {
-  if (workflowOnly(step)) {
+  if (!runsForEvent(step)) {
+    skipped += 1;
     console.log(
-      `\n↷ [${index + 1}/${steps.length}] ${step.name}\n  skipped: ${step.condition}`,
+      `\n↷ [${index + 1}/${steps.length}] ${step.name}\n  skipped for event=${event}: ${step.condition ?? "if"}`,
     );
     continue;
   }
@@ -127,7 +130,11 @@ for (const [index, step] of steps.entries()) {
 
 const total = ((Bun.nanoseconds() - started) / 1e9).toFixed(1);
 if (failed.length === 0) {
-  console.log(`\nci:local: ${steps.length} steps passed in ${total}s`);
+  console.log(
+    `\nci:local: ${steps.length - skipped} steps passed${
+      skipped > 0 ? `, ${skipped} skipped (event=${event})` : ""
+    } in ${total}s`,
+  );
 } else {
   console.log(
     `\nci:local: ${failed.length} failed in ${total}s:\n${failed.map((name) => `  - ${name}`).join("\n")}`,
