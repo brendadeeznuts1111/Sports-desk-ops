@@ -15,7 +15,7 @@
  * key halves and the four radix slots, compare the 8-byte key column as two little-endian u32
  * words (no BigInt read), and read the signed 64-bit net column as two u32 words (no BigInt read).
  */
-import { existsSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, fstatSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
@@ -175,6 +175,12 @@ function readFileBufferOwned(absolute: string): ArrayBuffer {
     const read = readSync(fd, bytes, 0, stat, 0);
     if (read !== stat) {
       throw new Error(`DOD6 spine truncated read: ${read} < ${stat}`);
+    }
+    const sizeAfter = fstatSync(fd).size;
+    if (sizeAfter !== stat) {
+      throw new Error(
+        `DOD6 spine size changed during read: ${stat} -> ${sizeAfter}`,
+      );
     }
     return assertOwnedWholeBuffer(bytes, "DOD6 spine");
   } finally {

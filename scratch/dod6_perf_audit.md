@@ -120,7 +120,9 @@ touched chain/field lines) inside that ArrayBuffer, not the size of the allocati
 - **mmap/truncation:** the owned-read path is kept, and open already asserts
   `fileSize === header.totalFileBytes` (word 8); a truncated spine returns `null`, and a file
   replaced between header validation and the full read throws, so it fails closed before any
-  section mount. This is the open-time assertion for the mmap assumption, not just a comment.
+  section mount. The full read also re-checks `fstatSync(fd).size` after the read, so a same-inode
+  grow/truncate during the read throws instead of mounting a stale-length buffer. This is the
+  open-time assertion for the mmap assumption, not just a comment.
 
 **Rejected:** `Bun.mmap` would cut the remaining 19–28 ms one-time read, but the reader is
 long-lived/per-cron and mmap has a documented truncation/segfault failure mode. The Bun 1.4.4
