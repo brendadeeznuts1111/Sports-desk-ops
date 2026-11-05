@@ -189,7 +189,7 @@ async function readPasswordHidden(): Promise<string> {
       env: buildMinimalSpawnEnv(),
     },
   );
-  const bytes = await new Response(proc.stdout).arrayBuffer();
+  const bytes = await Bun.readableStreamToArrayBuffer(proc.stdout);
   await proc.exited;
   output.write("\n");
   return new TextDecoder().decode(bytes);

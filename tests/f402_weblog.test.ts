@@ -62,7 +62,7 @@ async function compress(
   const stream = new Blob([text])
     .stream()
     .pipeThrough(new CompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  return new Uint8Array(await Bun.readableStreamToArrayBuffer(stream));
 }
 
 /** Feed `bytes` as chunks split at `boundaries`, so records straddle the chunk edges. */

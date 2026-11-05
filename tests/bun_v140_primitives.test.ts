@@ -21,7 +21,7 @@ async function compress(
   const stream = new Blob([text])
     .stream()
     .pipeThrough(new CompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  return new Uint8Array(await Bun.readableStreamToArrayBuffer(stream));
 }
 
 describe("Bun v1.4.0 primitives", () => {

@@ -158,6 +158,26 @@ describe("Bun capabilities used by the ops tooling", () => {
     expect(Math.abs(blurAspect - width / height)).toBeLessThan(0.15);
   });
 
+  test("readableStreamToArrayBuffer concatenates typed chunks", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+        controller.enqueue(new Uint8Array([3, 4, 5]));
+        controller.close();
+      },
+    });
+    const buffer = await Bun.readableStreamToArrayBuffer(stream);
+    expect(buffer).toBeInstanceOf(ArrayBuffer);
+    expect([...new Uint8Array(buffer)]).toEqual([1, 2, 3, 4, 5]);
+
+    const empty = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    expect((await Bun.readableStreamToArrayBuffer(empty)).byteLength).toBe(0);
+  });
+
   test("GlobScanOptions defaults exclude dotfiles, symlinked dirs and directories", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bun-glob-options-"));
     try {
