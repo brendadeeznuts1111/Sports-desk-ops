@@ -12,6 +12,7 @@
 
 import { env } from "bun";
 
+import { resolveBunServePort } from "../lib/bun_serve_port.ts";
 import { resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
 
 export interface ServiceSpec {
@@ -60,11 +61,7 @@ function portFrom(
 export function supervisedServices(
   environment: Readonly<Record<string, string | undefined>> = env,
 ): readonly ServiceSpec[] {
-  const webviewPort = portFrom(
-    environment,
-    "PORT",
-    portFrom(environment, "BUN_PORT", 4020),
-  );
+  const webviewPort = resolveBunServePort(environment);
   const blobPort = portFrom(environment, "BLOB_PORT", 4021);
   const services: ServiceSpec[] = [
     {

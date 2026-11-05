@@ -18,6 +18,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { resolveBunServePort } from "../lib/bun_serve_port.ts";
+
 export type CheckStatus = "ok" | "warn" | "fail";
 
 export interface Check {
@@ -265,14 +267,15 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
         : `"${shell}" --no-sandbox --remote-debugging-port=9222 about:blank   # or: ./bin/dx shot <url>`,
   });
 
-  const daemonUp = await probe("http://127.0.0.1:4020/health");
+  const daemonPort = resolveBunServePort(Bun.env);
+  const daemonUp = await probe(`http://127.0.0.1:${daemonPort}/health`);
   checks.push({
     id: "daemon",
     status: daemonUp ? "ok" : "warn",
     title: daemonUp
-      ? "webview daemon up on :4020 (WS hub reachable)"
-      : "webview daemon not running on :4020 (live WS panel falls back to polling)",
-    fix: "PORT=4020 bun run serve",
+      ? `webview daemon up on :${daemonPort} (WS hub reachable)`
+      : `webview daemon not running on :${daemonPort} (live WS panel falls back to polling)`,
+    fix: `PORT=${daemonPort} bun run serve`,
   });
 
   const dshDir = path.join(os.homedir(), ".dsh");

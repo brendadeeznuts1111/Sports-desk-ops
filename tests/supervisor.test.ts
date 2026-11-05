@@ -7,6 +7,7 @@ import {
   supervisedServices,
   supervisedServicesAsync,
 } from "../services/supervisor.ts";
+import { resolveBunServePort } from "../lib/bun_serve_port.ts";
 
 describe("service supervisor", () => {
   test("supervises the blob gateway only when its credentials exist", () => {
@@ -30,6 +31,32 @@ describe("service supervisor", () => {
       "run",
       "services/blob_and_live_bets_server.ts",
     ]);
+  });
+
+  test("mirrors Bun.serve's port cascade for the webview health URL", () => {
+    // Bun reads BUN_PORT before PORT and NODE_PORT; the supervisor must probe the same port
+    // the child will actually bind.
+    expect(
+      supervisedServices({ BUN_PORT: "4100", PORT: "4200" })[0]?.healthUrl,
+    ).toBe("http://127.0.0.1:4100/health");
+    expect(
+      supervisedServices({ PORT: "4200", NODE_PORT: "4300" })[0]?.healthUrl,
+    ).toBe("http://127.0.0.1:4200/health");
+    expect(supervisedServices({ NODE_PORT: "4300" })[0]?.healthUrl).toBe(
+      "http://127.0.0.1:4300/health",
+    );
+    expect(supervisedServices({})[0]?.healthUrl).toBe(
+      "http://127.0.0.1:3000/health",
+    );
+  });
+
+  test("skips empty or invalid port variables", () => {
+    expect(resolveBunServePort({ BUN_PORT: "nope", PORT: "4200" })).toBe(4200);
+    expect(resolveBunServePort({ BUN_PORT: "0", PORT: "4200" })).toBe(4200);
+    expect(
+      resolveBunServePort({ BUN_PORT: "", PORT: "  ", NODE_PORT: "4300" }),
+    ).toBe(4300);
+    expect(resolveBunServePort({})).toBe(3000);
   });
 
   test("resolves BLOB tokens from Bun.secrets without env leakage", async () => {
