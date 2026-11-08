@@ -137,7 +137,7 @@ const PATTERN_RULES: readonly PatternRule[] = [
     pattern:
       /\b(?:all\s+)?\d[\d,]*\+?\s+(?:per-office\b|(?:customer|downline|active|total)\s+accounts?\b|valid\s+(?:polymarket\s+)?wallets?\b|configured\s+(?:polymarket\s+)?wallets?\b)|(?:full-customer|customer|downline|polymarket|wallets?)\s*\(\d[\d,]*\+?\s+(?:accounts?|valid|wallets?|customers?)\)|\(\d[\d,]*\+?\s+(?:valid|wallets?|customers?)\)/gi,
     guidance:
-      "describe the wire filter or cohort rule (`type=\"B\"`, `valid 0x addresses`, `Full-Customer`) rather than a point-in-time entity count",
+      'describe the wire filter or cohort rule (`type="B"`, `valid 0x addresses`, `Full-Customer`) rather than a point-in-time entity count',
   },
 ];
 
@@ -275,7 +275,10 @@ export function readExpectedBunVersion(root: string): string {
       engines !== null &&
       typeof (engines as Record<string, unknown>).bun === "string"
     ) {
-      const ver = (engines as Record<string, string>).bun?.replace(/^[^\d]*/, "");
+      const ver = (engines as Record<string, string>).bun?.replace(
+        /^[^\d]*/,
+        "",
+      );
       if (ver) return ver;
     }
     const devDeps = record.devDependencies;
