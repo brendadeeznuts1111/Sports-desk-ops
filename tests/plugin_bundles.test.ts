@@ -22,28 +22,42 @@ const BUNDLES = [
   "dsh-plugin-security",
 ] as const;
 
+const isCI = Boolean(Bun.env.CI);
+const hasEnrichedCustomers = existsSync(
+  join(ROOT, "enriched_customers_full.json"),
+);
+
 describe("DSH plugin bundles", () => {
   for (const bundle of BUNDLES) {
-    test(`${bundle} verify-load passes`, async () => {
-      const harness = join(ROOT, bundle, "verify-load.mjs");
-      expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
-        true,
-      );
+    // dsh-plugin reads operator-only customer PII data (enriched_customers_full.json)
+    // which is gitignored and deliberately absent in CI (AGENTS.md:34-39).
+    const shouldSkip =
+      bundle === "dsh-plugin" && (isCI || !hasEnrichedCustomers);
 
-      const child = Bun.spawn([process.execPath, harness], {
-        cwd: join(ROOT, bundle),
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      const [stdout, stderr] = await Promise.all([
-        child.stdout.text(),
-        child.stderr.text(),
-      ]);
-      const exitCode = await child.exited;
-      const report = [stderr.trim(), stdout.trim()]
-        .filter((part) => part !== "")
-        .join("\n");
-      expect(exitCode, `${bundle} verify-load failed:\n${report}`).toBe(0);
-    }, 60_000);
+    test.skipIf(shouldSkip)(
+      `${bundle} verify-load passes`,
+      async () => {
+        const harness = join(ROOT, bundle, "verify-load.mjs");
+        expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
+          true,
+        );
+
+        const child = Bun.spawn([process.execPath, harness], {
+          cwd: join(ROOT, bundle),
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [stdout, stderr] = await Promise.all([
+          child.stdout.text(),
+          child.stderr.text(),
+        ]);
+        const exitCode = await child.exited;
+        const report = [stderr.trim(), stdout.trim()]
+          .filter((part) => part !== "")
+          .join("\n");
+        expect(exitCode, `${bundle} verify-load failed:\n${report}`).toBe(0);
+      },
+      60_000,
+    );
   }
 });

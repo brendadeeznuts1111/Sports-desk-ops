@@ -1,8 +1,7 @@
 # AGENTS.md — sportsdesk-ops
 
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
-portal and the VPS service. 790 tracked TypeScript files (318 test files), 186 files under
-`scripts/`. Bun **1.4.4**.
+portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
 
 ## Entrypoint and the gate chain
 
@@ -48,6 +47,12 @@ with `bun run audit:tool-calls`.
 
 ## Agent friction quick reference
 
+- **Anchor to the checkout root (`git rev-parse --show-toplevel`).** Always write repository code,
+  tests, and config inside the repository worktree — never into an isolated agent `$HOME` directory.
+- **Derive counts, never hardcode them in prose or code.** File, test, rule, and plugin counts drift
+  on every commit; state behavioral contracts instead and let `bun test`, `Bun.Glob`, or the
+  committed baseline files (`tests/bun_docs_surface_baseline.json`, `docs/artifacts.lock.json`)
+  enforce exactness.
 - **Read immediately before `edit`.** `bun fmt`, `docs:stage`, `artifacts:value` and the feed
   poller rewrite tracked files; a read taken before them is stale (`FS_STALE_VERSION`). Re-read
   after any formatter/generator.
@@ -69,7 +74,7 @@ with `bun run audit:tool-calls`.
 ## Layout
 
 `lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
-`tests/` (237 `*.test.ts` suites plus fixtures) plus **81 colocated tests in `lib/` and
+`tests/` (`*.test.ts` suites plus fixtures) plus **colocated `*.test.ts` suites in `lib/` and
 `scripts/`** (CI only runs `tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
 `docs/` · root runbooks (runtime shapes, guardrails, token architecture, R2/API, VPS domain).
 
@@ -103,7 +108,6 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
   wired by `code-project sync-environments --apply` (2026-11-02: it carries an environment id and
   `.env` is a 1Password-mounted pipe on the operator machine). Do not hand-write secrets into the
   repo.
-- `gs-manager-cli.zip` (31 KB) is untracked junk — do not commit it.
 - `~/platform` is an external policy checkout (pinned SHA in `.github/workflows/ci.yml`); without
   it `policy`-based scripts fail. Say so instead of disabling them.
 

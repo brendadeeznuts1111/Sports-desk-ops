@@ -60,7 +60,7 @@ Those four claims are resolved against Bun records, not memory:
   example is partial but accepted at runtime (measured on 1.4.4).
 - `api:Bun.markdown.ListItemMeta` — the `listItem` meta, including `checked?`.
 
-Record version: `bun-types` v1.4.3, resolved through the `bun-dev` MCP server. Record ids are cited in
+Record version: `bun-types` v1.4.4, resolved through the `bun-dev` MCP server. Record ids are cited in
 the references table below and are the strings to re-resolve after a Bun upgrade.
 
 Meta task list. Every item carries a **basis** (`[CODE]`, `[OBSERVED]`, `[UNVERIFIED]`, `[ASSUMPTION]`),

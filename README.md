@@ -280,9 +280,10 @@ All tokens and contracts are verified continuously through `lib/validation/token
 
 ### Test Suite Classification
 
-The suite is grouped by what it verifies. Assertion counts drift with every edit, so the numbers
-here are not pinned; the authoritative counts are what CI's `bun test` reports (last full local run
-2026-11-04: 2,763 passed, 49 skipped, 2,812 tests across 320 files).
+The suite is grouped by what it verifies. File and assertion counts change with every edit and are
+never pinned in prose; the authoritative execution surfaces are `bun test tests/` (the CI gate) and
+`bun test` (which additionally discovers colocated `*.test.ts` suites in `lib/` and `scripts/`, with
+scratch and generated gate paths excluded via `bunfig.toml` `[test].pathIgnorePatterns`).
 
 - **Token verification** (`tests/verify_tokens.test.ts`): zero-drift regeneration from
   `design/tokens.toml`, 24-bit colour uniqueness, CIEDE2000 perceptual separation, WCAG 2.1
@@ -308,11 +309,15 @@ See **[ROOT_LAYOUT.md](ROOT_LAYOUT.md)** for the full map. At a glance:
 ├── cli/              # sportsdesk_* CLIs (bun run cli, schema, replay, …)
 ├── services/         # webview daemon, Telegram bot, R2, churn engine, ingestion
 ├── catalog/          # Fantasy402 sport navigation catalog
-├── lib/              # shared modules, F402 capture, schema SSOT
-├── scripts/          # generators & capture; scripts/deploy/ for VPS/docs/reports
+├── lib/              # shared modules, F402 capture, schema SSOT (+ colocated *.test.ts)
+├── src/dod6/         # DOD6 v5.4 Merkle manifest, R2 layout & edge hydrator
+├── scripts/          # generators & capture; scripts/deploy/ for VPS/docs/reports (+ colocated *.test.ts)
+├── reports/          # surveillance outputs, ingestion-audit.jsonl & docs-review
 ├── static/           # token-compiled daemon HTML
 ├── docs/             # API evidence portal; docs/runbooks/ for long-form ops guides
-├── tests/            # bun test suites
+├── tests/            # bun test suites (CI gate target)
+├── verification/     # manager-boot-oracle slices & gen-tokens zero-drift gate
+├── dsh-plugin*/      # removable DeepSeek Harness plugin bundles (verify-load.mjs gated)
 ├── bin/dx            # operator entrypoint
 ├── design/           # tokens.toml + domain-branded-types.ts (gen:tokens)
 ├── schema/           # migrations, manifest.bin, schema preload
