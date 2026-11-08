@@ -4,7 +4,15 @@
  * against real codebase imports, Temporal primitives, prototype spies, and mock lifecycle matchers.
  */
 
-import { describe, expect, test, mock, spyOn } from "bun:test";
+import {
+  describe,
+  expect,
+  test,
+  mock,
+  spyOn,
+  setSystemTime,
+  jest,
+} from "bun:test";
 import {
   checkUnresolvedSentinels,
   buildSedScript,
@@ -260,6 +268,75 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
       const afterGc = process.memoryUsage().heapUsed;
       expect(afterGc).toBeGreaterThan(0);
       expect(beforeGc).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Pattern 9: System Time Manipulation & Identity Stability", () => {
+    test("mocks system clock while preserving Date constructor reference identity", () => {
+      const originalDate = Date;
+      const originalDateNow = Date.now;
+
+      setSystemTime(new Date("2020-01-01T00:00:00.000Z"));
+
+      expect(new Date().getUTCFullYear()).toBe(2020);
+      expect(Date.now()).toBe(1577836800000);
+
+      // In Bun, unlike Jest, Date constructor does not mutate or wrap
+      expect(Date).toBe(originalDate);
+      expect(Date.now).toBe(originalDateNow);
+
+      // Reset system clock to wall time
+      setSystemTime();
+      expect(new Date().getUTCFullYear()).toBeGreaterThan(2020);
+    });
+  });
+
+  describe("Pattern 10: Fake Timers and Deterministic Clock Progression", () => {
+    test("advances virtual clock without real sleep delay", () => {
+      jest.useFakeTimers();
+      let triggered = false;
+
+      setTimeout(() => {
+        triggered = true;
+      }, 60_000);
+
+      expect(triggered).toBe(false);
+      jest.advanceTimersByTime(59_999);
+      expect(triggered).toBe(false);
+      jest.advanceTimersByTime(1);
+      expect(triggered).toBe(true);
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe("Pattern 11: Dynamic Multi-Timezone Switching at Runtime", () => {
+    test("switches timezone dynamically across Intl and Date without restarting process", () => {
+      const originalTz = Bun.env.TZ;
+
+      try {
+        Bun.env.TZ = "America/Los_Angeles";
+        expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(
+          "America/Los_Angeles",
+        );
+        expect(new Date("2020-07-01T00:00:00.000Z").getTimezoneOffset()).toBe(
+          420,
+        ); // UTC-7 (PDT)
+
+        Bun.env.TZ = "America/New_York";
+        expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(
+          "America/New_York",
+        );
+        expect(new Date("2020-07-01T00:00:00.000Z").getTimezoneOffset()).toBe(
+          240,
+        ); // UTC-4 (EDT)
+      } finally {
+        if (originalTz !== undefined) {
+          Bun.env.TZ = originalTz;
+        } else {
+          delete Bun.env.TZ;
+        }
+      }
     });
   });
 });
