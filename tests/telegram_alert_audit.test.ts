@@ -97,7 +97,7 @@ describe("telegram alert audit", () => {
   });
 
   test("summary counts statuses and chats", async () => {
-    const root = await makeRoot();
+    const _root = await makeRoot();
     const summary = summarizeAlertAudit([
       row({ status: "sent" }),
       row({ status: "sent", chatId: "99", chatLabel: null }),

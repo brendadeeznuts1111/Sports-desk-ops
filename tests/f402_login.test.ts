@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   type LoginView,
   MissingF402CredentialsError,
@@ -233,6 +233,21 @@ describe("F402 login", () => {
 });
 
 describe("F402 credential sources", () => {
+  const origIsTTY = process.stdin.isTTY;
+  beforeAll(() => {
+    // Prevent interactive TTY prompt hangs when running tests standalone in terminal
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: false,
+      configurable: true,
+    });
+  });
+  afterAll(() => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: origIsTTY,
+      configurable: true,
+    });
+  });
+
   const store = new Map<string, string>([
     [`${SECRETS_SERVICE}/${SECRET_NAMES.agentId}`, "keychain-agent"],
     [`${SECRETS_SERVICE}/${SECRET_NAMES.password}`, "keychain-secret"],

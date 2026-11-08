@@ -6,7 +6,7 @@ import {
 /** Append-only batch marker (CLI may override with --run-id). */
 export type AuditRunId = string & { readonly __auditRunId: unique symbol };
 
-export function auditRunId(value: string = crypto.randomUUID()): AuditRunId {
+export function auditRunId(value: string = Bun.randomUUIDv7()): AuditRunId {
   return value as AuditRunId;
 }
 

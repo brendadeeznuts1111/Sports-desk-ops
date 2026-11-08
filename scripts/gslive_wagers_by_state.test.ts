@@ -1,5 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
+// Ambient typing for Bun native Temporal global under standard tsc
+declare namespace Temporal {
+  namespace Instant {
+    function fromEpochMilliseconds(epochMilliseconds: number): {
+      toZonedDateTimeISO(timeZone: string): {
+        year: number;
+        month: number;
+        day: number;
+        hour: number;
+        minute: number;
+        second: number;
+      };
+    };
+  }
+}
+
 import { z } from "zod";
 
 import {

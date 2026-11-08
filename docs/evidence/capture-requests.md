@@ -333,7 +333,7 @@ read-only unless the task is explicitly a deploy, and a VIP entry is live custom
 `tests/fixtures/f402-report-requests-observed-2026-11-01.json:188`). One caveat keeps that claim exact:
 `lib/f402_probe.ts:400-414` registers `Log/write` as a non-read-only probe, selected only under
 `--include-unconfirmed`, which the capture CLI also gates behind `--i-understand-mutations`
-(`scripts/capture/f402_probe.ts:370-375`). That probe builds its own body; it never replays the observed
+(`scripts/capture/f402_probe.ts:371-376`). That probe builds its own body; it never replays the observed
 one.
 
 **The acknowledgement `{"INFO":""}` was observed, and it is an empty string.** The paste recorded the
@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:1485-1504`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:1499-1518`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3233-3258`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3261-3281`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3296-3321`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3324-3344`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3313-3321`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3376-3384`).
 
 ## P7 — the customer report surface (7 candidates)
 

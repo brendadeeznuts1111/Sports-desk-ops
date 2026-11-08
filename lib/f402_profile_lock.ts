@@ -23,7 +23,6 @@
  * `staleMs` only when the caller knows its sessions are shorter.
  */
 
-import { randomUUID } from "node:crypto";
 import {
   existsSync,
   linkSync,
@@ -181,7 +180,8 @@ function createLockFile(
   payload: string,
   pid: number,
 ): boolean {
-  const tmpPath = `${lockPath}.${pid}.${randomUUID()}.tmp`;
+  const nonce = Bun.randomUUIDv7();
+  const tmpPath = `${lockPath}.${pid}.${nonce}.tmp`;
   try {
     writeFileSync(tmpPath, payload, {
       encoding: "utf8",

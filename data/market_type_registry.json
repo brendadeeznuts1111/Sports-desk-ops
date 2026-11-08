@@ -139,18 +139,7 @@
       "id": "spread",
       "parserKind": "spread",
       "family": "handicap/line vs opponent",
-      "periods": [
-        "game",
-        "1q",
-        "2q",
-        "3q",
-        "4q",
-        "1h",
-        "2h",
-        "1p",
-        "2p",
-        "3p"
-      ],
+      "periods": ["game", "1q", "2q", "3q", "4q", "1h", "2h", "1p", "2p", "3p"],
       "observed": [
         {
           "label": "point spread",
@@ -171,18 +160,7 @@
       "id": "total",
       "parserKind": "total",
       "family": "over/under on a combined score",
-      "periods": [
-        "game",
-        "1q",
-        "2q",
-        "3q",
-        "4q",
-        "1h",
-        "2h",
-        "1p",
-        "2p",
-        "3p"
-      ],
+      "periods": ["game", "1q", "2q", "3q", "4q", "1h", "2h", "1p", "2p", "3p"],
       "observed": [
         {
           "label": "total",
@@ -195,15 +173,7 @@
       "id": "team_total",
       "parserKind": "team_total",
       "family": "over/under on one team's score",
-      "periods": [
-        "game",
-        "1h",
-        "2h",
-        "1q",
-        "2q",
-        "3q",
-        "4q"
-      ],
+      "periods": ["game", "1h", "2h", "1q", "2q", "3q", "4q"],
       "observed": [
         {
           "label": "baltimore ravens team total",
@@ -224,9 +194,7 @@
       "id": "player_prop",
       "parserKind": "player_prop",
       "family": "player stat over/under",
-      "periods": [
-        "game"
-      ],
+      "periods": ["game"],
       "observed": [
         {
           "label": "total player touchdowns",
@@ -263,9 +231,7 @@
       "id": "prop",
       "parserKind": "prop",
       "family": "non-player prop (margin, first scorer, tree)",
-      "periods": [
-        "game"
-      ],
+      "periods": ["game"],
       "observed": [
         {
           "label": "winning margin",
@@ -278,57 +244,29 @@
       "id": "combo",
       "parserKind": null,
       "family": "ticket of ≥2 legs; Kalshi has no parlay product, Polymarket's combo product is wallet-scoped/RFQ",
-      "periods": [
-        "game"
-      ],
+      "periods": ["game"],
       "observed": [],
       "parserObserved": 0
     }
   ],
   "periods": {
     "tokens": {
-      "game": [
-        "Game",
-        "Match",
-        "Match (Including OT)"
-      ],
-      "1h": [
-        "1st Half"
-      ],
-      "2h": [
-        "2nd Half"
-      ],
-      "1q": [
-        "1st Quarter"
-      ],
-      "2q": [
-        "2nd Quarter"
-      ],
-      "3q": [
-        "3rd Quarter"
-      ],
-      "4q": [
-        "4th Quarter"
-      ],
-      "1p": [
-        "1st Period"
-      ],
-      "2p": [
-        "2nd Period"
-      ],
-      "3p": [
-        "3rd Period"
-      ],
-      "round": [
-        "1st Round"
-      ]
+      "game": ["Game", "Match", "Match (Including OT)"],
+      "1h": ["1st Half"],
+      "2h": ["2nd Half"],
+      "1q": ["1st Quarter"],
+      "2q": ["2nd Quarter"],
+      "3q": ["3rd Quarter"],
+      "4q": ["4th Quarter"],
+      "1p": ["1st Period"],
+      "2p": ["2nd Period"],
+      "3p": ["3rd Period"],
+      "round": ["1st Round"]
     }
   },
   "wagerComposition": {
     "scope": "all wagers: single + same-game / cross-game / cross-sport, 1-4 legs (5+ counted separately)",
-    "excluded": [
-      "futures"
-    ],
+    "excluded": ["futures"],
     "kinds": [
       "single",
       "same_game",
@@ -385,11 +323,7 @@
   "combos": {
     "definition": "A ticket with two or more picks/legs, or a wager code that appends total picks.",
     "minLegs": 2,
-    "wagerCodes": [
-      "P",
-      "T",
-      "I"
-    ],
+    "wagerCodes": ["P", "T", "I"],
     "observed": {
       "comboRows": 20,
       "singleRows": 230,
