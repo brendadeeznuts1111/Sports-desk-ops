@@ -10,16 +10,21 @@
  * ESM scripts, and the larger ones (dsh-plugin) import the checkout's TypeScript.
  */
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const BUNDLES = [
-  "dsh-plugin",
-  "dsh-plugin-sidebar",
-  "dsh-plugin-ui",
-  "dsh-plugin-watchlist-autobet",
-  "dsh-plugin-security",
+const BUNDLES = readdirSync(ROOT, { withFileTypes: true })
+  .filter(
+    (entry) => entry.isDirectory() && /^dsh-plugin(?:-|$)/.test(entry.name),
+  )
+  .map((entry) => entry.name)
+  .sort();
+
+const INVARIANT_FILES = [
+  "package.json",
+  "cordis.patch.yml",
+  "verify-load.mjs",
 ] as const;
 
 const isCI = Boolean(Bun.env.CI);
@@ -28,7 +33,27 @@ const hasEnrichedCustomers = existsSync(
 );
 
 describe("DSH plugin bundles", () => {
+  test("discovers at least one dsh-plugin* bundle at repository root", () => {
+    expect(BUNDLES.length).toBeGreaterThan(0);
+  });
+
+  if (BUNDLES.length === 0) {
+    throw new Error(
+      `No dsh-plugin* directories discovered in ${ROOT}; refusing vacuous pass`,
+    );
+  }
+
   for (const bundle of BUNDLES) {
+    test(`${bundle} declares required bundle manifest files`, () => {
+      const bundleDir = join(ROOT, bundle);
+      for (const file of INVARIANT_FILES) {
+        expect(
+          existsSync(join(bundleDir, file)),
+          `${bundle} is missing required ${file}`,
+        ).toBe(true);
+      }
+    });
+
     // dsh-plugin reads operator-only customer PII data (enriched_customers_full.json)
     // which is gitignored and deliberately absent in CI (AGENTS.md:34-39).
     const shouldSkip =
@@ -37,13 +62,14 @@ describe("DSH plugin bundles", () => {
     test.skipIf(shouldSkip)(
       `${bundle} verify-load passes`,
       async () => {
-        const harness = join(ROOT, bundle, "verify-load.mjs");
+        const bundleDir = join(ROOT, bundle);
+        const harness = join(bundleDir, "verify-load.mjs");
         expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
           true,
         );
 
         const child = Bun.spawn([process.execPath, harness], {
-          cwd: join(ROOT, bundle),
+          cwd: bundleDir,
           stdout: "pipe",
           stderr: "pipe",
         });

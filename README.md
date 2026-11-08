@@ -20,13 +20,13 @@ Always use **`./bin/dx`** as your primary entrypoint—it configures sandbox/hos
 ./bin/dx modes 9    # Mode 9: Pending Exposure (Stake vs Potential Payout vs Defined Liability)
 ./bin/dx modes 10   # Mode 10: Reconciliation (Report Totals vs Settled Tickets vs Ledger, Gap = $0.00)
 
-# 3. Audit all 13 Per-Office (type="B" customerID=<Office>) & Cross-Office (customerID="0") IP-Tracker Clusters
+# 3. Audit all Per-Office (type="B" customerID=<Office>) & Cross-Office (customerID="0") IP-Tracker Clusters
 ./bin/dx iptracker
 
-# 4. Run the 4-Week Full-Customer (9,435 accounts) CFB & NBA Parlay/Combo Backtest
+# 4. Run the 4-Week Full-Customer CFB & NBA Parlay/Combo Backtest
 ./bin/dx backtest
 
-# 5. Poll configured Polymarket wallets (23 valid), stage the 6-Tab Portal and publish to R2
+# 5. Poll configured Polymarket wallets (valid 0x addresses), stage the 6-Tab Portal and publish to R2
 #    Add SPORTSDESK_LIVE_INGEST=1 (Polymarket) and/or SPORTSDESK_LIVE_F402=1 (F402 probe)
 SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 ```
@@ -39,7 +39,7 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 
 - `./bin/dx status` — measured, not asserted: git, R2 S3 and Pages credentials, and a 3-second HEAD probe of the R2 portal (`DX_STATUS_OFFLINE=1` skips the probe). Each line says what it checked.
 - `./bin/dx setup [--replace]` — reports any real file (for example `~/.zshrc`) that `dx` declined to replace with a dotfiles symlink; `--replace` moves it to `<path>.dx-backup-<epoch>` and links.
-- `./bin/dx scripts [substring]` — the 200+ `package.json` scripts grouped by prefix; a substring lists the matching commands.
+- `./bin/dx scripts [substring]` — the `package.json` scripts grouped by prefix; a substring lists the matching commands.
 - `./bin/dx gslive <LOGIN>` — GSLive Partner 118 links for one account: the 7-parameter `#/reports/users` deep link (`bot=true`, desk-day ISO window, `text=player_<LOGIN>`) and the `#/events/bet-history` sidecar (`calcTime` / `betTime`, epoch `from`/`to`, raw `partnerUserId`).
 - `./bin/dx docs` / `./bin/dx docs gslive` — deployed docs portal URLs, or the GSLive surface section.
 - `./bin/dx stale -i <export>` — stale-line cohort over a bet-log export (CSV/JSON/JSONL); seeds on operator stale notes or graded-then-cancelled tickets, then clusters other customers on the same market and window.
@@ -87,7 +87,7 @@ bun test
 # 6. Run 24h sniper surveillance
 bun run cli winners -p 24h --limit 25
 
-# 7. Generate all 7 auditable surveillance reports
+# 7. Generate the auditable surveillance report bundle (reports/<timestamp>/MANIFEST.md)
 bun run reports -- --format table
 
 # 8. Run 52-week bettor churn simulation

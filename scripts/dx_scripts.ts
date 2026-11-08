@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
  * @file dx_scripts.ts
- * `./bin/dx scripts [filter] [--json]` — package.json has 200+ scripts and no index. This groups
- * them by their `prefix:` and lists the commands behind a name filter.
+ * `./bin/dx scripts [filter] [--json]` — groups `package.json` scripts by their `prefix:`
+ * and lists the commands behind a name filter.
  *
  *   ./bin/dx scripts            prefixes with counts and names (largest group first)
  *   ./bin/dx scripts schema     every script whose name contains "schema", with its command
