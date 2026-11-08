@@ -102,6 +102,7 @@ depth = 8
 # Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
 pathIgnorePatterns = [
   "scratch/**",
+  "Scratch/**",
   "verification/gen-tokens-zero-drift-gate/out/**",
 ]
 
@@ -113,6 +114,7 @@ coveragePathIgnorePatterns = [
   "tests/**",
   "verification/**",
   "scratch/**",
+  "Scratch/**",
   "dist/**",
   "docs/**",
 ]
