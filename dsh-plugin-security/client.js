@@ -208,6 +208,16 @@ window.__ModuleLoader__.load({
     const MAX_QUEUE_REASONS = 3;
     const MAX_CALIBRATION_BINS = 10;
     /** Data value -> locale key maps (API strings stay data, labels stay local). */
+    /** Integrity statuses this client understands; anything else renders "not reported". */
+    const INTEGRITY_STATUS_KEYS = Object.freeze({
+      verified: "integrityVerified",
+      incomplete: "integrityIncomplete",
+      invalid: "integrityInvalid",
+      unavailable: "integrityUnavailable",
+    });
+    const SETTLEMENT_STATUS_KEYS = Object.freeze({
+      unverified: "settlementUnverified",
+    });
     const SEVERITY_LABEL_KEYS = Object.freeze({
       critical: "severityCritical",
       high: "severityHigh",
@@ -298,6 +308,26 @@ window.__ModuleLoader__.load({
         sourceRecords: "Records",
         sourceAge: "Age",
         sourceNote: "Note",
+        /* Overview posture strip */
+        postureSources: "Sources measured",
+        postureAllOk: "all measured",
+        postureStale: "{count} stale",
+        postureMissing: "{count} missing",
+        postureCorpus: "Corpus rows",
+        postureModel: "Model",
+        postureFlags: "Desk-flagged rows",
+        postureIntegrity: "Bet-group integrity",
+        postureSettlement: "Settlement",
+        integrityNotReported: "not reported",
+        integrityVerified: "verified",
+        integrityIncomplete: "incomplete",
+        integrityInvalid: "invalid",
+        integrityUnavailable: "unavailable",
+        integrityGroups: "groups",
+        integrityCrossPlayer: "cross-player",
+        integrityConflicts: "conflicts",
+        settlementUnverified: "unverified",
+        settlementNoLedger: "no same-book ledger",
         sourcePath: "Path",
         sourceSha: "sha256",
         sourceReason: "Reason",
@@ -655,6 +685,26 @@ window.__ModuleLoader__.load({
         sourceRecords: "记录数",
         sourceAge: "数据龄",
         sourceNote: "说明",
+        /* Overview posture strip */
+        postureSources: "已测量来源",
+        postureAllOk: "全部已测量",
+        postureStale: "{count} 个过期",
+        postureMissing: "{count} 个缺失",
+        postureCorpus: "语料行数",
+        postureModel: "模型",
+        postureFlags: "工作台标记行",
+        postureIntegrity: "注单组完整性",
+        postureSettlement: "结算核验",
+        integrityNotReported: "未报告",
+        integrityVerified: "已验证",
+        integrityIncomplete: "不完整",
+        integrityInvalid: "无效",
+        integrityUnavailable: "不可用",
+        integrityGroups: "注单组",
+        integrityCrossPlayer: "跨用户",
+        integrityConflicts: "字段冲突",
+        settlementUnverified: "未核验",
+        settlementNoLedger: "缺少同盘结算账本",
         sourcePath: "路径",
         sourceSha: "sha256",
         sourceReason: "原因",
@@ -1497,6 +1547,43 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Bet-group integrity from the status payload. Returns null for a missing block or an
+     * unsupported schemaVersion/status: the page must say "not reported", never "clean".
+     * @param {Record<string, unknown> | null} payload
+     * @returns {{ status: string, groups: number | null, crossPlayer: number | null, conflicts: number | null } | null}
+     */
+    function readIntegrity(payload) {
+      if (payload === null) return null;
+      const integrity = isRecord(payload.integrity) ? payload.integrity : null;
+      if (integrity === null || integrity.schemaVersion !== 1) return null;
+      const status = readText(integrity.status);
+      if (status === null || !(status in INTEGRITY_STATUS_KEYS)) return null;
+      const counters = isRecord(integrity.counters) ? integrity.counters : {};
+      return {
+        status,
+        groups: readNumber(counters.groups),
+        crossPlayer: readNumber(counters.crossPlayerGroups),
+        conflicts: readNumber(counters.ticketFieldConflicts),
+      };
+    }
+
+    /**
+     * Settlement verification is a separate contract field, never folded into integrity.
+     * @param {Record<string, unknown> | null} payload
+     * @returns {{ status: string, blockedBy: string | null } | null}
+     */
+    function readSettlementVerification(payload) {
+      if (payload === null) return null;
+      const settlement = isRecord(payload.settlementVerification)
+        ? payload.settlementVerification
+        : null;
+      if (settlement === null) return null;
+      const status = readText(settlement.status);
+      if (status === null) return null;
+      return { status, blockedBy: readText(settlement.blockedBy) };
+    }
+
+    /**
      * Normalize the status model summary (ModelState); never invents metrics.
      * @param {Record<string, unknown> | null} payload
      * @returns {{ present: boolean, path: string | null, fittedAt: string | null, metrics: Record<string, unknown> | null, limits: string[], reason: string | null, command: string | null } | null}
@@ -2220,10 +2307,19 @@ window.__ModuleLoader__.load({
         sources.map((source) =>
           h(
             "div",
-            { className: "sec-source", key: source.id },
+            {
+              className: "sec-source",
+              key: source.id,
+              "data-state": source.state,
+            },
             h(
               "div",
               { className: "sec-source-head" },
+              h("span", {
+                className: "sec-state-dot",
+                "data-state": source.state,
+                "aria-hidden": "true",
+              }),
               h("span", { className: "sec-source-name" }, source.label),
               h("span", { className: "sec-source-id sec-mono" }, source.id),
               chip(sourceStateText(t, source.state), {
@@ -2427,6 +2523,8 @@ window.__ModuleLoader__.load({
       const corpus = readCorpus(statusPayload);
       const model = readModelState(statusPayload);
       const nextStep = readNextStep(statusPayload);
+      const integrity = readIntegrity(statusPayload);
+      const settlement = readSettlementVerification(statusPayload);
       const weblogEntry = snapshot.weblog;
       const weblog = readWeblog(weblogEntry.payload);
       const betsEntry = snapshot.bets;
@@ -2739,6 +2837,127 @@ window.__ModuleLoader__.load({
         { key: "bets" },
       );
 
+      /**
+       * Posture strip: the first questions an operator asks, answered from the payloads
+       * already measured above. Every value is derived — no pinned counts.
+       */
+      const okSources = sources.filter(
+        (source) => source.state === "ok",
+      ).length;
+      const staleSources = sources.filter(
+        (source) => source.state === "stale",
+      ).length;
+      const missingSources = sources.filter(
+        (source) =>
+          source.state === "missing" ||
+          source.state === "session_expired" ||
+          source.state === "unreadable",
+      ).length;
+      const postureTone =
+        missingSources > 0
+          ? "error"
+          : staleSources > 0
+            ? "warn"
+            : sources.length === 0
+              ? "muted"
+              : "ok";
+      // Compose every non-ok state, so "6/11" is explained rather than guessed.
+      const postureParts = [];
+      if (staleSources > 0) {
+        postureParts.push(t("postureStale", { count: staleSources }));
+      }
+      if (missingSources > 0) {
+        postureParts.push(t("postureMissing", { count: missingSources }));
+      }
+      const postureSub =
+        sources.length === 0
+          ? t("notAvailable")
+          : postureParts.length === 0
+            ? t("postureAllOk")
+            : postureParts.join(" · ");
+      const postureTile = (key, tone, label, value, sub) =>
+        h(
+          "div",
+          { className: "sec-posture-tile", key, "data-tone": tone },
+          h("span", { className: "sec-posture-label" }, label),
+          h("span", { className: "sec-posture-value" }, value),
+          sub === null
+            ? null
+            : h("span", { className: "sec-posture-sub" }, sub),
+        );
+      const posture = h(
+        "div",
+        { className: "sec-posture", key: "posture" },
+        postureTile(
+          "sources",
+          postureTone,
+          t("postureSources"),
+          `${formatInteger(okSources) ?? "0"} / ${formatInteger(sources.length) ?? "0"}`,
+          postureSub,
+        ),
+        postureTile(
+          "corpus",
+          "muted",
+          t("postureCorpus"),
+          formatInteger(corpus?.rows) ?? t("notAvailable"),
+          `${t("corpusAccounts")}: ${formatInteger(corpus?.accounts) ?? t("notAvailable")}`,
+        ),
+        postureTile(
+          "model",
+          model === null ? "muted" : model.present ? "ok" : "warn",
+          t("postureModel"),
+          model === null
+            ? t("modelUnknown")
+            : model.present
+              ? t("modelFitted")
+              : t("modelNotFitted"),
+          model !== null && model.present
+            ? `${t("modelAuc")}: ${formatFixed(model.metrics?.aucRoc, 3) ?? t("notAvailable")}`
+            : null,
+        ),
+        postureTile(
+          "flags",
+          "muted",
+          t("postureFlags"),
+          formatInteger(aggregate?.suspectedBot) ?? t("notAvailable"),
+          `${t("sourceRecords")}: ${formatInteger(aggregate?.rows) ?? t("notAvailable")}`,
+        ),
+        postureTile(
+          "integrity",
+          integrity === null
+            ? "muted"
+            : integrity.status === "verified"
+              ? "ok"
+              : integrity.status === "invalid"
+                ? "error"
+                : integrity.status === "unavailable"
+                  ? "muted"
+                  : "warn",
+          t("postureIntegrity"),
+          integrity === null
+            ? t("integrityNotReported")
+            : labelOf(t, INTEGRITY_STATUS_KEYS, integrity.status),
+          integrity === null
+            ? null
+            : `${t("integrityGroups")}: ${formatInteger(integrity.groups) ?? t("notAvailable")} · ${t("integrityCrossPlayer")}: ${formatInteger(integrity.crossPlayer) ?? t("notAvailable")} · ${t("integrityConflicts")}: ${formatInteger(integrity.conflicts) ?? t("notAvailable")}`,
+        ),
+        postureTile(
+          "settlement",
+          settlement === null
+            ? "muted"
+            : settlement.status === "unverified"
+              ? "warn"
+              : "muted",
+          t("postureSettlement"),
+          settlement === null
+            ? t("integrityNotReported")
+            : labelOf(t, SETTLEMENT_STATUS_KEYS, settlement.status),
+          settlement === null || settlement.blockedBy === null
+            ? null
+            : t("settlementNoLedger"),
+        ),
+      );
+
       return h(
         "div",
         {
@@ -2746,11 +2965,10 @@ window.__ModuleLoader__.load({
           id: "sec-panel-overview",
           role: "tabpanel",
         },
+        posture,
         sourceCard,
-        corpusCard,
-        modelCard,
-        weblogCard,
-        betsCard,
+        h("div", { className: "sec-overview-pair" }, [corpusCard, modelCard]),
+        h("div", { className: "sec-overview-pair" }, [weblogCard, betsCard]),
         h("p", { className: "sec-note" }, t("overviewHint")),
       );
     }
@@ -5285,6 +5503,31 @@ window.__ModuleLoader__.load({
 .sec-breakdown .sec-list { margin-top: 0; padding-left: 0; list-style: none; gap: 2px; }
 .sec-breakdown-rows { color: var(--dsw-alias-label-secondary); }
 .sec-tabpanel > .sec-note { margin-top: 4px; }
+/* Overview posture strip: derived values, tone-accented, tabular numerals. */
+.sec-posture { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.sec-posture-tile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 14px 16px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: linear-gradient(180deg, var(--dsw-alias-bg-layer-2), var(--dsw-alias-bg-layer-1)); overflow: hidden; }
+.sec-posture-tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--dsw-alias-border-l2); }
+.sec-posture-tile[data-tone='ok']::before { background: var(--dsw-alias-state-success-primary); }
+.sec-posture-tile[data-tone='warn']::before { background: var(--dsw-alias-state-warn-primary); }
+.sec-posture-tile[data-tone='error']::before { background: var(--dsw-alias-state-error-primary); }
+.sec-posture-label { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; }
+.sec-posture-value { font-size: 20px; line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sec-posture-sub { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.sec-overview-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+/* Sources stay scannable: two columns on wide pages, one on narrow ones. */
+.sec-matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 0 24px; }
+.sec-source { min-width: 0; }
+.sec-source:nth-child(-n + 2) { border-top: 0; padding-top: 0; }
+.sec-source-line { overflow-wrap: anywhere; }
+.sec-state-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--dsw-alias-label-secondary); }
+.sec-state-dot[data-state='ok'] { background: var(--dsw-alias-state-success-primary); }
+.sec-state-dot[data-state='stale'] { background: var(--dsw-alias-state-warn-primary); }
+.sec-state-dot[data-state='missing'], .sec-state-dot[data-state='session_expired'], .sec-state-dot[data-state='unreadable'] { background: var(--dsw-alias-state-error-primary); }
+.sec-source { transition: border-top-color 120ms ease; }
+.sec-source[data-state='missing'], .sec-source[data-state='session_expired'], .sec-source[data-state='unreadable'] { border-top-color: var(--dsw-alias-state-error-primary); }
+.sec-card { transition: border-color 120ms ease; }
+.sec-card:hover { border-color: var(--dsw-alias-border-l2); }
+.sec-card-title { letter-spacing: 0.01em; }
 `;
 
     /** Decorative sidebar glyph; the host owns the entry's color and label. */
