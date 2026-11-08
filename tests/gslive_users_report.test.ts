@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   USERS_REPORT_BASE_URL,
@@ -7,6 +10,7 @@ import {
   buildUsersReportUrl,
   captureUsersReport,
   compareUsersReportToCorpus,
+  readUsersReportArtifact,
   redactUsersReportRows,
   usersReportStringHash,
 } from "../lib/gslive_users_report.ts";
@@ -129,7 +133,7 @@ describe("users-report capture", () => {
             ),
         }),
       ),
-    ).rejects.toMatchObject({ code: "session_expired" });
+    ).rejects.toMatchObject({ code: "auth_expired" });
   });
 
   test("an error envelope is a refusal, never an empty report", async () => {
@@ -183,7 +187,7 @@ describe("users-report capture", () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ code: "session_expired" });
+    ).rejects.toMatchObject({ code: "auth_expired" });
     expect(calls).toBe(0);
   });
 });
@@ -260,5 +264,201 @@ describe("users-report comparison", () => {
     expect(() =>
       compareUsersReportToCorpus(report, aggregateCorpusTickets(corpusBets)),
     ).toThrow(UsersReportError);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Artifact provenance + freshness                                             */
+/* -------------------------------------------------------------------------- */
+
+const WORK = mkdtempSync(join(tmpdir(), "users-report-"));
+afterAll(() => rmSync(WORK, { recursive: true, force: true }));
+
+function artifactFor(
+  rows: readonly Record<string, number | boolean | null | string>[],
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const report = redactUsersReportRows(rows);
+  return {
+    schemaVersion: 1,
+    kind: "gslive-users-report-capture",
+    capturedAt: new Date().toISOString(),
+    rawSha256: "a".repeat(64),
+    fromEpochSec: 100,
+    toEpochSec: 200,
+    partnerId: 118,
+    envelope: "array",
+    sessionSource: "test",
+    report,
+    ...overrides,
+  };
+}
+
+function writeJson(name: string, value: unknown): string {
+  const path = join(WORK, name);
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+  return path;
+}
+
+function runCompare(
+  reportPath: string,
+  corpusPath: string,
+): {
+  code: number;
+  body: Record<string, unknown>;
+  stderr: string;
+} {
+  const script = join(
+    import.meta.dir,
+    "..",
+    "scripts",
+    "gslive_users_report_compare.ts",
+  );
+  const proc = Bun.spawnSync({
+    cmd: [
+      process.execPath,
+      script,
+      "--report",
+      reportPath,
+      "--corpus",
+      corpusPath,
+    ],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(proc.stdout.toString()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  return {
+    code: proc.exitCode ?? -1,
+    body,
+    stderr: proc.stderr.toString(),
+  };
+}
+
+describe("users-report artifact provenance", () => {
+  test("a fresh provenance-stamped artifact is accepted", () => {
+    const assessment = readUsersReportArtifact(
+      artifactFor([{ userID: 1, stake: 10 }]),
+      { maxAgeMinutes: 60 },
+    );
+    expect(assessment.status).toBe("fresh");
+    expect(assessment.artifact.rawSha256).toHaveLength(64);
+  });
+
+  test("an old artifact is stale", () => {
+    const raw = artifactFor([{ userID: 1 }], {
+      capturedAt: "2020-01-01T00:00:00.000Z",
+    });
+    const assessment = readUsersReportArtifact(raw, { maxAgeMinutes: 60 });
+    expect(assessment.status).toBe("stale");
+    expect(assessment.reasons.length).toBeGreaterThan(0);
+  });
+
+  test("a bare report or a missing digest is refused", () => {
+    expect(() =>
+      readUsersReportArtifact(
+        {
+          report: {
+            rows: [],
+            columns: [],
+            numericColumns: [],
+            stringColumns: [],
+          },
+        },
+        { maxAgeMinutes: 60 },
+      ),
+    ).toThrow(UsersReportError);
+    expect(() =>
+      readUsersReportArtifact(
+        artifactFor([{ userID: 1 }], { rawSha256: "not-a-digest" }),
+        { maxAgeMinutes: 60 },
+      ),
+    ).toThrow(UsersReportError);
+  });
+});
+
+describe("compare CLI statuses", () => {
+  const corpus = {
+    from: 100,
+    to: 200,
+    r: {
+      bets: [
+        {
+          betGroupId: "g1",
+          userID: "1",
+          partnerUserID: "player_A",
+          bet: "100",
+          betGroupResult: "-50",
+        },
+      ],
+    },
+  };
+
+  test("fresh artifact with a matching window exits 0 and prints the join", () => {
+    const report = writeJson(
+      "fresh.json",
+      artifactFor([{ userID: 1, stake: 100 }]),
+    );
+    const corpusPath = writeJson("corpus.json", corpus);
+    const result = runCompare(report, corpusPath);
+    expect(result.code).toBe(0);
+    expect(result.body["status"]).toBe("ok");
+    const join = result.body["join"] as Record<string, unknown>;
+    expect(join["idColumn"]).toBe("userID");
+    expect(join["matchedIds"]).toBe(1);
+    expect(result.body["reportRows"]).toBe(1);
+  });
+
+  test("a stale artifact exits 6 before comparing", () => {
+    const report = writeJson(
+      "stale.json",
+      artifactFor([{ userID: 1 }], { capturedAt: "2020-01-01T00:00:00.000Z" }),
+    );
+    const corpusPath = writeJson("corpus-stale.json", corpus);
+    const result = runCompare(report, corpusPath);
+    expect(result.code).toBe(6);
+    expect(result.body["status"]).toBe("stale_report");
+  });
+
+  test("a window mismatch exits 5", () => {
+    const report = writeJson(
+      "scope.json",
+      artifactFor([{ userID: 1 }], { fromEpochSec: 300, toEpochSec: 400 }),
+    );
+    const corpusPath = writeJson("corpus-scope.json", corpus);
+    const result = runCompare(report, corpusPath);
+    expect(result.code).toBe(5);
+    expect(result.body["status"]).toBe("scope_mismatch");
+  });
+
+  test("no joinable column exits 7", () => {
+    const report = writeJson(
+      "nojoin.json",
+      artifactFor([{ mystery: 7, other: 3 }]),
+    );
+    const corpusPath = writeJson("corpus-nojoin.json", corpus);
+    const result = runCompare(report, corpusPath);
+    expect(result.code).toBe(7);
+    expect(result.body["status"]).toBe("no_join");
+  });
+
+  test("a bare artifact is refused with exit 4", () => {
+    const report = writeJson("bare.json", {
+      report: {
+        rows: [{ userID: 1 }],
+        columns: ["userID"],
+        numericColumns: ["userID"],
+        stringColumns: [],
+        rowCount: 1,
+      },
+    });
+    const corpusPath = writeJson("corpus-bare.json", corpus);
+    const result = runCompare(report, corpusPath);
+    expect(result.code).toBe(4);
+    expect(result.body["status"]).toBe("invalid_artifact");
   });
 });

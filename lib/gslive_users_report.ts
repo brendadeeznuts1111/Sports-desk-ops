@@ -25,7 +25,7 @@ export const USERS_REPORT_PARTNER_ID = 118;
 export const USERS_REPORT_STRING_HASH_HEX = 16;
 
 export type UsersReportErrorCode =
-  "session_expired" | "http_error" | "report_error" | "invalid_response";
+  "auth_expired" | "http_error" | "report_error" | "invalid_response";
 
 export class UsersReportError extends Error {
   readonly code: UsersReportErrorCode;
@@ -218,15 +218,15 @@ export interface UsersReportFetchOptions extends UsersReportRequest {
 
 /**
  * Fetch one users-report and return the redacted artifact. Session-gated: a missing/expired
- * session fails closed with `session_expired`; nothing is written here.
+ * session fails closed with `auth_expired`; nothing is written here.
  */
 export async function captureUsersReport(
   options: UsersReportFetchOptions,
 ): Promise<UsersReportCapture> {
   if (options.cookieHeader.trim() === "") {
     throw new UsersReportError(
-      "session_expired",
-      "users-report: no GSLive manager session (cookie header is empty)",
+      "auth_expired",
+      "users-report: no GSLive manager session (cookie header is empty); reauthenticate before capturing",
     );
   }
   const request: UsersReportRequest = {
@@ -266,8 +266,8 @@ export async function captureUsersReport(
     const status = response.status;
     if (status === 401 || status === 403) {
       throw new UsersReportError(
-        "session_expired",
-        `users-report: HTTP ${status} (session expired or login required); re-authenticate and retry`,
+        "auth_expired",
+        `users-report: HTTP ${status} — AUTH_EXPIRED (login required); reauthenticate, then retry once`,
         { status },
       );
     }
@@ -300,6 +300,134 @@ export async function captureUsersReport(
     envelope,
     sessionSource: options.sessionSource ?? "unknown",
     report,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Artifact provenance + freshness                                             */
+/* -------------------------------------------------------------------------- */
+
+export type UsersReportArtifactStatus =
+  "fresh" | "stale" | "unverified_provenance";
+
+export interface UsersReportArtifactAssessment {
+  readonly artifact: UsersReportCapture;
+  readonly capturedAtMs: number | null;
+  readonly ageMinutes: number | null;
+  readonly status: UsersReportArtifactStatus;
+  readonly reasons: readonly string[];
+}
+
+function isHexDigest(value: unknown, length: number): boolean {
+  return (
+    typeof value === "string" && new RegExp(`^[0-9a-f]{${length}}$`).test(value)
+  );
+}
+
+/**
+ * Validate a captured artifact before comparing: it must carry its own provenance (capture kind,
+ * capturedAt, raw response digest) and be recent enough for the comparison to mean anything.
+ * A bare redacted report without provenance is refused rather than trusted.
+ */
+export function readUsersReportArtifact(
+  raw: unknown,
+  options: { readonly nowMs?: number; readonly maxAgeMinutes: number },
+): UsersReportArtifactAssessment {
+  const record = asRecord(raw);
+  if (record === null) {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact is not a JSON object",
+    );
+  }
+  const reasons: string[] = [];
+  if (record["kind"] !== "gslive-users-report-capture") {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact is not a capture (kind must be gslive-users-report-capture); a bare report has no provenance",
+    );
+  }
+  if (!isHexDigest(record["rawSha256"], 64)) {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact has no valid rawSha256 provenance",
+    );
+  }
+  const rawSha256Text = record["rawSha256"] as string;
+  const capturedAtText =
+    typeof record["capturedAt"] === "string" ? record["capturedAt"] : "";
+  const capturedAtMs =
+    capturedAtText === "" ? Number.NaN : Date.parse(capturedAtText);
+  if (!Number.isFinite(capturedAtMs)) {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact has no parseable capturedAt",
+    );
+  }
+  const reportRecord = asRecord(record["report"]);
+  if (reportRecord === null) {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact has no redacted report block",
+    );
+  }
+  const rows = reportRecord["rows"];
+  const columns = reportRecord["columns"];
+  const numericColumns = reportRecord["numericColumns"];
+  const stringColumns = reportRecord["stringColumns"];
+  if (
+    !Array.isArray(rows) ||
+    !Array.isArray(columns) ||
+    !Array.isArray(numericColumns) ||
+    !Array.isArray(stringColumns)
+  ) {
+    throw new UsersReportError(
+      "invalid_response",
+      "users-report artifact report block is missing rows/columns metadata",
+    );
+  }
+  const nowMs = options.nowMs ?? Date.now();
+  const ageMinutes = Math.max(0, (nowMs - capturedAtMs) / 60_000);
+  const status: UsersReportArtifactStatus =
+    ageMinutes > options.maxAgeMinutes ? "stale" : "fresh";
+  if (status === "stale") {
+    reasons.push(
+      `capturedAt is ${ageMinutes.toFixed(1)} minutes old (max ${options.maxAgeMinutes})`,
+    );
+  }
+  return {
+    artifact: {
+      url: typeof record["url"] === "string" ? record["url"] : "",
+      fromEpochSec:
+        typeof record["fromEpochSec"] === "number" ? record["fromEpochSec"] : 0,
+      toEpochSec:
+        typeof record["toEpochSec"] === "number" ? record["toEpochSec"] : 0,
+      partnerId:
+        typeof record["partnerId"] === "number"
+          ? record["partnerId"]
+          : USERS_REPORT_PARTNER_ID,
+      capturedAt: capturedAtText,
+      rawSha256: rawSha256Text,
+      sessionSource:
+        typeof record["sessionSource"] === "string"
+          ? record["sessionSource"]
+          : "unknown",
+      envelope: record["envelope"] === "object-r" ? "object-r" : "array",
+      report: {
+        rows: rows as RedactedUsersReport["rows"],
+        columns: columns as string[],
+        numericColumns: numericColumns as string[],
+        stringColumns: stringColumns as string[],
+        rowCount:
+          typeof reportRecord["rowCount"] === "number"
+            ? reportRecord["rowCount"]
+            : rows.length,
+      },
+    },
+    capturedAtMs,
+    ageMinutes,
+    status,
+    reasons,
   };
 }
 

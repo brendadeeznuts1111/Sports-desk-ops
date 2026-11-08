@@ -21,6 +21,7 @@ import {
   resolveManagerSession,
   sessionGateFromEnv,
 } from "../../lib/manager_session.ts";
+import { probeGsliveSession } from "../../lib/gslive_session_health.ts";
 import {
   USERS_REPORT_KIND,
   UsersReportError,
@@ -44,6 +45,9 @@ function usage(): string {
     "  -h, --help          This text",
     "",
     "The session comes from the manager-session SSOT. The cookie is never printed.",
+    "Preflight: the session is probed (cookie-only partnerConfig GET) before the report fetch.",
+    "",
+    "Exit codes: 0 ok; 3 AUTH_EXPIRED (reauthenticate, then rerun once); 4 invalid/refused report; 5 network/HTTP failure.",
     "Redaction: string cells become sha256:<16>; numeric/boolean cells are kept; the raw body is not stored (sha256 only).",
   ].join("\n");
 }
@@ -156,8 +160,21 @@ async function main(): Promise<number> {
   const session = await resolveManagerSession();
   if (session.source === "none") {
     throw new UsersReportError(
-      "session_expired",
-      "No GSLive manager session. Provision it with `bun run secrets:gslive set` or the SSOT environment; never paste a cookie.",
+      "auth_expired",
+      "AUTH_EXPIRED: no GSLive manager session. Provision it with `bun run secrets:gslive set` or the SSOT environment, then retry once; never paste a cookie.",
+    );
+  }
+  // Preflight before the report fetch: distinguish expired auth from a report failure.
+  const preflight = await probeGsliveSession(session.cookieHeader);
+  if (preflight.status !== "ok") {
+    throw new UsersReportError(
+      "auth_expired",
+      `AUTH_EXPIRED: session preflight ${preflight.status} — ${preflight.detail}`,
+      {
+        preflightStatus: preflight.status,
+        httpStatus: preflight.httpStatus,
+        cfMitigated: preflight.cfMitigated,
+      },
     );
   }
   const capture = await captureUsersReport({
@@ -179,6 +196,12 @@ async function main(): Promise<number> {
     kind: "gslive-users-report-capture",
     ...capture,
     request: { method: "GET", url: capture.url },
+    preflight: {
+      status: preflight.status,
+      httpStatus: preflight.httpStatus,
+      checkedAt: preflight.checkedAt,
+      detail: preflight.detail,
+    },
     redaction: {
       strings: "sha256:<16> prefix; raw identity strings are not stored",
       numbers: "kept",
@@ -221,6 +244,14 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   const code = error instanceof UsersReportError ? error.code : "error";
+  const exitCode =
+    error instanceof UsersReportError
+      ? error.code === "auth_expired"
+        ? 3
+        : error.code === "http_error"
+          ? 5
+          : 4
+      : 1;
   process.stderr.write(`${code}: ${message}\n`);
-  process.exit(1);
+  process.exit(exitCode);
 }

@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:2396-2415`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:2651-2670`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:4239-4264`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:4267-4287`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:4498-4523`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:4526-4546`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:4319-4327`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:4578-4586`).
 
 ## P7 — the customer report surface (7 candidates)
 
@@ -829,7 +829,15 @@ Required capture:
 4. Store the capture under `docs/evidence/captures/<desk-date>/` with the existing sha256/manifest
    convention, and compare in a read-only script before quoting any totals.
 
-The capture and comparison are implemented and tested; they fail closed until a session exists:
+The capture and comparison are implemented and tested; they fail closed until a session exists.
+The strict workflow is one command — preflight, then capture, then a gated comparison — so a stale
+session stops before an artifact can be reused:
+
+```sh
+bun run verify:gslive-users-report --from 1793163600 --to 1793771999
+```
+
+Or run the two steps separately:
 
 ```sh
 bun run capture:gslive-users-report --from 1793163600 --to 1793771999
@@ -837,6 +845,13 @@ bun run compare:gslive-users-report \
   --report Scratch/security/review-captures/users-report-1793163600-1793771999.redacted.json \
   --corpus Scratch/security/corpus/gslive-betreport-all-2026-11-03.json
 ```
+
+Classification and exit codes: HTTP 401/403, an unconfigured session, or a failed preflight is
+`AUTH_EXPIRED` (exit 3; reauthenticate, then retry once — do not loop). The comparison requires a
+provenance-stamped artifact (capture kind, `capturedAt`, `rawSha256`) that is fresh
+(`--max-age-minutes`, default 1440; exit 6 when stale), refuses a window mismatch by default
+(exit 5), and exits 7 when no report column joins the corpus. Comparison output always prints one
+JSON object with explicit matched/unmatched/duplicate counts and the candidate metric deltas.
 
 The capture resolves the session from the manager-session SSOT (never prints the cookie), accepts
 either an array body or `{e:0,r:[...]}`, refuses non-2xx/error-envelope/non-array bodies, and writes
