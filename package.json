@@ -21,6 +21,8 @@
     "build:live-bets": "bun run scripts/build_live_bets.ts",
     "bet:tally": "bun run scripts/fetch-bet-tally.ts",
     "capture:gslive-corpus": "bun run scripts/capture/gslive_corpus.ts",
+    "capture:gslive-users-report": "bun run scripts/capture/gslive_users_report.ts",
+    "compare:gslive-users-report": "bun run scripts/gslive_users_report_compare.ts",
     "wagers:by-state": "bun run scripts/gslive_wagers_by_state.ts",
     "wagers:capture": "bun run scripts/wagers_by_state_capture.ts",
     "wagers:debug": "bun --inspect-wait scripts/wagers_by_state_capture.ts --dry-run",
