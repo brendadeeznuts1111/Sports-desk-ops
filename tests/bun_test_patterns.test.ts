@@ -360,4 +360,35 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
       expect(order).toEqual(["test-body", "onTestFinished-callback"]);
     });
   });
+
+  describe("Pattern 13: Conditional Test Modifiers (test.if, test.skipIf, test.failing)", () => {
+    test.if(true)("executes when condition is truthy", () => {
+      expect(true).toBe(true);
+    });
+
+    test.skipIf(false)("does not skip when condition is falsy", () => {
+      expect(1 + 1).toBe(2);
+    });
+
+    test.failing("inverts failure status for known tracking bugs", () => {
+      // This assertion fails, so test.failing() reports it as passing
+      expect(0.1 + 0.2).toBe(0.3);
+    });
+  });
+
+  describe("Pattern 14: Strict Assertion Counting (expect.hasAssertions, expect.assertions)", () => {
+    test("verifies exact assertion count in synchronous blocks", () => {
+      expect.assertions(2);
+
+      expect(typeof Bun.version).toBe("string");
+      expect(Bun.semver.order("1.4.4", "1.4.0")).toBe(1);
+    });
+
+    test("verifies that async completion invoked assertions with expect.hasAssertions", async () => {
+      expect.hasAssertions();
+
+      const result = await Promise.resolve("resolved-token");
+      expect(result).toBe("resolved-token");
+    });
+  });
 });
