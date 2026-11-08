@@ -108,4 +108,13 @@ pathIgnorePatterns = [
 # Dual coverage reporting: preserves console text table while producing lcov.info for CI
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = [
+  "tests/**",
+  "verification/**",
+  "scratch/**",
+  "dist/**",
+  "docs/**",
+]
+
 
