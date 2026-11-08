@@ -130,10 +130,14 @@ describe("status --json integrity contract", () => {
     expect(typeof result.body["model"]).toBe("object");
     expect(Array.isArray(result.body["sources"])).toBe(true);
     expect(typeof result.body["nextStep"]).toBe("string");
+    const sameBook = objectOf(result.body["sameBookControl"]);
+    expect(sameBook["status"]).toBe("unavailable");
+    expect(sameBook["generatedAt"]).toBeNull();
     const timing = result.body["timing"] as Record<string, unknown>;
     expect(typeof timing["elapsedMs"]).toBe("number");
     expect(typeof timing["integrityMs"]).toBe("number");
     expect(Number(timing["integrityCaptures"])).toBeGreaterThanOrEqual(1);
+    expect(typeof timing["sameBookControlMs"]).toBe("number");
   });
 
   test("settlement verification is a separate top-level status, never inside integrity", () => {
@@ -337,3 +341,82 @@ function fixtureTextOf(path: string): string {
   // Local sync read keeps this assertion independent of the CLI under test.
   return readFileSync(path, "utf8");
 }
+
+describe("same-book control in status", () => {
+  function controlArtifact(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    const now = new Date().toISOString();
+    return {
+      schemaVersion: 1,
+      kind: "users-report-control",
+      generatedAt: now,
+      status: "ok",
+      report: {
+        path: "Scratch/security/review-captures/r.json",
+        capturedAt: now,
+        rawSha256: "a".repeat(64),
+        rowCount: 6,
+        sessionSource: "test",
+      },
+      corpus: {
+        path: CORPUS_PRIMARY_REL,
+        sha256: sha256Of(fixtureText(GROUP_VALID_CORPUS_FIXTURE)),
+        from: 1,
+        to: 2,
+        tickets: 4,
+      },
+      scope: { match: true },
+      join: {
+        idColumn: "userID",
+        idKind: "userId",
+        matchedIds: 3,
+        unmatchedReportIds: 3,
+        duplicateIdRows: 0,
+      },
+      candidateCount: 1,
+      candidates: [],
+      note: "test control",
+      ...overrides,
+    };
+  }
+
+  test("a fresh control whose corpus digest matches is ok", () => {
+    const root = cleanRoot();
+    writeAt(
+      root,
+      "reports/security/users-report-control.json",
+      controlArtifact(),
+    );
+    const result = runCli(root, ["status"]);
+    expect(result.code).toBe(0);
+    const sameBook = objectOf(result.body["sameBookControl"]);
+    expect(sameBook["status"]).toBe("ok");
+    expect(objectOf(sameBook["join"])["matchedIds"]).toBe(3);
+    expect(objectOf(sameBook["corpus"])["verified"]).toBe(true);
+  });
+
+  test("an old control is stale, never ok", () => {
+    const root = cleanRoot();
+    writeAt(
+      root,
+      "reports/security/users-report-control.json",
+      controlArtifact({ generatedAt: "2020-01-01T00:00:00.000Z" }),
+    );
+    const result = runCli(root, ["status"]);
+    const sameBook = objectOf(result.body["sameBookControl"]);
+    expect(sameBook["status"]).toBe("stale");
+  });
+
+  test("a control for a different corpus digest is unverified_corpus", () => {
+    const root = cleanRoot();
+    const artifact = controlArtifact();
+    const corpus = objectOf(artifact["corpus"]);
+    artifact["corpus"] = { ...corpus, sha256: "b".repeat(64) };
+    writeAt(root, "reports/security/users-report-control.json", artifact);
+    const result = runCli(root, ["status"]);
+    const sameBook = objectOf(result.body["sameBookControl"]);
+    expect(sameBook["status"]).toBe("unverified_corpus");
+    expect(objectOf(sameBook["corpus"])["verified"]).toBe(false);
+  });
+});

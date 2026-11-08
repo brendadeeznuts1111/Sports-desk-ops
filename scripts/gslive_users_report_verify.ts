@@ -20,10 +20,13 @@ import { chmod, mkdir, rename } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
 import {
+  USERS_REPORT_CONTROL_REL_PATH,
   aggregateCorpusTickets,
+  buildUsersReportControlArtifact,
   captureUsersReport,
   compareUsersReportToCorpus,
   readUsersReportArtifact,
+  sha256FileHex,
   UsersReportError,
 } from "../lib/gslive_users_report.ts";
 import { probeGsliveSession } from "../lib/gslive_session_health.ts";
@@ -47,6 +50,8 @@ function usage(): string {
     "  --out <path>           Artifact path (default Scratch/security/review-captures/users-report-<from>-<to>.redacted.json)",
     "  --corpus <path>        Corpus path (default Scratch/security/corpus/gslive-betreport-all-2026-11-03.json)",
     "  --max-age-minutes <n>  Freshness gate (default 1440)",
+    "  --control-out <path>   Control artifact path (default reports/security/users-report-control.json)",
+    "  --no-control           Do not write a control artifact",
     "  --dry-run              Print the plan; no session read, no network, no writes",
     "  -h, --help             This text",
   ].join("\n");
@@ -59,6 +64,7 @@ interface Args {
   out: string;
   corpus: string;
   maxAgeMinutes: number;
+  controlOut: string | null;
   dryRun: boolean;
 }
 
@@ -69,12 +75,17 @@ function parseArgs(argv: readonly string[]): Args | "help" {
   let out: string | null = null;
   let corpus = DEFAULT_CORPUS;
   let maxAgeMinutes = 24 * 60;
+  let controlOut: string | null = USERS_REPORT_CONTROL_REL_PATH;
   let dryRun = false;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]!;
     if (token === "-h" || token === "--help") return "help";
     if (token === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (token === "--no-control") {
+      controlOut = null;
       continue;
     }
     const value = argv[index + 1];
@@ -106,6 +117,7 @@ function parseArgs(argv: readonly string[]): Args | "help" {
       partnerId = parsed;
     } else if (token === "--out") out = value;
     else if (token === "--corpus") corpus = value;
+    else if (token === "--control-out") controlOut = value;
     else if (token === "--max-age-minutes") {
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -137,12 +149,44 @@ function parseArgs(argv: readonly string[]): Args | "help" {
       `Scratch/security/review-captures/users-report-${from}-${to}.redacted.json`,
     corpus,
     maxAgeMinutes,
+    controlOut,
     dryRun,
   };
 }
 
 function emit(result: Readonly<Record<string, unknown>>): void {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+async function writeControl(
+  path: string,
+  artifact: Readonly<Record<string, unknown>>,
+): Promise<string> {
+  const outPath = resolve(ROOT, path);
+  await mkdir(dirname(outPath), { recursive: true });
+  const tmpPath = `${outPath}.tmp-${process.pid}`;
+  await Bun.write(tmpPath, `${JSON.stringify(artifact, null, 2)}\n`);
+  await chmod(tmpPath, 0o600);
+  await rename(tmpPath, outPath);
+  return relative(ROOT, outPath).split("\\").join("/");
+}
+
+function duplicateIdRows(
+  rows: readonly Readonly<Record<string, number | boolean | null | string>>[],
+  idColumn: string,
+): number {
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    const cell = row[idColumn];
+    if (cell === undefined) continue;
+    const key = String(cell);
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  let duplicates = 0;
+  for (const count of seen.values()) {
+    if (count > 1) duplicates += count - 1;
+  }
+  return duplicates;
 }
 
 async function main(): Promise<number> {
@@ -263,12 +307,41 @@ async function main(): Promise<number> {
   const bets = Array.isArray(corpus.r?.bets) ? corpus.r.bets : [];
   const corpusFrom = typeof corpus.from === "number" ? corpus.from : null;
   const corpusTo = typeof corpus.to === "number" ? corpus.to : null;
+  const corpusSha256 = await sha256FileHex(corpusPath);
+  const corpusAggregates = aggregateCorpusTickets(bets);
+  const corpusTickets = [...corpusAggregates.byUserId.values()].reduce(
+    (sum, account) => sum + account.tickets,
+    0,
+  );
   const scopeMatch =
     corpusFrom !== null &&
     corpusTo !== null &&
     artifact.fromEpochSec === corpusFrom &&
     artifact.toEpochSec === corpusTo;
+  const controlCommon = {
+    reportPath: parsed.out,
+    capture: artifact,
+    corpusPath: parsed.corpus,
+    corpusSha256,
+    corpusFrom,
+    corpusTo,
+    corpusTickets,
+    scopeMatch,
+  } as const;
   if (!scopeMatch) {
+    const control =
+      parsed.controlOut === null
+        ? null
+        : await writeControl(
+            parsed.controlOut,
+            buildUsersReportControlArtifact({
+              ...controlCommon,
+              status: "scope_mismatch",
+              join: null,
+              candidates: [],
+              note: "report window differs from corpus window",
+            }),
+          );
     emit({
       status: "scope_mismatch",
       captured: relativeOut,
@@ -277,21 +350,66 @@ async function main(): Promise<number> {
         report: { from: artifact.fromEpochSec, to: artifact.toEpochSec },
         corpus: { from: corpusFrom, to: corpusTo },
       },
+      control,
     });
     process.stderr.write(
       "scope_mismatch: report window differs from corpus window\n",
     );
     return 5;
   }
-  const corpusAggregates = aggregateCorpusTickets(bets);
-  const comparison = compareUsersReportToCorpus(
-    artifact.report,
-    corpusAggregates,
-  );
-  const corpusTickets = [...corpusAggregates.byUserId.values()].reduce(
-    (sum, account) => sum + account.tickets,
-    0,
-  );
+  let comparison;
+  try {
+    comparison = compareUsersReportToCorpus(artifact.report, corpusAggregates);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const control =
+      parsed.controlOut === null
+        ? null
+        : await writeControl(
+            parsed.controlOut,
+            buildUsersReportControlArtifact({
+              ...controlCommon,
+              status: "no_join",
+              join: null,
+              candidates: [],
+              note: message,
+            }),
+          );
+    emit({
+      status: "no_join",
+      captured: relativeOut,
+      provenance,
+      reportRows: artifact.report.rowCount,
+      corpusTickets,
+      control,
+      message,
+    });
+    process.stderr.write(`no_join: ${message}\n`);
+    return 7;
+  }
+  const join = {
+    idColumn: comparison.idColumn,
+    idKind: comparison.idKind,
+    matchedIds: comparison.overlap,
+    unmatchedReportIds: Math.max(
+      0,
+      artifact.report.rowCount - comparison.overlap,
+    ),
+    duplicateIdRows: duplicateIdRows(artifact.report.rows, comparison.idColumn),
+  };
+  const control =
+    parsed.controlOut === null
+      ? null
+      : await writeControl(
+          parsed.controlOut,
+          buildUsersReportControlArtifact({
+            ...controlCommon,
+            status: "ok",
+            join,
+            candidates: comparison.candidates,
+            note: comparison.note,
+          }),
+        );
   emit({
     status: "ok",
     captured: relativeOut,
@@ -303,17 +421,10 @@ async function main(): Promise<number> {
     },
     reportRows: artifact.report.rowCount,
     corpusTickets,
-    join: {
-      idColumn: comparison.idColumn,
-      idKind: comparison.idKind,
-      matchedIds: comparison.overlap,
-      unmatchedReportIds: Math.max(
-        0,
-        artifact.report.rowCount - comparison.overlap,
-      ),
-    },
+    join,
     candidates: comparison.candidates,
     note: comparison.note,
+    control,
   });
   return 0;
 }

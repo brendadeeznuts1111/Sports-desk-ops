@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -303,6 +303,7 @@ function writeJson(name: string, value: unknown): string {
 function runCompare(
   reportPath: string,
   corpusPath: string,
+  extraArgs: readonly string[] = [],
 ): {
   code: number;
   body: Record<string, unknown>;
@@ -322,6 +323,7 @@ function runCompare(
       reportPath,
       "--corpus",
       corpusPath,
+      ...extraArgs,
     ],
     stdout: "pipe",
     stderr: "pipe",
@@ -444,6 +446,32 @@ describe("compare CLI statuses", () => {
     const result = runCompare(report, corpusPath);
     expect(result.code).toBe(7);
     expect(result.body["status"]).toBe("no_join");
+  });
+
+  test("--control-out writes a versioned control artifact after a successful compare", () => {
+    const report = writeJson(
+      "control-report.json",
+      artifactFor([{ userID: 1, stake: 100 }]),
+    );
+    const corpusPath = writeJson("control-corpus.json", corpus);
+    const controlPath = join(WORK, "users-report-control.json");
+    const result = runCompare(report, corpusPath, [
+      "--control-out",
+      controlPath,
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.body["status"]).toBe("ok");
+    const control = JSON.parse(readFileSync(controlPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(control["kind"]).toBe("users-report-control");
+    expect(control["schemaVersion"]).toBe(1);
+    expect(control["status"]).toBe("ok");
+    const joinBlock = control["join"] as Record<string, unknown>;
+    expect(joinBlock["matchedIds"]).toBe(1);
+    const corpusBlock = control["corpus"] as Record<string, unknown>;
+    expect(corpusBlock["sha256"]).toHaveLength(64);
   });
 
   test("a bare artifact is refused with exit 4", () => {

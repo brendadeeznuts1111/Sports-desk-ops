@@ -60,6 +60,46 @@ settlement ledger exists to compare against. It must never be folded into, deriv
 ranked against the `integrity` status; a corpus can be internally consistent (verified ownership
 and financial fields) while settlement correctness remains unknown.
 
+## `bets` — ticket-deduped aggregate
+
+`aggregate` is measured over the filtered corpus. `rows` counts **legs** (one `getBetReport` row
+per leg); the ticket-level fields are deduped by `betGroupId`, because `bet`, `betGroupToWin` and
+`betGroupResult` repeat verbatim on every leg row of the same ticket:
+
+| Field           | Meaning                                                                           |
+| --------------- | --------------------------------------------------------------------------------- |
+| `tickets`       | distinct `betGroupId` values; each ticket is counted once                         |
+| `ungroupedRows` | rows with no `betGroupId`; they cannot join a ticket and are never counted as one |
+| `wageredCents`  | ticket-deduped sum of non-null `bet` values, integer cents                        |
+| `toWinCents`    | ticket-deduped sum of non-null `betGroupToWin` values, integer cents              |
+| `resultCents`   | ticket-deduped sum of non-null `betGroupResult` values, integer cents             |
+
+The dedupe uses the first occurrence of each `betGroupId`; null ticket-level values are skipped
+rather than coerced to zero. `rows` and `tickets` are different units and must not be compared to
+each other without saying which is which. The four vocabulary breakdowns (`bySport`, `bySubSport`,
+`byPeriod`, `byWagerType`) remain leg-level and sum to `rows`.
+
+<!-- staleness-ok: field contract only; no measured counts are pinned -->
+
+## `status` — `sameBookControl`
+
+`status` also carries the same-book users-report control, read from
+`reports/security/users-report-control.json` (written by `compare:gslive-users-report
+--control-out` or `verify:gslive-users-report`). It is a third, separate block:
+
+| Status              | Meaning                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `unavailable`       | no control artifact; capture and compare first                                                           |
+| `ok`                | fresh control, report-vs-corpus window matched, and the recorded corpus digest equals the corpus on disk |
+| `stale`             | control older than the maximum age                                                                       |
+| `scope_mismatch`    | report window differs from the corpus window                                                             |
+| `no_join`           | no report column joined to the corpus                                                                    |
+| `unverified_corpus` | recorded corpus digest missing or different from disk                                                    |
+| `invalid`           | malformed/unsupported artifact                                                                           |
+
+The block is evidence from a second encoding in the same book. It never changes
+`settlementVerification`; a control can be `ok` while settlement remains `unverified`.
+
 ## Related evidence
 
 - [manager-betreport-field-contract.md](evidence/manager-betreport-field-contract.md) pins the

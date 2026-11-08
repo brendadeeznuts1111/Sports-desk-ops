@@ -3,27 +3,32 @@
  * Compare a provenance-stamped redacted GSLive `users-report` capture against `getBetReport`
  * ticket aggregates.
  *
- * Read-only. The capture must carry its own provenance (capture kind, capturedAt, raw response
- * digest) and be recent; a bare or stale report is refused rather than silently reused. Comparison
- * output is candidate evidence from a second encoding in the same book, never external settlement
- * truth.
+ * Read-only by default. The capture must carry its own provenance (capture kind, capturedAt, raw
+ * response digest) and be recent; a bare or stale report is refused rather than silently reused.
+ * With `--control-out`, the comparison writes a versioned same-book control artifact that
+ * `status`/the security console can read without recomputing anything.
  *
  * Exit codes: 0 ok; 4 invalid/unverified artifact; 5 scope mismatch; 6 stale report; 7 no join.
  *
  * Usage:
  *   bun run compare:gslive-users-report \
  *     --report Scratch/security/review-captures/users-report-1793163600-1793771999.redacted.json \
- *     --corpus Scratch/security/corpus/gslive-betreport-all-2026-11-03.json
+ *     --corpus Scratch/security/corpus/gslive-betreport-all-2026-11-03.json \
+ *     --control-out reports/security/users-report-control.json
  */
 
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { chmod, mkdir, rename } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 
 import {
   UsersReportError,
   aggregateCorpusTickets,
+  buildUsersReportControlArtifact,
   compareUsersReportToCorpus,
   readUsersReportArtifact,
+  sha256FileHex,
+  type UsersReportMetricCandidate,
 } from "../lib/gslive_users_report.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -38,6 +43,7 @@ function usage(): string {
     "Options:",
     "  --report <path>        Redacted users-report capture (required)",
     `  --corpus <path>        getBetReport corpus (default ${DEFAULT_CORPUS})`,
+    "  --control-out <path>   Write a versioned same-book control artifact (status reads it)",
     "  --max-age-minutes <n>  Refuse a report older than this (default 1440)",
     "  --allow-stale          Compare a stale artifact anyway (status stays stale)",
     "  --allow-scope-mismatch Compare even when the report window differs from the corpus window",
@@ -51,6 +57,7 @@ function usage(): string {
 interface Args {
   report: string;
   corpus: string;
+  controlOut: string | null;
   maxAgeMinutes: number;
   allowStale: boolean;
   allowScopeMismatch: boolean;
@@ -59,6 +66,7 @@ interface Args {
 function parseArgs(argv: readonly string[]): Args | "help" {
   let report: string | null = null;
   let corpus = DEFAULT_CORPUS;
+  let controlOut: string | null = null;
   let maxAgeMinutes = DEFAULT_MAX_AGE_MINUTES;
   let allowStale = false;
   let allowScopeMismatch = false;
@@ -84,6 +92,7 @@ function parseArgs(argv: readonly string[]): Args | "help" {
     index += 1;
     if (token === "--report") report = value;
     else if (token === "--corpus") corpus = value;
+    else if (token === "--control-out") controlOut = value;
     else if (token === "--max-age-minutes") {
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -106,7 +115,14 @@ function parseArgs(argv: readonly string[]): Args | "help" {
       `--report is required\n${usage()}`,
     );
   }
-  return { report, corpus, maxAgeMinutes, allowStale, allowScopeMismatch };
+  return {
+    report,
+    corpus,
+    controlOut,
+    maxAgeMinutes,
+    allowStale,
+    allowScopeMismatch,
+  };
 }
 
 function emit(result: Readonly<Record<string, unknown>>): void {
@@ -129,6 +145,19 @@ function duplicateIdRows(
     if (count > 1) duplicates += count - 1;
   }
   return duplicates;
+}
+
+async function writeControl(
+  path: string,
+  artifact: Readonly<Record<string, unknown>>,
+): Promise<string> {
+  const outPath = resolve(ROOT, path);
+  await mkdir(dirname(outPath), { recursive: true });
+  const tmpPath = `${outPath}.tmp-${process.pid}`;
+  await Bun.write(tmpPath, `${JSON.stringify(artifact, null, 2)}\n`);
+  await chmod(tmpPath, 0o600);
+  await rename(tmpPath, outPath);
+  return relative(ROOT, outPath).split("\\").join("/");
 }
 
 async function main(): Promise<number> {
@@ -217,6 +246,12 @@ async function main(): Promise<number> {
   }
   const corpusFrom = typeof corpus.from === "number" ? corpus.from : null;
   const corpusTo = typeof corpus.to === "number" ? corpus.to : null;
+  const corpusSha256 = await sha256FileHex(corpusPath);
+  const corpusAggregates = aggregateCorpusTickets(bets);
+  const corpusTickets = [...corpusAggregates.byUserId.values()].reduce(
+    (sum, account) => sum + account.tickets,
+    0,
+  );
   const scopeMatch =
     corpusFrom !== null &&
     corpusTo !== null &&
@@ -230,23 +265,54 @@ async function main(): Promise<number> {
       ? "same window; per-account deltas are comparable"
       : "window mismatch or unknown; per-account deltas are not comparable",
   };
+  const controlCommon = {
+    reportPath: parsed.report,
+    capture: artifact,
+    corpusPath: parsed.corpus,
+    corpusSha256,
+    corpusFrom,
+    corpusTo,
+    corpusTickets,
+    scopeMatch,
+  } as const;
   if (!scopeMatch && !parsed.allowScopeMismatch) {
-    emit({ inputs, status: "scope_mismatch", provenance, scope });
+    const control =
+      parsed.controlOut === null
+        ? null
+        : await writeControl(
+            parsed.controlOut,
+            buildUsersReportControlArtifact({
+              ...controlCommon,
+              status: "scope_mismatch",
+              join: null,
+              candidates: [],
+              note: "report window differs from corpus window",
+            }),
+          );
+    emit({ inputs, status: "scope_mismatch", provenance, scope, control });
     process.stderr.write(
       "scope_mismatch: report window differs from corpus window (use --allow-scope-mismatch to inspect the shape anyway)\n",
     );
     return 5;
   }
-  const corpusAggregates = aggregateCorpusTickets(bets);
-  const corpusTickets = [...corpusAggregates.byUserId.values()].reduce(
-    (sum, account) => sum + account.tickets,
-    0,
-  );
   let comparison;
   try {
     comparison = compareUsersReportToCorpus(artifact.report, corpusAggregates);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const control =
+      parsed.controlOut === null
+        ? null
+        : await writeControl(
+            parsed.controlOut,
+            buildUsersReportControlArtifact({
+              ...controlCommon,
+              status: "no_join",
+              join: null,
+              candidates: [],
+              note: message,
+            }),
+          );
     emit({
       inputs,
       status: "no_join",
@@ -254,11 +320,37 @@ async function main(): Promise<number> {
       scope,
       reportRows: artifact.report.rowCount,
       corpusTickets,
+      control,
       message,
     });
     process.stderr.write(`no_join: ${message}\n`);
     return 7;
   }
+  const join = {
+    idColumn: comparison.idColumn,
+    idKind: comparison.idKind,
+    matchedIds: comparison.overlap,
+    unmatchedReportIds: Math.max(
+      0,
+      artifact.report.rowCount - comparison.overlap,
+    ),
+    duplicateIdRows: duplicateIdRows(artifact.report.rows, comparison.idColumn),
+  };
+  const candidates: readonly UsersReportMetricCandidate[] =
+    comparison.candidates;
+  const control =
+    parsed.controlOut === null
+      ? null
+      : await writeControl(
+          parsed.controlOut,
+          buildUsersReportControlArtifact({
+            ...controlCommon,
+            status: "ok",
+            join,
+            candidates,
+            note: comparison.note,
+          }),
+        );
   emit({
     inputs,
     status: "ok",
@@ -269,21 +361,10 @@ async function main(): Promise<number> {
     numericColumns: artifact.report.numericColumns,
     stringColumns: artifact.report.stringColumns,
     corpusTickets,
-    join: {
-      idColumn: comparison.idColumn,
-      idKind: comparison.idKind,
-      matchedIds: comparison.overlap,
-      unmatchedReportIds: Math.max(
-        0,
-        artifact.report.rowCount - comparison.overlap,
-      ),
-      duplicateIdRows: duplicateIdRows(
-        artifact.report.rows,
-        comparison.idColumn,
-      ),
-    },
-    candidates: comparison.candidates,
+    join,
+    candidates,
     note: comparison.note,
+    control,
   });
   return 0;
 }

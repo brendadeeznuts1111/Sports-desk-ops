@@ -432,6 +432,314 @@ export function readUsersReportArtifact(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Same-book control artifact (produced by compare/verify, read by status)     */
+/* -------------------------------------------------------------------------- */
+
+export const USERS_REPORT_CONTROL_REL_PATH =
+  "reports/security/users-report-control.json";
+export const USERS_REPORT_CONTROL_KIND = "users-report-control";
+export const USERS_REPORT_CONTROL_SCHEMA_VERSION = 1 as const;
+/** Status treats a control older than this as stale (operators regenerate after a fresh capture). */
+export const USERS_REPORT_CONTROL_MAX_AGE_MINUTES = 24 * 60;
+
+export type UsersReportControlStatus =
+  | "unavailable"
+  | "ok"
+  | "stale"
+  | "scope_mismatch"
+  | "no_join"
+  | "invalid"
+  | "unverified_corpus";
+
+export interface UsersReportControlView {
+  readonly status: UsersReportControlStatus;
+  readonly generatedAt: string | null;
+  readonly ageMinutes: number | null;
+  readonly maxAgeMinutes: number;
+  readonly report: {
+    readonly path: string | null;
+    readonly capturedAt: string | null;
+    readonly rawSha256: string | null;
+    readonly rowCount: number | null;
+    readonly sessionSource: string | null;
+  };
+  readonly corpus: {
+    readonly path: string | null;
+    readonly sha256: string | null;
+    readonly verified: boolean | null;
+    readonly from: number | null;
+    readonly to: number | null;
+    readonly tickets: number | null;
+  };
+  readonly scope: { readonly match: boolean | null };
+  readonly join: {
+    readonly idColumn: string | null;
+    readonly idKind: string | null;
+    readonly matchedIds: number | null;
+    readonly unmatchedReportIds: number | null;
+    readonly duplicateIdRows: number | null;
+  } | null;
+  readonly candidateCount: number;
+  readonly note: string | null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/** Stream a file's sha256; null when it cannot be read. */
+export async function sha256FileHex(path: string): Promise<string | null> {
+  try {
+    const hasher = new Bun.CryptoHasher("sha256");
+    for await (const chunk of Bun.file(path).stream()) hasher.update(chunk);
+    return hasher.digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+function unavailableControl(
+  maxAgeMinutes: number,
+  note: string,
+): UsersReportControlView {
+  return {
+    status: "unavailable",
+    generatedAt: null,
+    ageMinutes: null,
+    maxAgeMinutes,
+    report: {
+      path: null,
+      capturedAt: null,
+      rawSha256: null,
+      rowCount: null,
+      sessionSource: null,
+    },
+    corpus: {
+      path: null,
+      sha256: null,
+      verified: null,
+      from: null,
+      to: null,
+      tickets: null,
+    },
+    scope: { match: null },
+    join: null,
+    candidateCount: 0,
+    note,
+  };
+}
+
+/**
+ * Validate a same-book control artifact produced by the compare/verify workflow.
+ *
+ * `corpusSha256` is the CURRENT digest of the corpus path the artifact names (or null when it
+ * cannot be read). A control whose recorded corpus digest differs is `unverified_corpus`, never
+ * `ok`: the comparison may describe a different corpus than the one on disk.
+ */
+export function readUsersReportControl(
+  raw: unknown,
+  options: {
+    readonly nowMs?: number;
+    readonly maxAgeMinutes: number;
+    readonly corpusSha256?: string | null;
+  },
+): UsersReportControlView {
+  const maxAgeMinutes = options.maxAgeMinutes;
+  if (raw === null || raw === undefined) {
+    return unavailableControl(
+      maxAgeMinutes,
+      "no users-report control artifact; capture and compare first",
+    );
+  }
+  const record = asRecord(raw);
+  if (record === null) {
+    return unavailableControl(
+      maxAgeMinutes,
+      "control artifact is not an object",
+    );
+  }
+  const invalid = (note: string): UsersReportControlView => ({
+    ...unavailableControl(maxAgeMinutes, note),
+    generatedAt: stringOrNull(record["generatedAt"]),
+  });
+  if (record["kind"] !== USERS_REPORT_CONTROL_KIND) {
+    return invalid("control artifact has the wrong kind");
+  }
+  if (record["schemaVersion"] !== USERS_REPORT_CONTROL_SCHEMA_VERSION) {
+    return invalid("control artifact has an unsupported schemaVersion");
+  }
+  const generatedAt = stringOrNull(record["generatedAt"]);
+  const generatedAtMs =
+    generatedAt === null ? Number.NaN : Date.parse(generatedAt);
+  if (!Number.isFinite(generatedAtMs)) {
+    return invalid("control artifact has no parseable generatedAt");
+  }
+  const report = asRecord(record["report"]);
+  const corpus = asRecord(record["corpus"]);
+  const scope = asRecord(record["scope"]);
+  const join = asRecord(record["join"]);
+  const candidates = Array.isArray(record["candidates"])
+    ? record["candidates"]
+    : [];
+  const reportedStatus = stringOrNull(record["status"]);
+  const nowMs = options.nowMs ?? Date.now();
+  const ageMinutes = Math.max(0, (nowMs - generatedAtMs) / 60_000);
+  const base: UsersReportControlView = {
+    status: "invalid",
+    generatedAt,
+    ageMinutes,
+    maxAgeMinutes,
+    report: {
+      path: stringOrNull(report?.["path"]),
+      capturedAt: stringOrNull(report?.["capturedAt"]),
+      rawSha256: stringOrNull(report?.["rawSha256"]),
+      rowCount: numberOrNull(report?.["rowCount"]),
+      sessionSource: stringOrNull(report?.["sessionSource"]),
+    },
+    corpus: {
+      path: stringOrNull(corpus?.["path"]),
+      sha256: stringOrNull(corpus?.["sha256"]),
+      verified: null,
+      from: numberOrNull(corpus?.["from"]),
+      to: numberOrNull(corpus?.["to"]),
+      tickets: numberOrNull(corpus?.["tickets"]),
+    },
+    scope: {
+      match:
+        scope?.["match"] === true
+          ? true
+          : scope?.["match"] === false
+            ? false
+            : null,
+    },
+    join:
+      join === null
+        ? null
+        : {
+            idColumn: stringOrNull(join["idColumn"]),
+            idKind: stringOrNull(join["idKind"]),
+            matchedIds: numberOrNull(join["matchedIds"]),
+            unmatchedReportIds: numberOrNull(join["unmatchedReportIds"]),
+            duplicateIdRows: numberOrNull(join["duplicateIdRows"]),
+          },
+    candidateCount: candidates.length,
+    note: stringOrNull(record["note"]),
+  };
+  if (ageMinutes > maxAgeMinutes) {
+    return {
+      ...base,
+      status: "stale",
+      note: `control is ${ageMinutes.toFixed(1)} minutes old (max ${maxAgeMinutes})`,
+    };
+  }
+  if (record["status"] === "scope_mismatch") {
+    return { ...base, status: "scope_mismatch" };
+  }
+  if (record["status"] === "no_join") return { ...base, status: "no_join" };
+  if (record["status"] !== "ok") {
+    return {
+      ...base,
+      status: "invalid",
+      note: `control status is ${String(reportedStatus)}`,
+    };
+  }
+  const recordedCorpusSha = base.corpus.sha256;
+  const currentCorpusSha = options.corpusSha256 ?? null;
+  if (recordedCorpusSha === null) {
+    return {
+      ...base,
+      status: "unverified_corpus",
+      note: "control records no corpus digest",
+    };
+  }
+  if (currentCorpusSha === null) {
+    return {
+      ...base,
+      corpus: { ...base.corpus, verified: null },
+      status: "unverified_corpus",
+      note: "corpus digest cannot be read; control provenance unverified",
+    };
+  }
+  if (recordedCorpusSha !== currentCorpusSha) {
+    return {
+      ...base,
+      corpus: { ...base.corpus, verified: false },
+      status: "unverified_corpus",
+      note: "control corpus digest differs from the corpus on disk",
+    };
+  }
+  return {
+    ...base,
+    status: "ok",
+    corpus: { ...base.corpus, verified: true },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Control artifact builder                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface UsersReportControlInput {
+  readonly status: "ok" | "scope_mismatch" | "no_join";
+  readonly reportPath: string;
+  readonly capture: UsersReportCapture;
+  readonly corpusPath: string;
+  readonly corpusSha256: string | null;
+  readonly corpusFrom: number | null;
+  readonly corpusTo: number | null;
+  readonly corpusTickets: number;
+  readonly scopeMatch: boolean;
+  readonly join: {
+    readonly idColumn: string;
+    readonly idKind: string;
+    readonly matchedIds: number;
+    readonly unmatchedReportIds: number;
+    readonly duplicateIdRows: number;
+  } | null;
+  readonly candidates: readonly UsersReportMetricCandidate[];
+  readonly note: string;
+  readonly generatedAt?: string;
+}
+
+/** Build the versioned same-book control artifact written by compare/verify. */
+export function buildUsersReportControlArtifact(
+  input: UsersReportControlInput,
+): Readonly<Record<string, unknown>> {
+  return {
+    schemaVersion: USERS_REPORT_CONTROL_SCHEMA_VERSION,
+    kind: USERS_REPORT_CONTROL_KIND,
+    generatedAt: input.generatedAt ?? new Date().toISOString(),
+    status: input.status,
+    report: {
+      path: input.reportPath,
+      capturedAt: input.capture.capturedAt,
+      rawSha256: input.capture.rawSha256,
+      rowCount: input.capture.report.rowCount,
+      sessionSource: input.capture.sessionSource,
+      fromEpochSec: input.capture.fromEpochSec,
+      toEpochSec: input.capture.toEpochSec,
+      partnerId: input.capture.partnerId,
+    },
+    corpus: {
+      path: input.corpusPath,
+      sha256: input.corpusSha256,
+      from: input.corpusFrom,
+      to: input.corpusTo,
+      tickets: input.corpusTickets,
+    },
+    scope: { match: input.scopeMatch },
+    join: input.join,
+    candidateCount: input.candidates.length,
+    candidates: input.candidates,
+    note: input.note,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Comparison scaffold                                                         */
 /* -------------------------------------------------------------------------- */
 

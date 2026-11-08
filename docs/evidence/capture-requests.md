@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:2651-2670`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:2671-2690`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:4498-4523`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:4526-4546`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:4518-4543`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:4546-4566`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:4578-4586`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:4598-4606`).
 
 ## P7 — the customer report surface (7 candidates)
 
@@ -845,6 +845,12 @@ bun run compare:gslive-users-report \
   --report Scratch/security/review-captures/users-report-1793163600-1793771999.redacted.json \
   --corpus Scratch/security/corpus/gslive-betreport-all-2026-11-03.json
 ```
+
+The verify workflow writes a versioned control artifact to
+`reports/security/users-report-control.json` (override with `--control-out`, skip with
+`--no-control`). `status` reads it as a separate `sameBookControl` block and reports `ok` only when
+the control is fresh, the windows match, and the recorded corpus digest still equals the corpus on
+disk. The control never changes `settlementVerification`.
 
 Classification and exit codes: HTTP 401/403, an unconfigured session, or a failed preflight is
 `AUTH_EXPIRED` (exit 3; reauthenticate, then retry once — do not loop). The comparison requires a

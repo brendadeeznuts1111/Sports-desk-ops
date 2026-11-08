@@ -47,6 +47,12 @@ import {
 } from "../lib/fraud_logs.ts";
 import { buildGroupIntegrity } from "../lib/fraud_integrity.ts";
 import {
+  USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+  USERS_REPORT_CONTROL_REL_PATH,
+  readUsersReportControl,
+  sha256FileHex,
+} from "../lib/gslive_users_report.ts";
+import {
   FRAUD_CATEGORIES,
   FRAUD_SEVERITIES,
   filterFraudPatterns,
@@ -563,6 +569,51 @@ function findingSubset(
 /* Commands                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Read the same-book control artifact written by the users-report compare/verify workflow.
+ * Missing → unavailable; present → validated against freshness and the current corpus digest.
+ * A control can never make settlement correctness "verified".
+ */
+async function loadSameBookControl(root: string): Promise<{
+  control: ReturnType<typeof readUsersReportControl>;
+  controlMs: number;
+}> {
+  const startedAt = performance.now();
+  const path = join(root, USERS_REPORT_CONTROL_REL_PATH);
+  let control: ReturnType<typeof readUsersReportControl>;
+  if (!(await Bun.file(path).exists())) {
+    control = readUsersReportControl(null, {
+      maxAgeMinutes: USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+    });
+  } else {
+    let raw: unknown = null;
+    try {
+      raw = await Bun.file(path).json();
+    } catch {
+      raw = {};
+    }
+    // Hash the corpus path the artifact names so a control for a different corpus is caught.
+    const record =
+      typeof raw === "object" && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : null;
+    const corpus = record?.["corpus"];
+    const relative =
+      typeof corpus === "object" && corpus !== null && !Array.isArray(corpus)
+        ? (corpus as Record<string, unknown>)["path"]
+        : null;
+    let corpusSha256: string | null = null;
+    if (typeof relative === "string" && relative !== "") {
+      corpusSha256 = await sha256FileHex(join(root, relative));
+    }
+    control = readUsersReportControl(raw, {
+      maxAgeMinutes: USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+      corpusSha256,
+    });
+  }
+  return { control, controlMs: Math.round(performance.now() - startedAt) };
+}
+
 async function cmdStatus(
   tokens: readonly string[],
   context: CliContext,
@@ -578,6 +629,7 @@ async function cmdStatus(
     perception.config,
   );
   const integrityMs = Math.round(performance.now() - integrityStartedAt);
+  const sameBook = await loadSameBookControl(context.root);
   const corpusSummary =
     perception.corpus === null
       ? null
@@ -624,6 +676,8 @@ async function cmdStatus(
     integrity,
     // Separate question, separate status: never folded into group integrity.
     settlementVerification: SETTLEMENT_VERIFICATION,
+    // Same-book users-report control (a second encoding; not settlement truth).
+    sameBookControl: sameBook.control,
     model: model.state,
     sources,
     dataHandling: {
@@ -686,6 +740,7 @@ async function cmdStatus(
   return emitSuccess(context, "status", payload, {
     integrityMs,
     integrityCaptures: integrity.source?.captures?.length ?? 1,
+    sameBookControlMs: sameBook.controlMs,
   });
 }
 
