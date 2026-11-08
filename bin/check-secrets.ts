@@ -38,6 +38,11 @@ function trackedFiles(): string[] {
   return execFileSync("git", ["ls-files", "-z"], {
     cwd: ROOT,
     maxBuffer: 64 * 1024 * 1024,
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
   })
     .toString()
     .split("\0")

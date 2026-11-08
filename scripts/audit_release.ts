@@ -19,7 +19,13 @@ import {
 const args = process.argv.slice(2);
 const json = args.includes("--json");
 
-const tagsResult = Bun.spawnSync(["git", "tag", "--list", "docs-v*"]);
+const tagsResult = Bun.spawnSync(["git", "tag", "--list", "docs-v*"], {
+  env: {
+    ...Bun.env,
+    GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  },
+});
 if (tagsResult.exitCode !== 0) {
   console.error(
     `audit:release: git tag failed: ${tagsResult.stderr.toString().trim()}`,

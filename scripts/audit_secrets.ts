@@ -46,6 +46,11 @@ async function trackedFiles(): Promise<string[]> {
   const child = Bun.spawn(["git", "ls-files", "*.ts", "*.js", "*.mjs"], {
     stdout: "pipe",
     stderr: "ignore",
+    env: {
+      ...Bun.env,
+      GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
   });
   const [out, code] = await Promise.all([child.stdout.text(), child.exited]);
   if (code !== 0) {

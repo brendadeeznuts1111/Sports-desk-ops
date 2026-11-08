@@ -19,10 +19,17 @@ import {
 
 const rootDir = path.resolve(import.meta.dir, "..");
 
+const gitEnv = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
+
 function git(args: string[]): { ok: boolean; stdout: string } {
   const r = spawnSync("git", args, {
     cwd: rootDir,
     encoding: "utf-8",
+    env: gitEnv,
   });
   return { ok: r.status === 0, stdout: (r.stdout ?? "").trim() };
 }
@@ -32,6 +39,7 @@ function run(cmd: string, args: string[]): number {
     cwd: rootDir,
     stdio: "inherit",
     encoding: "utf-8",
+    env: cmd === "git" ? gitEnv : process.env,
   });
   return r.status ?? 1;
 }

@@ -53,7 +53,13 @@ const entries = parseEnvFile(await envFile.text());
 const stat = await envFile.stat();
 
 const tracked: TrackedFile[] = [];
-const list = Bun.spawnSync(["git", "ls-files", "-z"]);
+const list = Bun.spawnSync(["git", "ls-files", "-z"], {
+  env: {
+    ...Bun.env,
+    GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+  },
+});
 if (list.exitCode !== 0) {
   console.error("env:audit: git ls-files failed; run inside the repository.");
   process.exit(2);

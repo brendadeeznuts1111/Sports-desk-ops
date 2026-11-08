@@ -27,7 +27,13 @@ function flag(args: readonly string[], name: string): string {
 }
 
 function gitList(listArgs: readonly string[]): string[] {
-  const result = Bun.spawnSync(["git", "ls-files", ...listArgs]);
+  const result = Bun.spawnSync(["git", "ls-files", ...listArgs], {
+    env: {
+      ...Bun.env,
+      GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
+  });
   if (result.exitCode !== 0) {
     console.error(
       `audit:archives: git ls-files failed: ${result.stderr.toString().trim()}`,

@@ -1,21 +1,14 @@
 /**
  * F402 login credentials — never from shell env by default (no ps/history inheritance).
  *
- * **Bun 1.4.4 has no OS-keychain API.** `Bun.password` is bcrypt/argon2 *hashing*, not secret
- * storage — do not use it for capture credentials. This module reads the keychain by shelling to
- * the platform tool (macOS `security`) or `Bun.secrets` when injected in tests.
+ * Bun 1.4+ provides native OS credential storage via `Bun.secrets` (`com.bookdeskops.sportsdesk`
+ * canonical service with legacy `sportsdesk-ops` read fallback). This module accesses credentials
+ * via `Bun.secrets` or injected test readers.
  *
  * **Child-process rules (the only places a plaintext password crosses a process boundary):**
- * 1. **Keychain read** — canonical service (`com.bookdeskops.sportsdesk`) then the legacy
- *    `sportsdesk-ops` fallback. The macOS path shells to `Bun.spawn(["security",
- *    "find-generic-password",…])` with an **argv array** (no shell) and an explicit minimal
- *    environment allowlist (`buildMinimalSpawnEnv()`), and fails closed on a 1s timeout so a
- *    locked Keychain cannot hang a daemon. Never `Bun.$` — interpolation routes bytes through a
- *    shell parser. When a reader is injected (`Bun.secrets` by default, a fake in tests) only that
- *    reader is used.
- * 2. **TTY hidden read** — no native no-echo on `Bun.stdin`; uses `Bun.spawn(["bash","-c",
+ * 1. **TTY hidden read** — no native no-echo on `Bun.stdin`; uses `Bun.spawn(["bash","-c",
  *    "read -rs …"])` with stdin inherited from the TTY and `env: buildMinimalSpawnEnv()`.
- * 3. **Keychain store** (`secrets:f402 set`) — password only via **stdin**; the macOS write path
+ * 2. **Keychain store** (`secrets:f402 set`) — password only via **stdin**; the macOS write path
  *    may use `security add-generic-password -w` and remains the sole argv-leak surface on store.
  */
 
@@ -112,58 +105,16 @@ export function wrapF402Credentials(
 }
 
 /**
- * A locked Keychain (or an item whose ACL wants an interactive consent dialog) makes
- * `security -w` block forever — a daemon or a test has no one to click Allow. Fail closed fast.
- */
-const PLATFORM_KEYCHAIN_TIMEOUT_MS = 1_000;
-
-async function readMacOsKeychainValue(
-  service: string,
-  account: string,
-): Promise<string> {
-  const proc = Bun.spawn(
-    ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
-    { stdout: "pipe", stderr: "ignore", env: buildMinimalSpawnEnv() },
-  );
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), PLATFORM_KEYCHAIN_TIMEOUT_MS);
-  });
-  try {
-    const result = await Promise.race([proc.exited, timedOut]);
-    if (result === "timeout") {
-      proc.kill();
-      await proc.exited.catch(() => undefined);
-      return "";
-    }
-    if (result !== 0) return "";
-    return (await proc.stdout.text()).trim();
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-/** macOS fallback: try the canonical service, then the legacy one. */
-async function readKeychainViaPlatform(account: string): Promise<string> {
-  if (process.platform !== "darwin") return "";
-  for (const service of KEYCHAIN_SERVICES) {
-    const value = await readMacOsKeychainValue(service, account);
-    if (value !== "") return value;
-  }
-  return "";
-}
-
-/**
- * Keychain read with one injected reader (production: `Bun.secrets`, tests: a fake). The reader
- * is asked canonical-first then legacy, matching `lib/secrets.ts`. The macOS `security` CLI is
- * the fallback only when the caller supplied no reader at all (`null`), so a fake store stays
- * deterministic and never depends on the machine's real keychain.
+ * Keychain read with one injected reader (production: `Bun.secrets`, tests: a fake or `null`).
+ * The reader is asked canonical-first then legacy, matching `lib/secrets.ts`. Explicit `null`
+ * or an omitted reader disables keychain lookup completely so tests remain deterministic and
+ * never touch the real keychain.
  */
 async function readKeychain(
-  secrets: SecretsReader | null,
+  secrets: SecretsReader | null | undefined,
   name: string,
 ): Promise<string> {
-  if (secrets === null) return readKeychainViaPlatform(name);
+  if (!secrets) return "";
   for (const service of KEYCHAIN_SERVICES) {
     try {
       const value = (await secrets.get({ service, name }))?.trim() ?? "";
@@ -214,8 +165,15 @@ export async function promptF402CredentialsTTY(): Promise<SecureF402Credentials>
 }
 
 /**
- * Keychain → TTY → (deprecated) env when F402_ALLOW_ENV_CREDENTIALS=1.
- * Never reads F402_PASSWORD from env otherwise.
+ * Keychain → (deprecated) env when F402_ALLOW_ENV_CREDENTIALS=1 → interactive TTY prompt.
+ *
+ * Callers:
+ * - `scripts/evidence_capture.ts` (`authenticateWithWebView`): omits `secrets` (defaults to `Bun.secrets`);
+ *   expects stored keychain credentials or explicit opt-in env credentials without hanging on TTY.
+ * - `scripts/capture/f402_login.ts` (`loadF402Credentials`): omits `secrets` (defaults to `Bun.secrets`);
+ *   interactive operators without stored keychain or env credentials fall through to `promptF402CredentialsTTY`.
+ * - Test suites (`lib/f402_credentials_policy.test.ts`, `tests/f402_login.test.ts`): pass `secrets = null`
+ *   to guarantee test isolation from the host keychain and prevent CLI/TTY prompt stalls.
  */
 export async function loadF402CredentialsSecure(
   env: Env = Bun.env,
@@ -225,10 +183,6 @@ export async function loadF402CredentialsSecure(
   const password = await readKeychain(secrets, SECRET_NAMES.password);
   if (agentId !== "" && password !== "") {
     return wrapF402Credentials({ agentId, password }, "keychain");
-  }
-
-  if (input.isTTY) {
-    return promptF402CredentialsTTY();
   }
 
   if (env[DEPRECATED_ENV_CREDENTIALS_FLAG]?.trim() === "1") {
@@ -241,6 +195,10 @@ export async function loadF402CredentialsSecure(
         "deprecated-env",
       );
     }
+  }
+
+  if (input.isTTY) {
+    return promptF402CredentialsTTY();
   }
 
   throw new MissingF402CredentialsError();
