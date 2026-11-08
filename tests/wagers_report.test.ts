@@ -646,7 +646,11 @@ describe("group sizes, filters, buckets", () => {
     expect(doc).toContain("TOTAL");
     const grid = renderGrid(buckets, sumGrand(buckets), cfg, "State");
     expect(grid).toContain("Risk ($)");
-    // Piped (non-TTY) output carries no ANSI: the enableANSIColors gate holds.
-    expect(Bun.stripANSI(doc)).toBe(doc);
+    // Colors gate holds: uncolored when !Bun.enableANSIColors, colored when enabled
+    if (Bun.enableANSIColors) {
+      expect(Bun.stripANSI(doc)).not.toBe(doc);
+    } else {
+      expect(Bun.stripANSI(doc)).toBe(doc);
+    }
   });
 });

@@ -456,7 +456,18 @@ const REAL_CORPUS = join(
   process.cwd(),
   "Scratch/security/corpus/gslive-betreport-latest.json",
 );
-const realCorpusPresent = existsSync(REAL_CORPUS);
+const isCI = Boolean(Bun.env.CI);
+const realCorpusPresent =
+  !isCI &&
+  existsSync(REAL_CORPUS) &&
+  (() => {
+    try {
+      // 1,114-row scratch slice is ~2.4MB; full 24,778-row production corpus is ~50MB.
+      return Bun.file(REAL_CORPUS).size > 20 * 1024 * 1024;
+    } catch {
+      return false;
+    }
+  })();
 
 describe("real corpus (measured, skipped when absent)", () => {
   test.skipIf(!realCorpusPresent)(
