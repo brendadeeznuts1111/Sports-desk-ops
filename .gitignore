@@ -9,6 +9,7 @@ i18n-resources.json
 manager-common.json
 live-data.json
 reports/
+coverage/
 tests/.tmp-*
 schema/manifest.bin
 scratch/

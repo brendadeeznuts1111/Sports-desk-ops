@@ -104,3 +104,8 @@ pathIgnorePatterns = [
   "scratch/**",
   "verification/gen-tokens-zero-drift-gate/out/**",
 ]
+
+# Dual coverage reporting: preserves console text table while producing lcov.info for CI
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"
+
