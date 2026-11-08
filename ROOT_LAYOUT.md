@@ -9,7 +9,6 @@ The root holds **workspace metadata** and **operator entrypoints**. Code and SSO
 | `catalog/`      | Fantasy402 sport navigation catalog ([catalog/README.md](catalog/README.md))               |
 | `design/`       | `tokens.toml` + generated `domain-branded-types.ts` ([design/README.md](design/README.md)) |
 | `lib/`          | Shared modules; token math in `lib/validation/`                                            |
-| `src/dod6/`     | DOD6 v5.4 Merkle manifest, R2 chunk layout, and edge hydrator                              |
 | `schema/`       | Migrations, local manifest, schema preload ([schema/README.md](schema/README.md))          |
 | `infra/`        | Pages `_headers` for docs deploy ([infra/README.md](infra/README.md))                      |
 | `types/`        | Ambient `env.d.ts` ([types/README.md](types/README.md))                                    |

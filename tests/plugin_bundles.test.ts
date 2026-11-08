@@ -54,13 +54,20 @@ describe("DSH plugin bundles", () => {
       }
     });
 
-    // dsh-plugin reads operator-only customer PII data (enriched_customers_full.json)
-    // which is gitignored and deliberately absent in CI (AGENTS.md:34-39).
+    // By design, dsh-plugin/verify-load.mjs reads operator-only customer PII
+    // (enriched_customers_full.json, gitignored per AGENTS.md:34-39). In CI (or
+    // when that local fixture is absent), all 5 bundles run the structural
+    // manifest check above, while verify-load runs for the 4 fixture-free
+    // bundles and skips dsh-plugin ("5 discovered, 4 verified in CI").
     const shouldSkip =
       bundle === "dsh-plugin" && (isCI || !hasEnrichedCustomers);
+    const verifyLabel =
+      bundle === "dsh-plugin"
+        ? `${bundle} verify-load passes (requires local enriched_customers_full.json; skipped in CI)`
+        : `${bundle} verify-load passes`;
 
     test.skipIf(shouldSkip)(
-      `${bundle} verify-load passes`,
+      verifyLabel,
       async () => {
         const bundleDir = join(ROOT, bundle);
         const harness = join(bundleDir, "verify-load.mjs");
