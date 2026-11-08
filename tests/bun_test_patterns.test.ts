@@ -396,8 +396,6 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
     let executionOrder: number[] = [];
     let concurrent = 0;
     let maxConcurrent = 0;
-    const sleep = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
 
     test.serial("executes first in strict serial sequence", () => {
       executionOrder = [1];
@@ -412,14 +410,14 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
     test.concurrent("concurrent task A", async () => {
       concurrent++;
       maxConcurrent = Math.max(maxConcurrent, concurrent);
-      await sleep(25);
+      await Bun.sleep(25);
       concurrent--;
     });
 
     test.concurrent("concurrent task B", async () => {
       concurrent++;
       maxConcurrent = Math.max(maxConcurrent, concurrent);
-      await sleep(25);
+      await Bun.sleep(25);
       concurrent--;
     });
 
