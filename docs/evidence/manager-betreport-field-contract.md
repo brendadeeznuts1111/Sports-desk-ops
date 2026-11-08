@@ -62,6 +62,20 @@ does not apply the display conversion.
 
 `valuesRetrieved` is added by the client normalizer; it is not present on raw wire rows.
 
+## Adjacent services that are not the source
+
+- `assets/vendor/lp-data-service/dist/lib/lp-data-service.iife.js` (sha256
+  `63c2bd06f209cfcc7a34e0e471e8d3b1902412e0dd2c151704300d690dcdb862`, fetched 2026-11-08) is a
+  real-time event/odds subscription service, not a wager-read client. It subscribes to
+  event/league/sport/lineset data and to partner, free-bet and promo-profile entities
+  (`featuredBet`, `freeBet`, `userFreeBet`, `groupProfile`, `activeCircle`, `fixedParlay`,
+  `partnerPreferences`, …). It does **not** contain `betGroupResult`, `betGroupToWin`,
+  `betGroupId`, `supplementalConfirmation`, `windowEndTime`, `isWin` or `getBetReport`.
+- Trap: its `groupId` is a promo/group-profile cache key, not the wager `betGroupId`. Wager rows
+  and their enums live in the manager application bundle and the `ajax.php` `getBetReport`
+  response documented above; the vendor data service must not be cited for wager grouping or
+  settlement semantics.
+
 ## Limits
 
 - No external settlement truth is implied: these are shape semantics, not outcome correctness.
