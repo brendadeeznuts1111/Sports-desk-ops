@@ -96,3 +96,11 @@ noOrphans = true
 # nested report objects (a secrets row with its mention counts and aliases is 7 deep) readable.
 # `bun --console-depth=N` overrides it. Plain `Bun.inspect` is not affected by this setting.
 depth = 8
+
+[test]
+# Ignore scratch experiments and generated gate artifacts from default test scans.
+# Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
+pathIgnorePatterns = [
+  "scratch/**",
+  "verification/gen-tokens-zero-drift-gate/out/**",
+]
