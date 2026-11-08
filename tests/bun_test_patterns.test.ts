@@ -12,6 +12,7 @@ import {
   spyOn,
   setSystemTime,
   jest,
+  onTestFinished,
 } from "bun:test";
 import {
   checkUnresolvedSentinels,
@@ -337,6 +338,26 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
           delete Bun.env.TZ;
         }
       }
+    });
+  });
+
+  describe("Pattern 12: Scoped Teardown with onTestFinished Hook", () => {
+    let order: string[] = [];
+
+    test("executes onTestFinished cleanup specifically after test completion", () => {
+      order = [];
+      order.push("test-body");
+
+      onTestFinished(() => {
+        order.push("onTestFinished-callback");
+      });
+
+      expect(order).toEqual(["test-body"]);
+    });
+
+    test("verifies onTestFinished ran at the conclusion of the previous test", () => {
+      // The callback registered in the previous test must have fired
+      expect(order).toEqual(["test-body", "onTestFinished-callback"]);
     });
   });
 });
