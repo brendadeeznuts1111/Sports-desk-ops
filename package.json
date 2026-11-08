@@ -181,6 +181,8 @@
     "docs:deploy": "bun run test:docs && bun run verify:docs && bun run audit:release && bun run docs:stage && ./wrangler pages deploy dist --project-name=fantasy402-docs --branch=main",
     "docs:verify:live": "bun run scripts/verify_docs.ts --live https://fantasy402-docs-4ay.pages.dev",
     "verify:docs": "bun run check:ledger-consistency && bun run check:spec-citations && bun run scripts/verify_docs.ts",
+    "verify:docs-staleness": "bun run scripts/check_docs_staleness.ts --warn",
+    "verify:docs-staleness:strict": "bun run scripts/check_docs_staleness.ts",
     "check:ledger-consistency": "bun run scripts/check_ledger_consistency.ts",
     "check:spec-citations": "bun run scripts/check_spec_citations.ts",
     "check:route-surface": "bun run scripts/check_route_surface.ts",

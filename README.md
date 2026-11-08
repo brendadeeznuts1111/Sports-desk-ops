@@ -310,7 +310,6 @@ See **[ROOT_LAYOUT.md](ROOT_LAYOUT.md)** for the full map. At a glance:
 ├── services/         # webview daemon, Telegram bot, R2, churn engine, ingestion
 ├── catalog/          # Fantasy402 sport navigation catalog
 ├── lib/              # shared modules, F402 capture, schema SSOT (+ colocated *.test.ts)
-├── src/dod6/         # DOD6 v5.4 Merkle manifest, R2 layout & edge hydrator
 ├── scripts/          # generators & capture; scripts/deploy/ for VPS/docs/reports (+ colocated *.test.ts)
 ├── reports/          # surveillance outputs, ingestion-audit.jsonl & docs-review
 ├── static/           # token-compiled daemon HTML
