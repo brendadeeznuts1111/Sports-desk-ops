@@ -26,6 +26,8 @@ import {
   FRAUD_CONFIG_REL_PATH,
   FRAUD_MODEL_FIT_COMMAND,
   FRAUD_SCHEMA_VERSION,
+  FraudConfigError,
+  SETTLEMENT_VERIFICATION,
   aggregateBets,
   compactSourceStates,
   filterBets,
@@ -33,6 +35,7 @@ import {
   listIpClusters,
   listPrefixClusters,
   loadFraudPerception,
+  loadGroupIntegrityCohort,
   resolveDossierSubject,
   subjectBetAggregate,
   toBetRecord,
@@ -42,6 +45,7 @@ import {
   type FraudSourceState,
   type IpCluster,
 } from "../lib/fraud_logs.ts";
+import { buildGroupIntegrity } from "../lib/fraud_integrity.ts";
 import {
   FRAUD_CATEGORIES,
   FRAUD_SEVERITIES,
@@ -565,6 +569,11 @@ async function cmdStatus(
   assertNoPositionals("status", flags);
   const perception = await perceptionOf(context);
   const model = await readFraudModel(context.root);
+  // Validated over every discoverable capture (primary + fallbacks), deduped by betGroupId.
+  const integrity = await loadGroupIntegrityCohort(
+    context.root,
+    perception.config,
+  );
   const corpusSummary =
     perception.corpus === null
       ? null
@@ -608,6 +617,9 @@ async function cmdStatus(
       schemaVersion: perception.config.schemaVersion,
     },
     corpus: corpusSummary,
+    integrity,
+    // Separate question, separate status: never folded into group integrity.
+    settlementVerification: SETTLEMENT_VERIFICATION,
     model: model.state,
     sources,
     dataHandling: {
@@ -1183,6 +1195,12 @@ async function cmdBets(
       limit,
     },
     aggregate,
+    integrity:
+      corpus.integrity ??
+      buildGroupIntegrity([], {
+        policy: perception.config.groupIntegrity,
+        source: { kind: "getBetReport", capturedRows: 0 },
+      }),
     sample,
     sampleCount: sample.length,
     sources: sourceStates(perception),
@@ -1917,6 +1935,11 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       "Prints the measured state of all 11 security sources (exists/bytes/age/stale/",
       "provenance/sha256/state/note), the parsed corpus summary and the fitted-model state.",
       "A missing source is reported as MISSING with its reason, never as zero records.",
+      "integrity: bet-group ownership/financial-field validation over every discoverable",
+      "capture (status verified|incomplete|invalid|unavailable; zero violations is only clean",
+      "when coverage completed).",
+      "settlementVerification: reported separately and stays unverified while no same-book",
+      "settlement ledger is available; it is never mixed into the integrity status.",
     ],
     options: [],
     examples: ["bun run cli/sportsdesk_fraud_cli.ts status --json"],
@@ -1924,13 +1947,14 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
   {
     name: "bets",
     summary:
-      "Filtered, masked bet rows plus an aggregate (never all 24,778 rows)",
+      "Filtered, masked bet rows plus an aggregate (never the whole corpus)",
     usage:
       "bets [--agent <id>] [--account <id>] [--state <code>] [--since <iso>] [--limit N] [--include-bots <bool>] [flags]",
     detail: [
       "Normalizes getBetReport rows to the frozen BetRecord shape. IP addresses are masked",
       "(ipMasked/ipTag/ipPrefix24) at the parse boundary; a raw address is never emitted.",
       "The aggregate covers the filtered set; `sample` is capped by --limit.",
+      "integrity: the loaded corpus's bet-group integrity object (same contract as status).",
     ],
     options: [
       { flags: "--agent <id>", description: "Filter to one agent login." },
@@ -2347,6 +2371,13 @@ async function main(): Promise<number> {
   } catch (error) {
     if (error instanceof CliError) {
       return emitFailure(global.command, error, global.json);
+    }
+    if (error instanceof FraudConfigError) {
+      return emitFailure(
+        global.command,
+        new CliError(error.code, error.message, {}, EXIT_ERROR),
+        global.json,
+      );
     }
     if (error instanceof FraudModelError) {
       const refusal = new CliError(
