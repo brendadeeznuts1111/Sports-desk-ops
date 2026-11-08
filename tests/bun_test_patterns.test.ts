@@ -391,4 +391,28 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
       expect(result).toBe("resolved-token");
     });
   });
+
+  describe("Pattern 15: Concurrency Qualifiers (test.concurrent, test.serial)", () => {
+    let executionOrder: number[] = [];
+
+    test.serial("executes first in strict serial sequence", () => {
+      executionOrder = [1];
+      expect(executionOrder).toEqual([1]);
+    });
+
+    test.serial("executes second in strict serial sequence", () => {
+      executionOrder.push(2);
+      expect(executionOrder).toEqual([1, 2]);
+    });
+
+    test.concurrent(
+      "executes concurrently alongside other async tasks",
+      async () => {
+        const delay = (ms: number) =>
+          new Promise((resolve) => setTimeout(resolve, ms));
+        await delay(1);
+        expect(true).toBe(true);
+      },
+    );
+  });
 });
