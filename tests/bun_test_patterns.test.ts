@@ -394,6 +394,10 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
 
   describe("Pattern 15: Concurrency Qualifiers (test.concurrent, test.serial)", () => {
     let executionOrder: number[] = [];
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const sleep = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
 
     test.serial("executes first in strict serial sequence", () => {
       executionOrder = [1];
@@ -405,13 +409,27 @@ describe("Bun 1.4+ Extended Testing Patterns", () => {
       expect(executionOrder).toEqual([1, 2]);
     });
 
-    test.concurrent(
-      "executes concurrently alongside other async tasks",
-      async () => {
-        const delay = (ms: number) =>
-          new Promise((resolve) => setTimeout(resolve, ms));
-        await delay(1);
-        expect(true).toBe(true);
+    test.concurrent("concurrent task A", async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await sleep(25);
+      concurrent--;
+    });
+
+    test.concurrent("concurrent task B", async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await sleep(25);
+      concurrent--;
+    });
+
+    test.serial(
+      "verifies concurrent overlap occurred and serialized teardown followed",
+      () => {
+        // Proves that both concurrent tasks overlapped in time (concurrency > 1)
+        expect(maxConcurrent).toBeGreaterThan(1);
+        expect(concurrent).toBe(0);
+        expect(executionOrder).toEqual([1, 2]);
       },
     );
   });
