@@ -1559,11 +1559,35 @@ window.__ModuleLoader__.load({
       const status = readText(integrity.status);
       if (status === null || !(status in INTEGRITY_STATUS_KEYS)) return null;
       const counters = isRecord(integrity.counters) ? integrity.counters : {};
+      const source = isRecord(integrity.source) ? integrity.source : null;
+      const captureList = asArray(source?.captures);
+      const violationCounts = isRecord(integrity.violationCounts)
+        ? integrity.violationCounts
+        : {};
+      const violationSummary = Object.entries(violationCounts)
+        .map(([code, count]) => {
+          const value = formatInteger(count);
+          return value === null ? null : `${code} ${value}`;
+        })
+        .filter((entry) => entry !== null)
+        .slice(0, 3)
+        .join(" · ");
       return {
         status,
         groups: readNumber(counters.groups),
         crossPlayer: readNumber(counters.crossPlayerGroups),
         conflicts: readNumber(counters.ticketFieldConflicts),
+        rows: readNumber(counters.rows),
+        schemaVersion: integrity.schemaVersion,
+        derivationVersion: readText(integrity.derivationVersion),
+        policyVersion: readText(integrity.policyVersion),
+        captures:
+          captureList.length > 0
+            ? captureList.length
+            : source === null
+              ? null
+              : 1,
+        violationSummary: violationSummary === "" ? null : violationSummary,
       };
     }
 
@@ -1580,7 +1604,11 @@ window.__ModuleLoader__.load({
       if (settlement === null) return null;
       const status = readText(settlement.status);
       if (status === null) return null;
-      return { status, blockedBy: readText(settlement.blockedBy) };
+      return {
+        status,
+        blockedBy: readText(settlement.blockedBy),
+        note: readText(settlement.note),
+      };
     }
 
     /**
@@ -2525,6 +2553,10 @@ window.__ModuleLoader__.load({
       const nextStep = readNextStep(statusPayload);
       const integrity = readIntegrity(statusPayload);
       const settlement = readSettlementVerification(statusPayload);
+      // No payload yet + no error means "measuring"; only a resolved payload can say
+      // "not reported" (a missing/unsupported block is a measurement result, not loading).
+      const statusLoading =
+        statusPayload === null && statusEntry.error === null;
       const weblogEntry = snapshot.weblog;
       const weblog = readWeblog(weblogEntry.payload);
       const betsEntry = snapshot.bets;
@@ -2875,10 +2907,15 @@ window.__ModuleLoader__.load({
           : postureParts.length === 0
             ? t("postureAllOk")
             : postureParts.join(" · ");
-      const postureTile = (key, tone, label, value, sub) =>
+      const postureTile = (key, tone, label, value, sub, title = null) =>
         h(
           "div",
-          { className: "sec-posture-tile", key, "data-tone": tone },
+          {
+            className: "sec-posture-tile",
+            key,
+            "data-tone": tone,
+            ...(title === null ? {} : { title }),
+          },
           h("span", { className: "sec-posture-label" }, label),
           h("span", { className: "sec-posture-value" }, value),
           sub === null
@@ -2924,7 +2961,7 @@ window.__ModuleLoader__.load({
         ),
         postureTile(
           "integrity",
-          integrity === null
+          integrity === null || statusLoading
             ? "muted"
             : integrity.status === "verified"
               ? "ok"
@@ -2934,27 +2971,56 @@ window.__ModuleLoader__.load({
                   ? "muted"
                   : "warn",
           t("postureIntegrity"),
-          integrity === null
-            ? t("integrityNotReported")
-            : labelOf(t, INTEGRITY_STATUS_KEYS, integrity.status),
-          integrity === null
+          statusLoading
+            ? t("loading")
+            : integrity === null
+              ? t("integrityNotReported")
+              : labelOf(t, INTEGRITY_STATUS_KEYS, integrity.status),
+          integrity === null || statusLoading
             ? null
             : `${t("integrityGroups")}: ${formatInteger(integrity.groups) ?? t("notAvailable")} · ${t("integrityCrossPlayer")}: ${formatInteger(integrity.crossPlayer) ?? t("notAvailable")} · ${t("integrityConflicts")}: ${formatInteger(integrity.conflicts) ?? t("notAvailable")}`,
+          integrity === null || statusLoading
+            ? null
+            : [
+                `schema v${integrity.schemaVersion}`,
+                integrity.derivationVersion,
+                integrity.policyVersion === null
+                  ? null
+                  : `policy ${integrity.policyVersion}`,
+                integrity.captures === null
+                  ? null
+                  : `captures ${integrity.captures}`,
+                integrity.rows === null
+                  ? null
+                  : `rows ${formatInteger(integrity.rows)}`,
+                integrity.violationSummary === null
+                  ? null
+                  : `violations ${integrity.violationSummary}`,
+              ]
+                .filter((part) => part !== null)
+                .join(" · "),
         ),
         postureTile(
           "settlement",
-          settlement === null
+          settlement === null || statusLoading
             ? "muted"
             : settlement.status === "unverified"
               ? "warn"
               : "muted",
           t("postureSettlement"),
-          settlement === null
-            ? t("integrityNotReported")
-            : labelOf(t, SETTLEMENT_STATUS_KEYS, settlement.status),
-          settlement === null || settlement.blockedBy === null
+          statusLoading
+            ? t("loading")
+            : settlement === null
+              ? t("integrityNotReported")
+              : labelOf(t, SETTLEMENT_STATUS_KEYS, settlement.status),
+          settlement === null || statusLoading || settlement.blockedBy === null
             ? null
             : t("settlementNoLedger"),
+          settlement === null || statusLoading
+            ? null
+            : [settlement.blockedBy, settlement.note]
+                .filter((part) => part !== null)
+                .join(": "),
         ),
       );
 

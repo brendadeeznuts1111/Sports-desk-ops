@@ -38,6 +38,10 @@ Status semantics:
 A malformed `groupIntegrity` block in `config/fraud-model.json` fails explicitly with the
 `invalid_config` error code; it never falls back to defaults.
 
+`status` also reports the measurement cost in its timing envelope: `integrityMs` is the cohort
+validation duration and `integrityCaptures` is the number of distinct captures validated. They are
+observability fields only; they never affect the status value.
+
 ## `status` — `settlementVerification`
 
 Settlement correctness is a separate question from ownership and financial-field integrity.
@@ -55,6 +59,12 @@ This field is defined and intentionally constant: it reports `unverified` until 
 settlement ledger exists to compare against. It must never be folded into, derived from, or
 ranked against the `integrity` status; a corpus can be internally consistent (verified ownership
 and financial fields) while settlement correctness remains unknown.
+
+## Related evidence
+
+- [manager-betreport-field-contract.md](evidence/manager-betreport-field-contract.md) pins the
+  observed `getBetReport` enums, the nested confirmation state, and the raw-vs-display currency
+  split behind the fields this CLI consumes.
 
 ## Compatibility
 

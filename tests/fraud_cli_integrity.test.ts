@@ -130,6 +130,10 @@ describe("status --json integrity contract", () => {
     expect(typeof result.body["model"]).toBe("object");
     expect(Array.isArray(result.body["sources"])).toBe(true);
     expect(typeof result.body["nextStep"]).toBe("string");
+    const timing = result.body["timing"] as Record<string, unknown>;
+    expect(typeof timing["elapsedMs"]).toBe("number");
+    expect(typeof timing["integrityMs"]).toBe("number");
+    expect(Number(timing["integrityCaptures"])).toBeGreaterThanOrEqual(1);
   });
 
   test("settlement verification is a separate top-level status, never inside integrity", () => {

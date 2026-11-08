@@ -275,6 +275,7 @@ function emitSuccess(
   context: CliContext,
   command: string,
   payload: Readonly<Record<string, unknown>>,
+  extraTiming: Readonly<Record<string, number | null>> = {},
 ): number {
   // Envelope fields win over payload fields: `command` is always the command NAME, never a
   // shell line or a payload value (the plugin routes on it).
@@ -291,6 +292,7 @@ function emitSuccess(
         context.perception === null
           ? null
           : Math.round(context.perception.timing.corpusParseMs ?? 0),
+      ...extraTiming,
     },
   };
   process.stdout.write(
@@ -570,10 +572,12 @@ async function cmdStatus(
   const perception = await perceptionOf(context);
   const model = await readFraudModel(context.root);
   // Validated over every discoverable capture (primary + fallbacks), deduped by betGroupId.
+  const integrityStartedAt = performance.now();
   const integrity = await loadGroupIntegrityCohort(
     context.root,
     perception.config,
   );
+  const integrityMs = Math.round(performance.now() - integrityStartedAt);
   const corpusSummary =
     perception.corpus === null
       ? null
@@ -679,7 +683,10 @@ async function cmdStatus(
       EXIT_ERROR,
     );
   }
-  return emitSuccess(context, "status", payload);
+  return emitSuccess(context, "status", payload, {
+    integrityMs,
+    integrityCaptures: integrity.source?.captures?.length ?? 1,
+  });
 }
 
 function ageIn(
