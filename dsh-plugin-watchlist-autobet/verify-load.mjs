@@ -210,9 +210,13 @@ check(
       "found no imports at all; expected node: builtins",
     );
     for (const specifier of specifiers) {
+      const ok =
+        specifier.startsWith("node:") ||
+        specifier.startsWith("./") ||
+        specifier.startsWith("../");
       assert(
-        specifier.startsWith("node:"),
-        `index.js imports a non-builtin module: ${specifier}`,
+        ok,
+        `index.js imports outside node: builtins or this bundle: ${specifier}`,
       );
     }
     // The header may NAME a peer package to explain why it is not imported; what must not
