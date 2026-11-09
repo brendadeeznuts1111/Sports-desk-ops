@@ -2677,6 +2677,118 @@
           default chat; apply limits in Fantasy402.
         </p>
       </section>
+
+      <!-- Customer Behavioral Signatures (5-Kind Pipeline) -->
+      <section
+        class="section-card"
+        id="customer-signatures-panel"
+        aria-labelledby="csig-title"
+        aria-live="polite"
+      >
+        <div class="section-title">
+          <span id="csig-title">
+            Customer Behavioral Signatures (5-Kind Pipeline)
+          </span>
+          <span class="badge badge-primary" id="csig-badge">LOADING</span>
+        </div>
+
+        <p class="ld-note" style="margin-top: 0" id="csig-note">
+          Two-pass customer signature audit across 5 active kinds:
+          <code>in_play_activity</code>, <code>post_halftime_activity</code>,
+          <code>football_key_number_discipline</code>,
+          <code>pre_move_betting</code> (local 60s live reference window +
+          <code>timing</code> split), and
+          <code>cbb_under_concentration</code> (dormant).
+        </p>
+
+        <dl class="lw-stats" id="csig-stats">
+          <div class="lw-stat">
+            <dt>Normalized Legs</dt>
+            <dd id="csig-stat-legs">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Distinct Customers</dt>
+            <dd id="csig-stat-customers">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Priced Pre-Move Legs</dt>
+            <dd id="csig-stat-priced">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Multi-Cohort Accounts</dt>
+            <dd id="csig-stat-multi">–</dd>
+          </div>
+          <div class="lw-stat">
+            <dt>Volume-Capped Excluded</dt>
+            <dd id="csig-stat-capped">–</dd>
+          </div>
+        </dl>
+
+        <div
+          id="csig-filters"
+          style="display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0"
+          role="group"
+          aria-label="Filter signature cohort"
+        ></div>
+
+        <div style="overflow-x: auto; margin-bottom: 14px">
+          <table
+            class="lw-table"
+            aria-label="Customer signature cohort diagnostics and drop attribution"
+          >
+            <thead>
+              <tr>
+                <th scope="col">Cohort Kind</th>
+                <th scope="col" class="num">Candidates</th>
+                <th scope="col" class="num">Drop: Denom</th>
+                <th scope="col" class="num">Drop: minWagers</th>
+                <th scope="col" class="num">Drop: maxLegs</th>
+                <th scope="col" class="num">Drop: Numerator/Rate</th>
+                <th scope="col" class="num">Emitted</th>
+                <th scope="col">Score (Mean / Med / p95)</th>
+                <th scope="col" class="num">Tie Rate</th>
+                <th scope="col">Sub-Cohort Breakdown</th>
+              </tr>
+            </thead>
+            <tbody id="csig-cohorts-body">
+              <tr>
+                <td class="empty-row" colspan="10">
+                  Loading customer signature cohorts…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="overflow-x: auto">
+          <table
+            class="lw-table"
+            aria-label="Top ranked accounts across customer signature cohorts"
+          >
+            <thead>
+              <tr>
+                <th scope="col">Cohort</th>
+                <th scope="col" class="num">Rank</th>
+                <th scope="col">Customer</th>
+                <th scope="col" class="num">Score</th>
+                <th scope="col">Tie-Break</th>
+                <th scope="col" class="num">Wagers / Legs</th>
+                <th scope="col" class="num">Deduped Risk</th>
+                <th scope="col" class="num">Deduped Net</th>
+                <th scope="col">Sport Mix (FB/BK/OT)</th>
+                <th scope="col">Signature Evidence</th>
+              </tr>
+            </thead>
+            <tbody id="csig-top-body">
+              <tr>
+                <td class="empty-row" colspan="10">
+                  Loading top ranked signature accounts…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <script type="module">
@@ -3310,7 +3422,7 @@
           setBadge("LOADING", "primary");
           try {
             const [bets, admin, sports, board] = await Promise.all([
-              authed("/api/live-bets", { cache: "no-store" }),
+              authed("/api/live-bets?source=auto", { cache: "no-store" }),
               authed("/api/game-admin", { cache: "no-store" }),
               authed("/api/sports", { cache: "no-store" }),
               authed("/api/scoreboard", { cache: "no-store" }),
@@ -4844,7 +4956,9 @@
 
         const loadLiveWagers = async () => {
           try {
-            const res = await authed("/api/live-wagers", { cache: "no-store" });
+            const res = await authed("/api/live-wagers?source=auto", {
+              cache: "no-store",
+            });
             if (res.status === 404) {
               badge.textContent = "NOT CAPTURED";
               badge.className = "badge badge-warning";
@@ -5816,6 +5930,363 @@
         renderTaxonomy();
       })();
 
+      function renderCustomerSignatures(sigData) {
+        const badgeEl = document.getElementById("csig-badge");
+        const legsEl = document.getElementById("csig-stat-legs");
+        const custEl = document.getElementById("csig-stat-customers");
+        const pricedEl = document.getElementById("csig-stat-priced");
+        const multiEl = document.getElementById("csig-stat-multi");
+        const cappedEl = document.getElementById("csig-stat-capped");
+        const filtersEl = document.getElementById("csig-filters");
+        const cohortsBody = document.getElementById("csig-cohorts-body");
+        const topBody = document.getElementById("csig-top-body");
+
+        const makeEmptyRow = (colspan, message) => {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.className = "empty-row";
+          td.colSpan = colspan;
+          td.textContent = message;
+          tr.appendChild(td);
+          return tr;
+        };
+
+        if (
+          !sigData ||
+          typeof sigData !== "object" ||
+          !sigData.pass1 ||
+          !sigData.pass2 ||
+          !sigData.pass2.cohorts
+        ) {
+          if (badgeEl) {
+            badgeEl.textContent = "UNAVAILABLE";
+            badgeEl.className = "badge badge-warning";
+          }
+          if (cohortsBody) {
+            cohortsBody.replaceChildren(
+              makeEmptyRow(10, "Signature audit unavailable."),
+            );
+          }
+          if (topBody) {
+            topBody.replaceChildren(
+              makeEmptyRow(10, "No top signature accounts available."),
+            );
+          }
+          return;
+        }
+
+        const p1 = sigData.pass1;
+        const p2 = sigData.pass2;
+        const cohorts = p2.cohorts || {};
+        const cohortOrder = [
+          "in_play_activity",
+          "post_halftime_activity",
+          "football_key_number_discipline",
+          "pre_move_betting",
+          "cbb_under_concentration",
+        ];
+
+        const fmtCount = (v) =>
+          typeof v === "number" && Number.isFinite(v)
+            ? v.toLocaleString("en-US")
+            : "0";
+        const fmtUsdVal = (v) => {
+          if (typeof v !== "number" || !Number.isFinite(v)) return "$0";
+          const sign = v < 0 ? "-" : "";
+          return sign + "$" + Math.abs(Math.round(v)).toLocaleString("en-US");
+        };
+
+        if (badgeEl) {
+          const alarms = Array.isArray(p2.zeroBucketAlarms)
+            ? p2.zeroBucketAlarms.length
+            : 0;
+          badgeEl.textContent =
+            alarms === 0 ? "5 KINDS ACTIVE" : alarms + " ALARM";
+          badgeEl.className =
+            alarms === 0 ? "badge badge-success" : "badge badge-warning";
+        }
+        if (legsEl)
+          legsEl.textContent = fmtCount(p1.corpus && p1.corpus.totalTickets);
+        if (custEl)
+          custEl.textContent = fmtCount(
+            p1.corpus && p1.corpus.distinctCustomers,
+          );
+        if (pricedEl)
+          pricedEl.textContent = fmtCount(
+            p1.preMoveViability && p1.preMoveViability.pricedTickets,
+          );
+        if (multiEl)
+          multiEl.textContent = fmtCount(
+            p2.overlap && Array.isArray(p2.overlap.multiCohortCustomers)
+              ? p2.overlap.multiCohortCustomers.length
+              : 0,
+          );
+        if (cappedEl)
+          cappedEl.textContent = fmtCount(
+            p2.volumeAccountDiagnostics &&
+              p2.volumeAccountDiagnostics.excludedByMaxLegsCapCount,
+          );
+
+        const describeSubCohort = (kind) => {
+          if (kind === "in_play_activity" && p2.inPlayBreakdown) {
+            const bt = p2.inPlayBreakdown.byTiming || {};
+            return (
+              "dominant_in_play=" +
+              fmtCount(bt.dominant_in_play) +
+              " · balanced=" +
+              fmtCount(bt.balanced)
+            );
+          }
+          if (kind === "post_halftime_activity" && p2.postHalftimeBreakdown) {
+            const br = p2.postHalftimeBreakdown.byReason || {};
+            const bs = p2.postHalftimeBreakdown.byDominantSport || {};
+            return (
+              "period=" +
+              fmtCount(br.period) +
+              " · in_play=" +
+              fmtCount(br.in_play) +
+              " (FB " +
+              fmtCount(bs.Football) +
+              " / BK " +
+              fmtCount(bs.Basketball) +
+              ")"
+            );
+          }
+          if (kind === "pre_move_betting" && p2.preMoveBreakdown) {
+            const bt = p2.preMoveBreakdown.byTiming || {};
+            return (
+              "pregame=" +
+              fmtCount(bt.pregame) +
+              " · live=" +
+              fmtCount(bt.live) +
+              " (60s window)"
+            );
+          }
+          if (kind === "football_key_number_discipline") {
+            const fk = p1.footballKeyNumbers || {};
+            return (
+              "atKey=" +
+              fmtCount(fk.atKeyCount) +
+              " · boughtKey=" +
+              fmtCount(fk.boughtKeyCount)
+            );
+          }
+          if (kind === "cbb_under_concentration") {
+            return "status=dormant (M3=12)";
+          }
+          return "—";
+        };
+
+        const describeSignatureEvidence = (sig) => {
+          if (!sig || typeof sig !== "object") return "—";
+          if (sig.kind === "in_play_activity") {
+            return (
+              sig.timing +
+              " · live=" +
+              fmtCount(sig.liveCount) +
+              "/" +
+              fmtCount(sig.totalCount) +
+              " (" +
+              Math.round((sig.liveRate || 0) * 100) +
+              "%)"
+            );
+          }
+          if (sig.kind === "post_halftime_activity") {
+            return (
+              "reason=" +
+              sig.reason +
+              " · 2H=" +
+              fmtCount(sig.twoHalfCount) +
+              "/" +
+              fmtCount(sig.totalCount) +
+              " (period=" +
+              fmtCount(sig.periodCount) +
+              ", inPlay=" +
+              fmtCount(sig.inPlayCount) +
+              ")"
+            );
+          }
+          if (sig.kind === "football_key_number_discipline") {
+            return (
+              "onKey=" +
+              fmtCount(sig.onKey) +
+              "/" +
+              fmtCount(sig.totalSpread) +
+              " (key3=" +
+              fmtCount(sig.onKey3) +
+              ", key7=" +
+              fmtCount(sig.onKey7) +
+              ", at=" +
+              fmtCount(sig.atKeyCount) +
+              ", bought=" +
+              fmtCount(sig.boughtKeyCount) +
+              ")"
+            );
+          }
+          if (sig.kind === "pre_move_betting") {
+            return (
+              sig.timing +
+              " · move=" +
+              fmtCount(sig.moveCount) +
+              "/" +
+              fmtCount(sig.totalCount) +
+              " · avgCLV=" +
+              (typeof sig.avgPriceVsCloseCents === "number"
+                ? sig.avgPriceVsCloseCents.toFixed(2) + "c"
+                : "0c")
+            );
+          }
+          if (sig.kind === "cbb_under_concentration") {
+            return (
+              (sig.status || "dormant") +
+              " · under=" +
+              fmtCount(sig.underCount) +
+              "/" +
+              fmtCount(sig.cbbTotalCount)
+            );
+          }
+          return JSON.stringify(sig);
+        };
+
+        let activeFilter = "ALL";
+
+        const renderTables = () => {
+          if (cohortsBody) {
+            const cohortRows = [];
+            for (const kind of cohortOrder) {
+              if (activeFilter !== "ALL" && activeFilter !== kind) continue;
+              const c = cohorts[kind] || {};
+              const d = c.dropAttribution || {};
+              const s = c.scoreDistribution || {};
+              const tr = document.createElement("tr");
+              const cells = [
+                [kind, "mono-cell"],
+                [fmtCount(d.candidatesWithAnySignal), "num mono-cell"],
+                [fmtCount(d.droppedBySmallDenominator), "num mono-cell"],
+                [fmtCount(d.droppedByMinWagers), "num mono-cell"],
+                [fmtCount(d.droppedByVolumeCap), "num mono-cell"],
+                [
+                  fmtCount(d.droppedByZeroOrMinNumerator) +
+                    " / " +
+                    fmtCount(d.droppedByRateThreshold),
+                  "num mono-cell",
+                ],
+                [fmtCount(c.bucketSize), "num mono-cell"],
+                [
+                  String(s.mean ?? 0) +
+                    " / " +
+                    String(s.median ?? 0) +
+                    " / " +
+                    String(s.p95 ?? 0),
+                  "mono-cell",
+                ],
+                [
+                  typeof s.tieRate === "number"
+                    ? (s.tieRate * 100).toFixed(1) + "%"
+                    : "0.0%",
+                  "num mono-cell",
+                ],
+                [describeSubCohort(kind), ""],
+              ];
+              for (const [text, cls] of cells) {
+                const td = document.createElement("td");
+                if (cls) td.className = cls;
+                td.textContent = String(text);
+                tr.appendChild(td);
+              }
+              cohortRows.push(tr);
+            }
+            cohortsBody.replaceChildren(
+              ...(cohortRows.length > 0
+                ? cohortRows
+                : [makeEmptyRow(10, "No matching signature cohorts.")]),
+            );
+          }
+
+          if (topBody) {
+            const topRows = [];
+            for (const kind of cohortOrder) {
+              if (activeFilter !== "ALL" && activeFilter !== kind) continue;
+              const c = cohorts[kind] || {};
+              const list = Array.isArray(c.top10) ? c.top10 : [];
+              const limit = activeFilter === "ALL" ? 5 : 10;
+              for (const item of list.slice(0, limit)) {
+                const tr = document.createElement("tr");
+                const sm = item.sportMix || {
+                  footballPct: 0,
+                  basketballPct: 0,
+                  otherPct: 0,
+                };
+                const mixStr =
+                  Math.round((sm.footballPct || 0) * 100) +
+                  "%/" +
+                  Math.round((sm.basketballPct || 0) * 100) +
+                  "%/" +
+                  Math.round((sm.otherPct || 0) * 100) +
+                  "%";
+                const cells = [
+                  [kind, "mono-cell"],
+                  ["#" + String(item.rank ?? "—"), "num mono-cell"],
+                  [String(item.customerId ?? "—"), "mono-cell"],
+                  [String(item.rankScore ?? "—"), "num mono-cell"],
+                  [JSON.stringify(item.tieBreak ?? []), "mono-cell"],
+                  [
+                    fmtCount(item.nTickets) +
+                      "w / " +
+                      fmtCount(item.legs) +
+                      "L",
+                    "num mono-cell",
+                  ],
+                  [fmtUsdVal(item.totalRiskUsd), "num mono-cell"],
+                  [fmtUsdVal(item.netUsd), "num mono-cell"],
+                  [mixStr, "mono-cell"],
+                  [describeSignatureEvidence(item.signature), ""],
+                ];
+                for (const [text, cls] of cells) {
+                  const td = document.createElement("td");
+                  if (cls) td.className = cls;
+                  td.textContent = String(text);
+                  tr.appendChild(td);
+                }
+                topRows.push(tr);
+              }
+            }
+            topBody.replaceChildren(
+              ...(topRows.length > 0
+                ? topRows
+                : [makeEmptyRow(10, "No top accounts for selected cohort.")]),
+            );
+          }
+        };
+
+        if (filtersEl) {
+          const filterOptions = ["ALL", ...cohortOrder];
+          const buttons = filterOptions.map((opt) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = opt === activeFilter ? "btn" : "btn btn-ghost";
+            const countSuffix =
+              opt === "ALL"
+                ? ""
+                : " (" +
+                  fmtCount(cohorts[opt] && cohorts[opt].bucketSize) +
+                  ")";
+            btn.textContent = opt + countSuffix;
+            btn.addEventListener("click", () => {
+              activeFilter = opt;
+              for (const b of buttons) {
+                b.className = b === btn ? "btn" : "btn btn-ghost";
+              }
+              renderTables();
+            });
+            return btn;
+          });
+          filtersEl.replaceChildren(...buttons);
+        }
+
+        renderTables();
+      }
+
       (async () => {
         try {
           const res = await authed("/api/kpis", { cache: "no-store" });
@@ -5823,6 +6294,7 @@
           const payload = await res.json();
           renderWeblogPanel(payload.weblog);
           renderBridgeReview(payload.bridge);
+          renderCustomerSignatures(payload.signatures);
         } catch {
           const el = document.getElementById("weblog-status");
           if (el) el.textContent = "Bridge WebLog: unavailable";

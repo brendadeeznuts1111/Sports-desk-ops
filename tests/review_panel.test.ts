@@ -130,3 +130,61 @@ describe("Bridge Review dashboard panel", () => {
     expect([...html.matchAll(/<script\b/g)]).toHaveLength(2);
   });
 });
+
+describe("Customer Behavioral Signatures (5-Kind Pipeline) dashboard panel", () => {
+  const sigRenderer = functionSource(
+    "function renderCustomerSignatures(sigData)",
+  );
+
+  test("renders the customer-signatures-panel section with full contract IDs", () => {
+    const section = html.match(
+      /<section[^>]*id="customer-signatures-panel"[^>]*>/s,
+    );
+    expect(section).not.toBeNull();
+    expect(section?.[0]).toContain('class="section-card"');
+    expect(section?.[0]).toContain('aria-labelledby="csig-title"');
+    expect(section?.[0]).toContain('aria-live="polite"');
+    for (const id of [
+      "csig-title",
+      "csig-badge",
+      "csig-stats",
+      "csig-stat-legs",
+      "csig-stat-customers",
+      "csig-stat-priced",
+      "csig-stat-multi",
+      "csig-stat-capped",
+      "csig-filters",
+      "csig-cohorts-body",
+      "csig-top-body",
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
+  test("uses DOM construction and textContent, never an HTML sink", () => {
+    expect(sigRenderer.length).toBeGreaterThan(0);
+    expect(sigRenderer).toContain("document.createElement");
+    expect(sigRenderer).toContain("textContent");
+    expect(sigRenderer).toContain("replaceChildren");
+    for (const kind of [
+      "in_play_activity",
+      "post_halftime_activity",
+      "football_key_number_discipline",
+      "pre_move_betting",
+      "cbb_under_concentration",
+    ]) {
+      expect(sigRenderer).toContain(kind);
+    }
+  });
+
+  test("calls renderCustomerSignatures(payload.signatures) from the KPI load after Bridge Review", () => {
+    const kpiAt = html.lastIndexOf('authed("/api/kpis"');
+    expect(kpiAt).toBeGreaterThan(-1);
+    const kpiBlock = html.slice(kpiAt, kpiAt + 1500);
+    expect(kpiBlock).toContain("renderBridgeReview(payload.bridge)");
+    expect(kpiBlock).toContain("renderCustomerSignatures(payload.signatures)");
+    expect(kpiBlock.indexOf("renderBridgeReview")).toBeLessThan(
+      kpiBlock.indexOf("renderCustomerSignatures"),
+    );
+  });
+});
