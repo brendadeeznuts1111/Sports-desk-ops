@@ -89,7 +89,6 @@ import {
   type LiveBetsArtifact,
 } from "../lib/live_bets.ts";
 import {
-  STALE_AFTER_SECONDS,
   deriveDeskKpis,
   freshness,
   readCustomerBookSummary,

@@ -13,7 +13,8 @@ import type {
 import { resolveTelegramCredentials } from "./telegram_alert_sender.ts";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
 
-export const HEALTH_WATCHER_STATE_REL = "scratch/health-watcher-state.json" as const;
+export const HEALTH_WATCHER_STATE_REL =
+  "scratch/health-watcher-state.json" as const;
 
 export interface HealthWatcherState {
   readonly schemaVersion: 1;
@@ -114,12 +115,10 @@ export function snapshotFromHealthPayload(
   };
 }
 
-export async function fetchHealthWatcherSnapshot(
-  options?: {
-    readonly healthUrl?: string;
-    readonly fetchImpl?: typeof fetch;
-  },
-): Promise<HealthWatcherSnapshot> {
+export async function fetchHealthWatcherSnapshot(options?: {
+  readonly healthUrl?: string;
+  readonly fetchImpl?: typeof fetch;
+}): Promise<HealthWatcherSnapshot> {
   const url = options?.healthUrl ?? defaultHealthUrl();
   const fetchImpl = options?.fetchImpl ?? fetch;
   try {
@@ -244,7 +243,8 @@ export async function runHealthWatcherTick(
       lastOperationalStatus: current,
       updatedAt: now().toISOString(),
     };
-    const save = options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
+    const save =
+      options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
     await save(nextState);
     return {
       previous,
@@ -276,7 +276,8 @@ export async function runHealthWatcherTick(
       lastOperationalStatus: current,
       updatedAt: now().toISOString(),
     };
-    const save = options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
+    const save =
+      options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
     await save(nextState);
     return {
       previous,
@@ -294,7 +295,8 @@ export async function runHealthWatcherTick(
     lastOperationalStatus: current,
     updatedAt: now().toISOString(),
   };
-  const save = options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
+  const save =
+    options.saveState ?? ((s) => saveHealthWatcherState(s, statePath));
   await save(nextState);
 
   const result: HealthWatcherTickResult = {

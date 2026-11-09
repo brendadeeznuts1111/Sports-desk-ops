@@ -541,7 +541,8 @@ describe("keychain-first manager session", () => {
   test("resolveManagerSessionGate prefers GS_SESSION then keychain", async () => {
     const gateReader = {
       async get(options: { name: string }) {
-        if (options.name === "GSLIVE_GANCHROW_SESSION") return "gate-from-keychain";
+        if (options.name === "GSLIVE_GANCHROW_SESSION")
+          return "gate-from-keychain";
         return null;
       },
     };

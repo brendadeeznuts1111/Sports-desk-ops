@@ -2670,40 +2670,40 @@ window.__ModuleLoader__.load({
                 state.degradedReasons
                   .filter((reason) => reason.kind !== "data")
                   .map((reason) =>
-                  h(
-                    "li",
-                    {
-                      key: reason.message,
-                      "data-severity": reason.severity,
-                    },
-                    reason.message,
-                    reason.action === null
-                      ? null
-                      : h(
-                          "button",
-                          {
-                            key: "action",
-                            type: "button",
-                            className: "spsd-command spsd-reason-action",
-                            title: t("degradedActionCopy"),
-                            onClick: () => {
-                              void (async () => {
-                                try {
-                                  if (navigator.clipboard?.writeText) {
-                                    await navigator.clipboard.writeText(
-                                      reason.action,
-                                    );
+                    h(
+                      "li",
+                      {
+                        key: reason.message,
+                        "data-severity": reason.severity,
+                      },
+                      reason.message,
+                      reason.action === null
+                        ? null
+                        : h(
+                            "button",
+                            {
+                              key: "action",
+                              type: "button",
+                              className: "spsd-command spsd-reason-action",
+                              title: t("degradedActionCopy"),
+                              onClick: () => {
+                                void (async () => {
+                                  try {
+                                    if (navigator.clipboard?.writeText) {
+                                      await navigator.clipboard.writeText(
+                                        reason.action,
+                                      );
+                                    }
+                                  } catch {
+                                    /* clipboard blocked */
                                   }
-                                } catch {
-                                  /* clipboard blocked */
-                                }
-                              })();
+                                })();
+                              },
                             },
-                          },
-                          reason.action,
-                        ),
+                            reason.action,
+                          ),
+                    ),
                   ),
-                ),
               ),
         );
       } else if (state.phase === "stale") {
@@ -2813,9 +2813,9 @@ window.__ModuleLoader__.load({
      * Non-interactive: read-only values, not navigation tiles.
      * @param {(key: string, params?: object) => string} t
      * @param {typeof LIVE_INITIAL} live
-     * @param {number} now
+     * @param {number} _now
      */
-    function liveCounterStrip(t, live, now) {
+    function liveCounterStrip(t, live, _now) {
       if (live.values === null || live.values.counts === null) return null;
       const counts = live.values.counts;
       const items = [];
@@ -2830,7 +2830,11 @@ window.__ModuleLoader__.load({
               key,
               title: t(LIVE_COUNTER_LABELS[key] ?? key),
             },
-            h("span", { className: "spsd-strip-label" }, t(LIVE_COUNTER_LABELS[key] ?? key)),
+            h(
+              "span",
+              { className: "spsd-strip-label" },
+              t(LIVE_COUNTER_LABELS[key] ?? key),
+            ),
             h(
               "span",
               { className: "spsd-strip-value" },
@@ -3360,16 +3364,15 @@ window.__ModuleLoader__.load({
     /**
      * @param {(key: string, params?: object) => string} t
      * @param {NonNullable<ReturnType<typeof readR2PipelineSinks>>[number]} sink
-     * @param {number} now
+     * @param {number} _now
      */
-    function formatR2SinkValue(t, sink, now) {
+    function formatR2SinkValue(t, sink, _now) {
       const age =
         sink.ageSeconds !== null
           ? formatAgeSeconds(t, sink.ageSeconds)
           : t("never");
       const state =
-        sink.state ??
-        (sink.stale ? t("r2SinkStale") : t("r2SinkFresh"));
+        sink.state ?? (sink.stale ? t("r2SinkStale") : t("r2SinkFresh"));
       const parts = [t("r2SinkState", { state, age })];
       if (sink.dataAgeSeconds !== null) {
         parts.push(
@@ -4198,7 +4201,13 @@ window.__ModuleLoader__.load({
      * @param {ReturnType<typeof readExecutionPayload>} executionPayload
      * @param {ReturnType<typeof readKpisPayload>} kpisPayload
      */
-    function attentionBanner(t, state, graphPayload, executionPayload, kpisPayload) {
+    function attentionBanner(
+      t,
+      state,
+      graphPayload,
+      executionPayload,
+      kpisPayload,
+    ) {
       const items = [];
       if (
         state.phase === "down" ||
@@ -4244,8 +4253,7 @@ window.__ModuleLoader__.load({
       const kpisSource = state.sources.kpis;
       if (isSourceOk(kpisSource) && kpisPayload !== null) {
         const agentsBlock = kpisPayload.agents;
-        const agentsProv =
-          agentsBlock === null ? null : agentsBlock.provenance;
+        const agentsProv = agentsBlock === null ? null : agentsBlock.provenance;
         if (isFixtureProvenance(agentsProv)) {
           items.push({
             key: "agents-fixture",

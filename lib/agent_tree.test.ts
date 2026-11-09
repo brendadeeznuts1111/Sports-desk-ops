@@ -80,11 +80,13 @@ describe("buildAgentTree", () => {
 
 describe("isFixtureAgentTreeGraphSource", () => {
   test("flags scratch and fixture paths", () => {
-    expect(isFixtureAgentTreeGraphSource("scratch/agent-graph.json")).toBe(true);
-    expect(isFixtureAgentTreeGraphSource("tests/fixtures/foo.json")).toBe(true);
-    expect(isFixtureAgentTreeGraphSource("out/capture/f402-hierarchy.json")).toBe(
-      false,
+    expect(isFixtureAgentTreeGraphSource("scratch/agent-graph.json")).toBe(
+      true,
     );
+    expect(isFixtureAgentTreeGraphSource("tests/fixtures/foo.json")).toBe(true);
+    expect(
+      isFixtureAgentTreeGraphSource("out/capture/f402-hierarchy.json"),
+    ).toBe(false);
   });
 });
 

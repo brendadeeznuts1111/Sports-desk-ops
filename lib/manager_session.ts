@@ -139,7 +139,10 @@ export async function resolveManagerSession(
   secretReader: SecretReader | null = defaultSecretReader(),
 ): Promise<ManagerSession> {
   const envCookie = cookieHeaderFromGsidCookie(environment);
-  const sessionGate = await resolveManagerSessionGate(environment, secretReader);
+  const sessionGate = await resolveManagerSessionGate(
+    environment,
+    secretReader,
+  );
   if (envCookie !== "")
     return { source: "env-cookie", cookieHeader: envCookie, sessionGate };
   const fileCookie = cookieHeaderFromSessionFile(environment);

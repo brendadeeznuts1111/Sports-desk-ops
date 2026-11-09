@@ -48,9 +48,7 @@ const FETCH_MODES = new Set<WebLogMode>(["A", "B", "C", "I"]);
 export function parseWeblogFetchMode(raw: string): WebLogMode {
   const mode = raw.trim().toUpperCase() as WebLogMode;
   if (!FETCH_MODES.has(mode)) {
-    throw new Error(
-      `--fetch-mode must be A, B, C, or I (got "${raw.trim()}")`,
-    );
+    throw new Error(`--fetch-mode must be A, B, C, or I (got "${raw.trim()}")`);
   }
   return mode;
 }

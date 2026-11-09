@@ -68,6 +68,7 @@ observed frequency:
    tail -1 scratch/bridge-rollup-cron.jsonl \
      | jq '{updatedAt, jobs: [.jobs[] | {id, ok, durationMs, error}]}'
    ```
+
 2. **Operator Mac asleep / crashed** — `pgrep -fl 'live_positions_cron'` returns empty.
    Restart the local cron and consider moving supervision to a `launchd` `LaunchAgent` with
    `KeepAlive` + `StartInterval` so a reboot or sleep does not kill it silently.

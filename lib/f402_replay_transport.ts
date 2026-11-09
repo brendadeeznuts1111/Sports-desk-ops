@@ -44,10 +44,7 @@ export interface F402ReplayTransportOptions {
   readonly proxyUrl?: string | undefined;
   readonly env?: NodeJS.ProcessEnv;
   /** Test seam: replace the Bun FetchSession wire call. */
-  readonly fetchImpl?: (
-    url: string,
-    init: RequestInit,
-  ) => Promise<Response>;
+  readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
   /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `writeF402Session`). */
   readonly refreshSession?: () => Promise<void>;
   readonly readSession?: () => ReturnType<typeof readF402Session>;

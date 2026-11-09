@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -117,36 +111,34 @@ describe("f402_weblog_bridge CLI", () => {
 
   test("--from + --dry-run rolls up fixture jsonl", () => {
     const dir = mkdtempSync(join(tmpdir(), "weblog-cli-"));
-  try {
-    const jsonl = join(dir, "corpus.jsonl");
-    writeFileSync(
-      jsonl,
-      `${weblogLine("U1", "2026-11-08 10:00:00")}\n`,
-      { mode: 0o600 },
-    );
-    const bets = join(dir, "bets.jsonl");
-    writeFileSync(bets, "", { mode: 0o600 });
-    const out = join(dir, "rollup.json");
-    const proc = Bun.spawnSync(
-      [
-        "bun",
-        "scripts/f402_weblog_bridge.ts",
-        "--from",
-        jsonl,
-        "--bets",
-        bets,
-        "--out",
-        out,
-        "--dry-run",
-        "--no-r2",
-      ],
-      { cwd: ROOT, stderr: "pipe", stdout: "pipe" },
-    );
-    expect(proc.exitCode).toBe(0);
-    expect(existsSync(out)).toBe(false);
-    expect(proc.stdout.toString()).toContain("gates");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+    try {
+      const jsonl = join(dir, "corpus.jsonl");
+      writeFileSync(jsonl, `${weblogLine("U1", "2026-11-08 10:00:00")}\n`, {
+        mode: 0o600,
+      });
+      const bets = join(dir, "bets.jsonl");
+      writeFileSync(bets, "", { mode: 0o600 });
+      const out = join(dir, "rollup.json");
+      const proc = Bun.spawnSync(
+        [
+          "bun",
+          "scripts/f402_weblog_bridge.ts",
+          "--from",
+          jsonl,
+          "--bets",
+          bets,
+          "--out",
+          out,
+          "--dry-run",
+          "--no-r2",
+        ],
+        { cwd: ROOT, stderr: "pipe", stdout: "pipe" },
+      );
+      expect(proc.exitCode).toBe(0);
+      expect(existsSync(out)).toBe(false);
+      expect(proc.stdout.toString()).toContain("gates");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

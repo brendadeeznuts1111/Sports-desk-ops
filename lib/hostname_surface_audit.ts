@@ -98,9 +98,6 @@ const H_P = String.fromCharCode(
   111,
   109,
 );
-const H_R = ["pub-", "d061f943df0e4477", "ba7ff200721eddb1", ".r2.dev"].join(
-  "",
-);
 
 const epDefsPart1: [
   string,

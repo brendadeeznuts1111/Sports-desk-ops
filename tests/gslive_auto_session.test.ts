@@ -40,7 +40,10 @@ describe("mintGsid", () => {
   test("reports Cloudflare when sign-in returns an empty 200", async () => {
     await expect(
       mintGsid(
-        fetchResponse({ status: 200, headers: { "set-cookie": "GSID=bot-edge" } }),
+        fetchResponse({
+          status: 200,
+          headers: { "set-cookie": "GSID=bot-edge" },
+        }),
         credentials,
       ),
     ).rejects.toThrow(new RegExp(GSLIVE_CLOUDFLARE_BLOCKED_PREFIX));
@@ -58,16 +61,15 @@ describe("mintGsid", () => {
 
   test("skips checkSession bootstrap when credential JSON has ganchrowSessionId", async () => {
     let signinCalls = 0;
-    const fetchImpl = (async (
-      input: string | URL,
-      init?: RequestInit,
-    ) => {
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("signin")) {
         signinCalls += 1;
         const body = typeof init?.body === "string" ? init.body : "";
         if (body.includes("checkSession")) {
-          throw new Error("bootstrapGanchrowSession should not run on credential mint");
+          throw new Error(
+            "bootstrapGanchrowSession should not run on credential mint",
+          );
         }
         return new Response(
           JSON.stringify({

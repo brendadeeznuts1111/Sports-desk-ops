@@ -7,7 +7,7 @@
 
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import type { F402ProbeFetch } from "./f402_ingest.ts";
 import {
@@ -412,7 +412,6 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
   let refreshLastOk: boolean | null = null;
   let refreshLastError: string | null = null;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
-  let refreshStopped = false;
 
   const refreshEnv: Readonly<Record<string, string | undefined>> = {
     ...Bun.env,
@@ -785,7 +784,6 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
 
   function startRefreshLoop(): (() => void) | null {
     if (!refreshEnabled() || refreshTimer !== null) return null;
-    refreshStopped = false;
     const jitter =
       options.liveRefresh?.jitterMs === undefined
         ? 0
@@ -796,7 +794,6 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
         clearInterval(refreshTimer);
         refreshTimer = null;
       }
-      refreshStopped = true;
     };
     refreshTimer = setInterval(() => {
       void refreshTick();

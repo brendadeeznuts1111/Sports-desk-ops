@@ -37,7 +37,9 @@ describe("f402 weblog fetch", () => {
 
   test("parseWebLogListPayload accepts array, LIST array, and LIST JSON string", () => {
     expect(parseWebLogListPayload([{ LoginID: "x" }])).toHaveLength(1);
-    expect(parseWebLogListPayload({ LIST: [{ LoginID: "y" }] })).toHaveLength(1);
+    expect(parseWebLogListPayload({ LIST: [{ LoginID: "y" }] })).toHaveLength(
+      1,
+    );
     expect(parseWebLogListPayload({ LIST: "", INFO: "" })).toEqual([]);
     expect(
       parseWebLogListPayload({

@@ -23,7 +23,8 @@ export function resolveF402BetsJsonlPath(
   const fromCli = cli !== undefined && cli !== "" ? cli : undefined;
   const fromEnv = env.F402_BETS_JSONL?.trim();
   const resolved =
-    fromCli ?? (fromEnv !== undefined && fromEnv !== "" ? fromEnv : undefined) ??
+    fromCli ??
+    (fromEnv !== undefined && fromEnv !== "" ? fromEnv : undefined) ??
     operatorDefault;
 
   if (!exists(resolved)) {

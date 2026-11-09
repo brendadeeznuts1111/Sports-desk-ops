@@ -934,10 +934,10 @@ Responses pass a Class A guard (200, JSON, not HTML) and are atomically persiste
 
 CLI (`scripts/f402_weblog_bridge.ts`):
 
-| Mode | Command |
-| ---- | ------- |
+| Mode             | Command                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Capture + rollup | `bun run weblog:rollup --fetch-mode A\|B\|C\|I [--date YYYY-MM-DD] [--save-capture path] [--customer-id id] [--ip addr]` |
-| Rollup only | `bun run weblog:rollup --from out/f402/weblog/MM-DD-YYYY.jsonl` |
+| Rollup only      | `bun run weblog:rollup --from out/f402/weblog/MM-DD-YYYY.jsonl`                                                          |
 
 `--fetch-mode` calls `fetchAndPersistWebLog` then rolls up the captured JSONL (default capture:
 `out/f402/weblog/<MM-DD-YYYY>.jsonl` from `--date`). Without `--fetch-mode`, `--from` is required

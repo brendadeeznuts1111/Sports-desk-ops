@@ -494,10 +494,7 @@ export function lastBridgeJobFailureHint(
   stderr: string,
   stdout: string,
 ): string | null {
-  const lines = [
-    ...meaningfulLogLines(stderr),
-    ...meaningfulLogLines(stdout),
-  ];
+  const lines = [...meaningfulLogLines(stderr), ...meaningfulLogLines(stdout)];
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]!;
     if (FAILURE_LINE.test(line)) return clip(line);

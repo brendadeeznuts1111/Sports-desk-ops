@@ -211,7 +211,8 @@ export function classifyAjaxSessionProbe(input: {
       : {
           ...base,
           status: "forbidden",
-          detail: "Forbidden (HTTP 403) — the cookie is valid but lacks access.",
+          detail:
+            "Forbidden (HTTP 403) — the cookie is valid but lacks access.",
         };
   }
   if (input.httpStatus === 429) {

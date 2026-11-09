@@ -434,9 +434,11 @@ describe("streaming JSONL reader", () => {
       event(1_000, "A", "1.2.3.4", "login"),
       event(2_000, "B", "1.2.3.5", "login"),
     ];
-    expect(resolveWeblogRollupWindow({ rows, malformed: 0, total: 2 })).toEqual({
-      fromMs: 1_000,
-      toMs: 2_001,
-    });
+    expect(resolveWeblogRollupWindow({ rows, malformed: 0, total: 2 })).toEqual(
+      {
+        fromMs: 1_000,
+        toMs: 2_001,
+      },
+    );
   });
 });

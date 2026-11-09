@@ -178,7 +178,9 @@ switch (command) {
   case "status": {
     const status = await gsliveDualSecretStatus();
     console.log(`service: ${status.gsid.service}`);
-    console.log(`gsid: ${status.gsid.name} ${status.gsid.present ? "stored" : "absent"}`);
+    console.log(
+      `gsid: ${status.gsid.name} ${status.gsid.present ? "stored" : "absent"}`,
+    );
     console.log(
       `ganchrow gate: ${status.ganchrowGate.name} ${status.ganchrowGate.present ? "stored" : "absent"}`,
     );

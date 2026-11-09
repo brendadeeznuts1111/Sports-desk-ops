@@ -260,7 +260,7 @@ window.__ModuleLoader__.load({
       }
       const operational =
         body !== null && typeof body === "object"
-          ? body.operationalStatus ?? body.status
+          ? (body.operationalStatus ?? body.status)
           : null;
       const degraded =
         operational === "degraded" ||
@@ -322,15 +322,15 @@ window.__ModuleLoader__.load({
           ? t("current")
           : state.phase === "degraded"
             ? t("degraded")
-          : state.phase === "stale"
-            ? uptime === null
-              ? t("staleUnknown")
-              : t("stale", { uptime })
-            : state.phase === "down"
-              ? t("down")
-              : state.phase === "unknown"
-                ? t("unknown")
-                : t("checking");
+            : state.phase === "stale"
+              ? uptime === null
+                ? t("staleUnknown")
+                : t("stale", { uptime })
+              : state.phase === "down"
+                ? t("down")
+                : state.phase === "unknown"
+                  ? t("unknown")
+                  : t("checking");
       const checked =
         state.checkedAt === null
           ? "—"

@@ -119,9 +119,7 @@ describe("GSLive cookie handling", () => {
       now: () => Date.parse(checkedAt),
       readSessionGate: async () => "",
       fetchImpl: (async (url: string, init?: RequestInit) => {
-        calls.push(
-          init === undefined ? { url } : { url, init },
-        );
+        calls.push(init === undefined ? { url } : { url, init });
         if (String(url).includes("signin")) {
           return new Response(
             JSON.stringify({

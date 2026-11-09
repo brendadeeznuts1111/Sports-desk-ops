@@ -179,7 +179,9 @@ function gsidFromSetCookie(res: Response): string {
   return "";
 }
 
-function metaFromSigninJson(json: Record<string, unknown>): GsliveSessionMeta | null {
+function metaFromSigninJson(
+  json: Record<string, unknown>,
+): GsliveSessionMeta | null {
   const adminUserName = json.adminUserName;
   if (typeof adminUserName !== "string" || adminUserName.trim() === "") {
     return null;
@@ -257,7 +259,10 @@ async function verifyMintedGsid(
     if (await probe(gsid, fetchImpl, sessionGate)) {
       return { gsid, gate: sessionGate };
     }
-    if (gsid !== sessionGate && (await probe(sessionGate, fetchImpl, sessionGate))) {
+    if (
+      gsid !== sessionGate &&
+      (await probe(sessionGate, fetchImpl, sessionGate))
+    ) {
       return { gsid: sessionGate, gate: sessionGate };
     }
     throw new Error(
@@ -379,10 +384,7 @@ export async function ensureGsid(
   const existing = await getGsid();
   if (existing !== null && existing !== "") {
     const storedGate = await resolveManagerSessionGate();
-    if (
-      storedGate !== "" &&
-      (await probe(existing, fetchImpl, storedGate))
-    ) {
+    if (storedGate !== "" && (await probe(existing, fetchImpl, storedGate))) {
       consecutiveMintFailures = 0;
       return existing;
     }
@@ -412,6 +414,7 @@ export async function ensureGsid(
     if (consecutiveMintFailures >= 3) {
       throw new Error(
         `${GSLIVE_MINT_LOOP_PREFIX} Credentials rejected by portal. Rotate password.`,
+        { cause: err },
       );
     }
     throw err;

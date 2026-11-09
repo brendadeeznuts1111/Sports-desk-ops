@@ -143,7 +143,10 @@ function pushDegradedReason(
   out: DegradedReason[],
   message: string,
   kind: DegradedReasonKind,
-  options?: { readonly action?: string; readonly severity?: DegradedReasonSeverity },
+  options?: {
+    readonly action?: string;
+    readonly severity?: DegradedReasonSeverity;
+  },
 ): void {
   out.push({
     message,
@@ -172,10 +175,13 @@ function defaultGitSha(): string | null {
   }
   try {
     const root = resolve(import.meta.dirname, "..");
-    const proc = Bun.spawnSync(["git", "-C", root, "rev-parse", "--short", "HEAD"], {
-      stdout: "pipe",
-      stderr: "ignore",
-    });
+    const proc = Bun.spawnSync(
+      ["git", "-C", root, "rev-parse", "--short", "HEAD"],
+      {
+        stdout: "pipe",
+        stderr: "ignore",
+      },
+    );
     if (proc.exitCode === 0) {
       const sha = new TextDecoder().decode(proc.stdout).trim();
       cachedGitSha = sha === "" ? null : sha;
@@ -189,7 +195,11 @@ function defaultGitSha(): string | null {
 }
 
 function defaultBuildTime(): string | null {
-  const explicit = (Bun.env.BUILD_TIME ?? Bun.env.SPORTSDESK_BUILD_TIME ?? "").trim();
+  const explicit = (
+    Bun.env.BUILD_TIME ??
+    Bun.env.SPORTSDESK_BUILD_TIME ??
+    ""
+  ).trim();
   if (explicit !== "") return explicit;
   try {
     const self = Bun.file(import.meta.path);
@@ -242,7 +252,11 @@ type GsliveAuthCore = Omit<
 function gsliveAuthFromHealth(health: GsliveSessionHealth): GsliveAuthCore {
   const source = health.session.source;
   if (!health.session.configured) {
-    return { status: "unconfigured", source, probeStatus: health.probe.httpStatus };
+    return {
+      status: "unconfigured",
+      source,
+      probeStatus: health.probe.httpStatus,
+    };
   }
   const probe = health.probe.status;
   if (probe === "ok") {
@@ -253,7 +267,11 @@ function gsliveAuthFromHealth(health: GsliveSessionHealth): GsliveAuthCore {
     };
   }
   if (probe === "unconfigured") {
-    return { status: "unconfigured", source, probeStatus: health.probe.httpStatus };
+    return {
+      status: "unconfigured",
+      source,
+      probeStatus: health.probe.httpStatus,
+    };
   }
   if (probe === "expired") {
     return { status: "expired", source, probeStatus: health.probe.httpStatus };
@@ -300,7 +318,9 @@ function summarizePipelines(kpis: R2PipelineKpis): DeskPipelinesSummary {
   };
 }
 
-function legacyStatus(operational: DeskOperationalStatus): DeskEnhancedHealthPayload["status"] {
+function legacyStatus(
+  operational: DeskOperationalStatus,
+): DeskEnhancedHealthPayload["status"] {
   if (operational === "ok") return "healthy";
   if (operational === "down") return "down";
   return "degraded";
@@ -425,7 +445,7 @@ export async function buildDeskEnhancedHealth(
   const f402 = withF402MintFields(f402Core, hasF402Mint);
   const gslive = withGsliveMintFields(gsliveCore, mintLoop);
 
-  const kpis = await probeR2(now).catch(() => ({} as R2PipelineKpis));
+  const kpis = await probeR2(now).catch(() => ({}) as R2PipelineKpis);
   const pipelines = summarizePipelines(kpis);
 
   const degradedReasons: DegradedReason[] = [];
@@ -518,9 +538,7 @@ export async function buildDeskEnhancedHealth(
   const finalReasons: DegradedReason[] =
     operational === "down"
       ? degradedReasons.map((reason) =>
-          reason.kind === "auth"
-            ? { ...reason, severity: "error" }
-            : reason,
+          reason.kind === "auth" ? { ...reason, severity: "error" } : reason,
         )
       : degradedReasons;
 

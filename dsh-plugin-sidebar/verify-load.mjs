@@ -1077,17 +1077,17 @@ await checkAsync(
     }
     // The feed's own age row is measured in hours, not invented.
     assert(!text.includes("undefined"), "page rendered an undefined value");
-  const attention = findOne(tree, "spsd-attention");
-  assert(attention !== undefined, "no attention banner for stale signals");
-  const attentionCount = Number(attention.props["data-count"]);
-  assert(
-    attentionCount >= 2,
-    `attention count ${attention.props["data-count"]} (feed + R2 sink)`,
-  );
-  assert(
-    text.includes("R2 sink"),
-    "stale R2 pipeline sink is not called out in attention",
-  );
+    const attention = findOne(tree, "spsd-attention");
+    assert(attention !== undefined, "no attention banner for stale signals");
+    const attentionCount = Number(attention.props["data-count"]);
+    assert(
+      attentionCount >= 2,
+      `attention count ${attention.props["data-count"]} (feed + R2 sink)`,
+    );
+    assert(
+      text.includes("R2 sink"),
+      "stale R2 pipeline sink is not called out in attention",
+    );
     harness.dispose();
   },
 );
@@ -1135,7 +1135,10 @@ await checkAsync(
       flat.includes("provenance") && flat.includes("17m ago"),
       "Agents row should read provenance · 17m ago",
     );
-    assert(flat.includes("not live"), "Agents row is missing the not-live chip");
+    assert(
+      flat.includes("not live"),
+      "Agents row is missing the not-live chip",
+    );
     harness.dispose();
   },
 );
@@ -1896,7 +1899,11 @@ await checkAsync(
       `absent stream rendered as ${card.props["data-live-state"]}`,
     );
     const cardText = JSON.stringify(card);
-    for (const expected of ["polling fallback", "Last poll", "15 s graph probe"]) {
+    for (const expected of [
+      "polling fallback",
+      "Last poll",
+      "15 s graph probe",
+    ]) {
       assert(
         cardText.includes(expected),
         `polling fallback is missing ${expected}`,

@@ -8,9 +8,9 @@ import {
 
 describe("parseDataWindowEndMs", () => {
   test("reads weblog window.toMs", () => {
-    expect(
-      parseDataWindowEndMs({ window: { toMs: 1_762_300_799_000 } }),
-    ).toBe(1_762_300_799_000);
+    expect(parseDataWindowEndMs({ window: { toMs: 1_762_300_799_000 } })).toBe(
+      1_762_300_799_000,
+    );
   });
 
   test("reads wagers observedEnd", () => {
@@ -48,9 +48,7 @@ describe("probeR2PipelineKpis", () => {
         return new Response(null, {
           status: 200,
           headers: {
-            "last-modified": new Date(
-              "2026-11-09T03:45:00.000Z",
-            ).toUTCString(),
+            "last-modified": new Date("2026-11-09T03:45:00.000Z").toUTCString(),
           },
         });
       }

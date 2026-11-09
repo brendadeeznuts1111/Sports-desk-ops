@@ -1,7 +1,6 @@
 /** Direct 4C `Manager/getWebLog` fetch (Modes A/B/C/I), Class A guard, atomic JSONL capture. */
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { resolveF402BearerToken } from "./f402_pending_fetch.ts";
 
 export class F402WebLogFetchError extends Error {
   constructor(message: string) {
@@ -109,8 +108,7 @@ function f402FetchVerbose(): boolean | "curl" | undefined {
 }
 
 function describeJsonShape(payload: unknown): string {
-  if (Array.isArray(payload))
-    return `array[length=${payload.length}]`;
+  if (Array.isArray(payload)) return `array[length=${payload.length}]`;
   if (payload !== null && typeof payload === "object") {
     const keys = Object.keys(payload);
     const head = keys.slice(0, 8).join(",");
@@ -216,8 +214,7 @@ export async function fetchWebLog(options: {
   const text = await response.text();
   logWebLogResponseDebug(contentType, text);
   if (response.status >= 300 && response.status < 400) {
-    const location =
-      response.headers.get("location") ?? "(no Location header)";
+    const location = response.headers.get("location") ?? "(no Location header)";
     throw new F402WebLogFetchError(
       `getWebLog redirect HTTP ${response.status} → ${location} (session/cookie rejected; set F402_FETCH_VERBOSE=1 to trace)`,
     );

@@ -27,7 +27,6 @@ import {
   formatCronScheduleLine,
   installOsCronJob,
   isBunOsCronInvocation,
-  osCronWorkerPath,
   previewCronSchedule,
   removeOsCronJob,
 } from "../lib/bun_cron.ts";

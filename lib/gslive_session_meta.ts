@@ -30,7 +30,9 @@ export function readGsliveSessionMeta(): GsliveSessionMeta | null {
   }
 }
 
-export async function writeGsliveSessionMeta(meta: GsliveSessionMeta): Promise<void> {
+export async function writeGsliveSessionMeta(
+  meta: GsliveSessionMeta,
+): Promise<void> {
   const path = gsliveSessionMetaPath();
   try {
     mkdirSync(dirname(path), { recursive: true });

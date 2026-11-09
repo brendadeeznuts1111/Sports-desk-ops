@@ -499,7 +499,7 @@ describe("bridge rollup cycle", () => {
 
   test("selects jobs in canonical order and substitutes {root} in argv", async () => {
     const root = makeRoot();
-  const weblogCorpus = join(
+    const weblogCorpus = join(
       root,
       "out",
       "f402",
@@ -878,9 +878,8 @@ describe("lastBridgeJobFailureHint", () => {
 describe("GSLive session JIT refresh", () => {
   test("maps Cloudflare block to manual GSID cron message", async () => {
     const root = makeRoot();
-    const { gsliveCloudflareBlockedError } = await import(
-      "../lib/gslive_auto_session.ts"
-    );
+    const { gsliveCloudflareBlockedError } =
+      await import("../lib/gslive_auto_session.ts");
     const result = await runBridgeRollupCycle({
       root,
       env: { GSID: "x", F402_AGENT_ID: "A" },

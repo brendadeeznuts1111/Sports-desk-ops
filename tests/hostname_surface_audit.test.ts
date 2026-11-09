@@ -4,7 +4,6 @@ import {
   REGISTERED_ENDPOINTS,
   ModeBit,
   DomainMask,
-  type AuditedEndpointRow,
 } from "../lib/hostname_surface_audit.ts";
 import {
   getEndpointsForMode,

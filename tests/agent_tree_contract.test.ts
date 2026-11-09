@@ -24,7 +24,8 @@ describe("data/agent-tree.json contract", () => {
     expect(tree).not.toBeNull();
     expect(tree?.schemaVersion).toBe(1);
     expect(tree?.source.length).toBeGreaterThan(0);
-    const count = tree?.agentCount ?? Object.keys(tree?.nodes ?? {}).length ?? 0;
+    const count =
+      tree?.agentCount ?? Object.keys(tree?.nodes ?? {}).length ?? 0;
     expect(count).toBeGreaterThan(0);
   });
 

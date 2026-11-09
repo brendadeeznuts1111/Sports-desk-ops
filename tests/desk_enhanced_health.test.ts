@@ -185,7 +185,9 @@ describe("buildDeskEnhancedHealth", () => {
       readGsliveHealth: async () => gsliveOk(),
       probeR2: async () => ({}),
     });
-    expect(payload.checks.auth.gslive.remediation).toContain("secrets:gslive set");
+    expect(payload.checks.auth.gslive.remediation).toContain(
+      "secrets:gslive set",
+    );
     expect(
       payload.degradedReasons.some((r) =>
         r.message.includes("mint failed repeatedly"),

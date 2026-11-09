@@ -2,11 +2,11 @@
 
 Three concepts—do not merge them:
 
-| Concept | Where it lives | Role |
-|--------|----------------|------|
-| **Harness workspace package** | Upstream monorepo `packages/<group>/<pkg>/`, scope `@deepseek-ai/dsh-*` | Internal harness source; groups are containers only (no group-level `package.json`). |
-| **Plugin bundle** | e.g. `sportsdesk-ops/dsh-plugin*/` with `dsh.bundle`, `cordis.patch.yml` | Distributable Cordis entry; installed via `dsh plugin --profile <name> add` or `link:` in profile `package.json`. |
-| **Profile** | `~/.dsh/profiles/<name>/` | Assembly list (`dsh.profile.bundles`) + `cordis.patch.yml` overrides. |
+| Concept                       | Where it lives                                                           | Role                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **Harness workspace package** | Upstream monorepo `packages/<group>/<pkg>/`, scope `@deepseek-ai/dsh-*`  | Internal harness source; groups are containers only (no group-level `package.json`).                              |
+| **Plugin bundle**             | e.g. `sportsdesk-ops/dsh-plugin*/` with `dsh.bundle`, `cordis.patch.yml` | Distributable Cordis entry; installed via `dsh plugin --profile <name> add` or `link:` in profile `package.json`. |
+| **Profile**                   | `~/.dsh/profiles/<name>/`                                                | Assembly list (`dsh.profile.bundles`) + `cordis.patch.yml` overrides.                                             |
 
 SportsDesk does **not** belong under the harness `packages/<group>/<pkg>/` tree unless you are contributing **to the harness repo itself**. This repo’s `packages/*` Bun workspaces (e.g. `ba-example`) are **SportsDesk monorepo** workspaces, not DSH harness groups.
 
@@ -30,13 +30,13 @@ Below: **profiles** + **bundles** only (ports, proxy, inspector).
 
 **Shared SportsDesk bundles (desktop today):**
 
-| Bundle name in `package.json` | Repo directory |
-|-------------------------------|----------------|
-| `dsh-plugin-sportsdesk-desk-status` | `dsh-plugin-ui/` |
-| `dsh-plugin-sportsdesk-desk-panel` | `dsh-plugin-sidebar/` |
-| `dsh-plugin-sportsdesk-ops` | `dsh-plugin/` |
-| `dsh-plugin-sportsdesk-security` | `dsh-plugin-security/` |
-| `dsh-plugin-watchlist-autobet` | `dsh-plugin-watchlist-autobet/` |
+| Bundle name in `package.json`       | Repo directory                  |
+| ----------------------------------- | ------------------------------- |
+| `dsh-plugin-sportsdesk-desk-status` | `dsh-plugin-ui/`                |
+| `dsh-plugin-sportsdesk-desk-panel`  | `dsh-plugin-sidebar/`           |
+| `dsh-plugin-sportsdesk-ops`         | `dsh-plugin/`                   |
+| `dsh-plugin-sportsdesk-security`    | `dsh-plugin-security/`          |
+| `dsh-plugin-watchlist-autobet`      | `dsh-plugin-watchlist-autobet/` |
 
 Link installs: `link:../../../code/sportsdesk-ops/dsh-plugin-…` in `desktop/package.json`.
 
@@ -91,12 +91,12 @@ Desktop (`dsh-app://app`) must **not** rely on loopback CORS; use the proxy or s
 
 ## Port map (measured conventions)
 
-| Service | Typical bind | Profile | Notes |
-|--------|----------------|---------|--------|
-| Harness Web UI | `:3080` (configurable) | web | `dsh web` |
-| SportsDesk daemon | `:4020` | — | `PORT=4020 bun run serve` in `sportsdesk-ops` |
-| Inspector worker | `:9230+` | web (default) | CDP + `/ingest`; not SportsDesk |
-| Inspector (desktop pin) | `:9240` | desktop (if enabled) | Avoid collision with web on 9230 |
+| Service                 | Typical bind           | Profile              | Notes                                         |
+| ----------------------- | ---------------------- | -------------------- | --------------------------------------------- |
+| Harness Web UI          | `:3080` (configurable) | web                  | `dsh web`                                     |
+| SportsDesk daemon       | `:4020`                | —                    | `PORT=4020 bun run serve` in `sportsdesk-ops` |
+| Inspector worker        | `:9230+`               | web (default)        | CDP + `/ingest`; not SportsDesk               |
+| Inspector (desktop pin) | `:9240`                | desktop (if enabled) | Avoid collision with web on 9230              |
 
 There is **no** separate SportsDesk “ingest” WebSocket on 9231/9241—those ports were the inspector client reconnecting to a dead or wrong ingest URL.
 

@@ -93,7 +93,8 @@ export const BUN_CRON_OS_REGISTER_EXAMPLE =
   `await Bun.cron("./worker.ts", "30 2 * * MON", "weekly-report");` as const;
 
 /** Same \`title\` overwrites schedule in place — no duplicate OS job. */
-export const BUN_CRON_OS_REREGISTER_EXAMPLE = `await Bun.cron("./worker.ts", "0 * * * *", "my-job"); // every hour
+export const BUN_CRON_OS_REREGISTER_EXAMPLE =
+  `await Bun.cron("./worker.ts", "0 * * * *", "my-job"); // every hour
 await Bun.cron("./worker.ts", "*/15 * * * *", "my-job"); // replaces: every 15 min` as const;
 
 /** Next fire; local TZ by default — pass third arg `{ tz: "UTC" }` for UTC wall clock. */

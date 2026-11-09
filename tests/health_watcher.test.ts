@@ -120,8 +120,7 @@ describe("health watcher", () => {
       saveState: async (state) => {
         saved = state;
       },
-      fetchSnapshot: async () =>
-        snapshotFromHealthPayload(healthyPayload()),
+      fetchSnapshot: async () => snapshotFromHealthPayload(healthyPayload()),
     });
     expect(result.transitioned).toBe(false);
     expect(result.alerted).toBe(false);
