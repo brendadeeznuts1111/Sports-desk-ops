@@ -57,7 +57,7 @@ describe("PII endpoints from loopback", () => {
   });
 
   test("stay readable locally without a token", async () => {
-    for (const path of ["api/live-bets", "api/agent-tree"]) {
+    for (const path of ["api/live-bets?source=auto", "api/agent-tree"]) {
       const res = await fetch(`${server.url}${path}`);
       expect(res.status).toBe(200);
     }

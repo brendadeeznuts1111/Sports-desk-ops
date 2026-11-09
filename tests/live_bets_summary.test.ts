@@ -18,7 +18,7 @@ interface Summary {
   dataSource: string;
 }
 
-describe("GET /api/live-bets/summary", () => {
+describe("GET /api/live-bets/summary?source=auto", () => {
   let server: ReturnType<typeof startServer>;
 
   beforeAll(() => {
@@ -34,7 +34,7 @@ describe("GET /api/live-bets/summary", () => {
   });
 
   const getSummary = async (): Promise<Summary> => {
-    const res = await fetch(`${server.url}api/live-bets/summary`);
+    const res = await fetch(`${server.url}api/live-bets/summary?source=auto`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { success: boolean; summary: Summary };
     expect(body.success).toBe(true);
@@ -76,7 +76,9 @@ describe("GET /api/live-bets/summary", () => {
 
   test("agrees with the summary embedded in /api/live-bets", async () => {
     const summary = await getSummary();
-    const full = (await (await fetch(`${server.url}api/live-bets`)).json()) as {
+    const full = (await (
+      await fetch(`${server.url}api/live-bets?source=auto`)
+    ).json()) as {
       summary: Summary;
       games: unknown[];
     };
@@ -88,7 +90,9 @@ describe("GET /api/live-bets/summary", () => {
   test("is derived, not a stored literal", async () => {
     // A hand-maintained aggregate drifts from the game list; recompute independently.
     const games = (
-      (await (await fetch(`${server.url}api/live-bets`)).json()) as {
+      (await (
+        await fetch(`${server.url}api/live-bets?source=auto`)
+      ).json()) as {
         games: Array<{ wagered: number; toWin: number }>;
       }
     ).games;
@@ -99,7 +103,9 @@ describe("GET /api/live-bets/summary", () => {
   });
 
   test("never serves credentials or customer names", async () => {
-    const body = await (await fetch(`${server.url}api/live-bets`)).text();
+    const body = await (
+      await fetch(`${server.url}api/live-bets?source=auto`)
+    ).text();
     for (const key of ["Password", "NameFirst", "Login"]) {
       expect(body).not.toContain(`"${key}"`);
     }
@@ -107,7 +113,7 @@ describe("GET /api/live-bets/summary", () => {
 
   test("does not advertise home/away it cannot know", async () => {
     const { games } = (await (
-      await fetch(`${server.url}api/live-bets`)
+      await fetch(`${server.url}api/live-bets?source=auto`)
     ).json()) as {
       games: Array<Record<string, unknown>>;
     };
@@ -118,12 +124,14 @@ describe("GET /api/live-bets/summary", () => {
   });
 
   test("marks the snapshot as non-cacheable", async () => {
-    const res = await fetch(`${server.url}api/live-bets`);
+    const res = await fetch(`${server.url}api/live-bets?source=auto`);
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
   test("joins real scoreboard scores onto matching wagers only", async () => {
-    const body = (await (await fetch(`${server.url}api/live-bets`)).json()) as {
+    const body = (await (
+      await fetch(`${server.url}api/live-bets?source=auto`)
+    ).json()) as {
       games: Array<{
         team1: { name: string };
         team2: { name: string };
@@ -189,7 +197,7 @@ describe("GET /api/live-bets/summary", () => {
 
   test("tags every wager with its taxonomy category", async () => {
     const { games, sports } = (await (
-      await fetch(`${server.url}api/live-bets`)
+      await fetch(`${server.url}api/live-bets?source=auto`)
     ).json()) as {
       games: Array<{ category: string; position: string; wagerType: string }>;
       sports: { all: string[]; categories: Array<{ category: string }> };
@@ -235,7 +243,7 @@ describe("GET /api/live-bets/summary", () => {
 
   test("reports agent scope resolved against the hierarchy", async () => {
     const { agents, games } = (await (
-      await fetch(`${server.url}api/live-bets`)
+      await fetch(`${server.url}api/live-bets?source=auto`)
     ).json()) as {
       agents: {
         agents: Array<{ key: string; level: number | null; games: number }>;

@@ -191,7 +191,7 @@ describe("GET /api/live-wagers live-first", () => {
 
     // The exact status object the dashboard renders; a field change must fail this test.
     expect(body.live).toEqual({
-      mode: "auto",
+      mode: "live",
       status: "live",
       ok: true,
       fetchedAt: observedAt,
@@ -297,7 +297,7 @@ describe("GET /api/live-wagers with an unavailable live read", () => {
 
   test("falls back to the capture with the live diagnostic, never a 500", async () => {
     const { status, body } = await getJson<LiveWagersBody>(
-      `${server.url}api/live-wagers`,
+      `${server.url}api/live-wagers?source=auto`,
     );
     expect(status).toBe(200);
     expect(body.provenance?.source.startsWith("capture:")).toBe(true);
@@ -313,10 +313,10 @@ describe("GET /api/live-wagers with an unavailable live read", () => {
   });
 
   test("the failed read is cached too, so a poll pair POSTs once", async () => {
-    await getJson<LiveWagersBody>(`${server.url}api/live-wagers`);
+    await getJson<LiveWagersBody>(`${server.url}api/live-wagers?source=auto`);
     const before = counted.calls();
     const { body } = await getJson<LiveWagersBody>(
-      `${server.url}api/live-wagers`,
+      `${server.url}api/live-wagers?source=auto`,
     );
     expect(counted.calls()).toBe(before);
     expect(body.live?.servedFromCache).toBe(true);
@@ -382,7 +382,7 @@ describe("GET /api/live-wagers with live unavailable and no capture", () => {
 
   test("the 404 names the live setup first and keeps the capture fallback", async () => {
     const { status, body } = await getJson<LiveWagersBody>(
-      `${server.url}api/live-wagers`,
+      `${server.url}api/live-wagers?source=auto`,
     );
     expect(status).toBe(404);
     expect(body.error).toBe("no live wager list");
@@ -421,7 +421,7 @@ describe("live-ticker env gates", () => {
     });
     servers.push(started);
     const { status, body } = await getJson<LiveWagersBody>(
-      `${started.url}api/live-wagers`,
+      `${started.url}api/live-wagers?source=auto`,
     );
     expect(status).toBe(200);
     expect(body.live).toEqual({

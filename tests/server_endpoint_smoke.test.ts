@@ -59,7 +59,12 @@ describe("daemon endpoint smoke", () => {
   test("every GET/ANY route answers without a handler 5xx", async () => {
     for (const route of DAEMON_ROUTES) {
       if (route.method === "POST" || SKIP.has(route.path)) continue;
-      const code = await status(route.path);
+      // Live reads default to the live feed (#70): without a session they answer 503 rather
+      // than the file. This test is about handler crashes, not data availability.
+      const path = /(^|\/)(live-bets|live-wagers)(\/|$)/.test(route.path)
+        ? `${route.path}?source=auto`
+        : route.path;
+      const code = await status(path);
       // An unauthenticated admin route stops at the guard; every other route must reach its
       // handler. 404/410/501 are data states, not crashes.
       expect(code, route.path).not.toBe(500);
