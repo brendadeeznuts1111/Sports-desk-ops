@@ -32,6 +32,7 @@ export const INPUT_PATHS = [
   "lib/cfb_events.ts",
   "lib/combo_identity.ts",
   "lib/combo_legs.ts",
+  "lib/venue_market_kinds.ts",
   "lib/combo_uniqueness.ts",
   "lib/combo_wallets.ts",
   "lib/json_fetch.ts",

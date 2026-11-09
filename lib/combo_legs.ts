@@ -7,8 +7,7 @@
 
 import type { GameIndex } from "./cfb_events.ts";
 import { asRecord, text } from "./json_fetch.ts";
-
-const ELIGIBLE_LEG_TYPES = new Set(["moneyline", "spreads", "totals"]);
+import { isEligibleLegKind, kindFromTypeName } from "./venue_market_kinds.ts";
 
 export interface NormalizedCombo {
   readonly comboId: string;
@@ -166,7 +165,7 @@ export function normalizeCombo(
     }
     attributed += 1;
     games.add(result.game);
-    if (!ELIGIBLE_LEG_TYPES.has(result.type)) eligible = false;
+    if (!isEligibleLegKind(kindFromTypeName(result.type))) eligible = false;
   }
   if (games.size === 0) return { ok: false, reason: "NO_ATTRIBUTION" };
 

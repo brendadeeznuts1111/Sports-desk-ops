@@ -76,6 +76,7 @@ export type MarketKind =
   | "total"
   | "moneyline"
   | "team_total"
+  | "player_prop"
   | "prop"
   | "teaser"
   | "unknown";
