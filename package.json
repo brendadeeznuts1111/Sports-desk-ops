@@ -265,6 +265,8 @@
     "fetch-periods": "bun run scripts/fetch-periods.ts",
     "taxonomy": "bun run scripts/normalize.ts",
     "enrich:figure-date": "bun run scripts/enrich_bets_from_figure_date.ts",
+    "dashboard:edge": "bun run scripts/market_edge_dashboard.ts",
+    "edge": "bun run scripts/market_edge_dashboard.ts",
     "gslive:suspect:cron": "bun run scripts/gslive_all_states_suspect_cron.ts",
     "bridge3c:rollup": "bun run scripts/gslive_tally_bridge3c.ts",
     "wagers:publish-snapshot": "bun run scripts/publish_wagers_snapshot.ts",

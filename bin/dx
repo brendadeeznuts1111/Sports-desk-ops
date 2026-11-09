@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -327,6 +327,8 @@ Usage: ./bin/dx <command> [args...]
                                     Stream and join live ticker wagers with settled getWagersByFigureDate
     ./bin/dx taxonomy [--mode=CP|CPS|CPV|G] [--period=-1..6] [--engine=native|full] [--sqlite=<path>] [--format=inspect|table|json] [--inspect]
                                     Normalize wagers to canonical 0-6 portal period enum with multi-family dates
+    ./bin/dx edge [--input=<path>] [--sort=leak|hold|edge|volume] [--min-wagers=N] [--inspect]
+                                    Market edge & leakage dashboard slicing by sport, period & market
 
   Deploy
     ./bin/dx stage                  Regenerate + stage dist/ (no upload)
@@ -650,6 +652,9 @@ VERSION_HELP
     ;;
   taxonomy)
     exec bun run "$REPO_ROOT/scripts/normalize.ts" "$@"
+    ;;
+  edge)
+    exec bun run "$REPO_ROOT/scripts/market_edge_dashboard.ts" "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies

@@ -51,6 +51,7 @@ const COVERAGE: Readonly<Record<string, string>> = {
   mmd: "Mermaid verification artifact",
   tla: "TLA+ verification artifact",
   plist: "launchd template (macOS operator)",
+  txt: "plain text document",
 };
 
 const EXACT_FILES: Readonly<Record<string, string>> = {
