@@ -104,6 +104,7 @@ function cycle(
     spawnJob: OK_SPAWN,
     readArtifact: async (job) => artifacts[job.id] ?? null,
     ensureGsliveSession: async () => {},
+    ensureF402Session: async () => {},
     ...overrides,
   });
 }
@@ -899,6 +900,30 @@ describe("GSLive session JIT refresh", () => {
     expect(result.jobs[0]?.error).toContain("set-gate");
   });
 
+  test("skips F402 jobs when ensureF402Session fails", async () => {
+    const root = makeRoot();
+    let spawned = false;
+    const result = await runBridgeRollupCycle({
+      root,
+      env: { F402_AGENT_ID: "A" },
+      jobs: ["bridge3a", "bridge3b"],
+      ensureF402Session: async () => {
+        throw new Error("Mock F402 mint fail");
+      },
+      ensureGsliveSession: async () => {},
+      spawnJob: async () => {
+        spawned = true;
+        return { exitCode: 0, stdout: "", stderr: "", timedOut: false };
+      },
+      readArtifact: async () => null,
+    });
+    expect(spawned).toBe(false);
+    expect(result.jobs).toHaveLength(2);
+    expect(result.jobs.every((job) => job.ok === false)).toBe(true);
+    expect(result.jobs[0]?.error).toContain("Mock F402 mint fail");
+    expect(result.jobs[1]?.error).toContain("Mock F402 mint fail");
+  });
+
   test("skips GSLive jobs when ensureGsliveSession fails", async () => {
     const root = makeRoot();
     let spawned = false;
@@ -909,6 +934,7 @@ describe("GSLive session JIT refresh", () => {
       ensureGsliveSession: async () => {
         throw new Error("Mock auth fail");
       },
+      ensureF402Session: async () => {},
       spawnJob: async () => {
         spawned = true;
         return { exitCode: 0, stdout: "", stderr: "", timedOut: false };
@@ -937,6 +963,7 @@ describe("bridge job failure surfacing", () => {
       env: { GSID: "x", F402_AGENT_ID: "A" },
       jobs: ["bridge3c"],
       ensureGsliveSession: async () => {},
+      ensureF402Session: async () => {},
       spawnJob: failSpawn,
       readArtifact: async () => null,
     });

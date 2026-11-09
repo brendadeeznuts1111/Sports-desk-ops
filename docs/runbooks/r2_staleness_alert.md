@@ -61,8 +61,13 @@ observed frequency:
 1. **F402 session rotation broke the bridge** — the rollup scripts rely on
    `~/.config/sportsdesk/gslive-session` or `F402_BEARER_TOKEN`. Recover with
    `bun run session:login --from-keychain` on the operator Mac. Check
-   `scratch/bridge-rollup-cron.jsonl` — the latest entries will have `ok:false` with a
-   credential error.
+   `scratch/bridge-rollup-cron.jsonl` — each line is one **cycle** (`updatedAt`, `jobs[]`,
+   `alerts[]`), not a flat job row. Inspect the latest cycle:
+
+   ```sh
+   tail -1 scratch/bridge-rollup-cron.jsonl \
+     | jq '{updatedAt, jobs: [.jobs[] | {id, ok, durationMs, error}]}'
+   ```
 2. **Operator Mac asleep / crashed** — `pgrep -fl 'live_positions_cron'` returns empty.
    Restart the local cron and consider moving supervision to a `launchd` `LaunchAgent` with
    `KeepAlive` + `StartInterval` so a reboot or sleep does not kill it silently.

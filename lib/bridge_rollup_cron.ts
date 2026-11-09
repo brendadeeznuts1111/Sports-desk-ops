@@ -24,7 +24,8 @@
  * The first cycle only establishes the baseline. Ids are stable, so a consumer can dedupe a
  * replayed digest.
  *
- * The file is mostly pure orchestration: it may call {@link ensureGsid} once per cycle before GSLive
+ * The file is mostly pure orchestration: it may call {@link ensureF402Session} once per cycle before
+ * F402 jobs (bridge3a/bridge3b) and {@link ensureGsid} before GSLive
  * jobs; otherwise it spawns only through `options.spawnJob`, reads only through
  * `options.readArtifact`, and writes only `statePath` and `historyPath` (atomic temp+rename for
  * state, one JSON line per cycle for history).
@@ -53,7 +54,7 @@ import {
   bridgeWeblogCorpusPresent,
   resolveBridgeWeblogCorpusFrom,
 } from "./f402_weblog_bridge_inputs.ts";
-import { readF402Session } from "./f402_session.ts";
+import { ensureF402Session, readF402Session } from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
   GSID_KEYCHAIN_NAME,
@@ -367,12 +368,26 @@ export interface BridgeRollupCycleOptions {
    * Default: {@link ensureGsid} (keychain username/password → verified GSID).
    */
   readonly ensureGsliveSession?: () => Promise<void>;
+  /**
+   * Once per cycle, before the first F402 CLI (`bridge3a`, `bridge3b`).
+   * Default: {@link ensureF402Session} with `allowLiveLogin: true`.
+   */
+  readonly ensureF402Session?: () => Promise<void>;
 }
+
+const F402_SESSION_JOB_IDS: ReadonlySet<BridgeRollupJobId> = new Set([
+  "bridge3a",
+  "bridge3b",
+]);
 
 const GSLIVE_SESSION_JOB_IDS: ReadonlySet<BridgeRollupJobId> = new Set([
   "bridge3c",
   "wagers-by-state",
 ]);
+
+async function defaultEnsureF402Session(): Promise<void> {
+  await ensureF402Session({ allowLiveLogin: true });
+}
 
 async function defaultEnsureGsliveSession(): Promise<void> {
   await ensureGsid();
@@ -1195,6 +1210,8 @@ export async function runBridgeRollupCycle(
   const spawnJob = options.spawnJob ?? defaultSpawnJob(root);
   const readArtifact = options.readArtifact ?? defaultReadArtifact();
   const credentials = options.credentials ?? envCredentialProbe(env);
+  const ensureF402SessionFn =
+    options.ensureF402Session ?? defaultEnsureF402Session;
   const ensureGsliveSession =
     options.ensureGsliveSession ?? defaultEnsureGsliveSession;
   const selected = selectJobs(options.jobs);
@@ -1207,10 +1224,44 @@ export async function runBridgeRollupCycle(
     Record<BridgeRollupJobId, BridgeArtifactStatus>
   > = {};
 
+  let f402SessionReady: boolean | null = null;
+  let f402SessionError: string | null = null;
   let gsliveSessionReady: boolean | null = null;
   let gsliveSessionError: string | null = null;
 
   for (const job of selected) {
+    if (F402_SESSION_JOB_IDS.has(job.id)) {
+      if (f402SessionReady === false) {
+        jobs.push({
+          id: job.id,
+          label: job.label,
+          ok: false,
+          durationMs: 0,
+          error: f402SessionError ?? "F402 auth failed",
+        });
+        artifactStatus[job.id] = "missing";
+        continue;
+      }
+      if (f402SessionReady === null) {
+        try {
+          await ensureF402SessionFn();
+          f402SessionReady = true;
+        } catch (error) {
+          f402SessionReady = false;
+          f402SessionError = `F402 auth failed: ${describeError(error)}`;
+          jobs.push({
+            id: job.id,
+            label: job.label,
+            ok: false,
+            durationMs: 0,
+            error: f402SessionError,
+          });
+          artifactStatus[job.id] = "missing";
+          continue;
+        }
+      }
+    }
+
     if (GSLIVE_SESSION_JOB_IDS.has(job.id)) {
       if (gsliveSessionReady === false) {
         jobs.push({

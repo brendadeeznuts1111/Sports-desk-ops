@@ -236,6 +236,41 @@ export async function refreshF402Session(
   }
 }
 
+export interface EnsureF402SessionOptions extends RefreshF402SessionOptions {
+  /**
+   * When true, sets `F402_LIVE_LOGIN=1` for this refresh only (trusted automation callers).
+   * Interactive CLIs still require the operator to set the env var explicitly.
+   */
+  readonly allowLiveLogin?: boolean;
+  readonly now?: number;
+}
+
+/**
+ * Read-through: return when a valid session file exists; otherwise mint once and persist.
+ * Used by bridge rollup cron before bridge3a/bridge3b spawn.
+ */
+export async function ensureF402Session(
+  options: EnsureF402SessionOptions = {},
+): Promise<void> {
+  const env = options.env ?? Bun.env;
+  const now = options.now ?? Date.now();
+  const existing = readF402Session({ now });
+  if (existing !== null) return;
+
+  const allow =
+    options.allowLiveLogin === true || env["F402_LIVE_LOGIN"]?.trim() === "1";
+  if (!allow) {
+    throw new Error(
+      "F402 session expired or missing and F402_LIVE_LOGIN=1 is not set. " +
+        "Cron may pass allowLiveLogin; operators: F402_LIVE_LOGIN=1 bun run session:login --from-keychain",
+    );
+  }
+
+  const refreshEnv: NodeJS.ProcessEnv = { ...env, F402_LIVE_LOGIN: "1" };
+  const session = await refreshF402Session({ ...options, env: refreshEnv });
+  writeF402Session(session, { now });
+}
+
 /** One-line, secret-free description for logs. */
 export function describeF402Session(session: F402Session | null): string {
   if (session === null) return "no cached session";
