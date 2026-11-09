@@ -37,4 +37,19 @@ describe("sidebar fixture provenance chip", () => {
     };
     expect(shouldShowFixtureNotLiveChip(prov)).toBe(false);
   });
+
+  test("live: and capture: sources never chip on path alone", () => {
+    expect(
+      shouldShowFixtureNotLiveChip({
+        source: "live:/cloud/api/Report/Pending@2026-11-09T03:00:00.000Z",
+        basis: "capture",
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowFixtureNotLiveChip({
+        source: "capture:/cloud/api/Report/Pending@2026-11-09T03:00:00.000Z",
+        basis: null,
+      }),
+    ).toBe(false);
+  });
 });

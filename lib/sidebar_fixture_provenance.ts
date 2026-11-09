@@ -9,6 +9,18 @@ export interface SidebarKpiProvenance {
   readonly source?: string | null;
 }
 
+/** True when a bare `source` string points at repo-local / demo inputs, not portal capture. */
+export function isFixtureSource(source: string): boolean {
+  const value = source.trim();
+  if (value.startsWith("live:")) return false;
+  if (value.startsWith("capture:")) return false;
+  return (
+    value.startsWith("scratch/") ||
+    value.startsWith("tests/fixtures/") ||
+    value.startsWith("./")
+  );
+}
+
 export function isFixtureProvenance(
   prov: SidebarKpiProvenance | null | undefined,
 ): boolean {
@@ -18,13 +30,10 @@ export function isFixtureProvenance(
   if (basis === "live") return false;
   const srcRaw = (prov.source ?? "").trim();
   if (basis === "capture" && srcRaw.startsWith("data/")) return false;
-  const src = (prov.source ?? "").trim().toLowerCase();
-  if (src === "") return false;
-  return (
-    src.startsWith("scratch/") ||
-    src.startsWith("tests/") ||
-    src.includes("fixture")
-  );
+  if (srcRaw === "") return false;
+  if (isFixtureSource(srcRaw)) return true;
+  const src = srcRaw.toLowerCase();
+  return src.startsWith("tests/") || src.includes("fixture");
 }
 
 /** When true, the sidebar should show the amber "not live" chip on a provenance line. */

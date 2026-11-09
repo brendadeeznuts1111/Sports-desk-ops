@@ -709,6 +709,19 @@ function findOne(node, cls) {
   return findAll(node, cls, [])[0];
 }
 
+/** Find elements whose React `key` prop matches (e.g. provenance row ids). */
+function findByKey(node, key, found = []) {
+  if (node === null || node === undefined) return found;
+  if (Array.isArray(node)) {
+    for (const child of node) findByKey(child, key, found);
+    return found;
+  }
+  if (typeof node !== "object") return found;
+  if (node.props?.key === key) found.push(node);
+  for (const child of node.children ?? []) findByKey(child, key, found);
+  return found;
+}
+
 const textOf = (tree) => JSON.stringify(tree);
 
 /**
@@ -1003,6 +1016,54 @@ await checkAsync(
       attention.props["data-count"] === "1",
       `attention count ${attention.props["data-count"]}`,
     );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "fixture agent tree provenance renders not-live chip and source hover",
+  async () => {
+    const kpisBody = {
+      ...FIXTURE_KPIS,
+      kpis: {
+        ...FIXTURE_KPIS.kpis,
+        agents: {
+          ...FIXTURE_KPIS.kpis.agents,
+          provenance: {
+            ageSeconds: 1_063,
+            stale: false,
+            basis: "fixture",
+            source: "scratch/agent-graph.json",
+          },
+        },
+      },
+    };
+    const harness = bootClient(async (url) => {
+      const text = String(url);
+      if (text.endsWith("/kpis") || text.endsWith("/api/kpis")) {
+        return proxiedResponse(url, kpisBody);
+      }
+      return proxiedResponse(url, fixtureFor(url));
+    });
+    harness.render("main");
+    await settle();
+    const tree = harness.render("main");
+
+    const agentsProv = findByKey(tree, "agents-prov")[0];
+    assert(
+      agentsProv !== undefined,
+      "Book card is missing Agents provenance row (agents-prov)",
+    );
+    assert(
+      agentsProv.props.title === "scratch/agent-graph.json",
+      `hover title was ${agentsProv.props.title ?? "(none)"}`,
+    );
+    const flat = textOf(tree);
+    assert(
+      flat.includes("provenance") && flat.includes("17m ago"),
+      "Agents row should read provenance · 17m ago",
+    );
+    assert(flat.includes("not live"), "Agents row is missing the not-live chip");
     harness.dispose();
   },
 );
