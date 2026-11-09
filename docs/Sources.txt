@@ -1,0 +1,28 @@
+# Sources.txt — local artifacts the desk reads (freshness / staleness)
+#
+# Principle: missing is never zero — absent or stale inputs surface as null blocks,
+# stale flags, or honest ages; never silent placeholder book numbers.
+#
+# Upstream wiring (auth, jobs, failure modes): docs/INTEGRATION-SOURCES.md
+
+| Desk signal        | Artifact path(s)                         | Stale threshold (indicative) | Refresh / owner command                          |
+|--------------------|------------------------------------------|------------------------------|--------------------------------------------------|
+| Market feed        | docs/graph-live-feed.json                | graph SLA                    | graph_feed_poller_daemon --once --live           |
+| Book — ticker      | data/live-wagers.json, data/bet-ticker.json | 1h (KPI)                  | positions:cron, capture:bet-ticker, bridge3a     |
+| Book — pending     | data/live-bets.json                      | 1h                           | positions:cron, live-bets refresh, bridge3b      |
+| Book — agents      | data/agent-tree.json                     | agent-tree SLA               | build:agent-tree (cron needs F402_BEARER_TOKEN)  |
+| Book — customer    | data/customer-profiles.json              | customer profiles SLA        | customers:profiles (needs enriched fixture)    |
+| Graph portal copy  | docs/graph-live-feed.json (R2 mirror)    | see INTEGRATION-SOURCES      | publish_r2_graph, bridge rollups                 |
+
+| WSS ingest flag    | (not a file)                             | n/a                          | wssIngestion hard-coded not_ingested until #67   |
+
+## Quick R2 bridge publish check (exit 1 ≠ dead until you HEAD)
+
+```sh
+for p in gslive-tally f402-weblog f402-bet-ticker wagers-by-state; do
+  curl -sI "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/$p/latest.json" \
+    | rg -i '^(HTTP|last-modified)'
+done
+```
+
+Recent `Last-Modified` → job published; investigate post-publish exit 1. Old or 404 → upstream/cron actually dead.

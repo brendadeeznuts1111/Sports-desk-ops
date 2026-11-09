@@ -21,6 +21,9 @@ export type KpiBasis = "capture" | "paste" | "fixture";
 export function kpiBasisFromSource(source: string): KpiBasis {
   if (source.startsWith("paste:")) return "paste";
   if (source.startsWith("capture:") || source.startsWith("live:")) return "capture";
+  // Bridge rollups may stamp the public R2 mirror URL on downstream artifacts.
+  if (source.startsWith("https://") && source.includes(".r2.dev/")) return "capture";
+  if (source.startsWith("data/")) return "capture";
   return "fixture";
 }
 
