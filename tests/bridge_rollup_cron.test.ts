@@ -12,6 +12,7 @@ import { join } from "node:path";
 import {
   BRIDGE_ROLLUP_JOBS,
   formatBridgeDigestHtml,
+  lastBridgeJobFailureHint,
   runBridgeRollupCycle,
   type BridgeAlert,
   type BridgeRollupCycleOptions,
@@ -816,5 +817,36 @@ describe("bridge digest HTML", () => {
 
     expect(html).toContain("FAIL");
     expect(html).not.toContain("all quiet");
+  });
+});
+
+describe("lastBridgeJobFailureHint", () => {
+  test("surfaces HTTP error on stdout when stderr is only the Bun banner", () => {
+    const hint = lastBridgeJobFailureHint(
+      "\nBun v1.4.4 (macOS arm64)\n",
+      "error: getBetReport returned HTTP 401 (text/html; charset=UTF-8)\n",
+    );
+    expect(hint).toContain("HTTP 401");
+  });
+});
+
+describe("bridge job failure surfacing", () => {
+  test("records stdout fatal in the cron job error field", async () => {
+    const root = makeRoot();
+    const failSpawn = async (): Promise<BridgeSpawnResult> => ({
+      exitCode: 1,
+      stdout: "error: getBetReport returned HTTP 401\n",
+      stderr: "Bun v1.4.4 (macOS arm64)\n",
+      timedOut: false,
+    });
+    const result = await runBridgeRollupCycle({
+      root,
+      env: { GSID: "x", F402_AGENT_ID: "A" },
+      jobs: ["bridge3c"],
+      spawnJob: failSpawn,
+      readArtifact: async () => null,
+    });
+    expect(result.jobs[0]?.ok).toBe(false);
+    expect(result.jobs[0]?.error).toContain("HTTP 401");
   });
 });

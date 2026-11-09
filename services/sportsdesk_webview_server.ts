@@ -96,6 +96,7 @@ import {
   recordedTime,
   type KpiInput,
 } from "../lib/desk_kpis.ts";
+import { probeR2PipelineKpis } from "../lib/r2_pipeline_kpis.ts";
 import { ReportingSchedulerService } from "./reporting_scheduler_service.ts";
 import {
   describeSource,
@@ -3078,11 +3079,13 @@ export function startServer(options?: ServerOptions) {
 
       // Headline KPIs: counts and sums only, so public like the dashboard that shows them.
       if (pathname === "/api/kpis") {
-        const [agentTree, liveInputs, customerBook] = await Promise.all([
-          kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
-          deskLive.kpiLiveInputs(),
-          kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
-        ]);
+        const [agentTree, liveInputs, customerBook, r2Pipeline] =
+          await Promise.all([
+            kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
+            deskLive.kpiLiveInputs(),
+            kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
+            probeR2PipelineKpis(new Date()).catch(() => null),
+          ]);
         const now = new Date();
         return Response.json(
           await withWeblog({
@@ -3098,6 +3101,7 @@ export function startServer(options?: ServerOptions) {
             ),
             live: liveInputs.live,
             livePending: liveInputs.livePending,
+            ...(r2Pipeline === null ? {} : { pipeline: { r2: r2Pipeline } }),
             generatedAt: now.toISOString(),
           }),
           { headers: { ...cors, "Cache-Control": "no-store" } },

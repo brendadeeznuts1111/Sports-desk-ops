@@ -374,6 +374,38 @@ function lastLogLine(stderr: string): string | null {
   return line === undefined ? null : clip(line);
 }
 
+const BUN_VERSION_LINE = /^Bun v\d+\.\d+/;
+
+const FAILURE_LINE =
+  /^(error:|fatal:|\[[^\]]+\] fatal:)|HTTP \d{3}|ENOENT:|cannot read /i;
+
+function meaningfulLogLines(text: string): readonly string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !BUN_VERSION_LINE.test(line));
+}
+
+/**
+ * Bun often prints fatals on stdout; cron previously tailed stderr only and reported
+ * `exit 1: Bun v1.4.4` with no cause.
+ */
+export function lastBridgeJobFailureHint(
+  stderr: string,
+  stdout: string,
+): string | null {
+  const lines = [
+    ...meaningfulLogLines(stderr),
+    ...meaningfulLogLines(stdout),
+  ];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    if (FAILURE_LINE.test(line)) return clip(line);
+  }
+  const last = lines.at(-1);
+  return last === undefined ? null : clip(last);
+}
+
 function defaultRoot(): string {
   return resolve(import.meta.dirname, "..");
 }
@@ -1002,16 +1034,19 @@ function jobFailure(
   job: BridgeRollupJobSpec,
   result: BridgeSpawnResult,
 ): string | null {
-  const tail = lastLogLine(result.stderr);
+  const hint =
+    lastBridgeJobFailureHint(result.stderr, result.stdout) ??
+    lastLogLine(result.stderr) ??
+    lastLogLine(result.stdout);
   if (result.timedOut) {
-    return tail === null
+    return hint === null
       ? `timeout after ${job.timeoutMs}ms`
-      : `timeout after ${job.timeoutMs}ms: ${tail}`;
+      : `timeout after ${job.timeoutMs}ms: ${hint}`;
   }
   if (result.exitCode !== 0) {
-    return tail === null
+    return hint === null
       ? `exit ${result.exitCode}`
-      : `exit ${result.exitCode}: ${tail}`;
+      : `exit ${result.exitCode}: ${hint}`;
   }
   return null;
 }

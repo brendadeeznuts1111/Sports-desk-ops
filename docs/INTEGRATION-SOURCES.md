@@ -18,7 +18,7 @@ Last R2 HEAD probe (2026-11-09 UTC): see [§ Public R2 bucket](#public-r2-bucket
 | R2 `f402-bet-ticker/latest.json` | Same as ticker artifact | Publish: R2 S3 credentials | `bridge3a` rollup | Public mirror stale; CI alerter (`r2_staleness`) |
 | R2 `gslive-tally/latest.json` | GSLive Partner 118 bet report | `GSID` in keychain | `bridge3c:rollup` | tally mirror stale |
 | R2 `f402-weblog/latest.json` | F402 weblog rollup | F402 token + local jsonl corpus | hourly weblog rollup (`:07`) | Weblog pointer stale |
-| R2 `wagers-by-state/latest.json` | Wager histogram rollup | bridge pipeline | bridge jobs | Liability histogram stale |
+| R2 `wagers-by-state/latest.json` | Wager histogram rollup | bridge pipeline | **`bun run wagers:by-state --live`** (not in 15m bridge cycle) | Liability histogram stale |
 
 F402 REST inventory (wire paths, forensic modes): `lib/hostname_surface_audit.ts`.
 
