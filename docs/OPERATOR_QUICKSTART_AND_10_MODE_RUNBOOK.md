@@ -2,6 +2,8 @@
 
 > **Live 6-Tab Surveillance, ROT Bet-Ticker & 10-Mode Forensic Portal:**
 > [`https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html`](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html)
+>
+> **Artifact vs upstream:** local file freshness → [`Sources.txt`](./Sources.txt); where each file is fed from (auth, jobs, R2) → [`INTEGRATION-SOURCES.md`](./INTEGRATION-SOURCES.md).
 > **Live JSON Feeds:** [`graph-live-feed.json`](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph-live-feed.json) • [`backtest-4wk-cfb-nba.json`](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/backtest-4wk-cfb-nba.json) • [`openapi.json`](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/openapi.json)
 
 ---
