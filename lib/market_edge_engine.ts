@@ -97,6 +97,9 @@ export interface EdgeFilterOptions {
   readonly market?: string | null | undefined;
   readonly minWagers?: number | undefined;
   readonly top?: number | undefined;
+  readonly compact?: boolean | undefined;
+  readonly ranked?: boolean | undefined;
+  readonly columns?: readonly string[] | undefined;
 }
 
 export type InputFileSource = string | File | Blob;
@@ -838,6 +841,201 @@ export async function streamAndAggregateMarketEdges(
   };
 }
 
+export const MARKET_EDGE_TABLE_COLUMNS = [
+  "Sport",
+  "Sub",
+  "Period",
+  "Market",
+  "Wagers",
+  "Risk",
+  "WinRate",
+  "DeskHold",
+  "SteamPct",
+  "Status",
+] as const;
+
+export type MarketEdgeTableColumn = (typeof MARKET_EDGE_TABLE_COLUMNS)[number];
+
+export interface MarketEdgeTableOptions {
+  readonly colors?: boolean | undefined;
+  readonly maxArrayLength?: number | undefined;
+  readonly compact?: boolean | number | undefined;
+  readonly ranked?: boolean | undefined;
+  readonly columns?: readonly string[] | undefined;
+}
+
+/**
+ * Formats a MarketEdgeReport into a terminal presentation leveraging Bun.inspect.table,
+ * Bun.inspect options (colors, maxArrayLength, compact), and native Bun utilities
+ * (Bun.color, Bun.enableANSIColors, Bun.stripANSI, Bun.stringWidth).
+ */
+export function formatMarketEdgeTable(
+  report: MarketEdgeReport,
+  options: MarketEdgeTableOptions = {},
+): string {
+  const useColors =
+    options.colors ??
+    (typeof Bun !== "undefined" ? Bun.enableANSIColors : false);
+
+  const colorOf = (
+    name: "red" | "green" | "yellow" | "cyan" | "magenta" | "gray",
+  ): string => {
+    if (!useColors) return "";
+    const native =
+      typeof Bun !== "undefined" && typeof Bun.color === "function"
+        ? Bun.color(name, "ansi")
+        : "";
+    if (native) return native;
+    switch (name) {
+      case "red":
+        return "\u001b[31m";
+      case "green":
+        return "\u001b[32m";
+      case "yellow":
+        return "\u001b[33m";
+      case "cyan":
+        return "\u001b[36m";
+      case "gray":
+        return "\u001b[90m";
+      case "magenta":
+        return "\u001b[35m";
+    }
+  };
+
+  const bold = (s: string) => (useColors ? `\u001b[1m${s}\u001b[22m` : s);
+  const dim = (s: string) => (useColors ? `\u001b[2m${s}\u001b[22m` : s);
+  const red = (s: string) =>
+    useColors ? `${colorOf("red")}${s}\u001b[39m` : s;
+  const green = (s: string) =>
+    useColors ? `${colorOf("green")}${s}\u001b[39m` : s;
+  const yellow = (s: string) =>
+    useColors ? `${colorOf("yellow")}${s}\u001b[39m` : s;
+  const cyan = (s: string) =>
+    useColors ? `${colorOf("cyan")}${s}\u001b[39m` : s;
+
+  const clean = (s: string) =>
+    !useColors &&
+    typeof Bun !== "undefined" &&
+    typeof Bun.stripANSI === "function"
+      ? Bun.stripANSI(s)
+      : s;
+
+  const u = report.universe;
+  const isCompact = options.compact === true || options.compact === 1;
+
+  let header = "";
+  if (isCompact) {
+    const pnlSign = u.totalDeskPnlDollars >= 0 ? "+" : "";
+    const pnlStr = `${pnlSign}$${u.totalDeskPnlDollars.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    const holdStr = `${u.overallHoldPct >= 0 ? "+" : ""}${u.overallHoldPct.toFixed(2)}% Hold`;
+    const leakStr =
+      u.criticalLeakCount > 0
+        ? red(bold(`${u.criticalLeakCount} LEAKS`))
+        : green("0 leaks");
+    header = clean(
+      `${bold("=== Fantasy402 Edge Matrix")} | Wagers: ${bold(u.totalWagers.toLocaleString())} | Risk: $${bold(u.totalRiskDollars.toLocaleString("en-US", { minimumFractionDigits: 2 }))} | PnL: ${u.totalDeskPnlDollars >= 0 ? green(pnlStr) : red(pnlStr)} (${u.totalDeskPnlDollars >= 0 ? green(holdStr) : red(holdStr)}) | ${leakStr} ===`,
+    );
+  } else {
+    const pnlColor = u.totalDeskPnlDollars >= 0 ? green : red;
+    const pnlSign = u.totalDeskPnlDollars >= 0 ? "+" : "";
+
+    header = clean(
+      [
+        bold("=== Fantasy402 Market Edge & Leakage Matrix ==="),
+        `Total Wagers     : ${bold(u.totalWagers.toLocaleString())} (${u.totalSettled.toLocaleString()} settled, ${u.totalPending.toLocaleString()} pending)`,
+        `Risk Monitored   : $${bold(u.totalRiskDollars.toLocaleString("en-US", { minimumFractionDigits: 2 }))}`,
+        `Desk Net PnL     : ${pnlColor(`${pnlSign}$${u.totalDeskPnlDollars.toLocaleString("en-US", { minimumFractionDigits: 2 })}`)} (${pnlColor(`${u.overallHoldPct >= 0 ? "+" : ""}${u.overallHoldPct.toFixed(2)}% Hold`)})`,
+        `Active Leaks     : ${u.criticalLeakCount > 0 ? red(bold(`${u.criticalLeakCount} CRITICAL`)) : green("0 critical")}, ${u.playerEdgeCount > 0 ? yellow(`${u.playerEdgeCount} player edge`) : "0 player edge"}`,
+        ...(report.throughputRowsPerSec !== undefined
+          ? [
+              `Throughput       : ${cyan(report.throughputRowsPerSec.toLocaleString())} wagers/sec (${report.durationMs?.toFixed(1) ?? "0"}ms total)`,
+            ]
+          : []),
+      ].join("\n"),
+    );
+  }
+
+  // Handle maxArrayLength slicing
+  const maxRows =
+    options.maxArrayLength !== undefined && options.maxArrayLength > 0
+      ? options.maxArrayLength
+      : report.rows.length;
+  const slicedRows = report.rows.slice(0, maxRows);
+
+  if (slicedRows.length === 0) {
+    return `${header}\n\nNo market cohorts matched the specified criteria.`;
+  }
+
+  const isRanked = options.ranked !== false;
+  const selectedColumns =
+    options.columns && options.columns.length > 0
+      ? options.columns
+      : (MARKET_EDGE_TABLE_COLUMNS as readonly string[]);
+
+  const tableData: Record<string, Record<string, unknown>> = {};
+  for (let i = 0; i < slicedRows.length; i++) {
+    const r = slicedRows[i]!;
+    const holdStr = `${r.deskHoldPct >= 0 ? "+" : ""}${r.deskHoldPct.toFixed(2)}%`;
+    let coloredHold = holdStr;
+    if (useColors) {
+      if (r.deskHoldPct <= -5.0) {
+        coloredHold = red(bold(holdStr));
+      } else if (r.deskHoldPct < 0) {
+        coloredHold = red(holdStr);
+      } else if (r.deskHoldPct >= 15.0) {
+        coloredHold = green(bold(holdStr));
+      } else if (r.deskHoldPct > 0) {
+        coloredHold = green(holdStr);
+      }
+    }
+
+    let coloredWinRate =
+      r.settledWagers > 0 ? `${r.bettorWinRatePct.toFixed(1)}%` : dim("—");
+    if (useColors && r.settledWagers > 0) {
+      if (r.bettorWinRatePct >= 57.0) {
+        coloredWinRate = red(bold(coloredWinRate));
+      } else if (r.bettorWinRatePct >= 53.5) {
+        coloredWinRate = yellow(coloredWinRate);
+      } else if (r.bettorWinRatePct <= 45.0) {
+        coloredWinRate = green(coloredWinRate);
+      }
+    }
+
+    const rowObj: Record<string, unknown> = {
+      Sport: r.sport,
+      Sub: r.subSport,
+      Period: r.periodLabel,
+      Market: r.marketLabel,
+      Wagers: r.totalWagers,
+      Risk: `$${r.totalRiskDollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      WinRate: clean(coloredWinRate),
+      DeskHold: clean(coloredHold),
+      SteamPct: `${r.lateSteamPct.toFixed(1)}%`,
+      Status: r.statusSymbol,
+    };
+
+    const rowKey = isRanked ? `#${i + 1}` : String(i);
+    tableData[rowKey] = rowObj;
+  }
+
+  let tableBlock = "";
+  if (typeof Bun !== "undefined" && typeof Bun.inspect.table === "function") {
+    tableBlock = Bun.inspect.table(tableData, selectedColumns as string[], {
+      colors: useColors,
+    });
+  } else {
+    tableBlock = JSON.stringify(tableData, null, 2);
+  }
+
+  let truncationNote = "";
+  if (report.rows.length > slicedRows.length) {
+    const remaining = report.rows.length - slicedRows.length;
+    truncationNote = `\n${dim(`... and ${remaining} more cohorts (use --top or maxArrayLength to view more)`)}`;
+  }
+
+  return `${header}\n${tableBlock}${truncationNote}`;
+}
+
 /**
  * Inspection class providing human-friendly terminal formatting via [Bun.inspect.custom].
  */
@@ -852,66 +1050,28 @@ export class MarketEdgeInspection {
 
   [Bun.inspect.custom](
     _depth: number,
-    opts: Parameters<typeof Bun.inspect>[1] = {},
+    opts: Parameters<typeof Bun.inspect>[1] & {
+      readonly maxArrayLength?: number | undefined;
+    } = {},
   ): string {
-    const colors = opts?.colors === true;
-    const bold = (s: string) => (colors ? `\u001b[1m${s}\u001b[22m` : s);
-    const red = (s: string) => (colors ? `\u001b[31m${s}\u001b[39m` : s);
-    const green = (s: string) => (colors ? `\u001b[32m${s}\u001b[39m` : s);
-    const yellow = (s: string) => (colors ? `\u001b[33m${s}\u001b[39m` : s);
-    const cyan = (s: string) => (colors ? `\u001b[36m${s}\u001b[39m` : s);
+    const colors =
+      opts?.colors ??
+      (typeof Bun !== "undefined" ? Bun.enableANSIColors : false);
+    const maxArrayLength =
+      typeof opts?.maxArrayLength === "number"
+        ? opts.maxArrayLength
+        : this.options.top;
+    const compact = Boolean(opts?.compact ?? this.options.compact);
+    const ranked = this.options.ranked !== false;
+    const columns = this.options.columns;
 
-    const u = this.report.universe;
-    const pnlColor = u.totalDeskPnlDollars >= 0 ? green : red;
-    const pnlSign = u.totalDeskPnlDollars >= 0 ? "+" : "";
-
-    const header = [
-      bold("=== Fantasy402 Market Edge & Leakage Matrix ==="),
-      `Total Wagers     : ${bold(u.totalWagers.toLocaleString())} (${u.totalSettled.toLocaleString()} settled, ${u.totalPending.toLocaleString()} pending)`,
-      `Risk Monitored   : $${bold(u.totalRiskDollars.toLocaleString("en-US", { minimumFractionDigits: 2 }))}`,
-      `Desk Net PnL     : ${pnlColor(`${pnlSign}$${u.totalDeskPnlDollars.toLocaleString("en-US", { minimumFractionDigits: 2 })}`)} (${pnlColor(`${u.overallHoldPct >= 0 ? "+" : ""}${u.overallHoldPct.toFixed(2)}% Hold`)})`,
-      `Active Leaks     : ${u.criticalLeakCount > 0 ? red(bold(`${u.criticalLeakCount} CRITICAL`)) : green("0 critical")}, ${u.playerEdgeCount > 0 ? yellow(`${u.playerEdgeCount} player edge`) : "0 player edge"}`,
-      ...(this.report.throughputRowsPerSec !== undefined
-        ? [
-            `Throughput       : ${cyan(this.report.throughputRowsPerSec.toLocaleString())} wagers/sec (${this.report.durationMs?.toFixed(1) ?? "0"}ms total)`,
-          ]
-        : []),
-    ].join("\n");
-
-    const tableRows = this.report.rows.map((r) => {
-      const holdStr = `${r.deskHoldPct >= 0 ? "+" : ""}${r.deskHoldPct.toFixed(2)}%`;
-      return {
-        Sport: r.sport,
-        Sub: r.subSport,
-        Period: r.periodLabel,
-        Market: r.marketLabel,
-        Wagers: r.totalWagers,
-        Risk: `$${r.totalRiskDollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        WinRate: `${r.bettorWinRatePct.toFixed(1)}%`,
-        DeskHold: r.deskHoldPct < 0 ? red(holdStr) : green(holdStr),
-        SteamPct: `${r.lateSteamPct.toFixed(1)}%`,
-        Status: r.statusSymbol,
-      };
+    return formatMarketEdgeTable(this.report, {
+      colors,
+      maxArrayLength,
+      compact,
+      ranked,
+      columns,
     });
-
-    let tableBlock = "";
-    const inspectTable = (
-      Bun.inspect as unknown as {
-        table?: (data: unknown, opts?: unknown) => string;
-      }
-    ).table;
-
-    if (tableRows.length > 0) {
-      if (typeof Bun !== "undefined" && typeof inspectTable === "function") {
-        tableBlock = `\n${inspectTable(tableRows, { colors })}`;
-      } else {
-        tableBlock = `\n${JSON.stringify(tableRows, null, 2)}`;
-      }
-    } else {
-      tableBlock = "\nNo market cohorts matched the specified criteria.";
-    }
-
-    return `${header}${tableBlock}`;
   }
 
   toJSON() {

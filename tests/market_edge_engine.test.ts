@@ -10,6 +10,7 @@ import {
   computeEdgeStatus,
   streamAndAggregateMarketEdges,
   MarketEdgeInspection,
+  formatMarketEdgeTable,
 } from "../lib/market_edge_engine.ts";
 
 describe("Market Edge Engine > Market Classification", () => {
@@ -334,6 +335,33 @@ describe("Market Edge Engine > Aggregation & Telemetry Slicing", () => {
     expect(renderedPlain).toContain("Total Wagers     : 9");
     expect(renderedPlain).toContain("CRITICAL LEAK");
     expect(renderedColors).toContain("\u001b[");
+  });
+
+  it("formats market edge table using Bun.inspect.table, inspect options and Bun utils", () => {
+    const report = aggregateMarketEdges(sampleWagers, { minWagers: 2 });
+
+    // 1. Plain formatting with stripANSI
+    const plain = formatMarketEdgeTable(report, { colors: false });
+    expect(plain).not.toContain("\u001b[");
+    expect(plain).toContain("#1");
+    expect(plain).toContain("Market");
+    expect(plain).toContain("DeskHold");
+
+    // 2. Compact banner mode
+    const compact = formatMarketEdgeTable(report, { compact: true });
+    expect(compact).toContain("=== Fantasy402 Edge Matrix");
+
+    // 3. MaxArrayLength truncation note
+    const truncated = formatMarketEdgeTable(report, { maxArrayLength: 1 });
+    expect(truncated).toContain("... and 2 more cohorts");
+
+    // 4. Custom column projection
+    const customCols = formatMarketEdgeTable(report, {
+      columns: ["Sport", "Market", "Risk", "DeskHold"],
+    });
+    expect(customCols).toContain("Sport");
+    expect(customCols).toContain("Market");
+    expect(customCols).not.toContain("SteamPct");
   });
 
   it("streams and aggregates wagers from an in-memory File instance", async () => {

@@ -52,6 +52,18 @@ describe("Market Edge Dashboard CLI > Argument Parsing", () => {
     expect(jsonOpts.json).toBe(true);
     expect(jsonOpts.format).toBe("json");
   });
+
+  it("handles --compact, --no-color, and --columns flags", () => {
+    const opts = parseCliArgs([
+      "--compact",
+      "--no-color",
+      "--columns",
+      "Sport,Market,Risk,DeskHold",
+    ]);
+    expect(opts.compact).toBe(true);
+    expect(opts.noColor).toBe(true);
+    expect(opts.columns).toEqual(["Sport", "Market", "Risk", "DeskHold"]);
+  });
 });
 
 describe("Market Edge Dashboard CLI > Execution", () => {

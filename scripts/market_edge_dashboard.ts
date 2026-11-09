@@ -49,6 +49,9 @@ Options:
   --market <type>             Filter by market type (derivative_points, spread, moneyline, total, etc.)
   --min-wagers <N>            Minimum wager count threshold to avoid low-sample noise (default: 10)
   --top <N>                   Maximum market cohorts to display (default: 25)
+  --compact                   Display single-line compact matrix summary
+  --columns <col1,col2,...>   Select specific columns to display
+  --no-color                  Disable terminal ANSI colors
   --format <fmt>              Output presentation: table | inspect | json | summary | csv (default: table)
   --inspect                   Shortcut for --format=inspect
   --json                      Shortcut for --format=json
@@ -61,6 +64,9 @@ export interface CliOptions extends EdgeFilterOptions {
   readonly format: "table" | "inspect" | "json" | "summary" | "csv";
   readonly inspect?: boolean | undefined;
   readonly json?: boolean | undefined;
+  readonly compact?: boolean | undefined;
+  readonly noColor?: boolean | undefined;
+  readonly columns?: readonly string[] | undefined;
 }
 
 export function parseCliArgs(args: string[]): CliOptions {
@@ -75,6 +81,9 @@ export function parseCliArgs(args: string[]): CliOptions {
   let format: "table" | "inspect" | "json" | "summary" | "csv" = "table";
   let inspect = false;
   let json = false;
+  let compact = false;
+  let noColor = false;
+  let columns: string[] | undefined = undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -111,6 +120,15 @@ export function parseCliArgs(args: string[]): CliOptions {
     } else if (arg === "--top" && i + 1 < args.length) {
       const t = parseInt(args[++i] ?? "", 10);
       if (!Number.isNaN(t)) top = t;
+    } else if (arg === "--columns" && i + 1 < args.length) {
+      columns = (args[++i] ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else if (arg === "--compact") {
+      compact = true;
+    } else if (arg === "--no-color") {
+      noColor = true;
     } else if (arg === "--format" && i + 1 < args.length) {
       const fmt = (args[++i] ?? "").toLowerCase();
       if (
@@ -148,7 +166,7 @@ export function parseCliArgs(args: string[]): CliOptions {
     }
   }
 
-  return {
+  const result: CliOptions = {
     inputPath,
     sort,
     sport,
@@ -158,9 +176,15 @@ export function parseCliArgs(args: string[]): CliOptions {
     minWagers,
     top,
     format,
-    inspect,
-    json,
   };
+
+  if (inspect) (result as { inspect?: boolean }).inspect = true;
+  if (json) (result as { json?: boolean }).json = true;
+  if (compact) (result as { compact?: boolean }).compact = true;
+  if (noColor) (result as { noColor?: boolean }).noColor = true;
+  if (columns) (result as { columns?: readonly string[] }).columns = columns;
+
+  return result;
 }
 
 export async function runMarketEdgeDashboard(
@@ -248,8 +272,19 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Default: table output using Bun.inspect table
-  console.log(Bun.inspect(inspection, { colors: true }));
+  // Default: table output using Bun.inspect and Bun.inspect.table
+  const baseInspectOpts = cliInspectOptions();
+  const inspectOpts = {
+    ...baseInspectOpts,
+    colors: options.noColor
+      ? false
+      : options.inspect
+        ? true
+        : baseInspectOpts.colors,
+    compact: options.compact ?? false,
+    maxArrayLength: options.top,
+  };
+  console.log(Bun.inspect(inspection, inspectOpts));
 }
 
 if (import.meta.main) {
