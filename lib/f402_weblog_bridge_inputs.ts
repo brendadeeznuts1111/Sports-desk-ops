@@ -13,9 +13,33 @@ import { readF402Session } from "./f402_session.ts";
 
 export const WEBLOG_BRIDGE_USAGE_HINT = [
   "weblog: --from required (or --fetch-mode to capture first)",
-  "  fetch+rollup: bun run weblog:rollup --fetch-mode B",
+  "  fetch+rollup: bun run weblog:rollup --fetch-mode A",
   "  rollup only:  bun run weblog:rollup --from out/f402/weblog/11-08-2026.jsonl",
+  "  (Mode B/I shared-IP audit is not activity weblog — not supported here)",
 ].join("\n");
+
+export const WEBLOG_ROLLUP_UNSUPPORTED_FETCH_MODES = new Set<WebLogMode>([
+  "B",
+  "I",
+]);
+
+export function weblogFetchModeUnsupportedMessage(mode: WebLogMode): string {
+  if (mode === "B") {
+    return (
+      "weblog:rollup --fetch-mode B is not supported. " +
+      "Mode B returns {LoginID, IPAddress} shared-IP audit rows, not weblog activity rows. " +
+      "Use --fetch-mode A or C for activity data."
+    );
+  }
+  if (mode === "I") {
+    return (
+      "weblog:rollup --fetch-mode I is not supported. " +
+      "Mode I is accounts-by-IP audit, not the activity stream this rollup expects. " +
+      "Use --fetch-mode A or C."
+    );
+  }
+  return `weblog:rollup --fetch-mode ${mode} is not supported for activity rollup.`;
+}
 
 const FETCH_MODES = new Set<WebLogMode>(["A", "B", "C", "I"]);
 
@@ -84,6 +108,14 @@ export async function resolveWeblogCorpusPaths(
         ok: false,
         exitCode: 1,
         message: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    if (WEBLOG_ROLLUP_UNSUPPORTED_FETCH_MODES.has(mode)) {
+      return {
+        ok: false,
+        exitCode: 1,
+        message: weblogFetchModeUnsupportedMessage(mode),
       };
     }
 

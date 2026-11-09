@@ -13,6 +13,8 @@ import {
   buildWeblogRollup,
   readBetsWindow,
   readWeblogRows,
+  resolveWeblogRollupWindow,
+  WeblogRollupCorpusError,
 } from "../lib/f402_weblog.ts";
 
 const { values } = parseArgs({
@@ -75,8 +77,20 @@ try {
   process.exit(1);
 }
 const web = await readWeblogRows(from);
-const fromMs = Math.min(...web.rows.map((r) => r.accessMs));
-const toMs = Math.max(...web.rows.map((r) => r.accessMs)) + 1;
+let fromMs: number;
+let toMs: number;
+try {
+  ({ fromMs, toMs } = resolveWeblogRollupWindow(web));
+} catch (error) {
+  console.error(
+    error instanceof WeblogRollupCorpusError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : String(error),
+  );
+  process.exit(1);
+}
 const bets = await readBetsWindow(betsPath, fromMs, toMs);
 const rollup = buildWeblogRollup(web, bets, fromMs, toMs);
 const failed = rollup.gates.filter((g) => g.status === "fail");

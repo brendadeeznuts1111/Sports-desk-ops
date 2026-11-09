@@ -678,6 +678,41 @@ function quantile(sorted: readonly number[], q: number): number {
   ]!;
 }
 
+export class WeblogRollupCorpusError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WeblogRollupCorpusError";
+  }
+}
+
+/** Fail before rollup when the JSONL is the wrong product (e.g. Mode B shared-IP rows). */
+export function resolveWeblogRollupWindow(web: {
+  readonly rows: readonly WeblogEvent[];
+  readonly malformed: number;
+  readonly total: number;
+}): { readonly fromMs: number; readonly toMs: number } {
+  if (web.total > 0 && web.malformed === web.total) {
+    throw new WeblogRollupCorpusError(
+      `weblog rollup: all ${web.total} rows are malformed. ` +
+        `This usually means the capture shape does not match weblog activity ` +
+        `(expected AccessDateTime/Operation; Mode B shared-IP rows are LoginID/IPAddress only). ` +
+        `Use --fetch-mode A or C for activity data, not Mode B.`,
+    );
+  }
+  const timestamps = web.rows
+    .map((row) => row.accessMs)
+    .filter((ms) => Number.isFinite(ms));
+  if (timestamps.length === 0) {
+    throw new WeblogRollupCorpusError(
+      `weblog rollup: no parsed activity rows (total=${web.total}, malformed=${web.malformed}).`,
+    );
+  }
+  return {
+    fromMs: Math.min(...timestamps),
+    toMs: Math.max(...timestamps) + 1,
+  };
+}
+
 export function buildWeblogRollup(
   web: {
     rows: readonly WeblogEvent[];

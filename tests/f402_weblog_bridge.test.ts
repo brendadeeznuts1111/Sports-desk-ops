@@ -38,7 +38,7 @@ describe("f402_weblog_bridge inputs", () => {
     const captured: { capturePath: string; mode: string }[] = [];
     const result = await resolveWeblogCorpusPaths(
       {
-        "fetch-mode": "B",
+        "fetch-mode": "A",
         date: "2026-11-08",
         "save-capture": capturePath,
         "bearer-token": TOKEN,
@@ -67,9 +67,22 @@ describe("f402_weblog_bridge inputs", () => {
     if (!result.ok) throw new Error("expected ok");
     expect(result.paths).toEqual([capturePath]);
     expect(captured[0]?.capturePath).toBe(capturePath);
-    expect(captured[0]?.mode).toBe("B");
+    expect(captured[0]?.mode).toBe("A");
     expect(existsSync(capturePath)).toBe(true);
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("--fetch-mode B is rejected for activity rollup", async () => {
+    const result = await resolveWeblogCorpusPaths({
+      "fetch-mode": "B",
+      date: "2026-11-08",
+      "bearer-token": TOKEN,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.exitCode).toBe(1);
+    expect(result.message).toMatch(/not supported/);
+    expect(result.message).toMatch(/LoginID, IPAddress/);
   });
 
   test("--from without --fetch-mode still resolves paths", async () => {
