@@ -4,7 +4,7 @@
  *
  * The point is to observe what the portal returns for each named report or boot call, not to assert a contract.
  * Paths and payloads come from the cached RequireJS bundles:
- * - `customer/report/report.js` (`Blob F5D0F39D9ABFE7F995C65F3152C690EFF1B0F9EF`)
+ * - `app/manager/report/help-report.js` (`Blob F5D0F39D9ABFE7F995C65F3152C690EFF1B0F9EF`, manager-side fork of `app/customer/report/report.js`)
  * - `app/manager/manager.js?bust=1.0.280` (`Blob 610B48F7F455B4D77131D88AD56832DFBB66A519`)
  *
  * `PendingDelete` is confirmed read-only in `customer/report/report.js:8578` (`setDeleteWager` ->

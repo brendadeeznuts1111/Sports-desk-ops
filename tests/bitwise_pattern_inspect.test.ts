@@ -293,13 +293,13 @@ describe("PatternScopeReport custom inspect & table integration", () => {
     // pending_price_spike is PROVEN (bit 0 -> 1)
     // cross_source_arb is PARTIAL (bit 1 -> 2)
     // customer_stake_timing_cluster is PARTIAL (bit 2 -> 4)
-    // settlement patterns are BLOCKED (bits 3, 4, 5 -> 8 + 16 + 32 = 56)
+    // settlement patterns are BLOCKED (bits 3, 4, 5, 6 -> 8 + 16 + 32 + 64 = 120)
     expect(report.provenMask).toBe(1 << 0);
     expect(report.partialMask).toBe((1 << 1) | (1 << 2));
-    expect(report.blockedMask).toBe((1 << 3) | (1 << 4) | (1 << 5));
+    expect(report.blockedMask).toBe((1 << 3) | (1 << 4) | (1 << 5) | (1 << 6));
 
     const rows = report.toTableRows();
-    expect(rows.length).toBe(6);
+    expect(rows.length).toBe(7);
 
     const priceSpike = rows.find((r) => r.Pattern === "pending_price_spike");
     expect(priceSpike?.Provability).toBe("PROVEN");
@@ -329,11 +329,12 @@ describe("PatternScopeReport custom inspect & table integration", () => {
     ]);
     const report = new PatternScopeReport(slices);
 
-    // With settlement_history: win_loss_rate, cancel_rate, parlay_leg_completion become PROVEN
+    // With settlement_history: win_loss_rate, cancel_rate, parlay_leg_completion, parlay_buyout_audit become PROVEN
     expect(report.evaluateProvability("win_loss_rate")).toBe("proven");
     expect(report.evaluateProvability("cancel_rate")).toBe("proven");
     expect(report.evaluateProvability("parlay_leg_completion")).toBe("proven");
-    expect(report.blockedMask).toBe(0); // All 6 are either proven or partial
+    expect(report.evaluateProvability("parlay_buyout_audit")).toBe("proven");
+    expect(report.blockedMask).toBe(0); // All 7 are either proven or partial
   });
 
   test("inspectPatternScopeTable helper formats table directly", () => {

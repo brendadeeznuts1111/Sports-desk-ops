@@ -47,10 +47,10 @@ set.
 The only upstream Fantasy402 route in this repo with an actual fetch client, and it is missing from the spec.
 
 - Endpoint: `POST {SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory`
-  (`lib/fantasy402_settlement_ingest.ts:547-557`).
+  (`lib/fantasy402_settlement_ingest.ts:841-851`).
 - Poll semantics: `fetch(url, { method: "POST", proxy: false, signal: AbortSignal.timeout(60_000) })`, **no
   request body**; response must be an array or `{ data: [] }` or the poll throws
-  (`lib/fantasy402_settlement_ingest.ts:559-587`).
+  (`lib/fantasy402_settlement_ingest.ts:853-881`).
 - Role: settlement-history slice (`lib/fantasy402_wager_universe_scope.ts:22-31`, `ingestionStatus: "wired"`).
 - Shape fixture: `tests/fixtures/fantasy402-history-poll.json` — `Login`, `WagerNumber`, `WagerStatus`
   (`S`/`C`), `AcceptedDateTime`, `GameDateTime`, `SettlementDateTime`, `Amount`, `Risk`, `ToWin`.

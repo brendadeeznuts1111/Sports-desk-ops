@@ -11,11 +11,12 @@ import {
   type IsoDateTimeUtc,
 } from "./audit_run_id.ts";
 import { canonicalJsonString } from "./match_evaluation_canonical.ts";
+import { redactDeletedWagerRow } from "./f402_deleted_wager_list.ts";
 import { sha256HexOfBytes } from "../services/sportsdesk_ingestion_feed_provenance.ts";
 /** Same semantics as candidate verify/replay store invariant exit (5). */
 export const SETTLEMENT_EXIT_STORE_INVARIANT = 5;
-
-export type SettlementFeed = "getHistory" | "getGrading";
+export type SettlementFeed =
+  "getHistory" | "getGrading" | "getDeleteWager" | "getTransactions";
 
 /**
  * Two independent axes, deliberately not one scalar:
@@ -296,6 +297,166 @@ export type SettlementPollBatch = {
   rows: Record<string, unknown>[];
 };
 
+function finiteNumOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalize one leg row from `Manager/getDeleteWager` (`INFO.LIST`) or `Report/PendingDelete` (`Pending[]`).
+ * Always strips `Password` and PCI cardholder fields (`CCNumber`, `CCExpires`, `CCApproval`) before hashing/persisting.
+ */
+export function normalizeDeleteWagerRow(
+  input: unknown,
+): NormalizedSettlementObservation | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const safeRaw = redactDeletedWagerRow(input as Record<string, unknown>);
+  const loginRaw =
+    safeRaw.Login ??
+    safeRaw.customerID ??
+    safeRaw.CustomerID ??
+    safeRaw.EnteredBy;
+  if (typeof loginRaw !== "string" || loginRaw.trim() === "") return null;
+  const login = loginRaw.trim();
+
+  const ticketNum = finiteNumOrNull(
+    safeRaw.TicketNumber ?? safeRaw.DocumentNumber ?? safeRaw.WagerNumber,
+  );
+  if (ticketNum === null) return null;
+  const wagerNumber = Math.trunc(ticketNum);
+
+  const itemNum = finiteNumOrNull(
+    safeRaw.ItemNumber ?? safeRaw.LegNumber ?? safeRaw.PlayNumber,
+  );
+  const legNumber = itemNum !== null ? Math.trunc(itemNum) : null;
+
+  const deletedBy = String(
+    safeRaw.LoginID ?? safeRaw.DeletedBy ?? safeRaw.LastUpdateLoginID ?? "",
+  ).trim();
+  const isBuyout = deletedBy.toUpperCase().includes("BUYOUT");
+
+  const validTime =
+    parseIsoTime(
+      "DeleteDateTime",
+      safeRaw.DeleteDateTime ??
+        safeRaw.TranDateTime ??
+        safeRaw.AcceptedDateTime,
+    ) ?? new Date(0).toISOString();
+
+  const riskVal = finiteNumOrNull(safeRaw.AmountWagered ?? safeRaw.Risk);
+  const toWinVal = finiteNumOrNull(safeRaw.ToWinAmount ?? safeRaw.ToWin);
+  const amtVal = finiteNumOrNull(safeRaw.Amount ?? safeRaw.AmountWon);
+  const refundVal = finiteNumOrNull(safeRaw.AmountRefunded);
+
+  return {
+    ticketId: fantasy402TicketId(login, wagerNumber),
+    login,
+    wagerNumber,
+    outcome: normalizeOutcome(safeRaw.Outcome),
+    lifecycle: "C",
+    source: writerSource(
+      typeof safeRaw.PlacedOn === "string" ? safeRaw.PlacedOn : null,
+      typeof safeRaw.TicketWriter === "string" ? safeRaw.TicketWriter : null,
+    ),
+    validTime,
+    sourceFeed: "getDeleteWager",
+    legNumber,
+    result: isBuyout ? "BUYOUT" : "DELETED",
+    amountCents: amtVal !== null ? Math.round(amtVal) : null,
+    riskCents: riskVal !== null ? Math.round(riskVal) : null,
+    toWinCents: toWinVal !== null ? Math.round(toWinVal) : null,
+    amountRefundedCents: refundVal !== null ? Math.round(refundVal) : null,
+    raw: safeRaw,
+    payloadSha256: hashRawPayload(safeRaw),
+  };
+}
+
+/**
+ * Normalize one ledger transaction row from `Report/getTransactions`, `Report/getGrading` (`LIVE_CASINO_POSTED`),
+ * or `Manager/getDeletedTransactionHistory`.
+ * Joins `"Buyout ... ticket <TicketNumber>"` credits directly to the parlay's `ticketId`.
+ */
+export function normalizeTransactionRow(
+  input: unknown,
+): NormalizedSettlementObservation | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const safeRaw = redactDeletedWagerRow(input as Record<string, unknown>);
+  const loginRaw =
+    safeRaw.CustomerID ??
+    safeRaw.customerID ??
+    safeRaw.Login ??
+    safeRaw.EnteredBy;
+  if (typeof loginRaw !== "string" || loginRaw.trim() === "") return null;
+  const login = loginRaw.trim();
+
+  const shortDesc = String(
+    safeRaw.ShortDesc ?? safeRaw.Description ?? "",
+  ).trim();
+  const isBuyout = /buyout/i.test(shortDesc);
+  const ticketMatch =
+    shortDesc.match(/ticket\s*#?\s*(\d+)/i) ??
+    (isBuyout ? shortDesc.match(/(\d{7,})/) : null);
+
+  const docNum = finiteNumOrNull(
+    ticketMatch?.[1] ??
+      safeRaw.TicketNumber ??
+      safeRaw.DocumentNumber ??
+      safeRaw.GradeNum ??
+      safeRaw.WagerNumber,
+  );
+  if (docNum === null) return null;
+  const wagerNumber = Math.trunc(docNum);
+
+  const tranCode = String(safeRaw.TranCode ?? "")
+    .trim()
+    .toUpperCase();
+  const rawAmt = finiteNumOrNull(safeRaw.Amount ?? safeRaw.EnteredAmount);
+  const signedAmt =
+    rawAmt === null
+      ? null
+      : tranCode === "D"
+        ? -Math.round(Math.abs(rawAmt))
+        : Math.round(Math.abs(rawAmt));
+
+  const validTime =
+    parseIsoTime(
+      "TranDateTime",
+      safeRaw.TranDateTime ??
+        safeRaw.DailyFigureDate ??
+        safeRaw.SettlementDateTime,
+    ) ?? new Date(0).toISOString();
+
+  const docLeg = finiteNumOrNull(safeRaw.DocumentNumber);
+
+  return {
+    ticketId: fantasy402TicketId(login, wagerNumber),
+    login,
+    wagerNumber,
+    outcome: null,
+    lifecycle: isBuyout ? "C" : "S",
+    source: "internet",
+    validTime,
+    sourceFeed: "getTransactions",
+    legNumber: docLeg !== null ? Math.trunc(docLeg) : null,
+    result: isBuyout
+      ? "BUYOUT_CREDIT"
+      : String(safeRaw.TranType ?? (tranCode || "TX"))
+          .trim()
+          .toUpperCase(),
+    amountCents: signedAmt,
+    riskCents: null,
+    toWinCents: null,
+    amountRefundedCents: isBuyout && signedAmt !== null ? signedAmt : null,
+    raw: safeRaw,
+    payloadSha256: hashRawPayload(safeRaw),
+  };
+}
+
 export function normalizeSettlementBatch(
   batch: SettlementPollBatch,
 ): NormalizedSettlementObservation[] {
@@ -304,7 +465,11 @@ export function normalizeSettlementBatch(
     const obs =
       batch.feed === "getGrading"
         ? normalizeGradingLegRow(row)
-        : normalizeHistoryWagerRow(row, batch.feed);
+        : batch.feed === "getDeleteWager"
+          ? normalizeDeleteWagerRow(row)
+          : batch.feed === "getTransactions"
+            ? normalizeTransactionRow(row)
+            : normalizeHistoryWagerRow(row, batch.feed);
     if (obs) out.push(obs);
   }
   return out;
@@ -459,7 +624,7 @@ export class WagerSettlementStore {
         `SELECT ticket_id, valid_time, outcome, lifecycle, source_feed,
                 COUNT(DISTINCT payload_sha256) AS distinct_payloads
          FROM wager_settlement_observations
-         GROUP BY ticket_id, valid_time, outcome, lifecycle, source_feed
+         GROUP BY ticket_id, valid_time, outcome, lifecycle, source_feed, COALESCE(leg_number, -1)
          HAVING COUNT(DISTINCT payload_sha256) > 1`,
       )
       .all() as SettlementPayloadDriftRow[];
@@ -472,7 +637,7 @@ export class WagerSettlementStore {
                 COUNT(DISTINCT valid_time) AS distinct_valid_times
          FROM wager_settlement_observations
          WHERE lifecycle IN ('S', 'C')
-         GROUP BY ticket_id, lifecycle
+         GROUP BY ticket_id, lifecycle, source_feed
          HAVING COUNT(DISTINCT valid_time) > 1`,
       )
       .all() as SettlementValidTimeForkRow[];
@@ -521,7 +686,136 @@ export class WagerSettlementStore {
       losses: sqlInt(losses.n),
     };
   }
+
+  /**
+   * Accounting rollup for deleted wagers (`getDeleteWager`) and parlay buyout ledger credits (`getTransactions`).
+   * Deduplicates ticket-level `risk_cents` and `to_win_cents` by `ticket_id` so multi-leg parlays are never inflated by leg count.
+   */
+  summarizeBuyoutAndDeleteAccounting(): BuyoutAndDeleteAccountingSummary {
+    const legCounts = this.db
+      .query(
+        `SELECT
+           COUNT(*) AS total_legs,
+           SUM(CASE WHEN result = 'BUYOUT' THEN 1 ELSE 0 END) AS buyout_legs,
+           SUM(CASE WHEN result = 'DELETED' THEN 1 ELSE 0 END) AS deleted_legs
+         FROM wager_settlement_observations
+         WHERE source_feed = 'getDeleteWager'`,
+      )
+      .get() as {
+      total_legs: number | bigint | null;
+      buyout_legs: number | bigint | null;
+      deleted_legs: number | bigint | null;
+    };
+
+    const ticketRollup = this.db
+      .query(
+        `SELECT
+           result,
+           COUNT(*) AS tickets,
+           COALESCE(SUM(risk_cents), 0) AS risk_cents,
+           COALESCE(SUM(to_win_cents), 0) AS to_win_cents
+         FROM (
+           SELECT ticket_id, result, MAX(risk_cents) AS risk_cents, MAX(to_win_cents) AS to_win_cents
+           FROM wager_settlement_observations
+           WHERE source_feed = 'getDeleteWager' AND result IN ('BUYOUT', 'DELETED')
+           GROUP BY ticket_id, result
+         )
+         GROUP BY result`,
+      )
+      .all() as Array<{
+      result: string;
+      tickets: number | bigint;
+      risk_cents: number | bigint;
+      to_win_cents: number | bigint;
+    }>;
+
+    let distinctBuyoutTickets = 0;
+    let distinctOperatorDeletedTickets = 0;
+    let buyoutTicketRiskCents = 0;
+    let buyoutTicketToWinCents = 0;
+    let operatorDeletedTicketRiskCents = 0;
+    let operatorDeletedTicketToWinCents = 0;
+
+    for (const r of ticketRollup) {
+      if (r.result === "BUYOUT") {
+        distinctBuyoutTickets = sqlInt(r.tickets);
+        buyoutTicketRiskCents = sqlInt(r.risk_cents);
+        buyoutTicketToWinCents = sqlInt(r.to_win_cents);
+      } else if (r.result === "DELETED") {
+        distinctOperatorDeletedTickets = sqlInt(r.tickets);
+        operatorDeletedTicketRiskCents = sqlInt(r.risk_cents);
+        operatorDeletedTicketToWinCents = sqlInt(r.to_win_cents);
+      }
+    }
+
+    const txRollup = this.db
+      .query(
+        `SELECT
+           COUNT(*) AS rows,
+           COALESCE(SUM(amount_cents), 0) AS credit_cents
+         FROM (
+           SELECT ticket_id, MAX(amount_cents) AS amount_cents
+           FROM wager_settlement_observations
+           WHERE source_feed = 'getTransactions' AND result = 'BUYOUT_CREDIT'
+           GROUP BY ticket_id
+         )`,
+      )
+      .get() as {
+      rows: number | bigint | null;
+      credit_cents: number | bigint | null;
+    };
+
+    const matchedRow = this.db
+      .query(
+        `SELECT COUNT(DISTINCT d.ticket_id) AS matched
+         FROM wager_settlement_observations d
+         INNER JOIN wager_settlement_observations t
+           ON d.ticket_id = t.ticket_id
+         WHERE d.source_feed = 'getDeleteWager'
+           AND d.result = 'BUYOUT'
+           AND t.source_feed = 'getTransactions'
+           AND t.result = 'BUYOUT_CREDIT'`,
+      )
+      .get() as { matched: number | bigint | null };
+
+    const reconciledBuyoutTickets = sqlInt(matchedRow.matched ?? 0);
+
+    return {
+      deletedWagerLegs: sqlInt(legCounts.total_legs ?? 0),
+      buyoutLegs: sqlInt(legCounts.buyout_legs ?? 0),
+      operatorDeletedLegs: sqlInt(legCounts.deleted_legs ?? 0),
+      distinctBuyoutTickets,
+      distinctOperatorDeletedTickets,
+      buyoutTicketRiskCents,
+      buyoutTicketToWinCents,
+      operatorDeletedTicketRiskCents,
+      operatorDeletedTicketToWinCents,
+      buyoutCreditRows: sqlInt(txRollup.rows ?? 0),
+      buyoutCreditTotalCents: sqlInt(txRollup.credit_cents ?? 0),
+      reconciledBuyoutTickets,
+      unreconciledBuyoutTickets: Math.max(
+        0,
+        distinctBuyoutTickets - reconciledBuyoutTickets,
+      ),
+    };
+  }
 }
+
+export type BuyoutAndDeleteAccountingSummary = {
+  deletedWagerLegs: number;
+  buyoutLegs: number;
+  operatorDeletedLegs: number;
+  distinctBuyoutTickets: number;
+  distinctOperatorDeletedTickets: number;
+  buyoutTicketRiskCents: number;
+  buyoutTicketToWinCents: number;
+  operatorDeletedTicketRiskCents: number;
+  operatorDeletedTicketToWinCents: number;
+  buyoutCreditRows: number;
+  buyoutCreditTotalCents: number;
+  reconciledBuyoutTickets: number;
+  unreconciledBuyoutTickets: number;
+};
 
 export type SettlementPayloadDriftRow = {
   ticket_id: string;

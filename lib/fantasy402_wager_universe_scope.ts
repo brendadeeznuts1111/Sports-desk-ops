@@ -36,6 +36,22 @@ export const FANTASY402_MANAGER_FEEDS = {
     includesSettledWagers: true,
     ingestionStatus: "wired" as const,
   },
+  getDeleteWager: {
+    endpoint: "Manager/getDeleteWager",
+    slice: "settlement_history" as const,
+    wagerStatusOnWire: "P|O (BUYOUT-<CustomerID> + operator/system deletes)",
+    includesSettledWagers: false,
+    includesCanceledBeforePoll: true,
+    ingestionStatus: "wired" as const,
+  },
+  getTransactions: {
+    endpoint: "Report/getTransactions",
+    slice: "settlement_history" as const,
+    wagerStatusOnWire: "C|D ledger credits/debits (Buyout ... ticket <id>)",
+    includesSettledWagers: true,
+    includesCanceledBeforePoll: true,
+    ingestionStatus: "wired" as const,
+  },
 } as const;
 
 export type PatternClass =
@@ -44,7 +60,8 @@ export type PatternClass =
   | "customer_stake_timing_cluster"
   | "win_loss_rate"
   | "cancel_rate"
-  | "parlay_leg_completion";
+  | "parlay_leg_completion"
+  | "parlay_buyout_audit";
 
 export type PatternProvability = "proven" | "partial" | "blocked";
 
@@ -95,6 +112,13 @@ export const PATTERN_SCOPE_MATRIX: readonly PatternScopeRow[] = [
     requiredSlices: ["settlement_history"],
     limitation:
       "getPending shows legs; per-leg settlement status needs history feed",
+  },
+  {
+    pattern: "parlay_buyout_audit",
+    provability: "proven",
+    requiredSlices: ["settlement_history"],
+    limitation:
+      "Requires getDeleteWager (BUYOUT-* legs) + getTransactions (Buyout ... ticket <id> ledger credits)",
   },
 ];
 

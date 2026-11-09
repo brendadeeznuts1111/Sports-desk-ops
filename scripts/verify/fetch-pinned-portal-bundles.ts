@@ -28,12 +28,23 @@ const ARTIFACTS = [
   { key: "app/manager/manager.js", file: "manager.js", pinned: true },
   { key: "app/util/util.js", file: "util.js", pinned: true },
   { key: "app/system/security.js", file: "security.js", pinned: true },
-  // The two request-composition modules. They are not in the manifest yet, so a run prints their
-  // hashes to paste in; nothing is compared until the entry exists. `score.js` builds the Scores
-  // call and `pending.js` the Pending call, which is where the caller-owned body fields
-  // (customerID, RRO, operation) are decided — `presetParam` never writes them.
-  { key: "app/sports/score/score.js", file: "score.js", pinned: false },
-  { key: "app/sports/report/pending.js", file: "pending.js", pinned: false },
+  { key: "app/sports/score/score.js", file: "score.js", pinned: true },
+  { key: "app/sports/report/pending.js", file: "pending.js", pinned: true },
+  {
+    key: "app/manager/report/help-report.js",
+    file: "help-report.js",
+    pinned: true,
+  },
+  {
+    key: "app/manager/report/report.js",
+    file: "manager-report.js",
+    pinned: true,
+  },
+  {
+    key: "app/customer/report/report.js",
+    file: "customer-report.js",
+    pinned: true,
+  },
 ] as const;
 
 const manifest = await loadPinnedManifest();

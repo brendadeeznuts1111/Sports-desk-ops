@@ -642,11 +642,12 @@ the risk to weigh. A prefilter installed after `presetParam` runs after it (both
 bucket, which is registration-ordered) and can redirect while keeping the injected body; the proxy
 target must stay same-origin for that to be the same request.
 
-What this does not answer, and the pins that would: `app/sports/score/score.js` and
-`app/sports/report/pending.js` are not in the pinned set, so (a) what `score.js` does with the
-`{accountInfo}` argument it is given, and (b) who writes `customerID` in the Pending caller, are
-open. Both are now in `pinned/fetch-pinned-bundles.sh` and `fetch:pinned-portal`; a run prints their
-hashes to pin, and the reads then answer those two questions the same way.
+What this does not answer, and the pins that resolve it (pinned 2026-11-09 in `verification/manager-boot-oracle/pinned/manifest.json`):
+
+- `app/sports/score/score.js` (`sha256: 948ba9b6b81b0ac262d7267fa136a75278f795899c1a0ee5edaa10e0018f091b`, 5,177 B): `getScoresDynamic(t)` reads `t.accountInfo.customerID` and posts `JSON.stringify({customerID: t.accountInfo.customerID, operation: "getScoresLiveDynamic", RRO: 1})` to `/cloud/api/Report/getScoresLiveDynamic`.
+- `app/sports/report/pending.js` (`sha256: 26836a982a4469e3a1f38e3da66faa79d145300a06475f56a76e9efda8ea6988`, 42,105 B): requires `"sports/sports"` (`r`) and in `get(e)` / `getFlat(e)` posts `JSON.stringify({agentID: r.accountInfo.AgentID, customerID: r.ID, ticketNumber: o.ticketNumber, path: this.path + o.operation, RRO: i.WR})` (`RRO: 0`) to `/cloud/api/Report/Pending` (or `getPendingByTicket` when invoked via `util.callPending`). Also dispatches `getAddedInfo` and `buyOutProcess`.
+- `app/manager/report/help-report.js` (`sha256: 10fbc07dc9dbe85bd78d79ef85bf3312a2b1d6968e79f6971131eed8dd5160f8`, 129,750 B): exact byte match for WebView cache `Blob F5D0F39D9ABFE7F995C65F3152C690EFF1B0F9EF` (loaded by `Blob A7FD1C99…`, `manager/module/pending/`). Previously misattributed to `customer/report/report.js`. Because `help-report.js` is a manager-portal fork of `customer/report/report.js`, its `require("manager/manager")` calls in `getDailyFigures` and `getPendingByTicket` and its `{agentID: "KSCMA"}` default in `getLeaderBoard` are manager-context code (F3/F4 superseded), and `getGrading` exists only in `help-report.js`, not in the customer module.
+- `app/customer/report/report.js` (`sha256: 1d853ccb6c56c4261b0ad59604129fa44e11d821e0de028abab0bd6cc17d2b58`, 400,384 B, unminified) and `app/manager/report/report.js` (`sha256: 09cba38e83b44db8a0daf1fb410cf838d3f04916b60fdf543efe07176b803289`, 549 B): pinned alongside `help-report.js`. The real customer module dispatches 11 operations (`Pending`, `PendingDelete`, `getAddedInfo`, `getDailyFiguresByCustomer`, `getGradedWagerByCustomer`, `getTransactions`, `getWagerDetailTransaction`, `getWagersByFigureDate`, `getTicketDetailPrint`, `getLeaderBoard`, `getPendingByTicket`, `buyOutProcess`), uses `require("customer/customer")`, and includes `token: Security.token` in every request body.
 
 **What `MASTER_ID` and `agentType` actually are** (same pinned read, 2026-11-02). The body gate is a
 login-state gate, and both of its operands have a writer:

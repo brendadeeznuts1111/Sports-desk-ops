@@ -2065,20 +2065,20 @@ manager.js:35023 boot report-configuration read. The form body is the one the 20
 
 ### `POST /cloud/api/Manager/getHistory`
 
-> **Evidence — tier D** · sources: `lib/fantasy402_settlement_ingest.ts:547-557`, `lib/fantasy402_wager_universe_scope.ts:22-31`, `fixture:tests/fixtures/fantasy402-history-poll.json:2-24` · response not captured
+> **Evidence — tier D** · sources: `lib/fantasy402_settlement_ingest.ts:841-851`, `lib/fantasy402_wager_universe_scope.ts:22-31`, `fixture:tests/fixtures/fantasy402-history-poll.json:2-24` · response not captured
 
 **Manager getHistory (wired settlement-history poll; no response capture)**
 
-The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).
+The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:841-862). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:863-881). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).
 
 - **Tag:** Settlement History · **operationId:** `postCloudApiManagerGetHistory`
 - **Required capture:** Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance.
 
 **Responses**
 
-- **HTTP 200** — JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.
+- **HTTP 200** — JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:868-881). Row fields are not captured, so only raw/unknown objects are described.
   - content `application/json`: **authored response schema — no response body was captured**
-- **Default response (status code not captured)** — Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571).
+- **Default response (status code not captured)** — Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:863-865).
 
 ### `POST /cloud/api/Manager/adjustBalance`
 

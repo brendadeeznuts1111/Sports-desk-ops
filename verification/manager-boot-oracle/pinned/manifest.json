@@ -26,6 +26,33 @@
       "bustQuery": "1.0.281",
       "sha256": "056c0fc2bc075017ed93ba7a3cd9d301c8144f3dee9d56347673d098d6f84e1b"
     },
+    "app/sports/score/score.js": {
+      "bustQuery": "1.0.281",
+      "sha256": "948ba9b6b81b0ac262d7267fa136a75278f795899c1a0ee5edaa10e0018f091b",
+      "bytes": 5177
+    },
+    "app/sports/report/pending.js": {
+      "bustQuery": "1.0.281",
+      "sha256": "26836a982a4469e3a1f38e3da66faa79d145300a06475f56a76e9efda8ea6988",
+      "bytes": 42105
+    },
+    "app/manager/report/help-report.js": {
+      "bustQuery": "1.0.281",
+      "sha256": "10fbc07dc9dbe85bd78d79ef85bf3312a2b1d6968e79f6971131eed8dd5160f8",
+      "bytes": 129750,
+      "note": "WebView cache Blob F5D0F39D9ABFE7F995C65F3152C690EFF1B0F9EF (manager-side fork of customer/report/report.js)"
+    },
+    "app/manager/report/report.js": {
+      "bustQuery": "1.0.281",
+      "sha256": "09cba38e83b44db8a0daf1fb410cf838d3f04916b60fdf543efe07176b803289",
+      "bytes": 549
+    },
+    "app/customer/report/report.js": {
+      "bustQuery": "1.0.281",
+      "sha256": "1d853ccb6c56c4261b0ad59604129fa44e11d821e0de028abab0bd6cc17d2b58",
+      "bytes": 400384,
+      "note": "Unminified customer-portal report module (never loaded in manager WebView cache)"
+    },
     "extracted/baseHeriarchy.body.min.js": {
       "sha256": "6e63ab3439f97961d9a0598e0b1d113120979a5e4ce63de1869b1b3f00fd49ec",
       "slicedFrom": "app/manager/manager.js"

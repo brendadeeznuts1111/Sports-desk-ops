@@ -21,7 +21,14 @@ const FORBIDDEN: readonly { readonly re: RegExp; readonly label: string }[] = [
 
 /** Password values in redacted output must be sentinel or [REDACTED] only. */
 const BAD_PASSWORD_VALUE =
-  /"Password"\s*:\s*"(?!REDACTED_PASSWORD"|\\[REDACTED\\]")[^"]+"/g;
+  /"Password"\s*:\s*"(?!REDACTED_PASSWORD"|\[REDACTED\]")[^"]+"/g;
+
+/**
+ * PCI DSS 3.3 / 3.4 cardholder fields (`getDeletedTransactionHistory` Finding F11):
+ * `CCNumber`, `CCExpires`, and `CCApproval` must be omitted, null, empty, or sentinel-redacted.
+ */
+const BAD_PCI_CARD_VALUE =
+  /"(?:CCNumber|CCExpires|CCApproval)"\s*:\s*"(?!REDACTED_CC"|REDACTED"|\[REDACTED\]"|<redacted>"|<REDACTED>")[^"]+"/g;
 
 export function sweepRedactedCaptureText(
   text: string,
@@ -49,6 +56,14 @@ export function sweepRedactedCaptureText(
     violations.push({
       code: "empty_password_key",
       detail: "empty Password string — use sentinel or omit",
+    });
+  }
+
+  const badPci = text.match(BAD_PCI_CARD_VALUE);
+  if (badPci !== null && badPci.length > 0) {
+    violations.push({
+      code: "pci_cardholder_leak",
+      detail: `non-sentinel CCNumber/CCExpires/CCApproval values in redacted output (count ${badPci.length})`,
     });
   }
 

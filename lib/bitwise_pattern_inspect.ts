@@ -91,7 +91,7 @@ export const WAGER_STATE_FLAG_NAMES: Readonly<Record<number, string>> = {
   8: "FREE_PLAY",
 };
 
-/** Pattern class bit position mapping (0..5). */
+/** Pattern class bit position mapping (0..6). */
 export const PATTERN_CLASS_BITS: Readonly<Record<PatternClass, number>> = {
   pending_price_spike: 0,
   cross_source_arb: 1,
@@ -99,6 +99,7 @@ export const PATTERN_CLASS_BITS: Readonly<Record<PatternClass, number>> = {
   win_loss_rate: 3,
   cancel_rate: 4,
   parlay_leg_completion: 5,
+  parlay_buyout_audit: 6,
 };
 
 export const PATTERN_FLAG_NAMES: Readonly<Record<number, string>> = {
@@ -108,6 +109,7 @@ export const PATTERN_FLAG_NAMES: Readonly<Record<number, string>> = {
   3: "win_loss_rate",
   4: "cancel_rate",
   5: "parlay_leg_completion",
+  6: "parlay_buyout_audit",
 };
 
 export interface BitSetTableRow {

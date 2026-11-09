@@ -3803,11 +3803,11 @@
       "post": {
         "tags": ["Settlement History"],
         "summary": "Manager getHistory (wired settlement-history poll; no response capture)",
-        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "description": "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:841-862). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:863-881). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
         "operationId": "postCloudApiManagerGetHistory",
         "responses": {
           "200": {
-            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
+            "description": "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:868-881). Row fields are not captured, so only raw/unknown objects are described.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3840,13 +3840,13 @@
             }
           },
           "default": {
-            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571)."
+            "description": "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:863-865)."
           }
         },
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "lib/fantasy402_settlement_ingest.ts:547-557",
+            "lib/fantasy402_settlement_ingest.ts:841-851",
             "lib/fantasy402_wager_universe_scope.ts:22-31",
             "fixture:tests/fixtures/fantasy402-history-poll.json:2-24"
           ],

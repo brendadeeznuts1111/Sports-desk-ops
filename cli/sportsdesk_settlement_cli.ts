@@ -4,7 +4,7 @@
  */
 
 import { openSportsdeskSqlite } from "../lib/sportsdesk_sqlite.ts";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { auditRunId, type AuditRunId } from "../lib/audit_run_id.ts";
 import {
@@ -17,10 +17,6 @@ import {
   activeWagerObservationSlicesForSettlementCount,
   patternProvability,
 } from "../lib/fantasy402_wager_universe_scope.ts";
-import {
-  exportSettlementOutcomes,
-  settlementOutcomesJsonl,
-} from "../lib/settlement_outcomes.ts";
 
 type GlobalOpts = { json: boolean };
 
@@ -32,7 +28,6 @@ Commands:
   poll      Live POST Manager/getHistory → SQLite (requires SPORTSDESK_PORTAL_HTTP_BASE)
   verify    Payload drift + valid_time fork invariants
   status    Outcome counts + pattern provability on active slices
-  outcomes  Export latest per-ticket outcomes as JSONL for alert performance
 
 Global:
   -h, --help
@@ -42,7 +37,6 @@ Examples:
   bun run settlement ingest --db ./lifecycle.sqlite --fixture tests/fixtures/fantasy402-history-poll.json
   bun run settlement poll --db ./lifecycle.sqlite
   bun run settlement verify --db ./lifecycle.sqlite
-  bun run settlement outcomes --db ./lifecycle.sqlite --out Scratch/settlement/outcomes.jsonl
 `);
 }
 
@@ -58,18 +52,6 @@ Exit: 0 ok · 1 usage
 `);
 }
 
-function printOutcomesHelp(): void {
-  console.log(`settlement outcomes
-
-Options:
-  --db <path>    SQLite settlement store (required)
-  --out <path>   Write JSONL outcomes; omit to print the summary only
-
-Rows: {customerId, wagerNumber, outcome: win|loss|push|void, netUsd, source}
-Latest observation per ticket wins; tickets without a decisive outcome are skipped.
-`);
-}
-
 function parseGlobal(argv: string[]): { rest: string[]; opts: GlobalOpts } {
   const opts: GlobalOpts = { json: false };
   const rest: string[] = [];
@@ -81,15 +63,42 @@ function parseGlobal(argv: string[]): { rest: string[]; opts: GlobalOpts } {
 }
 
 function loadBatchFixture(path: string): SettlementPollBatch {
-  const raw = JSON.parse(readFileSync(path, "utf8")) as SettlementPollBatch;
-  if (!raw.feed || !Array.isArray(raw.rows)) {
-    throw new Error(`Invalid fixture: ${path}`);
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  if (typeof parsed.feed === "string" && Array.isArray(parsed.rows)) {
+    return {
+      feed: parsed.feed as SettlementPollBatch["feed"],
+      polledAt:
+        typeof parsed.polledAt === "string"
+          ? parsed.polledAt
+          : new Date().toISOString(),
+      rows: parsed.rows as Record<string, unknown>[],
+    };
   }
-  return {
-    feed: raw.feed,
-    polledAt: raw.polledAt ?? new Date().toISOString(),
-    rows: raw.rows,
-  };
+  const info = parsed.INFO as { LIST?: unknown } | undefined;
+  if (info && Array.isArray(info.LIST)) {
+    return {
+      feed: "getDeleteWager",
+      polledAt:
+        typeof parsed.capturedAt === "string"
+          ? parsed.capturedAt
+          : new Date().toISOString(),
+      rows: info.LIST as Record<string, unknown>[],
+    };
+  }
+  if (Array.isArray(parsed.LIST)) {
+    return {
+      feed: "getTransactions",
+      polledAt:
+        typeof parsed.capturedAt === "string"
+          ? parsed.capturedAt
+          : new Date().toISOString(),
+      rows: parsed.LIST as Record<string, unknown>[],
+    };
+  }
+  throw new Error(`Invalid fixture: ${path}`);
 }
 
 async function cmdIngest(args: string[], opts: GlobalOpts): Promise<number> {
@@ -225,6 +234,7 @@ async function cmdStatus(args: string[], opts: GlobalOpts): Promise<number> {
   const db = openSportsdeskSqlite(dbPath);
   const store = createWagerSettlementStore(db);
   const rates = store.summarizeOutcomeRates();
+  const accounting = store.summarizeBuyoutAndDeleteAccounting();
   const slices = activeWagerObservationSlicesForSettlementCount(
     store.countObservations(),
   );
@@ -233,9 +243,11 @@ async function cmdStatus(args: string[], opts: GlobalOpts): Promise<number> {
     observationCount: store.countObservations(),
     activeSlices: [...slices],
     outcomes: rates,
+    accounting,
     patterns: {
       win_loss_rate: patternProvability("win_loss_rate", slices),
       cancel_rate: patternProvability("cancel_rate", slices),
+      parlay_buyout_audit: patternProvability("parlay_buyout_audit", slices),
     },
   };
 
@@ -247,71 +259,10 @@ async function cmdStatus(args: string[], opts: GlobalOpts): Promise<number> {
       `settled=${rates.settled} canceled=${rates.canceled} wins=${rates.wins} losses=${rates.losses}`,
     );
     console.log(
-      `win_loss_rate: ${body.patterns.win_loss_rate}, cancel_rate: ${body.patterns.cancel_rate}`,
+      `buyoutTickets=${accounting.distinctBuyoutTickets} deletedTickets=${accounting.distinctOperatorDeletedTickets} buyoutCredits=${accounting.buyoutCreditRows} ($${(accounting.buyoutCreditTotalCents / 100).toFixed(2)})`,
     );
-  }
-  return 0;
-}
-
-function cmdOutcomes(args: string[], opts: GlobalOpts): number {
-  let dbPath: string | undefined;
-  let outPath: string | undefined;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === "-h" || a === "--help") {
-      printOutcomesHelp();
-      return 0;
-    }
-    if (a === "--db" && args[i + 1]) dbPath = resolve(args[++i]!);
-    else if (a === "--out" && args[i + 1]) outPath = resolve(args[++i]!);
-  }
-  if (!dbPath) {
-    console.error("outcomes requires --db");
-    printOutcomesHelp();
-    return 1;
-  }
-  const exported = exportSettlementOutcomes(dbPath);
-  if (!exported.ok) {
-    if (opts.json) {
-      console.log(
-        JSON.stringify({
-          ok: false,
-          error: exported.reason,
-          dbPath: exported.dbPath,
-        }),
-      );
-    } else {
-      console.error(`outcomes: ${exported.reason} (${exported.dbPath})`);
-    }
-    return 1;
-  }
-  // Never write a file for an empty export: a blank file is indistinguishable from a real
-  // (empty) outcome set.
-  const wroteFile = outPath !== undefined && exported.rows.length > 0;
-  if (wroteFile && outPath !== undefined) {
-    writeFileSync(outPath, settlementOutcomesJsonl(exported.rows));
-  }
-  if (opts.json) {
     console.log(
-      JSON.stringify({
-        ok: true,
-        dbPath: exported.dbPath,
-        tickets: exported.tickets,
-        rows: exported.rows.length,
-        skipped: exported.skipped,
-        out: outPath ?? null,
-        wroteFile,
-      }),
-    );
-  } else {
-    console.log(
-      `outcomes: ${exported.rows.length}/${exported.tickets} ticket(s) exported` +
-        (exported.skipped === 0 ? "" : ` (${exported.skipped} skipped)`) +
-        (outPath === undefined
-          ? ""
-          : wroteFile
-            ? ` → ${outPath}`
-            : " (no outcome rows; file not written)"),
+      `win_loss_rate: ${body.patterns.win_loss_rate}, cancel_rate: ${body.patterns.cancel_rate}, parlay_buyout_audit: ${body.patterns.parlay_buyout_audit}`,
     );
   }
   return 0;
@@ -336,8 +287,6 @@ async function main(): Promise<number> {
       return cmdVerify(args, opts);
     case "status":
       return cmdStatus(args, opts);
-    case "outcomes":
-      return cmdOutcomes(args, opts);
     default:
       console.error(`Unknown command: ${cmd}`);
       printRootHelp();
