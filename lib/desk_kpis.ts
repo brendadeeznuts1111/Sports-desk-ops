@@ -10,6 +10,7 @@
  * `/api/kpis` stay public (`aggregate`) while `/api/live-bets` and `/api/live-wagers` stay guarded.
  */
 
+import { isFixtureAgentTreeGraphSource } from "./agent_tree.ts";
 import type { LiveBetsArtifact } from "./live_bets.ts";
 import { summarizeLiveWagers, type WagerListArtifact } from "./live_wagers.ts";
 
@@ -36,6 +37,8 @@ export interface KpiInput<T> {
 }
 
 export interface AgentTreeNodes {
+  /** Input graph path stamped by `build:agent-tree` (`source` on `AgentTreeFile`). */
+  readonly source?: string;
   readonly nodes?: Record<string, { readonly t?: string | null }>;
 }
 
@@ -168,6 +171,12 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
   const agents = (() => {
     if (agentTree === null) return null;
     const nodes = Object.values(agentTree.value.nodes ?? {});
+    const graphSource = (agentTree.value.source ?? "").trim();
+    const basis: KpiBasis = isFixtureAgentTreeGraphSource(graphSource)
+      ? "fixture"
+      : "capture";
+    const provenanceSource =
+      graphSource !== "" ? graphSource : "data/agent-tree.json";
     return {
       total: nodes.length,
       agents: nodes.filter((node) => node.t === "A").length,
@@ -175,8 +184,8 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       unclassified: nodes.filter((node) => node.t !== "A" && node.t !== "M")
         .length,
       provenance: provenance(
-        "data/agent-tree.json",
-        "capture",
+        provenanceSource,
+        basis,
         null,
         agentTree.mtime,
         STALE_AFTER_SECONDS.agentTree,

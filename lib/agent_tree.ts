@@ -68,6 +68,20 @@ export interface AgentTreeProblems {
   readonly missingParents: readonly AgentKey[];
 }
 
+/**
+ * True when the tree was built from scratch graph, tests, or other non-portal inputs.
+ * KPI provenance uses this so a fresh mtime cannot masquerade as a live hierarchy capture.
+ */
+export function isFixtureAgentTreeGraphSource(source: string): boolean {
+  const normalized = source.trim().toLowerCase();
+  if (normalized === "") return true;
+  return (
+    normalized.startsWith("scratch/") ||
+    normalized.startsWith("tests/") ||
+    normalized.includes("fixture")
+  );
+}
+
 export function readAgentTreeFile(payload: unknown): AgentTreeFile | null {
   if (typeof payload !== "object" || payload === null) return null;
   const record = payload as Partial<AgentTreeFile>;

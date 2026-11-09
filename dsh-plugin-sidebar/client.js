@@ -316,6 +316,7 @@ window.__ModuleLoader__.load({
         customers: "Customers",
         customerNet: "Customer net",
         provenance: "provenance",
+        notLive: "not live",
         partial: "partial",
         mode: "Mode",
         killSwitch: "Kill switch",
@@ -339,6 +340,8 @@ window.__ModuleLoader__.load({
         attentionJoin: "; ",
         attentionFeedStale: "stale ({age})",
         attentionWss: "WSS not ingested ({value})",
+        attentionFixtureProvenance:
+          "Agent tree: fixture-sourced ({value}); not live portal data",
         attentionFeedStatus: "status is {status}",
         attentionKill: "kill switch is on",
         attentionMode: "mode is {mode}",
@@ -491,6 +494,7 @@ window.__ModuleLoader__.load({
         customers: "客户数",
         customerNet: "客户净额",
         provenance: "来源",
+        notLive: "非实盘",
         partial: "部分",
         mode: "模式",
         killSwitch: "紧急开关",
@@ -514,6 +518,8 @@ window.__ModuleLoader__.load({
         attentionJoin: "；",
         attentionFeedStale: "过期（{age}）",
         attentionWss: "WSS 未接入（{value}）",
+        attentionFixtureProvenance:
+          "代理树：夹具来源（{value}）；非门户实盘数据",
         attentionFeedStatus: "状态为 {status}",
         attentionKill: "紧急开关已开启",
         attentionMode: "模式为 {mode}",
@@ -717,11 +723,32 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Belt-and-suspenders: trust basis when present, fall back to source prefix
+     * so the chip works against older API versions during rollout.
+     * @param {{ basis?: string | null, source?: string | null } | null | undefined} prov
+     */
+    function isFixtureProvenance(prov) {
+      if (prov === null || prov === undefined) return false;
+      const basis = (prov.basis ?? "").trim().toLowerCase();
+      if (basis === "fixture") return true;
+      if (basis === "live") return false;
+      const srcRaw = (prov.source ?? "").trim();
+      if (basis === "capture" && srcRaw.startsWith("data/")) return false;
+      const src = srcRaw.toLowerCase();
+      if (src === "") return false;
+      return (
+        src.startsWith("scratch/") ||
+        src.startsWith("tests/") ||
+        src.includes("fixture")
+      );
+    }
+
+    /**
      * Read a `provenance` block (the kpis and execution payload carry one per
      * measurement). Returns null when the block carries nothing usable, so the
      * page omits the row instead of printing "unknown age".
      * @param {unknown} value
-     * @returns {{ ageSeconds: number | null, stale: boolean | null, partial: boolean | null, asOf: string | null, source: string | null } | null}
+     * @returns {{ ageSeconds: number | null, stale: boolean | null, partial: boolean | null, asOf: string | null, source: string | null, basis: string | null } | null}
      */
     function readProvenance(value) {
       if (!isRecord(value)) return null;
@@ -730,16 +757,18 @@ window.__ModuleLoader__.load({
       const partial = readBoolean(value.partial);
       const asOf = readText(value.asOf);
       const source = readText(value.source);
+      const basis = readText(value.basis);
       if (
         ageSeconds === null &&
         stale === null &&
         partial === null &&
         asOf === null &&
-        source === null
+        source === null &&
+        basis === null
       ) {
         return null;
       }
-      return { ageSeconds, stale, partial, asOf, source };
+      return { ageSeconds, stale, partial, asOf, source, basis };
     }
 
     /**
@@ -3545,6 +3574,9 @@ window.__ModuleLoader__.load({
       if (provenance === null) return null;
       const age = provenanceAge(t, provenance, now);
       const chips = [];
+      if (isFixtureProvenance(provenance)) {
+        chips.push(chip(t("notLive"), "warn", "prov-fixture"));
+      }
       if (provenance.stale === true) {
         chips.push(chip(t("stateStale"), "warn", "prov-stale"));
       }
@@ -3778,8 +3810,9 @@ window.__ModuleLoader__.load({
      * @param {typeof INITIAL} state
      * @param {ReturnType<typeof readGraphPayload>} graphPayload
      * @param {ReturnType<typeof readExecutionPayload>} executionPayload
+     * @param {ReturnType<typeof readKpisPayload>} kpisPayload
      */
-    function attentionBanner(t, state, graphPayload, executionPayload) {
+    function attentionBanner(t, state, graphPayload, executionPayload, kpisPayload) {
       const items = [];
       if (
         state.phase === "down" ||
@@ -3819,6 +3852,21 @@ window.__ModuleLoader__.load({
               detail: reasons.join(t("attentionJoin")),
             });
           }
+        }
+      }
+      const kpisSource = state.sources.kpis;
+      if (isSourceOk(kpisSource) && kpisPayload !== null) {
+        const agentsBlock = kpisPayload.agents;
+        const agentsProv =
+          agentsBlock === null ? null : agentsBlock.provenance;
+        if (isFixtureProvenance(agentsProv)) {
+          items.push({
+            key: "agents-fixture",
+            source: t("book"),
+            detail: t("attentionFixtureProvenance", {
+              value: agentsProv.source ?? "",
+            }),
+          });
         }
       }
       const executionSource = state.sources.execution;
@@ -4205,6 +4253,7 @@ window.__ModuleLoader__.load({
         state,
         graphPayload,
         executionPayload,
+        kpisPayload,
       );
       const service = serviceCard(t, state);
       const lastMeasured =

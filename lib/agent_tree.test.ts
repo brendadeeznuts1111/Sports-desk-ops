@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildAgentTree,
+  isFixtureAgentTreeGraphSource,
   readAgentTreeFile,
   searchTree,
   subtreeKeys,
@@ -74,6 +75,16 @@ describe("buildAgentTree", () => {
     });
     expect(problems.cycles.length).toBe(1);
     expect(problems.cycles[0]?.map(String).sort()).toEqual(["A", "B"]);
+  });
+});
+
+describe("isFixtureAgentTreeGraphSource", () => {
+  test("flags scratch and fixture paths", () => {
+    expect(isFixtureAgentTreeGraphSource("scratch/agent-graph.json")).toBe(true);
+    expect(isFixtureAgentTreeGraphSource("tests/fixtures/foo.json")).toBe(true);
+    expect(isFixtureAgentTreeGraphSource("out/capture/f402-hierarchy.json")).toBe(
+      false,
+    );
   });
 });
 

@@ -59,6 +59,27 @@ describe("deriveDeskKpis", () => {
     });
   });
 
+  test("scratch graph source is fixture basis even when the file is old", () => {
+    const kpis = deriveDeskKpis(
+      {
+        ...none,
+        agentTree: {
+          value: {
+            source: "scratch/agent-graph.json",
+            nodes: { A1: { t: "A" } },
+          },
+          mtime: hoursBefore(200),
+        },
+      },
+      NOW,
+    );
+    expect(kpis.agents?.provenance).toMatchObject({
+      source: "scratch/agent-graph.json",
+      basis: "fixture",
+      stale: false,
+    });
+  });
+
   test("pending totals sum the capture and go stale after an hour", async () => {
     const sample = await Bun.file(
       resolve(ROOT, "tests/f402-pending-wager-sample.json"),

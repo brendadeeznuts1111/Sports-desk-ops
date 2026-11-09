@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Structural + behavioural load test for the SportsDesk desk-panel bundle.
  *
@@ -66,6 +66,12 @@
  *
  * Run: bun dsh-plugin-sidebar/verify-load.mjs
  */
+
+if (typeof Bun === "undefined") {
+  console.error("verify-load.mjs requires bun, not node.");
+  console.error("Try: bun dsh-plugin-sidebar/verify-load.mjs");
+  process.exit(1);
+}
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
