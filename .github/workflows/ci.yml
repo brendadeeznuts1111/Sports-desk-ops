@@ -16,6 +16,7 @@ on:
       - "package.json"
       - "bun.lock"
       - "verification/**"
+      - "market/**"
       - ".github/workflows/**"
   pull_request:
     branches: [main]
@@ -32,6 +33,7 @@ on:
       - "package.json"
       - "bun.lock"
       - "verification/**"
+      - "market/**"
       - ".github/workflows/**"
   # Freshness cadence: the value artifacts cannot be rebuilt in CI (live inputs), but a daily run
   # still fails if the generator inputs drifted or a release tag is unregistered.
@@ -49,6 +51,8 @@ concurrency:
 env:
   # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
   PLATFORM_SHA: 3390c88e231ba9bb1668bbf700132f5ebb822237
+  # Pinned parseMarketIndex validator — bump with engines.dsh / shipped harness
+  HARNESS_VALIDATOR_REF: dsh-v0.2.2-rc.1
 
 jobs:
   verify:
@@ -152,6 +156,18 @@ jobs:
         env:
           CI: "true"
         run: bun run schema:gate
+      - name: Check out deepseek-harness (market index validator)
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ env.HARNESS_VALIDATOR_REF }}
+          path: .ci/deepseek-harness
+          fetch-depth: 1
+      - name: Plugin market index (format 1; full git history for commit pins)
+        timeout-minutes: 3
+        env:
+          MARKET_INDEX_HARNESS: .ci/deepseek-harness
+        run: bun test tests/market_index.test.ts
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
