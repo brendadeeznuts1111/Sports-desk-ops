@@ -113,7 +113,6 @@
     "check:secrets": "bun run bin/check-secrets.ts",
     "audit:secrets": "bun run scripts/audit_secrets.ts",
     "audit:data-handling": "bun run scripts/audit_data_handling.ts",
-    "policy:check": "R=\"${PLATFORM_DIR:-$HOME/platform}/policy/ratchet.ts\"; test -f \"$R\" || { echo \"policy:check: $R not found; clone brendadeeznuts1111/platform to ~/platform or set PLATFORM_DIR\" >&2; exit 1; }; bun \"$R\" check .",
     "check:rotations": "bun run scripts/check_rotation_stability.ts",
     "hierarchy:load": "bun run scripts/hierarchy_load.ts",
     "ticker:coverage": "bun run scripts/ticker_tree_coverage.ts",
