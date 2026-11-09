@@ -883,8 +883,8 @@ async function load(
 ): Promise<Readonly<Record<string, ApiResult>>> {
   const paths = {
     kpis: "/api/kpis",
-    liveBets: "/api/live-bets",
-    liveWagers: "/api/live-wagers",
+    liveBets: "/api/live-bets?source=auto",
+    liveWagers: "/api/live-wagers?source=auto",
     contests: "/api/contests",
     gameBoard: "/api/game-admin/board",
     catalog: "/api/sports/catalog",

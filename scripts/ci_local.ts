@@ -12,6 +12,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import workflowYaml from "../.github/workflows/ci.yml" with { type: "yaml" };
 import { stepMatchesEvent } from "../lib/ci_event_filter.ts";
 
 type Step = {
@@ -49,8 +50,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function loadSteps(): Promise<Step[]> {
-  const workflow: unknown = Bun.YAML.parse(await Bun.file(WORKFLOW).text());
+function loadSteps(): Step[] {
+  const workflow: unknown = workflowYaml;
   if (!isRecord(workflow) || !isRecord(workflow.jobs)) {
     throw new Error(`${WORKFLOW}: no jobs mapping`);
   }
@@ -73,7 +74,7 @@ async function loadSteps(): Promise<Step[]> {
 
 const values = parseCli();
 const event = values.event ?? (values.scheduled ? "schedule" : "push");
-const steps = (await loadSteps()).filter(
+const steps = loadSteps().filter(
   (step) => values.install || !step.run.startsWith("bun install"),
 );
 const runsForEvent = (step: Step): boolean =>

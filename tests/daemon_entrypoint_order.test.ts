@@ -28,7 +28,7 @@ describe("daemon CLI entrypoint evaluation", () => {
     // queueMicrotask/setTimeout wrapper or a call placed after the hub const.
     const window = SOURCE.slice(mainIndex, mainIndex + 400);
     expect(window).toContain("queueMicrotask");
-    expect(window).toContain("startServer()");
+    expect(window).toContain("startServer(");
 
     const hubIndex = SOURCE.indexOf("export const bridgeWebsocket = {");
     expect(hubIndex).toBeGreaterThan(-1);

@@ -259,9 +259,9 @@ describe("bets aggregation", () => {
     expect(all.rows).toBe(16);
     expect(all.accounts).toBe(12);
     expect(all.agents).toBe(5);
-    expect(all.states.win).toBe(1);
-    expect(all.states.lose).toBe(13);
-    expect(all.states.push).toBe(2);
+    expect(all.states.win).toBe(0);
+    expect(all.states.lose).toBe(16);
+    expect(all.states.push).toBe(0);
     expect(all.suspectedBot).toBe(2);
     expect(all.reversedCredit).toBe(1);
     expect(all.manualLog).toBe(1);

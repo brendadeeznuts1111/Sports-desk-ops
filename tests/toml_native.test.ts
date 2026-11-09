@@ -27,6 +27,13 @@ describe("native Bun.TOML", () => {
     expect(parsed.fmt?.printWidth).toBe(80);
   });
 
+  test("loads TOML natively via dynamic import attribute with { type: 'toml' }", async () => {
+    const { default: parsed } = (await import("../bunfig.toml", {
+      with: { type: "toml" },
+    })) as { default: { fmt?: { printWidth?: number } } };
+    expect(parsed.fmt?.printWidth).toBe(80);
+  });
+
   test("TOML v1.1 syntax parses natively (dates, quoted keys, stringify)", () => {
     const parsed = Bun.TOML.parse(
       `released = 2026-08-10T12:00:00Z\n[package]\n"name" = "app"\n`,

@@ -867,7 +867,7 @@ export interface MarketEdgeTableOptions {
 /**
  * Formats a MarketEdgeReport into a terminal presentation leveraging Bun.inspect.table,
  * Bun.inspect options (colors, maxArrayLength, compact), and native Bun utilities
- * (Bun.color, Bun.enableANSIColors, Bun.stripANSI, Bun.stringWidth).
+ * (Bun.color, Bun.enableANSIColors, Bun.stringWidth).
  */
 export function formatMarketEdgeTable(
   report: MarketEdgeReport,
@@ -914,10 +914,11 @@ export function formatMarketEdgeTable(
     useColors ? `${colorOf("cyan")}${s}\u001b[39m` : s;
 
   const clean = (s: string) =>
-    !useColors &&
-    typeof Bun !== "undefined" &&
-    typeof Bun.stripANSI === "function"
-      ? Bun.stripANSI(s)
+    !useColors
+      ? s.replace(
+          new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, "g"),
+          "",
+        )
       : s;
 
   const u = report.universe;

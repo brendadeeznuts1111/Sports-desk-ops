@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import bunfig from "../bunfig.toml" with { type: "toml" };
+import pkg from "../package.json";
 import {
   FOREIGN_LOCKFILES,
   globalBunfigPath,
@@ -22,7 +23,7 @@ import {
 
 describe("package manager policy", () => {
   test("the project bunfig does not set machine-owned install keys", () => {
-    const config = Bun.TOML.parse(readFileSync("bunfig.toml", "utf8")) as {
+    const config = bunfig as {
       install?: Record<string, unknown>;
     };
     for (const key of MACHINE_OWNED_INSTALL_KEYS) {
@@ -30,18 +31,11 @@ describe("package manager policy", () => {
     }
   });
 
-  test("lifecycle scripts are not trusted implicitly", async () => {
-    const pkg = (await Bun.file("package.json").json()) as {
-      trustedDependencies?: unknown;
-    };
+  test("lifecycle scripts are not trusted implicitly", () => {
     expect(pkg.trustedDependencies).toEqual([]);
   });
 
-  test("package manager and engine match the runtime", async () => {
-    const pkg = (await Bun.file("package.json").json()) as {
-      packageManager?: string;
-      engines?: { bun?: string };
-    };
+  test("package manager and engine match the runtime", () => {
     const engine = pkg.engines?.bun ?? "";
     expect(pkg.packageManager).toBe(`bun@${engine}`);
     expect(Bun.semver.satisfies(Bun.version, engine)).toBe(true);

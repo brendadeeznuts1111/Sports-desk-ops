@@ -1743,7 +1743,9 @@ function normalizeBetRow(
   // `bet`, `betGroupToWin` and `betGroupResult` are ticket-level values repeated verbatim on
   // every leg row; `betGroupId` is what lets an aggregate dedupe them before summing.
   const betGroupId = nonEmptyText(row["betGroupId"]);
-  const ticketResultCents = dollarsToCents(row["betGroupResult"]);
+  const ticketResultCents = dollarsToCents(
+    row["betGroupResult"] ?? row["result"],
+  );
   const resultRaw = row["result"];
   const resultCode =
     typeof resultRaw === "string" && resultRaw.trim() !== ""

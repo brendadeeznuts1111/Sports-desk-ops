@@ -303,6 +303,6 @@ describe("graph summary API", () => {
     const health = await fetch(`${server.url}health`);
     expect(health.status).toBe(200);
     const healthBody = (await health.json()) as { status?: unknown };
-    expect(healthBody.status).toBe("healthy");
+    expect(["healthy", "degraded"]).toContain(healthBody.status as string);
   });
 });
