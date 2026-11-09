@@ -41,6 +41,10 @@ results, and resolvers must name **cause**, **source**, and **absence** explicit
 - Dashboards and APIs report **basis**: `live` | `capture` | `fixture` (or equivalent `source.kind`).
 - R2 freshness must not imply desk-data freshness when only publish time is known (log data window; track KPI data-age in follow-ups).
 
+### 5. Log prefixes
+
+Every subsystem prefixes **stderr** lines with a bracketed identifier: `[weblog]`, `[bridge3c]`, `[kpi]`, etc. Cron `jobFailure()` and operators tailing `bridge-rollup-cron.jsonl` use these tags to attribute failures without parsing full stack traces. Prefer one prefix per CLI; align new lines with the job id in `bridge_rollup_cron.ts` when the script serves a scheduled job. (Legacy `weblog:` without brackets is being phased toward `[weblog]`.)
+
 ## Standard patterns
 
 ### Resolvers return value and source
@@ -89,4 +93,6 @@ Only **weblog** uses an empty `requiredEnv` array; credentials are **corpus pres
 - Incident: `docs/incidents/2026-11-04-bridge-outage-recovery.md`
 - Sources contract: `docs/Sources.txt`
 - Wagers two-step publish: `docs/runbooks/wagers_live_capture_runbook.md`
-- Follow-ups: GitHub #78 (KPI data-age), #91 (weblog producer), #93 (wagers cron)
+- Recovery arc: GitHub #84 (multi-sink R2 stale; closed when sinks honest)
+- Open gaps this ADR governs (not closed by the ADR PR): #91 (weblog producer), #93 (wagers cron), #94 (bridge3c `--timeout`), #78 (KPI data-age vs publish-age)
+- Enforcement tracking: ast-grep / lint ban on generic throws (see repo issues)
