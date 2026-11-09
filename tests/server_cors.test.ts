@@ -1,5 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { startServer } from "../services/sportsdesk_webview_server.ts";
+import {
+  DEV_DEFAULT_CORS_ORIGINS,
+  resolveAllowedOrigins,
+  startServer,
+} from "../services/sportsdesk_webview_server.ts";
 
 /**
  * `Access-Control-Allow-Origin: *` was on every response, including the PII ones.
@@ -36,6 +40,26 @@ afterAll(() => {
   server.stop(true);
   setEnv("SPORTSDESK_ALLOWED_ORIGINS", savedOrigins);
   setEnv("SPORTSDESK_ADMIN_TOKEN", savedToken);
+});
+
+describe("resolveAllowedOrigins", () => {
+  test("production: empty env stays fail-closed", () => {
+    expect(resolveAllowedOrigins(false, "")).toEqual([]);
+    expect(resolveAllowedOrigins(false, undefined)).toEqual([]);
+  });
+
+  test("development: empty env includes DSH desktop and local dev hosts", () => {
+    const origins = resolveAllowedOrigins(true, "");
+    for (const origin of DEV_DEFAULT_CORS_ORIGINS) {
+      expect(origins).toContain(origin);
+    }
+  });
+
+  test("development: an explicit env list is not augmented", () => {
+    expect(resolveAllowedOrigins(true, "https://desk.example")).toEqual([
+      "https://desk.example",
+    ]);
+  });
 });
 
 describe("cross-origin reads are opt-in", () => {
@@ -89,6 +113,32 @@ describe("cross-origin reads are opt-in", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("content-security-policy")).toContain(
       "frame-ancestors",
+    );
+  });
+});
+
+describe("development CORS defaults on the wire", () => {
+  const savedOrigins = Bun.env.SPORTSDESK_ALLOWED_ORIGINS;
+  setEnv("SPORTSDESK_ALLOWED_ORIGINS", undefined);
+
+  const devServer = startServer({
+    port: 0,
+    hostname: "127.0.0.1",
+    development: true,
+  });
+  const devBase = `http://127.0.0.1:${devServer.port}`;
+
+  afterAll(() => {
+    devServer.stop(true);
+    setEnv("SPORTSDESK_ALLOWED_ORIGINS", savedOrigins);
+  });
+
+  test("dsh-app://app is echoed when origins env is unset", async () => {
+    const response = await fetch(`${devBase}/health`, {
+      headers: { origin: "dsh-app://app" },
+    });
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "dsh-app://app",
     );
   });
 });

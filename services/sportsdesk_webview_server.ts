@@ -755,6 +755,32 @@ const MAX_REQUEST_BODY_BYTES = 1 << 20;
 const POLYMARKET_LIVE_UNAVAILABLE_REASON =
   "Polymarket live has no EIP-712 signer in this checkout (viem/ethers absent); paper only";
 
+/** Dev-only CORS defaults when `SPORTSDESK_ALLOWED_ORIGINS` is unset (production never adds these). */
+export const DEV_DEFAULT_CORS_ORIGINS = [
+  "dsh-app://app",
+  "http://localhost:3080",
+  "http://127.0.0.1:3080",
+] as const;
+
+/**
+ * Cross-origin grant list from env. In development, empty env picks {@link DEV_DEFAULT_CORS_ORIGINS}
+ * so DSH Desktop and local `dsh web` can probe loopback without weakening production.
+ */
+export function resolveAllowedOrigins(
+  isDevelopment: boolean,
+  envOrigins: string | undefined = Bun.env.SPORTSDESK_ALLOWED_ORIGINS,
+): string[] {
+  const allowedOrigins = (envOrigins ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin !== "");
+
+  if (isDevelopment && allowedOrigins.length === 0) {
+    allowedOrigins.push(...DEV_DEFAULT_CORS_ORIGINS);
+  }
+  return allowedOrigins;
+}
+
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(telegramService);
@@ -803,12 +829,18 @@ export function startServer(options?: ServerOptions) {
    * The old value was `Access-Control-Allow-Origin: *` on every response, including the PII ones.
    * Any page on any site could therefore read `/api/live-bets` from the operator's own browser,
    * where the peer is loopback and the guard deliberately allows it. Same-origin fetches (the
-   * dashboard, the Mini App) need no header at all, so the default is to send none.
+   * dashboard, the Mini App) need no header at all, so the default is to send none. Development
+   * may add {@link DEV_DEFAULT_CORS_ORIGINS} when the env list is empty.
    */
-  const allowedOrigins = (Bun.env.SPORTSDESK_ALLOWED_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin !== "");
+  const corsDevelopment =
+    options?.development === false
+      ? false
+      : options?.development === undefined
+        ? typeof Bun !== "undefined"
+          ? Bun.env.NODE_ENV !== "production"
+          : process.env.NODE_ENV !== "production"
+        : true;
+  const allowedOrigins = resolveAllowedOrigins(corsDevelopment);
 
   /** Headers every response carries; the CORS grant is added per request by {@link corsHeadersFor}. */
   const baseHeaders: Record<string, string> = {
