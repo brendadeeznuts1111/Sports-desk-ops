@@ -2215,19 +2215,23 @@ function streamResponse(
 async function bootHost({
   origin = "https://dsh.example",
   deferInjection = false,
+  config,
 } = {}) {
   const module = await import("./index.js");
   const webServer = fakeWebServer(origin);
   let pending = null;
-  const dispose = module.apply({
-    inject(_deps, callback) {
-      if (deferInjection) {
-        pending = callback;
-        return;
-      }
-      webServer.instantiate(callback);
+  const dispose = module.apply(
+    {
+      inject(_deps, callback) {
+        if (deferInjection) {
+          pending = callback;
+          return;
+        }
+        webServer.instantiate(callback);
+      },
     },
-  });
+    config,
+  );
   return {
     routes: webServer.routes,
     disposals: webServer.disposals,
@@ -2259,6 +2263,45 @@ async function withFetchStub(fetchImpl, body) {
     globalThis.fetch = original;
   }
 }
+
+await checkAsync("host resolveDeskOrigin honors config.apiPort", async () => {
+  const module = await import("./index.js");
+  assert(
+    module.resolveDeskOrigin(undefined) === "http://127.0.0.1:4020",
+    "default port",
+  );
+  assert(
+    module.resolveDeskOrigin({ apiPort: 3000 }) === "http://127.0.0.1:3000",
+    "numeric apiPort",
+  );
+  assert(
+    module.resolveDeskOrigin({ apiPort: "3000" }) === "http://127.0.0.1:3000",
+    "string apiPort",
+  );
+});
+
+await checkAsync(
+  "host proxy uses config.apiPort for upstream fetch",
+  async () => {
+    const host = await bootHost({ config: { apiPort: 3000 } });
+    const health = host.routes.find(
+      (candidate) => candidate.path === "/api/sportsdesk-desk/health",
+    ).handler;
+    let seenUrl = "";
+    await withFetchStub(
+      async (url) => {
+        seenUrl = String(url);
+        return upstreamBody('{"status":"healthy"}', 200);
+      },
+      () => health({ method: "GET", headers: {} }, fakeRes()),
+    );
+    assert(
+      seenUrl === "http://127.0.0.1:3000/health",
+      `upstream was ${seenUrl}`,
+    );
+    host.dispose();
+  },
+);
 
 await checkAsync(
   "host registers the allowlisted GET proxy routes",

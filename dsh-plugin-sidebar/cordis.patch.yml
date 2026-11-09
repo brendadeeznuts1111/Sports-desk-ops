@@ -8,3 +8,6 @@
 - insert:
     - id: sportsdesk-desk-panel
       name: dsh-plugin-sportsdesk-desk-panel
+      # Optional: Host proxy upstream port (default 4020). Client loopback fallback stays 4020.
+      # config:
+      #   apiPort: 3000

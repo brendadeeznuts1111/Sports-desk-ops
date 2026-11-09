@@ -198,6 +198,26 @@ export async function removeOsCronJob(title: string): Promise<void> {
   await Bun.cron.remove(title);
 }
 
+/** macOS launchd plist path for an OS-level Bun.cron job (`title` = third arg to `Bun.cron`). */
+export function bunCronLaunchAgentPlistPath(title: string): string {
+  const home = (process.env.HOME ?? "").trim();
+  if (home === "") {
+    throw new Error("HOME is unset; cannot resolve LaunchAgents path");
+  }
+  return `${home}/Library/LaunchAgents/bun.cron.${title}.plist`;
+}
+
+/** macOS log paths Bun writes for OS-level cron jobs. */
+export function bunCronMacLogPaths(title: string): {
+  readonly stdout: string;
+  readonly stderr: string;
+} {
+  return {
+    stdout: `/tmp/bun.cron.${title}.stdout.log`,
+    stderr: `/tmp/bun.cron.${title}.stderr.log`,
+  };
+}
+
 /** Keep process alive; stop job and exit on SIGINT/SIGTERM (daemon CLIs). */
 export function wireInProcessCronLifecycle(
   job: InProcessCronJob,

@@ -12,7 +12,7 @@
  *
  * Routes (GET only, same-origin, allowlisted, one shared handler):
  *
- *   /api/sportsdesk-desk/health    -> http://127.0.0.1:4020/health
+ *   /api/sportsdesk-desk/health    -> http://127.0.0.1:{apiPort}/health
  *   /api/sportsdesk-desk/status    -> http://127.0.0.1:4020/api/status
  *   /api/sportsdesk-desk/graph     -> http://127.0.0.1:4020/api/graph/summary
  *   /api/sportsdesk-desk/kpis      -> http://127.0.0.1:4020/api/kpis
@@ -42,9 +42,25 @@
  * @module dsh-plugin-sportsdesk-desk-panel
  */
 
-/** The desk service the operator runs with `bun run serve`. */
-const DESK_ORIGIN = "http://127.0.0.1:4020";
 const PROXY_PREFIX = "/api/sportsdesk-desk";
+const DEFAULT_DESK_PORT = 4020;
+
+/**
+ * Cordis row `config.apiPort` → Host proxy upstream origin (loopback only).
+ * @param {unknown} config
+ */
+export function resolveDeskOrigin(config) {
+  const raw = config?.apiPort;
+  let port = DEFAULT_DESK_PORT;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    port = Math.trunc(raw);
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (/^\d+$/.test(trimmed)) port = Number(trimmed);
+  }
+  if (port < 1 || port > 65_535) port = DEFAULT_DESK_PORT;
+  return `http://127.0.0.1:${port}`;
+}
 /**
  * Marks a response as produced by this proxy. The Client module uses it to
  * tell "the Host half is absent, this 404 is the generic Harness 404" apart
@@ -113,10 +129,11 @@ function sendJson(res, target, status, payload) {
 /**
  * @param {import('cordis').Context} ctx
  */
-export function apply(ctx) {
+export function apply(ctx, config) {
   // Headless compositions have no browser carrier; the panel does not exist
   // there. The guard also keeps the dependency-free loader harness working.
   if (typeof ctx.inject !== "function") return;
+  const deskOrigin = resolveDeskOrigin(config);
   const routeDisposers = [];
   /**
    * In-flight upstream streams, so disposal aborts them instead of leaving a
@@ -156,7 +173,7 @@ export function apply(ctx) {
         return;
       }
       try {
-        const upstream = await fetch(`${DESK_ORIGIN}${target}`, {
+        const upstream = await fetch(`${deskOrigin}${target}`, {
           headers: { accept: "application/json" },
           signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
         });
@@ -236,7 +253,7 @@ export function apply(ctx) {
         STREAM_HEADER_TIMEOUT_MS,
       );
       try {
-        const upstream = await fetch(`${DESK_ORIGIN}${target}`, {
+        const upstream = await fetch(`${deskOrigin}${target}`, {
           headers: { accept: "text/event-stream" },
           signal: controller.signal,
         });

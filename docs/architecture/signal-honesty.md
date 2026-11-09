@@ -35,6 +35,7 @@ results, and resolvers must name **cause**, **source**, and **absence** explicit
 - If a CLI flag exists (`--fetch-mode`, `--timeout`, `--from`), it must affect behavior or reject with a named error.
 - If a cron job is scheduled, its argv and credential probe must match what the child script requires (`requiredEnv`, corpus present, keychain probe).
 - Empty `requiredEnv: []` is allowed only when a **dedicated** probe documents the real prerequisites (for example weblog corpus resolution).
+- Cordis / patch **config** keys must be read by the Host or Client that documents them (for example `apiPort` on `dsh-plugin-sportsdesk-desk-panel` → `resolveDeskOrigin()`).
 
 ### 4. Unknowns require explicit provenance
 
@@ -95,4 +96,5 @@ Only **weblog** uses an empty `requiredEnv` array; credentials are **corpus pres
 - Wagers two-step publish: `docs/runbooks/wagers_live_capture_runbook.md`
 - Recovery arc: GitHub #84 (multi-sink R2 stale; closed when sinks honest)
 - Open gaps this ADR governs (not closed by the ADR PR): #91 (weblog producer), #93 (wagers cron), #94 (bridge3c `--timeout`), #78 (KPI data-age vs publish-age)
-- Enforcement tracking: ast-grep / lint ban on generic throws (see repo issues)
+- Enforcement: platform policy rule `signal-honesty-generic-throw` (generic `throw new Error("failed"|"error"|…)` banned)
+- Weblog producer (#91): `weblog:sentinel` OS cron reminds at 08:00 when today's JSONL is missing (manual export; no Mode A fetch)
