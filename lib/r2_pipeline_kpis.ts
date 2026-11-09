@@ -21,11 +21,17 @@ export interface R2PipelineSinkKpi {
 
 export type R2PipelineKpis = Readonly<Record<string, R2PipelineSinkKpi>>;
 
+/** Injectable for tests (avoids requiring full Bun `fetch` surface). */
+export type R2HeadFetcher = (
+  url: string,
+  init: { readonly method: "HEAD" },
+) => Promise<Response>;
+
 const SINK_ID = (key: string) => key.replace(/\/latest\.json$/, "");
 
 export async function probeR2PipelineKpis(
   now: Date = new Date(),
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: R2HeadFetcher = (url, init) => fetch(url, init),
 ): Promise<R2PipelineKpis> {
   const nowMs = now.getTime();
   const out: Record<string, R2PipelineSinkKpi> = {};
@@ -34,7 +40,7 @@ export async function probeR2PipelineKpis(
       const url = publicUrlFor(target);
       let probe: StalenessProbe;
       try {
-        const response = await fetchImpl(url, { method: "HEAD" });
+        const response = await fetchImpl(url, { method: "HEAD" as const });
         probe = {
           target,
           status: response.status,

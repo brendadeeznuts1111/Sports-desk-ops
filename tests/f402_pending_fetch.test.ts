@@ -18,15 +18,21 @@ const jsonResponse = (payload: unknown, status = 200): Response =>
 
 describe("F402 getPending fetch", () => {
   test("rejects missing, zero, and short bearer tokens before I/O", () => {
+    const noSession = { readSession: () => null };
     for (const token of [undefined, "", "0", "short-token"]) {
       expect(() =>
-        resolveF402BearerToken({ cliToken: token, environment: {} }),
+        resolveF402BearerToken({
+          cliToken: token,
+          environment: {},
+          ...noSession,
+        }),
       ).toThrow(F402PendingFetchError);
     }
     expect(
       resolveF402BearerToken({
         cliToken: "Bearer " + "a".repeat(32),
         environment: {},
+        ...noSession,
       }),
     ).toBe("a".repeat(32));
   });

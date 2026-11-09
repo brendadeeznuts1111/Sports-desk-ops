@@ -876,12 +876,21 @@ Do not pre-migrate before `bun --help` lists `lint`; the docs have been ahead of
 | I    | `type:"I"`, `customerID:"0"`, `ip:<ip>`         | as supplied  |
 
 All carry `operation:"getWebLog"`, `RRO:1`, `agentID`, `agentOwner`. Token resolution is read-only
-(`--bearer-token` → `F402_BEARER_TOKEN` → `F402_TOKEN_FILE`, else
-`$XDG_CONFIG_HOME/sportsdesk/f402-token`), rejecting empty/`"0"`/`<24`-char tokens before I/O.
+(`--bearer-token` → `F402_BEARER_TOKEN` → `F402_TOKEN_FILE` →
+`session:login` `authorizationHeader` in `f402-session.json`), rejecting empty/`"0"`/`<24`-char
+tokens before I/O.
 Responses pass a Class A guard (200, JSON, not HTML) and are atomically persisted 0600 as JSONL.
 
-CLI: `bun run weblog:rollup --fetch-mode A|B|C|I --date YYYY-MM-DD [--customer-id id] [--ip addr]
-[--save-capture path]`; without `--fetch-mode` it reads the on-disk 11-01/11-02 corpus.
+CLI (`scripts/f402_weblog_bridge.ts`):
+
+| Mode | Command |
+| ---- | ------- |
+| Capture + rollup | `bun run weblog:rollup --fetch-mode A\|B\|C\|I [--date YYYY-MM-DD] [--save-capture path] [--customer-id id] [--ip addr]` |
+| Rollup only | `bun run weblog:rollup --from out/f402/weblog/MM-DD-YYYY.jsonl` |
+
+`--fetch-mode` calls `fetchAndPersistWebLog` then rolls up the captured JSONL (default capture:
+`out/f402/weblog/<MM-DD-YYYY>.jsonl` from `--date`). Without `--fetch-mode`, `--from` is required
+(no hard-coded demo corpus). Token: `--bearer-token`, `F402_BEARER_TOKEN`, or `F402_TOKEN_FILE`.
 
 The rollup is gated by GATE-WL-01 (row/grammar conservation, 523,632 rows), GATE-WL-02 (causal
 wager conservation), GATE-WL-03 (negative/positive controls), and GATE-WL-04 (byte-level raw

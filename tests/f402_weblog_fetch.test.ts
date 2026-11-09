@@ -8,6 +8,8 @@ import {
   fetchAndPersistWebLog,
   fetchWebLog,
   formatWebLogDate,
+  explainWebLogListParseFailure,
+  parseWebLogListPayload,
   resolveF402BearerToken,
 } from "../lib/f402_weblog_fetch.ts";
 
@@ -33,6 +35,23 @@ describe("f402 weblog fetch", () => {
     );
   });
 
+  test("parseWebLogListPayload accepts array, LIST array, and LIST JSON string", () => {
+    expect(parseWebLogListPayload([{ LoginID: "x" }])).toHaveLength(1);
+    expect(parseWebLogListPayload({ LIST: [{ LoginID: "y" }] })).toHaveLength(1);
+    expect(parseWebLogListPayload({ LIST: "", INFO: "" })).toEqual([]);
+    expect(
+      parseWebLogListPayload({
+        LIST: JSON.stringify([{ LoginID: "z" }]),
+        INFO: "",
+      }),
+    ).toHaveLength(1);
+    expect(parseWebLogListPayload({ LIST: "not-json", INFO: "x" })).toBeNull();
+    expect(explainWebLogListParseFailure({ rows: [] })).toMatch(/missing LIST/);
+    expect(explainWebLogListParseFailure({ LIST: "not-json" })).toMatch(
+      /LIST string/,
+    );
+  });
+
   test("builds all four wire bodies", () => {
     for (const mode of ["A", "B", "C", "I"] as const) {
       const body = buildWebLogBody({
@@ -42,16 +61,21 @@ describe("f402 weblog fetch", () => {
       });
       expect(body.type).toBe(mode);
       expect(body.operation).toBe("getWebLog");
-      expect(body.RRO).toBe(1);
+      expect(body.RRO).toBe("1");
+      expect(body.actions).toBe("ALL");
       expect(body.agentID).toBe("AG");
       expect(body.agentOwner).toBe("OWNER");
       if (mode === "I") {
         expect(body.customerID).toBe("0");
         expect(body.ip).toBe("203.0.113.7");
+        expect(body.start).toBe("2026-11-02");
+        expect(body.end).toBe("2026-11-02");
       } else if (mode === "C") {
-        expect(body.date).toBe("2026-11-02");
+        expect(body.start).toBe("2026-11-02");
+        expect(body.end).toBe("2026-11-02");
       } else {
-        expect(body.date).toBe("11/02/2026");
+        expect(body.start).toBe("11/02/2026");
+        expect(body.end).toBe("11/02/2026");
       }
     }
   });
@@ -73,9 +97,38 @@ describe("f402 weblog fetch", () => {
         (seen.init?.headers as Record<string, string> | undefined)
           ?.authorization,
       ).toBe(`Bearer ${"t".repeat(32)}`);
-      expect(JSON.parse(String(seen.init?.body)).type).toBe(mode);
+      const form = new URLSearchParams(String(seen.init?.body));
+      expect(form.get("type")).toBe(mode);
+      expect(
+        (seen.init?.headers as Record<string, string> | undefined)?.[
+          "content-type"
+        ],
+      ).toContain("application/x-www-form-urlencoded");
+      expect(seen.init?.redirect).toBe("manual");
       expect(result.rows).toHaveLength(1);
     }
+
+    await expect(
+      fetchWebLog({
+        token: "t".repeat(32),
+        request: modeRequest("B"),
+        baseUrl: "https://mock.test",
+        fetchImpl: async () =>
+          new Response("", {
+            status: 302,
+            headers: { location: "https://mock.test/login" },
+          }),
+      }),
+    ).rejects.toThrow(/redirect HTTP 302/);
+
+    await expect(
+      fetchWebLog({
+        token: "t".repeat(32),
+        request: modeRequest("B"),
+        baseUrl: "https://mock.test",
+        fetchImpl: async () => json({ rows: [{ LoginID: "x" }] }),
+      }),
+    ).rejects.toThrow(/missing LIST/);
 
     const dir = mkdtempSync(join(tmpdir(), "weblog-fetch-"));
     try {
@@ -102,7 +155,11 @@ describe("f402 weblog fetch", () => {
   test("rejects short/zero tokens", () => {
     for (const token of ["", "0", "short"]) {
       expect(() =>
-        resolveF402BearerToken({ cliToken: token, environment: {} }),
+        resolveF402BearerToken({
+          cliToken: token,
+          environment: {},
+          readSession: () => null,
+        }),
       ).toThrow();
     }
   });

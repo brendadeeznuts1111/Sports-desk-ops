@@ -6,6 +6,7 @@ import {
   F402PendingFetchError,
   readF402TokenFile,
   resolveF402BearerToken,
+  resolveF402BearerTokenDetailed,
   validateF402Token,
 } from "../lib/f402_pending_fetch.ts";
 
@@ -85,11 +86,13 @@ describe("F402 token validation", () => {
   });
 
   test("resolveF402BearerToken uses the validating reader and fails closed", () => {
+    const noSession = { readSession: () => null };
     const opaque = "resolved-token-" + "z".repeat(30);
     const validPath = writeToken(`${opaque}\n`);
     expect(
       resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: validPath },
+        ...noSession,
       }),
     ).toBe(opaque);
 
@@ -97,6 +100,7 @@ describe("F402 token validation", () => {
     expect(() =>
       resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: shellPath },
+        ...noSession,
       }),
     ).toThrow(F402PendingFetchError);
 
@@ -104,8 +108,9 @@ describe("F402 token validation", () => {
     expect(() =>
       resolveF402BearerToken({
         environment: { F402_TOKEN_FILE: malformedJwtPath },
+        ...noSession,
       }),
-    ).toThrow(/invalid F402 bearer token/);
+    ).toThrow(F402PendingFetchError);
   });
 
   test("CLI and env sources still win over the file", () => {
@@ -125,6 +130,30 @@ describe("F402 token validation", () => {
         },
       }),
     ).toBe("env-source-" + "e".repeat(30));
+  });
+
+  test("session authorizationHeader is the last resort before throwing", () => {
+    const sessionToken = "session-bearer-" + "s".repeat(30);
+    const resolved = resolveF402BearerTokenDetailed({
+      environment: {},
+      readFile: () => {
+        throw new Error("file must not be read");
+      },
+      readSession: () => ({
+        cookieHeader: "a=b",
+        cookieNames: ["a"],
+        authorizationHeader: `Bearer ${sessionToken}`,
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+    });
+    expect(resolved).toEqual({ token: sessionToken, source: "session" });
+    expect(() =>
+      resolveF402BearerTokenDetailed({
+        environment: {},
+        readSession: () => null,
+      }),
+    ).toThrow(F402PendingFetchError);
   });
 
   test("a present-but-invalid explicit source fails closed", () => {

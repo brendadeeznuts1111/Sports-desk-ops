@@ -36,66 +36,150 @@ export interface WebLogRequest {
   readonly agentOwner?: string;
 }
 
-export function buildWebLogBody(
+/** Observed Manager HAR wire: `application/x-www-form-urlencoded` with `start`/`end`. */
+export function buildWebLogFormFields(
   request: WebLogRequest,
-): Record<string, string | number> {
+): Record<string, string> {
   const agentId = request.agentId ?? Bun.env.F402_AGENT_ID ?? "";
   const agentOwner = request.agentOwner ?? Bun.env.F402_AGENT_OWNER ?? "";
-  if (request.mode === "I") {
-    return {
-      type: "I",
-      customerID: "0",
-      ip: request.ip ?? "",
-      operation: "getWebLog",
-      date: request.date,
-      RRO: 1,
-      agentID: agentId,
-      agentOwner,
-    };
-  }
-  if (request.mode === "A") {
-    return {
-      type: "A",
-      customerID: request.customerId ?? "",
-      operation: "getWebLog",
-      date: formatWebLogDate("A", request.date),
-      RRO: 1,
-      agentID: agentId,
-      agentOwner,
-    };
-  }
-  if (request.mode === "B") {
-    return {
-      type: "B",
-      customerID: request.customerId ?? "0",
-      operation: "getWebLog",
-      date: formatWebLogDate("B", request.date),
-      RRO: 1,
-      agentID: agentId,
-      agentOwner,
-    };
-  }
-  return {
-    type: "C",
-    customerID: request.customerId ?? "",
+  const common = {
     operation: "getWebLog",
-    date: formatWebLogDate("C", request.date),
-    RRO: 1,
+    RRO: "1",
     agentID: agentId,
     agentOwner,
+    type: request.mode,
+    actions: "ALL",
   };
+  if (request.mode === "I") {
+    const day = request.date.trim();
+    return {
+      ...common,
+      customerID: "0",
+      ip: request.ip ?? "",
+      start: day,
+      end: day,
+    };
+  }
+  if (request.mode === "C") {
+    const day = formatWebLogDate("C", request.date);
+    return {
+      ...common,
+      customerID: request.customerId ?? "",
+      ip: "",
+      start: day,
+      end: day,
+    };
+  }
+  const day = formatWebLogDate(request.mode, request.date);
+  return {
+    ...common,
+    customerID: request.customerId ?? (request.mode === "B" ? "0" : ""),
+    ip: "",
+    start: day,
+    end: day,
+  };
+}
+
+export function buildWebLogFormBody(request: WebLogRequest): string {
+  return new URLSearchParams(buildWebLogFormFields(request)).toString();
+}
+
+/** @deprecated Name kept for CLI tests; values match the live form fields. */
+export function buildWebLogBody(
+  request: WebLogRequest,
+): Record<string, string> {
+  return buildWebLogFormFields(request);
 }
 
 export interface WebLogFetchResult {
   readonly rows: readonly Record<string, unknown>[];
-  readonly body: Readonly<Record<string, string | number>>;
+  readonly body: Readonly<Record<string, string>>;
   readonly url: string;
+}
+
+type BunManagerFetchInit = RequestInit & {
+  readonly verbose?: boolean | "curl";
+};
+
+function f402FetchVerbose(): boolean | "curl" | undefined {
+  const raw = (Bun.env.F402_FETCH_VERBOSE ?? "").trim().toLowerCase();
+  if (raw === "" || raw === "0" || raw === "false") return undefined;
+  if (raw === "curl") return "curl";
+  return true;
+}
+
+function describeJsonShape(payload: unknown): string {
+  if (Array.isArray(payload))
+    return `array[length=${payload.length}]`;
+  if (payload !== null && typeof payload === "object") {
+    const keys = Object.keys(payload);
+    const head = keys.slice(0, 8).join(",");
+    return `object{${head}${keys.length > 8 ? ",…" : ""}}`;
+  }
+  return typeof payload;
+}
+
+function bodyPreview(text: string, max = 80): string {
+  return text.slice(0, max).replace(/\s+/g, " ").trim();
+}
+
+function logWebLogResponseDebug(contentType: string, text: string): void {
+  if (f402FetchVerbose() === undefined) return;
+  console.error("weblog: content-type:", contentType || "(none)");
+  console.error("weblog: raw response body (first 500 chars):");
+  console.error(text.slice(0, 500));
+}
+
+/** Human-readable cause when {@link parseWebLogListPayload} returns null. */
+export function explainWebLogListParseFailure(payload: unknown): string {
+  if (Array.isArray(payload))
+    return "internal error: top-level array should have parsed";
+  if (payload === null || typeof payload !== "object")
+    return `top-level ${describeJsonShape(payload)}`;
+  const record = payload as Record<string, unknown>;
+  if (!("LIST" in record)) {
+    const keys = Object.keys(record);
+    return `missing LIST; keys: ${keys.length > 0 ? keys.join(",") : "(none)"}`;
+  }
+  const list = record.LIST;
+  if (typeof list === "string") {
+    const trimmed = list.trim();
+    if (trimmed === "") return "internal error: empty LIST should yield []";
+    return `LIST string is not a JSON array (prefix: ${bodyPreview(trimmed, 120)})`;
+  }
+  if (list !== undefined && !Array.isArray(list))
+    return `LIST has unexpected type ${typeof list}`;
+  return describeJsonShape(payload);
+}
+
+/** Portal envelope: top-level array, `{ LIST: Row[] }`, or `{ LIST: "<json array>" | "" }`. */
+export function parseWebLogListPayload(
+  payload: unknown,
+): Record<string, unknown>[] | null {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (payload === null || typeof payload !== "object") return null;
+  const list = (payload as { LIST?: unknown; INFO?: unknown }).LIST;
+  if (list === undefined) return null;
+  if (Array.isArray(list)) return list as Record<string, unknown>[];
+  if (typeof list === "string") {
+    const trimmed = list.trim();
+    if (trimmed === "") return [];
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (!Array.isArray(parsed)) return null;
+      return parsed as Record<string, unknown>[];
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export async function fetchWebLog(options: {
   readonly token: string;
   readonly request: WebLogRequest;
   readonly baseUrl?: string;
+  readonly cookieHeader?: string;
   readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<WebLogFetchResult> {
   if (options.token === "0" || options.token.length < MIN_TOKEN_LENGTH) {
@@ -107,21 +191,40 @@ export async function fetchWebLog(options: {
     "https://fantasy402.com"
   ).replace(/\/+$/, "");
   const url = `${base}/cloud/api/Manager/getWebLog`;
-  const body = buildWebLogBody(options.request);
-  const response = await (options.fetchImpl ?? fetch)(url, {
+  const body = buildWebLogFormFields(options.request);
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${options.token}`,
+    accept: "application/json, text/plain, */*",
+    "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "x-requested-with": "XMLHttpRequest",
+  };
+  const cookieHeader = options.cookieHeader?.trim();
+  if (cookieHeader !== undefined && cookieHeader !== "") {
+    headers.cookie = cookieHeader;
+  }
+  const verbose = f402FetchVerbose();
+  const init: BunManagerFetchInit = {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${options.token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
+    headers,
+    body: buildWebLogFormBody(options.request),
+    redirect: "manual",
     signal: AbortSignal.timeout(20_000),
-  });
+    ...(verbose !== undefined ? { verbose } : {}),
+  };
+  const response = await (options.fetchImpl ?? fetch)(url, init);
   const contentType = response.headers.get("content-type") ?? "";
   const text = await response.text();
+  logWebLogResponseDebug(contentType, text);
+  if (response.status >= 300 && response.status < 400) {
+    const location =
+      response.headers.get("location") ?? "(no Location header)";
+    throw new F402WebLogFetchError(
+      `getWebLog redirect HTTP ${response.status} → ${location} (session/cookie rejected; set F402_FETCH_VERBOSE=1 to trace)`,
+    );
+  }
   if (response.status !== 200)
     throw new F402WebLogFetchError(
-      `getWebLog returned HTTP ${response.status}`,
+      `getWebLog returned HTTP ${response.status} (content-type: ${contentType || "unknown"}; body: ${bodyPreview(text)})`,
     );
   if (
     contentType.includes("text/html") ||
@@ -133,19 +236,33 @@ export async function fetchWebLog(options: {
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new F402WebLogFetchError("getWebLog returned non-JSON");
-  }
-  const rows = Array.isArray(payload)
-    ? payload
-    : payload !== null &&
-        typeof payload === "object" &&
-        Array.isArray((payload as { LIST?: unknown }).LIST)
-      ? (payload as { LIST: unknown[] }).LIST
-      : null;
-  if (rows === null)
     throw new F402WebLogFetchError(
-      "getWebLog response is neither an array nor { LIST: [...] }",
+      `getWebLog returned non-JSON (content-type: ${contentType || "unknown"}; first 200 chars: ${bodyPreview(text, 200)})`,
     );
+  }
+  if (
+    !Array.isArray(payload) &&
+    !(
+      payload !== null &&
+      typeof payload === "object" &&
+      "LIST" in (payload as object)
+    )
+  ) {
+    const keys =
+      payload !== null && typeof payload === "object"
+        ? Object.keys(payload as object).join(",")
+        : describeJsonShape(payload);
+    console.error("weblog: unexpected JSON shape:", keys || "(none)");
+    throw new F402WebLogFetchError(
+      `getWebLog response is neither an array nor { LIST: … } (missing LIST; keys: ${keys || "(none)"}; content-type: ${contentType || "unknown"})`,
+    );
+  }
+  const rows = parseWebLogListPayload(payload);
+  if (rows === null) {
+    throw new F402WebLogFetchError(
+      `getWebLog response is neither an array nor { LIST: [...] } (${explainWebLogListParseFailure(payload)}; content-type: ${contentType || "unknown"})`,
+    );
+  }
   if (
     !rows.every(
       (row) => row !== null && typeof row === "object" && !Array.isArray(row),
@@ -177,6 +294,7 @@ export async function fetchAndPersistWebLog(options: {
   readonly request: WebLogRequest;
   readonly capturePath: string;
   readonly baseUrl?: string;
+  readonly cookieHeader?: string;
   readonly fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<WebLogFetchResult> {
   const result = await fetchWebLog(options);
@@ -184,4 +302,9 @@ export async function fetchAndPersistWebLog(options: {
   return result;
 }
 
-export { resolveF402BearerToken };
+export {
+  resolveF402BearerToken,
+  resolveF402BearerTokenDetailed,
+  type F402BearerSource,
+  type ResolvedF402Bearer,
+} from "./f402_pending_fetch.ts";

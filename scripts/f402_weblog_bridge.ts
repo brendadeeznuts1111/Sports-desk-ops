@@ -3,6 +3,10 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
+import {
+  resolveWeblogCorpusPaths,
+  WEBLOG_BRIDGE_USAGE_HINT,
+} from "../lib/f402_weblog_bridge_inputs.ts";
 import { R2S3Client, resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
 import {
   buildWeblogRollup,
@@ -27,19 +31,40 @@ const { values } = parseArgs({
     help: { type: "boolean", short: "h", default: false },
   },
 });
+
 if (values.help) {
-  console.log(
-    "Usage: bun run weblog:rollup [--from a.jsonl[,b.jsonl]] [--bets f402-bets.jsonl] [--out path] [--dry-run] [--no-r2]",
-  );
+  console.log(`Usage: bun run weblog:rollup [options]
+
+Capture + rollup (live getWebLog):
+  bun run weblog:rollup --fetch-mode B [--date YYYY-MM-DD] [--save-capture path]
+
+Rollup only (existing JSONL corpus):
+  bun run weblog:rollup --from out/f402/weblog/11-08-2026.jsonl
+
+Options:
+  --from           Comma-separated JSONL paths (required without --fetch-mode)
+  --fetch-mode     A|B|C|I — fetch getWebLog, write JSONL, then roll up
+  --save-capture   Capture path (default: out/f402/weblog/MM-DD-YYYY.jsonl)
+  --date           Desk date YYYY-MM-DD for fetch (default: today UTC)
+  --bets           Wagers JSONL for Mode 6 join (default: F402_BETS_JSONL / out13/f402-bets.jsonl)
+  --out            Local rollup JSON (default: scratch/weblog/rollup-<date>.json)
+  --dry-run        Build rollup only; skip R2 publish
+  --no-r2          Skip R2 publish
+  --customer-id, --ip, --bearer-token  Passed through to getWebLog when fetching
+
+${WEBLOG_BRIDGE_USAGE_HINT}`);
   process.exit(0);
 }
-const from = (
-  values.from ??
-  "out/f402/weblog/11-01-2026.jsonl,out/f402/weblog/11-02-2026.jsonl"
-)
-  .split(",")
-  .map((p) => p.trim())
-  .filter(Boolean);
+
+const corpus = await resolveWeblogCorpusPaths(values, {
+  log: (line) => console.error(line),
+});
+if (!corpus.ok) {
+  console.error(corpus.message);
+  process.exit(corpus.exitCode);
+}
+
+const from = [...corpus.paths];
 const betsPath =
   values.bets ?? Bun.env.F402_BETS_JSONL ?? "out13/f402-bets.jsonl";
 const web = await readWeblogRows(from);

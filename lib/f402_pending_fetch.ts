@@ -1,6 +1,7 @@
 /** Direct 4C `Manager/getPending` fetch, validation and capture persistence. */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { readF402Session, type F402Session } from "./f402_session.ts";
 
 export class F402PendingFetchError extends Error {
   constructor(message: string) {
@@ -21,7 +22,7 @@ const CHICAGO_YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
 
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
-const INVALID_TOKEN_MESSAGE = `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, or F402_TOKEN_FILE (min ${MIN_TOKEN_LENGTH} chars, raw value only)`;
+const INVALID_TOKEN_MESSAGE = `invalid F402 bearer token: provide --bearer-token, F402_BEARER_TOKEN, F402_TOKEN_FILE, or run session:login (min ${MIN_TOKEN_LENGTH} chars, raw value only)`;
 
 /** A headerless JWT is exactly three non-empty base64url segments. */
 function isJwtShaped(token: string): boolean {
@@ -71,43 +72,72 @@ export function readF402TokenFile(
   }
 }
 
-/** Resolve the bearer token read-only: CLI, env, then the token file; fail before network I/O. */
-export function resolveF402BearerToken(
-  options: {
-    readonly cliToken?: string | undefined;
-    readonly environment?: Readonly<Record<string, string | undefined>>;
-    readonly readFile?: (path: string) => string;
-  } = {},
+export type F402BearerSource = "cli" | "env" | "file" | "session";
+
+export interface ResolvedF402Bearer {
+  readonly token: string;
+  readonly source: F402BearerSource;
+}
+
+export interface ResolveF402BearerOptions {
+  readonly cliToken?: string | undefined;
+  readonly environment?: Readonly<Record<string, string | undefined>>;
+  readonly readFile?: (path: string) => string;
+  readonly readSession?: () => F402Session | null;
+}
+
+function defaultF402TokenFilePath(
+  env: Readonly<Record<string, string | undefined>>,
 ): string {
+  const explicit = (env.F402_TOKEN_FILE ?? "").trim();
+  const configHome =
+    (env.XDG_CONFIG_HOME ?? "").trim() || `${(env.HOME ?? "").trim()}/.config`;
+  return explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
+}
+
+/** Resolve bearer + provenance: CLI, env, token file, then `session:login` authorizationHeader. */
+export function resolveF402BearerTokenDetailed(
+  options: ResolveF402BearerOptions = {},
+): ResolvedF402Bearer {
   const env =
     options.environment ?? (Bun.env as Record<string, string | undefined>);
   const readFile =
     options.readFile ?? ((path: string) => readFileSync(path, "utf8"));
+  const readSession = options.readSession ?? (() => readF402Session());
 
-  // First non-empty source wins, as before: a present-but-invalid source fails closed instead of
-  // silently falling through to a stale env/file token.
   const cliRaw = (options.cliToken ?? "").trim();
   if (cliRaw !== "") {
     const token = validateF402Token(cliRaw);
     if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
-    return token;
+    return { token, source: "cli" };
   }
   const envRaw = (env.F402_BEARER_TOKEN ?? "").trim();
   if (envRaw !== "") {
     const token = validateF402Token(envRaw);
     if (token === null) throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
-    return token;
+    return { token, source: "env" };
   }
 
-  const explicit = (env.F402_TOKEN_FILE ?? "").trim();
-  const configHome =
-    (env.XDG_CONFIG_HOME ?? "").trim() || `${(env.HOME ?? "").trim()}/.config`;
-  const path =
-    explicit !== "" ? explicit : `${configHome}/sportsdesk/f402-token`;
-  const fromFile = readF402TokenFile(path, readFile);
-  if (fromFile !== null) return fromFile;
+  const fromFile = readF402TokenFile(defaultF402TokenFilePath(env), readFile);
+  if (fromFile !== null) return { token: fromFile, source: "file" };
+
+  const session = readSession();
+  const authHeader = session?.authorizationHeader ?? "";
+  if (authHeader !== "") {
+    const token = validateF402Token(authHeader);
+    if (token !== null) {
+      return { token, source: "session" };
+    }
+  }
 
   throw new F402PendingFetchError(INVALID_TOKEN_MESSAGE);
+}
+
+/** Resolve the bearer token read-only; fail before network I/O. */
+export function resolveF402BearerToken(
+  options: ResolveF402BearerOptions = {},
+): string {
+  return resolveF402BearerTokenDetailed(options).token;
 }
 
 /** `deskDate - 6d` in America/Chicago, for the 7-day open book. */
