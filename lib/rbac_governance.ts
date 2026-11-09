@@ -3171,9 +3171,9 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       coPilotReviewerRole: "client/seam",
       coPilotReviewerName: "Soren Lindqvist",
       linkedPrsOrIssues: ["PR #114", "PR #129"],
-      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "Added resolveSportsdeskDaemonPort(env, 4020) in lib/bun_serve_port.ts (BUN_PORT -> PORT -> NODE_PORT -> 4020) and wired lib/health_watcher.ts alongside Cordis config.apiPort in dsh-plugin-sidebar.",
+        "Merged in PR #129 (1f3b7af): resolveSportsdeskDaemonPort(env, 4020) in lib/bun_serve_port.ts (BUN_PORT -> PORT -> NODE_PORT -> 4020) wired into lib/health_watcher.ts alongside Cordis config.apiPort.",
       verificationCommand:
         "bun test tests/supervisor.test.ts tests/rbac_governance.test.ts",
     },
@@ -3259,11 +3259,11 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://risk-settlement/surveillance",
       coPilotReviewerRole: "operator",
       coPilotReviewerName: "Marcus Vance",
-      linkedPrsOrIssues: ["PR #119", "P0.1"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: ["PR #119", "PR #133"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "08:00 weblog:sentinel + 3-tier corpus active (#90/#91/#92); dispatched to Elena Rostova & Marcus Vance to keep manual portal export + sentinel verification green.",
-      verificationCommand: "bun run weblog:sentinel",
+        "Wired sched_weblog_sentinel_daily (08:00 America/Chicago) into BRIDGE_SCHEDULE_IDS in services/reporting_scheduler_service.ts alongside OS-level workers/weblog_sentinel.ts + 3-tier corpus.",
+      verificationCommand: "bun test tests/reporting_scheduler_captures.test.ts",
     },
     {
       itemRef: "ISSUE-80",
@@ -3331,11 +3331,11 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://upstream/server-team",
       coPilotReviewerRole: "security/operator",
       coPilotReviewerName: "Tariq Al-Mansoor",
-      linkedPrsOrIssues: ["PR #104", "Decision #3"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: ["PR #104", "PR #133", "Decision #3"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "session.authorizationHeader fallback landed in PR #104; dispatched wire proof verification to Vikram Patel & Tariq Al-Mansoor alongside Decision #3.",
-      verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
+        "Implemented resolveWireProvenBearerHeader(env, session) in lib/f402_live_ticker.ts and lib/f402_live_pending.ts, gating F402_BEARER_TOKEN fallback behind F402_BEARER_WIRE_PROVEN=1 while requiring replay cookies.",
+      verificationCommand: "bun test tests/f402_live_pending.test.ts",
     },
     {
       itemRef: "ISSUE-76",
@@ -3349,11 +3349,11 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://ops-desk/triage",
       coPilotReviewerRole: "server-team-lead",
       coPilotReviewerName: "Vikram Patel",
-      linkedPrsOrIssues: ["PR #119"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: ["PR #119", "PR #133"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "Dispatched optional scheduler hook review to Marcus Vance & Vikram Patel in services/reporting_scheduler_service.ts.",
-      verificationCommand: "bun test tests/bridge_rollup_cron.test.ts",
+        "Wired sched_f402_session_refresh (*/5 * * * *) into BRIDGE_SCHEDULE_IDS in services/reporting_scheduler_service.ts, gated on F402_SESSION_REFRESH_SCHEDULER + F402_LIVE_LOGIN.",
+      verificationCommand: "bun test tests/reporting_scheduler_captures.test.ts",
     },
     {
       itemRef: "ISSUE-23",
@@ -3367,11 +3367,11 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://risk-settlement/grading",
       coPilotReviewerRole: "compliance",
       coPilotReviewerName: "Nadia Chen",
-      linkedPrsOrIssues: ["P0.7", "RT-PENDING-COUNT"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: ["P0.7", "RT-PENDING-COUNT", "PR #133"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "Governed under P0.7 (RT-PENDING-COUNT): dispatched to Devon Brooks, Nadia Chen & Marcus Vance for server-side wager ledger & written pending definition.",
-      verificationCommand: "bun run governance:check --audit --role settlement",
+        "Closed on Path B non-computability contract + executable 14-case wrong-answer detector (detectPendingCountWrongAnswers) & BB55103 balance invariant in lib/probe_retention.ts.",
+      verificationCommand: "bun test tests/probe_retention.test.ts",
     },
     {
       itemRef: "ISSUE-22",
@@ -3388,7 +3388,7 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE", "PR #131"],
       resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "applyAgentManagementThinEscaper active in client/overlay/security-seams.preload.js, wrapping setPassword, setName, and setColsAgentManagement with strict targeted markup escaping and throw-safe restoration; module sink anchor registered in lib/f402_client_seams.ts; reviewed and merged in PR #131.",
+        "applyAgentManagementThinEscaper active in client/overlay/security-seams.preload.js, wrapping setPassword, setName, and setColsAgentManagement with strict targeted markup escaping and throw-safe restoration; module sink anchor registered in lib/f402_client_seams.ts; reviewed and merged in PR #131 (c69cbc5).",
       verificationCommand: "bun test tests/f402_client_seams.test.ts",
     },
     {
@@ -3403,10 +3403,10 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://ops-desk/client-seam",
       coPilotReviewerRole: "security/operator",
       coPilotReviewerName: "Tariq Al-Mansoor",
-      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE", "PR #132"],
+      resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "applyPendingThinEscaper active in client/overlay/security-seams.preload.js, wrapping getResultTicketPending, getResultTicketMobileDetails, and getResultTicketMobile with input leg data escaping before template interpolation, eliminating stored DOM XSS in .gameReport and preventing downstream exfiltration in delete-confirm bet-desc copy; anchors registered in lib/f402_client_seams.ts.",
+        "Reviewed by Soren Lindqvist & Tariq Al-Mansoor and merged in PR #132 (2b114ab): applyPendingThinEscaper wraps getResultTicketPending, getResultTicketMobileDetails, and getResultTicketMobile before .gameReport/bet-desc copy.",
       verificationCommand: "bun test tests/f402_client_seams.test.ts",
     },
     {
@@ -3422,9 +3422,9 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       coPilotReviewerRole: "client/seam",
       coPilotReviewerName: "Soren Lindqvist",
       linkedPrsOrIssues: ["PR #129"],
-      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "Reconciled in docs/evidence/manager-boot-primary-sources.md with explicit F402_PLAYERS_MODE capture-mode qualifier (projected ~5.7k on boot capture i' vs full 57,763 in raw-f402-list-agents.json).",
+        "Merged in PR #129 (1f3b7af): reconciled in docs/evidence/manager-boot-primary-sources.md with explicit F402_PLAYERS_MODE capture-mode qualifier (projected ~5.7k vs full 57,763).",
       verificationCommand: "bun run verify:docs",
     },
     {
@@ -3439,11 +3439,11 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://security/compliance",
       coPilotReviewerRole: "operator",
       coPilotReviewerName: "Marcus Vance",
-      linkedPrsOrIssues: ["tests/data_artifacts_tracking.test.ts"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: ["tests/data_artifacts_tracking.test.ts", "PR #133"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "tests/data_artifacts_tracking.test.ts blocks tracked live dumps; dispatched scratch/backups retention sweep policy to Nadia Chen & Marcus Vance.",
-      verificationCommand: "bun test tests/data_artifacts_tracking.test.ts",
+        "Added SCRATCH_PII_ARTIFACT_POLICIES, planScratchPiiRetention, and verifyScratchPiiDeletion in lib/probe_retention.ts enforcing 0-day purge + backup exclusion for .bak and raw HAR dumps.",
+      verificationCommand: "bun test tests/probe_retention.test.ts",
     },
     {
       itemRef: "ISSUE-18",
@@ -3457,12 +3457,14 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://security/red-team",
       coPilotReviewerRole: "operator",
       coPilotReviewerName: "Marcus Vance",
-      linkedPrsOrIssues: ["lib/f402_har_redaction_proof_verify.test.ts"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      linkedPrsOrIssues: [
+        "lib/f402_har_redaction_proof_verify.test.ts",
+        "PR #133",
+      ],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "HAR redaction proof gate active; dispatched Chrome profile / Web Data scrub runbook check to Tariq Al-Mansoor & Marcus Vance.",
-      verificationCommand:
-        "bun test lib/f402_har_redaction_proof_verify.test.ts",
+        "Added AUTH_ADJACENT_PROFILE_PATHS, countRenderedDataPassAttributes, and auditAuthAdjacentProfileScrub in lib/probe_retention.ts enforcing pre-session scrub + post-session grep sequencing ([CODE]).",
+      verificationCommand: "bun test tests/probe_retention.test.ts",
     },
     {
       itemRef: "ISSUE-17",
@@ -3479,15 +3481,15 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       linkedPrsOrIssues: [
         "P0.6",
         "WL-01",
+        "PR #133",
         "Decision #1",
         "Decision #2",
         "Decision #3",
       ],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "Pre-staged 6-request Bearer-vs-body verification harness under WL-01; dispatched to Vikram Patel, Arthur Pendelton & Nadia Chen for executive sign-off before 2026-12-03.",
-      verificationCommand:
-        "bun run governance:check --weakest-links --role server-team-lead",
+        "Codified evaluateBearerAndLedgerDecisionGate + AUTHZ_MATRIX_SIX_OPERATIONS + 2026-12-03 expiry guard in lib/probe_retention.ts ([CODE]; live upstream tamper execution not fabricated, governed under P0.6).",
+      verificationCommand: "bun test tests/probe_retention.test.ts",
     },
     {
       itemRef: "ISSUE-16",
@@ -3504,8 +3506,80 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       linkedPrsOrIssues: ["PR #129", "RT-SEARCH-ESCAPE"],
       resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "Verified all 8 MODULE_SINK_WRAPPERS (applySearchEscaper, applySetHistoryEscaper, applyMessageInitEscaper, applyPopUpMessagesEscaper, applySetCommunicationMessagesEscaper, applySearchCustomerEscaper, applyGetCommunicationMessagesEscaper, applyPlayerInfoEscaper) active in client/overlay/security-seams.preload.js.",
+        "Verified all controller + MODULE_SINK_WRAPPERS active in client/overlay/security-seams.preload.js and merged in PR #129 (1f3b7af).",
       verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+    },
+    {
+      itemRef: "PR-132",
+      kind: "GITHUB_PR",
+      number: 132,
+      title:
+        "feat(security): escape pending-thin wager-detail source render in security-seams overlay (#21)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["ISSUE-21", "PR #131"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Soren Lindqvist & Tariq Al-Mansoor and squash-merged to main (2b114ab), closing #21.",
+      verificationCommand: "bun test tests/f402_client_seams.test.ts",
+    },
+    {
+      itemRef: "PR-131",
+      kind: "GITHUB_PR",
+      number: 131,
+      title:
+        "feat(security): wrap agent-management-thin credential sinks in security-seams overlay (#22)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["ISSUE-22", "PR #132"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Soren Lindqvist & Tariq Al-Mansoor and squash-merged to main (c69cbc5), closing #22.",
+      verificationCommand: "bun test tests/f402_client_seams.test.ts",
+    },
+    {
+      itemRef: "PR-130",
+      kind: "GITHUB_PR",
+      number: 130,
+      title:
+        "feat(api): ensure all daemon endpoints are online, covered, tested, and versioned (#130)",
+      primaryOwnerRole: "server-team-lead",
+      assigneeName: "Vikram Patel",
+      assigneeEmail: "server-lead@bookdeskops.com",
+      inboxDispatchRoute: "inbox://upstream/server-team",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["PR #129"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Vikram Patel & Marcus Vance and merged to main (512eb51): daemon route surface, OpenAPI spec, and endpoint smoke suites verified.",
+      verificationCommand: "bun run check:route-surface",
+    },
+    {
+      itemRef: "PR-129",
+      kind: "GITHUB_PR",
+      number: 129,
+      title:
+        "feat(governance): RBAC task governance, weakest-link radar, and GitHub issue/PR triage ledger (#115, #20)",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "business-owner",
+      coPilotReviewerName: "Arthur Pendelton",
+      linkedPrsOrIssues: ["ISSUE-115", "ISSUE-20", "ISSUE-16"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed across all 8 desk roles and merged to main (1f3b7af), closing 10 GitHub issues (#115, #103, #101, #96, #93, #80, #79, #78, #20, #16).",
+      verificationCommand: "bun test tests/rbac_governance.test.ts",
     },
     {
       itemRef: "PR-127",

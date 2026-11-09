@@ -535,4 +535,46 @@ describe("live Pending artifact provenance", () => {
         .dataSource,
     ).toBe(`live:${OPERATION}`);
   });
+
+  test("F402_BEARER_TOKEN fallback stays off until F402_BEARER_WIRE_PROVEN=1 (#77)", async () => {
+    const cookieOnlySession: F402Session = {
+      cookieHeader: SECRET_COOKIE,
+      cookieNames: ["F402SESSION"],
+      obtainedAtIso: "2026-11-07T20:00:00.000Z",
+      expiresAtIso: "2026-11-08T20:00:00.000Z",
+    };
+    const validJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBMTEifQ.c2lnbmF0dXJl";
+    const callsUnproven: FetchCall[] = [];
+    await fetchLivePending({
+      customers: ONE_CUSTOMER_SCOPE,
+      now: FIXED_NOW,
+      session: cookieOnlySession,
+      env: { F402_BEARER_TOKEN: validJwt },
+      fetchImpl: wiredFetch(() => jsonResponse([]), callsUnproven),
+    });
+    const unprovenHeaders = callsUnproven[0]?.init.headers as Record<
+      string,
+      string
+    >;
+    expect(unprovenHeaders["authorization"]).toBeUndefined();
+    expect(unprovenHeaders["cookie"]).toBe(SECRET_COOKIE);
+
+    const callsProven: FetchCall[] = [];
+    await fetchLivePending({
+      customers: ONE_CUSTOMER_SCOPE,
+      now: FIXED_NOW,
+      session: cookieOnlySession,
+      env: {
+        F402_BEARER_TOKEN: validJwt,
+        F402_BEARER_WIRE_PROVEN: "1",
+      },
+      fetchImpl: wiredFetch(() => jsonResponse([]), callsProven),
+    });
+    const provenHeaders = callsProven[0]?.init.headers as Record<
+      string,
+      string
+    >;
+    expect(provenHeaders["authorization"]).toBe(`Bearer ${validJwt}`);
+    expect(provenHeaders["cookie"]).toBe(SECRET_COOKIE);
+  });
 });

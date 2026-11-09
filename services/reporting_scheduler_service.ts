@@ -48,6 +48,8 @@ export const BRIDGE_SCHEDULE_IDS = [
   "sched_bridge_weblog_hourly",
   "sched_agent_tree_hourly",
   "sched_customer_profiles_6h",
+  "sched_f402_session_refresh",
+  "sched_weblog_sentinel_daily",
 ] as const;
 
 export type ReportType =
@@ -354,6 +356,36 @@ export class ReportingSchedulerService {
           bin: "bun",
           args: ["run", "customers:profiles"],
           requires: ["file:enriched_customers_full.json"],
+        },
+        enabled: true,
+      },
+      {
+        id: "sched_f402_session_refresh",
+        name: "F402 Session Refresh (optional 5m)",
+        scheduleTime: "*/5 * * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Optional scheduler-driven F402 session refresh (`scripts/f402_session_refresh.ts`) for non-launchd hosts (#76). Skipped unless F402_SESSION_REFRESH_SCHEDULER and F402_LIVE_LOGIN are set so launchd hosts never double-mint.",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: ["run", "scripts/f402_session_refresh.ts"],
+          requires: ["F402_SESSION_REFRESH_SCHEDULER", "F402_LIVE_LOGIN"],
+        },
+        enabled: true,
+      },
+      {
+        id: "sched_weblog_sentinel_daily",
+        name: "WebLog Export Sentinel (08:00 daily)",
+        scheduleTime: "0 8 * * *",
+        reportType: "SHELL_CAPTURE",
+        description:
+          "Daily 08:00 America/Chicago check that today's manual F402 Mode A activity JSONL is staged (`weblog:sentinel --once`), sending a deduplicated Telegram nudge when missing (#91).",
+        tz: "America/Chicago",
+        shellJob: {
+          bin: "bun",
+          args: ["run", "weblog:sentinel", "--once"],
+          requires: ["TELEGRAM_BOT_TOKEN"],
         },
         enabled: true,
       },

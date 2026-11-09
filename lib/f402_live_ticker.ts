@@ -21,6 +21,7 @@
  */
 
 import type { F402ProbeFetch } from "./f402_ingest.ts";
+import { resolveF402BearerToken } from "./f402_pending_fetch.ts";
 import {
   createF402ReplayTransport,
   type F402ReplayTransport,
@@ -37,6 +38,34 @@ import {
 
 /** `getBetTicker` (tier A live request+response); same URL the capture script records. */
 export const F402_TICKER_URL = `https://fantasy402.com${BET_TICKER_OPERATION}`;
+
+/**
+ * Resolves the outbound `Authorization` header for live Manager/Report reads (#77).
+ * Prefers `session.authorizationHeader` from the replay session; falls back to
+ * `resolveF402BearerToken` (`F402_BEARER_TOKEN` / token file) ONLY when
+ * `F402_BEARER_WIRE_PROVEN=1` is set alongside an active replay transport/session,
+ * preventing an unverified second auth universe that diverges from session cookies.
+ */
+export function resolveWireProvenBearerHeader(
+  env: Readonly<Record<string, string | undefined>>,
+  session: F402Session | null,
+): string | undefined {
+  if (session?.authorizationHeader !== undefined) {
+    return session.authorizationHeader;
+  }
+  if ((env["F402_BEARER_WIRE_PROVEN"] ?? "").trim() !== "1") {
+    return undefined;
+  }
+  try {
+    const token = resolveF402BearerToken({
+      environment: env,
+      readSession: () => session,
+    });
+    return `Bearer ${token}`;
+  } catch {
+    return undefined;
+  }
+}
 
 const PROXY_ENV = "F402_REPLAY_PROXY_URL";
 /** Per-request timeout when the caller does not name one; shared with f402_incoming_bets.ts. */
@@ -261,8 +290,9 @@ export async function fetchLiveBetTicker(
     "x-requested-with": "XMLHttpRequest",
     "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
   };
-  if (session?.authorizationHeader !== undefined) {
-    headers["authorization"] = session.authorizationHeader;
+  const authHeader = resolveWireProvenBearerHeader(env, session);
+  if (authHeader !== undefined) {
+    headers["authorization"] = authHeader;
   }
   // The replay transport injects the cached cookie itself; an injected fetch has no transport
   // behind it, so the caller-provided session supplies the same cookie header the probe sends.

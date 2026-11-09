@@ -528,11 +528,11 @@ describe("dashboard section, standalone HTML & CLI", () => {
       "...(timeoutMs === undefined ? {} : { timeoutMs })",
     );
 
-    // Verify GitHub Issue (#16..#115) & PR (#104..#128) Triage, Review & Merge Ledger
-    expect(GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER.length).toBe(23);
+    // Verify GitHub Issue (#16..#115) & PR (#104..#132) Triage, Review & Merge Ledger
+    expect(GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER.length).toBe(27);
     expect(report.summary.githubIssuesTriagedCount).toBe(19);
-    expect(report.summary.githubIssuesResolvedCount).toBe(12);
-    expect(report.summary.githubPrsReviewedAndMergedCount).toBe(4);
+    expect(report.summary.githubIssuesResolvedCount).toBe(19);
+    expect(report.summary.githubPrsReviewedAndMergedCount).toBe(8);
     for (const entry of GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER) {
       expect(DESK_ROLE_IDS).toContain(entry.primaryOwnerRole);
       expect(DESK_ROLE_IDS).toContain(entry.coPilotReviewerRole);

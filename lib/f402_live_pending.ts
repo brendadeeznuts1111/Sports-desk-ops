@@ -20,6 +20,7 @@
 
 import type { F402ProbeFetch } from "./f402_ingest.ts";
 import {
+  resolveWireProvenBearerHeader,
   SESSION_LOGIN_HINT,
   TRANSPORT_UNAVAILABLE_MESSAGE,
 } from "./f402_live_ticker.ts";
@@ -218,14 +219,16 @@ function pendingBody(customerId: string): string {
 /** Request headers from the capture script, plus the session the injected-fetch seam needs. */
 function requestHeaders(
   options: LivePendingFetchOptions,
+  env: Readonly<Record<string, string | undefined>>,
   session: F402Session | null,
 ): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/json, text/plain, */*",
     "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
   };
-  if (session?.authorizationHeader !== undefined) {
-    headers["authorization"] = session.authorizationHeader;
+  const authHeader = resolveWireProvenBearerHeader(env, session);
+  if (authHeader !== undefined) {
+    headers["authorization"] = authHeader;
   }
   // The replay transport injects the cached cookie itself; an injected fetch has no transport
   // behind it, so the caller-provided session supplies the same cookie header a probe sends.
@@ -450,7 +453,7 @@ export async function fetchLivePending(
     transportLabel = transport.label;
   }
 
-  const headers = requestHeaders(options, session);
+  const headers = requestHeaders(options, env, session);
   const outcomes: CustomerOutcome[] = [];
   let next = 0;
   let aborted = false;

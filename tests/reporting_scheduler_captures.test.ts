@@ -64,6 +64,39 @@ describe("SHELL_CAPTURE schedule definitions", () => {
   test("both new ids are owned by the webview daemon", () => {
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_agent_tree_hourly");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_customer_profiles_6h");
+    expect(BRIDGE_SCHEDULE_IDS).toContain("sched_f402_session_refresh");
+    expect(BRIDGE_SCHEDULE_IDS).toContain("sched_weblog_sentinel_daily");
+  });
+
+  test("session-refresh (#76) and weblog-sentinel (#91) are gated on opt-in env vars", () => {
+    const scheduler = new ReportingSchedulerService(fakeTelegram());
+    const refresh = scheduler
+      .getSchedules()
+      .find((s) => s.id === "sched_f402_session_refresh");
+    expect(refresh?.reportType).toBe("SHELL_CAPTURE");
+    expect(refresh?.scheduleTime).toBe("*/5 * * * *");
+    expect(refresh?.tz).toBe("America/Chicago");
+    expect(refresh?.shellJob?.args).toEqual([
+      "run",
+      "scripts/f402_session_refresh.ts",
+    ]);
+    expect(refresh?.shellJob?.requires).toEqual([
+      "F402_SESSION_REFRESH_SCHEDULER",
+      "F402_LIVE_LOGIN",
+    ]);
+
+    const sentinel = scheduler
+      .getSchedules()
+      .find((s) => s.id === "sched_weblog_sentinel_daily");
+    expect(sentinel?.reportType).toBe("SHELL_CAPTURE");
+    expect(sentinel?.scheduleTime).toBe("0 8 * * *");
+    expect(sentinel?.tz).toBe("America/Chicago");
+    expect(sentinel?.shellJob?.args).toEqual([
+      "run",
+      "weblog:sentinel",
+      "--once",
+    ]);
+    expect(sentinel?.shellJob?.requires).toEqual(["TELEGRAM_BOT_TOKEN"]);
   });
 
   test("agent-tree runs on the desk clock at :11 and gates on F402_BEARER_TOKEN", () => {
