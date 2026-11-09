@@ -1,25 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAtIso": "2026-11-04T16:57:06.207Z",
-  "evidence": "FIXTURE",
+  "generatedAtIso": "2026-10-31T22:00:05.185Z",
+  "evidence": "LIVE",
   "coverage": {
     "customersInBook": 220,
     "linkedCustomers": 19,
     "linkYieldPct": 8.64,
     "wallets": 22,
-    "attributionLinkRows": 26,
-    "observedWallets": 0,
+    "observedWallets": 15,
     "invalidWallets": 10,
     "multiWalletCustomers": 0,
     "sharedWallets": 4,
-    "attributionLinks": {
-      "NBA_SGP_SHARP": 2,
-      "WALLET_MAP_UNVERIFIED": 18,
-      "STEAM_ORIGINATOR_CTF": 2,
-      "WHALE_CTF_BRIDGE": 2,
-      "NBA_TOTAL_MIDDLE": 1,
-      "SUBNET_104_28_34_CLUSTER": 1
-    },
     "attributionTypes": {
       "NBA_SGP_SHARP": 2,
       "WALLET_MAP_UNVERIFIED": 18,
@@ -30,26 +21,107 @@
     }
   },
   "value": {
-    "customersWithPoly": 0,
-    "customersWithPnl": 0,
+    "customersWithPoly": 19,
+    "customersWithPnl": 8,
     "bothUp": 0,
-    "polyOnlyUp": 0,
+    "polyOnlyUp": 5,
     "deskOnlyUp": 0,
-    "bothDown": 0,
+    "bothDown": 3,
     "flat": 0,
     "deskVolumeUsd": 5295104,
     "customerDeskPnlUsd": -1213830.24,
     "deskHoldPct": -22.92,
-    "polyPnlUsd": 0,
-    "polyGrossPnlUsd": 0,
-    "polyNetPnlUsd": 0,
-    "polyFeeResidualUsd": 0,
-    "netCoveragePct": 0,
-    "polyVolumeUsd": 0,
-    "polyAdvantageUsd": 0,
-    "priorityUsd": 0,
+    "polyPnlUsd": 516795.13,
+    "polyGrossPnlUsd": 513389.21,
+    "polyNetPnlUsd": -9763.04,
+    "polyFeeResidualUsd": 110637.44,
+    "netCoveragePct": 6.67,
+    "polyVolumeUsd": 10517744.34,
+    "polyAdvantageUsd": 277987.59,
+    "priorityUsd": 675142.81,
     "sharedWalletRows": 8
   },
-  "leads": [],
+  "leads": [
+    {
+      "customerId": "BGD101",
+      "agentId": "BIGDAD",
+      "wallet": "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+      "deskPnlUsd": -137400,
+      "polyPnlUsd": 685665.54,
+      "basis": "GROSS",
+      "verdict": "POLY_ONLY_UP",
+      "priorityUsd": 823065.54
+    },
+    {
+      "customerId": "BB5127",
+      "agentId": "BIGDAD",
+      "wallet": "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+      "deskPnlUsd": -137400,
+      "polyPnlUsd": 685665.54,
+      "basis": "GROSS",
+      "verdict": "POLY_ONLY_UP",
+      "priorityUsd": 411532.77
+    },
+    {
+      "customerId": "GP300",
+      "agentId": "GPRO50RSK",
+      "wallet": "0x120640a1deffe6b53e291eba74acf1dbe8274528",
+      "deskPnlUsd": -33858,
+      "polyPnlUsd": 339842.65,
+      "basis": "GROSS",
+      "verdict": "POLY_ONLY_UP",
+      "priorityUsd": 373700.65
+    },
+    {
+      "customerId": "DAN245",
+      "agentId": "DAN318",
+      "wallet": "0x231699490d08919d8f1d3f0b90fd2a677e3e9819",
+      "deskPnlUsd": -42000,
+      "polyPnlUsd": 68514.76,
+      "basis": "GROSS",
+      "verdict": "POLY_ONLY_UP",
+      "priorityUsd": 110514.76
+    },
+    {
+      "customerId": "EJ8834",
+      "agentId": "MJ2026",
+      "wallet": "0x50cc8708aff3791f2d6125645c82bda532baa534",
+      "deskPnlUsd": -110000,
+      "polyPnlUsd": -9763.04,
+      "basis": "NET",
+      "verdict": "BOTH_DOWN",
+      "priorityUsd": 90213.26
+    },
+    {
+      "customerId": "DN2019",
+      "agentId": "SHARP66",
+      "wallet": "0x1eb93479b3425ad57aef1442be4624a27880f884",
+      "deskPnlUsd": -78000,
+      "polyPnlUsd": 78321.23,
+      "basis": "GROSS",
+      "verdict": "POLY_ONLY_UP",
+      "priorityUsd": 78160.62
+    },
+    {
+      "customerId": "MJ102",
+      "agentId": "MJ2026",
+      "wallet": "0x07db5765beba17be154cbfbd6324a15f3c81fa4f",
+      "deskPnlUsd": -88000,
+      "polyPnlUsd": -65446.48,
+      "basis": "GROSS",
+      "verdict": "BOTH_DOWN",
+      "priorityUsd": 22553.52
+    },
+    {
+      "customerId": "DA4401",
+      "agentId": "JUICEPLUS",
+      "wallet": "0xaa7789219c17e180dcb5933099c90d885f1d15a5",
+      "deskPnlUsd": -95000,
+      "polyPnlUsd": -580339.53,
+      "basis": "GROSS",
+      "verdict": "BOTH_DOWN",
+      "priorityUsd": 0
+    }
+  ],
   "quarantined": 10
 }

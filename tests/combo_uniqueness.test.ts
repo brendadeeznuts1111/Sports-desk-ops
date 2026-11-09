@@ -215,7 +215,7 @@ function fakeReport(
   };
 }
 
-describe("CFB combo uniqueness", () => {
+describe("combo identity: attribution, dedupe and unresolved legs", () => {
   test("attributes by condition id, slug and token id; dedupes across endpoints", async () => {
     const report = await buildComboUniquenessReport(options());
     expect(report.walletsScanned).toBe(2);
@@ -240,6 +240,16 @@ describe("CFB combo uniqueness", () => {
     expect(report.global.sumPerGameCombos).toBe(7);
   });
 
+  test("a combo whose legs cannot be attributed is reported as unresolved", async () => {
+    const report = await buildComboUniquenessReport(
+      options({ gate: "full-game", includeAudit: true }),
+    );
+    // c3 has one leg that touches no CFB game, so it is dropped before attribution, not by the gate.
+    expect(report.combos.some((row) => row.comboId === "c3")).toBe(false);
+  });
+});
+
+describe("combo gates: permissive / all-legs-cfb / full-game", () => {
   test("full-game gate keeps only single-game ML/spread/total combos", async () => {
     const report = await buildComboUniquenessReport(
       options({ gate: "full-game" }),
@@ -322,33 +332,6 @@ describe("CFB combo uniqueness", () => {
         before?.fullyWithinGame ?? 0,
       );
     }
-  });
-
-  test("closed events are included by default; --open-only drops them", async () => {
-    const byDefault = await buildComboUniquenessReport(options());
-    expect(byDefault.combos.some((row) => row.comboId === "c0")).toBe(true);
-    expect(byDefault.permissiveCombos).toBe(6);
-    expect(byDefault.index.activeOnly).toBe(false);
-
-    const openOnly = await buildComboUniquenessReport(
-      options({ includeClosedGames: false }),
-    );
-    expect(openOnly.combos.some((row) => row.comboId === "c0")).toBe(false);
-    expect(openOnly.permissiveCombos).toBe(5);
-    expect(openOnly.index.activeOnly).toBe(true);
-  });
-
-  test("--since bounds the index by game date", async () => {
-    const all = await buildComboUniquenessReport(options());
-    expect(all.permissiveCombos).toBe(6);
-    const recent = await buildComboUniquenessReport(
-      options({ since: "2026-10-01" }),
-    );
-    expect(recent.permissiveCombos).toBe(5); // c0 (2026-09-26) is filtered out
-    const none = await buildComboUniquenessReport(
-      options({ since: "2026-12-01" }),
-    );
-    expect(none.permissiveCombos).toBe(0);
   });
 
   test("synthetic audit fixture: gated references use kept sets only", () => {
@@ -436,13 +419,34 @@ describe("CFB combo uniqueness", () => {
     expect(linesToText([])).toBe("");
     expect(linesToText(["a", "b"])).toBe("a\nb\n");
   });
+});
 
-  test("a combo whose legs cannot be attributed is reported as unresolved", async () => {
-    const report = await buildComboUniquenessReport(
-      options({ gate: "full-game", includeAudit: true }),
+describe("CFB event source: closed games, --since and the event cache", () => {
+  test("closed events are included by default; --open-only drops them", async () => {
+    const byDefault = await buildComboUniquenessReport(options());
+    expect(byDefault.combos.some((row) => row.comboId === "c0")).toBe(true);
+    expect(byDefault.permissiveCombos).toBe(6);
+    expect(byDefault.index.activeOnly).toBe(false);
+
+    const openOnly = await buildComboUniquenessReport(
+      options({ includeClosedGames: false }),
     );
-    // c3 has one leg that touches no CFB game, so it is dropped before attribution, not by the gate.
-    expect(report.combos.some((row) => row.comboId === "c3")).toBe(false);
+    expect(openOnly.combos.some((row) => row.comboId === "c0")).toBe(false);
+    expect(openOnly.permissiveCombos).toBe(5);
+    expect(openOnly.index.activeOnly).toBe(true);
+  });
+
+  test("--since bounds the index by game date", async () => {
+    const all = await buildComboUniquenessReport(options());
+    expect(all.permissiveCombos).toBe(6);
+    const recent = await buildComboUniquenessReport(
+      options({ since: "2026-10-01" }),
+    );
+    expect(recent.permissiveCombos).toBe(5); // c0 (2026-09-26) is filtered out
+    const none = await buildComboUniquenessReport(
+      options({ since: "2026-12-01" }),
+    );
+    expect(none.permissiveCombos).toBe(0);
   });
 
   test("cache honors TTL and fresh bypass", async () => {

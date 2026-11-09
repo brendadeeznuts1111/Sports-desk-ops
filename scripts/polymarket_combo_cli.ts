@@ -10,14 +10,13 @@
  *   ./bin/dx combo wallet 0x26cf...
  */
 
+import { buildGameIndex, loadCfbGames } from "../lib/cfb_events.ts";
+import { seedWalletsFromLeaderboard } from "../lib/combo_wallets.ts";
 import {
   buildComboUniquenessReport,
-  buildGameIndex,
   checkComboSubset,
   comboIdLines,
   linesToText,
-  loadCfbGames,
-  seedWalletsFromLeaderboard,
   walletLines,
   type ComboGate,
   type ComboSubsetCheck,
