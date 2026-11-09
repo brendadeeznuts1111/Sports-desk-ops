@@ -557,10 +557,17 @@ export function keychainCredentialProbe(
   return {
     async check(job) {
       if (job.id === "weblog") {
-        const from = resolveBridgeWeblogCorpusFrom(probeRoot, {
-          env,
-          now: () => new Date(),
-        });
+        let from: string;
+        try {
+          from = resolveBridgeWeblogCorpusFrom(probeRoot, {
+            env,
+            now: () => new Date(),
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return { ok: false, error: message };
+        }
         const present = bridgeWeblogCorpusPresent(from);
         return present.ok
           ? { ok: true, source: "corpus" }
