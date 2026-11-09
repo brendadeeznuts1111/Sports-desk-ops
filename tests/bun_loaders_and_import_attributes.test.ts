@@ -72,6 +72,17 @@ describe("Bun Native Loaders & Import Attributes", () => {
       expect(flags.schemaVersion).toBe(1);
       expect(flags.rules?.some((r) => r.id === "stake_over_10k")).toBe(true);
     });
+
+    it("follows YAML 1.2 parsing rules (yes/no/on/off parse as strings)", () => {
+      const parsed = Bun.YAML.parse("yes: on\nno: off") as {
+        yes?: unknown;
+        no?: unknown;
+      };
+      expect(typeof parsed.yes).toBe("string");
+      expect(parsed.yes).toBe("on");
+      expect(typeof parsed.no).toBe("string");
+      expect(parsed.no).toBe("off");
+    });
   });
 
   describe("XML Loader", () => {

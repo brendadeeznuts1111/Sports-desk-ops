@@ -9,6 +9,7 @@ import {
   formatOpenApiSpecOsc8Markdown,
   formatAnsiThemeOsc8Markdown,
   formatBunSymbolOsc8Markdown,
+  formatOsc8Hyperlink,
   renderAnsiMarkdown,
   DARK_ANSI_THEME,
   LIGHT_ANSI_THEME,
@@ -72,6 +73,17 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
       "[`Bun.inspect.custom`](https://bun.com/reference/globals/bun/inspect)",
     );
     assert.equal(formatBunSymbolOsc8Markdown("nonexistent_symbol"), null);
+  });
+
+  it("formats raw OSC 8 escape sequences", () => {
+    const raw = formatOsc8Hyperlink(
+      "https://sportsdesk.internal/schema#match_evaluations",
+      "match_evaluations",
+    );
+    assert.equal(
+      raw,
+      "\x1b]8;;https://sportsdesk.internal/schema#match_evaluations\x1b\\match_evaluations\x1b]8;;\x1b\\",
+    );
   });
 
   it("provides standard AnsiTheme presets conforming to Bun specifications", () => {

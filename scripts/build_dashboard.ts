@@ -7,6 +7,7 @@
 
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { runBunBuild } from "./build.ts";
 
 const OUT_DIR = resolve(process.cwd(), "dist/dashboard");
 const DASHBOARD_ENTRY_PATH = resolve(process.cwd(), "src/dashboard/index.tsx");
@@ -14,7 +15,7 @@ const DASHBOARD_ENTRY_PATH = resolve(process.cwd(), "src/dashboard/index.tsx");
 mkdirSync(OUT_DIR, { recursive: true });
 
 const start = performance.now();
-const result = await Bun.build({
+const result = await runBunBuild({
   entrypoints: [DASHBOARD_ENTRY_PATH],
   outdir: OUT_DIR,
   target: "browser",

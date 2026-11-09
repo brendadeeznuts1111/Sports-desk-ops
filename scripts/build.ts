@@ -12,6 +12,13 @@ export interface TargetBuildConfig {
   minify?: boolean;
 }
 
+export type BuildConfig = Parameters<typeof Bun.build>[0];
+
+/** Raw wrapper around Bun.build for tooling scripts */
+export async function runBunBuild(options: BuildConfig) {
+  return await Bun.build(options);
+}
+
 export async function buildTarget(config: TargetBuildConfig) {
   const targetFeatures = BUILD_FEATURES[config.target];
   console.log(

@@ -136,6 +136,10 @@ export const BUN_KNOWN_REFERENCE_SYMBOLS: Readonly<Record<string, string>> = {
   "Bun.write": "globals/bun/write",
   "Bun.spawn": "globals/bun/spawn",
   "Bun.Transpiler": "globals/bun/Transpiler",
+  "Bun.dns": "globals/bun/dns",
+  "dns.lookup": "globals/bun/dns/lookup",
+  "dns.prefetch": "globals/bun/dns/prefetch",
+  "dns.getCacheStats": "globals/bun/dns/getCacheStats",
   ImportKind: "globals/bun/ImportKind",
 };
 
@@ -276,6 +280,35 @@ export function canonicalBunUrl(raw: string): BunUrl | null {
   const pathname = url.pathname.replace(/(.)\/+$/, "$1");
   if (!isBunPath(pathname)) return null;
   return `${BUN_ORIGIN}${pathname}${url.search}${url.hash}`;
+}
+
+/**
+ * Strips tracking parameters (`_gl`, `_ga`, `utm_*`, `fbclid`) from a Bun URL
+ * while preserving valid query parameters, hash fragments, and `:~:text=` text directives.
+ */
+export function sanitizeBunUrl(raw: string): BunUrl | null {
+  const canonical = canonicalBunUrl(raw);
+  if (!canonical) return null;
+  try {
+    const url = new URL(canonical);
+    const trackingKeys = ["_gl", "_ga", "fbclid"];
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (
+        trackingKeys.includes(key) ||
+        key.startsWith("_ga_") ||
+        key.startsWith("utm_")
+      ) {
+        url.searchParams.delete(key);
+      }
+    }
+    const search = url.searchParams.toString();
+    const query = search ? `?${search}` : "";
+    const pathname = url.pathname.replace(/(.)\/+$/, "$1");
+    if (!isBunPath(pathname)) return null;
+    return `${BUN_ORIGIN}${pathname}${query}${url.hash}`;
+  } catch {
+    return canonical;
+  }
 }
 
 function isBunPath(path: string): path is BunPath {

@@ -26,7 +26,7 @@ Bundles expose **Cordis tools** in `index.js` (not `bin` / `dsh.commands`). UI r
 
 ## Closed (recent)
 
-- **`repoPath` default (High)** — `resolveConfiguredRepoPath()` at `apply()`; removed baked-in path from `cordis.patch.yml`. Shim when bundle sits inside monorepo (`@tennis-hq/sportsdesk-workspace`). **ops 0.10.1**, **security 0.1.1**, **watchlist 0.2.1**.
+- **`repoPath` default (High)** — `resolveConfiguredRepoPath()` at `apply()`; removed baked-in path from `cordis.patch.yml`. Shim when bundle sits inside monorepo (`sportsdesk-ops`). **ops 0.10.1**, **security 0.1.1**, **watchlist 0.2.1**.
 - **ops `verify-load` in CI** — CI copies `tests/fixtures/backtest/enriched_customers_full.json`.
 
 ## Closed / upstream

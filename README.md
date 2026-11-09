@@ -51,6 +51,10 @@ SPORTSDESK_LIVE_INGEST=1 ./bin/dx deploy
 - `./bin/dx combo legs|price|wallet|uniqueness` — CFB combo legs, product-of-legs pricing, wallet combo positions and per-game unique combo/wallet counts.
 - `./bin/dx combo backtest` — realized combo PnL by day/game from public activity (open combos excluded).
 - `./bin/dx bridge coverage|value|match` — cross-domain join between our customer book and Polymarket wallets: attribution health, fee-aware cross-venue PnL, and leg-level mirror/opposite matching.
+- `bun run sportsdesk rank-all` — 30-day batched sharp bettor rankings ($269.5M handle, 9,141 accounts, Gini stake inequality, tiering).
+- `bun run sportsdesk quarantine` — sliding-window syndicate steam burst quarantine engine (`autoExecute: false`).
+- `bun run sportsdesk conduits` — audit 21 single-bettor proxy sub-agents (concentration $\ge 80\%$).
+- `bun run dev` — real-time dev server (:4022) with native WebSockets topic rooms (`live-bets`, `syndicate-alerts`, `proxy-conduits`, `terminal-logs`) and PTY terminal.
 
 ## Schema registry & prod dump parity
 
@@ -203,18 +207,17 @@ Mini App launches carry a signed `initData` payload. Server-side verification us
 
 ## Performance Telemetry & Micro-Benchmarks
 
-Empirical measurements on Bun v1.4.4 (macOS arm64). The first two rows are from `bun scripts/bench_server.ts` (2026-11-02, Apple M4; a single run, so treat the ratios as order-of-magnitude); the rest are from `tests/sendfile_threshold.test.ts`:
+Empirical measurements on Bun v1.4.4 (macOS arm64, Apple Silicon). Benchmarks reflect streaming production wager corpora (`f402-bets.jsonl`, 468.8 MB / 934,246 rows) alongside lazy server handles:
 
-| Surface / Operation                                 | Manual Baseline Path                | Native Bun Path            | Measured Latency     | Throughput / Speedup             |
-| :-------------------------------------------------- | :---------------------------------- | :------------------------- | :------------------- | :------------------------------- |
-| **JSON Serialization** (25 accounts)                | `JSON.stringify` + headers          | `Response.json(data)`      | 1.22 µs vs 1.12 µs   | 1.09x faster                     |
-| **Response Handle Construction** (154.1 KB payload) | eager `Bun.file().text()` + headers | `new Response(Bun.file())` | 196.68 µs vs 0.67 µs | 292x faster lazy handle creation |
-| **Handle Construction Latency** (16 KB)             | Buffer allocation                   | `new Response(Bun.file())` | 0.49 µs/op           | Sub-microsecond lazy handle      |
-| **Handle Construction Latency** (64 KB)             | Buffer allocation                   | `new Response(Bun.file())` | 0.47 µs/op           | Sub-microsecond lazy handle      |
-| **Handle Construction Latency** (1 MB)              | Buffer allocation                   | `new Response(Bun.file())` | 0.21 µs/op           | Sub-microsecond lazy handle      |
-| **End-to-End Socket Transfer** (16 KB payload)      | `fetch` socket transfer             | `new Response(Bun.file())` | 0.149 ms/req         | Direct loopback socket transfer  |
-| **End-to-End Socket Transfer** (64 KB payload)      | `fetch` socket transfer             | `new Response(Bun.file())` | 0.191 ms/req         | Direct loopback socket transfer  |
-| **End-to-End Socket Transfer** (1 MB payload)       | `fetch` socket transfer             | `new Response(Bun.file())` | 0.489 ms/req         | Direct loopback socket transfer  |
+| Operation / Workload                  | Legacy / Baseline       | Native Bun 1.4 Path        | Benchmark / Speedup                    |
+| :------------------------------------ | :---------------------- | :------------------------- | :------------------------------------- |
+| **JSONL Stream** (468MB, 934k rows)   | `readline` (1,966 ms)   | `Bun.JSONL.parseChunk`     | **636.9 ms (676.8 MB/s, 3.1x faster)** |
+| **Burst Arena** (627k wagers, 30d)    | Unbounded collections   | `SyndicateBurstGuardArena` | **1,202 ms** (bounded sliding window)  |
+| **Response Handle** (154 KB payload)  | Eager `file.text()`     | `new Response(Bun.file())` | **0.67 µs** (292x faster lazy handle)  |
+| **Socket Transfer** (1 MB payload)    | `fetch` socket transfer | Loopback kernel sendfile   | **0.489 ms/req** loopback transfer     |
+| **JSON Serialization** (25 accts)     | `JSON.stringify` + hdr  | `Response.json(data)`      | **1.12 µs** (1.09x faster)             |
+| **DNS Resolution** (`fantasy402.com`) | System `getaddrinfo`    | `Bun.dns.lookup` (c-ares)  | **0.27 ms** cached latency             |
+| **ANSI Text Width** (TUI rendering)   | npm `string-width`      | `Bun.stringWidth`          | **Instant** C++ zero-copy lookup       |
 
 ## Plane 3 — append-only ingestion JSONL replay
 

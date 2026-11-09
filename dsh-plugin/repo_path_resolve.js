@@ -14,10 +14,7 @@ const REPO_PATH_HELP =
   "Market git install only provides the bundle subdirectory; tools shell the monorepo with cwd=repoPath.";
 
 /** Root package names that identify this monorepo (npm workspace name may differ from catalog label). */
-const REPO_ROOT_NAMES = new Set([
-  "sportsdesk-ops",
-  "@tennis-hq/sportsdesk-workspace",
-]);
+const REPO_ROOT_NAMES = new Set(["sportsdesk-ops"]);
 
 /**
  * @param {unknown} rawRepoPath

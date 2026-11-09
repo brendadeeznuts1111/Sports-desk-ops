@@ -11,6 +11,7 @@ import {
   matchBunReferenceSymbol,
   parseBunReferenceUrl,
   resolveBunSymbolReferenceUrl,
+  sanitizeBunUrl,
   textFragment,
 } from "../lib/bun_urls.ts";
 
@@ -244,6 +245,15 @@ describe("Bun reference symbol matching", () => {
     );
     expect(linked).toContain(
       "[`Bun.markdown.ansi`](https://bun.com/reference/globals/bun/markdown/ansi)",
+    );
+  });
+
+  test("sanitizeBunUrl strips tracking parameters while preserving text fragments", () => {
+    const raw =
+      "https://bun.com/docs/runtime/networking/dns?_gl=1*shxskr*_ga*MTcxOTc4NTQzNS4xNzk0MjM5MTE0*_ga_3683R8TZ5M*czE3OTQyMzkxMTQkbzEkZzEkdDE3OTQyNDE4NDAkajYwJGwwJGgzMzY2NDYyNzg.#:~:text=%22c%2Dares%22,a%20thread%20pool.";
+    const sanitized = sanitizeBunUrl(raw);
+    expect(sanitized).toBe(
+      "https://bun.com/docs/runtime/networking/dns#:~:text=%22c%2Dares%22,a%20thread%20pool.",
     );
   });
 });

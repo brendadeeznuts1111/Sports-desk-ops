@@ -1,7 +1,11 @@
 {
-  "name": "@tennis-hq/sportsdesk-workspace",
+  "name": "sportsdesk-ops",
   "version": "1.0.0",
   "private": true,
+  "bin": {
+    "sportsdesk": "cli/sportsdesk_cli.ts",
+    "dx": "bin/dx"
+  },
   "trustedDependencies": [],
   "publishConfig": {
     "access": "restricted",
@@ -14,6 +18,7 @@
   "main": "cli/sportsdesk_cli.ts",
   "type": "module",
   "scripts": {
+    "sportsdesk": "bun run cli/sportsdesk_cli.ts",
     "test": "bun test --parallel --timings=.bun-test-timings.json --update-timings",
     "test:market-index": "REQUIRE_MARKET_INDEX=1 bun test tests/market_index.test.ts",
     "test:changed-plugins": "bash scripts/ci/test-changed-plugins.sh",
@@ -95,11 +100,11 @@
     "check:features": "bun run gen:features && git diff --exit-code -- tests/bundle_types.test-d.ts types/README.md examples/feature_flags/dashboard.html",
     "dashboard:features": "bun run examples/feature_flags/serve_dashboard.ts",
     "dashboard:sync": "bun run scripts/sync_brain_artifact.ts",
+    "dev": "bun run scripts/dev_dashboard.ts",
     "build:tokens": "bun run gen:tokens",
     "build:docs": "bun run scripts/generate_docs.ts",
-    "prebuild": "bun run build:tokens",
-    "build": "bun run build:docs",
-    "postbuild": "bun run verify:gen-tokens-gate",
+    "build:dashboard": "bun run scripts/build_dashboard.ts",
+    "build": "bun run scripts/build_dashboard.ts",
     "gen:tokens:gate": "bun run scripts/gen_tokens_gate.ts",
     "verify:gen-tokens-gate": "bun run verification/gen-tokens-zero-drift-gate/run.ts",
     "check:fetch-init": "bun run bin/check-fetch-init.ts",
@@ -131,8 +136,8 @@
     "settlement": "bun run cli/sportsdesk_settlement_cli.ts",
     "combo": "bun run cli/sportsdesk_combo_cli.ts",
     "schema": "bun run cli/sportsdesk_schema_cli.ts",
-    "schema:list": "bun run schema --list",
-    "schema:json": "bun run schema --json",
+    "schema:list": "bun cli/sportsdesk_schema_cli.ts --list",
+    "schema:json": "bun cli/sportsdesk_schema_cli.ts --json",
     "schema:workspaces": "bun run --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' schema:json",
     "schema:parallel": "bun run --parallel --elide-lines 10 --if-present --filter 'sportsdesk-*' schema",
     "schema:sequential": "bun run --sequential --no-exit-on-error --if-present --filter 'sportsdesk-*' schema",

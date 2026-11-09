@@ -88,18 +88,58 @@ export {
 
 export {
   batchRateCustomers,
+  computeBayesianSkillProfile,
+  computeClvSignificance,
+  computeKellyMetrics,
   formatCustomerRatingMarkdown,
   rateCustomerFromObservations,
   rateCustomerFromTickets,
   rateIncomingWager,
   renderCustomerRatingAnsi,
+  type BayesianSkillProfile,
+  type ClvStatisticalSignificance,
   type CustomerComponentScores,
   type CustomerRating,
   type CustomerRiskLevel,
   type CustomerSharpnessTier,
+  type KellySizingMetrics,
   type RatedIncomingWager,
   type RatingAction,
 } from "./customer_rating.ts";
+
+export {
+  buildComprehensiveCustomerProfile,
+  buildCorrelatedParlayProfile,
+  buildDeskActionDirectives,
+  buildMarketSpecializationProfile,
+  buildPortfolioRiskForensics,
+  buildStakeDistributionProfile,
+  buildSyndicateClusterProfile,
+  buildTimingFingerprintProfile,
+  computeSharpnessCompositeIndex,
+  computeStakeGini,
+  enrichSyndicateWithIpClassification,
+  evaluateIncomingTickerProfiling,
+  formatComprehensiveProfileAnsi,
+  formatComprehensiveProfileMarkdown,
+  renderComprehensiveProfileAnsi,
+  type CompositeSharpnessTier,
+  type ComprehensiveCustomerProfile,
+  type CorrelatedExploitType,
+  type CorrelatedParlayLeg,
+  type CorrelatedParlayProfile,
+  type CorrelatedWagerGroup,
+  type DeskActionDirectives,
+  type MarketSpecializationProfile,
+  type PortfolioRiskForensics,
+  type RealtimeTickerProfilingAlert,
+  type SharpnessCompositeIndex,
+  type StakeDistributionProfile,
+  type StakeSizingStrategy,
+  type SyndicateClusterProfile,
+  type TimingArchetype,
+  type TimingFingerprintProfile,
+} from "./customer_profiling_enhanced.ts";
 
 export type Channel = "GSLIVE" | "GSBUILDER" | "Internet" | string;
 
@@ -1061,7 +1101,7 @@ export function normalizeObservationTicket(
 
   // Structured LegWagerType ("S" = spread, "L" = total, "M" = moneyline) takes precedence over
   // multi-leg parlay Description regex so leg 2+ is never misclassified as leg 1's marketKind.
-  // Note: "derivative_points" (WagerType "E", alt-lines, Derivative Points Lines) intentionally maps to "other"
+  // Note: "derivative_points" (WagerType "E", alt-lines, team totals) intentionally maps to "other"
   // to preserve game-spread purity in football_key_number_discipline.
   const legWt = text(record["LegWagerType"]).toUpperCase();
   const wagerWt = text(record["WagerType"]).toUpperCase();

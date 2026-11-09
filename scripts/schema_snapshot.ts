@@ -47,6 +47,7 @@ const prodDumpPath = Bun.env.SPORTSDESK_SCHEMA_DUMP?.trim() ?? defaultProdDump;
 
 function logCaTrustSource(): void {
   if (Bun.env.SPORTSDESK_SCHEMA_CA !== "system") return;
+  if (Bun.env.SPORTSDESK_SCHEMA_SNAPSHOT_QUIET === "1") return;
   const platform =
     process.platform === "darwin"
       ? "macOS keychain"

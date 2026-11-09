@@ -33,3 +33,17 @@ export function inspectReport(
 ): string {
   return Bun.inspect(report, options);
 }
+
+/**
+ * Pad a string to visual terminal column display width using Bun.stringWidth (ANSI & emoji safe).
+ */
+export function padDisplay(
+  text: string,
+  width: number,
+  align: "left" | "right" = "left",
+): string {
+  const pad = Math.max(0, width - Bun.stringWidth(text));
+  return align === "right"
+    ? `${" ".repeat(pad)}${text}`
+    : `${text}${" ".repeat(pad)}`;
+}

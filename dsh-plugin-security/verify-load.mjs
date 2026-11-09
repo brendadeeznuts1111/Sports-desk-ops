@@ -42,7 +42,7 @@ function smokeCheckout(prefix) {
   const dir = mkdtempSync(join(tmpdir(), `${prefix}-${process.pid}-`));
   writeFileSync(
     join(dir, "package.json"),
-    JSON.stringify({ name: "@tennis-hq/sportsdesk-workspace", private: true }),
+    JSON.stringify({ name: "sportsdesk-ops", private: true }),
   );
   return dir;
 }

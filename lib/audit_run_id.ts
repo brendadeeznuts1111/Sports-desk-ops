@@ -1,7 +1,7 @@
 import {
-  isoDateTimeUtc,
-  type IsoDateTimeUtc,
-} from "../design/domain-branded-types.ts";
+  isoTime as isoDateTimeUtc,
+  type IsoTime as IsoDateTimeUtc,
+} from "./brand.ts";
 
 /** Append-only batch marker (CLI may override with --run-id). */
 export type AuditRunId = string & { readonly __auditRunId: unique symbol };

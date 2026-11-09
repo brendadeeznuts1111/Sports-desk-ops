@@ -18,6 +18,8 @@ declare module "bun" {
     readonly HTTPS_PROXY?: string;
     readonly ALL_PROXY?: string;
     readonly BUN_CONFIG_MAX_HTTP_REQUESTS?: string;
+    /** Native Bun DNS cache TTL override in seconds (default: 30). */
+    readonly BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS?: string;
     readonly BUN_SOCKET?: string;
 
     // Fantasy402 Portal Gateway

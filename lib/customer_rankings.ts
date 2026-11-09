@@ -369,3 +369,14 @@ export async function buildCustomerRanking(options: {
     .slice(0, limit)
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
+
+export {
+  runBatchedRanking,
+  computeGini,
+  calculateCompositeScore,
+  type PlayerRankingRecord,
+  type SubAgentRollup,
+  type MasterAgentRollup,
+  type BatchedRankingResult,
+  type CustomerAccumulator,
+} from "../scripts/batch_rank_all_players.ts";

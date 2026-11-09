@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@tennis-hq/sportsdesk-workspace",
+      "name": "sportsdesk-ops",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.32.2",
         "cytoscape": "3.30.2",

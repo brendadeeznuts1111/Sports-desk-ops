@@ -543,7 +543,11 @@ describe("live Pending artifact provenance", () => {
       obtainedAtIso: "2026-11-07T20:00:00.000Z",
       expiresAtIso: "2026-11-08T20:00:00.000Z",
     };
-    const validJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJBMTEifQ.c2lnbmF0dXJl";
+    const validJwt = [
+      btoa('{"alg":"HS256"}').replace(/=+$/g, ""),
+      btoa('{"sub":"A11"}').replace(/=+$/g, ""),
+      "testsignature",
+    ].join(".");
     const callsUnproven: FetchCall[] = [];
     await fetchLivePending({
       customers: ONE_CUSTOMER_SCOPE,

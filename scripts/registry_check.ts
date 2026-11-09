@@ -4,7 +4,7 @@
  * @description Show which registry each name resolves to and whether it is reachable.
  *
  *   bun run registry:check
- *   bun run registry:check @tennis-hq/sportsdesk-workspace --json
+ *   bun run registry:check sportsdesk-ops --json
  *
  * `bun info` against an unpublished private name reports a 404, and against a stopped private registry
  * a bare ConnectionRefused. This says which registry was tried and whether it is up.
@@ -34,7 +34,7 @@ Options:
 
 Examples:
   bun run registry:check
-  bun run registry:check @tennis-hq/sportsdesk-workspace
+  bun run registry:check sportsdesk-ops
   bun run registry:check --json
 
 Reads the project .npmrc, then ~/.npmrc, then uses the package argument.
@@ -64,7 +64,7 @@ const config = merge(
     : { defaultRegistry: null, scopes: {} },
 );
 
-const target = parsed.positionals[0] ?? "@tennis-hq/sportsdesk-workspace";
+const target = parsed.positionals[0] ?? "sportsdesk-ops";
 const registry = registryFor(target, config);
 
 async function probe(

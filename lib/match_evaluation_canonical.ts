@@ -2,7 +2,7 @@
  * Canonical JSON bytes for match evaluation — golden pins and SQLite storage.
  */
 
-import type { Sha256Hex } from "../design/domain-branded-types.ts";
+import type { Sha256Hex } from "./brand.ts";
 import { sha256HexOfBytes } from "../services/sportsdesk_ingestion_feed_provenance.ts";
 import type { MatchEvaluationResult } from "./candidate_match_evaluation.ts";
 import { canonicalJsonString } from "./canonical_json.ts";

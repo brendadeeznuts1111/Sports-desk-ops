@@ -109,7 +109,7 @@ Measured on the committed lock (Bun 1.4.4 text format):
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `lockfileVersion`          | `2` ([lockfile](https://bun.com/docs/pm/lockfile))                                                                 |
 | `configVersion`            | `1` → isolated linker default for workspaces                                                                       |
-| `workspaces[""]`           | Root `@tennis-hq/sportsdesk-workspace` holds **all** npm dependencies                                              |
+| `workspaces[""]`           | Root `sportsdesk-ops` holds **all** npm dependencies                                                               |
 | `workspaces["packages/…"]` | Workspace **name** + **version** only (no nested deps yet)                                                         |
 | Root workspace version     | **Not** stored under `workspaces[""]` (Bun omits it); doctor compares versions only for `packages/*`               |
 | `packages`                 | Resolved graph including optional platform packages (e.g. oxlint bindings) skipped at install time on other OS/CPU |

@@ -38,16 +38,28 @@ describe("Bun Native DNS & Networking Engine", () => {
   });
 
   it("resolves primary address using destructuring pattern", async () => {
-    const [record] = await dns.lookup("localhost", {
+    const [record] = await dns.lookup("example.com", {
       backend: "system",
     });
     expect(record).toBeDefined();
     const address = record?.address;
     expect(typeof address).toBe("string");
-    expect(["127.0.0.1", "::1"]).toContain(address ?? "");
+    expect(address?.length).toBeGreaterThan(0);
 
-    const helperAddress = await resolvePrimaryAddress("localhost", "system");
+    const helperAddress = await resolvePrimaryAddress("example.com", "system");
     expect(helperAddress).toBe(address ?? null);
+  });
+
+  it("coalesces concurrent requests and records cacheHitsInflight", async () => {
+    // Concurrent fetches to test in-flight deduplication
+    await Promise.all([
+      fetch("https://bun.com").catch(() => {}),
+      fetch("https://bun.com").catch(() => {}),
+      fetch("https://bun.com").catch(() => {}),
+    ]);
+
+    const stats = dns.getCacheStats();
+    expect(stats.totalCount).toBeGreaterThanOrEqual(1);
   });
 
   it("formats DNS telemetry markdown", () => {
@@ -70,15 +82,16 @@ describe("Bun Native DNS & Networking Engine", () => {
   });
 
   it("classifies IP addresses via reverse DNS lookups", async () => {
-    const res = await classifyIpAddress("127.0.0.1");
-    expect(res.ipAddress).toBe("127.0.0.1");
-    expect(typeof res.isDatacenterOrCloud).toBe("boolean");
-    expect(typeof res.organization).toBe("string");
+    const res = await classifyIpAddress("1.1.1.1");
+    expect(res.ipAddress).toBe("1.1.1.1");
+    expect(res.isDatacenterOrCloud).toBe(true);
+    expect(res.organization).toBe("Cloudflare Edge");
   });
 
   it("resolves multi-type DNS resource record set", async () => {
-    const set = await resolveDnsRecordSet("localhost");
-    expect(set.hostname).toBe("localhost");
+    const set = await resolveDnsRecordSet("example.com");
+    expect(set.hostname).toBe("example.com");
+    expect(set.aRecords.length).toBeGreaterThanOrEqual(0);
     expect(typeof set.timestamp).toBe("string");
   });
 

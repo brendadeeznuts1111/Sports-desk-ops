@@ -920,17 +920,15 @@ export function evaluateIncomingTickerProfiling(
   row: F402TickerRow | Record<string, unknown>,
   profile: ComprehensiveCustomerProfile,
 ): RealtimeTickerProfilingAlert | null {
-  const raw = row as Record<string, unknown>;
-  const customerId = (raw.CustomerID ??
-    raw.customerId ??
-    raw.Login ??
-    raw.login ??
-    "") as string;
+  const rec = row as Record<string, unknown>;
+  const customerId = String(
+    rec.customerId ?? rec.CustomerID ?? rec.login ?? rec.Login ?? "",
+  );
   const normalizedId = normalizeCustomerId(customerId);
   if (normalizedId !== profile.customerId) return null;
 
-  const wagerNum = String(raw.WagerNumber ?? raw.wagerNumber ?? "");
-  const stake = Number(raw.AmountWagered ?? raw.amountWagered ?? 0);
+  const wagerNum = String(rec.wagerNumber ?? rec.WagerNumber ?? "");
+  const stake = Number(rec.amountWagered ?? rec.AmountWagered ?? 0);
   const medianStake = profile.stakeProfile.medianStakeUsd || 100;
   const stakeSpikeRatio = Math.round((stake / medianStake) * 10) / 10;
 

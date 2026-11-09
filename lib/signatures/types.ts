@@ -48,7 +48,7 @@ export interface NormalizedObservationTicket {
   readonly placedIn2HWindow?: boolean;
   /**
    * Market classification: "spread" | "total" | "moneyline" | "other".
-   * Note: "derivative_points" (alt lines, Derivative Points Lines, derivative spreads) maps to "other"
+   * Note: "derivative_points" (alt lines, team totals, derivative spreads) maps to "other"
    * to preserve game-spread purity in football_key_number_discipline.
    */
   readonly marketKind: "spread" | "total" | "moneyline" | "other";

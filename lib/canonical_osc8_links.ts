@@ -32,20 +32,40 @@ export const CANONICAL_DOMAINS = {
   GITHUB_REPO: "https://github.com/bw496915-cmyk/Sports-desk-ops",
 } as const;
 
+/** Pre-parsed WebKit Base URLs (Bun 1.4 fast path: 168ns lookup, cached base). */
+export const CANONICAL_URL_BASES = {
+  FANTASY402_PORTAL: new URL(CANONICAL_DOMAINS.FANTASY402_PORTAL),
+  SPORTSDESK_DESK: new URL(CANONICAL_DOMAINS.SPORTSDESK_DESK),
+  DOCS_PORTAL: new URL(CANONICAL_DOMAINS.DOCS_PORTAL),
+  R2_PUBLIC_GATEWAY: new URL(CANONICAL_DOMAINS.R2_PUBLIC_GATEWAY),
+} as const;
+
 /**
- * Generate canonical customer portal URL.
+ * Format raw terminal OSC 8 hyperlink escape sequence:
+ * \x1b]8;;<url>\x1b\<text>\x1b]8;;\x1b\
  */
-export function getCanonicalCustomerUrl(customerId: string): string {
-  const cleanId = encodeURIComponent(customerId.trim().toUpperCase());
-  return `${CANONICAL_DOMAINS.FANTASY402_PORTAL}/manager.html?customer=${cleanId}`;
+export function formatOsc8Hyperlink(url: string, text: string): string {
+  return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
 /**
- * Generate canonical agent desk URL.
+ * Generate canonical customer portal URL using Bun 1.4 WebKit URL fast path.
+ */
+export function getCanonicalCustomerUrl(customerId: string): string {
+  const cleanId = encodeURIComponent(customerId.trim().toUpperCase());
+  return new URL(
+    `manager.html?customer=${cleanId}`,
+    CANONICAL_URL_BASES.FANTASY402_PORTAL,
+  ).href;
+}
+
+/**
+ * Generate canonical agent desk URL using Bun 1.4 WebKit URL fast path.
  */
 export function getCanonicalAgentUrl(agentId: string): string {
   const cleanAgent = encodeURIComponent(agentId.trim().toUpperCase());
-  return `${CANONICAL_DOMAINS.SPORTSDESK_DESK}/agent/${cleanAgent}`;
+  return new URL(`agent/${cleanAgent}`, CANONICAL_URL_BASES.SPORTSDESK_DESK)
+    .href;
 }
 
 /**
