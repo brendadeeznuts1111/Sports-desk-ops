@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -279,6 +279,8 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx fetch-i18n             Fetch i18n translation resources → i18n-resources.json
     ./bin/dx fetch-common           Fetch manager-tools common data → manager-common.json
     ./bin/dx fetch-live-data        Fetch live sports/reference data → live-data.json
+    ./bin/dx fetch-report-status    Probe live Manager report endpoints → status matrix
+    ./bin/dx fetch-report-periods   Fetch report period vocabulary → report-periods.json
 
   Wagers by state, day, event, player, agent (columns, groups, layout from config/wagers.json)
     ./bin/dx wagers-by-state --from=M/D/YYYY --to=M/D/YYYY [--state=X] [--nlegs=N] [--wager-number N] [--format=table|json|csv|summary|inspect|columns|grid] [--out=PATH] [--group-by=state|day|event|player|agent] [--top=N]
@@ -537,7 +539,15 @@ VERSION_HELP
     ;;
   fetch-live-data)
     cd "$REPO_ROOT"
-    exec bun run scripts/fetch-live-data.ts "$@"
+    exec bun run fetch-live-data.ts "$@"
+    ;;
+  fetch-report-status)
+    cd "$REPO_ROOT"
+    exec bun run scripts/fetch-report-status.ts "$@"
+    ;;
+  fetch-report-periods)
+    cd "$REPO_ROOT"
+    exec bun run fetch-report-periods.ts "$@"
     ;;
   wagers-by-state)
     cd "$REPO_ROOT"

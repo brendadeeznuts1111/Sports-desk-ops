@@ -49,10 +49,23 @@ import {
   type RebetStyle,
 } from "../lib/rebet_engine.ts";
 import {
+  buildAlertPerformance,
+  defaultCustomerBookPath,
+  loadOutcomeFile,
+  outcomesFromCustomerBook,
+  type AlertPerformanceReport,
+} from "../lib/alert_performance.ts";
+import {
+  backfillAlertAuditFromActivity,
+  chatAlertRollup,
+  dailyAlertRollup,
   readAlertAudit,
   readTelegramActivityLog,
+  ruleAlertRollup,
+  severityAlertRollup,
   summarizeAlertAudit,
   type AlertAuditStatus,
+  type TelegramAlertAuditRow,
 } from "../lib/telegram_alert_audit.ts";
 import {
   appendRebetOpportunities,
@@ -1665,8 +1678,16 @@ async function cmdAlertLog(
   context: CliContext,
 ): Promise<number> {
   const flags = parseCommandFlags("alert-log", tokens, {
-    valueFlags: ["--since", "--status", "--limit"],
-    switchFlags: ["--include-activity"],
+    valueFlags: ["--since", "--status", "--limit", "--chat", "--outcomes"],
+    switchFlags: [
+      "--include-activity",
+      "--backfill",
+      "--summary",
+      "--csv",
+      "--performance",
+      "--include-simulated",
+      "--use-customer-book-sample",
+    ],
   });
   assertNoPositionals("alert-log", flags);
   const since = flags.values.get("--since");
@@ -1679,12 +1700,41 @@ async function cmdAlertLog(
   );
   const limit = integerFlag("alert-log", flags, "--limit", 50, 1, 500);
   const includeActivity = flags.switches.has("--include-activity");
-  const structured = await readAlertAudit(context.root, {
+  const backfill = flags.switches.has("--backfill");
+  const summaryMode = flags.switches.has("--summary");
+  const csvMode = flags.switches.has("--csv");
+  const performanceMode = flags.switches.has("--performance");
+  const includeSimulated = flags.switches.has("--include-simulated");
+  const useBookSample = flags.switches.has("--use-customer-book-sample");
+  const chatFilter = flags.values.get("--chat")?.trim() ?? null;
+  if (csvMode && context.json) {
+    usageError("alert-log", "--csv cannot be combined with --json");
+  }
+  let backfillResult: {
+    imported: number;
+    skipped: number;
+    activityRows: number;
+  } | null = null;
+  if (backfill) {
+    backfillResult = await backfillAlertAuditFromActivity(
+      context.root,
+      since === undefined ? {} : { since },
+    );
+  }
+  // Read the whole (filtered) ledger for summaries/filters; the display limit applies after.
+  const structuredAll = await readAlertAudit(context.root, {
     ...(since === undefined ? {} : { since }),
     ...(statuses === undefined ? {} : { status: statuses }),
-    limit,
+    limit: Number.MAX_SAFE_INTEGER,
   });
-  let rows = structured;
+  let matchedRows: TelegramAlertAuditRow[] =
+    chatFilter === null
+      ? structuredAll
+      : structuredAll.filter(
+          (row) =>
+            row.chatId === chatFilter ||
+            (row.chatLabel ?? "").toLowerCase() === chatFilter.toLowerCase(),
+        );
   if (includeActivity) {
     const activity = await readTelegramActivityLog(context.root);
     const filtered = activity.filter((row) => {
@@ -1698,11 +1748,145 @@ async function cmdAlertLog(
         return false;
       return true;
     });
-    rows = [...structured, ...filtered]
-      .sort((a, b) => Date.parse(b.atIso) - Date.parse(a.atIso))
-      .slice(0, limit);
+    matchedRows = [...matchedRows, ...filtered].sort(
+      (a, b) => Date.parse(b.atIso) - Date.parse(a.atIso),
+    );
   }
-  const summary = summarizeAlertAudit(rows);
+  const matched = matchedRows.length;
+  const rows = matchedRows.slice(0, limit);
+  const summary = summarizeAlertAudit(matchedRows);
+  let performance: AlertPerformanceReport | null = null;
+  if (performanceMode) {
+    const outcomesPathRaw = flags.values.get("--outcomes");
+    let outcomes = null as Awaited<ReturnType<typeof loadOutcomeFile>>;
+    let outcomeFile = "settlement outcomes (--outcomes)";
+    if (outcomesPathRaw !== undefined) {
+      outcomeFile = resolveFromRoot(context.root, outcomesPathRaw);
+      outcomes = await loadOutcomeFile(outcomeFile);
+    } else if (useBookSample) {
+      outcomeFile = defaultCustomerBookPath(context.root);
+      const book: unknown = await Bun.file(outcomeFile)
+        .json()
+        .catch(() => null);
+      outcomes = book === null ? null : outcomesFromCustomerBook(book);
+    } else {
+      performance = {
+        available: false,
+        reason:
+          "no outcomes source: pass --outcomes <settlement-export.jsonl>, or --use-customer-book-sample to opt into the partial generated-book sample",
+        outcomeSource: "none",
+        alerts: 0,
+        delivered: 0,
+        matched: 0,
+        unmatched: 0,
+        wins: 0,
+        losses: 0,
+        pushes: 0,
+        netUsd: 0,
+        customers: [],
+        dimensions: [],
+        warnings: [],
+      };
+    }
+    if (performance === null) {
+      if (outcomes === null) {
+        performance = {
+          available: false,
+          reason: `outcome source missing: ${outcomeFile}`,
+          outcomeSource: "none",
+          alerts: 0,
+          delivered: 0,
+          matched: 0,
+          unmatched: 0,
+          wins: 0,
+          losses: 0,
+          pushes: 0,
+          netUsd: 0,
+          customers: [],
+          dimensions: [],
+          warnings: [],
+        };
+      } else {
+        performance = buildAlertPerformance(matchedRows, outcomes, {
+          deliveredOnly: !includeSimulated,
+        });
+      }
+    }
+  }
+  const rollups = summaryMode
+    ? {
+        daily: dailyAlertRollup(matchedRows),
+        chat: chatAlertRollup(matchedRows),
+        rule: ruleAlertRollup(matchedRows),
+        severity: severityAlertRollup(matchedRows),
+      }
+    : null;
+  if (csvMode) {
+    const csvEscape = (value: unknown): string => {
+      const text = value === null || value === undefined ? "" : String(value);
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const columns = [
+      "atIso",
+      "source",
+      "status",
+      "chatId",
+      "chatLabel",
+      "customerId",
+      "sport",
+      "subSport",
+      "period",
+      "wagerType",
+      "ruleId",
+      "severity",
+      "messageId",
+      "messageChars",
+      "detail",
+    ] as const;
+    context.out(
+      [
+        columns.join(","),
+        ...rows.map((row) =>
+          columns
+            .map((column) =>
+              csvEscape(
+                column === "chatLabel"
+                  ? row.chatLabel
+                  : column === "chatId"
+                    ? row.chatId
+                    : column === "atIso"
+                      ? row.atIso
+                      : column === "source"
+                        ? row.source
+                        : column === "status"
+                          ? row.status
+                          : column === "customerId"
+                            ? row.customerId
+                            : column === "sport"
+                              ? row.sport
+                              : column === "subSport"
+                                ? row.subSport
+                                : column === "period"
+                                  ? row.period
+                                  : column === "wagerType"
+                                    ? row.wagerType
+                                    : column === "ruleId"
+                                      ? row.ruleId
+                                      : column === "severity"
+                                        ? row.severity
+                                        : column === "messageId"
+                                          ? row.messageId
+                                          : column === "messageChars"
+                                            ? row.messageChars
+                                            : row.detail,
+              ),
+            )
+            .join(","),
+        ),
+      ].join("\n"),
+    );
+    return EXIT_OK;
+  }
   const payload = {
     success: true,
     command: "alert-log",
@@ -1711,8 +1895,14 @@ async function cmdAlertLog(
       statuses: statuses ?? null,
       limit,
       includeActivity,
+      backfill,
+      chat: chatFilter,
     },
+    ...(backfillResult === null ? {} : { backfill: backfillResult }),
+    matched,
     summary,
+    ...(rollups === null ? {} : { rollups }),
+    ...(performance === null ? {} : { performance }),
     rows,
   };
   if (context.json) {
@@ -1733,24 +1923,97 @@ async function cmdAlertLog(
       at: row.atIso,
       status: row.status,
       chat: row.chatLabel ?? row.chatId ?? "—",
+      customer: row.customerId ?? "—",
+      sport:
+        [row.sport, row.subSport, row.period, row.wagerType]
+          .filter((part) => part !== undefined && part !== "")
+          .join(" · ") || "—",
       rule: row.ruleId ?? "—",
       severity: row.severity ?? "—",
       source: row.source,
     })),
     { colors: false },
   );
-  context.out(
-    [
-      table.trimEnd(),
-      `${summary.total} alert row(s) · ${ALERT_AUDIT_STATUSES.map(
-        (status) => `${status} ${summary.byStatus[status]}`,
-      ).join(" · ")}`,
-      `chats: ${summary.chats.length === 0 ? "—" : summary.chats.join(", ")}`,
-      summary.firstAtIso === null
-        ? "window: —"
-        : `window: ${summary.firstAtIso} → ${summary.lastAtIso}`,
-    ].join("\n"),
-  );
+  const lines = [
+    table.trimEnd(),
+    `${summary.total} matching alert row(s) (${rows.length} shown) · ${ALERT_AUDIT_STATUSES.map(
+      (status) => `${status} ${summary.byStatus[status]}`,
+    ).join(" · ")}`,
+    `chats: ${summary.chats.length === 0 ? "—" : summary.chats.join(", ")}`,
+    summary.firstAtIso === null
+      ? "window: —"
+      : `window: ${summary.firstAtIso} → ${summary.lastAtIso}`,
+  ];
+  if (backfillResult !== null) {
+    lines.push(
+      `backfill: imported ${backfillResult.imported} activity row(s), skipped ${backfillResult.skipped} already tracked (${backfillResult.activityRows} outbound activity rows read)`,
+    );
+  }
+  if (performance !== null) {
+    lines.push("", `alert performance (${performance.outcomeSource})`);
+    if (!performance.available) {
+      lines.push(
+        `  unavailable: ${performance.reason ?? "no joined outcomes"}`,
+      );
+    } else {
+      lines.push(
+        `  alerts ${performance.alerts} · matched ${performance.matched} · unmatched ${performance.unmatched} · wins ${performance.wins} · losses ${performance.losses} · net $${performance.netUsd}`,
+      );
+      if (performance.metadata !== undefined) {
+        const window = performance.metadata.alertWindow;
+        lines.push(
+          `  coverage: ${performance.metadata.outcomeCoverage}` +
+            ` · window ${window.firstAtIso ?? "—"} → ${window.lastAtIso ?? "—"}` +
+            ` · sources ${performance.metadata.outcomeSources.join("+") || "none"}`,
+        );
+        if (performance.metadata.alertsWithoutCustomerKey > 0) {
+          lines.push(
+            `  ${performance.metadata.alertsWithoutCustomerKey} delivered alert(s) had no customer id`,
+          );
+        }
+      }
+      for (const warning of performance.warnings) {
+        lines.push(`  warning: ${warning}`);
+      }
+      for (const group of performance.dimensions) {
+        lines.push(
+          `  ${group.dimension}=${group.key}: ${group.matched}/${group.alerts} matched · net $${group.netUsd} · winner ${group.topWinner?.customerId ?? "—"} ($${group.topWinner?.netUsd ?? 0}) · loser ${group.topLoser?.customerId ?? "—"} ($${group.topLoser?.netUsd ?? 0})`,
+        );
+      }
+    }
+  }
+  if (rollups !== null) {
+    lines.push(
+      "",
+      "by day:",
+      Bun.inspect
+        .table(
+          rollups.daily.map((bucket) => ({
+            day: bucket.key,
+            total: bucket.total,
+            sent: bucket.sent,
+            simulated: bucket.simulated,
+            failed: bucket.failed,
+          })),
+          { colors: false },
+        )
+        .trimEnd(),
+      "by rule:",
+      Bun.inspect
+        .table(
+          rollups.rule.map((bucket) => ({
+            rule: bucket.key,
+            total: bucket.total,
+            sent: bucket.sent,
+            simulated: bucket.simulated,
+            failed: bucket.failed,
+          })),
+          { colors: false },
+        )
+        .trimEnd(),
+    );
+  }
+  context.out(lines.join("\n"));
   return EXIT_OK;
 }
 
@@ -2401,7 +2664,7 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     summary:
       "Read the structured audit of alerts delivered to the desk Telegram chat",
     usage:
-      "alert-log [--since <iso>] [--status <list>] [--limit N] [--include-activity] [flags]",
+      "alert-log [--since <iso>] [--status <list>] [--chat <id|label>] [--limit N] [--include-activity] [--backfill] [--summary] [--performance] [--outcomes <path>] [--csv] [flags]",
     detail: [
       "Reads Scratch/watchlist-autobet/telegram-alerts.jsonl, written by every flag-alert",
       "delivery (sent, simulated, failed, deduped, rate_limited). Rows carry the rule id,",
@@ -2409,6 +2672,14 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       "identifiers do not leak into the audit.",
       "--include-activity merges the bot's own outbound log (reports/telegram-activity.jsonl),",
       "which covers non-flag messages but has no rule identity.",
+      "--backfill imports those historical outbound rows into the audit ledger (idempotent).",
+      "--summary adds per-day, per-chat and per-rule delivery rollups; --csv exports rows.",
+      "--performance joins alerted customers (customer+wager) to outcomes and reports top",
+      "winner/loser per sport/subSport/period/wagerType. Default outcomes come from the",
+      "explicit --outcomes settlement export; --use-customer-book-sample opts into the",
+      "partial generated-book sample (labelled as a warning). Alerts without a wager key are",
+      "reported as unmatched, never guessed; duplicate sends of the same bet are counted once.",
+      "--chat filters by chat id or the configured chat label (e.g. deskbotops).",
       "TELEGRAM_CHAT_LABEL records the operator's chat name (e.g. deskbotops) on each row.",
     ],
     options: [
@@ -2434,6 +2705,8 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
     examples: [
       "bun run cli/sportsdesk_bet_flags_cli.ts alert-log --json",
       "bun run cli/sportsdesk_bet_flags_cli.ts alert-log --include-activity --limit 20",
+      "bun run cli/sportsdesk_bet_flags_cli.ts alert-log --backfill --summary --json",
+      "bun run cli/sportsdesk_bet_flags_cli.ts alert-log --chat deskbotops --csv",
     ],
   },
 ];

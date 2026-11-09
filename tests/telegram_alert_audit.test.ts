@@ -7,7 +7,10 @@ import {
   ALERT_AUDIT_REL_PATH,
   TELEGRAM_ACTIVITY_REL_PATH,
   appendAlertAuditRows,
+  backfillAlertAuditFromActivity,
+  dailyAlertRollup,
   messageDigest,
+  severityAlertRollup,
   readAlertAudit,
   readTelegramActivityLog,
   summarizeAlertAudit,
@@ -136,6 +139,118 @@ describe("telegram alert audit", () => {
     expect(rows[0]?.source).toBe("telegram-activity");
     expect(rows[0]?.status).toBe("simulated");
     expect(rows[0]?.chatId).toBeNull();
+  });
+
+  test("backfill imports historical activity rows idempotently and honours --since", async () => {
+    const root = await makeRoot();
+    await mkdir(join(root, "reports"), { recursive: true });
+    await writeFile(
+      join(root, TELEGRAM_ACTIVITY_REL_PATH),
+      `${JSON.stringify({
+        at: "2026-11-04T07:00:00.000Z",
+        direction: "out",
+        chatId: "8013171035",
+        summary: "watch list wager alert",
+        outcome: "sent",
+      })}\n${JSON.stringify({
+        at: "2026-11-05T07:00:00.000Z",
+        direction: "out",
+        chatId: "",
+        summary: "pulse",
+        outcome: "simulated",
+        detail: "TELEGRAM_BOT_TOKEN is not set",
+      })}\n${JSON.stringify({
+        at: "2026-11-05T08:00:00.000Z",
+        direction: "in",
+        chatId: "42",
+        summary: "command",
+        outcome: "ok",
+      })}\n`,
+    );
+
+    const first = await backfillAlertAuditFromActivity(root);
+    expect(first.activityRows).toBe(2);
+    expect(first.imported).toBe(2);
+    const rows = await readAlertAudit(root);
+    expect(rows).toHaveLength(2);
+    expect(rows.some((entry) => entry.chatId === "8013171035")).toBe(true);
+
+    const second = await backfillAlertAuditFromActivity(root);
+    expect(second.imported).toBe(0);
+    expect(second.skipped).toBe(2);
+
+    const since = await backfillAlertAuditFromActivity(root, {
+      since: "2026-11-05T00:00:00.000Z",
+    });
+    // Both rows were already imported; the since window only narrows candidates, never re-adds.
+    expect(since.imported).toBe(0);
+    expect(since.skipped).toBe(1);
+  });
+
+  test("append enforces the audit retention cap", async () => {
+    const root = await makeRoot();
+    await appendAlertAuditRows(root, [
+      row({ atIso: "2026-11-05T07:00:00.000Z" }),
+      row({ atIso: "2026-11-05T08:00:00.000Z" }),
+      row({ atIso: "2026-11-05T09:00:00.000Z" }),
+    ]);
+    await appendAlertAuditRows(
+      root,
+      [row({ atIso: "2026-11-05T10:00:00.000Z", status: "failed" })],
+      { maxBytes: 1, keepLines: 2 },
+    );
+    const rows = await readAlertAudit(root);
+    // The append trims to the last 2 lines, then adds the new row.
+    expect(rows.length).toBeLessThanOrEqual(3);
+    expect(rows[0]?.atIso).toBe("2026-11-05T10:00:00.000Z");
+  });
+
+  test("daily rollup buckets rows by UTC date", async () => {
+    const rollup = dailyAlertRollup([
+      row({ atIso: "2026-11-04T07:00:00.000Z", status: "sent" }),
+      row({ atIso: "2026-11-04T09:00:00.000Z", status: "failed" }),
+      row({ atIso: "2026-11-05T07:00:00.000Z", status: "simulated" }),
+    ]);
+    expect(rollup).toHaveLength(2);
+    expect(rollup[0]?.key).toBe("2026-11-04");
+    expect(rollup[0]?.sent).toBe(1);
+    expect(rollup[0]?.failed).toBe(1);
+    expect(rollup[1]?.simulated).toBe(1);
+
+    const bySeverity = severityAlertRollup([
+      row({ severity: "high" }),
+      row({ severity: "high" }),
+      row({ severity: "medium" }),
+      {
+        schemaVersion: 1,
+        atIso: "2026-11-05T07:00:00.000Z",
+        source: "telegram-activity",
+        chatId: null,
+        chatLabel: null,
+        status: "simulated",
+      },
+    ]);
+    expect(bySeverity.find((bucket) => bucket.key === "high")?.total).toBe(2);
+    expect(bySeverity.find((bucket) => bucket.key === "(none)")?.total).toBe(1);
+  });
+
+  test("malformed optional field types are stripped, not thrown", async () => {
+    const root = await makeRoot();
+    await mkdir(join(root, "Scratch/watchlist-autobet"), { recursive: true });
+    await writeFile(
+      join(root, ALERT_AUDIT_REL_PATH),
+      `${JSON.stringify({
+        ...row(),
+        customerId: 123,
+        wagerNumber: { bad: true },
+        ruleId: null,
+      })}\n`,
+    );
+    const rows = await readAlertAudit(root);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.customerId).toBeUndefined();
+    expect(rows[0]?.wagerNumber).toBeUndefined();
+    expect(rows[0]?.ruleId).toBeUndefined();
   });
 
   test("message digest is a stable hash plus length, no text", async () => {

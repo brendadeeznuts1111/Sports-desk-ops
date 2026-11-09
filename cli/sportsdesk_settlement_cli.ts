@@ -4,7 +4,7 @@
  */
 
 import { openSportsdeskSqlite } from "../lib/sportsdesk_sqlite.ts";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { auditRunId, type AuditRunId } from "../lib/audit_run_id.ts";
 import {
@@ -17,6 +17,10 @@ import {
   activeWagerObservationSlicesForSettlementCount,
   patternProvability,
 } from "../lib/fantasy402_wager_universe_scope.ts";
+import {
+  exportSettlementOutcomes,
+  settlementOutcomesJsonl,
+} from "../lib/settlement_outcomes.ts";
 
 type GlobalOpts = { json: boolean };
 
@@ -28,6 +32,7 @@ Commands:
   poll      Live POST Manager/getHistory → SQLite (requires SPORTSDESK_PORTAL_HTTP_BASE)
   verify    Payload drift + valid_time fork invariants
   status    Outcome counts + pattern provability on active slices
+  outcomes  Export latest per-ticket outcomes as JSONL for alert performance
 
 Global:
   -h, --help
@@ -37,6 +42,7 @@ Examples:
   bun run settlement ingest --db ./lifecycle.sqlite --fixture tests/fixtures/fantasy402-history-poll.json
   bun run settlement poll --db ./lifecycle.sqlite
   bun run settlement verify --db ./lifecycle.sqlite
+  bun run settlement outcomes --db ./lifecycle.sqlite --out Scratch/settlement/outcomes.jsonl
 `);
 }
 
@@ -49,6 +55,18 @@ Options:
   --run-id <id>       Batch marker (default: random UUID)
 
 Exit: 0 ok · 1 usage
+`);
+}
+
+function printOutcomesHelp(): void {
+  console.log(`settlement outcomes
+
+Options:
+  --db <path>    SQLite settlement store (required)
+  --out <path>   Write JSONL outcomes; omit to print the summary only
+
+Rows: {customerId, wagerNumber, outcome: win|loss|push|void, netUsd, source}
+Latest observation per ticket wins; tickets without a decisive outcome are skipped.
 `);
 }
 
@@ -235,6 +253,70 @@ async function cmdStatus(args: string[], opts: GlobalOpts): Promise<number> {
   return 0;
 }
 
+function cmdOutcomes(args: string[], opts: GlobalOpts): number {
+  let dbPath: string | undefined;
+  let outPath: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "-h" || a === "--help") {
+      printOutcomesHelp();
+      return 0;
+    }
+    if (a === "--db" && args[i + 1]) dbPath = resolve(args[++i]!);
+    else if (a === "--out" && args[i + 1]) outPath = resolve(args[++i]!);
+  }
+  if (!dbPath) {
+    console.error("outcomes requires --db");
+    printOutcomesHelp();
+    return 1;
+  }
+  const exported = exportSettlementOutcomes(dbPath);
+  if (!exported.ok) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          ok: false,
+          error: exported.reason,
+          dbPath: exported.dbPath,
+        }),
+      );
+    } else {
+      console.error(`outcomes: ${exported.reason} (${exported.dbPath})`);
+    }
+    return 1;
+  }
+  // Never write a file for an empty export: a blank file is indistinguishable from a real
+  // (empty) outcome set.
+  const wroteFile = outPath !== undefined && exported.rows.length > 0;
+  if (wroteFile && outPath !== undefined) {
+    writeFileSync(outPath, settlementOutcomesJsonl(exported.rows));
+  }
+  if (opts.json) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        dbPath: exported.dbPath,
+        tickets: exported.tickets,
+        rows: exported.rows.length,
+        skipped: exported.skipped,
+        out: outPath ?? null,
+        wroteFile,
+      }),
+    );
+  } else {
+    console.log(
+      `outcomes: ${exported.rows.length}/${exported.tickets} ticket(s) exported` +
+        (exported.skipped === 0 ? "" : ` (${exported.skipped} skipped)`) +
+        (outPath === undefined
+          ? ""
+          : wroteFile
+            ? ` → ${outPath}`
+            : " (no outcome rows; file not written)"),
+    );
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const { rest, opts } = parseGlobal(argv);
@@ -254,6 +336,8 @@ async function main(): Promise<number> {
       return cmdVerify(args, opts);
     case "status":
       return cmdStatus(args, opts);
+    case "outcomes":
+      return cmdOutcomes(args, opts);
     default:
       console.error(`Unknown command: ${cmd}`);
       printRootHelp();

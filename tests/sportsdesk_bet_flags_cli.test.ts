@@ -1411,6 +1411,10 @@ describe("telegram alert audit integration", () => {
     expect(rows[0]?.messageId).toBe(77);
     expect(rows[0]?.messageSha256).toHaveLength(64);
     expect(rows[0]?.messageChars).toBeGreaterThan(0);
+    // The alerted bettor and dimensions are tracked (never the message text).
+    expect(rows[0]?.customerId).toBe(finding.bet.customerId);
+    expect(rows[0]?.sport).toBe(finding.bet.sport);
+    expect(rows[0]?.wagerType).toBe(finding.bet.wagerType);
     // The rendered HTML/text is not stored.
     const serialized = JSON.stringify(rows);
     expect(serialized).not.toContain("<b>");
@@ -1506,5 +1510,171 @@ describe("telegram alert audit integration", () => {
 
     const invalid = await runCli(root, ["alert-log", "--status", "nonsense"]);
     expect(invalid.code).toBe(2);
+
+    // Backfill imports the historical outbound activity row, then is idempotent.
+    const backfilled = await runCli(root, [
+      "alert-log",
+      "--backfill",
+      "--summary",
+    ]);
+    expect(backfilled.code).toBe(0);
+    const backfillBody = parseSingleJson(backfilled.stdout);
+    const backfillInfo = backfillBody["backfill"] as Record<string, unknown>;
+    expect(Number(backfillInfo["imported"])).toBe(1);
+    const rollups = backfillBody["rollups"] as Record<string, unknown>;
+    expect(Array.isArray(rollups["daily"])).toBe(true);
+    expect(Array.isArray(rollups["chat"])).toBe(true);
+    expect(Array.isArray(rollups["rule"])).toBe(true);
+
+    const again = await runCli(root, ["alert-log", "--backfill"]);
+    const againInfo = parseSingleJson(again.stdout)["backfill"] as Record<
+      string,
+      unknown
+    >;
+    expect(Number(againInfo["imported"])).toBe(0);
+    expect(Number(againInfo["skipped"])).toBeGreaterThan(0);
+
+    // Chat filter matches the recorded label, not the activity row's empty chat.
+    const chatOnly = await runCli(root, ["alert-log", "--chat", "deskbotops"]);
+    expect(chatOnly.code).toBe(0);
+    const chatRows = parseSingleJson(chatOnly.stdout)["rows"] as Record<
+      string,
+      unknown
+    >[];
+    expect(chatRows.length).toBe(1);
+    expect(chatRows[0]?.["chatLabel"]).toBe("deskbotops");
+
+    // CSV export bypasses the JSON envelope (and refuses --json).
+    let csvOut = "";
+    const csvCode = await runSportsdeskBetFlagsCli(
+      ["alert-log", "--csv", "--root", root],
+      {
+        stdout: (text) => {
+          csvOut += text;
+        },
+      },
+    );
+    expect(csvCode).toBe(0);
+    expect(csvOut.split("\n")[0]).toContain("atIso,source,status,chatId");
+    expect(csvOut).toContain("deskbotops");
+    const csvJson = await runCli(root, ["alert-log", "--csv"]);
+    expect(csvJson.code).toBe(2);
+  });
+
+  test("alert-log --performance joins alerted customers to outcomes by dimension", async () => {
+    const root = await makeRoot();
+    const auditDir = join(root, "Scratch/watchlist-autobet");
+    await mkdir(auditDir, { recursive: true });
+    const auditRow = (
+      customerId: string,
+      wagerNumber: string,
+      atIso: string,
+    ) => ({
+      schemaVersion: 1,
+      atIso,
+      source: "flag-alert",
+      chatId: "8013171035",
+      chatLabel: "deskbotops",
+      status: "sent",
+      ruleId: "stake_over_10k",
+      severity: "high",
+      customerId,
+      wagerNumber,
+      sport: "Football",
+      subSport: "Total",
+      period: "Game",
+      wagerType: "M",
+    });
+    await writeFile(
+      join(auditDir, "telegram-alerts.jsonl"),
+      `${JSON.stringify(auditRow("ALPHA", "1", "2026-11-05T07:00:00.000Z"))}\n${JSON.stringify(auditRow("BETA", "2", "2026-11-05T07:01:00.000Z"))}\n`,
+    );
+    await writeFile(
+      join(root, "enriched_customers_full.json"),
+      `${JSON.stringify([
+        {
+          customer_id: "ALPHA",
+          recent_tickets: [{ wager_number: 1, result: "WIN", net_usd: 250 }],
+        },
+        {
+          customer_id: "BETA",
+          recent_tickets: [{ wager_number: 2, result: "LOSS", net_usd: -75 }],
+        },
+      ])}\n`,
+    );
+
+    // Default: no outcome source unless explicitly opted in.
+    const noSource = await runCli(root, ["alert-log", "--performance"]);
+    const noSourceBody = parseSingleJson(noSource.stdout)[
+      "performance"
+    ] as Record<string, unknown>;
+    expect(noSourceBody["available"]).toBe(false);
+    expect(String(noSourceBody["reason"])).toContain("no outcomes source");
+
+    const run = await runCli(root, [
+      "alert-log",
+      "--performance",
+      "--use-customer-book-sample",
+    ]);
+    expect(run.code).toBe(0);
+    const body = parseSingleJson(run.stdout);
+    const performance = body["performance"] as Record<string, unknown>;
+    expect(performance["available"]).toBe(true);
+    expect((performance["warnings"] as unknown[]).length).toBeGreaterThan(0);
+    expect(performance["matched"]).toBe(2);
+    const dimensions = performance["dimensions"] as Record<string, unknown>[];
+    const sport = dimensions.find(
+      (group) => group["dimension"] === "sport" && group["key"] === "Football",
+    );
+    expect(sport).toBeDefined();
+    expect(
+      (sport?.["topWinner"] as Record<string, unknown>)?.["customerId"],
+    ).toBe("ALPHA");
+    expect(
+      (sport?.["topLoser"] as Record<string, unknown>)?.["customerId"],
+    ).toBe("BETA");
+
+    let humanOut = "";
+    const humanCode = await runSportsdeskBetFlagsCli(
+      ["alert-log", "--performance", "--root", root],
+      {
+        stdout: (text) => {
+          humanOut += text;
+        },
+      },
+    );
+    expect(humanCode).toBe(0);
+    expect(humanOut).toContain("alert performance");
+
+    // An explicit outcomes file overrides the book.
+    const outcomesPath = join(root, "outcomes.jsonl");
+    await writeFile(
+      outcomesPath,
+      `${JSON.stringify({ customerId: "ALPHA", wagerNumber: 1, outcome: "LOSS", netUsd: -40 })}\n`,
+    );
+    const explicit = await runCli(root, [
+      "alert-log",
+      "--performance",
+      "--outcomes",
+      outcomesPath,
+    ]);
+    const explicitBody = parseSingleJson(explicit.stdout)[
+      "performance"
+    ] as Record<string, unknown>;
+    expect(explicitBody["outcomeSource"]).toBe("outcomes_file");
+    expect(explicitBody["matched"]).toBe(1);
+
+    // A missing explicit outcomes path is unavailable, not zero.
+    const missing = await runCli(root, [
+      "alert-log",
+      "--performance",
+      "--outcomes",
+      join(root, "absent.json"),
+    ]);
+    const missingBody = parseSingleJson(missing.stdout)[
+      "performance"
+    ] as Record<string, unknown>;
+    expect(missingBody["available"]).toBe(false);
+    expect(String(missingBody["reason"])).toContain("outcome source missing");
   });
 });

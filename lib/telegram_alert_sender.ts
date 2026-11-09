@@ -400,11 +400,15 @@ export async function deliverFlagAlerts(
   const statePath = options.statePath ?? ALERT_STATE_REL_PATH;
   const deliveries: AlertDelivery[] = [];
   const digests = new Map<string, { chars: number; sha256: string }>();
+  const findingsByDedupe = new Map(
+    findings.map((finding) => [finding.dedupeKey, finding]),
+  );
   const track = async (): Promise<void> => {
     if (options.audit === undefined || deliveries.length === 0) return;
     const atIso = now.toISOString();
     const rows: TelegramAlertAuditRow[] = deliveries.map((delivery) => {
       const digest = digests.get(delivery.dedupeKey);
+      const bet = findingsByDedupe.get(delivery.dedupeKey)?.bet;
       return {
         schemaVersion: 1,
         atIso,
@@ -422,6 +426,22 @@ export async function deliverFlagAlerts(
           ? {}
           : { messageChars: digest.chars, messageSha256: digest.sha256 }),
         ...(delivery.detail === undefined ? {} : { detail: delivery.detail }),
+        ...(bet === undefined
+          ? {}
+          : {
+              customerId: bet.customerId,
+              betKey: bet.betKey,
+              ticketNumber: bet.ticketNumber,
+              wagerNumber: bet.wagerNumber,
+              sport: bet.sport,
+              subSport: bet.subSport,
+              period: bet.period,
+              wagerType: bet.wagerType,
+              marketType: bet.marketType,
+              line: bet.line,
+              side: bet.side,
+              stakeUsd: bet.stakeUsd,
+            }),
       };
     });
     await appendAlertAuditRows(options.audit.root, rows);
