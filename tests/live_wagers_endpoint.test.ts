@@ -4,6 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
 
+/**
+ * `/api/live-wagers` defaults to the live feed (#70): unset `source` means `live`, which needs a
+ * portal session and answers 503 without one. A test that means the paste or the capture has to
+ * name `source=auto` — the documented fallback — instead of relying on the old default.
+ */
+function withSource(path: string, source: "auto" | "live" | "file"): string {
+  return `${path}${path.includes("?") ? "&" : "?"}source=${source}`;
+}
+
 describe("GET /api/live-wagers", () => {
   // The sanitized partial fixture, served from a temp dir: a developer's gitignored
   // data/bet-ticker.json or local data/live-wagers.json would otherwise win the selection and
@@ -30,7 +39,9 @@ describe("GET /api/live-wagers", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  const get = (path: string) => fetch(`${server.url}${path}`);
+  // These tests are about the paste and the capture, not the live feed.
+  const get = (path: string) =>
+    fetch(`${server.url}${withSource(path, "auto")}`);
 
   test("serves every row of the paste", async () => {
     const res = await get("api/live-wagers");
@@ -94,6 +105,32 @@ describe("GET /api/live-wagers", () => {
     expect(body.provenance?.captureNote ?? "").toContain("subset");
     expect(body.provenance?.observedAt).toBeNull();
   });
+
+  test("an unset source is the live feed, not the paste", async () => {
+    const res = await fetch(`${server.url}api/live-wagers`);
+    // Tests carry no portal session, so the live read refuses rather than quietly serving the
+    // paste as if it were live; with a session it would answer 200 from the live feed. Either
+    // way the mode says live, which is the part of #70 this test pins.
+    expect([200, 503]).toContain(res.status);
+    const body = (await res.json()) as { live?: { mode?: string } };
+    expect(body.live?.mode).toBe("live");
+  });
+
+  test("source=file reads the paste and never the live feed", async () => {
+    const res = await fetch(
+      `${server.url}${withSource("api/live-wagers", "file")}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { live?: { mode?: string } };
+    expect(body.live?.mode).toBe("file");
+  });
+
+  test("an unknown source is refused with 400", async () => {
+    const res = await fetch(`${server.url}api/live-wagers?source=bogus`);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain("source must be auto, live or file");
+  });
 });
 
 describe("GET /api/live-wagers source selection", () => {
@@ -149,7 +186,7 @@ describe("GET /api/live-wagers source selection", () => {
       typeof body === "string" ? body : JSON.stringify(body),
     );
   const get = async (path = "api/live-wagers") => {
-    const res = await fetch(`${server.url}${path}`);
+    const res = await fetch(`${server.url}${withSource(path, "auto")}`);
     return { status: res.status, body: (await res.json()) as Body };
   };
 
@@ -322,7 +359,8 @@ describe("GET /api/live-wagers deterministic flags", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  const get = () => fetch(`${server.url}api/live-wagers`);
+  const get = () =>
+    fetch(`${server.url}${withSource("api/live-wagers", "auto")}`);
 
   test("runs the deterministic rules over the same rows the ticker shows", async () => {
     const res = await get();
@@ -366,7 +404,9 @@ describe("GET /api/live-wagers deterministic flags", () => {
 
   test("filters flags with the rows they describe", async () => {
     const body = (await (
-      await fetch(`${server.url}api/live-wagers?type=NOPE`)
+      await fetch(
+        `${server.url}${withSource("api/live-wagers?type=NOPE", "auto")}`,
+      )
     ).json()) as {
       wagers: unknown[];
       flags: unknown[];

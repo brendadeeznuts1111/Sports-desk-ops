@@ -99,13 +99,16 @@ describe("proxied ingress requires the token", () => {
   test("a wrong bearer is refused, not just an absent one", async () => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", "the-real-token");
     try {
-      const response = await fetch(`http://localhost/api/live-bets`, {
-        unix: socket,
-        headers: { authorization: "Bearer not-the-token" },
-      } as RequestInit);
+      const response = await fetch(
+        `http://localhost/api/live-bets?source=auto`,
+        {
+          unix: socket,
+          headers: { authorization: "Bearer not-the-token" },
+        } as RequestInit,
+      );
       expect([401, 403, 503]).toContain(response.status);
 
-      const ok = await fetch(`http://localhost/api/live-bets`, {
+      const ok = await fetch(`http://localhost/api/live-bets?source=auto`, {
         unix: socket,
         headers: { authorization: "Bearer the-real-token" },
       } as RequestInit);
@@ -124,7 +127,7 @@ describe("proxied ingress requires the token", () => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", "dashboard-token");
     try {
       const paths = [
-        "/api/live-bets",
+        "/api/live-bets?source=auto",
         "/api/game-admin",
         "/api/sports",
         "/api/scoreboard",
@@ -132,7 +135,7 @@ describe("proxied ingress requires the token", () => {
         "/api/analysis/filters",
         "/api/sports/catalog",
         "/api/contests",
-        "/api/live-wagers",
+        "/api/live-wagers?source=auto",
         "/api/agents/search?q=BI",
         "/api/game-admin/board",
       ];
@@ -178,7 +181,7 @@ describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary"
   });
 
   test("a pii route answers the proxy without a token", async () => {
-    const response = await overSocket(socket, "/api/live-bets");
+    const response = await overSocket(socket, "/api/live-bets?source=auto");
     expect(response.status).toBe(200);
   });
 });
