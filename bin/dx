@@ -70,7 +70,7 @@ export XDG_STATE_HOME="$HOME/.local/state"
 export OP_CONFIG_DIR="$XDG_CONFIG_HOME/op"
 export GH_CONFIG_DIR="$XDG_CONFIG_HOME/gh"
 
-mkdir -p "$XDG_CONFIG_HOME/git" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME/1password" "$OP_CONFIG_DIR" "$GH_CONFIG_DIR" "$HOME/.local/bin" 2>/dev/null || true
+mkdir -p "$XDG_CONFIG_HOME/git" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME/1password" "$OP_CONFIG_DIR" "$GH_CONFIG_DIR" "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.grok/bin" "$HOME/.kimi-code/bin" "$HOME/.cursor" "$HOME/Projects" 2>/dev/null || true
 chmod 700 "$OP_CONFIG_DIR" "$XDG_STATE_HOME/1password" 2>/dev/null || true
 
 # 2. Configure $HOME/.gitconfig so Git has zero EPERM warnings on ignore/attributes/config
@@ -97,7 +97,11 @@ if [[ -d "$DOTFILES_DIR/git" ]]; then
 	path = $DOTFILES_DIR/git/gitconfig
 [core]
 	excludesFile = $XDG_CONFIG_HOME/git/ignore
-	attributesFile = $XDG_CONFIG_HOME/git/attributes"
+	attributesFile = $XDG_CONFIG_HOME/git/attributes
+[credential \"https://github.com\"]
+	helper = 
+	useHttpPath = true
+	helper = $XDG_CONFIG_HOME/git/credential-gh-owner"
     dx_full="$dx_marker"$'\n'"$dx_body"
     dx_write=0
     if [[ -L "$HOME/.gitconfig" || ! -e "$HOME/.gitconfig" ]]; then
@@ -124,14 +128,25 @@ if [[ -d "$DOTFILES_DIR/git" ]]; then
   export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
 fi
 
-# 3. Link shell config & bunfig from the dotfiles checkout into $HOME
+# 3. Link shell config, bunfig, root stubs, cursor permissions, and BIN_LINKS from dotfiles into $HOME
 if [[ -d "$DOTFILES_DIR" ]]; then
   export DOTFILES_ROOT="$DOTFILES_DIR"
   link_managed "$DOTFILES_DIR/shell/config" "$XDG_CONFIG_HOME/shell"
   link_managed "$DOTFILES_DIR/bun/bunfig.toml" "$HOME/.bunfig.toml"
   link_managed "$DOTFILES_DIR/shell/.zshenv" "$HOME/.zshenv"
+  link_managed "$DOTFILES_DIR/shell/.zprofile" "$HOME/.zprofile"
   link_managed "$DOTFILES_DIR/shell/.zshrc" "$HOME/.zshrc"
   link_managed "$DOTFILES_DIR/shell/.bash_profile" "$HOME/.bash_profile"
+  link_managed "$DOTFILES_DIR/npm/npmrc" "$HOME/.npmrc"
+  link_managed "$DOTFILES_DIR/ripgrep/rgignore" "$HOME/.rgignore"
+  link_managed "$DOTFILES_DIR/ripgrep/ripgreprc" "$HOME/.ripgreprc"
+  link_managed "$DOTFILES_DIR/cursor/permissions.json" "$HOME/.cursor/permissions.json"
+  link_managed "$DOTFILES_DIR/cursor/rules" "$HOME/.cursor/rules"
+  for dx_bin in shell-health root-health op-health op-agent-preflight code-1password-check finish-1password setup-1password code-1password-dashboard code-github-discover code-project code-dashboard code-dashboard-render gate gate-fast; do
+    link_managed "$DOTFILES_DIR/shell/bin/$dx_bin" "$HOME/.local/bin/$dx_bin"
+  done
+  link_managed "$DOTFILES_DIR/bin/dsh" "$HOME/.local/bin/dsh"
+  link_managed "$DOTFILES_DIR/bin/dsh" "$HOME/.bun/bin/dsh"
 fi
 
 # 4. Normalize PATH (Repo bin + User local bin + Dotfiles bin + Bun + Homebrew)
@@ -338,6 +353,12 @@ EOF
     fi
     if git -C "$REPO_ROOT" status -s >/dev/null 2>&1; then
       echo "  • git status           : $HOME/.gitconfig ($(dx_ok 'git status exits 0'))"
+      dx_dirty_count="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+      if [[ "${dx_dirty_count:-0}" == "0" ]]; then
+        echo "  • Worktree cleanliness : $(dx_ok 'clean (0 uncommitted paths)')"
+      else
+        echo "  • Worktree cleanliness : $(dx_warn "${dx_dirty_count} uncommitted path(s) (git status --porcelain)")"
+      fi
     else
       echo "  • git status           : $HOME/.gitconfig ($(dx_warn 'git status exits non-zero'))"
     fi
