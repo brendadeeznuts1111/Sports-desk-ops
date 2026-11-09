@@ -380,6 +380,9 @@ export function readWagerList(payload: unknown): LiveWager[] {
 
 export const BET_TICKER_OPERATION = "/cloud/api/Manager/getBetTicker";
 
+/** Provenance prefix for a live `getBetTicker` read (`live:<operation>@<observedAt>`). */
+export const LIVE_TICKER_SOURCE_PREFIX = "live:";
+
 /**
  * A raw `getBetTicker` body as the file `/api/live-wagers` serves. `wagerNumber=0` returns the
  * whole current list, so a capture is complete (`partial: false`), unlike the clipboard paste.
@@ -409,6 +412,27 @@ export function betTickerFile(
     observedAt,
     partial: false,
     LIST: list,
+  };
+}
+
+/**
+ * A live `getBetTicker` body as persisted under `data/live-wagers.json`. Same wire shape as
+ * {@link betTickerFile}, with a `live:` provenance label.
+ */
+export function liveTickerFile(
+  payload: unknown,
+  observedAt: string,
+): {
+  readonly schemaVersion: 1;
+  readonly source: string;
+  readonly observedAt: string;
+  readonly partial: false;
+  readonly LIST: readonly unknown[];
+} {
+  const captured = betTickerFile(payload, observedAt);
+  return {
+    ...captured,
+    source: `${LIVE_TICKER_SOURCE_PREFIX}${BET_TICKER_OPERATION}@${observedAt}`,
   };
 }
 

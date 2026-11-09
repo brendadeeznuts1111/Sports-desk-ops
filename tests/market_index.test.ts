@@ -42,7 +42,10 @@ const REPO_WEB = "https://github.com/bw496915-cmyk/Sports-desk-ops";
 async function indexGitPin(): Promise<string> {
   const raw = await loadRawIndex();
   const commit = raw.plugins[0]?.versions[0]?.source?.commit;
-  expect(commit, "index.json: plugins[0].versions[0].source.commit").toBeDefined();
+  expect(
+    commit,
+    "index.json: plugins[0].versions[0].source.commit",
+  ).toBeDefined();
   return commit!;
 }
 

@@ -33,6 +33,10 @@ import {
   type BridgeRollupCycleResult,
   type BridgeRollupJobId,
 } from "../lib/bridge_rollup_cron.ts";
+import {
+  summarizeDod6V54SpineTotals,
+  type Dod6V54SpineTotals,
+} from "../lib/dod6_v54_lifetime_reader.ts";
 
 /**
  * Schedules the long-lived webview daemon owns. The bot daemon excludes them
@@ -98,6 +102,58 @@ const SUMMARY_JSON_PATH = resolve(
   import.meta.dir,
   "../reports/live-positions-summary.json",
 );
+const DODBIN_PATH = resolve(
+  import.meta.dir,
+  "../data/sportsdesk_unified_baseline_v54.dodbin",
+);
+const AGENT_TREE_PATH = resolve(import.meta.dir, "../data/agent-tree.json");
+
+let cachedSpineTotals: Dod6V54SpineTotals | null | undefined;
+
+function readDodSpineTotals(): Dod6V54SpineTotals | null {
+  if (cachedSpineTotals !== undefined) return cachedSpineTotals;
+  try {
+    cachedSpineTotals = summarizeDod6V54SpineTotals(DODBIN_PATH);
+  } catch {
+    cachedSpineTotals = null;
+  }
+  return cachedSpineTotals;
+}
+
+interface AgentTreeSummary {
+  readonly totalNodes: number;
+  readonly subAgents: number;
+  readonly activeSubAgents: number;
+  readonly masters: number;
+}
+
+function readAgentTreeSummary(): AgentTreeSummary | null {
+  if (!existsSync(AGENT_TREE_PATH)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(AGENT_TREE_PATH, "utf8")) as {
+      nodes?: Record<string, { t?: string | null; a?: boolean }>;
+    };
+    const nodes = Object.values(raw.nodes ?? {});
+    return {
+      totalNodes: nodes.length,
+      subAgents: nodes.filter((n) => n.t === "A").length,
+      activeSubAgents: nodes.filter((n) => n.t === "A" && n.a === true).length,
+      masters: nodes.filter((n) => n.t === "M").length,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatUsdCents(cents: number, signed = false): string {
+  const abs = (Math.abs(cents) / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (cents < 0) return `-$${abs}`;
+  if (signed && cents > 0) return `+$${abs}`;
+  return `$${abs}`;
+}
 
 /** The last cycle the scheduler wrote; the digest generator and the dashboard both read it. */
 function readLatestBridgeState(): BridgeRollupCycleResult | null {
@@ -336,24 +392,38 @@ export class ReportingSchedulerService {
     }
 
     if (type === "MORNING_BRIEFING") {
+      const spineTotals = readDodSpineTotals();
+      const agentTree = readAgentTreeSummary();
       const openInfo = liveSummary
-        ? `\n• Live 24h Open Tix : <b>${liveSummary.window24hOpenPositions.openTicketsCount.toLocaleString()}</b> ($${(liveSummary.window24hOpenPositions.openRiskCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })} Risk)`
+        ? `\n• Live 24h Open Tix : <b>${liveSummary.window24hOpenPositions.openTicketsCount.toLocaleString()}</b> (${formatUsdCents(liveSummary.window24hOpenPositions.openRiskCents)} Risk)`
         : "";
+      const accountsLine = spineTotals
+        ? `<b>${spineTotals.meta.customerCount.toLocaleString()}</b> Canonical (Settled Bets: ${spineTotals.settledBetsCount.toLocaleString()} • Open Bets: ${spineTotals.openBetsCount.toLocaleString()})`
+        : "<b>unmeasured (no artifact)</b>";
+      const agentsLine = agentTree
+        ? `<b>${agentTree.subAgents.toLocaleString()}</b> (Active: ${agentTree.activeSubAgents.toLocaleString()} • Masters: ${agentTree.masters.toLocaleString()})`
+        : "<b>unmeasured (no artifact)</b>";
+      const handleLine = spineTotals
+        ? `<b>${formatUsdCents(spineTotals.settledStakedCents)}</b> (${spineTotals.settledBetsCount.toLocaleString()} Settled Tickets • Lifetime Staked: ${formatUsdCents(spineTotals.lifetimeStakedCents)})`
+        : "<b>unmeasured (no artifact)</b>";
+      const holdLine = spineTotals
+        ? `<b>${formatUsdCents(spineTotals.houseNetProfitCents, true)}</b> (Settled Hold: ${(spineTotals.settledHoldRatio * 100).toFixed(2)}% • DOD6 v5.4 Conserved Spine)`
+        : "<b>unmeasured (no artifact)</b>";
       const html = `
 ☀️ <b>SPORTSDESK MORNING RISK BRIEFING</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 
 📊 <b>Current Production Master Scope:</b>
-• Total Accounts    : <b>14,534</b> Canonical (Active: 2,236 • Sub-Accounts Merged: 40)
-• Sub-Agents in Tree: <b>668</b> (Active Sports: 460)
-• Total Sports Handle: <b>$2,786,199.00</b> (10,941 Settled Tickets)${openInfo}
-• Lifetime Net Hold : <b>+$35,697,418.60</b> (DOD6 v5.4 Conserved Spine)
+• Total Accounts    : ${accountsLine}
+• Sub-Agents in Tree: ${agentsLine}
+• Total Sports Handle: ${handleLine}${openInfo}
+• Lifetime Net Hold : ${holdLine}
 
 ⚠️ <b>Overnight & Morning Threat Assessment:</b>
-• <b>Whale Surveillance (RF2003):</b> Account represents <b>33.7% of total book handle</b> ($940k). Verify single-wager limit ceiling is active.
-• <b>Snipers on Standby:</b> BGD101 (+$40k win, 100% hit rate) and MJ102 (+$30k win, +150 ML) awaiting afternoon slate.
-• <b>Chronic Bleed:</b> 148 sub-agents are running chronic net-negative lifetime balances.
+• <b>Whale Surveillance (RF2003):</b> Verify single-wager limit ceiling is active against live exposure.
+• <b>Snipers on Standby:</b> BGD101 and MJ102 monitored ahead of afternoon slate.
+• <b>Spine Conservation:</b> ${spineTotals ? `Bets identity=${spineTotals.betsIdentityHolds ? "OK" : "FAIL"}, outcomes identity=${spineTotals.outcomesIdentityHolds ? "OK" : "FAIL"}` : "unmeasured (no artifact)"}.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
       return {
@@ -390,17 +460,30 @@ Enforce 6-second dynamic confirmation delay gate across live/in-play markets and
       };
     }
 
+    const spineTotals = readDodSpineTotals();
+    const settledHandleLine = spineTotals
+      ? `<b>${formatUsdCents(spineTotals.settledStakedCents)}</b> (${spineTotals.settledBetsCount.toLocaleString()} Tickets)`
+      : "<b>unmeasured (no artifact)</b>";
+    const outcomesLine = spineTotals
+      ? `Wins: <b>${spineTotals.winsCount.toLocaleString()}</b> • Losses: <b>${spineTotals.lossesCount.toLocaleString()}</b> • Pushes: <b>${spineTotals.pushesCount.toLocaleString()}</b>`
+      : "<b>unmeasured (no artifact)</b>";
+    const netHoldLine = spineTotals
+      ? `<b>${formatUsdCents(spineTotals.houseNetProfitCents, true)} (${(spineTotals.settledHoldRatio * 100).toFixed(2)}%)</b>`
+      : "<b>unmeasured (no artifact)</b>";
+    const sharedHoldLine = spineTotals
+      ? `<b>${formatUsdCents(Math.round(spineTotals.houseNetProfitCents / 2), true)}</b>`
+      : "<b>unmeasured (no artifact)</b>";
+
     const html = `
 🌙 <b>SPORTSDESK EVENING SETTLEMENT RECAP</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 
-📉 <b>Settled Sports Performance:</b>
-• Total Handle Settled  : <b>$2,786,199.00</b> (10,941 Tickets)
-• Customer Payouts Won  : <b>+$1,491,130.00</b>
-• Customer Wagers Lost  : <b>-$1,554,517.00</b>
-• Net House Hold        : <b style="color: #ef4444;">-$63,467.00 (DEFICIT: -2.28%)</b>
-• Agent 50% Shared Hold : <b>-$31,733.50 (Fronted by Master)</b>
+📉 <b>Settled Sports Performance (DOD6 v5.4 Spine):</b>
+• Total Handle Settled  : ${settledHandleLine}
+• Settled Outcomes      : ${outcomesLine}
+• Net House Hold        : ${netHoldLine}
+• Agent 50% Shared Hold : ${sharedHoldLine}
 
 🚨 <b>Top 5 Sub-Agent House Losses:</b>
 1. <b>BIGDAD</b>    : -$40,000.00 (BGD101 cashed 2 max wagers)

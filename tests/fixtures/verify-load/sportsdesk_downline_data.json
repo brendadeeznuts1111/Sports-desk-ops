@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "master_agent": "SYNTH_MASTER_01",
+    "total_sub_agents": 3,
+    "active_sports_sub_agents": 2,
+    "total_provisioned_accounts": 41,
+    "active_sports_bettors": 7,
+    "total_lifetime_lost": -200000,
+    "total_lifetime_won": 150000,
+    "total_lifetime_net_hold": -50000,
+    "total_sports_tickets": 9,
+    "total_sports_volume": 24000,
+    "total_sports_net": -5000
+  },
+  "agents": [
+    {
+      "agent": "BIGDAD",
+      "master": "SYNTH_MASTER_01",
+      "total_accounts": 2,
+      "active_sports_accounts": 1,
+      "dormant_accounts": 1,
+      "lifetime_lost": -50000,
+      "lifetime_won": 10000,
+      "lifetime_net": -40000,
+      "sports_tickets": 2,
+      "sports_vol": 10000,
+      "sports_net": -5000,
+      "hold_pct": -50,
+      "toxicity": 60,
+      "sharp_count": 1,
+      "grade": "C",
+      "agent_type": "SYNTH_VERIFY_LOAD"
+    },
+    {
+      "agent": "SYNTH_AGENT_B",
+      "master": "SYNTH_MASTER_01",
+      "total_accounts": 3,
+      "active_sports_accounts": 2,
+      "dormant_accounts": 1,
+      "lifetime_lost": -20000,
+      "lifetime_won": 30000,
+      "lifetime_net": 10000,
+      "sports_tickets": 3,
+      "sports_vol": 8000,
+      "sports_net": 2000,
+      "hold_pct": 25,
+      "toxicity": 20,
+      "sharp_count": 0,
+      "grade": "B",
+      "agent_type": "SYNTH_VERIFY_LOAD"
+    },
+    {
+      "agent": "SYNTH_AGENT_C",
+      "master": "SYNTH_MASTER_01",
+      "total_accounts": 1,
+      "active_sports_accounts": 1,
+      "dormant_accounts": 0,
+      "lifetime_lost": -5000,
+      "lifetime_won": 1000,
+      "lifetime_net": -4000,
+      "sports_tickets": 1,
+      "sports_vol": 3000,
+      "sports_net": -1000,
+      "hold_pct": -33.3,
+      "toxicity": 40,
+      "sharp_count": 0,
+      "grade": "C",
+      "agent_type": "SYNTH_VERIFY_LOAD"
+    }
+  ]
+}

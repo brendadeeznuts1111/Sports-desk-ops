@@ -722,7 +722,7 @@ export function apply(ctx, config) {
     defineTool({
       name: "fraud_status",
       description:
-        "Security/fraud console state: every log source (GSLive bet-report corpus with sha256 and masked PII posture, F402 live captures, F402 weblog rollup, GSLive activity artifact, suspect audit, fixture books) measured as ok/stale/missing/session_expired with provenance, plus the corpus summary and whether a fitted model artifact exists. MISSING is never reported as zero. Start here before any other fraud_* tool.",
+        "Security/fraud console state: every log source (GSLive bet-report corpus with sha256 and masked PII posture, F402 live captures, F402 weblog rollup, GSLive activity artifact, suspect audit, fixture books) measured as ok/stale/missing/session_expired with provenance, plus the corpus summary and whether a fitted model artifact exists. The payload also carries bet-group integrity (ownership and ticket-field validation over every capture, status verified/incomplete/invalid/unavailable) and a separate settlementVerification (unverified until a same-book settlement ledger exists; never folded into integrity). MISSING is never reported as zero. Start here before any other fraud_* tool.",
       parameters: {
         type: "object",
         properties: {},
@@ -739,7 +739,7 @@ export function apply(ctx, config) {
     defineTool({
       name: "fraud_bets",
       description:
-        "Aggregated view of the GSLive getBetReport log corpus (24,778 rows today): row/account/agent counts, state mix, suspected-bot / reversed-credit / manual-log / odds-drift counts, delay histogram, plus a masked sample of normalized bet records. Filters: agent, account, state, since, limit (default 25, max 200), includeBots. Raw IP addresses are never returned — only masked values and stable tags.",
+        "Aggregated view of the GSLive getBetReport log corpus loaded for this call: row/account/agent counts (the payload reports the rows it actually parsed), state mix, suspected-bot / reversed-credit / manual-log / odds-drift counts, delay histogram, plus a masked sample of normalized bet records. Filters: agent, account, state, since, limit (default 25, max 200), includeBots. Raw IP addresses are never returned — only masked values and stable tags.",
       parameters: {
         type: "object",
         properties: {

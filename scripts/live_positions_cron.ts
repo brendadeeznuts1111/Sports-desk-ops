@@ -11,7 +11,7 @@
  *   2. Tracks an incremental 10-minute watermark (`scratch/live-positions-watermark.json`) over `f402-bets.jsonl`
  *      to compute exact 10m / 1h / 24h / cumulative volume updates (deduplicating `ALERT` mirrors and `BLOCKED` rows).
  *   3. Summarizes open positions by Sport, Market/WagerType, Channel (`GSLIVE`, `GSBUILDER`, `Internet`), Top Sub-Agents,
- *      and Top Active Accounts cross-referenced against the 14,534-customer DOD6 v5.4 spine.
+ *      and Top Active Accounts cross-referenced against the DOD6 v5.4 binary spine (`customerCount` read from header).
  *   4. Sends a formatted HTML summary message every 10 minutes via `SportsDeskTelegramService` (checking both `Bun.env`
  *      and `Bun.secrets` keychain `bookdeskops.desk`) and logs every run to `scratch/live-positions-cron.jsonl`
  *      and `reports/live-positions-summary.json`.

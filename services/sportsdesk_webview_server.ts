@@ -176,6 +176,13 @@ import {
   sendFrameOrClose,
   WS_BACKPRESSURE_OPTIONS,
 } from "../lib/ws_backpressure.ts";
+import {
+  createDeskLiveReads,
+  parseLiveSourceMode,
+  type LivePendingServerOptions,
+  type LiveRefreshOptions,
+  type LiveTickerServerOptions,
+} from "../lib/desk_live_reads.ts";
 
 /** `null` when the request comes from the same machine; otherwise the admin gate applies. */
 export function isLoopbackAddress(address: string | null | undefined): boolean {
@@ -338,6 +345,13 @@ export interface ServerOptions {
   readonly executionEnv?: Readonly<Record<string, string | undefined>>;
   /** State for GET /tracker; tests inject one so no gh, git or keychain call is made. */
   readonly trackerState?: () => Promise<TrackerState>;
+  /** Fallback artifact for live-bets; defaults to `data/live-bets.json` under the repo. */
+  readonly liveBetsPath?: string;
+  readonly liveTicker?: LiveTickerServerOptions;
+  readonly livePending?: LivePendingServerOptions;
+  readonly liveRefresh?: LiveRefreshOptions;
+  /** When true, `import.meta.main` may start the live refresh loop from env. */
+  readonly daemonEntry?: boolean;
 }
 
 /**
@@ -354,10 +368,9 @@ const LIVE_BETS_PATH = resolve(repoRoot, "data/live-bets.json");
 const AGENT_TREE_PATH = resolve(repoRoot, "data/agent-tree.json");
 const CUSTOMER_PROFILES_PATH = resolve(repoRoot, "data/customer-profiles.json");
 
-const liveBetsArtifact = cachedJsonFile(
-  LIVE_BETS_PATH,
-  (raw) => raw as LiveBetsArtifact,
-);
+function liveBetsArtifactFor(path: string) {
+  return cachedJsonFile(path, (raw) => raw as LiveBetsArtifact);
+}
 const customerBookArtifact = cachedJsonFile(
   CUSTOMER_PROFILES_PATH,
   readCustomerBookSummary,
@@ -533,7 +546,9 @@ async function loadWagerList(
 }
 
 /** Reads the committed artifact first; falls back to the captured sample row. */
-async function loadLiveBets(): Promise<{
+async function loadLiveBetsFrom(
+  liveBetsArtifact: ReturnType<typeof liveBetsArtifactFor>,
+): Promise<{
   games: LiveBetGame[];
   agents: AgentScope;
   pendingCount: number;
@@ -743,9 +758,30 @@ const POLYMARKET_LIVE_UNAVAILABLE_REASON =
 export function startServer(options?: ServerOptions) {
   const telegramService = new SportsDeskTelegramService();
   const scheduler = new ReportingSchedulerService(telegramService);
-  const wagerLists = wagerListSources(
-    options?.wagerListDir ?? resolve(repoRoot, "data"),
-  );
+  const wagerListDir = options?.wagerListDir ?? resolve(repoRoot, "data");
+  const wagerLists = wagerListSources(wagerListDir);
+  const resolvedLiveBetsPath = resolve(options?.liveBetsPath ?? LIVE_BETS_PATH);
+  const liveBetsArtifact = liveBetsArtifactFor(resolvedLiveBetsPath);
+  const deskLive = createDeskLiveReads({
+    repoRoot,
+    liveBetsPath: resolvedLiveBetsPath,
+    wagerListDir,
+    ...(options?.liveTicker === undefined
+      ? {}
+      : { liveTicker: options.liveTicker }),
+    ...(options?.livePending === undefined
+      ? {}
+      : { livePending: options.livePending }),
+    ...(options?.liveRefresh === undefined
+      ? {}
+      : { liveRefresh: options.liveRefresh }),
+    daemonEntry: options?.daemonEntry === true,
+    readLiveBetsArtifact: async () =>
+      (await liveBetsArtifact.read())?.value ?? null,
+    loadWagerList: () => loadWagerList(wagerLists),
+  });
+  deskLive.startRefreshLoop();
+  const loadLiveBets = () => loadLiveBetsFrom(liveBetsArtifact);
   const customerDashboardPath = resolve(
     repoRoot,
     "static/customer-churn-simulation-dashboard.html",
@@ -1292,46 +1328,51 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const { games, agents, pendingCount, dataSource, capturedAt } =
-          await loadLiveBets();
-        const summary = summarizeGames(
-          games,
-          pendingCount,
-          dataSource,
-          capturedAt,
-        );
-        const generatedAt = new Date().toISOString();
-        // A scoreboard is a snapshot; let the client decide when to re-ask.
+        const sourceMode = parseLiveSourceMode(url.searchParams.get("source"));
+        if (sourceMode === "invalid") {
+          return Response.json(
+            { success: false, error: "source must be auto, live or file" },
+            { status: 400, headers: cors },
+          );
+        }
+
+        const isSummary = pathname.endsWith("/summary");
+        const served = isSummary
+          ? await deskLive.serveLiveBetsSummary(sourceMode)
+          : await deskLive.serveLiveBets(sourceMode);
         const headers = { ...cors, "Cache-Control": "no-store" };
 
-        if (pathname.endsWith("/summary")) {
-          const etag = `"${Buffer.from(
-            `${dataSource}|${capturedAt}|${summary.totalGames}|${summary.totalWagered}|${summary.totalToWin}|${summary.totalPending}`,
-          ).toString("base64url")}"`;
+        if (isSummary) {
+          const etag = `"${Buffer.from(served.etagParts ?? "").toString("base64url")}"`;
           const ifNoneMatch = req.headers.get("if-none-match");
-          // `private`, not `public`: the summary is served only because `piiRejection` allowed
-          // this peer (`byAgent` is keyed by agent login), so a shared cache that stored and
-          // replayed it would answer requests the guard never saw — which is exactly the request
-          // it must not answer. `must-revalidate` replaces `stale-while-revalidate` for the same
-          // reason: a stale copy is still an answer given without asking the guard.
-          // `Vary: Authorization` says the body is a function of the credential, not just the URL.
           const summaryHeaders = {
             ...cors,
             "Cache-Control": "private, max-age=30, must-revalidate",
             Vary: "Origin, Authorization",
             ETag: etag,
           };
-          if (ifNoneMatch === etag) {
+          if (served.httpStatus === 200 && ifNoneMatch === etag) {
             return new Response(null, { status: 304, headers: summaryHeaders });
           }
-          return Response.json(
-            { success: true, summary, generatedAt },
-            { headers: summaryHeaders },
-          );
+          return Response.json(served.body, {
+            status: served.httpStatus,
+            headers: summaryHeaders,
+          });
         }
 
-        // Scores come from the transcribed scoreboard; a wager without a matching game
-        // stays null rather than borrowing a neighbour's score.
+        if (served.httpStatus !== 200) {
+          return Response.json(served.body, {
+            status: served.httpStatus,
+            headers,
+          });
+        }
+
+        const games = (served.body.games as LiveBetGame[]) ?? [];
+        const agents = served.body.agents as AgentScope;
+        const summary = served.body.summary as ReturnType<
+          typeof summarizeGames
+        >;
+
         const scoreboard = await loadScoreboard();
         const withScores = games.map((game) => ({
           ...game,
@@ -1359,6 +1400,7 @@ export function startServer(options?: ServerOptions) {
 
         return Response.json(
           {
+            ...served.body,
             games: withScores,
             agents,
             pendingCount: summary.totalPending,
@@ -1376,7 +1418,6 @@ export function startServer(options?: ServerOptions) {
               all: SPORT_CATEGORIES,
               liveFilter: LIVE_FILTER,
             },
-            generatedAt,
           },
           { headers },
         );
@@ -1551,6 +1592,7 @@ export function startServer(options?: ServerOptions) {
             ok,
             status: ok ? "serving" : "degraded",
             checks,
+            live: deskLive.statusBlock(),
             health: {
               // process.cpuUsage() is cumulative CPU time since start, not utilisation; the old
               // `cpu` label invited reading it as load.
@@ -2527,28 +2569,47 @@ export function startServer(options?: ServerOptions) {
           );
         }
 
-        const { chosen, skipped } = await loadWagerList(wagerLists);
-        if (chosen === null) {
+        const sourceMode = parseLiveSourceMode(url.searchParams.get("source"));
+        if (sourceMode === "invalid") {
           return Response.json(
-            {
-              error: "no live wager list",
-              hint: "run bun run capture:bet-ticker (writes data/bet-ticker.json), or save a ticker paste as data/live-wagers.json, and reload",
-              skipped,
-            },
-            { status: 404, headers: cors },
+            { success: false, error: "source must be auto, live or file" },
+            { status: 400, headers: cors },
           );
         }
-        const artifact = chosen.artifact;
+
+        const fileSelection = await loadWagerList(wagerLists);
+        const resolved = await deskLive.serveLiveWagers(
+          sourceMode,
+          fileSelection,
+        );
+        if (resolved.httpStatus !== 200) {
+          return Response.json(resolved.body, {
+            status: resolved.httpStatus,
+            headers: { ...cors, "Cache-Control": "no-store" },
+          });
+        }
+
+        const artifact = {
+          wagers: (resolved.body.wagers as WagerListArtifact["wagers"]) ?? [],
+          provenance: resolved.body
+            .provenance as WagerListArtifact["provenance"],
+        };
         const wagers = artifact.wagers;
+        const skipped =
+          (resolved.body.skipped as Array<{ path: string; reason: string }>) ??
+          [];
         // No `ageSeconds`: it advances every second, and in the version it would turn each poll
         // into a new entry in the shared 48-body cache, which clears whole when full. The page
         // computes the age from `asOf`; `stale` flips once, so it can be part of the version.
-        const { ageSeconds: _age, ...fresh } = freshness(
-          artifact.provenance.observedAt,
-          chosen.mtime,
-          STALE_AFTER_SECONDS.liveWagers,
-          new Date(),
-        );
+        const fresh = (resolved.body.freshness as Omit<
+          ReturnType<typeof freshness>,
+          "ageSeconds"
+        > & { stale: boolean }) ?? {
+          stale: false,
+          asOf: artifact.provenance.observedAt ?? new Date().toISOString(),
+          asOfFrom: "artifact" as const,
+        };
+        const liveStatus = resolved.body.live;
 
         const writer = (url.searchParams.get("writer") ?? "")
           .trim()
@@ -2593,7 +2654,7 @@ export function startServer(options?: ServerOptions) {
         return encodedResponse(req, {
           // Every input to the bytes is in the version: the query, which file won, what was
           // skipped, and whether it has gone stale.
-          version: `live-wagers|${chosen.path}|${chosen.version}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}`,
+          version: `live-wagers|${fileSelection.chosen?.path ?? "none"}|${fileSelection.chosen?.version ?? "none"}|${artifact.provenance.source}|${fresh.stale}|${JSON.stringify(skipped)}|${writer}|${type}|${JSON.stringify(liveStatus)}`,
           contentType: "application/json; charset=utf-8",
           produce: () =>
             new TextEncoder().encode(
@@ -2603,13 +2664,13 @@ export function startServer(options?: ServerOptions) {
                 all: summarizeLiveWagers(wagers),
                 writer: writer === "" ? null : writer,
                 type: type === "" ? null : type,
-                // The file's own account of itself: a 17-row subset reads as 17 rows, not as the list.
                 provenance: artifact.provenance,
                 freshness: fresh,
                 skipped,
                 wagers: filtered,
                 flags,
                 byRule,
+                live: liveStatus,
               }),
             ),
           headers: { ...cors, "Cache-Control": "no-store" },
@@ -2983,28 +3044,26 @@ export function startServer(options?: ServerOptions) {
 
       // Headline KPIs: counts and sums only, so public like the dashboard that shows them.
       if (pathname === "/api/kpis") {
-        const [agentTree, liveBets, wagerList, customerBook] =
-          await Promise.all([
-            kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
-            kpiInput(LIVE_BETS_PATH, liveBetsArtifact),
-            loadWagerList(wagerLists),
-            kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
-          ]);
-        const liveWagers =
-          wagerList.chosen === null
-            ? null
-            : {
-                value: wagerList.chosen.artifact,
-                mtime: wagerList.chosen.mtime,
-              };
+        const [agentTree, liveInputs, customerBook] = await Promise.all([
+          kpiInput(AGENT_TREE_PATH, agentTreeArtifact),
+          deskLive.kpiLiveInputs(),
+          kpiInput(CUSTOMER_PROFILES_PATH, customerBookArtifact),
+        ]);
         const now = new Date();
         return Response.json(
           await withWeblog({
             success: true,
             kpis: deriveDeskKpis(
-              { agentTree, liveBets, liveWagers, customerBook },
+              {
+                agentTree,
+                liveBets: liveInputs.liveBets,
+                liveWagers: liveInputs.liveWagers,
+                customerBook,
+              },
               now,
             ),
+            live: liveInputs.live,
+            livePending: liveInputs.livePending,
             generatedAt: now.toISOString(),
           }),
           { headers: { ...cors, "Cache-Control": "no-store" } },
@@ -3439,7 +3498,7 @@ export function startBridgeSchedules(): () => void {
 if (import.meta.main)
   queueMicrotask(() => {
     // defer past module eval
-    const server = startServer();
+    const server = startServer({ daemonEntry: true });
     const stopBridgeCron = startBridgeSchedules();
     const location = server.url ? server.url.toString() : "unix domain socket";
     console.log(`[SportsDesk Webview Server] Active on ${location}`);

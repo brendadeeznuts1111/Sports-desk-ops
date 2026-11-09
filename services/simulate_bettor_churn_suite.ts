@@ -394,8 +394,11 @@ export class BettorSimulationHarness {
           : 0
       ) as BasisPoints;
 
-      const totalRegisteredCustomers = this.bettorProfileMap.size || 100;
       const activeBettorCount = acceptedActiveCustomers.size;
+      const totalRegisteredCustomers =
+        this.bettorProfileMap.size > 0
+          ? this.bettorProfileMap.size
+          : activeBettorCount;
       const dormantBettorCount = Math.max(
         0,
         totalRegisteredCustomers - activeBettorCount,

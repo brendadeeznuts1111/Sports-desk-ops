@@ -756,10 +756,10 @@ spec is missing parameters/response fields and should be corrected from source:
 
 | Operation                   | Handler                                                              | Spec drift to fix                                                         |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /health`               | `services/sportsdesk_webview_server.ts:1499-1518`                    | add `url`, `timestamp` to the response                                    |
+| `GET /health`               | `services/sportsdesk_webview_server.ts:2671-2690`                    | add `url`, `timestamp` to the response                                    |
 | `GET /api/watchlist`        | `sportsdesk_webview_server.ts#GET /api/watchlist` + `adminRejection` | add 401/503 responses from `adminRejection`                               |
-| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:3296-3321`                    | document the admin-token gate                                             |
-| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:3324-3344`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
+| `POST /api/telegram/alert`  | `services/sportsdesk_webview_server.ts:4518-4543`                    | document the admin-token gate                                             |
+| `POST /api/telegram/report` | `services/sportsdesk_webview_server.ts:4546-4566`                    | add the `?type=` query parameter (enum `REPORT_TYPES`) and the `ok` field |
 
 Also absent from the spec and documented from source only: `GET /`, `GET /dashboard`, `GET /miniapp`,
 `POST /telegram/webhook`, `GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -767,7 +767,7 @@ Also absent from the spec and documented from source only: `GET /`, `GET /dashbo
 [surfaces.md](./surfaces.md)).
 
 The `/api/desk/*` routes cannot be captured: no implementation exists anywhere in the repo. They need
-implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:3376-3384`).
+implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk` handler and 404s at `services/sportsdesk_webview_server.ts:4598-4606`).
 
 ## P7 — the customer report surface (7 candidates)
 
@@ -798,3 +798,73 @@ Still needed: `getPending` / `getInfoManager` / `getCustomerNotes` request templ
 current envelope); a live **sub-sport/period** capture from the Ticketwriter/board surface; and the
 remaining cloud operations (authenticateCustomer, updateByColumn, etc.). Live sports parity is checked
 by `catalog:probe` (`getSportsType`, 19/19 identical to the fixture).
+
+## P8 — GSLive `users-report` aggregate control (per-login totals)
+
+`GET /manager-tools/reports/?from=<epochSec>&to=<epochSec>&partnerId=118&kind=users-report`
+
+This is the manager's player report; `docs/design/bridge3c_gslive_tally.md` (GATE-03) names it the
+external per-login stake-sum arbiter, but **no capture exists** — the request/response shape is not
+pinned, and the committed `captures/2026-11-01/` set does not include it. An unauthenticated probe on
+2026-11-08 returns 401 `{"e":1,"r":[],"d":"Please login to your account"}`, consistent with the
+2026-11-02 probe. The report request builder (documented in the manager contracts note) sends
+`kind` verbatim and drops empty params; a non-array response is an error, so the error envelope above
+is not a success shape.
+
+Why it matters for the integrity flow: unlike the lifetime DOD6/customer-book aggregates, this report
+can be requested for the **exact corpus window**, making it the closest available same-book, windowed
+extract. Captured rows would allow a per-account cross-check of stake and ticket P&L totals derived
+from `getBetReport` (`betGroupResult` deduped by `betGroupId`) against the manager's own per-login
+totals. That is a second encoding in the same book — falsification evidence, not external settlement
+truth; `settlementVerification` would stay `unverified`.
+
+Required capture:
+
+1. Authenticated GET for the corpus window (`from`/`to` equal to the corpus document's `from`/`to`),
+   partner 118, so the comparison is scope-matched.
+2. Record the response envelope, column set, and row count; redact or hash player logins/names (the
+   report is identity-bearing), keeping the numeric ids needed for the join.
+3. Reject a non-array body or a populated error envelope as a failed capture; never coerce it to an
+   empty report.
+4. Store the capture under `docs/evidence/captures/<desk-date>/` with the existing sha256/manifest
+   convention, and compare in a read-only script before quoting any totals.
+
+The capture and comparison are implemented and tested; they fail closed until a session exists.
+The strict workflow is one command — preflight, then capture, then a gated comparison — so a stale
+session stops before an artifact can be reused:
+
+```sh
+bun run verify:gslive-users-report --from 1793163600 --to 1793771999
+```
+
+Or run the two steps separately:
+
+```sh
+bun run capture:gslive-users-report --from 1793163600 --to 1793771999
+bun run compare:gslive-users-report \
+  --report Scratch/security/review-captures/users-report-1793163600-1793771999.redacted.json \
+  --corpus Scratch/security/corpus/gslive-betreport-all-2026-11-03.json
+```
+
+The verify workflow writes a versioned control artifact to
+`reports/security/users-report-control.json` (override with `--control-out`, skip with
+`--no-control`). `status` reads it as a separate `sameBookControl` block and reports `ok` only when
+the control is fresh, the windows match, and the recorded corpus digest still equals the corpus on
+disk. The control never changes `settlementVerification`.
+
+Classification and exit codes: HTTP 401/403, an unconfigured session, or a failed preflight is
+`AUTH_EXPIRED` (exit 3; reauthenticate, then retry once — do not loop). The comparison requires a
+provenance-stamped artifact (capture kind, `capturedAt`, `rawSha256`) that is fresh
+(`--max-age-minutes`, default 1440; exit 6 when stale), refuses a window mismatch by default
+(exit 5), and exits 7 when no report column joins the corpus. Comparison output always prints one
+JSON object with explicit matched/unmatched/duplicate counts and the candidate metric deltas.
+
+The capture resolves the session from the manager-session SSOT (never prints the cookie), accepts
+either an array body or `{e:0,r:[...]}`, refuses non-2xx/error-envelope/non-array bodies, and writes
+only a redacted artifact (strings hashed to `sha256:<16>`, numeric cells kept, raw digest recorded).
+The comparison prints the scope-match first, discovers the join column (numeric userID or hashed
+partner login), and ranks numeric columns as candidate stake/result metrics — candidates, not
+asserted truth.
+
+Blockers: no GSLive session is available in this shell (all probes 401), and the success response
+shape is unconfirmed. Until then the per-account cross-check remains a named, uncaptured control.

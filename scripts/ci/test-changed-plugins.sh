@@ -48,11 +48,12 @@ fi
 
 echo "test-changed-plugins: ${BUNDLES[*]}"
 export CI=true
+export VERIFY_LOAD_FIXTURES=tests/fixtures/verify-load
 bun test tests/plugin_bundles.test.ts
 
 for bundle in "${BUNDLES[@]}"; do
   if [[ -f "$bundle/verify-load.mjs" ]]; then
-  echo "  verify-load $bundle"
-    (cd "$bundle" && node verify-load.mjs)
+    echo "  verify-load $bundle"
+    (cd "$bundle" && bun verify-load.mjs)
   fi
 done

@@ -113,6 +113,11 @@ jobs:
         run: bash scripts/ci/test-changed-plugins.sh
 
   verify:
+    # Full ratchet on main (and unattended cadence), not on pull requests — PRs use verify-changed.
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -214,6 +219,23 @@ jobs:
         env:
           CI: "true"
         run: bun run schema:gate
+      - name: Audit harness validator pin (deepseek-harness checkout)
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ env.HARNESS_VALIDATOR_REF }}
+          path: .ci/deepseek-harness
+          fetch-depth: 1
+      - name: Validate market index (format 1)
+        timeout-minutes: 3
+        env:
+          MARKET_INDEX_HARNESS: .ci/deepseek-harness
+          HARNESS_VALIDATOR_SHA: ${{ env.HARNESS_VALIDATOR_SHA }}
+          REQUIRE_MARKET_INDEX: "1"
+        run: |
+          test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
+          test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
+          bun run test:market-index
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml

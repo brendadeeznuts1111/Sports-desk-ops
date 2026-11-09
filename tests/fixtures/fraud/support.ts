@@ -71,6 +71,12 @@ export function copyFixtureAt(
 export interface FixtureRootOptions {
   /** Copy the small crafted bet-report corpus (16 rows) as the primary corpus path. */
   readonly corpus?: boolean;
+  /** Fixture name used for the primary corpus (default: the deliberately invalid fixture). */
+  readonly corpusFixture?: string;
+  /** Fixture name copied to the fallback corpus path; enables merged-capture tests. */
+  readonly corpusFallbackFixture?: string;
+  /** groupIntegrity override written into config/fraud-model.json. */
+  readonly groupIntegrity?: Readonly<Record<string, unknown>>;
   /** Add `Scratch/security/corpus/sha256.txt` for the copied corpus. */
   readonly corpusSidecar?: boolean;
   /** Copy the crafted F402 WebLog rollup. */
@@ -95,6 +101,16 @@ export interface FixtureRootOptions {
 
 export const CORPUS_PRIMARY_REL =
   "Scratch/security/corpus/gslive-betreport-latest.json";
+/** Clean companion fixture: one user per bet group, consistent ticket-level fields. */
+export const GROUP_VALID_CORPUS_FIXTURE = "groups-valid-corpus.json";
+/**
+ * `betreport-small.json` is deliberately ownership-invalid: six of its nine bet groups contain
+ * more than one userID. It is regression evidence for the integrity validator; do not "fix" it
+ * to make integrity checks pass. Use GROUP_VALID_CORPUS_FIXTURE for success-path tests.
+ */
+export const INVALID_INTEGRITY_CORPUS_FIXTURE = "betreport-small.json";
+export const CORPUS_FALLBACK_REL =
+  "Scratch/security/corpus/gslive-betreport-all-2026-11-03.json";
 
 /**
  * Write a complete fixture root. Every path is the real repo-relative path, so the discovery code
@@ -103,13 +119,18 @@ export const CORPUS_PRIMARY_REL =
 export function buildFixtureRoot(options: FixtureRootOptions = {}): string {
   const root = makeRoot();
   if (options.corpus !== false) {
-    copyFixtureAt(root, CORPUS_PRIMARY_REL, "betreport-small.json");
+    const corpusFixture =
+      options.corpusFixture ?? INVALID_INTEGRITY_CORPUS_FIXTURE;
+    copyFixtureAt(root, CORPUS_PRIMARY_REL, corpusFixture);
     if (options.corpusSidecar !== false) {
       writeAt(
         root,
         "Scratch/security/corpus/sha256.txt",
-        `${sha256Of(fixtureText("betreport-small.json"))}  ${CORPUS_PRIMARY_REL}\n`,
+        `${sha256Of(fixtureText(corpusFixture))}  ${CORPUS_PRIMARY_REL}\n`,
       );
+    }
+    if (options.corpusFallbackFixture !== undefined) {
+      copyFixtureAt(root, CORPUS_FALLBACK_REL, options.corpusFallbackFixture);
     }
   }
   if (options.weblogRollup !== false) {
@@ -164,6 +185,9 @@ export function buildFixtureRoot(options: FixtureRootOptions = {}): string {
   const config: Record<string, unknown> = {
     schemaVersion: 1,
     kind: "fraud-model-config",
+    ...(options.groupIntegrity === undefined
+      ? {}
+      : { groupIntegrity: options.groupIntegrity }),
     detectors: {
       // The crafted fixture is 16 rows: lower the counting thresholds so each detector can fire.
       sharedIpMinAccounts: 2,

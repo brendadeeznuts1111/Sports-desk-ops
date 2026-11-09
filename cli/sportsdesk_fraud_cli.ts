@@ -26,6 +26,8 @@ import {
   FRAUD_CONFIG_REL_PATH,
   FRAUD_MODEL_FIT_COMMAND,
   FRAUD_SCHEMA_VERSION,
+  FraudConfigError,
+  SETTLEMENT_VERIFICATION,
   aggregateBets,
   compactSourceStates,
   filterBets,
@@ -33,6 +35,7 @@ import {
   listIpClusters,
   listPrefixClusters,
   loadFraudPerception,
+  loadGroupIntegrityCohort,
   resolveDossierSubject,
   subjectBetAggregate,
   toBetRecord,
@@ -42,6 +45,13 @@ import {
   type FraudSourceState,
   type IpCluster,
 } from "../lib/fraud_logs.ts";
+import { buildGroupIntegrity } from "../lib/fraud_integrity.ts";
+import {
+  USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+  USERS_REPORT_CONTROL_REL_PATH,
+  readUsersReportControl,
+  sha256FileHex,
+} from "../lib/gslive_users_report.ts";
 import {
   FRAUD_CATEGORIES,
   FRAUD_SEVERITIES,
@@ -271,6 +281,7 @@ function emitSuccess(
   context: CliContext,
   command: string,
   payload: Readonly<Record<string, unknown>>,
+  extraTiming: Readonly<Record<string, number | null>> = {},
 ): number {
   // Envelope fields win over payload fields: `command` is always the command NAME, never a
   // shell line or a payload value (the plugin routes on it).
@@ -287,6 +298,7 @@ function emitSuccess(
         context.perception === null
           ? null
           : Math.round(context.perception.timing.corpusParseMs ?? 0),
+      ...extraTiming,
     },
   };
   process.stdout.write(
@@ -557,6 +569,51 @@ function findingSubset(
 /* Commands                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Read the same-book control artifact written by the users-report compare/verify workflow.
+ * Missing → unavailable; present → validated against freshness and the current corpus digest.
+ * A control can never make settlement correctness "verified".
+ */
+async function loadSameBookControl(root: string): Promise<{
+  control: ReturnType<typeof readUsersReportControl>;
+  controlMs: number;
+}> {
+  const startedAt = performance.now();
+  const path = join(root, USERS_REPORT_CONTROL_REL_PATH);
+  let control: ReturnType<typeof readUsersReportControl>;
+  if (!(await Bun.file(path).exists())) {
+    control = readUsersReportControl(null, {
+      maxAgeMinutes: USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+    });
+  } else {
+    let raw: unknown = null;
+    try {
+      raw = await Bun.file(path).json();
+    } catch {
+      raw = {};
+    }
+    // Hash the corpus path the artifact names so a control for a different corpus is caught.
+    const record =
+      typeof raw === "object" && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : null;
+    const corpus = record?.["corpus"];
+    const relative =
+      typeof corpus === "object" && corpus !== null && !Array.isArray(corpus)
+        ? (corpus as Record<string, unknown>)["path"]
+        : null;
+    let corpusSha256: string | null = null;
+    if (typeof relative === "string" && relative !== "") {
+      corpusSha256 = await sha256FileHex(join(root, relative));
+    }
+    control = readUsersReportControl(raw, {
+      maxAgeMinutes: USERS_REPORT_CONTROL_MAX_AGE_MINUTES,
+      corpusSha256,
+    });
+  }
+  return { control, controlMs: Math.round(performance.now() - startedAt) };
+}
+
 async function cmdStatus(
   tokens: readonly string[],
   context: CliContext,
@@ -565,6 +622,14 @@ async function cmdStatus(
   assertNoPositionals("status", flags);
   const perception = await perceptionOf(context);
   const model = await readFraudModel(context.root);
+  // Validated over every discoverable capture (primary + fallbacks), deduped by betGroupId.
+  const integrityStartedAt = performance.now();
+  const integrity = await loadGroupIntegrityCohort(
+    context.root,
+    perception.config,
+  );
+  const integrityMs = Math.round(performance.now() - integrityStartedAt);
+  const sameBook = await loadSameBookControl(context.root);
   const corpusSummary =
     perception.corpus === null
       ? null
@@ -608,6 +673,11 @@ async function cmdStatus(
       schemaVersion: perception.config.schemaVersion,
     },
     corpus: corpusSummary,
+    integrity,
+    // Separate question, separate status: never folded into group integrity.
+    settlementVerification: SETTLEMENT_VERIFICATION,
+    // Same-book users-report control (a second encoding; not settlement truth).
+    sameBookControl: sameBook.control,
     model: model.state,
     sources,
     dataHandling: {
@@ -667,7 +737,11 @@ async function cmdStatus(
       EXIT_ERROR,
     );
   }
-  return emitSuccess(context, "status", payload);
+  return emitSuccess(context, "status", payload, {
+    integrityMs,
+    integrityCaptures: integrity.source?.captures?.length ?? 1,
+    sameBookControlMs: sameBook.controlMs,
+  });
 }
 
 function ageIn(
@@ -1183,6 +1257,12 @@ async function cmdBets(
       limit,
     },
     aggregate,
+    integrity:
+      corpus.integrity ??
+      buildGroupIntegrity([], {
+        policy: perception.config.groupIntegrity,
+        source: { kind: "getBetReport", capturedRows: 0 },
+      }),
     sample,
     sampleCount: sample.length,
     sources: sourceStates(perception),
@@ -1917,6 +1997,11 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
       "Prints the measured state of all 11 security sources (exists/bytes/age/stale/",
       "provenance/sha256/state/note), the parsed corpus summary and the fitted-model state.",
       "A missing source is reported as MISSING with its reason, never as zero records.",
+      "integrity: bet-group ownership/financial-field validation over every discoverable",
+      "capture (status verified|incomplete|invalid|unavailable; zero violations is only clean",
+      "when coverage completed).",
+      "settlementVerification: reported separately and stays unverified while no same-book",
+      "settlement ledger is available; it is never mixed into the integrity status.",
     ],
     options: [],
     examples: ["bun run cli/sportsdesk_fraud_cli.ts status --json"],
@@ -1924,13 +2009,14 @@ const HELP_COMMANDS: readonly CommandHelp[] = [
   {
     name: "bets",
     summary:
-      "Filtered, masked bet rows plus an aggregate (never all 24,778 rows)",
+      "Filtered, masked bet rows plus an aggregate (never the whole corpus)",
     usage:
       "bets [--agent <id>] [--account <id>] [--state <code>] [--since <iso>] [--limit N] [--include-bots <bool>] [flags]",
     detail: [
       "Normalizes getBetReport rows to the frozen BetRecord shape. IP addresses are masked",
       "(ipMasked/ipTag/ipPrefix24) at the parse boundary; a raw address is never emitted.",
       "The aggregate covers the filtered set; `sample` is capped by --limit.",
+      "integrity: the loaded corpus's bet-group integrity object (same contract as status).",
     ],
     options: [
       { flags: "--agent <id>", description: "Filter to one agent login." },
@@ -2347,6 +2433,13 @@ async function main(): Promise<number> {
   } catch (error) {
     if (error instanceof CliError) {
       return emitFailure(global.command, error, global.json);
+    }
+    if (error instanceof FraudConfigError) {
+      return emitFailure(
+        global.command,
+        new CliError(error.code, error.message, {}, EXIT_ERROR),
+        global.json,
+      );
     }
     if (error instanceof FraudModelError) {
       const refusal = new CliError(

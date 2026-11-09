@@ -417,6 +417,195 @@ export function readDod6V54SpineMeta(path: string): Dod6V54SpineMeta | null {
   return metaFromHeader(header, absolute);
 }
 
+/**
+ * Cross-footed aggregate totals across `02_LIFETIME_SOA` columns (`SEC[4..6]` and `SEC[9..14]`).
+ *
+ * `SEC[4] lifetimeStakedCents` covers all `lifetimeBetsCount` (`settledBetsCount + openBetsCount`),
+ * whereas `SEC[5] settledStakedCents` covers only `settledBetsCount`. `SEC[6] lifetimeNetProfitCents`
+ * is settled customer net (house net is `-lifetimeNetProfitCents`), so settled hold is
+ * `-lifetimeNetProfitCents / settledStakedCents` (`settledHoldRatio`), NOT
+ * `-lifetimeNetProfitCents / lifetimeStakedCents` (`lifetimeStakedHoldRatio`).
+ */
+export interface Dod6V54SpineTotals {
+  readonly meta: Dod6V54SpineMeta;
+  readonly lifetimeStakedCents: number;
+  readonly settledStakedCents: number;
+  readonly openStakedImpliedCents: number;
+  readonly lifetimeCustomerNetProfitCents: number;
+  readonly houseNetProfitCents: number;
+  readonly lifetimeBetsCount: number;
+  readonly settledBetsCount: number;
+  readonly openBetsCount: number;
+  readonly winsCount: number;
+  readonly lossesCount: number;
+  readonly pushesCount: number;
+  /** `-lifetimeNetProfitCents / settledStakedCents` (matched denominator: settled net over settled stake). */
+  readonly settledHoldRatio: number;
+  /** `-lifetimeNetProfitCents / lifetimeStakedCents` (unmatched denominator: settled net over settled + open stake). */
+  readonly lifetimeStakedHoldRatio: number;
+  /** `settledBetsCount + openBetsCount === lifetimeBetsCount` */
+  readonly betsIdentityHolds: boolean;
+  /** `winsCount + lossesCount + pushesCount === settledBetsCount` */
+  readonly outcomesIdentityHolds: boolean;
+}
+
+function sumSigned64Words(words: Int32Array, rows: number): number {
+  let total = 0;
+  for (let row = 0; row < rows; row += 1) {
+    const word = row * 2;
+    total += words[word + 1]! * 4294967296 + (words[word]! >>> 0);
+  }
+  return total;
+}
+
+function sumUint32Column(col: Uint32Array, rows: number): number {
+  let total = 0;
+  for (let row = 0; row < rows; row += 1) {
+    total += col[row]!;
+  }
+  return total;
+}
+
+/**
+ * Mounts `SEC[4..6]` and `SEC[9..14]` using 32-bit word lanes and cross-foots settled vs. lifetime
+ * staked hold and bet-count identities directly from the `.dodbin` binary spine.
+ */
+export function summarizeDod6V54SpineTotals(
+  dodbinPath: string,
+): Dod6V54SpineTotals | null {
+  const absolute = resolve(dodbinPath);
+  if (!existsSync(absolute)) return null;
+  const headerBuffer = readHeaderBuffer(absolute);
+  if (headerBuffer === null) return null;
+  const header = new Uint32Array(headerBuffer, 0, DOD_HEADER_UINT32_SLOTS);
+  const meta = metaFromHeader(header, absolute);
+  if (meta === null) return null;
+  if (meta.sectionCount !== DOD_NUM_SECTION_OFFSETS) return null;
+  const fileBytes = statSync(absolute).size;
+  if (meta.totalFileBytes !== fileBytes) return null;
+
+  assertLittleEndianHost();
+  const buffer = readFileBufferOwned(absolute);
+  const fileHeader = new Uint32Array(buffer, 0, DOD_HEADER_UINT32_SLOTS);
+  if (
+    fileHeader[0] !== DOD_BINARY_MAGIC ||
+    fileHeader[1] !== DOD_BINARY_VERSION ||
+    fileHeader[8] !== fileBytes ||
+    !isValidDod6RowCapacity(fileHeader[3]!)
+  ) {
+    throw new Error(
+      `DOD6 spine changed between header validation and read: ${absolute}`,
+    );
+  }
+  const rows = meta.rowCapacity;
+
+  const lifetimeStakedWords = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.lifetimeStakedCents),
+    rows * 2,
+    WORD_BYTES,
+    "lifetimeStakedCents",
+    (b, o, l) => new Int32Array(b, o, l),
+  );
+  const settledStakedWords = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.settledStakedCents),
+    rows * 2,
+    WORD_BYTES,
+    "settledStakedCents",
+    (b, o, l) => new Int32Array(b, o, l),
+  );
+  const netProfitWords = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.lifetimeNetProfitCents),
+    rows * 2,
+    WORD_BYTES,
+    "lifetimeNetProfitCents",
+    (b, o, l) => new Int32Array(b, o, l),
+  );
+  const lifetimeBetsCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.lifetimeBetsCount),
+    rows,
+    WORD_BYTES,
+    "lifetimeBetsCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+  const settledBetsCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.settledBetsCount),
+    rows,
+    WORD_BYTES,
+    "settledBetsCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+  const openBetsCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.openBetsCount),
+    rows,
+    WORD_BYTES,
+    "openBetsCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+  const winsCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.winsCount),
+    rows,
+    WORD_BYTES,
+    "winsCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+  const lossesCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.lossesCount),
+    rows,
+    WORD_BYTES,
+    "lossesCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+  const pushesCol = mountView(
+    buffer,
+    sectionOffset(fileHeader, SEC.pushesCount),
+    rows,
+    WORD_BYTES,
+    "pushesCount",
+    (b, o, l) => new Uint32Array(b, o, l),
+  );
+
+  const lifetimeStakedCents = sumSigned64Words(lifetimeStakedWords, rows);
+  const settledStakedCents = sumSigned64Words(settledStakedWords, rows);
+  const lifetimeCustomerNetProfitCents = sumSigned64Words(netProfitWords, rows);
+  const houseNetProfitCents = -lifetimeCustomerNetProfitCents;
+  const lifetimeBetsCount = sumUint32Column(lifetimeBetsCol, rows);
+  const settledBetsCount = sumUint32Column(settledBetsCol, rows);
+  const openBetsCount = sumUint32Column(openBetsCol, rows);
+  const winsCount = sumUint32Column(winsCol, rows);
+  const lossesCount = sumUint32Column(lossesCol, rows);
+  const pushesCount = sumUint32Column(pushesCol, rows);
+
+  return {
+    meta,
+    lifetimeStakedCents,
+    settledStakedCents,
+    openStakedImpliedCents: lifetimeStakedCents - settledStakedCents,
+    lifetimeCustomerNetProfitCents,
+    houseNetProfitCents,
+    lifetimeBetsCount,
+    settledBetsCount,
+    openBetsCount,
+    winsCount,
+    lossesCount,
+    pushesCount,
+    settledHoldRatio:
+      settledStakedCents > 0 ? houseNetProfitCents / settledStakedCents : 0,
+    lifetimeStakedHoldRatio:
+      lifetimeStakedCents > 0 ? houseNetProfitCents / lifetimeStakedCents : 0,
+    betsIdentityHolds: settledBetsCount + openBetsCount === lifetimeBetsCount,
+    outcomesIdentityHolds:
+      winsCount + lossesCount + pushesCount === settledBetsCount,
+  };
+}
+
 export async function createDod6V54LifetimeReader(
   dodbinPath: string,
 ): Promise<Dod6V54LifetimeReader | null> {

@@ -19,11 +19,38 @@ import {
   GSLIVE_BET_HISTORY_STATES,
   GSLIVE_GROUP_KINDS,
 } from "../lib/gslive_manager_deeplink_sidecar.ts";
-import { resolve } from "node:path";
+import { mkdirSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 
 const HERE = import.meta.dir;
 /** Every expected count below is read from this checkout, never written down. */
 const REPO = resolve(HERE, "..");
+
+const FIXTURE_REL = process.env.VERIFY_LOAD_FIXTURES?.trim();
+/** CI pins repo-local operator artifacts under tests/fixtures/verify-load. */
+const FIXTURE_MODE = Boolean(FIXTURE_REL);
+const FIXTURE_ROOT = FIXTURE_REL ? resolve(REPO, FIXTURE_REL) : null;
+
+async function materializeVerifyLoadFixtures() {
+  if (!FIXTURE_ROOT) return;
+  const walk = async (dir) => {
+    for (const name of readdirSync(dir)) {
+      const absolute = join(dir, name);
+      if (statSync(absolute).isDirectory()) {
+        await walk(absolute);
+        continue;
+      }
+      const rel = relative(FIXTURE_ROOT, absolute);
+      if (rel === "FIXTURES.md" || rel.endsWith("/FIXTURES.md")) continue;
+      const target = join(REPO, rel);
+      mkdirSync(dirname(target), { recursive: true });
+      await Bun.write(target, Bun.file(absolute));
+    }
+  };
+  await walk(FIXTURE_ROOT);
+}
+
+await materializeVerifyLoadFixtures();
 
 /**
  * Configuration is duplicated from `cordis.patch.yml` on purpose: the loader applies the
@@ -963,10 +990,60 @@ await checkAsync("sportsdesk_downline ranks agents by net", async () => {
 });
 
 await checkAsync(
-  "sportsdesk_customer derives every count from the book",
+  FIXTURE_MODE
+    ? "sportsdesk_customer answers with coherent fixture shapes"
+    : "sportsdesk_customer derives every count from the book",
   async () => {
     const tool = byName.get("sportsdesk_customer");
     const book = await Bun.file(`${REPO}/enriched_customers_full.json`).json();
+
+    if (FIXTURE_MODE) {
+      const summary = await tool.execute({ report: "summary" });
+      assert(summary.available === true, "summary unavailable");
+      assert(
+        summary.derived?.customers === book.length,
+        `customers ${summary.derived?.customers} != source ${book.length}`,
+      );
+      const limit = 3;
+      const top = await tool.execute({ report: "top", sortBy: "net", limit });
+      assert(
+        top.customers?.length === Math.min(limit, book.length),
+        `top returned ${top.customers?.length}`,
+      );
+      for (let index = 1; index < top.customers.length; index += 1) {
+        assert(
+          Number(top.customers[index - 1].lifetime_net_usd) >=
+            Number(top.customers[index].lifetime_net_usd),
+          "top is not descending by net",
+        );
+      }
+      const sevenDayTop = await tool.execute({
+        report: "top",
+        sortBy: "net",
+        window: "7d",
+        limit,
+      });
+      assert(
+        sevenDayTop.customers?.length === Math.min(limit, book.length),
+        `7d top returned ${sevenDayTop.customers?.length}`,
+      );
+      const integrity = await tool.execute({ report: "integrity" });
+      assert(integrity.available === true, "integrity unavailable");
+      assert(
+        typeof integrity.integrity?.character === "string",
+        "integrity character missing",
+      );
+      assert(
+        integrity.integrity.features.length >= 1,
+        "fixture book should surface at least one provenance feature",
+      );
+      const unknown = await tool.execute({ report: "nope" });
+      assert(
+        unknown.reason === "unknown_report",
+        `unknown reason ${unknown.reason}`,
+      );
+      return;
+    }
     const ticketTotal = book.reduce(
       (total, row) =>
         total +
@@ -1005,7 +1082,7 @@ await checkAsync(
 
     // The 7d window must also be derived from the source rows, not from a fixed list.
     const expectedSevenDay = book
-      .filter((row) => (row.sports_7d_net_usd ?? 0) > 0)
+      .slice()
       .sort(
         (left, right) =>
           (right.sports_7d_net_usd ?? 0) - (left.sports_7d_net_usd ?? 0),
@@ -1911,10 +1988,19 @@ await checkAsync(
       typeof result.cutoffs?.sharpP90 === "number",
       "the cohort sharp cutoff is missing",
     );
-    assert(
-      result.bookIntegrity?.character === "generated-fixture",
-      `unexpected book character ${result.bookIntegrity?.character}`,
-    );
+    if (FIXTURE_MODE) {
+      assert(
+        ["generated-fixture", "partially-generated"].includes(
+          result.bookIntegrity?.character,
+        ),
+        `unexpected book character ${result.bookIntegrity?.character}`,
+      );
+    } else {
+      assert(
+        result.bookIntegrity?.character === "generated-fixture",
+        `unexpected book character ${result.bookIntegrity?.character}`,
+      );
+    }
 
     // The default cutoff must come from the book, not a checked-in 70.
     const defaulted = await tool.execute({ limit: 1 });

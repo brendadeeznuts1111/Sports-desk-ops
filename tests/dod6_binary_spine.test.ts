@@ -29,6 +29,7 @@ import {
   createDod6V54LifetimeReader,
   readDod6V54SpineMeta,
   roiBasisPointsToSharpScore,
+  summarizeDod6V54SpineTotals,
   type Dod6LifetimeLookupTarget,
 } from "../lib/dod6_v54_lifetime_reader.ts";
 import {
@@ -776,5 +777,59 @@ describe("real spine (88 MB)", () => {
     expect(reader!.lookup("")).toBeNull();
     // EMPTY_RADIX_SLOT_ROW is the frozen sentinel the chain walk relies on.
     expect(EMPTY_RADIX_SLOT_ROW).toBe(-1);
+  });
+
+  test("cross-foots settledStakedCents vs lifetimeStakedCents and bet count identities from spine header and columns", () => {
+    const totals = summarizeDod6V54SpineTotals(DODBIN);
+    expect(totals).not.toBeNull();
+    expect(totals!.meta.customerCount).toBe(meta!.customerCount);
+    expect(totals!.meta.rowCapacity).toBe(meta!.rowCapacity);
+    expect(totals!.betsIdentityHolds).toBe(true);
+    expect(totals!.outcomesIdentityHolds).toBe(true);
+    expect(totals!.settledBetsCount + totals!.openBetsCount).toBe(
+      totals!.lifetimeBetsCount,
+    );
+    expect(totals!.winsCount + totals!.lossesCount + totals!.pushesCount).toBe(
+      totals!.settledBetsCount,
+    );
+    expect(totals!.openStakedImpliedCents).toBe(
+      totals!.lifetimeStakedCents - totals!.settledStakedCents,
+    );
+    expect(totals!.houseNetProfitCents).toBe(
+      -totals!.lifetimeCustomerNetProfitCents,
+    );
+
+    // Independently derive column sums from the raw binary buffer using header-declared rowCapacity
+    const bytes = new Uint8Array(readFileSync(DODBIN));
+    const u32 = new Uint32Array(bytes.buffer, bytes.byteOffset);
+    const header = u32.subarray(0, DOD_HEADER_UINT32_SLOTS);
+    const rows = header[3]!;
+    const secOffset = (idx: number): number => header[16 + idx * 3]!;
+    const sumI64 = (secIdx: number): bigint => {
+      const col = new BigInt64Array(
+        bytes.buffer,
+        bytes.byteOffset + secOffset(secIdx),
+        rows,
+      );
+      let acc = 0n;
+      for (let r = 0; r < rows; r += 1) acc += col[r]!;
+      return acc;
+    };
+    const expectedLifetimeStaked = Number(sumI64(4));
+    const expectedSettledStaked = Number(sumI64(5));
+    const expectedCustomerNet = Number(sumI64(6));
+
+    expect(totals!.lifetimeStakedCents).toBe(expectedLifetimeStaked);
+    expect(totals!.settledStakedCents).toBe(expectedSettledStaked);
+    expect(totals!.lifetimeCustomerNetProfitCents).toBe(expectedCustomerNet);
+    expect(totals!.houseNetProfitCents).toBe(-expectedCustomerNet);
+    expect(totals!.settledHoldRatio).toBeCloseTo(
+      -expectedCustomerNet / expectedSettledStaked,
+      10,
+    );
+    expect(totals!.lifetimeStakedHoldRatio).toBeCloseTo(
+      -expectedCustomerNet / expectedLifetimeStaked,
+      10,
+    );
   });
 });

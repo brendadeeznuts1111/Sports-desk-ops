@@ -13,7 +13,8 @@
  * stored on a record and never emitted. Account ids/logins do appear (existing desk tools show
  * them), but never joined to a raw IP.
  *
- * Corpus volume: the live GSLive `getBetReport` capture is 55,600,957 bytes / 24,778 rows.
+ * Corpus volume: the retained GSLive `getBetReport` export is tens of MB / tens of thousands of
+ * rows; the number is reported per run by `status`, never assumed here.
  * Measured on Bun 1.4.4 (macOS arm64): `Bun.file(path).json()` ≈ 60–110 ms including the parse,
  * so one invocation parses the document once and every command reuses that in-memory corpus.
  */
@@ -30,6 +31,14 @@ import {
   loadGsliveWeblogActivity,
   type GsliveWeblogActivity,
 } from "./gslive_weblog_activity.ts";
+import {
+  buildGroupIntegrity,
+  mergeGroupIntegrity,
+  DEFAULT_GROUP_INTEGRITY_POLICY,
+  type GroupIntegrityCapture,
+  type GroupIntegrityPolicy,
+  type GroupIntegritySummary,
+} from "./fraud_integrity.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                   */
@@ -142,6 +151,19 @@ export interface FraudBetRecord extends BetRecord {
    * not the F402 namespace key. Optional because older synthetic fixtures may omit it.
    */
   readonly partnerUserId?: string | null;
+  /**
+   * GSLive `betGroupId` — the ticket this row is a leg of. A ticket's `bet`, `betGroupToWin` and
+   * `betGroupResult` are repeated verbatim on every leg row, so an aggregate must dedupe by this
+   * key before summing; summing per row inflates a parlay by its leg count. Optional because
+   * older synthetic fixtures may omit it.
+   */
+  readonly betGroupId?: string | null;
+  /**
+   * Ticket net P&L in cents (`betGroupResult`), repeated on every leg row: `> 0` won, `< 0` lost,
+   * `0` void, `null` still open. This is the money outcome of the ticket. Leg `isWin` is a
+   * different, leg-scoped fact: a winning leg inside a losing parlay is not a winning bet.
+   */
+  readonly ticketResultCents?: number | null;
   /** IP classification from `lib/f402_weblog.ts` (`BOT_RING_140_248`, `ICLOUD_RELAY`, ...). */
   readonly ipClass: string;
   readonly botRingRange: boolean;
@@ -151,7 +173,10 @@ export interface FraudBetRecord extends BetRecord {
   readonly dayOfWeekUtc: number;
   /** Ordinal period encoding: `sN` → N, `hN` → 20+N, `m` → 0, unknown → null. */
   readonly periodCode: number | null;
-  /** Numeric settled outcome: win=1, lose=0, push=0.5, open/unknown=0. */
+  /**
+   * Numeric settled outcome of the ticket, derived from `ticketResultCents` (never from the
+   * lifecycle `state` column): win=1, lose=0, void=0.5, open/unknown=0.
+   */
   readonly resultCodeNum: number;
 }
 
@@ -379,6 +404,11 @@ export interface FraudCorpus {
   readonly agents: number;
   readonly parseMs: number;
   readonly timerSource: "Bun.file().json" | "mock";
+  /**
+   * Bet-group integrity measured over every raw component row before ticket dedupe.
+   * Added by `parseFraudCorpus`; optional so mock corpora in tests stay constructible.
+   */
+  readonly integrity?: GroupIntegritySummary;
 }
 
 /** Everything one CLI invocation measures, loaded once (the 55 MB corpus parsed once). */
@@ -453,6 +483,10 @@ export interface FraudDetectorConfig {
   readonly burstMinTickets: number;
   readonly agentConcentrationMinShare: number;
   readonly vipStakeMultiple: number;
+  /** Co-placement detector: same-event window, minimum shared events, top pairs reported. */
+  readonly syncPairWindowSeconds: number;
+  readonly syncPairMinEvents: number;
+  readonly syncPairTop: number;
 }
 
 export type FraudProxyLabel = "desk_flag" | "suspected_bot" | "reversed_credit";
@@ -488,6 +522,11 @@ export interface FraudPluginConfig {
   readonly sources: Readonly<Record<FraudSourceId, FraudSourceConfig>>;
   readonly detectors: FraudDetectorConfig;
   readonly model: FraudModelHyperparameters;
+  /**
+   * Bet-group integrity policy (known/allowed provider enums, compared ticket fields). Parsed and
+   * validated at startup: a malformed block fails explicitly instead of falling back.
+   */
+  readonly groupIntegrity: GroupIntegrityPolicy;
   readonly features: readonly FraudFeatureConfig[];
 }
 
@@ -592,6 +631,13 @@ export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
     burstMinTickets: 3,
     agentConcentrationMinShare: 0.25,
     vipStakeMultiple: 5,
+    // Timing alone is base-rate: pairs of accounts land on the same popular event within seconds
+    // all the time. Shared *independent* events is the discriminator, so the default sits above
+    // the two-event floor; the finding reports the observed pair counts so the base rate is never
+    // a constant maintained here.
+    syncPairWindowSeconds: 10,
+    syncPairMinEvents: 3,
+    syncPairTop: 10,
   },
   model: {
     proxy: "desk_flag",
@@ -606,6 +652,7 @@ export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
     scoreQuantiles: 1001,
     scoreBands: { lowMax: 49, mediumMax: 74, highMax: 89 },
   },
+  groupIntegrity: { ...DEFAULT_GROUP_INTEGRITY_POLICY },
   features: [
     { id: "delay_sec", label: "Configured delay (seconds)", kind: "snapshot" },
     { id: "accept_sec", label: "Accept flag (seconds)", kind: "snapshot" },
@@ -636,7 +683,8 @@ export const DEFAULT_FRAUD_CONFIG: FraudPluginConfig = {
     { id: "day_of_week", label: "UTC day of week (0=Sun)", kind: "snapshot" },
     {
       id: "result_code",
-      label: "Settled outcome code (win=1, lose=0, push=0.5)",
+      label:
+        "Settled outcome code (ticket-level: win=1, lose=0, void=0.5, open=0)",
       kind: "snapshot",
     },
     { id: "acct_prior_bets", label: "Account prior bets", kind: "history" },
@@ -748,6 +796,139 @@ function stringList(value: unknown): readonly string[] | null {
   return list.length === value.length ? list : null;
 }
 
+/** Thrown when an explicitly-configured policy block is malformed; never silently downgraded. */
+export class FraudConfigError extends Error {
+  readonly code = "invalid_config" as const;
+}
+
+function configIntegerList(
+  value: unknown,
+  field: string,
+): readonly number[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new FraudConfigError(
+      `config groupIntegrity.${field} must be a non-empty array of integers`,
+    );
+  }
+  const out: number[] = [];
+  for (const item of value) {
+    if (typeof item !== "number" || !Number.isInteger(item)) {
+      throw new FraudConfigError(
+        `config groupIntegrity.${field} must be a non-empty array of integers`,
+      );
+    }
+    if (!out.includes(item)) out.push(item);
+  }
+  return out;
+}
+
+function configFieldList(value: unknown): readonly string[] | null {
+  if (value === undefined || value === null) return null;
+  const list = stringList(value);
+  if (
+    list === null ||
+    list.length === 0 ||
+    list.some((item) => item.trim() === "")
+  ) {
+    throw new FraudConfigError(
+      "config groupIntegrity.ticketFields must be a non-empty array of strings",
+    );
+  }
+  return list;
+}
+
+function configBoolean(value: unknown, field: string): boolean | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "boolean") {
+    throw new FraudConfigError(
+      `config groupIntegrity.${field} must be a boolean`,
+    );
+  }
+  return value;
+}
+
+function assertSubset(
+  subset: readonly number[],
+  superset: readonly number[],
+  field: string,
+  supersetName: string,
+): void {
+  const allowed = new Set(superset);
+  for (const value of subset) {
+    if (!allowed.has(value)) {
+      throw new FraudConfigError(
+        `config groupIntegrity.${field} must be a subset of ${supersetName} (unexpected ${value})`,
+      );
+    }
+  }
+}
+
+/** Parse + validate `config/fraud-model.json#groupIntegrity`; malformed input throws. */
+function parseGroupIntegrityPolicy(raw: unknown): GroupIntegrityPolicy {
+  if (raw === undefined || raw === null) {
+    return { ...DEFAULT_GROUP_INTEGRITY_POLICY };
+  }
+  const record = asRecord(raw);
+  if (record === null) {
+    throw new FraudConfigError(
+      "config groupIntegrity must be a JSON object when present",
+    );
+  }
+  const knownStates =
+    configIntegerList(record["knownStates"], "knownStates") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.knownStates;
+  const allowedStates =
+    configIntegerList(record["allowedStates"], "allowedStates") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.allowedStates;
+  assertSubset(allowedStates, knownStates, "allowedStates", "knownStates");
+  const knownIsWin =
+    configIntegerList(record["knownIsWin"], "knownIsWin") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.knownIsWin;
+  const allowedIsWin =
+    configIntegerList(record["allowedIsWin"], "allowedIsWin") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.allowedIsWin;
+  assertSubset(allowedIsWin, knownIsWin, "allowedIsWin", "knownIsWin");
+  const ticketFields =
+    configFieldList(record["ticketFields"]) ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.ticketFields;
+  const requireGroupId =
+    configBoolean(record["requireGroupId"], "requireGroupId") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.requireGroupId;
+  const requireUser =
+    configBoolean(record["requireUser"], "requireUser") ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.requireUser;
+  const maxSamples =
+    record["maxSamplesPerCode"] === undefined ||
+    record["maxSamplesPerCode"] === null
+      ? DEFAULT_GROUP_INTEGRITY_POLICY.maxSamplesPerCode
+      : finiteNumber(record["maxSamplesPerCode"]);
+  if (
+    maxSamples === null ||
+    !Number.isInteger(maxSamples) ||
+    maxSamples < 1 ||
+    maxSamples > 1000
+  ) {
+    throw new FraudConfigError(
+      "config groupIntegrity.maxSamplesPerCode must be an integer between 1 and 1000",
+    );
+  }
+  const policyVersion =
+    nonEmptyText(record["policyVersion"]) ??
+    DEFAULT_GROUP_INTEGRITY_POLICY.policyVersion;
+  return {
+    policyVersion,
+    knownStates,
+    allowedStates,
+    knownIsWin,
+    allowedIsWin,
+    ticketFields,
+    requireGroupId,
+    requireUser,
+    maxSamplesPerCode: maxSamples,
+  };
+}
+
 function proxyLabel(value: unknown): FraudProxyLabel | null {
   return value === "desk_flag" ||
     value === "suspected_bot" ||
@@ -819,6 +1000,7 @@ export async function loadFraudConfig(
   const detectors = asRecord(record["detectors"]);
   const model = asRecord(record["model"]);
   const sources = asRecord(record["sources"]);
+  const groupIntegrity = parseGroupIntegrityPolicy(record["groupIntegrity"]);
   const featuresRaw = record["features"];
   const sourceEntries = Object.entries(DEFAULT_FRAUD_CONFIG.sources) as Array<
     [FraudSourceId, FraudSourceConfig]
@@ -978,6 +1160,18 @@ export async function loadFraudConfig(
         1,
         1000,
       ),
+      syncPairWindowSeconds: positiveInt(
+        detectors?.["syncPairWindowSeconds"],
+        DEFAULT_FRAUD_CONFIG.detectors.syncPairWindowSeconds,
+      ),
+      syncPairMinEvents: positiveInt(
+        detectors?.["syncPairMinEvents"],
+        DEFAULT_FRAUD_CONFIG.detectors.syncPairMinEvents,
+      ),
+      syncPairTop: positiveInt(
+        detectors?.["syncPairTop"],
+        DEFAULT_FRAUD_CONFIG.detectors.syncPairTop,
+      ),
     },
     model: {
       proxy: proxyLabel(model?.["proxy"]) ?? DEFAULT_FRAUD_CONFIG.model.proxy,
@@ -1035,6 +1229,7 @@ export async function loadFraudConfig(
         ),
       },
     },
+    groupIntegrity,
     features: registry,
   };
   return { config, path, exists: true, note: null };
@@ -1126,6 +1321,37 @@ export function dollarsToCents(value: unknown): number | null {
   const parsed = finiteNumber(value);
   if (parsed === null) return null;
   return Math.round(parsed * 100);
+}
+
+export type TicketOutcome = "win" | "lose" | "void" | "open";
+
+/**
+ * Ticket outcome from `ticketResultCents` (`betGroupResult`). The lifecycle `state` column is not
+ * an outcome: `state=2` covers won, lost and void tickets alike, and `state=1` marks open tickets
+ * whose result is still null. Absent (older fixtures) is `open`, never a loss.
+ */
+export function ticketOutcomeOf(
+  ticketResultCents: number | null | undefined,
+): TicketOutcome {
+  const cents = ticketResultCents ?? null;
+  if (cents === null) return "open";
+  if (cents > 0) return "win";
+  if (cents < 0) return "lose";
+  return "void";
+}
+
+/** Numeric code for the model: win=1, lose=0, void=0.5, open/unknown=0. */
+export function ticketOutcomeCode(
+  ticketResultCents: number | null | undefined,
+): number {
+  const outcome = ticketOutcomeOf(ticketResultCents);
+  return outcome === "win"
+    ? 1
+    : outcome === "lose"
+      ? 0
+      : outcome === "void"
+        ? 0.5
+        : 0;
 }
 
 /** Decimal odds (e.g. "2.86") → implied probability; null when absent/non-positive. */
@@ -1514,6 +1740,10 @@ function normalizeBetRow(
       : null;
   const stakeCents = dollarsToCents(row["bet"]);
   const toWinCents = dollarsToCents(row["betGroupToWin"]);
+  // `bet`, `betGroupToWin` and `betGroupResult` are ticket-level values repeated verbatim on
+  // every leg row; `betGroupId` is what lets an aggregate dedupe them before summing.
+  const betGroupId = nonEmptyText(row["betGroupId"]);
+  const ticketResultCents = dollarsToCents(row["betGroupResult"]);
   const resultRaw = row["result"];
   const resultCode =
     typeof resultRaw === "string" && resultRaw.trim() !== ""
@@ -1521,8 +1751,7 @@ function normalizeBetRow(
       : null;
   const placedDate = placedAtMs === null ? null : new Date(placedAtMs);
   const period = nonEmptyText(row["period"]);
-  const resultCodeNum =
-    stateCode === 1 ? 1 : stateCode === 2 ? 0 : stateCode === 3 ? 0.5 : 0;
+  const resultCodeNum = ticketOutcomeCode(ticketResultCents);
   accumulator.accounts.add(userId);
   const agentId = nonEmptyText(row["agent"]);
   if (agentId !== null) accumulator.agents.add(agentId);
@@ -1541,6 +1770,8 @@ function normalizeBetRow(
     oddsDrift,
     stakeCents,
     toWinCents,
+    betGroupId,
+    ticketResultCents,
     // The 69-field capture has no `line` column; the frozen feature is constant 0.
     lineHundredths: 0,
     sport: nonEmptyText(row["displaySportId"]) ?? nonEmptyText(row["sID"]),
@@ -1579,7 +1810,10 @@ function compareRecords(a: FraudBetRecord, b: FraudBetRecord): number {
  * Parse the 55 MB `r.bets` document ONCE and normalize every row. IPs are masked here, at the
  * boundary, so no downstream consumer can print a raw address.
  */
-export async function parseFraudCorpus(path: string): Promise<{
+export async function parseFraudCorpus(
+  path: string,
+  options: { readonly policy?: GroupIntegrityPolicy } = {},
+): Promise<{
   rows: number;
   malformed: number;
   records: readonly FraudBetRecord[];
@@ -1590,10 +1824,17 @@ export async function parseFraudCorpus(path: string): Promise<{
   agents: number;
   window: CorpusWindow;
   parseMs: number;
+  integrity: GroupIntegritySummary;
 }> {
   const startedAt = performance.now();
   const document = await parseCorpusDocument(path);
   const bets = (asRecord(document["r"])?.["bets"] ?? []) as unknown[];
+  // Validate every component row BEFORE any ticket dedupe: ownership/conflict detection needs the
+  // rows a financial dedupe would remove. This pass is independent of the normalization loop.
+  const integrity = buildGroupIntegrity(bets, {
+    ...(options.policy === undefined ? {} : { policy: options.policy }),
+    source: { kind: "getBetReport", capturedRows: bets.length },
+  });
   const accumulator: NormalizeAccumulator = {
     records: [],
     byIp: new Map(),
@@ -1649,6 +1890,7 @@ export async function parseFraudCorpus(path: string): Promise<{
       measuredToIso: measuredTo === null ? null : iso(measuredTo / 1000),
     },
     parseMs,
+    integrity,
   };
 }
 
@@ -2547,6 +2789,111 @@ async function loadFixturePresence(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Settlement verification + group-integrity cohort                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Settlement correctness is a different question from ownership/financial-field integrity:
+ * the captured rows can be internally consistent while the settlement ledger has never been
+ * compared. The CLI contract carries this as a separate status; it must never be folded into
+ * the group-integrity status.
+ */
+export const SETTLEMENT_VERIFICATION = {
+  status: "unverified",
+  blockedBy: "no_same_book_settlement_ledger",
+  note: "Ownership and financial-field integrity are validated from captured rows; settlement correctness needs a same-book settlement ledger that is not available.",
+} as const;
+
+export type SettlementVerification = typeof SETTLEMENT_VERIFICATION;
+
+/** Raw row fields the integrity pass reads; compact copies keep the cohort in memory small. */
+function compactIntegrityRow(
+  raw: unknown,
+  policy: GroupIntegrityPolicy,
+): unknown {
+  const row = asRecord(raw);
+  if (row === null) return raw;
+  const compact: Record<string, unknown> = {
+    betGroupId: row["betGroupId"],
+    userID: row["userID"],
+    partnerUserID: row["partnerUserID"],
+    state: row["state"],
+    isWin: row["isWin"],
+    supplementalConfirmation: row["supplementalConfirmation"],
+  };
+  for (const field of policy.ticketFields) compact[field] = row[field];
+  return compact;
+}
+
+/** Stream-hash a capture so identical copies are validated once, not silently double-counted. */
+async function sha256FileStreaming(path: string): Promise<string | null> {
+  try {
+    const hasher = new Bun.CryptoHasher("sha256");
+    for await (const chunk of Bun.file(path).stream()) hasher.update(chunk);
+    return hasher.digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate every discoverable capture (primary + configured fallbacks) as one cohort: groups are
+ * keyed by `betGroupId` once, so an overlapping ticket is checked across captures rather than
+ * counted twice. Byte-identical copies (same sha256) are one capture. Status is `unavailable`
+ * when no capture can be read.
+ */
+export async function loadGroupIntegrityCohort(
+  root: string,
+  config: FraudPluginConfig,
+): Promise<GroupIntegritySummary> {
+  const candidates = [
+    config.corpus.primaryRelPath,
+    ...config.corpus.fallbackRelPaths,
+  ];
+  const seenPaths = new Set<string>();
+  const seenHashes = new Set<string>();
+  const captures: GroupIntegrityCapture[] = [];
+  for (const relative of candidates) {
+    if (seenPaths.has(relative)) continue;
+    seenPaths.add(relative);
+    const absolute = join(root, relative);
+    try {
+      if (!(await Bun.file(absolute).exists())) continue;
+      const sha256 = await sha256FileStreaming(absolute);
+      if (sha256 !== null && seenHashes.has(sha256)) continue;
+      if (sha256 !== null) seenHashes.add(sha256);
+      const document: unknown = await Bun.file(absolute).json();
+      const bets = asRecord(asRecord(document)?.["r"])?.["bets"];
+      if (!Array.isArray(bets)) continue;
+      captures.push({
+        captureId: relative,
+        rows: bets.map((bet) =>
+          compactIntegrityRow(bet, config.groupIntegrity),
+        ),
+        ...(sha256 === null ? {} : { sha256 }),
+      });
+    } catch {
+      // An unreadable capture contributes no rows; if none can be read the cohort is unavailable.
+      continue;
+    }
+  }
+  if (captures.length === 0) {
+    return buildGroupIntegrity([], {
+      policy: config.groupIntegrity,
+      source: { kind: "getBetReport", capturedRows: 0 },
+    });
+  }
+  if (captures.length === 1) {
+    const only = captures[0]!;
+    return buildGroupIntegrity(only.rows, {
+      policy: config.groupIntegrity,
+      source: { kind: "getBetReport", capturedRows: only.rows.length },
+    });
+  }
+  return mergeGroupIntegrity(captures, { policy: config.groupIntegrity });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Perception (one load per CLI invocation)                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -2568,7 +2915,9 @@ export async function loadFraudPerception(options: {
   let corpusSource = corpusDiscovery.source;
   if (corpusSource.exists) {
     try {
-      const parsed = await parseFraudCorpus(corpusDiscovery.path);
+      const parsed = await parseFraudCorpus(corpusDiscovery.path, {
+        policy: config.groupIntegrity,
+      });
       corpus = {
         source: corpusSource,
         path: corpusDiscovery.path,
@@ -2586,6 +2935,7 @@ export async function loadFraudPerception(options: {
         accounts: parsed.accounts,
         agents: parsed.agents,
         parseMs: parsed.parseMs,
+        integrity: parsed.integrity,
         timerSource: "Bun.file().json",
       };
       corpusSource = {
@@ -2791,9 +3141,10 @@ export function aggregateBets(
   for (const record of records) {
     accounts.add(record.userId);
     if (record.agentId !== null) agents.add(record.agentId);
-    if (record.stateCode === 1) states.win += 1;
-    else if (record.stateCode === 2) states.lose += 1;
-    else if (record.stateCode === 3) states.push += 1;
+    const outcome = ticketOutcomeOf(record.ticketResultCents);
+    if (outcome === "win") states.win += 1;
+    else if (outcome === "lose") states.lose += 1;
+    else if (outcome === "void") states.push += 1;
     else states.other += 1;
     if (record.suspectedBot) suspectedBot += 1;
     if (record.reversedCredit) reversedCredit += 1;
@@ -3038,6 +3389,7 @@ export function subjectBetAggregate(
       : record.agentId?.toUpperCase() === subject.id.toUpperCase(),
   );
   const aggregate = aggregateBets(matched);
+  const seenTicket = new Set<string>();
   let stakeCents = 0;
   let toWinCents = 0;
   let oddsSum = 0;
@@ -3045,8 +3397,13 @@ export function subjectBetAggregate(
   let first: number | null = null;
   let last: number | null = null;
   for (const record of matched) {
-    if (record.stakeCents !== null) stakeCents += record.stakeCents;
-    if (record.toWinCents !== null) toWinCents += record.toWinCents;
+    // `stake`/`toWin` are ticket-level values repeated on every leg row; count each ticket once.
+    const ticketKey = record.betGroupId ?? record.betId;
+    if (!seenTicket.has(ticketKey)) {
+      seenTicket.add(ticketKey);
+      if (record.stakeCents !== null) stakeCents += record.stakeCents;
+      if (record.toWinCents !== null) toWinCents += record.toWinCents;
+    }
     if (record.oddsPlaced !== null && Number.isFinite(record.oddsPlaced)) {
       oddsSum += record.oddsPlaced;
       oddsCount += 1;

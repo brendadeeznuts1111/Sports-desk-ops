@@ -10,13 +10,13 @@ Re-run: `bash scripts/audit-plugins.sh` (exits non-zero on version/name mismatch
 
 ## Report card (pin `4f847435`)
 
-| Plugin | Ver @ pin | Name | Entry | Client | `dist/` @ pin | Repo tests |
-|---|---|---|---|---|---|---|
-| ops | 0.10.0 | ✅ | `index.js` | — | ✅ none | `verify-load` skipped in CI without fixture |
-| security | 0.1.0 | ✅ | `index.js` | ✅ | ✅ | `verify-load` in CI |
-| desk-status | 0.1.2 | ✅ | `index.js` | ✅ | ✅ | `verify-load` in CI |
-| desk-panel | 0.4.0 | ✅ | `index.js` | ✅ | ✅ | `verify-load` in CI |
-| watchlist-autobet | 0.2.0 | ✅ | `index.js` | ✅ | ✅ | `verify-load` in CI |
+| Plugin            | Ver @ pin | Name | Entry      | Client | `dist/` @ pin | Repo tests                                  |
+| ----------------- | --------- | ---- | ---------- | ------ | ------------- | ------------------------------------------- |
+| ops               | 0.10.0    | ✅   | `index.js` | —      | ✅ none       | `verify-load` skipped in CI without fixture |
+| security          | 0.1.0     | ✅   | `index.js` | ✅     | ✅            | `verify-load` in CI                         |
+| desk-status       | 0.1.2     | ✅   | `index.js` | ✅     | ✅            | `verify-load` in CI                         |
+| desk-panel        | 0.4.0     | ✅   | `index.js` | ✅     | ✅            | `verify-load` in CI                         |
+| watchlist-autobet | 0.2.0     | ✅   | `index.js` | ✅     | ✅            | `verify-load` in CI                         |
 
 Bundles expose **Cordis tools** in `index.js` (not `bin` / `dsh.commands`). UI rows are **client-only** (`dsh-plugin-ui`, `dsh-plugin-sidebar`).
 

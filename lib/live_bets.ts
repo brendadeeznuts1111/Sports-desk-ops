@@ -548,20 +548,29 @@ function emptyBucket(): AggregateBucket {
   return { games: 0, wagered: 0, toWin: 0 };
 }
 
+export type LiveArtifactSourceKind = "live" | "capture";
+
+export interface BuildArtifactOptions {
+  readonly operation: string;
+  readonly capturedAt: string | null;
+  /** Hierarchy rows to resolve `Level`/`AgentType`; omit when none were captured. */
+  readonly hierarchy?: readonly ListAgentsByAgentGeneralWireRow[];
+  /** Prebuilt index (e.g. from the committed agent tree); wins over `hierarchy`. */
+  readonly hierarchyIndex?: HierarchyIndex;
+  /**
+   * Provenance prefix on `dataSource`: `capture:` (default) or `live:` for a desk live read.
+   * The derived games and totals are identical; only the label changes.
+   */
+  readonly sourceKind?: LiveArtifactSourceKind;
+}
+
 /**
  * Builds the committed artifact from captured rows. Dedupes by `TicketNumber-WagerNumber`
  * (the portal's own composite key) and refuses to emit a row that still carries PII.
  */
 export function buildArtifact(
   rows: readonly PendingRow[],
-  options: {
-    readonly operation: string;
-    readonly capturedAt: string | null;
-    /** Hierarchy rows to resolve `Level`/`AgentType`; omit when none were captured. */
-    readonly hierarchy?: readonly ListAgentsByAgentGeneralWireRow[];
-    /** Prebuilt index (e.g. from the committed agent tree); wins over `hierarchy`. */
-    readonly hierarchyIndex?: HierarchyIndex;
-  },
+  options: BuildArtifactOptions,
 ): LiveBetsArtifact {
   const byTicket = new Map<string, PendingRow>();
   for (const row of rows) {
@@ -579,7 +588,8 @@ export function buildArtifact(
   }
 
   const capturedAt = options.capturedAt;
-  const dataSource = `capture:${options.operation}${
+  const prefix = options.sourceKind === "live" ? "live" : "capture";
+  const dataSource = `${prefix}:${options.operation}${
     capturedAt === null ? "" : `@${capturedAt}`
   }`;
 
@@ -617,6 +627,14 @@ export function buildArtifact(
     ),
     games,
   };
+}
+
+/** Same as {@link buildArtifact} with `sourceKind: "live"` for live Pending reads. */
+export function livePendingArtifact(
+  rows: readonly PendingRow[],
+  options: Omit<BuildArtifactOptions, "sourceKind">,
+): LiveBetsArtifact {
+  return buildArtifact(rows, { ...options, sourceKind: "live" });
 }
 
 /** Deepest level carried by an index, ignoring ambiguous agents (which have none). */

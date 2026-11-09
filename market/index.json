@@ -68,10 +68,7 @@
         "directory": "dsh-plugin"
       },
       "metadata": {
-        "labels": [
-          "stable",
-          "internal"
-        ],
+        "labels": ["stable", "internal"],
         "category": "operations",
         "keywords": [
           "status",
@@ -115,10 +112,7 @@
         "directory": "dsh-plugin-security"
       },
       "metadata": {
-        "labels": [
-          "read-only",
-          "internal"
-        ],
+        "labels": ["read-only", "internal"],
         "category": "security",
         "keywords": [
           "security",
@@ -164,16 +158,9 @@
         "directory": "dsh-plugin-ui"
       },
       "metadata": {
-        "labels": [
-          "stable"
-        ],
+        "labels": ["stable"],
         "category": "ui",
-        "keywords": [
-          "status",
-          "desk-status",
-          "live",
-          "panel"
-        ]
+        "keywords": ["status", "desk-status", "live", "panel"]
       },
       "dist-tags": {
         "latest": "0.1.2"
@@ -209,16 +196,9 @@
         "directory": "dsh-plugin-sidebar"
       },
       "metadata": {
-        "labels": [
-          "stable"
-        ],
+        "labels": ["stable"],
         "category": "ui",
-        "keywords": [
-          "sidebar",
-          "desk",
-          "quick-actions",
-          "panel"
-        ]
+        "keywords": ["sidebar", "desk", "quick-actions", "panel"]
       },
       "dist-tags": {
         "latest": "0.4.0"
@@ -254,16 +234,9 @@
         "directory": "dsh-plugin-watchlist-autobet"
       },
       "metadata": {
-        "labels": [
-          "beta"
-        ],
+        "labels": ["beta"],
         "category": "automation",
-        "keywords": [
-          "autobet",
-          "watchlist",
-          "automation",
-          "betting"
-        ]
+        "keywords": ["autobet", "watchlist", "automation", "betting"]
       },
       "dist-tags": {
         "latest": "0.2.1"

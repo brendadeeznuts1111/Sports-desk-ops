@@ -28,30 +28,10 @@ const INVARIANT_FILES = [
 ] as const;
 
 const isCI = Boolean(Bun.env.CI);
-const ENRICHED_FIXTURE = join(
-  ROOT,
-  "tests/fixtures/backtest/enriched_customers_full.json",
-);
-const DOWNLINE_FIXTURE = join(
-  ROOT,
-  "tests/fixtures/backtest/sportsdesk_downline_data.json",
-);
+const VERIFY_LOAD_FIXTURES = "tests/fixtures/verify-load";
 const hasEnrichedCustomers = existsSync(
   join(ROOT, "enriched_customers_full.json"),
 );
-
-/** Gitignored operator artifacts; CI stages tracked backtest fixtures before verify-load. */
-async function ensureCiBacktestFixtures(): Promise<void> {
-  if (!isCI) return;
-  for (const [name, source] of [
-    ["enriched_customers_full.json", ENRICHED_FIXTURE],
-    ["sportsdesk_downline_data.json", DOWNLINE_FIXTURE],
-  ] as const) {
-    const target = join(ROOT, name);
-    if (existsSync(target)) continue;
-    await Bun.write(target, Bun.file(source));
-  }
-}
 
 describe("DSH plugin bundles", () => {
   test("discovers at least one dsh-plugin* bundle at repository root", () => {
@@ -75,13 +55,15 @@ describe("DSH plugin bundles", () => {
       }
     });
 
-    // dsh-plugin/verify-load.mjs reads gitignored backtest JSON. CI copies tracked fixtures first.
-    const shouldSkip = bundle === "dsh-plugin" && !isCI && !hasEnrichedCustomers;
+    // dsh-plugin verify-load against the operator book is optional locally; CI pins fixtures.
+    const shouldSkip =
+      bundle === "dsh-plugin" && !isCI && !hasEnrichedCustomers;
     const verifyLabel = `${bundle} verify-load passes`;
 
-    test.skipIf(shouldSkip)(verifyLabel, async () => {
-      await ensureCiBacktestFixtures();
-      const bundleDir = join(ROOT, bundle);
+    test.skipIf(shouldSkip)(
+      verifyLabel,
+      async () => {
+        const bundleDir = join(ROOT, bundle);
         const harness = join(bundleDir, "verify-load.mjs");
         expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
           true,
@@ -89,6 +71,12 @@ describe("DSH plugin bundles", () => {
 
         const child = Bun.spawn([process.execPath, harness], {
           cwd: bundleDir,
+          env: {
+            ...process.env,
+            ...(isCI && bundle === "dsh-plugin"
+              ? { VERIFY_LOAD_FIXTURES }
+              : {}),
+          },
           stdout: "pipe",
           stderr: "pipe",
         });
