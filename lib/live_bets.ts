@@ -767,7 +767,8 @@ export function summarizeGames(
     sportBucket.wagered += g.wagered;
     sportBucket.toWin += g.toWin;
 
-    const agentKey = g.agent.key === "" ? "unassigned" : g.agent.key;
+    const rawAgentKey = g.agent?.key ?? "";
+    const agentKey = rawAgentKey === "" ? "unassigned" : rawAgentKey;
     const agentBucket = (byAgent[agentKey] ??= emptyBucket());
     agentBucket.games += 1;
     agentBucket.wagered += g.wagered;

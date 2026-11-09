@@ -1382,7 +1382,9 @@ export function startServer(options?: ServerOptions) {
             sportSubType: game.subSport,
           }),
           scoreboard:
-            scoreboard === null
+            scoreboard === null ||
+            game.team1?.name == null ||
+            game.team2?.name == null
               ? null
               : findScore(scoreboard, {
                   team1: game.team1.name,
