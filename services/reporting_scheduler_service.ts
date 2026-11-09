@@ -301,13 +301,19 @@ export class ReportingSchedulerService {
       },
       {
         id: "sched_bridge_rollup_15m",
-        name: "Bridge Rollup Cycle (3a/3b/3c)",
+        name: "Bridge Rollup Cycle (3a/3b/3c/wagers)",
         scheduleTime: "*/15 * * * *",
         reportType: "BRIDGE_ROLLUP_DIGEST",
         description:
-          "Runs the one-shot bridge rollups (bet ticker, pending, GSLive tally), publishes them and sends an on-change digest. Overlaps are skipped.",
+          "Runs the one-shot bridge rollups (bet ticker, pending, GSLive tally, wagers-by-state, and R2 snapshot publish), publishes them and sends an on-change digest. Overlaps are skipped.",
         tz: "America/Chicago",
-        bridgeJobs: ["bridge3a", "bridge3b", "bridge3c"],
+        bridgeJobs: [
+          "bridge3a",
+          "bridge3b",
+          "bridge3c",
+          "wagers-by-state",
+          "wagers-publish",
+        ],
         enabled: true,
       },
       {

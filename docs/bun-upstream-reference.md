@@ -1153,3 +1153,47 @@ Bun v1.4 natively runs multiple `package.json` scripts concurrently with Foreman
 | **Async Stack Traces** | [#28652](https://github.com/oven-sh/bun/pull/28652)                                                      | Automatic across `Bun.file()`, `fs.promises`, S3, DNS, crypto, `fetch()` | Native errors preserve call frame continuity back to the application `await` site, eliminating blind async rejections in telemetry.                                  |
 | **Orphan Prevention**  | [#29930](https://github.com/oven-sh/bun/pull/29930)                                                      | `--no-orphans` (`[run] noOrphans = true`)                                | Enforced on all long-lived workers and watch scripts (`wagers:watch`, `positions:cron`, `supervisor.ts`); exits when parent dies and SIGKILLs descendants.           |
 | **Env File Isolation** | [#24767](https://github.com/oven-sh/bun/pull/24767)                                                      | `--no-env-file` (`env = false` in `bunfig.toml`)                         | Enforced on cron jobs to prevent accidental loading of local 1Password `.env` pipes; secrets are injected via `Bun.secrets` or explicit supervisor env.              |
+
+### macOS kqueue Event Loop Bug & Event Filter Semantics
+
+#### Root Cause Analysis: Signed Filter Enums vs Bitwise Masks
+
+In BSD and macOS Darwin kernels (`<sys/event.h>`), kernel events (`struct kevent`) distinguish event types via `int16_t filter`:
+
+```c
+struct kevent {
+    uintptr_t ident;       /* identifier for this event (e.g. socket fd) */
+    int16_t   filter;      /* filter for event */
+    uint16_t  flags;       /* action flags (e.g. EV_ADD, EV_ENABLE, EV_ONESHOT) */
+    uint32_t  fflags;      /* filter-specific flag bits */
+    intptr_t  data;        /* filter-specific data value */
+    void      *udata;      /* opaque user data identifier */
+};
+```
+
+Kernel filters are defined as signed negative integer constants (ordinals), **not** orthogonal bitmasks:
+
+- `EVFILT_READ` = `-1` (`0xFFFF` in 16-bit two's complement)
+- `EVFILT_WRITE` = `-2` (`0xFFFE` in 16-bit two's complement)
+- `EVFILT_AIO` = `-3` (`0xFFFD`)
+- `EVFILT_VNODE` = `-4` (`0xFFFC`)
+- `EVFILT_PROC` = `-5` (`0xFFFB`)
+- `EVFILT_SIGNAL` = `-6` (`0xFFFA`)
+- `EVFILT_TIMER` = `-7` (`0xFFF9`)
+
+#### The 100% CPU Busy-Loop Mechanism
+
+1. **Incorrect Bitwise Comparison:** When kqueue event polling checked filters using bitwise AND (`filter & EVFILT_WRITE`) instead of strict equality (`filter == EVFILT_WRITE`), any `EVFILT_READ` event resulted in:
+   $$-1 \ \& \ -2 \ = \ \text{0xFFFF} \ \& \ \text{0xFFFE} = \text{0xFFFE} \ (-2) \neq 0$$
+   Because the result is non-zero, every readable event erroneously evaluated as a writable event.
+2. **Missing `EV_ONESHOT` on Writable Sockets:** In BSD sockets, a writable condition is level-triggered: as long as space remains in the socket send buffer, the kernel continuously reports readiness. Without `EV_ONESHOT` (or `EV_CLEAR`) to automatically disarm the filter upon firing, a writable registration on an open socket remains continuously active.
+3. **The Spin Cycle:** Combined with the bitwise filter check evaluating true for incoming read events, the event loop woke up repeatedly with phantom writable readiness when no write I/O was pending or scheduled, spinning at 100% CPU in a tight `kevent()` loop.
+
+#### Operational Rules for `sportsdesk-ops`
+
+1. **Strict Separation of Bitwise Flags vs Scalar Enums:**
+   - **Bitwise flags**: Orthogonal flags packed into bitsets (`Uint32Array` arenas in `lib/bitwise_pattern_inspect.ts`, `lib/gslive_tally_rollup.ts`, and `InspectableBitSet32`) must use explicit bit shifts (`1 << bit`) with mask checks `(flags & MASK) !== 0`.
+   - **Scalar enums / ordinals**: Kernel filters (`EVFILT_*`), HTTP status codes, error codes, and TypeScript union discriminants must **always** be tested with strict equality (`===`), never bitwise masking.
+2. **Process and Socket Supervision under kqueue:**
+   - In `bunfig.toml`, `noOrphans = true` registers `EVFILT_PROC` with `NOTE_EXIT` to guarantee that spawned child processes (including headless browser workers) terminate when parent daemons exit.
+   - Long-lived daemons (`:4020` webview server, websocket streams, and `positions:cron`) on macOS rely on Bun versions containing this fix to avoid socket spin loops during idle write readiness.

@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "dataSource": "capture:/cloud/api/Report/Pending@2026-11-01T02:22:35.774Z",
+  "capturedAt": "2026-11-01T02:22:35.774Z",
+  "operation": "/cloud/api/Report/Pending",
+  "pendingCount": 2,
+  "agents": {
+    "agents": [
+      {
+        "key": "HRGROUP",
+        "id": "HRGROUP",
+        "level": 6,
+        "agentType": "A",
+        "games": 1,
+        "wagered": 22400000,
+        "toWin": 20000000
+      }
+    ],
+    "unresolved": [],
+    "unassignedGames": 1,
+    "maxLevel": 19,
+    "hierarchyLoaded": true,
+    "collisions": []
+  },
+  "games": [
+    {
+      "ticketNumber": "1072983884",
+      "wagerNumber": "1",
+      "ticketKey": "1072983884-1",
+      "agent": {
+        "key": "",
+        "id": "",
+        "level": null,
+        "agentType": null
+      },
+      "customerID": "H1716",
+      "status": "P",
+      "sport": "Soccer",
+      "subSport": "ENG PREM",
+      "period": "Game",
+      "wagerType": "S",
+      "picks": 1,
+      "description": "Soccer #200153 Arsenal PK,-&#189; +100 - For Game",
+      "chosenTeam": "Arsenal",
+      "wagered": 6500,
+      "toWin": 6500,
+      "gameDateTime": "2026-11-01 11:30:00.000",
+      "acceptedAt": "2026-10-31 21:26:44.917",
+      "team1": {
+        "name": "Arsenal",
+        "shortName": "Arsenal",
+        "score": 0,
+        "logo": "Arsenal FC.png",
+        "logoUrl": "https://cdn.fastassets.io/images/team-logos/Arsenal%20FC.png",
+        "rotationNumber": 200153
+      },
+      "team2": {
+        "name": "Liverpool",
+        "shortName": "Liverpool",
+        "score": 0,
+        "logo": "Liverpool FC.png",
+        "logoUrl": "https://cdn.fastassets.io/images/team-logos/Liverpool%20FC.png",
+        "rotationNumber": 200154
+      }
+    },
+    {
+      "ticketNumber": "1073351436",
+      "wagerNumber": "1",
+      "ticketKey": "1073351436-1",
+      "agent": {
+        "key": "HRGROUP",
+        "id": "HRGROUP",
+        "level": 6,
+        "agentType": "A"
+      },
+      "customerID": "CC364",
+      "status": "P",
+      "sport": "Football",
+      "subSport": "NFL",
+      "period": "2nd Half",
+      "wagerType": "S",
+      "picks": 1,
+      "description": "Football #244 Cowboys -4 -112 - For 2nd Half",
+      "chosenTeam": "Dallas Cowboys",
+      "wagered": 22400000,
+      "toWin": 20000000,
+      "gameDateTime": "2026-11-01 13:00:00.000",
+      "acceptedAt": "2026-11-01 14:33:47.900",
+      "team1": {
+        "name": "Arizona Cardinals",
+        "shortName": "Cardinals",
+        "score": 0,
+        "logo": "Arizona-Cardinals.png",
+        "logoUrl": "https://cdn.fastassets.io/images/team-logos/Arizona-Cardinals.png",
+        "rotationNumber": 243
+      },
+      "team2": {
+        "name": "Dallas Cowboys",
+        "shortName": "Cowboys",
+        "score": 0,
+        "logo": "Dallas-Cowboys.png",
+        "logoUrl": "https://cdn.fastassets.io/images/team-logos/Dallas-Cowboys.png",
+        "rotationNumber": 244
+      }
+    }
+  ]
+}

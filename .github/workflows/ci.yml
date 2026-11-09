@@ -198,6 +198,9 @@ jobs:
       - name: "Safe innerHTML + external-asset SRI gate"
         timeout-minutes: 3
         run: bun bin/check-innerhtml.ts --verbose
+      - name: "Signal Honesty Linter Gate"
+        timeout-minutes: 3
+        run: bun bin/check-signal-honesty.ts --verbose
       - name: Schema gate (snapshot parity, fixture drift, gauntlet, EOD smoke)
         timeout-minutes: 5
         env:

@@ -9,6 +9,7 @@
  */
 
 import { loadConfig, type WagersConfig } from "./wagers_config.ts";
+import { InspectableWagerColumns } from "./bitwise_pattern_inspect.ts";
 import type {
   FilterValues,
   GroupKey,
@@ -843,6 +844,17 @@ export function toColumnar(sorted: StateBucket[]): WagerColumns {
     i++;
   }
   return { groups, count, legs, risk, toWin, result };
+}
+
+/**
+ * Wrap columnar typed arrays in an inspectable container with `[Bun.inspect.custom]`
+ * and `Bun.inspect.table` formatting.
+ */
+export function toInspectableColumnar(
+  sorted: StateBucket[],
+  groupLabel = "State",
+): InspectableWagerColumns {
+  return new InspectableWagerColumns(toColumnar(sorted), groupLabel);
 }
 
 /** ------------------------------------------------------------------ */

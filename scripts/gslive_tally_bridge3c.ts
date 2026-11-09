@@ -30,7 +30,7 @@ const { values } = parseArgs({
     "chunk-bytes": { type: "string" },
     out: { type: "string" },
     "fetch-open": { type: "boolean", default: false },
-    timeout: { type: "string", default: "60000" },
+    timeout: { type: "string" },
     "open-from": { type: "string" },
     "open-to": { type: "string" },
     "save-capture": { type: "string" },
@@ -42,10 +42,20 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(
-    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--fetch-open] [--open-from epoch] [--open-to epoch] [--save-capture path] [--out path] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--timeout ms] [--dry-run] [--no-r2]",
+    "Usage: bun run bridge3c:rollup [--from <betReport-all.json>] [--fetch-open] [--open-from epoch] [--open-to epoch] [--save-capture path] [--out path] [--desk-date YYYY-MM-DD] [--chunk-bytes n] [--timeout ms|sec] [--dry-run] [--no-r2]",
   );
   process.exit(0);
 }
+
+const timeoutMs = (() => {
+  const raw = values.timeout;
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("--timeout must be a positive number of seconds");
+  }
+  return parsed < 1000 ? Math.round(parsed * 1000) : Math.round(parsed);
+})();
 
 function isOpenState(value: unknown): boolean {
   const state = String(value ?? "")
@@ -79,7 +89,7 @@ async function fetchOpenCapture(path: string): Promise<void> {
     toEpochSec: to,
     cookieHeader: session.cookieHeader,
     sessionGate,
-    timeoutMs: Number(values.timeout),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   const open = rows.filter((row) =>
     row !== null && typeof row === "object" && "state" in row

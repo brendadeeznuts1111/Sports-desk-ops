@@ -340,6 +340,8 @@ window.__ModuleLoader__.load({
         customerNet: "Customer net",
         provenance: "provenance",
         notLive: "not live",
+        notLiveScratch: "not live: scratch",
+        notLiveSample: "not live: sample",
         partial: "partial",
         mode: "Mode",
         killSwitch: "Kill switch",
@@ -540,6 +542,8 @@ window.__ModuleLoader__.load({
         customerNet: "客户净额",
         provenance: "来源",
         notLive: "非实盘",
+        notLiveScratch: "非实盘: 临时草稿",
+        notLiveSample: "非实盘: 示例样本",
         partial: "部分",
         mode: "模式",
         killSwitch: "紧急开关",
@@ -798,6 +802,13 @@ window.__ModuleLoader__.load({
       if (isFixtureSource(srcRaw)) return true;
       const src = srcRaw.toLowerCase();
       return src.startsWith("tests/") || src.includes("fixture");
+    }
+
+    function fixtureProvenanceSubtype(prov) {
+      if (!isFixtureProvenance(prov)) return null;
+      const srcRaw = (prov?.source ?? "").trim();
+      if (srcRaw.startsWith("scratch/")) return "scratch";
+      return "sample";
     }
 
     /**
@@ -3964,7 +3975,14 @@ window.__ModuleLoader__.load({
       const age = provenanceAge(t, provenance, now);
       const chips = [];
       if (isFixtureProvenance(provenance)) {
-        chips.push(chip(t("notLive"), "warn", "prov-fixture"));
+        const subtype = fixtureProvenanceSubtype(provenance);
+        const chipText =
+          subtype === "scratch"
+            ? t("notLiveScratch")
+            : subtype === "sample"
+              ? t("notLiveSample")
+              : t("notLive");
+        chips.push(chip(chipText, "warn", "prov-fixture"));
       }
       if (provenance.stale === true) {
         chips.push(chip(t("stateStale"), "warn", "prov-stale"));

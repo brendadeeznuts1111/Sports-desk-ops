@@ -1136,8 +1136,8 @@ await checkAsync(
       "Agents row should read provenance · 17m ago",
     );
     assert(
-      flat.includes("not live"),
-      "Agents row is missing the not-live chip",
+      flat.includes("not live: scratch"),
+      "Agents row is missing the not-live: scratch chip",
     );
     harness.dispose();
   },

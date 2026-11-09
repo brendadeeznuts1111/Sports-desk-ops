@@ -29,6 +29,7 @@ bun run tasks:render --no-color --columns 0 >/dev/null && bun run docs:render
 bun run gen:tokens:gate
 bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
+bun bin/check-signal-honesty.ts --verbose
 CI=true bun run schema:gate
 bun run test:market-index                       # CI: Validate market index (REQUIRE_MARKET_INDEX=1)
 bun test tests/ --path-ignore-patterns='**/market_index.test.ts'
@@ -113,9 +114,9 @@ Do not delete these contracts as redundant without reading the ADR:
 7. **#90 / #92** — Weblog cron `--from` + three-tier corpus; publish data-window log line.
 8. **#84 / GSID** — Multi-sink R2 recovery; canonical `GSLIVE_SESSION_ID`; wagers two-step (`--live` + `wagers:publish-snapshot`).
 9. **#91** — Weblog corpus: manual portal export + `weblog:sentinel` (08:00 Telegram if today's JSONL missing); not headless Mode A fetch.
-10. **#93** — Wire wagers capture + `publish-snapshot` into cron (open).
-11. **#94** — `bridge3c` `--timeout` for large `getBetReport` (open).
-12. **#78** — KPI data-age vs R2 `Last-Modified` (open).
+10. **#93** — Wire wagers capture + `publish-snapshot` into cron (`sched_bridge_rollup_15m` in `services/reporting_scheduler_service.ts`).
+11. **#94** — `bridge3c` `--timeout` for large `getBetReport` (`scripts/gslive_tally_bridge3c.ts`).
+12. **#78** — KPI data-age vs R2 `Last-Modified` (`lib/r2_pipeline_kpis.ts` / `lib/desk_enhanced_health.ts`).
 13. **Desk Host `apiPort`** — Cordis `config.apiPort` wired in `dsh-plugin-sidebar/index.js` (`resolveDeskOrigin`); default 4020.
 
 ## Layout

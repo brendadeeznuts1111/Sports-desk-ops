@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
+import { stripPtyCapture } from "../lib/bun_terminal.ts";
 
 describe("Server Port Cascade Resolution", () => {
   test("test_assert_bun_port_resolution_without_port_in_code", async () => {
@@ -67,7 +68,9 @@ describe("Server Port Cascade Resolution", () => {
         code: 0,
         stderr: "",
       });
-      return Number(stdout.trim());
+      const lines = stripPtyCapture(stdout).trim().split("\n");
+      const lastLine = lines[lines.length - 1]?.trim() ?? "";
+      return Number(lastLine);
     };
 
     expect(

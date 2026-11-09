@@ -97,7 +97,13 @@ describe("bridge schedules", () => {
     expect(cycle?.reportType).toBe("BRIDGE_ROLLUP_DIGEST");
     expect(cycle?.scheduleTime).toBe("*/15 * * * *");
     expect(cycle?.tz).toBe("America/Chicago");
-    expect(cycle?.bridgeJobs).toEqual(["bridge3a", "bridge3b", "bridge3c"]);
+    expect(cycle?.bridgeJobs).toEqual([
+      "bridge3a",
+      "bridge3b",
+      "bridge3c",
+      "wagers-by-state",
+      "wagers-publish",
+    ]);
     expect(cycle?.enabled).toBe(true);
 
     expect(weblog?.tz).toBe("America/Chicago");

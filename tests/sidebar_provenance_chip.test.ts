@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  fixtureProvenanceSubtype,
   isFixtureProvenance,
   shouldShowFixtureNotLiveChip,
 } from "../lib/sidebar_fixture_provenance.ts";
@@ -12,6 +13,7 @@ describe("sidebar fixture provenance chip", () => {
     };
     expect(shouldShowFixtureNotLiveChip(prov)).toBe(true);
     expect(isFixtureProvenance(prov)).toBe(true);
+    expect(fixtureProvenanceSubtype(prov)).toBe("scratch");
   });
 
   test("capture basis with data/ source does not chip", () => {
@@ -20,6 +22,7 @@ describe("sidebar fixture provenance chip", () => {
       basis: "capture",
     };
     expect(shouldShowFixtureNotLiveChip(prov)).toBe(false);
+    expect(fixtureProvenanceSubtype(prov)).toBe(null);
   });
 
   test("scratch source chips even if basis claims capture", () => {
@@ -28,6 +31,22 @@ describe("sidebar fixture provenance chip", () => {
       basis: "capture",
     };
     expect(shouldShowFixtureNotLiveChip(prov)).toBe(true);
+    expect(fixtureProvenanceSubtype(prov)).toBe("scratch");
+  });
+
+  test("sample fixture distinguishes from scratch", () => {
+    expect(
+      fixtureProvenanceSubtype({
+        source: "./enriched_customers_full.json",
+        basis: "fixture",
+      }),
+    ).toBe("sample");
+    expect(
+      fixtureProvenanceSubtype({
+        source: "tests/fixtures/agent-tree.json",
+        basis: "capture",
+      }),
+    ).toBe("sample");
   });
 
   test("live capture path does not chip", () => {
@@ -36,6 +55,7 @@ describe("sidebar fixture provenance chip", () => {
       basis: "live",
     };
     expect(shouldShowFixtureNotLiveChip(prov)).toBe(false);
+    expect(fixtureProvenanceSubtype(prov)).toBe(null);
   });
 
   test("live: and capture: sources never chip on path alone", () => {

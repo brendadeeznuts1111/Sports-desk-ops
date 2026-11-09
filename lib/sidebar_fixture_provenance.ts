@@ -42,3 +42,18 @@ export function shouldShowFixtureNotLiveChip(
 ): boolean {
   return isFixtureProvenance(prov);
 }
+
+export type FixtureSubtype = "scratch" | "sample" | null;
+
+/**
+ * Distinguishes scratch fallback (e.g. scratch/agent-graph.json) from intentional
+ * sample fixtures (e.g. tests/fixtures/, ./enriched_customers_full.json, basis="fixture").
+ */
+export function fixtureProvenanceSubtype(
+  prov: SidebarKpiProvenance | null | undefined,
+): FixtureSubtype {
+  if (!isFixtureProvenance(prov)) return null;
+  const srcRaw = (prov?.source ?? "").trim();
+  if (srcRaw.startsWith("scratch/")) return "scratch";
+  return "sample";
+}
