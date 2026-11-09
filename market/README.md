@@ -190,6 +190,6 @@ bun run test:market-index
 
 `bun run test:market-index` sets `REQUIRE_MARKET_INDEX=1` so a missing validator install is **red**, not skipped. The full suite omits that flag and skips when `node_modules` is absent (`describe.skipIf`).
 
-CI job names: **Audit harness validator pin** → **Validate market index** (`bun run test:market-index`).
+CI: job **`market-index`** (`bun run test:market-index`) is the **required** status on `main` for catalog changes. Job **`verify`** is the full repo gate (may be red on unrelated debt).
 
 Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json` (drift messages name plugin, version, and both ranges), vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).

@@ -6,8 +6,9 @@ portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-
 ## Entrypoint and the gate chain
 
 `./bin/dx` is the operator entrypoint (`README.md:11-15`); `scripts/deploy/deploy_to_vps.sh` / `./bin/dx deploy`
-ship to the VPS. CI (`.github/workflows/ci.yml`, job `verify`) runs these steps in order and stops
-at the first failure — reproduce them locally before claiming a change works:
+ship to the VPS. CI job **`verify`** runs the steps below in order and stops at the first failure.
+Job **`market-index`** is the required check on `main` for catalog edits (`bun run test:market-index`).
+Reproduce them locally before claiming a change works:
 
 ```sh
 bun run verify:manager-oracle-slices

@@ -56,6 +56,38 @@ env:
   HARNESS_VALIDATOR_REF: 66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db
 
 jobs:
+  market-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # git pin tests: commit must exist in this repo
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bun install --frozen-lockfile
+      - name: Audit harness validator pin (deepseek-harness checkout)
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ env.HARNESS_VALIDATOR_REF }}
+          path: .ci/deepseek-harness
+          fetch-depth: 1
+      - name: Validate market index (format 1)
+        timeout-minutes: 3
+        env:
+          MARKET_INDEX_HARNESS: .ci/deepseek-harness
+          HARNESS_VALIDATOR_SHA: ${{ env.HARNESS_VALIDATOR_SHA }}
+          REQUIRE_MARKET_INDEX: "1"
+        run: |
+          test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
+          test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
+          bun run test:market-index
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -157,23 +189,6 @@ jobs:
         env:
           CI: "true"
         run: bun run schema:gate
-      - name: Audit harness validator pin (deepseek-harness checkout)
-        uses: actions/checkout@v4
-        with:
-          repository: deepseek-ai/deepseek-harness
-          ref: ${{ env.HARNESS_VALIDATOR_REF }}
-          path: .ci/deepseek-harness
-          fetch-depth: 1
-      - name: Validate market index (format 1)
-        timeout-minutes: 3
-        env:
-          MARKET_INDEX_HARNESS: .ci/deepseek-harness
-          HARNESS_VALIDATOR_SHA: ${{ env.HARNESS_VALIDATOR_SHA }}
-          REQUIRE_MARKET_INDEX: "1"
-        run: |
-          test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
-          test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
-          bun run test:market-index
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
