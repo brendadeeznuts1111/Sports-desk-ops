@@ -727,6 +727,17 @@ window.__ModuleLoader__.load({
      * so the chip works against older API versions during rollout.
      * @param {{ basis?: string | null, source?: string | null } | null | undefined} prov
      */
+    function isFixtureSource(source) {
+      const value = source.trim();
+      if (value.startsWith("live:")) return false;
+      if (value.startsWith("capture:")) return false;
+      return (
+        value.startsWith("scratch/") ||
+        value.startsWith("tests/fixtures/") ||
+        value.startsWith("./")
+      );
+    }
+
     function isFixtureProvenance(prov) {
       if (prov === null || prov === undefined) return false;
       const basis = (prov.basis ?? "").trim().toLowerCase();
@@ -734,13 +745,10 @@ window.__ModuleLoader__.load({
       if (basis === "live") return false;
       const srcRaw = (prov.source ?? "").trim();
       if (basis === "capture" && srcRaw.startsWith("data/")) return false;
+      if (srcRaw === "") return false;
+      if (isFixtureSource(srcRaw)) return true;
       const src = srcRaw.toLowerCase();
-      if (src === "") return false;
-      return (
-        src.startsWith("scratch/") ||
-        src.startsWith("tests/") ||
-        src.includes("fixture")
-      );
+      return src.startsWith("tests/") || src.includes("fixture");
     }
 
     /**
