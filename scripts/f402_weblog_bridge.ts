@@ -16,6 +16,7 @@ import {
   resolveWeblogRollupWindow,
   WeblogRollupCorpusError,
 } from "../lib/f402_weblog.ts";
+import { weblogPublishDataWindowLogLine } from "../lib/f402_weblog_publish_log.ts";
 
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -153,6 +154,7 @@ if (values["no-r2"] !== true) {
     console.error(
       `[weblog] published ${dailyKey} bytes=${stat.size} + latest.json`,
     );
+    console.error(weblogPublishDataWindowLogLine(rollup.window.toMs));
     const publicStatus = await fetch(`${client.publicBase}/${dailyKey}`)
       .then((r) => r.status)
       .catch(() => -1);
