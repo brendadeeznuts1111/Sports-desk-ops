@@ -311,12 +311,21 @@ window.__ModuleLoader__.load({
         total: "Total",
         agentsField: "Agents",
         masters: "Masters",
-        pendingBlock: "Pending",
+        pendingBlock: "Pending (F402)",
         wagers: "Wagers",
         tickets: "Tickets",
         wagered: "Wagered",
         toWin: "To win",
-        tickerBlock: "Ticker",
+        tickerBlock: "Ticker (F402 · 3a)",
+        r2PipelinesBlock: "R2 pipelines",
+        r2F402Ticker: "Ticker (F402 · 3a)",
+        r2F402Weblog: "Weblog (F402)",
+        r2GsliveTally: "GSLive tally (3c)",
+        r2WagersAggregate: "Wagers aggregate",
+        r2SinkFresh: "fresh",
+        r2SinkStale: "stale",
+        r2SinkState: "{state} · {age}",
+        attentionR2Stale: "R2 sink {sink} is stale ({reason})",
         liveField: "Live",
         risk: "Risk",
         volume: "Volume",
@@ -497,12 +506,21 @@ window.__ModuleLoader__.load({
         total: "总计",
         agentsField: "代理",
         masters: "主代理",
-        pendingBlock: "待处理",
+        pendingBlock: "待处理 (F402)",
         wagers: "注单",
         tickets: "票数",
         wagered: "投注额",
         toWin: "可赢",
-        tickerBlock: "行情",
+        tickerBlock: "行情 (F402 · 3a)",
+        r2PipelinesBlock: "R2 管线",
+        r2F402Ticker: "行情 (F402 · 3a)",
+        r2F402Weblog: "Weblog (F402)",
+        r2GsliveTally: "GSLive 汇总 (3c)",
+        r2WagersAggregate: "分状态汇总",
+        r2SinkFresh: "新鲜",
+        r2SinkStale: "过期",
+        r2SinkState: "{state} · {age}",
+        attentionR2Stale: "R2 接收端 {sink} 已过期（{reason}）",
         liveField: "进行中",
         risk: "风险",
         volume: "成交量",
@@ -959,35 +977,81 @@ window.__ModuleLoader__.load({
      * its own fields and provenance; a missing block is omitted, never zeroed.
      * @param {unknown} body
      */
+    const R2_SINK_SPECS = [
+      { id: "f402-bet-ticker", labelKey: "r2F402Ticker" },
+      { id: "f402-weblog", labelKey: "r2F402Weblog" },
+      { id: "gslive-tally", labelKey: "r2GsliveTally" },
+      { id: "wagers-by-state", labelKey: "r2WagersAggregate" },
+    ];
+
+    /**
+     * `/api/kpis.pipeline.r2` — public R2 pointer freshness (distinct from block provenance).
+     * @param {unknown} body
+     */
+    function readR2PipelineSinks(body) {
+      if (!isRecord(body) || !isRecord(body.pipeline)) return null;
+      const r2 = body.pipeline.r2;
+      if (!isRecord(r2)) return null;
+      const sinks = [];
+      for (const spec of R2_SINK_SPECS) {
+        const raw = r2[spec.id];
+        if (!isRecord(raw)) continue;
+        sinks.push({
+          id: spec.id,
+          labelKey: spec.labelKey,
+          stale: readBoolean(raw.stale) === true,
+          state: readText(raw.state),
+          ageSeconds: readNumber(raw.ageSeconds),
+          reason: readText(raw.reason),
+        });
+      }
+      return sinks.length === 0 ? null : sinks;
+    }
+
     function readKpisPayload(body) {
       if (!isRecord(body)) return null;
       const raw = isRecord(body.kpis) ? body.kpis : null;
-      if (raw === null) return null;
+      const r2Sinks = readR2PipelineSinks(body);
+      if (raw === null && r2Sinks === null) return null;
       const payload = {
-        agents: readKpiBlock(raw.agents, ["total", "agents", "masters"]),
-        pending: readKpiBlock(raw.pending, [
-          "wagers",
-          "tickets",
-          "wageredCents",
-          "toWinCents",
-        ]),
-        ticker: readKpiBlock(raw.ticker, [
-          "wagers",
-          "live",
-          "riskCents",
-          "volumeCents",
-        ]),
-        customerBook: readKpiBlock(raw.customerBook, [
-          "customers",
-          "tickets",
-          "customerNetCents",
-        ]),
+        agents:
+          raw === null
+            ? null
+            : readKpiBlock(raw.agents, ["total", "agents", "masters"]),
+        pending:
+          raw === null
+            ? null
+            : readKpiBlock(raw.pending, [
+                "wagers",
+                "tickets",
+                "wageredCents",
+                "toWinCents",
+              ]),
+        ticker:
+          raw === null
+            ? null
+            : readKpiBlock(raw.ticker, [
+                "wagers",
+                "live",
+                "riskCents",
+                "volumeCents",
+              ]),
+        customerBook:
+          raw === null
+            ? null
+            : readKpiBlock(raw.customerBook, [
+                "customers",
+                "tickets",
+                "customerNetCents",
+              ]),
+        r2Sinks,
       };
       if (
         payload.agents === null &&
         payload.pending === null &&
         payload.ticker === null &&
-        payload.customerBook === null
+        payload.customerBook === null &&
+        payload.r2Sinks === null
       ) {
         return null;
       }
@@ -3156,12 +3220,34 @@ window.__ModuleLoader__.load({
         payload.ticker,
         payload.customerBook,
       ];
-      return blocks.some(
-        (block) =>
-          block !== null &&
-          block.provenance !== null &&
-          block.provenance.stale === true,
-      );
+      if (
+        blocks.some(
+          (block) =>
+            block !== null &&
+            block.provenance !== null &&
+            block.provenance.stale === true,
+        )
+      ) {
+        return true;
+      }
+      if (payload.r2Sinks === null) return false;
+      return payload.r2Sinks.some((sink) => sink.stale === true);
+    }
+
+    /**
+     * @param {(key: string, params?: object) => string} t
+     * @param {NonNullable<ReturnType<typeof readR2PipelineSinks>>[number]} sink
+     * @param {number} now
+     */
+    function formatR2SinkValue(t, sink, now) {
+      const age =
+        sink.ageSeconds !== null
+          ? formatAgeSeconds(t, sink.ageSeconds)
+          : t("never");
+      const state =
+        sink.state ??
+        (sink.stale ? t("r2SinkStale") : t("r2SinkFresh"));
+      return t("r2SinkState", { state, age });
     }
 
     /**
@@ -3705,6 +3791,23 @@ window.__ModuleLoader__.load({
           ),
         );
       }
+      if (payload.r2Sinks !== null) {
+        const rows = payload.r2Sinks.map((sink) =>
+          kvRow(
+            t(sink.labelKey),
+            formatR2SinkValue(t, sink, now),
+            `r2-${sink.id}`,
+            sink.stale ? "warn" : undefined,
+          ),
+        );
+        blocks.push(
+          subSection(
+            t("r2PipelinesBlock"),
+            [kvList(rows, "r2-pipelines-kv")],
+            "r2-pipelines-block",
+          ),
+        );
+      }
       return blocks;
     }
 
@@ -4013,6 +4116,19 @@ window.__ModuleLoader__.load({
               value: agentsProv.source ?? "",
             }),
           });
+        }
+        if (kpisPayload.r2Sinks !== null) {
+          for (const sink of kpisPayload.r2Sinks) {
+            if (sink.stale !== true) continue;
+            items.push({
+              key: `r2-${sink.id}`,
+              source: t("r2PipelinesBlock"),
+              detail: t("attentionR2Stale", {
+                sink: t(sink.labelKey),
+                reason: sink.reason ?? t("r2SinkStale"),
+              }),
+            });
+          }
         }
       }
       const executionSource = state.sources.execution;

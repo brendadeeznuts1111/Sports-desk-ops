@@ -390,6 +390,34 @@ const FIXTURE_KPIS = {
       provenance: { ageSeconds: 136_162, stale: false },
     },
   },
+  pipeline: {
+    r2: {
+      "f402-bet-ticker": {
+        stale: false,
+        state: "fresh",
+        ageSeconds: 120,
+        reason: "2m old",
+      },
+      "gslive-tally": {
+        stale: false,
+        state: "fresh",
+        ageSeconds: 300,
+        reason: "5m old",
+      },
+      "wagers-by-state": {
+        stale: true,
+        state: "stale",
+        ageSeconds: 200_000,
+        reason: "48h SLA",
+      },
+      "f402-weblog": {
+        stale: false,
+        state: "fresh",
+        ageSeconds: 100,
+        reason: "2m old",
+      },
+    },
+  },
 };
 
 const FIXTURE_EXECUTION = {
@@ -1004,18 +1032,26 @@ await checkAsync(
       "441 citations",
       "2,640 tests",
       "Last measured",
+      "R2 pipelines",
+      "Ticker (F402 · 3a)",
+      "GSLive tally (3c)",
+      "Wagers aggregate",
     ]) {
       assert(text.includes(expected), `overview page is missing ${expected}`);
     }
     // The feed's own age row is measured in hours, not invented.
     assert(!text.includes("undefined"), "page rendered an undefined value");
-    // One attention item: the captured feed is stale and WSS is not ingested.
-    const attention = findOne(tree, "spsd-attention");
-    assert(attention !== undefined, "no attention banner for the stale feed");
-    assert(
-      attention.props["data-count"] === "1",
-      `attention count ${attention.props["data-count"]}`,
-    );
+  const attention = findOne(tree, "spsd-attention");
+  assert(attention !== undefined, "no attention banner for stale signals");
+  const attentionCount = Number(attention.props["data-count"]);
+  assert(
+    attentionCount >= 2,
+    `attention count ${attention.props["data-count"]} (feed + R2 sink)`,
+  );
+  assert(
+    text.includes("R2 sink"),
+    "stale R2 pipeline sink is not called out in attention",
+  );
     harness.dispose();
   },
 );
@@ -1282,8 +1318,8 @@ await checkAsync(
     const attention = findOne(tree, "spsd-attention");
     assert(attention !== undefined, "no attention banner");
     assert(
-      attention.props["data-count"] === "4",
-      `attention count ${attention.props["data-count"]} (feed + kill + mode + live)`,
+      attention.props["data-count"] === "5",
+      `attention count ${attention.props["data-count"]} (feed + kill + mode + live + stale R2)`,
     );
     for (const expected of [
       "Market feed:",
@@ -1316,11 +1352,36 @@ await checkAsync("attention is quiet for a fully healthy desk", async () => {
     policy: { liveEnabled: false, maxOpenIntents: 25 },
     provenance: { stale: false },
   };
+  const healthyKpis = {
+    ...FIXTURE_KPIS,
+    kpis: {
+      ...FIXTURE_KPIS.kpis,
+      pending: {
+        ...FIXTURE_KPIS.kpis.pending,
+        provenance: { ageSeconds: 1, stale: false },
+      },
+      ticker: {
+        ...FIXTURE_KPIS.kpis.ticker,
+        provenance: { ageSeconds: 1, stale: false, partial: false },
+      },
+    },
+    pipeline: {
+      r2: Object.fromEntries(
+        Object.entries(FIXTURE_KPIS.pipeline.r2).map(([key, value]) => [
+          key,
+          { ...value, stale: false, state: "fresh" },
+        ]),
+      ),
+    },
+  };
   const harness = bootClient(async (url) => {
     const text = String(url);
     if (text.endsWith("/graph")) return proxiedResponse(url, fresh);
     if (text.endsWith("/execution")) {
       return proxiedResponse(url, healthyExecution);
+    }
+    if (text.endsWith("/kpis") || text.endsWith("/api/kpis")) {
+      return proxiedResponse(url, healthyKpis);
     }
     return proxiedResponse(url, fixtureFor(url));
   });
