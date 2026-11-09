@@ -59,6 +59,7 @@ const server = Bun.serve({
       }
 
       const markdown = await file.text();
+      // trusted-markdown: local repo dashboard.md rendered for operator dev server
       const html = Bun.markdown.html(markdown);
       return Response.json({
         markdown,

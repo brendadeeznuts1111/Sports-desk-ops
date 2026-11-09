@@ -53,6 +53,39 @@ export interface CustomerComponentScores {
   readonly derivativeSharpScore: number;
 }
 
+export interface BayesianSkillProfile {
+  readonly priorAlpha: number;
+  readonly priorBeta: number;
+  readonly posteriorAlpha: number;
+  readonly posteriorBeta: number;
+  readonly posteriorMeanWinRate: number;
+  readonly variance: number;
+  readonly standardDeviation: number;
+  readonly credibleInterval95: readonly [number, number];
+  readonly status: "PRELIMINARY" | "CONVERGING" | "CONFIRMED";
+}
+
+export interface KellySizingMetrics {
+  readonly impliedKellyFraction: number;
+  readonly halfKellyFraction: number;
+  readonly quarterKellyFraction: number;
+  readonly observedUnitFraction: number;
+  readonly kellyDivergence: number;
+  readonly isKellyDisciplined: boolean;
+  readonly growthRate: number;
+}
+
+export interface ClvStatisticalSignificance {
+  readonly meanClvPercent: number;
+  readonly stdDevClvPercent: number;
+  readonly sampleCount: number;
+  readonly standardError: number;
+  readonly tStatistic: number;
+  readonly pValue: number;
+  readonly isSignificant95: boolean;
+  readonly isSignificant99: boolean;
+}
+
 export interface CustomerRating {
   readonly customerId: string;
   /** Composite Sharpness Score from 0.0 (extreme square) to 10.0 (elite syndicate sharp). */
@@ -66,6 +99,9 @@ export interface CustomerRating {
   readonly totalRiskUsd: number;
   readonly netUsd: number;
   readonly recommendedAction: RatingAction;
+  readonly bayesianSkill?: BayesianSkillProfile;
+  readonly clvSignificance?: ClvStatisticalSignificance;
+  readonly kellyMetrics?: KellySizingMetrics;
   /** Strictly invariant: Informational alert only; NEVER auto-execute on external exchanges/Kalshi/Polymarket. */
   readonly autoExecute: false;
   readonly summary: string;
@@ -89,6 +125,7 @@ export interface RatedIncomingWager {
   readonly riskUsd: number;
   readonly flags: readonly string[];
   readonly message: string;
+  readonly wagerKelly?: KellySizingMetrics;
   /** Strictly invariant: Informational desk alert only; NEVER auto-execute on external markets. */
   readonly autoExecute: false;
   readonly [Bun.inspect.custom]?: (
@@ -104,6 +141,176 @@ function clamp(val: number, min: number, max: number): number {
 
 function round1(val: number): number {
   return Math.round(val * 10) / 10;
+}
+
+/**
+ * Computes sequential Bayesian skill updates for a bettor based on their closing line value (CLV).
+ */
+export function computeBayesianSkillProfile(
+  tickets: readonly NormalizedObservationTicket[],
+  priorAlpha: number = 10,
+  priorBeta: number = 10,
+): BayesianSkillProfile {
+  let clvWins = 0;
+  let clvLosses = 0;
+
+  for (const t of tickets) {
+    const clv = t.priceVsCloseCents;
+    if (clv !== null && clv !== undefined) {
+      if (clv > 0) clvWins += 1;
+      else if (clv < 0) clvLosses += 1;
+      else {
+        clvWins += 0.5;
+        clvLosses += 0.5;
+      }
+    } else if (t.movedInFavor === true) {
+      clvWins += 1;
+    } else if (t.movedInFavor === false) {
+      clvLosses += 1;
+    } else {
+      clvWins += 0.5;
+      clvLosses += 0.5;
+    }
+  }
+
+  const posteriorAlpha = priorAlpha + clvWins;
+  const posteriorBeta = priorBeta + clvLosses;
+  const total = posteriorAlpha + posteriorBeta;
+  const posteriorMeanWinRate =
+    Math.round((posteriorAlpha / total) * 1000) / 1000;
+  const variance =
+    (posteriorAlpha * posteriorBeta) / (total * total * (total + 1));
+  const standardDeviation = Math.round(Math.sqrt(variance) * 1000) / 1000;
+
+  const low95 = Math.max(
+    0,
+    Math.round((posteriorMeanWinRate - 1.96 * standardDeviation) * 1000) / 1000,
+  );
+  const high95 = Math.min(
+    1,
+    Math.round((posteriorMeanWinRate + 1.96 * standardDeviation) * 1000) / 1000,
+  );
+
+  let status: "PRELIMINARY" | "CONVERGING" | "CONFIRMED" = "PRELIMINARY";
+  if (tickets.length >= 50 || standardDeviation < 0.04) {
+    status = "CONFIRMED";
+  } else if (tickets.length >= 15) {
+    status = "CONVERGING";
+  }
+
+  return {
+    priorAlpha,
+    priorBeta,
+    posteriorAlpha: Math.round(posteriorAlpha * 10) / 10,
+    posteriorBeta: Math.round(posteriorBeta * 10) / 10,
+    posteriorMeanWinRate,
+    variance: Math.round(variance * 100000) / 100000,
+    standardDeviation,
+    credibleInterval95: [low95, high95],
+    status,
+  };
+}
+
+/**
+ * Computes CLV statistical significance: t-statistic, standard error, and two-tailed p-value.
+ */
+export function computeClvSignificance(
+  clvSamples: readonly number[],
+): ClvStatisticalSignificance {
+  const n = clvSamples.length;
+  if (n < 2) {
+    const single = clvSamples[0] ?? 0;
+    return {
+      meanClvPercent: Math.round(single * 1000) / 10,
+      stdDevClvPercent: 0,
+      sampleCount: n,
+      standardError: 0,
+      tStatistic: 0,
+      pValue: 1.0,
+      isSignificant95: false,
+      isSignificant99: false,
+    };
+  }
+
+  const mean = clvSamples.reduce((a, b) => a + b, 0) / n;
+  const variance =
+    clvSamples.reduce((acc, x) => acc + Math.pow(x - mean, 2), 0) / (n - 1);
+  const stdDev = Math.sqrt(variance);
+  const standardError = stdDev / Math.sqrt(n);
+  const tStatistic = standardError > 0 ? mean / standardError : 0;
+
+  const absZ = Math.abs(tStatistic);
+  const pValue = Math.min(
+    1.0,
+    Math.max(0.0, 2.0 / (1.0 + Math.exp(1.702 * absZ))),
+  );
+
+  return {
+    meanClvPercent: Math.round(mean * 1000) / 10,
+    stdDevClvPercent: Math.round(stdDev * 1000) / 10,
+    sampleCount: n,
+    standardError: Math.round(standardError * 10000) / 10000,
+    tStatistic: Math.round(tStatistic * 100) / 100,
+    pValue: Math.round(pValue * 10000) / 10000,
+    isSignificant95: pValue < 0.05,
+    isSignificant99: pValue < 0.01,
+  };
+}
+
+/**
+ * Computes fractional Kelly allocation, divergence, and capital growth rate.
+ */
+export function computeKellyMetrics(
+  oddsPrice: number,
+  estimatedWinProbability: number,
+  riskAmountUsd: number,
+  bankrollUsd: number = 10_000,
+): KellySizingMetrics {
+  let decimalOdds = 1.909;
+  if (oddsPrice > 0) {
+    decimalOdds = 1 + oddsPrice / 100;
+  } else if (oddsPrice < 0) {
+    decimalOdds = 1 + 100 / Math.abs(oddsPrice);
+  }
+  const b = Math.max(0.01, decimalOdds - 1);
+  const p = Math.max(0.01, Math.min(0.99, estimatedWinProbability));
+  const q = 1 - p;
+
+  const rawKelly = (b * p - q) / b;
+  const impliedKellyFraction = Math.max(
+    0,
+    Math.round(rawKelly * 10000) / 10000,
+  );
+  const halfKellyFraction =
+    Math.round(impliedKellyFraction * 0.5 * 10000) / 10000;
+  const quarterKellyFraction =
+    Math.round(impliedKellyFraction * 0.25 * 10000) / 10000;
+
+  const observedUnitFraction =
+    bankrollUsd > 0
+      ? Math.round((riskAmountUsd / bankrollUsd) * 10000) / 10000
+      : 0;
+
+  const divergence = Math.abs(observedUnitFraction - halfKellyFraction);
+  const isKellyDisciplined =
+    impliedKellyFraction > 0 &&
+    observedUnitFraction >= quarterKellyFraction * 0.8 &&
+    observedUnitFraction <= halfKellyFraction * 1.5;
+
+  const f = Math.min(0.99, observedUnitFraction);
+  const growthRate =
+    p * Math.log(Math.max(0.0001, 1 + f * b)) +
+    q * Math.log(Math.max(0.0001, 1 - f));
+
+  return {
+    impliedKellyFraction,
+    halfKellyFraction,
+    quarterKellyFraction,
+    observedUnitFraction,
+    kellyDivergence: Math.round(divergence * 10000) / 10000,
+    isKellyDisciplined,
+    growthRate: Math.round(growthRate * 10000) / 10000,
+  };
 }
 
 /**
@@ -334,7 +541,24 @@ export function rateCustomerFromTickets(
     null;
 
   if (obs) {
-    return rateCustomerFromObservations(obs);
+    const base = rateCustomerFromObservations(obs);
+    const bayesianSkill = computeBayesianSkillProfile(relevantTickets);
+    const clvSamples = relevantTickets
+      .map((t) => t.priceVsCloseCents)
+      .filter((c): c is number => c !== null && c !== undefined);
+    const clvSignificance = computeClvSignificance(clvSamples);
+    const avgRisk = obs.nTickets > 0 ? obs.totalRiskUsd / obs.nTickets : 100;
+    const kellyMetrics = computeKellyMetrics(
+      -110,
+      bayesianSkill.posteriorMeanWinRate,
+      avgRisk,
+    );
+    return {
+      ...base,
+      bayesianSkill,
+      clvSignificance,
+      kellyMetrics,
+    };
   }
 
   // Fallback empty rating for zero-ticket customer
@@ -412,6 +636,13 @@ export function rateIncomingWager(
     (touchesKey ? `touches key ${touchedKeys.join(",")} ` : "") +
     `-> ${rating.recommendedAction}`;
 
+  const wagerKelly = computeKellyMetrics(
+    -110,
+    rating.bayesianSkill?.posteriorMeanWinRate ?? 0.524,
+    ticket.amountWageredUsd,
+    10_000,
+  );
+
   const ratedWager: RatedIncomingWager = {
     type: "RATED_INCOMING_WAGER",
     ticketNumber: ticket.TicketNumber || ticket.WagerNumber,
@@ -425,6 +656,7 @@ export function rateIncomingWager(
     riskUsd: ticket.amountWageredUsd,
     flags,
     message,
+    wagerKelly,
     autoExecute: false,
     [Bun.inspect.custom](
       depth: number = 0,
@@ -465,6 +697,38 @@ export function batchRateCustomers(
 export function formatCustomerRatingMarkdown(rating: CustomerRating): string {
   const custLink = formatCustomerOsc8Markdown(rating.customerId);
   const scores = rating.componentScores;
+  let extraMd = "";
+
+  if (rating.bayesianSkill) {
+    const b = rating.bayesianSkill;
+    extraMd +=
+      `- **Bayesian Skill**: Status \`${b.status}\` | Win Rate: **${(b.posteriorMeanWinRate * 100).toFixed(1)}%** ` +
+      `(95% CI: [${(b.credibleInterval95[0] * 100).toFixed(1)}%, ${(b.credibleInterval95[1] * 100).toFixed(1)}%], ` +
+      `Posterior: α=${b.posteriorAlpha}, β=${b.posteriorBeta})\n`;
+  }
+  if (rating.clvSignificance) {
+    const s = rating.clvSignificance;
+    extraMd +=
+      `- **CLV Significance**: Mean CLV: **${s.meanClvPercent > 0 ? "+" : ""}${s.meanClvPercent.toFixed(1)}%** ` +
+      `| t-stat: \`${s.tStatistic.toFixed(2)}\` (p=\`${s.pValue.toFixed(4)}\`, ` +
+      (s.isSignificant99
+        ? "99% Statistically Significant"
+        : s.isSignificant95
+          ? "95% Statistically Significant"
+          : "Not Significant") +
+      `)\n`;
+  }
+  if (rating.kellyMetrics) {
+    const k = rating.kellyMetrics;
+    extraMd +=
+      `- **Kelly Sizing**: Optimal Half-Kelly: \`${(k.halfKellyFraction * 100).toFixed(2)}%\` | ` +
+      `Observed: \`${(k.observedUnitFraction * 100).toFixed(2)}%\` (Divergence: \`${(k.kellyDivergence * 100).toFixed(2)}%\`, ` +
+      (k.isKellyDisciplined
+        ? "✅ Disciplined Sizing"
+        : "⚠️ Undisciplined / Irrational Sizing") +
+      `)\n`;
+  }
+
   return (
     `### Customer Rating Report: ${custLink}\n\n` +
     `- **Tier**: \`${rating.tier}\` (Score: **${rating.score.toFixed(1)}/10**)\n` +
@@ -472,6 +736,7 @@ export function formatCustomerRatingMarkdown(rating: CustomerRating): string {
     `- **Archetype**: \`${rating.primaryArchetype}\`\n` +
     `- **Recommended Action**: \`${rating.recommendedAction}\`\n` +
     `- **Sample Size**: ${rating.sampleSize} tickets ($${Math.round(rating.totalRiskUsd).toLocaleString()} risk)\n` +
+    extraMd +
     `- **Components**:\n` +
     `  - Key Numbers: \`${scores.keyNumberScore.toFixed(1)}/10\`\n` +
     `  - CLV Edge: \`${scores.clvEdgeScore.toFixed(1)}/10\`\n` +

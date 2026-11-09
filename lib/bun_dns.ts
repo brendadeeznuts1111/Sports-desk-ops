@@ -12,6 +12,7 @@
  */
 
 import { dns } from "bun";
+import { promises as nodeDns } from "node:dns";
 
 export type DnsResolverBackend = "c-ares" | "system" | "getaddrinfo" | "libc";
 
@@ -119,6 +120,44 @@ export interface DnsLookupRecord {
   readonly ttl?: number;
 }
 
+export interface ResolverLatencyMetric {
+  readonly backend: DnsResolverBackend;
+  readonly samplesMs: readonly number[];
+  readonly minMs: number;
+  readonly maxMs: number;
+  readonly meanMs: number;
+  readonly p50Ms: number;
+  readonly p99Ms: number;
+  readonly addresses: readonly string[];
+}
+
+export interface ResolverBenchmarkResult {
+  readonly hostname: string;
+  readonly timestamp: string;
+  readonly metrics: readonly ResolverLatencyMetric[];
+  readonly fastestBackend: DnsResolverBackend;
+  readonly speedupFactor: number;
+}
+
+export interface ReverseDnsClassification {
+  readonly ipAddress: string;
+  readonly hostnames: readonly string[];
+  readonly primaryHostname: string | null;
+  readonly isDatacenterOrCloud: boolean;
+  readonly isVpnOrProxySuspicious: boolean;
+  readonly organization: string;
+}
+
+export interface DnsRecordSet {
+  readonly hostname: string;
+  readonly aRecords: readonly string[];
+  readonly aaaaRecords: readonly string[];
+  readonly mxRecords: ReadonlyArray<{ exchange: string; priority: number }>;
+  readonly txtRecords: readonly string[][];
+  readonly cnameRecords: readonly string[];
+  readonly timestamp: string;
+}
+
 /**
  * Resolves a hostname using an explicit Bun DNS resolver backend.
  * Default on macOS/Windows is "system"; on Linux default is "c-ares".
@@ -171,4 +210,224 @@ export function formatDnsTelemetryMarkdown(): string {
     `| **Errors** | \`${telemetry.errors}\` | Connection / resolution failures |\n` +
     `| **Cache TTL** | \`${telemetry.defaultTtlSeconds}s\` | Configurable via \`$BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS\` |\n`
   );
+}
+
+/**
+ * Benchmarks resolution latency between resolver backends ("c-ares" vs "system" vs "libc")
+ * for high-frequency trading and low-latency betting operations.
+ */
+export async function benchmarkResolverLatency(
+  hostname: string,
+  backends: readonly DnsResolverBackend[] = ["c-ares", "system"],
+  sampleCount: number = 3,
+): Promise<ResolverBenchmarkResult> {
+  const metrics: ResolverLatencyMetric[] = [];
+
+  for (const backend of backends) {
+    const samples: number[] = [];
+    let addresses: string[] = [];
+
+    for (let i = 0; i < sampleCount; i++) {
+      const t0 = performance.now();
+      try {
+        const records = await dns.lookup(hostname, { backend });
+        const elapsed = performance.now() - t0;
+        samples.push(Math.round(elapsed * 1000) / 1000);
+        addresses = records.map((r) => r.address);
+      } catch {
+        const elapsed = performance.now() - t0;
+        samples.push(Math.round(elapsed * 1000) / 1000);
+      }
+    }
+
+    const sorted = [...samples].sort((a, b) => a - b);
+    const minMs = sorted[0] ?? 0;
+    const maxMs = sorted[sorted.length - 1] ?? 0;
+    const sum = sorted.reduce((acc, v) => acc + v, 0);
+    const meanMs =
+      sorted.length > 0 ? Math.round((sum / sorted.length) * 1000) / 1000 : 0;
+    const p50Ms = sorted[Math.floor(sorted.length * 0.5)] ?? minMs;
+    const p99Ms = sorted[Math.floor(sorted.length * 0.99)] ?? maxMs;
+
+    metrics.push({
+      backend,
+      samplesMs: samples,
+      minMs,
+      maxMs,
+      meanMs,
+      p50Ms,
+      p99Ms,
+      addresses,
+    });
+  }
+
+  const sortedMetrics = [...metrics].sort((a, b) => a.meanMs - b.meanMs);
+  const fastest = sortedMetrics[0] ?? { backend: "system", meanMs: 1 };
+  const slowest = sortedMetrics[sortedMetrics.length - 1] ?? {
+    backend: "system",
+    meanMs: 1,
+  };
+  const speedup =
+    fastest.meanMs > 0
+      ? Math.round((slowest.meanMs / fastest.meanMs) * 10) / 10
+      : 1.0;
+
+  return {
+    hostname,
+    timestamp: new Date().toISOString(),
+    metrics,
+    fastestBackend: fastest.backend,
+    speedupFactor: Math.max(1.0, speedup),
+  };
+}
+
+/**
+ * Performs reverse DNS verification and hosting/proxy classification on incoming bettor IP addresses.
+ */
+export async function classifyIpAddress(
+  ipAddress: string,
+): Promise<ReverseDnsClassification> {
+  let hostnames: string[] = [];
+  try {
+    hostnames = await nodeDns.reverse(ipAddress);
+  } catch {
+    // Reverse resolution may fail for unmapped IP literals
+  }
+
+  const primaryHostname = hostnames[0] ?? null;
+  const combinedHostText = hostnames.join(" ").toLowerCase();
+
+  let isDatacenterOrCloud = false;
+  let isVpnOrProxySuspicious = false;
+  let organization = "Residential/Unknown ISP";
+
+  if (
+    combinedHostText.includes("amazonaws.com") ||
+    combinedHostText.includes("aws")
+  ) {
+    isDatacenterOrCloud = true;
+    organization = "Amazon Web Services (AWS)";
+  } else if (
+    combinedHostText.includes("cloudflare") ||
+    combinedHostText.includes("1.1.1.1") ||
+    combinedHostText.includes("one.one.one.one")
+  ) {
+    isDatacenterOrCloud = true;
+    organization = "Cloudflare Edge";
+  } else if (
+    combinedHostText.includes("google") ||
+    combinedHostText.includes("1e100.net")
+  ) {
+    isDatacenterOrCloud = true;
+    organization = "Google Cloud Platform";
+  } else if (combinedHostText.includes("digitalocean")) {
+    isDatacenterOrCloud = true;
+    organization = "DigitalOcean VPS";
+  } else if (
+    combinedHostText.includes("hetzner") ||
+    combinedHostText.includes("your-server.de")
+  ) {
+    isDatacenterOrCloud = true;
+    organization = "Hetzner Online";
+  } else if (combinedHostText.includes("ovh")) {
+    isDatacenterOrCloud = true;
+    organization = "OVHcloud";
+  }
+
+  if (
+    combinedHostText.includes("vpn") ||
+    combinedHostText.includes("proxy") ||
+    combinedHostText.includes("tor") ||
+    combinedHostText.includes("relay") ||
+    combinedHostText.includes("exit")
+  ) {
+    isVpnOrProxySuspicious = true;
+  }
+
+  return {
+    ipAddress,
+    hostnames,
+    primaryHostname,
+    isDatacenterOrCloud,
+    isVpnOrProxySuspicious,
+    organization,
+  };
+}
+
+/**
+ * Resolves standard DNS resource records (A, AAAA, MX, TXT, CNAME) using Bun's native methods.
+ */
+export async function resolveDnsRecordSet(
+  hostname: string,
+): Promise<DnsRecordSet> {
+  let aRecords: string[] = [];
+  let aaaaRecords: string[] = [];
+  let mxRecords: Array<{ exchange: string; priority: number }> = [];
+  let txtRecords: string[][] = [];
+  let cnameRecords: string[] = [];
+
+  try {
+    aRecords = await nodeDns.resolve(hostname, "A");
+  } catch {}
+  try {
+    aaaaRecords = await nodeDns.resolve(hostname, "AAAA");
+  } catch {}
+  try {
+    mxRecords = (await nodeDns.resolveMx(hostname)) as Array<{
+      exchange: string;
+      priority: number;
+    }>;
+  } catch {}
+  try {
+    txtRecords = (await nodeDns.resolveTxt(hostname)) as string[][];
+  } catch {}
+  try {
+    cnameRecords = await nodeDns.resolveCname(hostname);
+  } catch {}
+
+  return {
+    hostname,
+    aRecords,
+    aaaaRecords,
+    mxRecords,
+    txtRecords,
+    cnameRecords,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Continuous background DNS cache warmer for mission-critical trading and betting desk operations.
+ */
+export class ContinuousDnsWarmingManager {
+  private timer: Timer | null = null;
+  private isRunning = false;
+
+  constructor(
+    private readonly hosts: readonly HostTarget[] = SPORTSDESK_CORE_HOSTS,
+    private readonly intervalMs: number = 20_000,
+  ) {}
+
+  public start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    // Initial warmup
+    prefetchSportsDeskEndpoints(this.hosts);
+    this.timer = setInterval(() => {
+      prefetchSportsDeskEndpoints(this.hosts);
+    }, this.intervalMs);
+  }
+
+  public stop(): void {
+    if (!this.isRunning) return;
+    this.isRunning = false;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
+  public active(): boolean {
+    return this.isRunning;
+  }
 }

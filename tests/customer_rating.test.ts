@@ -2,6 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { CustomerObservations } from "../lib/customer_profile.ts";
 import {
   batchRateCustomers,
+  computeBayesianSkillProfile,
+  computeClvSignificance,
+  computeKellyMetrics,
   formatCustomerRatingMarkdown,
   rateCustomerFromObservations,
   rateCustomerFromTickets,
@@ -313,5 +316,85 @@ describe("Customer Rating Engine", () => {
       MONOCHROME_ANSI_THEME,
     );
     expect(renderedAnsiMono.length).toBeGreaterThan(0);
+  });
+
+  it("computes Bayesian skill profile with Beta prior updating and credible intervals", () => {
+    const mockTickets: NormalizedObservationTicket[] = [
+      {
+        ticketNumber: "T1",
+        customerId: "SHARP1",
+        agentId: "AG1",
+        placedAtYmd: "2026-11-01",
+        sport: "Football",
+        competitionFamily: "NFL",
+        canonicalPeriod: "game",
+        marketKind: "spread",
+        side: "home",
+        origSpread: -3.0,
+        adjSpread: -3.0,
+        buyPoints: 0,
+        touchedKeyNumber: 3,
+        priceVsCloseCents: 15, // Beat close by 15 cents
+        movedInFavor: true,
+        riskUsd: 1000,
+        netUsd: 909,
+      },
+      {
+        ticketNumber: "T2",
+        customerId: "SHARP1",
+        agentId: "AG1",
+        placedAtYmd: "2026-11-02",
+        sport: "Football",
+        competitionFamily: "NFL",
+        canonicalPeriod: "game",
+        marketKind: "spread",
+        side: "away",
+        origSpread: 7.0,
+        adjSpread: 7.0,
+        buyPoints: 0,
+        touchedKeyNumber: 7,
+        priceVsCloseCents: 20, // Beat close by 20 cents
+        movedInFavor: true,
+        riskUsd: 2000,
+        netUsd: 1818,
+      },
+    ];
+
+    const bayes = computeBayesianSkillProfile(mockTickets, 10, 10);
+    expect(bayes.posteriorAlpha).toBe(12);
+    expect(bayes.posteriorBeta).toBe(10);
+    expect(bayes.posteriorMeanWinRate).toBeGreaterThan(0.5);
+    expect(bayes.credibleInterval95[0]).toBeLessThan(
+      bayes.posteriorMeanWinRate,
+    );
+    expect(bayes.credibleInterval95[1]).toBeGreaterThan(
+      bayes.posteriorMeanWinRate,
+    );
+    expect(bayes.status).toBe("PRELIMINARY");
+  });
+
+  it("computes CLV statistical significance with t-statistic and p-value", () => {
+    // 5 sample CLVs beating the closing line consistently (+10%, +15%, +20%, +12%, +18%)
+    const clvSamples = [0.1, 0.15, 0.2, 0.12, 0.18];
+    const sig = computeClvSignificance(clvSamples);
+
+    expect(sig.sampleCount).toBe(5);
+    expect(sig.meanClvPercent).toBe(15); // mean is 0.15 -> 15.0%
+    expect(sig.tStatistic).toBeGreaterThan(5.0);
+    expect(sig.pValue).toBeLessThan(0.01);
+    expect(sig.isSignificant95).toBe(true);
+    expect(sig.isSignificant99).toBe(true);
+  });
+
+  it("computes fractional Kelly allocation, divergence and disciplined sizing", () => {
+    // 54% estimated win rate at -110 juice (b = 0.909, p = 0.54, q = 0.46)
+    // Full Kelly: (0.909 * 0.54 - 0.46) / 0.909 = 0.0339 (3.4%)
+    // Half Kelly: ~1.7% ($170 on $10k bankroll)
+    const kelly = computeKellyMetrics(-110, 0.54, 170, 10000);
+
+    expect(kelly.impliedKellyFraction).toBeGreaterThan(0.02);
+    expect(kelly.halfKellyFraction).toBeGreaterThan(0.01);
+    expect(kelly.isKellyDisciplined).toBe(true);
+    expect(kelly.growthRate).toBeGreaterThan(0);
   });
 });
