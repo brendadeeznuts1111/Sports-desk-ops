@@ -518,6 +518,20 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     dataClass: "operational",
     surface: null,
   }),
+  defineRoute({
+    path: "/governance",
+    method: "GET",
+    guard: "none",
+    dataClass: "aggregate",
+    surface: null,
+  }),
+  defineRoute({
+    path: "/governance.json",
+    method: "GET",
+    guard: "none",
+    dataClass: "aggregate",
+    surface: null,
+  }),
 ];
 
 /** Paths only, for the surface comparison. */

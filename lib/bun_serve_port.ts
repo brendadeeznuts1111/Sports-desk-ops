@@ -21,11 +21,23 @@ export const BUN_SERVE_PORT_NAMES = ["BUN_PORT", "PORT", "NODE_PORT"] as const;
 export function resolveBunServePort(
   environment: Readonly<Record<string, string | undefined>>,
 ): number {
+  return resolveSportsdeskDaemonPort(environment, 3000);
+}
+
+/**
+ * Resolve the Sportsdesk Ops daemon port (`:4020` by default) while honoring
+ * the full Bun-native port cascade (`BUN_PORT` → `PORT` → `NODE_PORT` → `defaultPort`).
+ */
+export function resolveSportsdeskDaemonPort(
+  environment: Readonly<Record<string, string | undefined>>,
+  defaultPort = 4020,
+): number {
   for (const name of BUN_SERVE_PORT_NAMES) {
     const raw = environment[name];
     if (raw === undefined || raw.trim() === "") continue;
     const value = Number(raw);
     if (Number.isInteger(value) && value >= 0) return value;
   }
-  return 3000;
+  return defaultPort;
 }
+

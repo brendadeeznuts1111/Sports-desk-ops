@@ -44,6 +44,10 @@ import {
   assertBridgeAndChannelTaxonomicSeparation,
   assertColumnStoreNamingAndUnsignedHandles,
 } from "../lib/specification_naming_police.ts";
+import {
+  buildGovernanceDashboardSection,
+  buildGovernanceReport,
+} from "../lib/rbac_governance.ts";
 
 interface ApiResult {
   readonly path: string;
@@ -794,6 +798,23 @@ function buildSnapshot(
           ),
         },
   );
+
+  try {
+    sections.push(
+      buildGovernanceDashboardSection(
+        buildGovernanceReport({ now: new Date(now) }),
+      ),
+    );
+  } catch (error) {
+    sections.push(
+      missingSection(
+        "rbac-governance",
+        "RBAC Roles & Task Governance",
+        "ops",
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
 
   const relay = rec(automation?.["wsRelay"]);
   const cron = rec(automation?.["cron"]);

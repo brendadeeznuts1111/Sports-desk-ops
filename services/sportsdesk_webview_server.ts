@@ -3447,22 +3447,22 @@ export function startServer(options?: ServerOptions) {
         );
       }
 
-      // 13b. Ops tracker (GET /tracker): tasks, pull requests and the secret inventory as a static
-      // page, guarded like the graph page (loopback, or the admin token). Headers (CSP, no-store)
-      // come from lib/tracker_dashboard.ts.
+      // 13b. Ops tracker (/tracker) and RBAC & Task Governance (/governance, /governance.json).
+      if (
+        (pathname === "/governance" || pathname === "/governance.json") &&
+        req.method === "GET"
+      ) {
+        return serveGovernanceRoute(pathname, cors);
+      }
       if (pathname === "/tracker" && req.method === "GET") {
-        const rejected = piiRejection(
-          req,
-          server.requestIP(req)?.address,
-          ingress,
-        );
+        const ip = server.requestIP(req)?.address;
+        const rejected = piiRejection(req, ip, ingress);
         if (rejected !== null) {
           return Response.json(
             { success: false, error: rejected.error },
             { status: rejected.status, headers: cors },
           );
         }
-        // Imported here so the daemon does not load react-dom until someone opens the page.
         const [
           { TRACKER_HEADERS, renderTrackerPage },
           { loadTrackerStateCached },
@@ -3977,4 +3977,26 @@ async function serveGraphDocsJson(
     "application/json; charset=utf-8",
     { ...cors, "Cache-Control": "no-store" },
   );
+}
+
+/** RBAC Roles & Task Governance HTML dashboard (/governance) and JSON report (/governance.json). */
+async function serveGovernanceRoute(
+  pathname: string,
+  cors: Record<string, string>,
+): Promise<Response> {
+  const { buildGovernanceReport, renderStandaloneGovernanceHtml } =
+    await import("../lib/rbac_governance.ts");
+  const report = buildGovernanceReport({ root: repoRoot });
+  if (pathname === "/governance.json") {
+    return Response.json(report, {
+      headers: { ...cors, "Cache-Control": "no-store" },
+    });
+  }
+  return new Response(renderStandaloneGovernanceHtml(report), {
+    headers: {
+      ...cors,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
 }

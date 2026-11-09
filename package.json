@@ -177,6 +177,8 @@
     "dashboard:html": "bun run scripts/dashboard_view.ts html",
     "dashboard:markdown": "bun run scripts/dashboard_view.ts markdown",
     "dashboard:watch": "bun run scripts/dashboard_view.ts watch --interval 10",
+    "governance:check": "bun run scripts/governance_check.ts",
+    "governance:dashboard": "bun run scripts/governance_check.ts --html --out scratch/governance-dashboard.html",
     "desk:doctor": "bun run scripts/desk_doctor.ts",
     "serve:blob-live-bets": "bun run services/blob_and_live_bets_server.ts",
     "supervise": "bun run services/supervisor.ts",

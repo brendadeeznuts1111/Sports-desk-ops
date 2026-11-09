@@ -103,6 +103,9 @@ so an id resolves without guessing which artifact it came from.
 
 - [ ] **P0.1 Capture the seven F402 customer-report operations by per-prefix group (`[Manager]`, `[Report]`, `[unknown]`)**
   - **Ref:** `RT-F402-CAPTURE`
+  - **Owner:** operator + server team lead
+  - **Goal:** Achieve 7/7 verified F402 customer-report wire contracts across `/cloud/api/Manager` and `/cloud/api/Report`, eliminating zero-byte 500 ambiguity and locking `parseF402ListEnvelope()` schema parity.
+  - **Direction:** Run `bun run capture:f402 --week 0` for `getDailyFiguresByCustomer` (`application/json`), probe `PendingDelete` with sentinel `--ticket -1`, and pull one upstream server error log line for `getGradedWagerByCustomer` / `getTicketDetailPrint` against `docs/evidence/captures/pending-500s/diagnostics.json`.
   - **Basis:** `[OBSERVED]` `docs/evidence/captures/2026-11-01/` (3 promoted 200s + `run.json` TLSv1.3 provenance);
     `[CODE]` PII-safe form-key contract in `docs/evidence/captures/schema/` (parameter names only, no parameter
     values recorded); `[OBSERVED]` client JS inspection of cached `customer/report/report.js` (`offset 8578`,
@@ -165,6 +168,9 @@ so an id resolves without guessing which artifact it came from.
 
 - [ ] **P0.2 Verify the pre-fee PnL claim**
   - **Ref:** `RT-PREFEE-PNL`
+  - **Owner:** settlement team + risk-desk-analyst
+  - **Goal:** Reconcile the 110,637.44 USD Polymarket fee residual (`usdcSize - size * price`) in `docs/cross-domain-bridge.json` against official PnL so cross-domain bridge priority rankings are 100% cashflow-verified.
+  - **Direction:** Capture full fill-level activity rows (`size`, `price`, `usdcSize`) for one taker-heavy bridge wallet (such as `EJ8834` or `BGD101`) and run `bun run artifacts:value --offline` to promote `[UNVERIFIED]` to `[OBSERVED]`.
   - **Basis:** `[UNVERIFIED]` — inferred from a third-party toolkit and the `usdcSize − size × price` residual.
   - **Done when:** on one taker-heavy wallet, the residual reconciles to the gap between the official PnL and a
     cashflow replay, with the capture path recorded.
@@ -172,6 +178,9 @@ so an id resolves without guessing which artifact it came from.
 
 - [ ] **P0.3 Verify the backend-difference resolution (WebKit in-page vs CDP) for the Authorization-header discrepancy**
   - **Ref:** `RT-AUTH-BACKEND-DIFF`
+  - **Owner:** client/seam workstream + security/operator
+  - **Goal:** Prove that WebKit (`headersObserved: false`) vs Chrome CDP (`Authorization: Bearer <redacted>`) capture differences stem purely from browser network-stack interception rather than portal auth drift.
+  - **Direction:** Run `bun run capture:f402-har --backend chrome` on `getTransactions` or `Pending` and diff the resulting HAR header metadata against `docs/evidence/captures/2026-11-01/run.json`.
   - **Basis:** `[OBSERVED]` 2026-10-28 HAR recorded no `Authorization` header (`auth: "cookie"`), 2026-10-31 live
     captures recorded `authorization: "<redacted>"`, and 2026-11-01 WebKit probes (`docs/evidence/captures/2026-11-01/run.json`)
     recorded `backend: "webkit"`, `authMode: "env-login"`, `headersObserved: false`.
@@ -191,6 +200,8 @@ so an id resolves without guessing which artifact it came from.
   - **Ref:** `RT-SEARCH-ESCAPE`
   - **Owner:** client/seam workstream
   - **Issue:** [#16](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/16)
+  - **Goal:** Eliminate stored DOM XSS across `searchComponent` and the 31-module `MODULE_SINK_WRAPPERS` census (`docs/analysis/defense-measurement-2026-11-03/07-module-sink-census.md`) so player-controlled fields (`NameFirst`, `Login`, `Password`, `Comments`) cannot exfiltrate `sessionStorage.credentials.code`.
+  - **Direction:** Migrate `getResultTicketPending` / `getResultTicketMobileDetails` (`bet-desc` origin) and remaining `MODULE_SINK_WRAPPERS` entries one PR per module, then verify with `bun run pin:cdn` and `bun run check:innerhtml`.
   - **Basis:** `[CODE]` pinned `manager.js` player branch builds `<li>` with `NameFirst` and
     `Password` by concatenation and injects with `.html()` (bytes 80222/82730); the dropdown is one
     hop from `sessionStorage.credentials.code`.
@@ -225,6 +236,8 @@ so an id resolves without guessing which artifact it came from.
   - **Ref:** `RT-DEFENSE-MEASURE`
   - **Owner:** security/operator (needs vendor + server team + business owner)
   - **Issue:** [#17](https://github.com/bw496915-cmyk/Sports-desk-ops/issues/17)
+  - **Goal:** Convert all 7 `[UNVERIFIED]` defense claims in `docs/analysis/defense-measurement-2026-11-03/` to `[OBSERVED]` before the **2026-12-03** risk-acceptance expiry, governing 675,142.81 USD in cross-domain priority exposure.
+  - **Direction:** Complete Executive Decisions #1 (subordinate test account, ~1h), #2 (written tamper scope, ~1h), and #3 (6-request Bearer claim vs body test, ~2h) in `docs/analysis/defense-measurement-2026-11-03/00-executive-summary.md`, then verify closure with `bun run governance:check --audit`.
   - **Decision surface:** `docs/analysis/defense-measurement-2026-11-03/00-executive-summary.md`.
   - **Expiry:** if item 2 is not funded by **2026-12-03** (30 days), the `searchComponent` pause
     acceptance is re-opened deliberately on issue #17, not silently extended.
@@ -248,6 +261,8 @@ so an id resolves without guessing which artifact it came from.
 - [ ] **P0.7 Establish whether the pending-customer count is computable (Path A or Path B)**
   - **Ref:** `RT-PENDING-COUNT`
   - **Owner:** operator + settlement team + compliance
+  - **Goal:** Resolve whether an authoritative pending-customer count is computable across `getPending`, `getHistory`, and `getTransactionList` (Path A) or formally sign off the written non-computability finding (Path B).
+  - **Direction:** Evaluate 3–5 additional redacted customer ledgers in `scratch/` against the 33-row `BB55103` balance invariant (`docs/analysis/defense-measurement-2026-11-03/08-pending-customer-count-feasibility.md`), verify with `bun test tests/f402_pending_wagers.test.ts`, and record settlement + compliance sign-off.
   - **Basis:** `[CODE]`/`[OBSERVED]`
     `docs/analysis/defense-measurement-2026-11-03/08-pending-customer-count-feasibility.md`: no
     decision consumer documented; the portal's `Pending 2,400` is 2,400 dollars of wager amount, not a
@@ -266,6 +281,7 @@ so an id resolves without guessing which artifact it came from.
     ledgers/INFO in
     `scratch/` for the same 33-row invariant; 3/5 pass moves “one customer” to “ledger model,” any
     fail is a headline finding. No server call.
+  - **Done when:** Path A 20-customer manual sample reconciles against EOD settlement and compliance definitions, or Path B written non-computability finding is signed off.
   - **Exit:** Path A — 20-customer manual sample matches, settlement confirms end-of-day on a named
     date, compliance confirms definition, negative cases hold; or Path B — written finding linked
     from item 3 and unblock requested. Current state: **Path B (blocked)**.
@@ -274,6 +290,9 @@ so an id resolves without guessing which artifact it came from.
 
 - [ ] **P1.6 Capture GSLive deep-link behaviour**
   - **Ref:** `RT-GSLIVE-LINKS`
+  - **Owner:** operator + risk-desk-analyst
+  - **Goal:** Promote all three GSLive deep-link surfaces (`capture:gslive-corpus`, `capture:gslive-users-report`, `wagers:by-state`) from `[UNVERIFIED]` window/bot parameter assumptions to `[OBSERVED]` capture fixtures.
+  - **Direction:** Run `bun run capture:gslive-corpus` (`scripts/capture/gslive_corpus.ts`), `bun run verify:gslive-users-report` (`scripts/gslive_users_report_verify.ts`), and `bun run wagers:by-state` (`scripts/gslive_wagers_by_state.ts`) with an active `GSLIVE_SESSION_ID` to record one capture-backed deep-link example per surface.
   - **Basis:** `[OBSERVED]` the three surfaces exist; `[UNVERIFIED]` window/bot parameters beyond the captured
     examples.
   - **Done when:** each surface has one capture-backed example and the docs say `[OBSERVED]`.
@@ -283,6 +302,9 @@ so an id resolves without guessing which artifact it came from.
 
 - [ ] **P2.3 Schedule artifact regeneration**
   - **Ref:** `RT-ARTIFACT-CADENCE`
+  - **Owner:** operator
+  - **Goal:** Ensure `docs/combo-uniqueness.json` and `docs/cross-domain-bridge.json` are regenerated on a deterministic daily schedule with automated SHA-256 lock verification (`docs/artifacts.lock.json`).
+  - **Direction:** Run `bun run artifacts:value --offline` followed by `bun run artifacts:lock` and wire the host `artifacts:cron` job to publish freshness status into `scratch/artifacts-cron.jsonl`.
   - **Basis:** `[CODE]` `docs/combo-uniqueness.json` and `docs/cross-domain-bridge.json` only change when
     `artifacts:value` is run manually. `[CODE]` `--offline` now reproduces the combo half from the cached
     CFB event index, but the bridge half still needs `scratch/bridge-live-all.json` or the demo book, so a

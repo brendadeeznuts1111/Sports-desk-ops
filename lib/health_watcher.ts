@@ -5,6 +5,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
+import { resolveSportsdeskDaemonPort } from "./bun_serve_port.ts";
 import type {
   DegradedReason,
   DeskEnhancedHealthPayload,
@@ -62,7 +63,7 @@ function defaultStatePath(): string {
 function defaultHealthUrl(): string {
   const explicit = (Bun.env.DESK_HEALTH_URL ?? "").trim();
   if (explicit !== "") return explicit;
-  const port = (Bun.env.PORT ?? "4020").trim();
+  const port = resolveSportsdeskDaemonPort(Bun.env);
   return `http://127.0.0.1:${port}/health`;
 }
 

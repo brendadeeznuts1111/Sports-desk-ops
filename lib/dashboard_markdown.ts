@@ -48,6 +48,7 @@ export const DASHBOARD_SECTION_ORDER = [
   "game-admin",
   "sports-catalog",
   "analysis",
+  "rbac-governance",
   "automation",
   "admin",
 ] as const;
