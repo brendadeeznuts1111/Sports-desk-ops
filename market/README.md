@@ -192,4 +192,9 @@ bun run test:market-index
 
 CI: job **`market-index`** (`bun run test:market-index`) is the **required** status on `main` for catalog changes. Job **`verify`** is the full repo gate (may be red on unrelated debt).
 
+**Git install pins:** `market/index.json` `source.commit` is the installable tree. After squash
+merges, tag **`market-pin-N`** on that commit before bumping the pin in the index so the SHA stays
+fetchable. **`repoPath`** is required in bundle config for market-only git installs (see
+`market/PLUGIN-AUDIT.md`).
+
 Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json` (drift messages name plugin, version, and both ranges), vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).

@@ -41,6 +41,7 @@
  */
 
 // ast-grep-ignore: node-child-process -- Host plugin code runs in Electron's Node main process, where the Bun global does not exist; spawning bun is the shim's whole job.
+import { resolveConfiguredRepoPath } from "./repo_path_resolve.js";
 import { execFile } from "node:child_process";
 // ast-grep-ignore: node-fs-read-write-file -- same runtime: Bun.file() is not defined in Electron's Node, so whole-file reads and the capture-store listing go through node:fs.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -64,7 +65,7 @@ export const inject = ["tools"];
  * here and a malformed value falls back to its default rather than reaching a spawn.
  */
 const DEFAULT_CONFIG = {
-  repoPath: "/Users/nolarose/code/sportsdesk-ops",
+  repoPath: "",
   bunPath: "bun",
   serviceUrl: "http://127.0.0.1:4020",
   timeoutMs: 60_000,
@@ -3222,6 +3223,7 @@ function parseRouteSurfaceCounts(text) {
  */
 export function apply(ctx, config) {
   const settings = normalizeConfig(config);
+  settings.repoPath = resolveConfiguredRepoPath(settings.repoPath);
   const repoPath = settings.repoPath;
   const serviceUrl = String(settings.serviceUrl).replace(/\/+$/, "");
   const staleAfterMinutes = settings.staleAfterMinutes;

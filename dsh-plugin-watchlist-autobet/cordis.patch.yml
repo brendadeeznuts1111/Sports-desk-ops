@@ -22,7 +22,7 @@
     - id: watchlist-autobet
       name: dsh-plugin-watchlist-autobet
       config:
-        repoPath: /Users/nolarose/code/sportsdesk-ops
+        # repoPath: required — absolute sportsdesk-ops checkout (see repo_path_resolve.js)
         bunPath: bun
         configPath: config/watchlist-autobet.json
         timeoutMs: 60000

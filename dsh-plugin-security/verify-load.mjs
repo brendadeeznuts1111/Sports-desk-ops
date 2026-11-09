@@ -22,14 +22,14 @@
  *
  * WHAT IT DOES NOT PROVE: that the CLI's answers are correct (its own tests own that), that the
  * model is any good (the CLI reports metrics and limits), or that the running Host serves the
- * page (a live install check owns that). It deliberately points `repoPath` at a non-existent
- * temp directory so it never depends on the CLI existing and never reads or writes real data.
+ * page (a live install check owns that). It uses a temp checkout with a valid root
+ * `package.json` but no CLI so tools answer `cli_missing` without touching this repo.
  *
  * Run: node dsh-plugin-security/verify-load.mjs
  */
 
 // ast-grep-ignore: node-fs-read-write-file -- this smoke test reads its own bundle files to prove the manifest, locale and client safety rules.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -37,13 +37,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Runs under Node as well as Bun: import.meta.dir is Bun-only.
 // ast-grep-ignore: bun-import-meta-dir
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** The bundle must never reach the real repo in this smoke test. */
-const MISSING_REPO = join(
-  tmpdir(),
-  `dsh-security-verify-no-cli-${process.pid}`,
-);
+/** Empty sportsdesk-ops-shaped checkout (no CLI) for structured `cli_missing` answers. */
+function smokeCheckout(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), `${prefix}-${process.pid}-`));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "@tennis-hq/sportsdesk-workspace", private: true }),
+  );
+  return dir;
+}
+const SMOKE_REPO = smokeCheckout("dsh-security-verify");
 const CLI_RELATIVE_PATH = "cli/sportsdesk_fraud_cli.ts";
-const EXPECTED_CLI_PATH = join(MISSING_REPO, CLI_RELATIVE_PATH);
+const EXPECTED_CLI_PATH = join(SMOKE_REPO, CLI_RELATIVE_PATH);
 const PACKAGE_NAME = "dsh-plugin-sportsdesk-security";
 const BANNER_ID = "sportsdesk-security";
 const HTTP_ORIGIN = "http://verify.test";
@@ -312,7 +317,7 @@ async function main() {
   console.log("verify-load: tool registrations");
   const { ctx, tools, routes, toolDisposals, routeDisposals } = makeContext();
   const dispose = apply(ctx, {
-    repoPath: MISSING_REPO,
+    repoPath: SMOKE_REPO,
     bunPath: "bun",
     timeoutMs: 5_000,
   });
