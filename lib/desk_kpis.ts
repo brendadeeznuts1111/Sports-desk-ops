@@ -17,6 +17,13 @@ import { summarizeLiveWagers, type WagerListArtifact } from "./live_wagers.ts";
 /** `fixture` is demo data; it is shown so the card is not empty, never as the book. */
 export type KpiBasis = "capture" | "paste" | "fixture";
 
+/** Map artifact `source` / `dataSource` strings to KPI basis (`live:` counts as capture). */
+export function kpiBasisFromSource(source: string): KpiBasis {
+  if (source.startsWith("paste:")) return "paste";
+  if (source.startsWith("capture:") || source.startsWith("live:")) return "capture";
+  return "fixture";
+}
+
 export interface KpiProvenance {
   readonly source: string;
   readonly basis: KpiBasis;
@@ -205,7 +212,7 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       toWinCents: artifact.games.reduce((sum, g) => sum + g.toWin, 0),
       provenance: provenance(
         artifact.dataSource,
-        artifact.dataSource.startsWith("capture:") ? "capture" : "fixture",
+        kpiBasisFromSource(artifact.dataSource),
         artifact.capturedAt,
         liveBets.mtime,
         STALE_AFTER_SECONDS.liveBets,
@@ -227,7 +234,7 @@ export function deriveDeskKpis(inputs: DeskKpiInputs, now: Date): DeskKpis {
       volumeCents: summary.volume,
       provenance: provenance(
         filed.source,
-        filed.source.startsWith("paste:") ? "paste" : "capture",
+        kpiBasisFromSource(filed.source),
         filed.observedAt,
         liveWagers.mtime,
         STALE_AFTER_SECONDS.liveWagers,

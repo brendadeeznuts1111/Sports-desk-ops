@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import {
   deriveDeskKpis,
   freshness,
+  kpiBasisFromSource,
   readCustomerBookSummary,
   recordedTime,
   STALE_AFTER_SECONDS,
@@ -78,6 +79,42 @@ describe("deriveDeskKpis", () => {
       basis: "fixture",
       stale: false,
     });
+  });
+
+  test("live pending dataSource is capture basis, not fixture", () => {
+    const kpis = deriveDeskKpis(
+      {
+        ...none,
+        liveBets: {
+          value: {
+            schemaVersion: 1,
+            dataSource:
+              "live:/cloud/api/Report/Pending@2026-11-09T03:00:00.000Z",
+            capturedAt: NOW.toISOString(),
+            operation: "/cloud/api/Report/Pending",
+            pendingCount: 0,
+            agents: {
+              hierarchyLoaded: false,
+              collisions: [],
+              agents: [],
+              unresolved: [],
+              unassignedGames: 0,
+              maxLevel: null,
+            },
+            games: [],
+          },
+          mtime: NOW,
+        },
+      },
+      NOW,
+    );
+    expect(kpis.pending?.provenance).toMatchObject({
+      basis: "capture",
+      source: "live:/cloud/api/Report/Pending@2026-11-09T03:00:00.000Z",
+    });
+    expect(kpiBasisFromSource("live:/cloud/api/Manager/getBetTicker@x")).toBe(
+      "capture",
+    );
   });
 
   test("pending totals sum the capture and go stale after an hour", async () => {
