@@ -188,6 +188,38 @@ describe("parseShortDesc", () => {
       isLive: false,
     });
   });
+
+  test("splits single-line compact parlays so subsequent sports do not bleed into period", () => {
+    const { legs, descCode } = parseShortDesc(
+      "P.Basketball #503 76ers +115 - For Game Tennis #8103 T Paul -305 - For Game Tennis #8097 L Musetti -1½ +100 - For Game Tennis #8106 C Ruud -190 - For Game Tennis #18109 A Fils Games/T Fritz Games O 24½ -115 - For Game Tennis #8838 Z Sonmez -370 - For Game Tennis #8741 M Hontama -1½ -155 - For Game ",
+    );
+    expect(descCode).toBe("P");
+    expect(legs).toHaveLength(7);
+    expect(legs[0]).toMatchObject({
+      sport: "Basketball",
+      period: "Game",
+      pick: "76ers +115",
+      gameNumber: "503",
+    });
+    expect(legs[1]).toMatchObject({
+      sport: "Tennis",
+      period: "Game",
+      pick: "T Paul -305",
+      gameNumber: "8103",
+    });
+    expect(legs[4]).toMatchObject({
+      sport: "Tennis",
+      period: "Game",
+      pick: "A Fils Games/T Fritz Games O 24½ -115",
+      gameNumber: "18109",
+    });
+    expect(legs[6]).toMatchObject({
+      sport: "Tennis",
+      period: "Game",
+      pick: "M Hontama -1½ -155",
+      gameNumber: "8741",
+    });
+  });
 });
 
 describe("volume vs amount", () => {

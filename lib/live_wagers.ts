@@ -199,6 +199,62 @@ export function splitSportPrefix(header: string): {
 const LIVE_TOKEN = /^LIVE\s+#(\d+)\s+/i;
 const HASH_TOKEN = /^#(\d+)\s+/;
 
+const COMPACT_PERIOD_LABELS = [
+  "1st 5 Innings",
+  "Last 4 Innings",
+  "1st Quarter",
+  "2nd Quarter",
+  "3rd Quarter",
+  "4th Quarter",
+  "1st Period",
+  "2nd Period",
+  "3rd Period",
+  "1st Inning",
+  "2nd Inning",
+  "3rd Inning",
+  "4th Inning",
+  "5th Inning",
+  "6th Inning",
+  "7th Inning",
+  "8th Inning",
+  "9th Inning",
+  "1st Half",
+  "2nd Half",
+  "Overtime",
+  "1st Set",
+  "2nd Set",
+  "3rd Set",
+  "4th Set",
+  "5th Set",
+  "1st OT",
+  "2nd OT",
+  "Match",
+  "Game",
+  "Prop",
+] as const;
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Internet compact parlays/teasers (`P.Basketball #503 76ers +115 - For Game Tennis #8103 …`)
+ * concatenate legs on one line with no `\r\n`. Split right after `- For <Period>` when followed
+ * by the next leg's `[Sport] [LIVE] #<GameNumber>`.
+ */
+const COMPACT_LEG_BOUNDARY = new RegExp(
+  `(\\s+-\\s+For\\s+(?:${COMPACT_PERIOD_LABELS.map(escapeRegex).join("|")}))\\s+(?=(?:(?:${SPORT_PREFIXES.map(escapeRegex).join("|")})\\s+)?(?:LIVE\\s+)?#\\d+)`,
+  "gi",
+);
+
+function splitCompactLegs(line: string): string[] {
+  return line
+    .replace(COMPACT_LEG_BOUNDARY, "$1\n")
+    .split("\n")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== "");
+}
+
 /**
  * The compact grammar has no `/` segments: it is `[Sport] [#id] [LIVE #id] <selection> <odds>
  * - For <period>`. Everything after the odds is the period, the `#id` is the game number, and the
@@ -334,18 +390,23 @@ export function parseShortDesc(shortDesc: unknown): {
 
     if (rest.length === 0) {
       // Compact grammar: no `/ Period / Market / Pick` segments to read.
-      const compactLeg = parseCompactLeg(header);
-      legs.push({
-        sport: compactLeg.sport,
-        game: "",
-        period: compactLeg.period,
-        market: "",
-        pick: compactLeg.pick,
-        raw: line,
-        compact: true,
-        live: compactLeg.live,
-        gameNumber: compactLeg.gameNumber,
-      });
+      // Single-line compact parlays/teasers (`P.Basketball #503 … - For Game Tennis #8103 …`)
+      // concatenate several legs without `\r\n`; split each leg before parsing.
+      const compactSegments = splitCompactLegs(header);
+      for (const segment of compactSegments) {
+        const compactLeg = parseCompactLeg(segment);
+        legs.push({
+          sport: compactLeg.sport,
+          game: "",
+          period: compactLeg.period,
+          market: "",
+          pick: compactLeg.pick,
+          raw: compactSegments.length === 1 ? line : segment,
+          compact: true,
+          live: compactLeg.live,
+          gameNumber: compactLeg.gameNumber,
+        });
+      }
       continue;
     }
 

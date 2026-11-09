@@ -419,7 +419,8 @@ interface OppositePair {
 
 function oppositePair(leg: NormalizedTicketLeg): OppositePair | null {
   const event = normalizeEventName(leg.eventName);
-  const total = /^(Over|Under)\s+(.+)$/i.exec(leg.selection.trim());
+  const trimmedSelection = leg.selection.trim();
+  const total = /^(Over|Under)\s+(.+)$/i.exec(trimmedSelection);
   if (total !== null) {
     return {
       key: `total|${event}|${leg.market}|${total[2]}`,
@@ -428,11 +429,23 @@ function oppositePair(leg: NormalizedTicketLeg): OppositePair | null {
       market: leg.market,
     };
   }
-  if (leg.market === "" || leg.selection === "") return null;
-  const side = leg.selection
-    .replace(/\s+[+-]?\d+(?:\.\d+)?$/, "")
-    .trim()
-    .toLowerCase();
+  const playerTotal = /^(.+?)\s+(Over|Under)\s+(.+)$/i.exec(trimmedSelection);
+  if (playerTotal !== null) {
+    const subject = playerTotal[1]!.trim().toLowerCase();
+    return {
+      key: `total|${event}|${leg.market}|${subject}|${playerTotal[3]!.trim()}`,
+      side: playerTotal[2]!.toUpperCase(),
+      event: leg.eventName,
+      market: leg.market,
+    };
+  }
+  if (leg.market === "" || trimmedSelection === "") return null;
+  const side = /\d+\s*-\s*\d+$/.test(trimmedSelection)
+    ? trimmedSelection.toLowerCase()
+    : trimmedSelection
+        .replace(/\s+[+-]?\d+(?:\.\d+)?$/, "")
+        .trim()
+        .toLowerCase();
   return {
     key: `side|${event}|${leg.market}`,
     side,
@@ -491,8 +504,8 @@ export function oppositeSidesSameCustomer(
   const hits: Anomaly[] = [];
   for (const group of oppositeGroups(tickets, true)) {
     if (group.sides.size < 2) continue;
-    const all = [...group.sides.values()].flat();
-    if (!withinWindow(all, 60 * 60_000)) continue;
+    const all = [...new Set([...group.sides.values()].flat())];
+    if (all.length < 2 || !withinWindow(all, 60 * 60_000)) continue;
     hits.push({
       rule: "opposite_sides_same_customer",
       severity: "notice",
@@ -516,7 +529,7 @@ export function oppositeSidesAcrossCustomers(
   const hits: Anomaly[] = [];
   for (const group of oppositeGroups(tickets, false)) {
     if (group.sides.size < 2) continue;
-    const all = [...group.sides.values()].flat();
+    const all = [...new Set([...group.sides.values()].flat())];
     const customers = new Set(
       all
         .map((ticket) => customerOf(ticket))

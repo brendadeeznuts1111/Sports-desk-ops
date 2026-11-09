@@ -211,6 +211,50 @@ describe("opposite sides", () => {
     ];
     expect(oppositeSidesAcrossCustomers(rows)).toHaveLength(1);
   });
+
+  test("does not flag different players Over on the same SGP ticket, but flags Over vs Under on the same player", () => {
+    const sgp = ticket({
+      wagerNumber: "767478753",
+      customer: "C",
+      insertedAt: "2026-11-05T08:26:55.420Z",
+      legs: [
+        leg(
+          "Dallas Cowboys vs Indianapolis Colts",
+          "Game",
+          "George Pickens Over 0.5",
+          "+144",
+          "total player touchdowns",
+        ),
+        leg(
+          "Dallas Cowboys vs Indianapolis Colts",
+          "Game",
+          "CeeDee Lamb Over 0.5",
+          "-116",
+          "total player touchdowns",
+        ),
+      ],
+    });
+    expect(oppositeSidesSameCustomer([sgp])).toHaveLength(0);
+
+    const playerUnder = ticket({
+      wagerNumber: "767478754",
+      customer: "C",
+      insertedAt: "2026-11-05T08:30:00.000Z",
+      legs: [
+        leg(
+          "Dallas Cowboys vs Indianapolis Colts",
+          "Game",
+          "George Pickens Under 0.5",
+          "-180",
+          "total player touchdowns",
+        ),
+      ],
+    });
+    const hits = oppositeSidesSameCustomer([sgp, playerUnder]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.evidence.sides).toEqual(["OVER", "UNDER"]);
+    expect(hits[0]?.evidence.wagerNumbers).toEqual(["767478753", "767478754"]);
+  });
 });
 
 describe("period_order_anomaly", () => {
