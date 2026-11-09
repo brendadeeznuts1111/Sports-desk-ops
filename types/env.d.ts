@@ -24,6 +24,8 @@ declare module "bun" {
     readonly F402_BASE_URL?: string;
     /** Bun fetch: log request/response headers (`1` or `curl`). */
     readonly F402_FETCH_VERBOSE?: string;
+    /** Comma-separated activity JSONL paths for bridge weblog rollup `--from`. */
+    readonly F402_WEBLOG_FROM?: string;
     readonly F402_AGENT_ID?: string;
     /** @deprecated Use secrets:f402 or TTY; only if F402_ALLOW_ENV_CREDENTIALS=1 */
     readonly F402_PASSWORD?: string;

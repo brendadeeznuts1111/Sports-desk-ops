@@ -2,6 +2,8 @@
  * CLI input resolution for `scripts/f402_weblog_bridge.ts` (fetch + rollup).
  */
 
+import { existsSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import {
   fetchAndPersistWebLog,
   resolveF402BearerTokenDetailed,
@@ -40,6 +42,59 @@ export function defaultWeblogCapturePath(deskDateYmd: string): string {
 
 export function defaultDeskDateYmd(now = new Date()): string {
   return now.toISOString().slice(0, 10);
+}
+
+/**
+ * Hourly bridge cron: staged activity JSONL for `weblog:rollup --from` (not Mode B audit).
+ * Override with `F402_WEBLOG_FROM` (absolute or repo-relative; comma-separated allowed).
+ */
+export function resolveBridgeWeblogCorpusFrom(
+  root: string,
+  options?: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly now?: () => Date;
+  },
+): string {
+  const env = options?.env ?? Bun.env;
+  const now = options?.now ?? (() => new Date());
+  const override = (env.F402_WEBLOG_FROM ?? "").trim();
+  if (override !== "") {
+    return override
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== "")
+      .map((part) => (isAbsolute(part) ? part : resolve(root, part)))
+      .join(",");
+  }
+  return resolve(
+    root,
+    defaultWeblogCapturePath(defaultDeskDateYmd(now())),
+  );
+}
+
+export function bridgeWeblogCorpusPresent(
+  fromPaths: string,
+): { readonly ok: true } | { readonly ok: false; readonly message: string } {
+  const paths = fromPaths
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p !== "");
+  if (paths.length === 0) {
+    return {
+      ok: false,
+      message: "weblog: no corpus paths resolved",
+    };
+  }
+  const missing = paths.filter((p) => !existsSync(p));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message:
+        `weblog: corpus missing at ${missing[0]} (set F402_WEBLOG_FROM or stage ` +
+        `out/f402/weblog/MM-DD-YYYY.jsonl via --fetch-mode A)`,
+    };
+  }
+  return { ok: true };
 }
 
 export interface WeblogBridgeCliValues {
