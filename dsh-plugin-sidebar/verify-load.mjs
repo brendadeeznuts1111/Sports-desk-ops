@@ -1798,16 +1798,17 @@ await checkAsync(
       card.props["data-live-state"] === "polling",
       `absent stream rendered as ${card.props["data-live-state"]}`,
     );
-    const text = JSON.stringify(card);
-    for (const expected of [
-      "polling fallback",
-      "Pending bets",
-      "$64,139",
-      "Last poll",
-      "15 s graph probe",
-    ]) {
+    const cardText = JSON.stringify(card);
+    for (const expected of ["polling fallback", "Last poll", "15 s graph probe"]) {
       assert(
-        text.includes(expected),
+        cardText.includes(expected),
+        `polling fallback is missing ${expected}`,
+      );
+    }
+    const pageText = textOf(tree);
+    for (const expected of ["Pending bets", "$64,139"]) {
+      assert(
+        pageText.includes(expected),
         `polling fallback is missing ${expected}`,
       );
     }
