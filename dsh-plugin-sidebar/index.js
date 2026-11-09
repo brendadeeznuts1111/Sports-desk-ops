@@ -18,6 +18,11 @@
  *   /api/sportsdesk-desk/kpis      -> http://127.0.0.1:4020/api/kpis
  *   /api/sportsdesk-desk/execution -> http://127.0.0.1:4020/api/execution/plan
  *   /api/sportsdesk-desk/stream    -> http://127.0.0.1:4020/api/graph/stream
+ *   /api/sportsdesk-desk/ws        -> ws://127.0.0.1:4020/api/live-bets
+ *
+ * The WebSocket entry is not a fetch route: it is an HTTP upgrade tunnel that
+ * performs both RFC 6455 handshakes and pipes the raw sockets, so the panel's
+ * Live bridge reaches the desk's pub/sub hub from a remotely served UI.
  *
  * The five JSON routes share one buffered handler: GET only (405 otherwise); a
  * present Origin must equal the carrier origin (a missing Origin is allowed,
@@ -41,6 +46,10 @@
  *
  * @module dsh-plugin-sportsdesk-desk-panel
  */
+
+import { createHash, randomBytes } from "node:crypto";
+import net from "node:net";
+import tls from "node:tls";
 
 const PROXY_PREFIX = "/api/sportsdesk-desk";
 const DEFAULT_DESK_PORT = 4020;
@@ -77,6 +86,67 @@ const PROBE_TIMEOUT_MS = 4_000;
  * a runaway-response guard, not a working limit.
  */
 const MAX_BODY_BYTES = 512 * 1024;
+
+/**
+ * The desk's WebSocket bridge. The browser cannot reach the desk's loopback
+ * port when the Harness UI is served remotely, and a WebSocket handshake
+ * cannot be proxied by a normal fetch handler: this route tunnels the raw
+ * upgraded socket to the desk's `/api/live-bets` bridge after performing both
+ * RFC 6455 handshakes. Only the fixed path and subprotocol are forwarded.
+ */
+const WS_ROUTE = Object.freeze({
+  path: `${PROXY_PREFIX}/ws`,
+  target: "/api/live-bets",
+  protocol: "sportsdesk.bridge.v1",
+});
+/** Bound connect + upstream handshake; the bridge answers immediately when up. */
+const WS_HANDSHAKE_TIMEOUT_MS = 4_000;
+/** Largest upstream handshake head accepted before refusing. */
+const MAX_WS_HEAD_BYTES = 8 * 1024;
+const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+/** RFC 6455 accept key for a client's `Sec-WebSocket-Key`. */
+export function websocketAcceptKey(key) {
+  return createHash("sha1").update(`${key}${WS_GUID}`).digest("base64");
+}
+
+/** A client key is base64 of exactly 16 random bytes. */
+export function isValidWebSocketKey(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]{22}==$/.test(value)) {
+    return false;
+  }
+  return Buffer.from(value, "base64").length === 16;
+}
+
+/** The upstream opening handshake for the desk bridge (fixed path/protocol). */
+export function buildBridgeHandshake(port, key) {
+  return [
+    `GET ${WS_ROUTE.target} HTTP/1.1`,
+    `Host: 127.0.0.1:${port}`,
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Key: ${key}`,
+    "Sec-WebSocket-Version: 13",
+    `Sec-WebSocket-Protocol: ${WS_ROUTE.protocol}`,
+    "",
+    "",
+  ].join("\r\n");
+}
+
+/** Parse one HTTP response head (status + lowercased headers). */
+export function parseUpgradeHead(head) {
+  const lines = String(head).split("\r\n");
+  const status = Number((lines[0] ?? "").split(" ")[1]);
+  const headers = {};
+  for (const line of lines.slice(1)) {
+    const index = line.indexOf(":");
+    if (index <= 0) continue;
+    headers[line.slice(0, index).trim().toLowerCase()] = line
+      .slice(index + 1)
+      .trim();
+  }
+  return { status: Number.isFinite(status) ? status : 0, headers };
+}
 
 /** The complete allowlist of buffered JSON routes: proxy path -> upstream path. */
 const ROUTES = Object.freeze([
@@ -126,6 +196,30 @@ function sendJson(res, target, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+/** Refuse an upgrade before any 101 has been written. */
+function rejectUpgrade(socket, status, error) {
+  const text =
+    status === 400
+      ? "Bad Request"
+      : status === 403
+        ? "Forbidden"
+        : status === 504
+          ? "Gateway Timeout"
+          : "Bad Gateway";
+  const body = JSON.stringify({ error });
+  try {
+    socket.end(
+      `HTTP/1.1 ${status} ${text}\r\n` +
+        "content-type: application/json\r\n" +
+        `content-length: ${Buffer.byteLength(body)}\r\n` +
+        "connection: close\r\n\r\n" +
+        body,
+    );
+  } catch {
+    // The client may already be gone.
+  }
+}
+
 /**
  * @param {import('cordis').Context} ctx
  */
@@ -140,6 +234,8 @@ export function apply(ctx, config) {
    * detached read running against the desk after the bundle is gone.
    */
   const activeStreams = new Set();
+  /** Open WebSocket tunnels, so disposal closes both ends. */
+  const activeUpgrades = new Set();
   let disposed = false;
 
   ctx.inject(["webServer"], (serverCtx) => {
@@ -326,6 +422,138 @@ export function apply(ctx, config) {
       }
     };
 
+    /**
+     * Tunnel one browser WebSocket to the desk's bridge. Node hands over the
+     * socket before any 101 response, so this performs both RFC 6455
+     * handshakes: upstream first (validating its accept key and echoed
+     * subprotocol), then the browser one. Only the fixed path and subprotocol
+     * cross; no client header or cookie is forwarded upstream.
+     */
+    const handleUpgrade = (req, socket, head) => {
+      if (req.method !== "GET" || !sameOrigin(req)) {
+        rejectUpgrade(socket, 403, "origin_refused");
+        return;
+      }
+      const offered = String(req.headers["sec-websocket-protocol"] ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value !== "");
+      if (!offered.includes(WS_ROUTE.protocol)) {
+        rejectUpgrade(socket, 400, "protocol_required");
+        return;
+      }
+      const clientKey = req.headers["sec-websocket-key"];
+      if (!isValidWebSocketKey(clientKey)) {
+        rejectUpgrade(socket, 400, "invalid_key");
+        return;
+      }
+      const url = new URL(deskOrigin);
+      const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
+      const upstreamKey = randomBytes(16).toString("base64");
+      const upstream =
+        url.protocol === "https:"
+          ? tls.connect({ host: url.hostname, port, servername: url.hostname })
+          : net.connect({ host: url.hostname, port });
+      const record = { client: socket, upstream };
+      activeUpgrades.add(record);
+      let settled = false;
+      let responseHead = "";
+      let timer = null;
+      const finish = () => {
+        activeUpgrades.delete(record);
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        try {
+          upstream.destroy();
+        } catch {
+          // Already closed.
+        }
+        try {
+          socket.destroy();
+        } catch {
+          // Already closed.
+        }
+      };
+      const fail = (status, error) => {
+        if (settled) return;
+        settled = true;
+        activeUpgrades.delete(record);
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        try {
+          upstream.destroy();
+        } catch {
+          // Already closed.
+        }
+        rejectUpgrade(socket, status, error);
+      };
+      timer = setTimeout(
+        () => fail(504, "upstream_handshake_timeout"),
+        WS_HANDSHAKE_TIMEOUT_MS,
+      );
+      upstream.setNoDelay?.(true);
+      upstream.once("error", () => fail(502, "upstream_unreachable"));
+      upstream.once("connect", () => {
+        upstream.write(buildBridgeHandshake(port, upstreamKey));
+      });
+      const onUpstreamData = (chunk) => {
+        if (settled) return;
+        responseHead += chunk.toString("latin1");
+        const boundary = responseHead.indexOf("\r\n\r\n");
+        if (boundary < 0) {
+          if (responseHead.length > MAX_WS_HEAD_BYTES) {
+            fail(502, "upstream_head_too_large");
+          }
+          return;
+        }
+        upstream.off("data", onUpstreamData);
+        const parsed = parseUpgradeHead(responseHead.slice(0, boundary + 4));
+        if (parsed.status !== 101) {
+          fail(502, `upstream_${parsed.status || "handshake"}`);
+          return;
+        }
+        if (
+          parsed.headers["sec-websocket-accept"] !==
+          websocketAcceptKey(upstreamKey)
+        ) {
+          fail(502, "upstream_accept_mismatch");
+          return;
+        }
+        if (parsed.headers["sec-websocket-protocol"] !== WS_ROUTE.protocol) {
+          fail(502, "upstream_protocol_mismatch");
+          return;
+        }
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        socket.write(
+          [
+            "HTTP/1.1 101 Switching Protocols",
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            `Sec-WebSocket-Accept: ${websocketAcceptKey(clientKey)}`,
+            `Sec-WebSocket-Protocol: ${WS_ROUTE.protocol}`,
+            `x-sportsdesk-desk-ws: ${WS_ROUTE.target}`,
+            "",
+            "",
+          ].join("\r\n"),
+        );
+        // Bytes the upstream sent after its handshake belong to the stream.
+        const rest = Buffer.from(responseHead.slice(boundary + 4), "latin1");
+        if (rest.length > 0) socket.write(rest);
+        if (head !== undefined && head !== null && head.length > 0) {
+          upstream.write(head);
+        }
+        socket.pipe(upstream);
+        upstream.pipe(socket);
+        socket.on("error", finish);
+        upstream.on("error", finish);
+        socket.on("close", finish);
+        upstream.on("close", finish);
+      };
+      upstream.on("data", onUpstreamData);
+    };
+
     const disposers = [
       ...ROUTES.map((route) =>
         webServer.register({
@@ -340,6 +568,14 @@ export function apply(ctx, config) {
         handler: (req, res) => handleStream(req, res),
       }),
     ];
+    if (typeof webServer.registerUpgrade === "function") {
+      disposers.push(
+        webServer.registerUpgrade({
+          path: WS_ROUTE.path,
+          handler: (req, socket, head) => handleUpgrade(req, socket, head),
+        }),
+      );
+    }
     if (disposed) {
       for (const dispose of disposers) dispose();
       return;
@@ -358,5 +594,18 @@ export function apply(ctx, config) {
     }
     for (const controller of activeStreams) controller.abort();
     activeStreams.clear();
+    for (const upgrade of activeUpgrades) {
+      try {
+        upgrade.upstream.destroy();
+      } catch {
+        // Already closed.
+      }
+      try {
+        upgrade.client.destroy();
+      } catch {
+        // Already closed.
+      }
+    }
+    activeUpgrades.clear();
   };
 }

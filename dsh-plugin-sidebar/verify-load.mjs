@@ -574,6 +574,69 @@ function fakeDocument() {
 }
 
 /**
+ * A scriptable WebSocket stand-in: tests drive open/message/error/close.
+ * Instances record the URL, offered protocols, sent frames and close code.
+ */
+function fakeWebSocketHarness() {
+  const instances = [];
+  class FakeWebSocket {
+    constructor(url, protocols) {
+      this.url = url;
+      this.protocols = Array.isArray(protocols) ? protocols : [];
+      this.readyState = 0;
+      this.protocol = "";
+      this.bufferedAmount = 0;
+      this.sent = [];
+      this.listeners = new Map();
+      this.closeCode = null;
+      this.closeReason = "";
+      instances.push(this);
+    }
+    addEventListener(type, listener) {
+      const list = this.listeners.get(type) ?? [];
+      list.push(listener);
+      this.listeners.set(type, list);
+    }
+    removeEventListener(type, listener) {
+      const list = this.listeners.get(type) ?? [];
+      this.listeners.set(
+        type,
+        list.filter((entry) => entry !== listener),
+      );
+    }
+    send(data) {
+      this.sent.push(String(data));
+    }
+    close(code = 1000, reason = "") {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      this.closeCode = code;
+      this.closeReason = reason;
+      this.dispatch("close", { code, reason, wasClean: code === 1000 });
+    }
+    dispatch(type, event) {
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+    open(protocol = "sportsdesk.bridge.v1") {
+      this.readyState = 1;
+      this.protocol = protocol;
+      this.dispatch("open", {});
+    }
+    message(value) {
+      this.dispatch("message", { data: JSON.stringify(value) });
+    }
+    serverError() {
+      this.dispatch("error", {});
+    }
+    serverClose(code = 1006, reason = "") {
+      this.readyState = 3;
+      this.dispatch("close", { code, reason, wasClean: false });
+    }
+  }
+  return { FakeWebSocket, instances };
+}
+
+/**
  * Boot one isolated client-module instance with a stubbed fetch and document.
  * Each call gets a fresh store, so scenarios cannot leak state into each other.
  * Component effects run when a component renders (this is a shim, not React),
@@ -638,6 +701,10 @@ function bootClient(fetchImpl, options = {}) {
     clearTimeout,
     setInterval,
     clearInterval,
+    ...(options.webSocket === undefined
+      ? {}
+      : { WebSocket: options.webSocket }),
+    ...(options.location === undefined ? {} : { location: options.location }),
     document: fakeDocument(),
     console,
   };
@@ -1136,8 +1203,8 @@ await checkAsync(
       "Agents row should read provenance · 17m ago",
     );
     assert(
-      flat.includes("not live: scratch"),
-      "Agents row is missing the not-live: scratch chip",
+      flat.includes("not live"),
+      "Agents row is missing the not-live chip",
     );
     harness.dispose();
   },
@@ -2125,6 +2192,167 @@ await checkAsync("the sidebar dot tracks the service phase only", async () => {
   downHarness.dispose();
 });
 
+/* --- live bridge (WebSocket) -------------------------------------------- */
+
+const BRIDGE_LOCATION = { host: "127.0.0.1:3080", protocol: "http:" };
+
+await checkAsync(
+  "the desk bridge subscribes, pings and counts frames",
+  async () => {
+    const { FakeWebSocket, instances } = fakeWebSocketHarness();
+    const harness = bootClient(
+      async (url) => proxiedResponse(url, fixtureFor(url)),
+      { webSocket: FakeWebSocket, location: BRIDGE_LOCATION },
+    );
+    harness.render("main");
+    await settle();
+    assert(instances.length === 1, `opened ${instances.length} sockets`);
+    const socket = instances[0];
+    assert(
+      socket.url === "ws://127.0.0.1:3080/api/sportsdesk-desk/ws",
+      `bridge url ${socket.url}`,
+    );
+    assert(
+      socket.protocols.includes("sportsdesk.bridge.v1"),
+      "bridge subprotocol missing",
+    );
+    socket.open();
+    const sent = socket.sent.map((frame) => JSON.parse(frame));
+    assert(
+      sent.some(
+        (message) =>
+          message.type === "SUBSCRIBE" && message.channel === "f402-bet-ticker",
+      ),
+      "the ticker topic was not subscribed",
+    );
+    assert(
+      sent.some((message) => message.type === "PING"),
+      "no PING was sent on open",
+    );
+    socket.message({ type: "SUBSCRIBED", channel: "f402-bet-ticker" });
+    socket.message({ type: "PONG", ts: Date.now() });
+    socket.message({ kind: "f402-bet-ticker", count: 12 });
+    const tree = harness.render("main");
+    const card = findOne(tree, "spsd-bridge");
+    assert(card !== undefined, "no bridge card rendered");
+    assert(
+      card.props["data-bridge-state"] === "subscribed",
+      `bridge state ${card.props["data-bridge-state"]}`,
+    );
+    const text = JSON.stringify(card);
+    for (const expected of [
+      "Live bridge",
+      "f402-bet-ticker",
+      "count 12",
+      "Frames",
+    ]) {
+      assert(text.includes(expected), `bridge card is missing ${expected}`);
+    }
+    harness.dispose();
+    assert(
+      socket.closeCode === 1000,
+      `disposal closed with ${socket.closeCode}`,
+    );
+  },
+);
+
+await checkAsync(
+  "a pre-open bridge failure falls back to the desk loopback",
+  async () => {
+    const { FakeWebSocket, instances } = fakeWebSocketHarness();
+    const harness = bootClient(
+      async (url) => proxiedResponse(url, fixtureFor(url)),
+      { webSocket: FakeWebSocket, location: BRIDGE_LOCATION },
+    );
+    harness.render("main");
+    await settle();
+    assert(instances.length === 1, `opened ${instances.length} sockets`);
+    instances[0].serverError();
+    instances[0].serverClose(1006, "refused");
+    await settle();
+    assert(
+      instances.length === 2,
+      `fallback opened ${instances.length} sockets`,
+    );
+    assert(
+      instances[1].url === "ws://127.0.0.1:4020/api/live-bets",
+      `fallback url ${instances[1].url}`,
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "a 1006 close after opening reconnects with backoff",
+  async () => {
+    const { FakeWebSocket, instances } = fakeWebSocketHarness();
+    const harness = bootClient(
+      async (url) => proxiedResponse(url, fixtureFor(url)),
+      { webSocket: FakeWebSocket, location: BRIDGE_LOCATION },
+    );
+    harness.render("main");
+    await settle();
+    instances[0].open();
+    instances[0].serverError();
+    instances[0].serverClose(1006, "gone");
+    const card = findOne(harness.render("main"), "spsd-bridge");
+    assert(
+      card.props["data-bridge-state"] === "reconnecting",
+      `state after 1006 ${card.props["data-bridge-state"]}`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    assert(
+      instances.length === 2,
+      `no reconnect after backoff (${instances.length})`,
+    );
+    harness.dispose();
+  },
+);
+
+await checkAsync(
+  "hiding the tab pauses the bridge and showing resumes it",
+  async () => {
+    const { FakeWebSocket, instances } = fakeWebSocketHarness();
+    const harness = bootClient(
+      async (url) => proxiedResponse(url, fixtureFor(url)),
+      { webSocket: FakeWebSocket, location: BRIDGE_LOCATION },
+    );
+    harness.render("main");
+    await settle();
+    instances[0].open();
+    const listener = harness.document.listeners.get("visibilitychange");
+    assert(typeof listener === "function", "no visibility listener");
+    harness.document.visibilityState = "hidden";
+    listener();
+    assert(instances[0].closeCode === 1000, "the bridge did not close on hide");
+    const hiddenCard = findOne(harness.render("main"), "spsd-bridge");
+    assert(
+      hiddenCard.props["data-bridge-state"] === "paused",
+      `hidden state ${hiddenCard.props["data-bridge-state"]}`,
+    );
+    harness.document.visibilityState = "visible";
+    listener();
+    assert(instances.length === 2, `no reopen on show (${instances.length})`);
+    harness.dispose();
+  },
+);
+
+check("the bridge card reports an unsupported browser", () => {
+  const harness = bootClient(async (url) =>
+    proxiedResponse(url, fixtureFor(url)),
+  );
+  // The first render reads the store before its mount effect publishes; the
+  // second render observes the "unsupported" state.
+  harness.render("main");
+  const card = findOne(harness.render("main"), "spsd-bridge");
+  assert(card !== undefined, "no bridge card rendered");
+  assert(
+    card.props["data-bridge-state"] === "unsupported",
+    `state ${card.props["data-bridge-state"]}`,
+  );
+  harness.dispose();
+});
+
 /* --- host half ---------------------------------------------------------- */
 
 /**
@@ -2134,10 +2362,14 @@ await checkAsync("the sidebar dot tracks the service phase only", async () => {
  */
 function fakeWebServer(origin = "https://dsh.example") {
   const routes = [];
+  const upgradeRoutes = [];
   let disposals = 0;
+  let upgradeDisposals = 0;
   const server = {
     routes,
+    upgradeRoutes,
     disposals: () => disposals,
+    upgradeDisposals: () => upgradeDisposals,
     getOrigin: () => origin,
     register(route) {
       routes.push(route);
@@ -2145,6 +2377,14 @@ function fakeWebServer(origin = "https://dsh.example") {
         const index = routes.indexOf(route);
         if (index >= 0) routes.splice(index, 1);
         disposals += 1;
+      };
+    },
+    registerUpgrade(route) {
+      upgradeRoutes.push(route);
+      return () => {
+        const index = upgradeRoutes.indexOf(route);
+        if (index >= 0) upgradeRoutes.splice(index, 1);
+        upgradeDisposals += 1;
       };
     },
     /** Deliver the webServer service to the `ctx.inject` callback. */
@@ -2277,7 +2517,9 @@ async function bootHost({
   );
   return {
     routes: webServer.routes,
+    upgradeRoutes: webServer.upgradeRoutes,
     disposals: webServer.disposals,
+    upgradeDisposals: webServer.upgradeDisposals,
     dispose,
     deliver() {
       if (pending === null) throw new Error("no deferred injection");
@@ -2343,6 +2585,96 @@ await checkAsync(
       `upstream was ${seenUrl}`,
     );
     host.dispose();
+  },
+);
+
+await checkAsync("host validates the WebSocket bridge handshake", async () => {
+  const module = await import("./index.js");
+  const key = "dGhlIHNhbXBsZSBub25jZQ==";
+  assert(
+    module.websocketAcceptKey(key) === "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+    "RFC 6455 accept key mismatch",
+  );
+  assert(module.isValidWebSocketKey(key), "valid key rejected");
+  for (const bad of [
+    "",
+    "not-base64",
+    "AAAA",
+    "dGhlIHNhbXBsZSBub25jZQ",
+    "////",
+  ]) {
+    assert(!module.isValidWebSocketKey(bad), `invalid key accepted: ${bad}`);
+  }
+  const handshake = module.buildBridgeHandshake(4020, key);
+  for (const expected of [
+    "GET /api/live-bets HTTP/1.1",
+    "Host: 127.0.0.1:4020",
+    "Sec-WebSocket-Protocol: sportsdesk.bridge.v1",
+    `Sec-WebSocket-Key: ${key}`,
+  ]) {
+    assert(handshake.includes(expected), `handshake missing ${expected}`);
+  }
+  const head = module.parseUpgradeHead(
+    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: x\r\n\r\n",
+  );
+  assert(head.status === 101, `status ${head.status}`);
+  assert(head.headers["sec-websocket-accept"] === "x", "headers not parsed");
+  const refused = module.parseUpgradeHead("HTTP/1.1 401 Unauthorized\r\n\r\n");
+  assert(refused.status === 401, `refused status ${refused.status}`);
+});
+
+await checkAsync(
+  "host registers a WebSocket tunnel and refuses foreign origins",
+  async () => {
+    const host = await bootHost();
+    const route = host.upgradeRoutes.find(
+      (candidate) => candidate.path === "/api/sportsdesk-desk/ws",
+    );
+    assert(route !== undefined, "no WebSocket upgrade route");
+    assert(typeof route.handler === "function", "no upgrade handler");
+    const foreign = {
+      text: "",
+      end(value) {
+        this.text = value;
+      },
+    };
+    route.handler(
+      { method: "GET", headers: { origin: "https://evil.example" } },
+      foreign,
+      Buffer.alloc(0),
+    );
+    assert(
+      foreign.text.includes("403"),
+      `foreign origin answered ${foreign.text.slice(0, 40)}`,
+    );
+    const noProtocol = {
+      text: "",
+      end(value) {
+        this.text = value;
+      },
+    };
+    route.handler(
+      {
+        method: "GET",
+        headers: { origin: "https://dsh.example" },
+      },
+      noProtocol,
+      Buffer.alloc(0),
+    );
+    assert(
+      noProtocol.text.includes("400") &&
+        noProtocol.text.includes("protocol_required"),
+      `missing protocol answered ${noProtocol.text.slice(0, 60)}`,
+    );
+    host.dispose();
+    assert(
+      host.upgradeRoutes.length === 0,
+      "the upgrade route survived disposal",
+    );
+    assert(
+      host.upgradeDisposals() === 1,
+      `disposed ${host.upgradeDisposals()} upgrade routes`,
+    );
   },
 );
 

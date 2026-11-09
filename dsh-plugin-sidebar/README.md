@@ -45,7 +45,8 @@ available without opening the page.
 
 A header (title, one-line description, Refresh and Open desk), a compact **Last
 measured** line, the existing service status card, a **Live stream** card, a
-recovery callout when the service is stale/down/unknown, an **attention**
+**Live bridge** card, a recovery callout when the service is stale/down/unknown,
+an **attention**
 banner, and a responsive card grid (2 columns at ≥ 900 px, 1 below) with the
 three desk cards. Every card carries its own state chip — `live` / `stale` /
 `error` / `missing` — plus the time its payload was received (or, when it has no
@@ -138,6 +139,36 @@ The stream connection belongs to the desk page: it opens when the page mounts,
 closes when the page unmounts, pauses when the tab hides, and aborts on bundle
 disposal. The sidebar glyph starts only the probe loop, so a closed page never
 holds an SSE connection.
+
+### Live bridge
+
+The **Live bridge** card reads the desk's own WebSocket pub/sub hub
+(`/api/live-bets`, subprotocol `sportsdesk.bridge.v1`) instead of polling: the
+panel opens a browser `WebSocket`, subscribes to `f402-bet-ticker` and
+`gslive-tally`, and sends a `PING` every 15 s. The desk answers `SUBSCRIBED`,
+`PONG` and its per-topic rollup frames; the card renders the connection state,
+protocol, ping round-trip, frame count, last frame and the newest five frame
+kinds with a numeric, PII-free summary — never a frame payload.
+
+Transport: the browser connects to the same-origin Host tunnel
+`/api/sportsdesk-desk/ws`; on a loopback-served UI (or a browser on the desk
+host) it falls back to `ws[://127.0.0.1:4020/api/live-bets]`. The Host performs
+both RFC 6455 handshakes — it validates the client's key and offered
+subprotocol, connects to the desk, verifies the upstream accept key and echoed
+protocol, then pipes the raw upgraded sockets — so a remotely served UI reaches
+a loopback bridge without exposing a port.
+
+Bun 1.4 WebSocket semantics are handled explicitly:
+
+- an `error` event is recorded but is **not** treated as a close; the bridge
+  reconnects only on `close`, so a `1006` (failed connection) is not duplicated;
+- a pre-open failure falls back to the next transport immediately; a failure
+  after opening reconnects with a bounded 1/2/5/10 s backoff;
+- hiding the tab sends `close(1000)` and shows `paused`; becoming visible
+  reopens;
+- `bufferedAmount` over 64 KiB closes the socket `1011 backpressure` instead of
+  queueing frames;
+- disposal closes with `close(1000)` and no later frame publishes.
 
 ### Desk overview cards
 
@@ -265,9 +296,9 @@ The Harness server is the process on the desk host, so it proxies instead.
 Measured 2026-11-04: the desk service answered 200 on `/health` and `/api/status`
 while the panel showed "service down" from the tunnel-served UI.
 
-The Host half allowlists six read-only GET routes — five buffered JSON
-documents and one chunked SSE stream — served by two fixed handlers (`target` is
-the route's fixed upstream path, never caller input):
+The Host half allowlists seven read-only routes — five buffered JSON documents,
+one chunked SSE stream and one WebSocket upgrade tunnel — served by three fixed
+handlers (`target` is the route's fixed upstream path, never caller input):
 
 | Proxy route                      | Upstream              | Forwarding |
 | -------------------------------- | --------------------- | ---------- |
@@ -277,6 +308,7 @@ the route's fixed upstream path, never caller input):
 | `/api/sportsdesk-desk/kpis`      | `/api/kpis`           | buffered   |
 | `/api/sportsdesk-desk/execution` | `/api/execution/plan` | buffered   |
 | `/api/sportsdesk-desk/stream`    | `/api/graph/stream`   | chunked    |
+| `/api/sportsdesk-desk/ws`        | `/api/live-bets`      | WS tunnel  |
 
 Both handlers answer GET only (405 otherwise) and refuse a present Origin that
 does not match the carrier (403). The buffered handler bounds the upstream with
@@ -397,9 +429,11 @@ auto-loaded `.env` for `PORT=4020` (and the Bun port cascade falls back to 3000)
 - React comes from the browser module table; no Harness Client package is
   imported; the app root is not touched.
 - Read-only: no POST, no control actions, no mutations, and no network
-  destination beyond the six allowlisted same-origin routes and their loopback
-  fallbacks. The one streaming route forwards the desk's own SSE bytes and
-  synthesizes nothing; the client never sends a body or a credential.
+  destination beyond the seven allowlisted same-origin routes and their loopback
+  fallbacks. The streaming route forwards the desk's own SSE bytes and the
+  bridge tunnel forwards the desk's own frames; the client only sends
+  `SUBSCRIBE` and `PING` on the bridge. It never sends a body or a credential,
+  and the Host forwards no client header other than the fixed handshake.
 
 ## Verify
 
@@ -447,6 +481,16 @@ checks:
   `x-accel-buffering: no`, proxy marker, no buffering), reports a missing route
   as 404 `stream_route_missing` and an unreachable desk as 502, and aborts an
   open upstream stream on disposal;
+- **the live bridge**: the fake socket opens with the tunnel URL and the
+  `sportsdesk.bridge.v1` subprotocol, subscribes to both topics, pings and
+  counts a frame; a pre-open failure falls back to the loopback URL; a `1006`
+  after opening reconnects after the backoff; hiding sends `close(1000)` and
+  shows `paused`; disposal closes with `1000`; without a `WebSocket` the card
+  reports `unsupported`;
+- **the Host tunnel**: the RFC 6455 accept key matches the spec vector, keys
+  are validated, the upstream handshake carries the fixed path and protocol,
+  the upgrade route refuses a foreign origin and a missing subprotocol before
+  connecting, and disposal removes the upgrade route;
 - **disposal** removes the slot registrations and locale dictionary, removes the
   visibility listener, aborts the in-flight request and publishes nothing after
   the probe resolves;

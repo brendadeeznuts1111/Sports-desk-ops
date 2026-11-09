@@ -340,8 +340,6 @@ window.__ModuleLoader__.load({
         customerNet: "Customer net",
         provenance: "provenance",
         notLive: "not live",
-        notLiveScratch: "not live: scratch",
-        notLiveSample: "not live: sample",
         partial: "partial",
         mode: "Mode",
         killSwitch: "Kill switch",
@@ -407,6 +405,32 @@ window.__ModuleLoader__.load({
           "Reading pauses while the browser tab is hidden and resumes when it becomes visible again.",
         liveRetry: "Next attempt in {seconds}s.",
         liveRaw: "Raw stream",
+        bridgeTitle: "Live bridge",
+        bridgeStateIdle: "idle",
+        bridgeStateConnecting: "connecting…",
+        bridgeStateOpen: "connected",
+        bridgeStateSubscribed: "subscribed",
+        bridgeStateReconnecting: "reconnecting",
+        bridgeStatePaused: "paused",
+        bridgeStateUnsupported: "unsupported",
+        bridgeStateError: "bridge error",
+        bridgeEndpoint: "Bridge",
+        bridgeProtocol: "Protocol",
+        bridgePing: "Ping",
+        bridgeFrames: "Frames",
+        bridgeLastFrame: "Last frame",
+        bridgeTopics: "Topics",
+        bridgeNoTopics: "No subscription confirmed yet.",
+        bridgeRecent: "Recent frames",
+        bridgeNoFrames:
+          "Connected — no bridge frame yet. The desk publishes when its gateway relays a topic.",
+        bridgePausedNote:
+          "Reading pauses while the browser tab is hidden and resumes when it becomes visible again.",
+        bridgeUnsupported:
+          "This browser has no WebSocket support, so the desk bridge cannot be read.",
+        bridgeDown: "The bridge is not connected: {reason}.",
+        bridgeNote:
+          "The desk's WebSocket bridge, tunneled through the Harness host. It carries per-topic rollups; this card shows connection state, ping and frame counts, never payloads.",
         liveNote:
           "Live frames come from the desk's own Server-Sent Events route through the same-origin proxy. The three overview cards below stay on the shared probe loop: five read-only routes every {seconds}s while the tab is visible. Refresh measures both now.",
       },
@@ -542,8 +566,6 @@ window.__ModuleLoader__.load({
         customerNet: "客户净额",
         provenance: "来源",
         notLive: "非实盘",
-        notLiveScratch: "非实盘: 临时草稿",
-        notLiveSample: "非实盘: 示例样本",
         partial: "部分",
         mode: "模式",
         killSwitch: "紧急开关",
@@ -608,6 +630,29 @@ window.__ModuleLoader__.load({
         livePausedNote: "浏览器标签页隐藏时暂停读取，重新可见时自动恢复。",
         liveRetry: "{seconds} 秒后重试。",
         liveRaw: "原始实时流",
+        bridgeTitle: "实时桥接",
+        bridgeStateIdle: "空闲",
+        bridgeStateConnecting: "连接中…",
+        bridgeStateOpen: "已连接",
+        bridgeStateSubscribed: "已订阅",
+        bridgeStateReconnecting: "重连中",
+        bridgeStatePaused: "已暂停",
+        bridgeStateUnsupported: "不支持",
+        bridgeStateError: "桥接错误",
+        bridgeEndpoint: "桥接地址",
+        bridgeProtocol: "协议",
+        bridgePing: "延迟",
+        bridgeFrames: "帧数",
+        bridgeLastFrame: "最近帧",
+        bridgeTopics: "主题",
+        bridgeNoTopics: "尚未确认订阅。",
+        bridgeRecent: "最近的帧",
+        bridgeNoFrames: "已连接——尚未收到桥接帧。网关转发主题后服务才会发布。",
+        bridgePausedNote: "浏览器标签页隐藏时暂停读取，重新可见时自动恢复。",
+        bridgeUnsupported: "此浏览器不支持 WebSocket，无法读取工作台桥接。",
+        bridgeDown: "桥接未连接：{reason}。",
+        bridgeNote:
+          "服务自身的工作台 WebSocket 桥接，经 Harness 主机隧道转发。它承载按主题的汇总；本卡片显示连接状态、延迟与帧数，不显示负载内容。",
         liveNote:
           "实时帧来自服务自身的 Server-Sent Events 路由，经同源代理转发。下方三张概览卡片仍使用共享探测循环：标签页可见时每 {seconds} 秒探测五个只读路由。点击“刷新”会同时重新测量两者。",
       },
@@ -802,13 +847,6 @@ window.__ModuleLoader__.load({
       if (isFixtureSource(srcRaw)) return true;
       const src = srcRaw.toLowerCase();
       return src.startsWith("tests/") || src.includes("fixture");
-    }
-
-    function fixtureProvenanceSubtype(prov) {
-      if (!isFixtureProvenance(prov)) return null;
-      const srcRaw = (prov?.source ?? "").trim();
-      if (srcRaw.startsWith("scratch/")) return "scratch";
-      return "sample";
     }
 
     /**
@@ -1755,6 +1793,7 @@ window.__ModuleLoader__.load({
       if (disposed) return;
       if (isHidden()) {
         stopLive("paused");
+        stopBridge("paused");
         if (!polling) return;
         if (pollTimer !== null) {
           clearTimeout(pollTimer);
@@ -1763,6 +1802,7 @@ window.__ModuleLoader__.load({
         return;
       }
       startLive();
+      startBridge();
       if (!polling) return;
       if (pollTimer !== null) {
         clearTimeout(pollTimer);
@@ -2221,6 +2261,407 @@ window.__ModuleLoader__.load({
     function reconnectLive() {
       stopLive();
       startLive();
+    }
+
+    /* --- live bridge store: the desk's WebSocket pub/sub hub ------------ */
+
+    /**
+     * The desk's WebSocket bridge (`/api/live-bets`, subprotocol
+     * `sportsdesk.bridge.v1`) through the Host tunnel, with a direct loopback
+     * fallback on the desk host. It is a separate source from the SSE graph
+     * stream: the bridge carries the desk's per-topic rollups. This store keeps
+     * only frame counts, kinds, ping round-trips and timestamps — never a
+     * frame's raw payload.
+     */
+    const BRIDGE_PROTOCOL = "sportsdesk.bridge.v1";
+    const BRIDGE_TOPICS = Object.freeze(["f402-bet-ticker", "gslive-tally"]);
+    const BRIDGE_PING_MS = 15_000;
+    const BRIDGE_RETRY_MS = Object.freeze([1_000, 2_000, 5_000, 10_000]);
+    const BRIDGE_MAX_BUFFERED = 64 * 1024;
+    const BRIDGE_RECENT_MAX = 5;
+    const BRIDGE_PING_SAMPLES_MAX = 10;
+
+    const BRIDGE_INITIAL = Object.freeze({
+      state: "idle",
+      url: null,
+      transport: null,
+      protocol: null,
+      topics: Object.freeze([]),
+      frames: 0,
+      kinds: Object.freeze({}),
+      recent: Object.freeze([]),
+      lastFrameAt: null,
+      lastKind: null,
+      pingRttMs: null,
+      pingSamples: Object.freeze([]),
+      reconnects: 0,
+      error: null,
+      closeCode: null,
+      closeReason: null,
+    });
+
+    let bridgeState = BRIDGE_INITIAL;
+    const bridgeListeners = new Set();
+    let bridgeSocket = null;
+    let bridgeGeneration = 0;
+    let bridgeAttempt = 0;
+    let bridgeRetryTimer = null;
+    let bridgePingTimer = null;
+    let bridgePingSentAt = null;
+    let bridgeOpening = false;
+
+    function publishBridge(next) {
+      bridgeState = next;
+      for (const listener of bridgeListeners) listener();
+    }
+
+    function subscribeBridge(listener) {
+      bridgeListeners.add(listener);
+      return () => {
+        bridgeListeners.delete(listener);
+      };
+    }
+
+    function getBridge() {
+      return bridgeState;
+    }
+
+    /** Subscribe a component to the bridge snapshot. */
+    function useBridge() {
+      return React.useSyncExternalStore(subscribeBridge, getBridge, getBridge);
+    }
+
+    /** Same-origin tunnel first; loopback only works on the desk host. */
+    function bridgeUrls() {
+      const urls = [];
+      if (
+        typeof location !== "undefined" &&
+        typeof location.host === "string" &&
+        location.host !== ""
+      ) {
+        const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+        urls.push(`${scheme}//${location.host}${PROXY_BASE}/ws`);
+      }
+      urls.push(`${SERVICE_URL.replace(/^http/, "ws")}/api/live-bets`);
+      return urls;
+    }
+
+    /** A numeric, PII-free summary of one bridge frame. */
+    function bridgeFrameSummary(message) {
+      const parts = [];
+      for (const key of ["count", "total", "live", "pregame", "seq"]) {
+        if (typeof message[key] === "number") {
+          parts.push(`${key} ${message[key]}`);
+        }
+      }
+      return parts.join(" · ");
+    }
+
+    function bridgeStateText(t, state) {
+      if (state === "connecting") return t("bridgeStateConnecting");
+      if (state === "open") return t("bridgeStateOpen");
+      if (state === "subscribed") return t("bridgeStateSubscribed");
+      if (state === "reconnecting") return t("bridgeStateReconnecting");
+      if (state === "paused") return t("bridgeStatePaused");
+      if (state === "unsupported") return t("bridgeStateUnsupported");
+      if (state === "error") return t("bridgeStateError");
+      return t("bridgeStateIdle");
+    }
+
+    function bridgeChipState(state) {
+      if (state === "open" || state === "subscribed") return "ok";
+      if (state === "reconnecting" || state === "paused") return "stale";
+      if (state === "unsupported" || state === "error") return "error";
+      return "checking";
+    }
+
+    function clearBridgeTimers() {
+      if (bridgeRetryTimer !== null) {
+        clearTimeout(bridgeRetryTimer);
+        bridgeRetryTimer = null;
+      }
+      if (bridgePingTimer !== null) {
+        clearInterval(bridgePingTimer);
+        bridgePingTimer = null;
+      }
+      bridgePingSentAt = null;
+    }
+
+    /** PING with a buffered-amount guard; a backed-up socket is closed. */
+    function sendBridgePing() {
+      const socket = bridgeSocket;
+      if (socket === null || socket.readyState !== 1) return;
+      if (socket.bufferedAmount > BRIDGE_MAX_BUFFERED) {
+        try {
+          socket.close(1011, "backpressure");
+        } catch {
+          // Already closing.
+        }
+        publishBridge({
+          ...bridgeState,
+          state: "error",
+          error: "bridge backpressure",
+        });
+        return;
+      }
+      try {
+        socket.send(JSON.stringify({ type: "PING" }));
+        bridgePingSentAt = Date.now();
+      } catch {
+        // The close event reports the transport failure.
+      }
+    }
+
+    function subscribeBridgeTopics() {
+      const socket = bridgeSocket;
+      if (socket === null || socket.readyState !== 1) return;
+      for (const topic of BRIDGE_TOPICS) {
+        try {
+          socket.send(JSON.stringify({ type: "SUBSCRIBE", channel: topic }));
+        } catch {
+          return;
+        }
+      }
+    }
+
+    /** Handles one bridge frame; anything unrecognised is ignored. */
+    function handleBridgeMessage(raw) {
+      let message;
+      try {
+        message = JSON.parse(String(raw));
+      } catch {
+        return;
+      }
+      if (!isRecord(message)) return;
+      if (message.type === "SUBSCRIBED") {
+        if (typeof message.channel !== "string") return;
+        const topics = bridgeState.topics.includes(message.channel)
+          ? bridgeState.topics
+          : [...bridgeState.topics, message.channel].slice(0, 8);
+        publishBridge({ ...bridgeState, state: "subscribed", topics });
+        return;
+      }
+      if (message.type === "PONG") {
+        if (bridgePingSentAt === null) return;
+        const rtt = Math.max(0, Math.round(Date.now() - bridgePingSentAt));
+        bridgePingSentAt = null;
+        publishBridge({
+          ...bridgeState,
+          pingRttMs: rtt,
+          pingSamples: [...bridgeState.pingSamples, rtt].slice(
+            -BRIDGE_PING_SAMPLES_MAX,
+          ),
+        });
+        return;
+      }
+      if (message.type === "ERROR") {
+        publishBridge({
+          ...bridgeState,
+          error:
+            typeof message.code === "string"
+              ? message.code.slice(0, 40)
+              : "bridge_error",
+        });
+        return;
+      }
+      if (typeof message.kind !== "string") return;
+      const kind = message.kind.slice(0, 40);
+      const at = Date.now();
+      publishBridge({
+        ...bridgeState,
+        frames: bridgeState.frames + 1,
+        kinds: {
+          ...bridgeState.kinds,
+          [kind]: (bridgeState.kinds[kind] ?? 0) + 1,
+        },
+        lastKind: kind,
+        lastFrameAt: at,
+        recent: [
+          { kind, at, summary: bridgeFrameSummary(message) },
+          ...bridgeState.recent,
+        ].slice(0, BRIDGE_RECENT_MAX),
+      });
+    }
+
+    function scheduleBridgeRetry(reason) {
+      if (disposed) return;
+      const attempts = bridgeState.reconnects + 1;
+      const delay =
+        BRIDGE_RETRY_MS[Math.min(attempts - 1, BRIDGE_RETRY_MS.length - 1)];
+      publishBridge({
+        ...bridgeState,
+        state: "reconnecting",
+        reconnects: attempts,
+        error: reason ?? bridgeState.error,
+      });
+      bridgeRetryTimer = setTimeout(() => {
+        bridgeRetryTimer = null;
+        if (disposed || isHidden()) return;
+        bridgeAttempt = 0;
+        openBridge();
+      }, delay);
+    }
+
+    /** Open one attempt: tunnel first, loopback after a pre-open failure. */
+    function openBridge() {
+      if (disposed || bridgeSocket !== null || bridgeOpening) return;
+      const urls = bridgeUrls();
+      if (bridgeAttempt >= urls.length) {
+        scheduleBridgeRetry("bridge transports exhausted");
+        return;
+      }
+      const url = urls[bridgeAttempt];
+      const transport = bridgeAttempt === 0 ? "proxy" : "direct";
+      const generation = ++bridgeGeneration;
+      let opened = false;
+      bridgeOpening = true;
+      publishBridge({
+        ...bridgeState,
+        state: "connecting",
+        url,
+        transport,
+        error: null,
+        closeCode: null,
+        closeReason: null,
+      });
+      let socket;
+      try {
+        socket = new WebSocket(url, [BRIDGE_PROTOCOL]);
+      } catch (error) {
+        bridgeOpening = false;
+        bridgeAttempt += 1;
+        if (bridgeAttempt < urls.length) {
+          openBridge();
+        } else {
+          bridgeAttempt = 0;
+          scheduleBridgeRetry(
+            String((error && error.message) || error || "bridge failed"),
+          );
+        }
+        return;
+      }
+      bridgeSocket = socket;
+      socket.addEventListener("open", () => {
+        if (generation !== bridgeGeneration || disposed) {
+          try {
+            socket.close(1000, "superseded");
+          } catch {
+            // Already closing.
+          }
+          return;
+        }
+        opened = true;
+        bridgeOpening = false;
+        publishBridge({
+          ...bridgeState,
+          state: "open",
+          protocol:
+            typeof socket.protocol === "string" && socket.protocol !== ""
+              ? socket.protocol
+              : null,
+          error: null,
+        });
+        subscribeBridgeTopics();
+        sendBridgePing();
+        if (bridgePingTimer === null) {
+          bridgePingTimer = setInterval(sendBridgePing, BRIDGE_PING_MS);
+        }
+      });
+      socket.addEventListener("message", (event) => {
+        if (generation !== bridgeGeneration || disposed) return;
+        handleBridgeMessage(event.data);
+      });
+      socket.addEventListener("error", () => {
+        if (generation !== bridgeGeneration || disposed) return;
+        // Bun/browser deliver error before close(1006); the close handler
+        // decides whether to fall back or reconnect.
+        publishBridge({
+          ...bridgeState,
+          state: "error",
+          error: "bridge socket error",
+        });
+      });
+      socket.addEventListener("close", (event) => {
+        if (generation !== bridgeGeneration || disposed) return;
+        bridgeSocket = null;
+        bridgeOpening = false;
+        if (bridgePingTimer !== null) {
+          clearInterval(bridgePingTimer);
+          bridgePingTimer = null;
+        }
+        bridgePingSentAt = null;
+        const closeCode = typeof event.code === "number" ? event.code : null;
+        const closeReason =
+          typeof event.reason === "string" ? event.reason.slice(0, 80) : null;
+        if (!opened && bridgeAttempt + 1 < urls.length) {
+          bridgeAttempt += 1;
+          publishBridge({
+            ...bridgeState,
+            state: "connecting",
+            closeCode,
+            closeReason,
+          });
+          openBridge();
+          return;
+        }
+        bridgeAttempt = 0;
+        publishBridge({
+          ...bridgeState,
+          closeCode,
+          closeReason,
+          state: "reconnecting",
+        });
+        scheduleBridgeRetry(
+          closeReason === null
+            ? `bridge closed (${closeCode ?? "unknown"})`
+            : `bridge closed (${closeCode ?? "unknown"}): ${closeReason}`,
+        );
+      });
+    }
+
+    function startBridge() {
+      if (disposed || bridgeSocket !== null || bridgeOpening) return;
+      if (typeof WebSocket !== "function") {
+        publishBridge({ ...bridgeState, state: "unsupported", error: null });
+        return;
+      }
+      if (isHidden()) {
+        if (bridgeState.state !== "paused") {
+          publishBridge({ ...bridgeState, state: "paused" });
+        }
+        return;
+      }
+      bridgeAttempt = 0;
+      openBridge();
+    }
+
+    /**
+     * Stop the socket and forbid later publishes from it. `nextState` is
+     * rendered for a deliberate pause; unmount and disposal pass none.
+     * @param {"paused" | undefined} nextState
+     */
+    function stopBridge(nextState) {
+      bridgeGeneration += 1;
+      clearBridgeTimers();
+      bridgeOpening = false;
+      const socket = bridgeSocket;
+      bridgeSocket = null;
+      if (socket !== null) {
+        try {
+          socket.close(1000, "panel stopped");
+        } catch {
+          // Already closed.
+        }
+      }
+      if (nextState !== undefined && bridgeState.state !== nextState) {
+        publishBridge({ ...bridgeState, state: nextState });
+      }
+    }
+
+    /** Manual Refresh: close and reopen from the first transport. */
+    function retryBridge() {
+      stopBridge();
+      startBridge();
     }
 
     /* --- formatting ------------------------------------------------------ */
@@ -2824,7 +3265,7 @@ window.__ModuleLoader__.load({
      * Non-interactive: read-only values, not navigation tiles.
      * @param {(key: string, params?: object) => string} t
      * @param {typeof LIVE_INITIAL} live
-     * @param {number} _now
+     * @param {number} [_now]
      */
     function liveCounterStrip(t, live, _now) {
       if (live.values === null || live.values.counts === null) return null;
@@ -3168,6 +3609,130 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The bridge card: the desk's WebSocket pub/sub hub as a measured source.
+     * Shows connection state, protocol, ping, subscribed topics, frame counts
+     * and the last few frames — only kinds, times and numeric summaries.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof BRIDGE_INITIAL} bridge
+     * @param {number} now
+     */
+    function bridgeCard(t, bridge, now) {
+      const rows = [
+        h(
+          "div",
+          { className: "spsd-ovhead", key: "head" },
+          h("h2", { className: "spsd-ovtitle" }, t("bridgeTitle")),
+          h(
+            "span",
+            {
+              className: "spsd-chip-state",
+              "data-state": bridgeChipState(bridge.state),
+            },
+            bridgeStateText(t, bridge.state),
+          ),
+        ),
+      ];
+      const lastFrame =
+        bridge.lastFrameAt === null
+          ? t("never")
+          : `${formatClock(bridge.lastFrameAt) ?? t("never")} · ${formatAgeSeconds(t, (now - bridge.lastFrameAt) / 1_000) ?? t("never")}`;
+      rows.push(
+        h("dl", { className: "spsd-meta", key: "meta" }, [
+          metaRow(
+            t("bridgeEndpoint"),
+            h(
+              "code",
+              { className: "spsd-code" },
+              bridge.url ?? bridgeUrls()[0],
+            ),
+          ),
+          metaRow(t("bridgeProtocol"), bridge.protocol ?? BRIDGE_PROTOCOL),
+          metaRow(
+            t("bridgePing"),
+            bridge.pingRttMs === null ? t("never") : `${bridge.pingRttMs} ms`,
+          ),
+          metaRow(t("bridgeFrames"), formatCount(bridge.frames) ?? "0"),
+          metaRow(t("bridgeLastFrame"), lastFrame),
+        ]),
+      );
+      if (bridge.topics.length === 0) {
+        rows.push(
+          noteLine(t("bridgeNoTopics"), undefined, "bridge-topics-empty"),
+        );
+      } else {
+        rows.push(
+          h(
+            "div",
+            { className: "spsd-bridge-topics", key: "topics" },
+            h("h3", { className: "spsd-h3" }, t("bridgeTopics")),
+            ...bridge.topics.map((topic) =>
+              chip(topic, undefined, `bridge-topic-${topic}`),
+            ),
+          ),
+        );
+      }
+      if (bridge.recent.length === 0) {
+        rows.push(noteLine(t("bridgeNoFrames"), undefined, "bridge-no-frames"));
+      } else {
+        rows.push(
+          subSection(
+            t("bridgeRecent"),
+            h(
+              "ul",
+              { className: "spsd-bridge-list" },
+              bridge.recent.map((frame, index) =>
+                h(
+                  "li",
+                  {
+                    className: "spsd-bridge-frame",
+                    key: `bridge-frame-${frame.at}-${index}`,
+                  },
+                  h(
+                    "span",
+                    { className: "spsd-when" },
+                    formatClock(frame.at) ?? t("never"),
+                  ),
+                  h("span", { className: "spsd-bridge-kind" }, frame.kind),
+                  frame.summary === ""
+                    ? null
+                    : h(
+                        "span",
+                        { className: "spsd-bridge-summary" },
+                        frame.summary,
+                      ),
+                ),
+              ),
+            ),
+            "bridge-recent",
+          ),
+        );
+      }
+      if (bridge.state === "unsupported") {
+        rows.push(
+          noteLine(t("bridgeUnsupported"), "warn", "bridge-unsupported"),
+        );
+      } else if (bridge.state === "paused") {
+        rows.push(noteLine(t("bridgePausedNote"), undefined, "bridge-paused"));
+      } else if (bridge.state === "reconnecting" || bridge.state === "error") {
+        const reason =
+          bridge.error ??
+          `${bridge.closeCode ?? t("never")}${
+            bridge.closeReason === null ? "" : ` · ${bridge.closeReason}`
+          }`;
+        rows.push(noteLine(t("bridgeDown", { reason }), "warn", "bridge-down"));
+      }
+      return h(
+        "section",
+        {
+          className: "spsd-card spsd-bridge",
+          key: "bridge",
+          "data-bridge-state": bridge.state,
+        },
+        rows,
+      );
+    }
+
+    /**
      * The Service card: the /api/status fields, rendered only when the service
      * actually answered them.
      * @param {(key: string, params?: object) => string} t
@@ -3375,7 +3940,7 @@ window.__ModuleLoader__.load({
     /**
      * @param {(key: string, params?: object) => string} t
      * @param {NonNullable<ReturnType<typeof readR2PipelineSinks>>[number]} sink
-     * @param {number} _now
+     * @param {number} [_now]
      */
     function formatR2SinkValue(t, sink, _now) {
       const age =
@@ -3975,14 +4540,7 @@ window.__ModuleLoader__.load({
       const age = provenanceAge(t, provenance, now);
       const chips = [];
       if (isFixtureProvenance(provenance)) {
-        const subtype = fixtureProvenanceSubtype(provenance);
-        const chipText =
-          subtype === "scratch"
-            ? t("notLiveScratch")
-            : subtype === "sample"
-              ? t("notLiveSample")
-              : t("notLive");
-        chips.push(chip(chipText, "warn", "prov-fixture"));
+        chips.push(chip(t("notLive"), "warn", "prov-fixture"));
       }
       if (provenance.stale === true) {
         chips.push(chip(t("stateStale"), "warn", "prov-stale"));
@@ -4490,6 +5048,13 @@ window.__ModuleLoader__.load({
 .spsd-venue { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; line-height: 18px; }
 .spsd-venue-name { font-weight: 500; }
 .spsd-venue-reason { color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.spsd-bridge { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.spsd-bridge-topics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.spsd-bridge-topics .spsd-h3 { margin: 0 6px 0 0; }
+.spsd-bridge-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.spsd-bridge-frame { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.spsd-bridge-kind { color: var(--dsw-alias-label-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.spsd-bridge-summary { color: var(--dsw-alias-label-secondary); }
 .spsd-note { margin-top: 32px; max-width: 72ch; }
 .spsd-note h2 { margin: 0 0 6px; font-size: 14px; line-height: 20px; font-weight: 500; }
 .spsd-note p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
@@ -4594,6 +5159,7 @@ window.__ModuleLoader__.load({
       const t = typeof props.t === "function" ? props.t : fallbackT;
       const state = useStatus();
       const live = useLive();
+      const bridge = useBridge();
       const [copyState, setCopyState] = React.useState("idle");
       const copyTimer = React.useRef(null);
       React.useEffect(
@@ -4604,10 +5170,14 @@ window.__ModuleLoader__.load({
       );
       React.useEffect(() => {
         startPolling();
-        // The stream belongs to the page: the sidebar glyph needs only the
-        // probe loop, so a closed desk page must not hold an SSE connection.
+        // The stream and the bridge belong to the page: the sidebar glyph needs
+        // only the probe loop, so a closed desk page holds neither live socket.
         startLive();
-        return () => stopLive();
+        startBridge();
+        return () => {
+          stopLive();
+          stopBridge();
+        };
       }, []);
       const now = useNow(1_000);
       const sources = state.sources;
@@ -4625,6 +5195,7 @@ window.__ModuleLoader__.load({
       const retry = () => {
         void runProbe(true);
         reconnectLive();
+        retryBridge();
       };
       const copyDiagnostics = async () => {
         const measured = {
@@ -4650,6 +5221,19 @@ window.__ModuleLoader__.load({
             lastFrameAt: live.lastFrameAt,
             lastHeartbeatAt: live.lastHeartbeatAt,
             error: live.error ?? null,
+          },
+          bridge: {
+            state: bridge.state,
+            url: bridge.url,
+            protocol: bridge.protocol,
+            topics: bridge.topics,
+            frames: bridge.frames,
+            kinds: bridge.kinds,
+            pingRttMs: bridge.pingRttMs,
+            reconnects: bridge.reconnects,
+            closeCode: bridge.closeCode,
+            closeReason: bridge.closeReason,
+            error: bridge.error ?? null,
           },
           sources: Object.fromEntries(
             Object.entries(state.sources).map(([id, entry]) => [
@@ -4887,6 +5471,7 @@ window.__ModuleLoader__.load({
               ),
             ),
             liveCard(t, live, now),
+            bridgeCard(t, bridge, now),
             recovery,
             attention,
             overview,
@@ -4935,8 +5520,10 @@ window.__ModuleLoader__.load({
             const pending = inFlight;
             inFlight = null;
             if (pending !== null) pending.abort();
-            // Closes the SSE connection and forbids any later publish from it.
+            // Closes the SSE connection and the bridge, and forbids any later
+            // publish from them.
             stopLive();
+            stopBridge();
           };
         }, "sportsdesk desk panel: live status polling and stream");
 
