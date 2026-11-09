@@ -63,6 +63,11 @@ describe("DSH plugin bundles", () => {
     test.skipIf(shouldSkip)(
       verifyLabel,
       async () => {
+        const liveBetsPath = join(ROOT, "data/live-bets.json");
+        const liveBetsBefore = existsSync(liveBetsPath)
+          ? await Bun.file(liveBetsPath).text()
+          : null;
+
         const bundleDir = join(ROOT, bundle);
         const harness = join(bundleDir, "verify-load.mjs");
         expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
@@ -89,6 +94,16 @@ describe("DSH plugin bundles", () => {
           .filter((part) => part !== "")
           .join("\n");
         expect(exitCode, `${bundle} verify-load failed:\n${report}`).toBe(0);
+
+        if (isCI && bundle === "dsh-plugin") {
+          const liveBetsAfter = existsSync(liveBetsPath)
+            ? await Bun.file(liveBetsPath).text()
+            : null;
+          expect(
+            liveBetsAfter,
+            "verify-load must not write data/live-bets.json at repo root",
+          ).toBe(liveBetsBefore);
+        }
       },
       60_000,
     );

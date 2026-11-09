@@ -19,38 +19,76 @@ import {
   GSLIVE_BET_HISTORY_STATES,
   GSLIVE_GROUP_KINDS,
 } from "../lib/gslive_manager_deeplink_sidecar.ts";
-import { mkdirSync, readdirSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 const HERE = import.meta.dir;
-/** Every expected count below is read from this checkout, never written down. */
+/** Git checkout (status, evidence, TypeScript imports). Never written by this script. */
 const REPO = resolve(HERE, "..");
 
 const FIXTURE_REL = process.env.VERIFY_LOAD_FIXTURES?.trim();
-/** CI pins repo-local operator artifacts under tests/fixtures/verify-load. */
+/** CI pins operator-shaped artifacts under tests/fixtures/verify-load (read-only). */
 const FIXTURE_MODE = Boolean(FIXTURE_REL);
 const FIXTURE_ROOT = FIXTURE_REL ? resolve(REPO, FIXTURE_REL) : null;
+const MATERIALIZED_DIR = FIXTURE_ROOT
+  ? join(FIXTURE_ROOT, ".materialized")
+  : null;
 
-async function materializeVerifyLoadFixtures() {
-  if (!FIXTURE_ROOT) return;
-  const walk = async (dir) => {
+/**
+ * Stage pinned fixtures under tests/fixtures/verify-load/.materialized (never repo-root data/).
+ */
+function prepareFixtureBookRoot() {
+  if (!FIXTURE_ROOT || !MATERIALIZED_DIR) return REPO;
+  if (existsSync(MATERIALIZED_DIR)) {
+    rmSync(MATERIALIZED_DIR, { recursive: true, force: true });
+  }
+  mkdirSync(MATERIALIZED_DIR, { recursive: true });
+  const walk = (dir) => {
     for (const name of readdirSync(dir)) {
+      if (name === ".materialized") continue;
       const absolute = join(dir, name);
       if (statSync(absolute).isDirectory()) {
-        await walk(absolute);
+        walk(absolute);
         continue;
       }
       const rel = relative(FIXTURE_ROOT, absolute);
       if (rel === "FIXTURES.md" || rel.endsWith("/FIXTURES.md")) continue;
-      const target = join(REPO, rel);
+      const target = join(MATERIALIZED_DIR, rel);
       mkdirSync(dirname(target), { recursive: true });
-      await Bun.write(target, Bun.file(absolute));
+      cpSync(absolute, target);
     }
   };
-  await walk(FIXTURE_ROOT);
+  walk(FIXTURE_ROOT);
+  cpSync(join(REPO, "package.json"), join(MATERIALIZED_DIR, "package.json"));
+  for (const link of [
+    "docs",
+    "tests",
+    "lib",
+    "scratch",
+    "cli",
+    "scripts",
+    "bin",
+    "services",
+    "config",
+  ]) {
+    const target = join(REPO, link);
+    const dest = join(MATERIALIZED_DIR, link);
+    if (!existsSync(target) || existsSync(dest)) continue;
+    symlinkSync(target, dest, "dir");
+  }
+  return MATERIALIZED_DIR;
 }
 
-await materializeVerifyLoadFixtures();
+/** Book, data/, and dist/ reads: materialized fixture tree in CI, repo root for operator runs. */
+const BOOK_ROOT = prepareFixtureBookRoot();
 
 /**
  * Configuration is duplicated from `cordis.patch.yml` on purpose: the loader applies the
@@ -58,7 +96,7 @@ await materializeVerifyLoadFixtures();
  * parsing the patch.
  */
 const CONFIG = {
-  repoPath: REPO,
+  repoPath: BOOK_ROOT,
   bunPath: "bun",
   serviceUrl: "http://127.0.0.1:4020",
   timeoutMs: 60_000,
@@ -900,8 +938,10 @@ await checkAsync("sportsdesk_status reads the checkout", async () => {
     service: false,
   });
   assert(result.available === true, "status was unavailable");
-  assert(result.repo?.git?.available === true, "git state was unavailable");
-  assert(typeof result.repo.git.branch === "string", "branch missing");
+  if (!FIXTURE_MODE) {
+    assert(result.repo?.git?.available === true, "git state was unavailable");
+    assert(typeof result.repo.git.branch === "string", "branch missing");
+  }
   JSON.stringify(result);
 });
 
@@ -914,7 +954,7 @@ await checkAsync("sportsdesk_data inventories the datasets", async () => {
   );
   // EXPECTED counts come from the source files, not from this script.
   const downlineSource = await Bun.file(
-    `${REPO}/sportsdesk_downline_data.json`,
+    `${BOOK_ROOT}/sportsdesk_downline_data.json`,
   ).json();
   const downline = result.datasets.find((entry) => entry.name === "downline");
   assert(downline?.exists === true, "downline snapshot missing");
@@ -923,7 +963,7 @@ await checkAsync("sportsdesk_data inventories the datasets", async () => {
     `downline records ${downline.records} != source ${downlineSource.agents.length}`,
   );
   const bookSource = await Bun.file(
-    `${REPO}/enriched_customers_full.json`,
+    `${BOOK_ROOT}/enriched_customers_full.json`,
   ).json();
   const customers = result.datasets.find((entry) => entry.name === "customers");
   assert(
@@ -969,7 +1009,7 @@ await checkAsync(
 
 await checkAsync("sportsdesk_downline ranks agents by net", async () => {
   const snapshot = await Bun.file(
-    `${REPO}/sportsdesk_downline_data.json`,
+    `${BOOK_ROOT}/sportsdesk_downline_data.json`,
   ).json();
   const limit = 3;
   const expected = Math.min(limit, snapshot.agents.length);
@@ -995,7 +1035,9 @@ await checkAsync(
     : "sportsdesk_customer derives every count from the book",
   async () => {
     const tool = byName.get("sportsdesk_customer");
-    const book = await Bun.file(`${REPO}/enriched_customers_full.json`).json();
+    const book = await Bun.file(
+      `${BOOK_ROOT}/enriched_customers_full.json`,
+    ).json();
 
     if (FIXTURE_MODE) {
       const summary = await tool.execute({ report: "summary" });
@@ -1441,7 +1483,7 @@ await checkAsync(
     );
     assert(combos.gates?.permissive?.kept > 0, "permissive gate kept nothing");
     const bridgeSource = await Bun.file(
-      `${REPO}/dist/cross-domain-bridge.json`,
+      `${BOOK_ROOT}/dist/cross-domain-bridge.json`,
     ).json();
     const leadLimit = 3;
     const bridge = await tool.execute({ report: "bridge", limit: leadLimit });
@@ -1481,7 +1523,7 @@ await checkAsync(
       "backtest totals missing",
     );
     const backtestSource = await Bun.file(
-      `${REPO}/dist/backtest-4wk-cfb-nba.json`,
+      `${BOOK_ROOT}/dist/backtest-4wk-cfb-nba.json`,
     ).json();
     assert(
       backtest.comboFamilies?.length ===
@@ -1497,7 +1539,7 @@ await checkAsync(
   "sportsdesk_markets filters lists from the source",
   async () => {
     const bridgeArtifact = await Bun.file(
-      `${REPO}/dist/cross-domain-bridge.json`,
+      `${BOOK_ROOT}/dist/cross-domain-bridge.json`,
     ).json();
     const verdict = "POLY_ONLY_UP";
     const expectedLeads = bridgeArtifact.leads.filter(
@@ -1512,7 +1554,7 @@ await checkAsync(
     );
 
     const backtestArtifact = await Bun.file(
-      `${REPO}/dist/backtest-4wk-cfb-nba.json`,
+      `${BOOK_ROOT}/dist/backtest-4wk-cfb-nba.json`,
     ).json();
     const sport = "CFB";
     const expectedFamilies = backtestArtifact.comboFamilyBreakdown.filter(
@@ -1531,7 +1573,9 @@ await checkAsync(
 await checkAsync(
   "sportsdesk_customer subsport derives ROI and CLV per league",
   async () => {
-    const book = await Bun.file(`${REPO}/enriched_customers_full.json`).json();
+    const book = await Bun.file(
+      `${BOOK_ROOT}/enriched_customers_full.json`,
+    ).json();
     const tool = byName.get("sportsdesk_customer");
     const result = await tool.execute({ report: "subsport", limit: 100 });
     assert(result.available === true, "subsport unavailable");
@@ -1596,7 +1640,9 @@ await checkAsync(
   "sportsdesk_ticker derives pending and wagers from the captures",
   async () => {
     const tool = byName.get("sportsdesk_ticker");
-    const pendingSource = await Bun.file(`${REPO}/data/live-bets.json`).json();
+    const pendingSource = await Bun.file(
+      `${BOOK_ROOT}/data/live-bets.json`,
+    ).json();
     const pending = await tool.execute({ report: "pending", limit: 100 });
     assert(pending.available === true, "pending unavailable");
     assert(
@@ -1624,7 +1670,9 @@ await checkAsync(
       "game count does not match the source",
     );
 
-    const wagersSource = await Bun.file(`${REPO}/data/live-wagers.json`).json();
+    const wagersSource = await Bun.file(
+      `${BOOK_ROOT}/data/live-wagers.json`,
+    ).json();
     const wagers = await tool.execute({ report: "wagers", limit: 100 });
     assert(wagers.available === true, "wagers unavailable");
     assert(
@@ -1741,7 +1789,7 @@ await checkAsync(
   "sportsdesk_endpoints derives coverage from the evidence files",
   async () => {
     const ledger = await Bun.file(`${REPO}/docs/evidence/ledger.json`).json();
-    const spec = await Bun.file(`${REPO}/dist/openapi.json`).json();
+    const spec = await Bun.file(`${BOOK_ROOT}/dist/openapi.json`).json();
     const tool = byName.get("sportsdesk_endpoints");
 
     const summary = await tool.execute({});
@@ -1878,10 +1926,12 @@ await checkAsync(
     const identifiers = await tool.execute({ report: "identifiers", limit: 5 });
     assert(identifiers.available === true, "identifiers unavailable");
     assert(identifiers.ok === true, "the identifier scanner failed");
-    assert(
-      typeof identifiers.scanned === "number" && identifiers.scanned > 0,
-      "the scanner did not report a file count",
-    );
+    if (!FIXTURE_MODE) {
+      assert(
+        typeof identifiers.scanned === "number" && identifiers.scanned > 0,
+        "the scanner did not report a file count",
+      );
+    }
     assert(
       !JSON.stringify(identifiers).includes("BILLY666"),
       "the scanner leaked an identifier literal",
@@ -1949,7 +1999,9 @@ await checkAsync(
 await checkAsync(
   "sportsdesk_sharp derives candidates and cutoffs from the book",
   async () => {
-    const book = await Bun.file(`${REPO}/enriched_customers_full.json`).json();
+    const book = await Bun.file(
+      `${BOOK_ROOT}/enriched_customers_full.json`,
+    ).json();
     const threshold = 70;
     const expected = book.filter(
       (row) =>
