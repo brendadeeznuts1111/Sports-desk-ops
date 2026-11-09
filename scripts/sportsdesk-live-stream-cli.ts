@@ -63,6 +63,21 @@ import {
   withKalshiJoin,
   type StreamSignalEmissionWithKalshi,
 } from "../lib/weight_tier_kalshi_join.ts";
+import {
+  Rsk06DelayRecommender,
+  type CandidateAccountTelemetry,
+} from "../lib/rsk06_delay_recommender.ts";
+import {
+  serializeDelayDodbin,
+  STREAM_PROVENANCE_MASKS,
+} from "../lib/delay_dodbin_store.ts";
+
+export interface LiveStreamDelayOptions {
+  readonly evaluateDelays?: boolean | undefined;
+  readonly dispatchClamps?: boolean | undefined;
+  readonly saveDelaySnapshot?: string | undefined;
+  readonly recommender?: Rsk06DelayRecommender | undefined;
+}
 
 /** Matches `services/sportsdesk_webview_server.ts` bridge subprotocol. */
 const BRIDGE_WS_PROTOCOL = "sportsdesk.bridge.v1";
@@ -88,7 +103,7 @@ const HELP = [
   "  --interval-ms <n>      Poll interval when not --once (default 15000)",
   "  --once                 Single poll / single jsonl pass / one bridge-triggered poll",
   "",
-  "Output:",
+  "Output & Delay Defense:",
   "  --json                 One NDJSON emission per stdout line (default)",
   "  --tier <id>            Filter to one tier (repeatable)",
   "  --dry-run              Print tier registry only; no network",
@@ -98,6 +113,9 @@ const HELP = [
   "  --gslive-steam-index <path>  JSON map ROT → timeUntilScoreSec (Partner 118)",
   "  --resolve-markets      Offline Kalshi series + Gamma hints on wireDraft",
   "  --kalshi-join          Live read-only Kalshi join (public GET; adds kalshiJoin to NDJSON)",
+  "  --evaluate-delays      Evaluate RSK-06 live delay bitsets over sharp candidates",
+  "  --dispatch-clamps      Dispatch defensive clamps to Fantasy402 Manager (20 req/s rate-limited)",
+  "  --save-delay-snapshot <path>  Write binary DODBIN delay snapshot to disk",
   "  --explain              Human-readable diagnostics on stderr (NDJSON still on stdout)",
   "",
   "Tiers:",
@@ -189,6 +207,7 @@ async function emitSignals(
   resolveMarkets: boolean,
   kalshiJoin: boolean,
   explain: boolean,
+  delayOptions?: LiveStreamDelayOptions,
 ): Promise<void> {
   const emissions = planStreamSignalsForRows(rows, {
     clusterTracker,
@@ -206,46 +225,151 @@ async function emitSignals(
     for (const emission of visible) {
       writeEmission(emission, explain);
     }
-    return;
-  }
-
-  const pairs = visible
-    .map((emission) => {
-      const row = rowByKey.get(emissionLookupKey(emission));
-      return row === undefined ? null : { emission, row };
-    })
-    .filter(
-      (pair): pair is { emission: StreamSignalEmission; row: F402TickerRow } =>
-        pair !== null,
-    );
-
-  const client = new KalshiClient();
-  const joined = await joinKalshiForStreamEmissions(pairs, {
-    client,
-    config: joinConfigFromEnv(),
-  });
-  const joinByKey = new Map(
-    joined.map((entry) => [
-      emissionLookupKey(entry.emission),
-      entry.kalshiJoin,
-    ]),
-  );
-
-  for (const emission of visible) {
-    const kalshi = joinByKey.get(emissionLookupKey(emission));
-    writeEmission(
-      kalshi !== undefined ? withKalshiJoin(emission, kalshi) : emission,
-      explain,
-      kalshi,
-    );
-  }
-
-  const telemetry = client.telemetry();
-  if (!telemetry.ok) {
-    for (const error of telemetry.errors) {
-      process.stderr.write(
-        `live-stream: kalshi degraded (${error.scope}): ${error.reason}\n`,
+  } else {
+    const pairs = visible
+      .map((emission) => {
+        const row = rowByKey.get(emissionLookupKey(emission));
+        return row === undefined ? null : { emission, row };
+      })
+      .filter(
+        (
+          pair,
+        ): pair is { emission: StreamSignalEmission; row: F402TickerRow } =>
+          pair !== null,
       );
+
+    const client = new KalshiClient();
+    const joined = await joinKalshiForStreamEmissions(pairs, {
+      client,
+      config: joinConfigFromEnv(),
+    });
+    const joinByKey = new Map(
+      joined.map((entry) => [
+        emissionLookupKey(entry.emission),
+        entry.kalshiJoin,
+      ]),
+    );
+
+    for (const emission of visible) {
+      const kalshi = joinByKey.get(emissionLookupKey(emission));
+      writeEmission(
+        kalshi !== undefined ? withKalshiJoin(emission, kalshi) : emission,
+        explain,
+        kalshi,
+      );
+    }
+
+    const telemetry = client.telemetry();
+    if (!telemetry.ok) {
+      for (const error of telemetry.errors) {
+        process.stderr.write(
+          `live-stream: kalshi degraded (${error.scope}): ${error.reason}\n`,
+        );
+      }
+    }
+  }
+
+  // RSK-06 Live Delay Evaluation & Defensive Clamp Dispatch
+  if (delayOptions?.evaluateDelays || delayOptions?.dispatchClamps) {
+    const candidates: CandidateAccountTelemetry[] = [];
+    const seenLogins = new Set<string>();
+    let rowIndex = 0;
+    for (const row of rows) {
+      const login = row.login.trim().toUpperCase();
+      if (login === "" || seenLogins.has(login)) continue;
+      seenLogins.add(login);
+
+      const matchingEmissions = emissions.filter(
+        (e) => e.triggerLogin.trim().toUpperCase() === login,
+      );
+      const isVip = row.vip === "1" || row.vip === "Y";
+      const hasTwin = matchingEmissions.some(
+        (e) =>
+          e.tier === "tier3_probe_hammer_syndicate" ||
+          e.tier === "tier5_miami_syndicate",
+      );
+      let oddsSnipeConfidence = 0.5;
+      if (
+        matchingEmissions.some(
+          (e) =>
+            e.tier === "tier1_apex_spread_ml" ||
+            e.tier === "tier7_correlated_parlay_extractors",
+        )
+      ) {
+        oddsSnipeConfidence = 0.95;
+      } else if (hasTwin) {
+        oddsSnipeConfidence = 0.85;
+      } else if (
+        matchingEmissions.some(
+          (e) =>
+            e.tier === "tier2_blindspot_clv_whales" ||
+            e.tier === "tier4_college_steam",
+        )
+      ) {
+        oddsSnipeConfidence = 0.7;
+      }
+
+      candidates.push({
+        rowIndex: rowIndex++,
+        customerLogin: login,
+        leafAgent: (row.agentLogin || row.agentId || "AGENT").trim(),
+        inPlayVelocityScore: matchingEmissions.length,
+        isVipShielded: isVip,
+        currentDelaySeconds: 5,
+        oddsSnipeConfidence,
+        syndicateTwinConfirmed: hasTwin,
+      });
+    }
+
+    if (candidates.length > 0) {
+      const recommender =
+        delayOptions.recommender ?? new Rsk06DelayRecommender();
+      const result = recommender.evaluateRecommendations({
+        candidates,
+        gsliveLastBetGroupIdNumeric: 0,
+        f402LastWagerNumber: Number(rows[0]?.wagerNumber ?? 0) || 0,
+      });
+
+      if (explain) {
+        process.stderr.write(
+          `[live-stream] delay evaluation:\n${Bun.inspect(result, { colors: true })}\n`,
+        );
+      }
+
+      if (delayOptions.saveDelaySnapshot) {
+        const bytes = serializeDelayDodbin({
+          customerCount: candidates.length,
+          rowCapacity: result.audit.derivedDelayArenaCapacity,
+          asOfEpochDays: Math.floor(Date.now() / 86_400_000),
+          watermarks: {
+            gsliveLastBetGroupIdNumeric: result.gsliveWatermarkBetGroupId,
+            f402LastWagerNumber: result.f402WatermarkWagerNumber,
+            streamProvenanceMask: STREAM_PROVENANCE_MASKS.EP03_BET_TICKER,
+          },
+          tier1Words32: result.tier1Words32,
+          tier2Words32: result.tier2Words32,
+          tier3Words32: result.tier3Words32,
+          shieldedVipWords32: result.shieldedVipWords32,
+        });
+        await Bun.write(delayOptions.saveDelaySnapshot, bytes);
+        if (explain) {
+          process.stderr.write(
+            `[live-stream] wrote delay snapshot to ${delayOptions.saveDelaySnapshot}\n`,
+          );
+        }
+      }
+
+      if (delayOptions.dispatchClamps) {
+        const clampResults = await recommender.dispatchRecommendedClamps(
+          result,
+          candidates,
+        );
+        if (explain) {
+          process.stderr.write(
+            `[live-stream] dispatched ${clampResults.length} defensive clamps via 20 req/s limiter\n`,
+          );
+        }
+      }
     }
   }
 }
@@ -296,6 +420,7 @@ async function runBridgeWakePoll(options: {
   readonly resolveMarkets: boolean;
   readonly kalshiJoin: boolean;
   readonly explain: boolean;
+  readonly delayOptions?: LiveStreamDelayOptions;
 }): Promise<void> {
   const protocols =
     options.bridgeToken === null
@@ -342,6 +467,7 @@ async function runBridgeWakePoll(options: {
       options.resolveMarkets,
       options.kalshiJoin,
       options.explain,
+      options.delayOptions,
     );
   };
 
@@ -404,6 +530,9 @@ async function main(): Promise<number> {
       "gslive-steam-index": { type: "string" },
       "resolve-markets": { type: "boolean", default: false },
       "kalshi-join": { type: "boolean", default: false },
+      "evaluate-delays": { type: "boolean", default: false },
+      "dispatch-clamps": { type: "boolean", default: false },
+      "save-delay-snapshot": { type: "string" },
       explain: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -499,6 +628,13 @@ async function main(): Promise<number> {
     usage("--interval-ms must be >= 1000");
   }
 
+  const delayOptions = {
+    evaluateDelays:
+      values["evaluate-delays"] === true || values["dispatch-clamps"] === true,
+    dispatchClamps: values["dispatch-clamps"] === true,
+    saveDelaySnapshot: values["save-delay-snapshot"]?.trim(),
+  };
+
   if (fromBody !== undefined) {
     const rows = await loadBodyRows(fromBody);
     await emitSignals(
@@ -511,6 +647,7 @@ async function main(): Promise<number> {
       resolveMarkets,
       kalshiJoin,
       explain,
+      delayOptions,
     );
     return 0;
   }
@@ -538,6 +675,7 @@ async function main(): Promise<number> {
         resolveMarkets,
         kalshiJoin,
         explain,
+        delayOptions,
       );
     };
     await runPass();
@@ -587,6 +725,7 @@ async function main(): Promise<number> {
         resolveMarkets,
         kalshiJoin,
         explain,
+        delayOptions,
       });
     } catch (error) {
       console.error(
@@ -609,6 +748,7 @@ async function main(): Promise<number> {
       resolveMarkets,
       kalshiJoin,
       explain,
+      delayOptions,
     );
   };
 
