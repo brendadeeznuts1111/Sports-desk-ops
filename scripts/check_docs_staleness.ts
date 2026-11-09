@@ -116,7 +116,7 @@ const PATTERN_RULES: readonly PatternRule[] = [
     // Includes a negative lookahead so status phrases ("0 test failures", "3 test flakes",
     // "1 test regression", "2 test errors") are never flagged as inventory counts.
     pattern:
-      /\b\d[\d,]*\+?\s+(?:(?:passing|passed|skipped|colocated|tracked|unit|integration|typescript)\s+)*(?:tests?(?!\s+(?:failures?|flakes?|regressions?|errors?)\b)|test\s+files?|test\s+suites?|\*\.test\.ts\s+suites?|typescript\s+files?|files?\s+under\s+(?:scripts|lib|tests|cli|services)\/?|assertions?|expect(?:\(\))?\s+calls?)\b/gi,
+      /\b\d[\d,]*\+?\s+(?:(?:passing|passed|skipped|colocated|tracked|unit|integration|typescript)\s+)*(?:test\s+files?|test\s+suites?|tests?(?!\s+(?:failures?|flakes?|regressions?|errors?)\b)|\*\.test\.ts\s+suites?|typescript\s+files?|files?\s+under\s+(?:scripts|lib|tests|cli|services)\/?|assertions?|expect(?:\(\))?\s+calls?)\b/gi,
     guidance:
       "derive test/file/assertion counts via `bun test` or `Bun.Glob` instead of hardcoding inventory totals in prose",
   },

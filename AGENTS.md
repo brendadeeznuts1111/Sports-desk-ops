@@ -29,9 +29,15 @@ bun run gen:tokens:gate
 bun bin/check-fetch-init.ts --verbose
 bun bin/check-innerhtml.ts --verbose
 CI=true bun run schema:gate
-bun test tests/
+bun run test:market-index                       # CI: Validate market index (REQUIRE_MARKET_INDEX=1)
+bun test tests/ --path-ignore-patterns='**/market_index.test.ts'
 bun test                                        # not in CI: also runs the colocated tests
 ```
+
+When you change `market/**`, `package.json` devDeps for `@deepseek-ai/dsh-plugin-market-index`, or
+`.github/workflows/ci.yml` market steps, run **`bun run test:market-index`** first. Discover
+contract: [market/README.md](market/README.md). Upstream format:
+[DSH plugin market index Agent Note](https://github.com/deepseek-ai/deepseek-harness/blob/master/.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.md).
 
 `bun run ci:local` replays that chain in order (`--list`, `--keep-going`, `--install`); prefer it
 over assembling the steps by hand. Actions do run on this repo (2026-11-02: PR #10's `verify` job
@@ -71,9 +77,22 @@ with `bun run audit:tool-calls`.
 - **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`;
   never source `.env` (1Password FIFO plus R2/F402 secrets that shadow the Pages token).
 
+## DSH Discover (plugin market index)
+
+Five Cordis bundles under `dsh-plugin*` are listed in **`market/index.json`** for the Harness
+**Discover** tab (not for the `web` ops host by default — see `dsh-ops/notes/PROFILES.md`).
+
+- Enable **Custom plugin indexes** in Harness **Plugins → Experimental** before adding an index URL.
+- Catalog field for “publisher” is **`author`** (`Sportsdesk Ops` on every row).
+- Install reproducibility is **`versions[].source.commit`**, not the index URL; keep `market-pin-*`
+  tags when pins are branch-only until merged to `main`.
+- Operator URL policy and cache behavior: **`market/README.md`** · cross-host notes:
+  **`$CODE_ROOT/dsh-ops/notes/SPORTSDESK-MARKET.md`**.
+
 ## Layout
 
 `lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·
+`market/` (format-1 index for Discover) ·
 `tests/` (`*.test.ts` suites plus fixtures) plus **colocated `*.test.ts` suites in `lib/` and
 `scripts/`** (CI only runs `tests/`, so run `bun test` before pushing) · `packages/` · `design/` · `schema/` · `infra/` ·
 `docs/` · root runbooks (runtime shapes, guardrails, token architecture, R2/API, VPS domain).
@@ -122,5 +141,5 @@ Revoke any token that was exposed. Live manager API calls must use **`createF402
 
 ## Doc ownership
 
-`README.md` = orientation + the runbook tree · the seven root runbooks = operational procedure ·
+`README.md` = orientation + the runbook tree · the root runbooks = operational procedure ·
 `docs/` = long-form. Move procedure into `docs/` rather than growing the root.
