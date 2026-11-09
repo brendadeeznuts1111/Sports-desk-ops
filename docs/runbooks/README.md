@@ -6,6 +6,7 @@ Evidence ledger and OpenAPI citations use **filename only** (for example `operat
 
 | Document                                                                                           | Topic                                                                 |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [../architecture/signal-honesty.md](../architecture/signal-honesty.md)                             | Signal honesty ADR, cron audit, operator triage matrix                |
 | [operational_guardrails_runbook.md](./operational_guardrails_runbook.md)                           | Fantasy402 Manager wire evidence, capture guardrails, getWebLog modes |
 | [bun_server_runtime_shapes_runbook.md](./bun_server_runtime_shapes_runbook.md)                     | Bun `Server`, WebSocket handlers, TLS, replay shapes                  |
 | [bun_shape_contracts_runbook.md](./bun_shape_contracts_runbook.md)                                 | The 70 `Bun.*` shapes this repo calls: source, evidence, gate         |

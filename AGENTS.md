@@ -90,6 +90,29 @@ Five Cordis bundles under `dsh-plugin*` are listed in **`market/index.json`** fo
 - Operator URL policy and cache behavior: **`market/README.md`** · cross-host notes:
   **`$CODE_ROOT/dsh-ops/notes/SPORTSDESK-MARKET.md`**.
 
+## Signal honesty
+
+Architecture and review standard: [docs/architecture/signal-honesty.md](docs/architecture/signal-honesty.md).
+PRs should complete the **Signal Honesty Checklist** in
+[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+
+### Nov 2026 — nine “lies by omission” fixes (institutional memory)
+
+Do not delete these contracts as redundant without reading the ADR:
+
+1. **#69 / #85** — Fixture isolation; `jobFailure()` must not swallow child stdout.
+2. **#73 / #74** — KPI provenance: pending vs fixture vs live.
+3. **#75** — Replay transport 401 retry.
+4. **#87** — `--fetch-mode` wired; session/bearer fallback for getWebLog.
+5. **#88** — `resolveF402BetsJsonlPath` (env → operator default).
+6. **#89** — Reject weblog Mode B/I (shared-IP ≠ activity stream).
+7. **#90 / #92** — Weblog cron `--from` + three-tier corpus; publish data-window log line.
+8. **#84 / GSID** — Multi-sink R2 recovery; canonical `GSLIVE_SESSION_ID`; wagers two-step (`--live` + `wagers:publish-snapshot`).
+9. **#91** — Off-repo weblog JSONL producer (open).
+10. **#93** — Wire wagers capture + `publish-snapshot` into cron (open).
+11. **#94** — `bridge3c` `--timeout` for large `getBetReport` (open).
+12. **#78** — KPI data-age vs R2 `Last-Modified` (open).
+
 ## Layout
 
 `lib/` (ingestion, settlement, combo identity, venue stores) · `bin/` (dx, linters) ·

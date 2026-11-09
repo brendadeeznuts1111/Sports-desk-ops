@@ -4,6 +4,8 @@ Production intelligence, downline risk surveillance, 10-Mode Forensic/Risk/Cross
 
 Repository: [bw496915-cmyk/Sports-desk-ops](https://github.com/bw496915-cmyk/Sports-desk-ops)
 
+**Engineering:** [Signal honesty ADR](docs/architecture/signal-honesty.md) — errors must name cause, missing ≠ zero, cron/CLI surfaces must match reality (see also [AGENTS.md](AGENTS.md)).
+
 ## 🚀 Day-1 Operator Onboarding & 60-Second Triage Guide
 
 If you are opening this repository for the first time or starting a desk shift, read the **[Operator Quickstart, Data Cleaning Pipeline & 10-Mode Action Runbook](docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md)** and open the **[Live 6-Tab Surveillance, ROT Bet-Ticker & 10-Mode Forensic Portal (`graph.html`)](https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html)**.
