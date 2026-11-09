@@ -51,6 +51,7 @@ function loadRawIndex(): RawIndex {
   return JSON.parse(readFileSync(INDEX_PATH, "utf8")) as RawIndex
 }
 
+/** Canonical range = first row; every plugin version must match (not per-plugin ranges). */
 function enginesRangeFromIndex(raw: RawIndex): string {
   const first = raw.plugins[0]?.versions[0]?.engines?.dsh
   expect(first, "index.json: first engines.dsh").toBeDefined()
@@ -92,7 +93,11 @@ function harnessCheckoutValid(): boolean {
   const marketPkg = JSON.parse(readFileSync(marketPkgPath, "utf8")) as {
     version?: string
   }
-  if (rootPkg.version !== HARNESS_RUNTIME || marketPkg.version !== HARNESS_RUNTIME) {
+  // Root version is authoritative; internal package version may diverge in future harness releases.
+  if (rootPkg.version !== HARNESS_RUNTIME) {
+    return false
+  }
+  if (marketPkg.version && marketPkg.version !== HARNESS_RUNTIME) {
     return false
   }
 
@@ -138,7 +143,16 @@ function loadSemver(): SemverLike {
   return req("semver") as SemverLike
 }
 
-describe.skipIf(!marketIndexTestsReady())("market/index.json", () => {
+const REQUIRE_MARKET_INDEX = process.env.REQUIRE_MARKET_INDEX === "1"
+
+test("published validator installed (REQUIRE_MARKET_INDEX)", () => {
+  if (!REQUIRE_MARKET_INDEX) return
+  expect(publishedValidatorReady()).toBe(true)
+})
+
+describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
+  "market/index.json",
+  () => {
   test("harness validator checkout matches pin when MARKET_INDEX_HARNESS is set", () => {
     if (!process.env.MARKET_INDEX_HARNESS) return
     expect(harnessCheckoutValid()).toBe(true)
@@ -250,4 +264,5 @@ describe.skipIf(!marketIndexTestsReady())("market/index.json", () => {
       "reject next-minor prereleases",
     ).toBe(false)
   })
-})
+  },
+)

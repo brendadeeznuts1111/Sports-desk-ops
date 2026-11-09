@@ -169,10 +169,11 @@ jobs:
         env:
           MARKET_INDEX_HARNESS: .ci/deepseek-harness
           HARNESS_VALIDATOR_SHA: ${{ env.HARNESS_VALIDATOR_SHA }}
+          REQUIRE_MARKET_INDEX: "1"
         run: |
           test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
           test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
-          bun test tests/market_index.test.ts
+          bun run test:market-index
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml

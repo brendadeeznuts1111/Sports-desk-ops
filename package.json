@@ -15,7 +15,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test --parallel --timings=.bun-test-timings.json --update-timings",
-    "test:market-index": "bun test tests/market_index.test.ts",
+    "test:market-index": "REQUIRE_MARKET_INDEX=1 bun test tests/market_index.test.ts",
     "test:serial": "bun test",
     "test:changed": "bun test --parallel --changed",
     "pretest": "bun run scripts/pretest-oracle-guard.ts",

@@ -69,16 +69,12 @@ https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/main/market/inde
 
 **Commit-pinned index** — use a **git tag** on the index commit so squash-merge does not GC the object (branch-only SHAs 404 eventually):
 
-```text
-https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-1/market/index.json
-```
-
-Re-tag on every index bump (`market-index-2`, …) and point **Discover** at the tag URL — not a branch-only SHA (squash-merge can GC those objects). Raw SHA URLs are fine for **pre-merge** curl checks only.
+Cut a **new** tag on every index bump (`market-index-2`, `market-index-3`, …). **Never move a published index tag** — immutability is the point; moving a tag can leave raw.githubusercontent serving a stale body briefly. Point **Discover** at the latest tag URL, not a branch-only SHA (squash-merge can GC those objects). Raw SHA URLs are fine for **pre-merge** curl checks only.
 
 Current Discover URL:
 
 ```text
-https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-1/market/index.json
+https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-2/market/index.json
 ```
 
 GitHub raw may cache for a few minutes after push. Body is usually served as `text/plain`; Discover parses JSON from the body.
@@ -111,7 +107,7 @@ Validation runs the **exact published validator that install uses** — same pac
 | Step | What | Guarantees | Failure means |
 |---|---|---|---|
 | **Validate market index** | `bun install` → `bun test tests/market_index.test.ts` using npm `@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.1` | `index.json` is valid for the harness you ship | Index format, pins, or `engines.dsh` wrong |
-| **Audit validator pin** (CI only) | Shallow clone `deepseek-harness` at `HARNESS_VALIDATOR_SHA`, set `MARKET_INDEX_HARNESS` | The pinned SHA is real and matches the shipped release | Pin drifted or SHA unreachable |
+| **Audit validator pin** (CI only) | Shallow clone `deepseek-harness` at `HARNESS_VALIDATOR_SHA`, set `MARKET_INDEX_HARNESS` | The pinned SHA is real and matches the shipped release (root `package.json` version; internal `plugin-market-index` version may diverge in future harness releases) | Pin drifted or SHA unreachable |
 
 GitHub Actions uses **`fetch-depth: 0`** on this repo so `git cat-file -e <pin>^{commit}` still works after `main` advances past older index pins.
 
@@ -119,9 +115,11 @@ Local (validation only — no audit unless you set `MARKET_INDEX_HARNESS` + `HAR
 
 ```sh
 bun install --frozen-lockfile
-bun test tests/market_index.test.ts
+bun run test:market-index
 ```
 
-CI job names: **Audit harness validator pin** → **Validate market index**. The full suite skips this file when the published validator is missing or the optional harness checkout fails version/SHA gates (`describe.skipIf`).
+`bun run test:market-index` sets `REQUIRE_MARKET_INDEX=1` so a missing validator install is **red**, not skipped. The full suite omits that flag and skips when `node_modules` is absent (`describe.skipIf`).
+
+CI job names: **Audit harness validator pin** → **Validate market index** (`bun run test:market-index`).
 
 Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json` (drift messages name plugin, version, and both ranges), vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).
