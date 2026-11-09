@@ -37,6 +37,18 @@ const EXPECTED_PATHS: Record<string, string> = {
   "dsh-plugin-watchlist-autobet": "dsh-plugin-watchlist-autobet",
 };
 
+const INDEX_PIN = "4f84743536a4de78a8ff81e09e00a8228ae09be6";
+const REPO_WEB = "https://github.com/bw496915-cmyk/Sports-desk-ops";
+
+/** Leading keyword = primary Discover search term for that card. */
+const SEARCH_LEADING_KEYWORD: Record<string, string> = {
+  "dsh-plugin-sportsdesk-ops": "status",
+  "dsh-plugin-sportsdesk-security": "security",
+  "dsh-plugin-sportsdesk-desk-status": "status",
+  "dsh-plugin-sportsdesk-desk-panel": "sidebar",
+  "dsh-plugin-watchlist-autobet": "autobet",
+};
+
 type RawIndex = {
   description?: { en?: string };
   metadata?: {
@@ -45,9 +57,11 @@ type RawIndex = {
   };
   plugins: Array<{
     name: string;
+    title?: { en?: string };
     author?: string;
     description?: { en?: string };
     homepage?: string;
+    repository?: { url?: string; directory?: string };
     metadata?: {
       category?: string;
       keywords?: string[];
@@ -220,7 +234,19 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
       const declaredLabels = Object.keys(raw.metadata?.labels ?? {});
       expect(declaredLabels.length).toBeGreaterThanOrEqual(4);
       const declaredCategories = Object.keys(raw.metadata?.categories ?? {});
+      for (const [id, decl] of Object.entries(raw.metadata?.categories ?? {})) {
+        const title = (decl as { title?: { en?: string } }).title?.en;
+        expect(title, `metadata.categories.${id}.title.en`).toBeTruthy();
+      }
+      for (const [id, decl] of Object.entries(raw.metadata?.labels ?? {})) {
+        const title = (decl as { title?: { en?: string } }).title?.en;
+        expect(title, `metadata.labels.${id}.title.en`).toBeTruthy();
+      }
       for (const plugin of raw.plugins) {
+        expect(
+          (plugin.title?.en?.length ?? 0) > 0,
+          `${plugin.name}: title.en`,
+        ).toBe(true);
         const keywords = plugin.metadata?.keywords ?? [];
         expect(
           keywords.length,
@@ -233,6 +259,9 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
           keywords.every((k) => k === k.toLowerCase() && !k.includes(" ")),
           `${plugin.name}: keyword shape`,
         ).toBe(true);
+        const lead = SEARCH_LEADING_KEYWORD[plugin.name];
+        expect(lead, `${plugin.name}: search keyword map`).toBeDefined();
+        expect(keywords[0], `${plugin.name}: leading keyword`).toBe(lead);
         const usedLabels = plugin.metadata?.labels ?? [];
         expect(
           usedLabels.length,
@@ -252,8 +281,14 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
           declaredCategories,
           `${plugin.name}: category declared`,
         ).toContain(category!);
-        expect(plugin.homepage, `${plugin.name}: homepage`).toMatch(
-          /^https:\/\/github\.com\/bw496915-cmyk\/Sports-desk-ops\/tree\/[0-9a-f]{40}\//,
+        const bundlePath = EXPECTED_PATHS[plugin.name]!;
+        expect(plugin.homepage, `${plugin.name}: homepage`).toBe(
+          `${REPO_WEB}/tree/${INDEX_PIN}/${bundlePath}`,
+        );
+        const repo = plugin.repository;
+        expect(repo?.url, `${plugin.name}: repository.url`).toBe(REPO_WEB);
+        expect(repo?.directory, `${plugin.name}: repository.directory`).toBe(
+          bundlePath,
         );
       }
     });

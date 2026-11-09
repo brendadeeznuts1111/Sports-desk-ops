@@ -4,7 +4,7 @@
     "en": "Sportsdesk Ops"
   },
   "description": {
-    "en": "Operational and security tooling for the Sportsdesk ecosystem."
+    "en": "Operational and security tooling for Sportsdesk: desk status, GSLive capture health, fraud review, and watchlist automation."
   },
   "metadata": {
     "categories": {
@@ -59,7 +59,7 @@
         "en": "Sportsdesk Ops Tools"
       },
       "description": {
-        "en": "Desk status, GSLive deep links, capture health, and verification gates for the sports desk. Read-only aggregation over capture artifacts; writes nothing."
+        "en": "Desk status, GSLive deep links, capture health, and verification gates. Read-only over capture artifacts."
       },
       "author": "Sportsdesk Ops",
       "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin",
@@ -71,11 +71,11 @@
         "labels": ["stable", "internal"],
         "category": "operations",
         "keywords": [
-          "ops",
+          "status",
           "gslive",
           "capture-health",
           "verification",
-          "status"
+          "ops"
         ]
       },
       "dist-tags": {
@@ -103,7 +103,7 @@
         "en": "Security Console"
       },
       "description": {
-        "en": "Fraud and risk read-only tools over GSLive and F402 artifacts. Surfaces integrity findings, disposition coverage, and provenance gaps without writing to source systems."
+        "en": "Fraud and risk read-only tools over GSLive and F402 artifacts. Surfaces integrity findings and provenance gaps."
       },
       "author": "Sportsdesk Ops",
       "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-security",
@@ -148,7 +148,7 @@
         "en": "Desk Status UI"
       },
       "description": {
-        "en": "Live desk-status panel for the harness UI. At-a-glance desk state with drill-down into pending gates and open items."
+        "en": "Live desk-status panel for the harness UI. At-a-glance state with drill-down into pending gates."
       },
       "author": "Sportsdesk Ops",
       "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-ui",
@@ -159,7 +159,7 @@
       "metadata": {
         "labels": ["stable"],
         "category": "ui",
-        "keywords": ["ui", "desk-status", "live", "panel"]
+        "keywords": ["status", "desk-status", "live", "panel"]
       },
       "dist-tags": {
         "latest": "0.1.2"
@@ -186,7 +186,7 @@
         "en": "Desk Sidebar Panel"
       },
       "description": {
-        "en": "Persistent sidebar for desk operations and quick actions. Sticky access to frequently used desk tools."
+        "en": "Persistent sidebar for desk operations. Sticky access to frequently used desk tools and quick actions."
       },
       "author": "Sportsdesk Ops",
       "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-sidebar",
@@ -197,7 +197,7 @@
       "metadata": {
         "labels": ["stable"],
         "category": "ui",
-        "keywords": ["ui", "sidebar", "desk", "quick-actions"]
+        "keywords": ["sidebar", "desk", "quick-actions", "panel"]
       },
       "dist-tags": {
         "latest": "0.4.0"
@@ -224,7 +224,7 @@
         "en": "Watchlist Autobet"
       },
       "description": {
-        "en": "Automated watchlist betting triggers with configurable rules. Watchlist-driven placement with policy-controlled rule evaluation."
+        "en": "Automated watchlist betting triggers with configurable rules. Watchlist-driven placement, policy-controlled."
       },
       "author": "Sportsdesk Ops",
       "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-watchlist-autobet",
