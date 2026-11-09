@@ -16,6 +16,10 @@
   "scripts": {
     "test": "bun test --parallel --timings=.bun-test-timings.json --update-timings",
     "test:market-index": "REQUIRE_MARKET_INDEX=1 bun test tests/market_index.test.ts",
+    "test:changed-plugins": "bash scripts/ci/test-changed-plugins.sh",
+    "audit:branches": "bash scripts/audit-branches.sh",
+    "audit:plugins": "bash scripts/audit-plugins.sh",
+    "check:plugin-boundaries": "bash scripts/check-plugin-boundaries.sh",
     "test:serial": "bun test",
     "test:changed": "bun test --parallel --changed",
     "pretest": "bun run scripts/pretest-oracle-guard.ts",

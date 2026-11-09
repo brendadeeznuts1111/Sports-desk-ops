@@ -32,15 +32,25 @@ const ENRICHED_FIXTURE = join(
   ROOT,
   "tests/fixtures/backtest/enriched_customers_full.json",
 );
+const DOWNLINE_FIXTURE = join(
+  ROOT,
+  "tests/fixtures/backtest/sportsdesk_downline_data.json",
+);
 const hasEnrichedCustomers = existsSync(
   join(ROOT, "enriched_customers_full.json"),
 );
 
-async function ensureEnrichedCustomersFixture(): Promise<void> {
+/** Gitignored operator artifacts; CI stages tracked backtest fixtures before verify-load. */
+async function ensureCiBacktestFixtures(): Promise<void> {
   if (!isCI) return;
-  const target = join(ROOT, "enriched_customers_full.json");
-  if (existsSync(target)) return;
-  await Bun.write(target, Bun.file(ENRICHED_FIXTURE));
+  for (const [name, source] of [
+    ["enriched_customers_full.json", ENRICHED_FIXTURE],
+    ["sportsdesk_downline_data.json", DOWNLINE_FIXTURE],
+  ] as const) {
+    const target = join(ROOT, name);
+    if (existsSync(target)) continue;
+    await Bun.write(target, Bun.file(source));
+  }
 }
 
 describe("DSH plugin bundles", () => {
@@ -65,13 +75,12 @@ describe("DSH plugin bundles", () => {
       }
     });
 
-    // dsh-plugin/verify-load.mjs reads enriched_customers_full.json. CI copies the
-    // tracked backtest fixture into the gitignored path before running verify-load.
+    // dsh-plugin/verify-load.mjs reads gitignored backtest JSON. CI copies tracked fixtures first.
     const shouldSkip = bundle === "dsh-plugin" && !isCI && !hasEnrichedCustomers;
     const verifyLabel = `${bundle} verify-load passes`;
 
     test.skipIf(shouldSkip)(verifyLabel, async () => {
-      await ensureEnrichedCustomersFixture();
+      await ensureCiBacktestFixtures();
       const bundleDir = join(ROOT, bundle);
         const harness = join(bundleDir, "verify-load.mjs");
         expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(

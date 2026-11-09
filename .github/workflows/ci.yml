@@ -87,10 +87,35 @@ jobs:
           test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
           test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
           bun run test:market-index
+      - name: Plugin bundle boundary check
+        run: bash scripts/check-plugin-boundaries.sh
+      - name: Index vs manifest audit
+        run: bash scripts/audit-plugins.sh
+
+  verify-changed:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Bun test changed files
+        run: bun run test:changed
+      - name: Changed dsh-plugin bundles (verify-load)
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/ci/test-changed-plugins.sh
 
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:

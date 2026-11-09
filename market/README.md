@@ -190,7 +190,7 @@ bun run test:market-index
 
 `bun run test:market-index` sets `REQUIRE_MARKET_INDEX=1` so a missing validator install is **red**, not skipped. The full suite omits that flag and skips when `node_modules` is absent (`describe.skipIf`).
 
-CI: job **`market-index`** (`bun run test:market-index`) is the **required** status on `main` for catalog changes. Job **`verify`** is the full repo gate (may be red on unrelated debt).
+CI: **`market-index`** is **required** on `main` (index, `audit-plugins.sh`, boundary check). PRs also run **`verify-changed`** (`bun test --changed` + touched `dsh-plugin*` verify-load). **`verify`** is the full monorepo gate (`continue-on-error: true` — ratchet debt does not block merge).
 
 **Git install pins:** `market/index.json` `source.commit` is the installable tree. After squash
 merges, tag **`market-pin-N`** on that commit before bumping the pin in the index so the SHA stays
