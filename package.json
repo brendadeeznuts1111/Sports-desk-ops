@@ -283,7 +283,7 @@
     "pele": "1.9.0",
     "typescript": "5.9.3",
     "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
-    "semver": "^7.8.5"
+    "semver": "7.8.6"
   },
   "repository": {
     "type": "git",

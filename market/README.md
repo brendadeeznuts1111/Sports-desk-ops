@@ -73,7 +73,13 @@ https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/main/market/inde
 https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-1/market/index.json
 ```
 
-Bump by tagging the next index commit (`market-index-2`, …). Raw SHA URLs are fine for **pre-merge** curl checks only.
+Re-tag on every index bump (`market-index-2`, …) and point **Discover** at the tag URL — not a branch-only SHA (squash-merge can GC those objects). Raw SHA URLs are fine for **pre-merge** curl checks only.
+
+Current Discover URL:
+
+```text
+https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-1/market/index.json
+```
 
 GitHub raw may cache for a few minutes after push. Body is usually served as `text/plain`; Discover parses JSON from the body.
 
@@ -98,15 +104,24 @@ Tagging is cheap insurance for SHA-pinned Discover URLs and for DSH git installs
 2. Update `version`, `publishTimestamp`, and `source.commit` for changed rows.
 3. Commit, push, curl the branch (or SHA) raw URL for **200**, then merge; run `bun test tests/market_index.test.ts` (set `MARKET_INDEX_HARNESS` or `DSH_HARNESS_ROOT`).
 
-## CI / local validator
+## CI / local validation (two steps)
 
-GitHub Actions uses **`actions/checkout@v4` with `fetch-depth: 0`** so `git cat-file -e <pin>^{commit}` still works after `main` advances past older index pins (shallow `fetch-depth: 1` would fail on the next bump, not because the pin is wrong).
+Validation runs the **exact published validator that install uses** — same package (`@deepseek-ai/dsh-plugin-market-index`), same version (`0.2.2-rc.1` exact in `package.json` devDependencies, no caret), same `includePrerelease: true` semver path as harness install checks. Do not “simplify” this back to a harness source clone without reinstalling the monorepo.
+
+| Step | What | Guarantees | Failure means |
+|---|---|---|---|
+| **Validate market index** | `bun install` → `bun test tests/market_index.test.ts` using npm `@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.1` | `index.json` is valid for the harness you ship | Index format, pins, or `engines.dsh` wrong |
+| **Audit validator pin** (CI only) | Shallow clone `deepseek-harness` at `HARNESS_VALIDATOR_SHA`, set `MARKET_INDEX_HARNESS` | The pinned SHA is real and matches the shipped release | Pin drifted or SHA unreachable |
+
+GitHub Actions uses **`fetch-depth: 0`** on this repo so `git cat-file -e <pin>^{commit}` still works after `main` advances past older index pins.
+
+Local (validation only — no audit unless you set `MARKET_INDEX_HARNESS` + `HARNESS_VALIDATOR_SHA`):
 
 ```sh
-export DSH_HARNESS_ROOT="${DSH_HARNESS_ROOT:-$HOME/code/deepseek-harness-web}"
+bun install --frozen-lockfile
 bun test tests/market_index.test.ts
 ```
 
-CI checks out **`deepseek-harness` at `HARNESS_VALIDATOR_SHA`** (40-hex in `.github/workflows/ci.yml`, same object as tag `dsh-v0.2.2-rc.1`), asserts root `package.json` version **`0.2.2-rc.1`**, and sets `MARKET_INDEX_HARNESS` + `HARNESS_VALIDATOR_SHA`. **`parseMarketIndex`** loads from the published npm devDependency `@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.1` (no harness `bun install`). The full suite skips when that package is missing or the optional harness checkout fails version/SHA gates (`describe.skipIf`).
+CI job names: **Audit harness validator pin** → **Validate market index**. The full suite skips this file when the published validator is missing or the optional harness checkout fails version/SHA gates (`describe.skipIf`).
 
-Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json`, vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).
+Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json` (drift messages name plugin, version, and both ranges), vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).

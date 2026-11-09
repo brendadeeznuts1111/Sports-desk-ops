@@ -157,14 +157,14 @@ jobs:
         env:
           CI: "true"
         run: bun run schema:gate
-      - name: Check out deepseek-harness (market index validator)
+      - name: Audit harness validator pin (deepseek-harness checkout)
         uses: actions/checkout@v4
         with:
           repository: deepseek-ai/deepseek-harness
           ref: ${{ env.HARNESS_VALIDATOR_REF }}
           path: .ci/deepseek-harness
           fetch-depth: 1
-      - name: Plugin market index (format 1; full git history for commit pins)
+      - name: Validate market index (format 1)
         timeout-minutes: 3
         env:
           MARKET_INDEX_HARNESS: .ci/deepseek-harness

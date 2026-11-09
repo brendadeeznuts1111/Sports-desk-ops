@@ -107,12 +107,18 @@ function harnessCheckoutValid(): boolean {
   return head.stdout.toString().trim() === expectedHead
 }
 
+function publishedValidatorReady(): boolean {
+  if (!existsSync(PUBLISHED_PARSER_ENTRY) || !existsSync(PUBLISHED_PARSER_PKG)) {
+    return false
+  }
+  const pkg = JSON.parse(readFileSync(PUBLISHED_PARSER_PKG, "utf8")) as {
+    version?: string
+  }
+  return pkg.version === HARNESS_RUNTIME
+}
+
 function marketIndexTestsReady(): boolean {
-  return (
-    existsSync(PUBLISHED_PARSER_ENTRY) &&
-    existsSync(PUBLISHED_PARSER_PKG) &&
-    harnessCheckoutValid()
-  )
+  return publishedValidatorReady() && harnessCheckoutValid()
 }
 
 async function loadParser() {
@@ -209,7 +215,10 @@ describe.skipIf(!marketIndexTestsReady())("market/index.json", () => {
       for (const ver of plugin.versions) {
         const range = ver.engines?.dsh
         expect(range, `${plugin.name}: engines.dsh`).toBeDefined()
-        expect(range!, `${plugin.name}: engines.dsh drift`).toBe(canonicalRange)
+        expect(
+          range === canonicalRange,
+          `${plugin.name}@${ver.version} engines.dsh "${range}" != canonical "${canonicalRange}"`,
+        ).toBe(true)
       }
     }
 
