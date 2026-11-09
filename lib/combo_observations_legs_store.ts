@@ -7,9 +7,9 @@
 
 import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite } from "./sportsdesk_sqlite.ts";
+import type { CanonicalPeriod } from "./leg_taxonomy.ts";
 import {
   type CanonicalLeg,
-  type CanonicalPeriod,
   type LineHundredths,
   type F402CustomerReportPendingRow,
   computeComboIdentityHashes,

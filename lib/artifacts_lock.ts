@@ -35,6 +35,7 @@ export const INPUT_PATHS = [
   "lib/combo_uniqueness.ts",
   "lib/combo_wallets.ts",
   "lib/json_fetch.ts",
+  "lib/leg_taxonomy.ts",
   "lib/customer_poly_bridge.ts",
   "lib/layoff_risk_engine.ts",
   "lib/parlay_combo_backtest_engine.ts",

@@ -2554,7 +2554,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getGradedWagerByCustomer",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:49-67 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetGradedWagerByCustomer",
         "responses": {
           "default": {
@@ -2564,7 +2564,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:30-48",
+            "main:lib/combo_identity.ts:49-67",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,
@@ -2710,7 +2710,7 @@
       "post": {
         "tags": ["Inferred (Unverified)"],
         "summary": "POST /cloud/api/Report/getTicketDetailPrint",
-        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
+        "description": "UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:49-67 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.",
         "operationId": "postCloudApiReportGetTicketDetailPrint",
         "responses": {
           "default": {
@@ -2720,7 +2720,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "main:lib/combo_identity.ts:30-48",
+            "main:lib/combo_identity.ts:49-67",
             "docs/evidence/captures/pending-500s/diagnostics.json"
           ],
           "capturedResponse": false,

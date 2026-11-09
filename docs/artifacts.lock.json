@@ -2,7 +2,7 @@
   "version": 1,
   "artifacts": {
     "docs/combo-uniqueness.json": {
-      "sha256": "5d4285eae39c2c4e2635399b72f754287a7be175e08b2515c23bef8c8daaa76f",
+      "sha256": "ad364c23b4e7de33893fb9edcd194839efc0f48924a6bf339b33e0b771946ef2",
       "bytes": 3255
     },
     "docs/cross-domain-bridge.json": {
@@ -12,13 +12,14 @@
   },
   "inputs": {
     "lib/cfb_events.ts": "b719b28e09e46a89a56ae45e6f94322ee1be2529945bc178dc929c1a4c722d10",
-    "lib/combo_identity.ts": "a9b06d83241821dcdc110d6151d460460adbb8e2e4d720087ec325cb9a492fd6",
+    "lib/combo_identity.ts": "fc30ed8d218bad13da5dbf039fe38d84be0c6580510ca6fc3771bdef332db032",
     "lib/combo_legs.ts": "6872948a8d6633e95bb3ce3795eba20d4a323ba49cfd6f8d0cee144cc856e25c",
     "lib/combo_uniqueness.ts": "3684e97a723684ad74b0c4abee937d99ddbc9db74ab0ede4907a0e885a6cb760",
     "lib/combo_wallets.ts": "e25818492105412a25d52c55604ab477fa3bef4d4f8ec36162c788f20f0d7c53",
     "lib/customer_poly_bridge.ts": "8a70dcc91b48d082022c0ed0b4d4e4569dd4235b5e25288a1c1cc725064d3858",
     "lib/json_fetch.ts": "23438abef6e611b3f1ef69a2924ce3fa8bd0bd6f7b7d8b63fd0a054eb640c3f0",
     "lib/layoff_risk_engine.ts": "55385a43aa741c4a3e9805cad3cb67bd455cf28d06287121d5840550ee440dd0",
+    "lib/leg_taxonomy.ts": "bd32915ffb2a831afd72d04c71a63b41998dfb58582e32454309b7c6d6d23b58",
     "lib/parlay_combo_backtest_engine.ts": "60221184eb8fbe2d7fea5c9c76ea0355da590152dc65bd0bdc29aedacbe8d26c",
     "lib/polymarket_combo.ts": "7cc58bfdc0b7fc0f374824941c3885c7f5298f3e8285c26337e4e7ebc6fde6a6",
     "lib/polymarket_profile.ts": "62bd1c170a700b758b0d88c072edcf2ee3f28adf56eacaa0ed43cb2e6fcd02fa",

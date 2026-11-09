@@ -1578,7 +1578,7 @@
       "capturedResponse": true,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract. [Contradicted, re-read 2026-11-02: the cited comment now labels pending `[Report] [A]`, and this row is tier A on capture:2026-11-01/Pending.post.json; the [UNVERIFIED] label predates that capture.]"
         },
@@ -1601,7 +1601,7 @@
       "capturedResponse": true,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract."
         },
@@ -1630,7 +1630,7 @@
       "capturedResponse": true,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract."
         },
@@ -1659,7 +1659,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract."
         },
@@ -1682,7 +1682,7 @@
       "capturedResponse": true,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[OBSERVED] Cross-prefix routing (2026-11-01): deobfuscated customer/report/report.js listed getTransactions alongside Report reads, but live probing showed POST /cloud/api/Report/getTransactions returns HTTP 500 (0 B) both with and without customerID=H1716, whereas POST /cloud/api/Manager/getTransactions returns HTTP 200 (11 B {\"LIST\":\"\"})."
         },
@@ -1705,7 +1705,7 @@
       "capturedResponse": true,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract. [Contradicted, re-read 2026-11-02: the cited comment now labels gradingByFigureDate `[Report] [A-empty]` ({\"LIST\":\"\"} confirmed), and this row is tier A on capture:2026-11-01/getGrading.post.json; the [UNVERIFIED] label predates that capture.]"
         },
@@ -1728,7 +1728,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "main:lib/combo_identity.ts:30-48",
+          "source": "main:lib/combo_identity.ts:49-67",
           "kind": "repo-type",
           "note": "[UNVERIFIED] Endpoint name and method extracted from the deobfuscated customer/report/report.js registry; no request or response was captured. The operator runbook advertises modes on this surface. Treat as a candidate, not a contract."
         },
@@ -2509,7 +2509,7 @@
     "docs/runbooks/operational_guardrails_runbook.md:213": "opening a player sent `getInfoPlayer` with a 7-character `customerID`",
     "docs/runbooks/operational_guardrails_runbook.md:214": "are the logged-in master on all 19 Manager calls",
     "docs/runbooks/operational_guardrails_runbook.md:215": "_Padded writes:_ `PaddedCustomerId`",
-    "lib/combo_identity.ts:30-48": "ROSETTA STONE: EXACT `customer/report/report.js` ENDPOINTS",
+    "lib/combo_identity.ts:49-67": "ROSETTA STONE: EXACT `customer/report/report.js` ENDPOINTS",
     "lib/f402_agent_performance_request.test.ts:275-282": "test(\"reproduces the observed CPS body byte for byte\"",
     "lib/f402_agent_performance_request.test.ts:61-87": "test(\"reproduces the observed all-periods body byte for byte\"",
     "lib/f402_bet_ticker_config.ts:18-19": "The write builder exists so a future read-side integration cannot hand-assemble a body",

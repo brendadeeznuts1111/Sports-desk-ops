@@ -771,7 +771,7 @@ implementation first (`services/sportsdesk_webview_server.ts` has no `/api/desk`
 
 ## P7 — the customer report surface (7 candidates)
 
-`lib/combo_identity.ts:30-48` names these from the deobfuscated `customer/report/report.js`. None has a
+`lib/combo_identity.ts:49-67` names these from the deobfuscated `customer/report/report.js`. None has a
 capture; they are published as tier C with no request or response content. **Contradicted, re-read
 2026-11-02:** `Report/Pending`, `Report/getGrading` and `Manager/getTransactions` are now tier A on
 committed captures; the other four are still tier C.

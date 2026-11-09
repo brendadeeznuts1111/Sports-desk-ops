@@ -2449,11 +2449,11 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getGradedWagerByCustomer`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:49-67`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/getGradedWagerByCustomer**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:49-67 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetGradedWagerByCustomer`
 - **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 (shared handler threw before response serialization). 1. Retrieve upstream server error log for the shared handler group; 2. Re-probe with the identical captured payload, then test integer week=0 per customer/report/report.js:33171.
@@ -2479,11 +2479,11 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getTicketDetailPrint`
 
-> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:30-48`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
+> **Evidence — tier C** · sources: `main:lib/combo_identity.ts:49-67`, `docs/evidence/captures/pending-500s/diagnostics.json` · response not captured
 
 **POST /cloud/api/Report/getTicketDetailPrint**
 
-UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:30-48 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
+UNVERIFIED — no capture exists. The path, method and any previously published field schema were authored in the prior hand-built spec or its generators; no request or response artifact exists in this repository. Repo type evidence: main:lib/combo_identity.ts:49-67 (a consumer type declaration, not a capture). The request body and the response body/status codes are unknown, so no request schema and no response content are published here.
 
 - **Tag:** Inferred (Unverified) · **operationId:** `postCloudApiReportGetTicketDetailPrint`
 - **Required capture:** Prefix-identical 500 (0 B) on both /Manager and /Report on 2026-11-01 when ticketNumber/wagerNumber were omitted. 1. Retrieve upstream server error log; 2. Re-probe identical payload, then probe with the 5-key customer/report/report.js:108955 envelope {token, ticketNumber, wagerNumber, flag, operation}.
