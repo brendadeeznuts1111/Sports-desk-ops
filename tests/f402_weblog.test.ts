@@ -12,6 +12,8 @@ import {
   readWeblogJsonlChunks,
   readWeblogJsonlFile,
   readWeblogRows,
+  resolveWeblogRollupWindow,
+  WeblogRollupCorpusError,
   weblogDecompressionSupport,
 } from "../lib/f402_weblog.ts";
 
@@ -416,5 +418,25 @@ describe("streaming JSONL reader", () => {
       // lines are still parsed: the fallback is per line, not an abandoned window.
       expect(web.rows.map((row) => row.loginId)).toEqual(["A", "B"]);
     }
+  });
+
+  test("resolveWeblogRollupWindow rejects all-malformed corpora", () => {
+    expect(() =>
+      resolveWeblogRollupWindow({ rows: [], malformed: 5, total: 5 }),
+    ).toThrow(WeblogRollupCorpusError);
+    expect(() =>
+      resolveWeblogRollupWindow({ rows: [], malformed: 5, total: 5 }),
+    ).toThrow(/Mode B/);
+  });
+
+  test("resolveWeblogRollupWindow computes bounds from parsed rows", () => {
+    const rows = [
+      event(1_000, "A", "1.2.3.4", "login"),
+      event(2_000, "B", "1.2.3.5", "login"),
+    ];
+    expect(resolveWeblogRollupWindow({ rows, malformed: 0, total: 2 })).toEqual({
+      fromMs: 1_000,
+      toMs: 2_001,
+    });
   });
 });
