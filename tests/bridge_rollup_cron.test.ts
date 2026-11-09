@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   BRIDGE_ROLLUP_JOBS,
@@ -20,6 +22,7 @@ import {
   type BridgeRollupJobId,
   type BridgeSpawnResult,
 } from "../lib/bridge_rollup_cron.ts";
+import { resolveBridgeWeblogCorpusFrom } from "../lib/f402_weblog_bridge_inputs.ts";
 
 type Artifacts = Partial<Record<BridgeRollupJobId, unknown>>;
 
@@ -494,6 +497,15 @@ describe("bridge rollup cycle", () => {
 
   test("selects jobs in canonical order and substitutes {root} in argv", async () => {
     const root = makeRoot();
+  const weblogCorpus = join(
+      root,
+      "out",
+      "f402",
+      "weblog",
+      "10-09-2025.jsonl",
+    );
+    mkdirSync(dirname(weblogCorpus), { recursive: true });
+    writeFileSync(weblogCorpus, "{}\n");
     const calls: { id: BridgeRollupJobId; argv: readonly string[] }[] = [];
     const artifacts: Artifacts = {
       bridge3c: pendingArtifact(),
@@ -528,6 +540,8 @@ describe("bridge rollup cycle", () => {
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
+      "--from",
+      resolveBridgeWeblogCorpusFrom(root, { now: () => new Date(NOW) }),
       "--out",
       join(root, "scratch", "bridge-rollup", "weblog.json"),
     ]);
@@ -592,6 +606,8 @@ describe("bridge rollup cycle", () => {
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
+      "--from",
+      "{weblogFrom}",
       "--out",
       "{root}/scratch/bridge-rollup/weblog.json",
     ]);

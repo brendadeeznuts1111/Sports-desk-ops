@@ -43,6 +43,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
+import {
+  bridgeWeblogCorpusPresent,
+  resolveBridgeWeblogCorpusFrom,
+} from "./f402_weblog_bridge_inputs.ts";
 import { readF402Session } from "./f402_session.ts";
 import {
   F402_KEYCHAIN_NAMES,
@@ -181,14 +185,15 @@ export const BRIDGE_ROLLUP_JOBS: readonly BridgeRollupJobSpec[] = [
   {
     id: "weblog",
     label: "WebLog overlap bridge",
-    // Its `--from` default is `out/f402/weblog/<date>.jsonl` relative to the CWD, which is the
-    // corpus staging convention; a host without staged corpus records one clean job failure.
+    // Staged activity JSONL (`--from`); default desk-date path or `F402_WEBLOG_FROM`.
     args: [
       "bun",
       "--no-orphans",
       "--no-env-file",
       "run",
       "scripts/f402_weblog_bridge.ts",
+      "--from",
+      "{weblogFrom}",
       "--out",
       "{root}/scratch/bridge-rollup/weblog.json",
     ],
@@ -428,15 +433,29 @@ function resolveAgainst(root: string, path: string): string {
   return isAbsolute(path) ? path : resolve(root, path);
 }
 
-function resolvePlaceholders(value: string, root: string): string {
-  return value.replaceAll("{root}", root);
+function resolvePlaceholders(
+  value: string,
+  root: string,
+  weblogFrom: string,
+): string {
+  return value
+    .replaceAll("{root}", root)
+    .replaceAll("{weblogFrom}", weblogFrom);
 }
 
 function resolveArgv(
   job: BridgeRollupJobSpec,
   root: string,
+  ctx: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly now: () => number;
+  },
 ): readonly string[] {
-  return job.args.map((arg) => resolvePlaceholders(arg, root));
+  const weblogFrom = resolveBridgeWeblogCorpusFrom(root, {
+    env: ctx.env,
+    now: () => new Date(ctx.now()),
+  });
+  return job.args.map((arg) => resolvePlaceholders(arg, root, weblogFrom));
 }
 
 function jobContext(
@@ -483,6 +502,8 @@ export function envCredentialProbe(
 
 export interface KeychainCredentialProbeOptions {
   readonly env: Readonly<Record<string, string | undefined>>;
+  /** Repo root for weblog corpus resolution. Default: checkout containing `lib/`. */
+  readonly root?: string;
   /** Canonical-then-legacy keychain read. Default `readSecretCanonicalThenLegacy`. */
   readonly readSecret?: (name: string) => Promise<string | null>;
   /** Default: `readF402Session() !== null`. */
@@ -531,10 +552,27 @@ export function keychainCredentialProbe(
     });
   const gsidName = options.gsidName ?? GSID_KEYCHAIN_NAME;
   const agentIdName = options.agentIdName ?? F402_KEYCHAIN_NAMES.agentId;
+  const probeRoot = options.root ?? defaultRoot();
 
   return {
     async check(job) {
-      if (job.id === "weblog") return { ok: true, source: "corpus" };
+      if (job.id === "weblog") {
+        let from: string;
+        try {
+          from = resolveBridgeWeblogCorpusFrom(probeRoot, {
+            env,
+            now: () => new Date(),
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return { ok: false, error: message };
+        }
+        const present = bridgeWeblogCorpusPresent(from);
+        return present.ok
+          ? { ok: true, source: "corpus" }
+          : { ok: false, error: present.message };
+      }
       if (job.id === "bridge3c") {
         const envNames = [
           "GSLIVE_SESSION_ID",
@@ -1097,7 +1135,7 @@ export async function runBridgeRollupCycle(
       ...env,
       ...decision.extraEnv,
     });
-    const argv = resolveArgv(job, root);
+    const argv = resolveArgv(job, root, { env, now });
     const startedAt = now();
     let spawnResult: BridgeSpawnResult;
     try {
