@@ -51,6 +51,26 @@ describe("sportCategoryFor", () => {
     expect(
       sportCategoryFor({ sportType: "Basketball", sportSubType: "NFL" }),
     ).toBe("Basketball");
+
+    // Native ASI EZLive in-play wire mapping
+    expect(
+      sportCategoryFor({
+        sportType: "LIVE                ",
+        sportSubType: "NBA Live            ",
+      }),
+    ).toBe("Basketball");
+    expect(
+      sportCategoryFor({
+        sportType: "LIVE                ",
+        sportSubType: "NFL Live            ",
+      }),
+    ).toBe("Football");
+    expect(
+      sportCategoryFor({
+        sportType: "LIVE                ",
+        sportSubType: "CFB Live            ",
+      }),
+    ).toBe("Football");
   });
 
   test("keeps unknown sports visible as Other", () => {

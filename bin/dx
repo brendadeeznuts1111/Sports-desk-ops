@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -323,6 +323,10 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx session [status|login] Portal session file the replay transport reads (status is read-only)
     ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
     ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
+    ./bin/dx enrich --figure=<path> [--ticker=<path>] [--output=<path>] [--format=inspect|jsonl|summary] [--inspect]
+                                    Stream and join live ticker wagers with settled getWagersByFigureDate
+    ./bin/dx taxonomy [--mode=CP|CPS|CPV|G] [--period=-1..6] [--engine=native|full] [--sqlite=<path>] [--format=inspect|table|json] [--inspect]
+                                    Normalize wagers to canonical 0-6 portal period enum with multi-family dates
 
   Deploy
     ./bin/dx stage                  Regenerate + stage dist/ (no upload)
@@ -640,6 +644,12 @@ VERSION_HELP
       --with | --with=*) exec bun "$REPO_ROOT/scripts/secrets_env.ts" exec "$@" ;;
     esac
     exec "$@"
+    ;;
+  enrich)
+    exec bun run "$REPO_ROOT/scripts/enrich_bets_from_figure_date.ts" "$@"
+    ;;
+  taxonomy)
+    exec bun run "$REPO_ROOT/scripts/normalize.ts" "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies

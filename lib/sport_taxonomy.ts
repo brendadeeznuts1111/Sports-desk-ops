@@ -84,6 +84,7 @@ const WIRE_MAP: Readonly<Record<string, SportCategory>> = {
 const SUBSPORT_HINTS: Readonly<Record<string, SportCategory>> = {
   nfl: "Football",
   ncaaf: "Football",
+  cfb: "Football",
   "eng prem": "Soccer",
   "eng champ": "Soccer",
   ucl: "Soccer",
@@ -120,8 +121,15 @@ export function sportCategoryFor(input: {
     if (mapped !== undefined) return mapped;
   }
 
-  const hint = SUBSPORT_HINTS[key(input.sportSubType)];
+  const subKey = key(input.sportSubType);
+  const hint = SUBSPORT_HINTS[subKey];
   if (hint !== undefined) return hint;
+
+  if (subKey.endsWith(" live")) {
+    const stripped = subKey.slice(0, -5).trim();
+    const strippedHint = SUBSPORT_HINTS[stripped] ?? WIRE_MAP[stripped];
+    if (strippedHint !== undefined) return strippedHint;
+  }
 
   return "Other";
 }
