@@ -34,13 +34,13 @@ service can answer `/health` while predating the checkout. Measured on
 without `ingress` — a naive health check says "healthy"; this row says
 **stale build**.
 
-## CORS
+## Transport (Desktop CORS)
 
-Measured before wiring the fetch: `curl -si http://127.0.0.1:4020/health`
-returns `Access-Control-Allow-Origin: *` (same for `/api/status`), so the page
-may read both. A browser cannot distinguish a network failure from a CORS
-rejection, so a rejected fetch is reported as "service down" rather than being
-explained away as healthy.
+The DSH Desktop shell is `dsh-app://app`, so loopback fetches to `:4020` are
+cross-origin unless the daemon lists that origin in `SPORTSDESK_ALLOWED_ORIGINS`.
+The client probes `/api/sportsdesk-desk/{health,status}` on the Host first (same
+origin, registered by `dsh-plugin-sportsdesk-desk-panel`), then falls back to
+`http://127.0.0.1:4020` when the proxy route is absent.
 
 ## Rules followed
 

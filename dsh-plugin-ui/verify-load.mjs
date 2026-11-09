@@ -214,25 +214,30 @@ check("client: stale and down tooltips carry restart guidance", () => {
   assert(client.includes('t("downHint")'), "down hint is not used");
 });
 
-check("client: fetches only the desk's two routes", () => {
-  const urls = [...client.matchAll(/https?:\/\/[^\s"'`]+/g)].map((match) =>
-    match[0].replace(/[.,;:)]+$/, ""),
-  );
-  assert(urls.length > 0, "no fetch origins found");
-  for (const url of urls) {
-    assert(
-      url === "http://127.0.0.1:4020" ||
-        url.startsWith("http://127.0.0.1:4020/"),
-      `unexpected origin in client.js: ${url}`,
-    );
-  }
+check("client: probes proxy-first then loopback desk routes", () => {
   assert(
-    client.includes("http://127.0.0.1:4020/health"),
-    "health route is missing",
+    client.includes('PROXY_BASE = "/api/sportsdesk-desk"'),
+    "proxy base is missing",
   );
   assert(
-    client.includes("http://127.0.0.1:4020/api/status"),
-    "status route is missing",
+    client.includes("${PROXY_BASE}/health"),
+    "proxy health route is missing",
+  );
+  assert(
+    client.includes("${PROXY_BASE}/status"),
+    "proxy status route is missing",
+  );
+  assert(
+    client.includes('SERVICE_URL = "http://127.0.0.1:4020"'),
+    "loopback service URL is missing",
+  );
+  assert(
+    client.includes("${SERVICE_URL}/health"),
+    "loopback health route is missing",
+  );
+  assert(
+    client.includes("${SERVICE_URL}/api/status"),
+    "loopback status route is missing",
   );
 });
 

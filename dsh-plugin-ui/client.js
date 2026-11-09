@@ -23,10 +23,11 @@
  * 404 for /api/status, and a /health body without `ingress` — so a naive
  * `/health` check would say "healthy" while the row honestly says "stale build".
  *
- * CORS: measured with `curl -si` on 2026-11-02 — both /health and /api/status
- * answer `Access-Control-Allow-Origin: *`, so the page may read them. A browser
- * cannot distinguish a network failure from a CORS rejection; if the fetch
- * rejects, the row says "service down" rather than inventing a healthy state.
+ * Transport: the Harness Web UI is `dsh-app://app`, so loopback fetches need
+ * either the Host same-origin proxy (`/api/sportsdesk-desk/*`) or an explicit
+ * `SPORTSDESK_ALLOWED_ORIGINS` grant on the daemon. The client probes the proxy
+ * first, then falls back to `http://127.0.0.1:4020` for a browser on the desk
+ * host. A fetch rejection is reported as "service down", not a healthy state.
  *
  * RULES FOLLOWED
  *
@@ -51,8 +52,11 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this bundle (also the `locale:` registration option). */
     const NS = "sportsdesk-desk-status";
     /** The local webview service the desk runs with `bun run serve`. */
-    const HEALTH_URL = "http://127.0.0.1:4020/health";
-    const STATUS_URL = "http://127.0.0.1:4020/api/status";
+    const SERVICE_URL = "http://127.0.0.1:4020";
+    /** Same-origin proxy routes registered by the Host half (`index.js`). */
+    const PROXY_BASE = "/api/sportsdesk-desk";
+    const HEALTH_URLS = [`${PROXY_BASE}/health`, `${SERVICE_URL}/health`];
+    const STATUS_URLS = [`${PROXY_BASE}/status`, `${SERVICE_URL}/api/status`];
     /** Per-request bound; the service answers /health in ~3 ms when up. */
     const PROBE_TIMEOUT_MS = 3_000;
     /** Poll cadence, inside the requested <= 60 s bound. */
@@ -147,13 +151,43 @@ window.__ModuleLoader__.load({
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
         headers: { accept: "application/json" },
       });
+      const proxied =
+        typeof response.headers?.get === "function" &&
+        response.headers.get("x-sportsdesk-desk-proxy") !== null;
       let body = null;
       try {
         body = await response.json();
       } catch {
         body = null;
       }
-      return { status: response.status, ok: response.ok, body };
+      return { status: response.status, ok: response.ok, body, proxied };
+    }
+
+    /**
+     * Try proxy-first URLs; an unmarked proxy 404 means this Harness has no route yet.
+     * @param {readonly string[]} urls
+     */
+    async function getJsonFirst(urls) {
+      let last = null;
+      for (let index = 0; index < urls.length; index += 1) {
+        const url = urls[index];
+        try {
+          const result = await getJson(url);
+          last = result;
+          if (result.ok) return result;
+          const unmarkedProxy404 =
+            index === 0 && result.status === 404 && result.proxied !== true;
+          if (unmarkedProxy404 && index < urls.length - 1) continue;
+          return result;
+        } catch (error) {
+          if (index < urls.length - 1) continue;
+          throw error;
+        }
+      }
+      if (last === null) {
+        throw new Error("no probe URLs");
+      }
+      return last;
     }
 
     /**
@@ -164,7 +198,7 @@ window.__ModuleLoader__.load({
       const checkedAt = Date.now();
       let health;
       try {
-        health = await getJson(HEALTH_URL);
+        health = await getJsonFirst(HEALTH_URLS);
       } catch (error) {
         return {
           phase: "down",
@@ -199,7 +233,7 @@ window.__ModuleLoader__.load({
       // missing-endpoint one.
       let status = null;
       try {
-        status = await getJson(STATUS_URL);
+        status = await getJsonFirst(STATUS_URLS);
       } catch {
         status = null;
       }
