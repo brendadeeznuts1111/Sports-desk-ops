@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import { createRequire } from "node:module"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dir, "..")
@@ -16,9 +16,13 @@ const HARNESS_ROOT =
   process.env.DSH_HARNESS_WEB_ROOT ??
   join(process.env.HOME ?? "", "code/deepseek-harness-web")
 
-const MARKET_INDEX_PKG = join(
-  HARNESS_ROOT,
-  "packages/util/plugin-market-index/src/index.ts",
+const PUBLISHED_PARSER_PKG = join(
+  ROOT,
+  "node_modules/@deepseek-ai/dsh-plugin-market-index/package.json",
+)
+const PUBLISHED_PARSER_ENTRY = join(
+  ROOT,
+  "node_modules/@deepseek-ai/dsh-plugin-market-index/lib/index.js",
 )
 
 const HARNESS_RUNTIME = "0.2.2-rc.1"
@@ -41,6 +45,10 @@ type RawIndex = {
       engines?: { dsh?: string }
     }>
   }>
+}
+
+function loadRawIndex(): RawIndex {
+  return JSON.parse(readFileSync(INDEX_PATH, "utf8")) as RawIndex
 }
 
 function enginesRangeFromIndex(raw: RawIndex): string {
@@ -68,34 +76,77 @@ type SemverLike = {
   ) => boolean
 }
 
-async function loadParser(): Promise<{
-  parseMarketIndex: (raw: unknown, url: string) => ParsedMarketIndex
-}> {
-  if (!existsSync(MARKET_INDEX_PKG)) {
+function harnessCheckoutValid(): boolean {
+  if (!process.env.MARKET_INDEX_HARNESS) return true
+
+  const rootPkgPath = join(HARNESS_ROOT, "package.json")
+  const marketPkgPath = join(
+    HARNESS_ROOT,
+    "packages/util/plugin-market-index/package.json",
+  )
+  if (!existsSync(rootPkgPath) || !existsSync(marketPkgPath)) return false
+
+  const rootPkg = JSON.parse(readFileSync(rootPkgPath, "utf8")) as {
+    version?: string
+  }
+  const marketPkg = JSON.parse(readFileSync(marketPkgPath, "utf8")) as {
+    version?: string
+  }
+  if (rootPkg.version !== HARNESS_RUNTIME || marketPkg.version !== HARNESS_RUNTIME) {
+    return false
+  }
+
+  const expectedHead = process.env.HARNESS_VALIDATOR_SHA
+  if (!expectedHead) return true
+
+  const head = Bun.spawnSync(["git", "-C", HARNESS_ROOT, "rev-parse", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (head.exitCode !== 0) return false
+  return head.stdout.toString().trim() === expectedHead
+}
+
+function marketIndexTestsReady(): boolean {
+  return (
+    existsSync(PUBLISHED_PARSER_ENTRY) &&
+    existsSync(PUBLISHED_PARSER_PKG) &&
+    harnessCheckoutValid()
+  )
+}
+
+async function loadParser() {
+  if (!existsSync(PUBLISHED_PARSER_ENTRY)) {
     throw new Error(
-      `Missing ${MARKET_INDEX_PKG}; set MARKET_INDEX_HARNESS or DSH_HARNESS_ROOT to a deepseek-harness checkout`,
+      `Missing ${PUBLISHED_PARSER_ENTRY}; run bun install (devDependency @deepseek-ai/dsh-plugin-market-index)`,
     )
   }
-  return import(MARKET_INDEX_PKG)
+  const mod = await import("@deepseek-ai/dsh-plugin-market-index")
+  return mod as unknown as {
+    parseMarketIndex: (raw: unknown, url: string) => ParsedMarketIndex
+  }
 }
 
 function loadSemver(): SemverLike {
-  const req = createRequire(MARKET_INDEX_PKG)
+  const req = createRequire(join(ROOT, "package.json"))
   return req("semver") as SemverLike
 }
 
-const harnessReady = existsSync(MARKET_INDEX_PKG)
+describe.skipIf(!marketIndexTestsReady())("market/index.json", () => {
+  test("harness validator checkout matches pin when MARKET_INDEX_HARNESS is set", () => {
+    if (!process.env.MARKET_INDEX_HARNESS) return
+    expect(harnessCheckoutValid()).toBe(true)
+  })
 
-describe.skipIf(!harnessReady)("market/index.json", () => {
   test("parseMarketIndex accepts the document", async () => {
     const { parseMarketIndex } = await loadParser()
-    const raw = JSON.parse(await Bun.file(INDEX_PATH).text())
+    const raw = loadRawIndex()
     const doc = parseMarketIndex(raw, INDEX_URL)
     expect(doc.plugins).toHaveLength(Object.keys(EXPECTED_PATHS).length)
   })
 
   test("dist-tags.latest matches a versions[] row per plugin", async () => {
-    const raw = JSON.parse(await Bun.file(INDEX_PATH).text()) as RawIndex
+    const raw = loadRawIndex()
     for (const plugin of raw.plugins) {
       const latest = plugin["dist-tags"]?.latest
       expect(latest, `${plugin.name}: dist-tags.latest`).toBeDefined()
@@ -108,15 +159,13 @@ describe.skipIf(!harnessReady)("market/index.json", () => {
 
   test("every indexed bundle matches name, path, and commit in git", async () => {
     const { parseMarketIndex } = await loadParser()
-    const raw = JSON.parse(await Bun.file(INDEX_PATH).text())
+    const raw = loadRawIndex()
     const doc = parseMarketIndex(raw, INDEX_URL)
 
     for (const plugin of doc.plugins) {
       const bundlePath = EXPECTED_PATHS[plugin.name]
       expect(bundlePath, `unexpected plugin name ${plugin.name}`).toBeDefined()
-      const rawPlugin = (
-        JSON.parse(await Bun.file(INDEX_PATH).text()) as RawIndex
-      ).plugins.find((p) => p.name === plugin.name)!
+      const rawPlugin = raw.plugins.find((p) => p.name === plugin.name)!
       const latest = rawPlugin["dist-tags"]!.latest!
       const row = plugin.versions.find(
         (ver: ParsedMarketIndex["plugins"][number]["versions"][number]) =>
@@ -152,7 +201,7 @@ describe.skipIf(!harnessReady)("market/index.json", () => {
   test("engines.dsh satisfies harness install check (includePrerelease)", async () => {
     const semver = loadSemver()
     const { parseMarketIndex } = await loadParser()
-    const raw = JSON.parse(await Bun.file(INDEX_PATH).text()) as RawIndex
+    const raw = loadRawIndex()
     const doc = parseMarketIndex(raw, INDEX_URL)
     const canonicalRange = enginesRangeFromIndex(raw)
 

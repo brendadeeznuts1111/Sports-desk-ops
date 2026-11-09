@@ -52,7 +52,8 @@ env:
   # platform commit whose policy/baseline.json this repo is held to; bump it deliberately
   PLATFORM_SHA: 3390c88e231ba9bb1668bbf700132f5ebb822237
   # Pinned parseMarketIndex validator — bump with engines.dsh / shipped harness
-  HARNESS_VALIDATOR_REF: dsh-v0.2.2-rc.1
+  HARNESS_VALIDATOR_SHA: 66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db
+  HARNESS_VALIDATOR_REF: 66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db
 
 jobs:
   verify:
@@ -167,7 +168,11 @@ jobs:
         timeout-minutes: 3
         env:
           MARKET_INDEX_HARNESS: .ci/deepseek-harness
-        run: bun test tests/market_index.test.ts
+          HARNESS_VALIDATOR_SHA: ${{ env.HARNESS_VALIDATOR_SHA }}
+        run: |
+          test "$(jq -r .version .ci/deepseek-harness/package.json)" = "0.2.2-rc.1"
+          test "$(git -C .ci/deepseek-harness rev-parse HEAD)" = "$HARNESS_VALIDATOR_SHA"
+          bun test tests/market_index.test.ts
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml

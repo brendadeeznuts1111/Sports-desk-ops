@@ -67,11 +67,13 @@ curl -sI "https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/main/m
 https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/main/market/index.json
 ```
 
-**Commit-pinned index** (recommended for operator Discover — reproducible; bump with releases):
+**Commit-pinned index** — use a **git tag** on the index commit so squash-merge does not GC the object (branch-only SHAs 404 eventually):
 
 ```text
-https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/<40-char-sha>/market/index.json
+https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-1/market/index.json
 ```
+
+Bump by tagging the next index commit (`market-index-2`, …). Raw SHA URLs are fine for **pre-merge** curl checks only.
 
 GitHub raw may cache for a few minutes after push. Body is usually served as `text/plain`; Discover parses JSON from the body.
 
@@ -105,6 +107,6 @@ export DSH_HARNESS_ROOT="${DSH_HARNESS_ROOT:-$HOME/code/deepseek-harness-web}"
 bun test tests/market_index.test.ts
 ```
 
-CI checks out **`deepseek-harness` at `HARNESS_VALIDATOR_REF`** (`dsh-v0.2.2-rc.1` in `.github/workflows/ci.yml`) and sets `MARKET_INDEX_HARNESS=.ci/deepseek-harness`. The full test suite skips this file when no harness checkout is on disk (`describe.skipIf`).
+CI checks out **`deepseek-harness` at `HARNESS_VALIDATOR_SHA`** (40-hex in `.github/workflows/ci.yml`, same object as tag `dsh-v0.2.2-rc.1`), asserts root `package.json` version **`0.2.2-rc.1`**, and sets `MARKET_INDEX_HARNESS` + `HARNESS_VALIDATOR_SHA`. **`parseMarketIndex`** loads from the published npm devDependency `@deepseek-ai/dsh-plugin-market-index@0.2.2-rc.1` (no harness `bun install`). The full suite skips when that package is missing or the optional harness checkout fails version/SHA gates (`describe.skipIf`).
 
-Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, uniform `engines.dsh` from the index vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows read from that same range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).
+Asserts: `parseMarketIndex`, reachable commits, `path/package.json` names, `dist-tags.latest`, every plugin’s `engines.dsh` matches the canonical range read from `market/index.json`, vs **`0.2.2-rc.1`** / `0.2.2`, plus boundary rows on that range (`0.2.0-rc.1` in, `0.3.0-rc.1` out).
