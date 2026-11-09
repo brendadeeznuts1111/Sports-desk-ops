@@ -71,6 +71,7 @@ import {
   readDod6SpineHeader,
   type DodCustomerLifetimeMeta,
 } from "../lib/dod6_spine_overlay.ts";
+import { resolveF402BetsJsonlPath } from "../lib/f402_bets_corpus_path.ts";
 
 export type { DodCustomerLifetimeMeta };
 
@@ -91,9 +92,6 @@ function readIsoField(fieldName: string): (body: unknown) => string | null {
     return typeof value === "string" && value !== "" ? value : null;
   };
 }
-const DEFAULT_BETS_JSONL =
-  Bun.env.F402_BETS_JSONL ??
-  "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
 const DEFAULT_LIFETIME_CSV =
   Bun.env.F402_LIFETIME_CSV ??
   "/Users/nolarose/4c-odds-intergration/probes/out13/bettor_lifetime.csv";
@@ -655,12 +653,9 @@ export async function runLivePositionsPulse(options?: {
   const now = new Date();
   const nowIso = now.toISOString();
   const schedule = options?.schedule ?? DEFAULT_SCHEDULE;
+  const betsJsonlPath = resolveF402BetsJsonlPath();
 
-  if (!existsSync(DEFAULT_BETS_JSONL)) {
-    throw new Error(`Live stream not found at ${DEFAULT_BETS_JSONL}`);
-  }
-
-  const streamStat = statSync(DEFAULT_BETS_JSONL);
+  const streamStat = statSync(betsJsonlPath);
   const previousWatermark = existsSync(DEFAULT_WATERMARK_PATH)
     ? ((await Bun.file(
         DEFAULT_WATERMARK_PATH,
@@ -668,7 +663,7 @@ export async function runLivePositionsPulse(options?: {
     : null;
 
   const { watermark, delta } = computeCumulativeAndDelta(
-    DEFAULT_BETS_JSONL,
+    betsJsonlPath,
     previousWatermark,
     nowIso,
   );
@@ -679,7 +674,7 @@ export async function runLivePositionsPulse(options?: {
   );
 
   // Read the tail of f402-bets.jsonl (~6 MB, last ~9,000 rows) to extract the latest 24h, 1h, and 10m windows
-  const tailLines = readTailLines(DEFAULT_BETS_JSONL, 6 * 1024 * 1024);
+  const tailLines = readTailLines(betsJsonlPath, 6 * 1024 * 1024);
   const rawObjects: Record<string, unknown>[] = [];
   const parsedWagers: {
     raw: Record<string, unknown>;
@@ -1112,7 +1107,7 @@ export async function runLivePositionsPulse(options?: {
     schemaVersion: 1,
     generatedAtIso: nowIso,
     schedule,
-    sourceStreamPath: DEFAULT_BETS_JSONL,
+    sourceStreamPath: betsJsonlPath,
     sourceStreamBytes: streamStat.size,
     sourceStreamMtimeIso: new Date(streamStat.mtimeMs).toISOString(),
     dodSpine: dodSpineHeader,

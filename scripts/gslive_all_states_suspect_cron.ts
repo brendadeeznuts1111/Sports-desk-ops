@@ -21,6 +21,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { parseCliArgs } from "../lib/cli_args.ts";
+import { resolveF402BetsJsonlPath } from "../lib/f402_bets_corpus_path.ts";
 import { resolve } from "node:path";
 
 /**
@@ -31,9 +32,6 @@ import { resolve } from "node:path";
 const GSLIVE_BET_REPORT_CSV =
   Bun.env.GSLIVE_BET_REPORT_CSV ??
   "/Users/nolarose/code/turbo-cap/turbo-cap-valley-lion/.data/exports/bet-report.csv";
-const F402_BETS_JSONL =
-  Bun.env.F402_BETS_JSONL ??
-  "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
 const F402_HISTORY_DB =
   Bun.env.F402_HISTORY_DB ??
   "/Users/nolarose/4c-odds-intergration/probes/out11/history.db";
@@ -497,7 +495,7 @@ export async function runGSLiveAllStatesSuspectAudit(
     .slice(0, 15);
 
   // 2. Inspect targetAccount (`CCC107`) in `f402-bets.jsonl` across all time and `10/28-11/03`
-  const tickerPath = F402_BETS_JSONL;
+  const tickerPath = resolveF402BetsJsonlPath();
   const uniqueBets = await readTickerBetsJsonl(tickerPath, targetAccount);
 
   const allBets = [...uniqueBets.values()].sort((a, b) =>

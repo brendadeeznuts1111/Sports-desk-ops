@@ -20,7 +20,11 @@ describe("probeR2PipelineKpis", () => {
       if (key === "f402-bet-ticker/latest.json") {
         return new Response(null, {
           status: 200,
-          headers: { "last-modified": new Date("2026-11-09T03:45:00.000Z").toUTCString() },
+          headers: {
+            "last-modified": new Date(
+              "2026-11-09T03:45:00.000Z",
+            ).toUTCString(),
+          },
         });
       }
       return new Response(null, { status: 404 });

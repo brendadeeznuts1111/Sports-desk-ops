@@ -1,7 +1,7 @@
 /**
  * @file f402_bet_ticker_jsonl.ts
  * @description Tail ingestion for Bridge 3a. The live F402 bet ticker is archived by the 4C
- * collector as append-only JSONL (`probes/out13/f402-bets.jsonl`, hundreds of MB). Bridge 3a can
+ * collector as append-only JSONL (`resolveF402BetsJsonlPath()` → probes/out13/f402-bets.jsonl). Bridge 3a can
  * project that stream without opening a second Fantasy402 session: this reader keeps a byte offset
  * and a wager-number watermark, reads only the bytes appended since the last read, holds back a
  * partial trailing line, and never loads the whole file.

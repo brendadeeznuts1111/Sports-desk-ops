@@ -3,6 +3,7 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
+import { resolveF402BetsJsonlPath } from "../lib/f402_bets_corpus_path.ts";
 import {
   resolveWeblogCorpusPaths,
   WEBLOG_BRIDGE_USAGE_HINT,
@@ -46,7 +47,7 @@ Options:
   --fetch-mode     A|B|C|I — fetch getWebLog, write JSONL, then roll up
   --save-capture   Capture path (default: out/f402/weblog/MM-DD-YYYY.jsonl)
   --date           Desk date YYYY-MM-DD for fetch (default: today UTC)
-  --bets           Wagers JSONL for Mode 6 join (default: F402_BETS_JSONL / out13/f402-bets.jsonl)
+  --bets           Wagers JSONL for Mode 6 join (default: resolveF402BetsJsonlPath / F402_BETS_JSONL)
   --out            Local rollup JSON (default: scratch/weblog/rollup-<date>.json)
   --dry-run        Build rollup only; skip R2 publish
   --no-r2          Skip R2 publish
@@ -55,7 +56,6 @@ Options:
 ${WEBLOG_BRIDGE_USAGE_HINT}`);
   process.exit(0);
 }
-
 const corpus = await resolveWeblogCorpusPaths(values, {
   log: (line) => console.error(line),
 });
@@ -65,8 +65,15 @@ if (!corpus.ok) {
 }
 
 const from = [...corpus.paths];
-const betsPath =
-  values.bets ?? Bun.env.F402_BETS_JSONL ?? "out13/f402-bets.jsonl";
+let betsPath: string;
+try {
+  betsPath = resolveF402BetsJsonlPath(
+    values.bets !== undefined ? { cliValue: values.bets } : {},
+  );
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 const web = await readWeblogRows(from);
 const fromMs = Math.min(...web.rows.map((r) => r.accessMs));
 const toMs = Math.max(...web.rows.map((r) => r.accessMs)) + 1;
