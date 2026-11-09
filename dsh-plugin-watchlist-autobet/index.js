@@ -59,6 +59,7 @@
  */
 
 // ast-grep-ignore: node-child-process -- Host plugin code runs in Electron's Node main process, where the Bun global does not exist; spawning bun is the shim's whole job.
+import { resolveConfiguredRepoPath } from "./repo_path_resolve.js";
 import { execFile } from "node:child_process";
 // The control-plane CSRF token is generated per plugin activation; node:crypto is a builtin.
 import { randomUUID } from "node:crypto";
@@ -88,7 +89,7 @@ const CLI_RELATIVE_PATH = "cli/watchlist_autobet_cli.ts";
  * reaching a spawn.
  */
 const DEFAULT_CONFIG = {
-  repoPath: "/Users/nolarose/code/sportsdesk-ops",
+  repoPath: "",
   bunPath: "bun",
   // Repo-relative, as the CLI contract requires. Changing it to a non-paper config cannot
   // enable live execution: the CLI rejects any mode other than "paper" at config load time.
@@ -925,6 +926,7 @@ function buildAccountsBlock(part) {
  */
 export function apply(ctx, config) {
   const settings = normalizeConfig(config);
+  settings.repoPath = resolveConfiguredRepoPath(settings.repoPath);
   const repoPath = settings.repoPath;
   const cliAbsolutePath = join(repoPath, CLI_RELATIVE_PATH);
   /**

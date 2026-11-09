@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-sportsdesk-ops",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "description": "Read-only DSH tools for the SportsDesk/Fantasy402 desk: ops status, dataset freshness, customer/downline questions, canonical GSLive Manager deep links (canceled bet-history view and its URL-expressible Filters values), the snapshot wager-state table (legs vs wagers, deduped wagerRisk, spanning wagers, computed quality) with capture-automation health (journal, alerts, artifact freshness) and capture trends from the append-only history, endpoint evidence coverage, secrets and identifier scans, sharp-money scans, getWebLog evidence and the repo's verification gates.",

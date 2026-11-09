@@ -28,9 +28,20 @@ const INVARIANT_FILES = [
 ] as const;
 
 const isCI = Boolean(Bun.env.CI);
+const ENRICHED_FIXTURE = join(
+  ROOT,
+  "tests/fixtures/backtest/enriched_customers_full.json",
+);
 const hasEnrichedCustomers = existsSync(
   join(ROOT, "enriched_customers_full.json"),
 );
+
+async function ensureEnrichedCustomersFixture(): Promise<void> {
+  if (!isCI) return;
+  const target = join(ROOT, "enriched_customers_full.json");
+  if (existsSync(target)) return;
+  await Bun.write(target, Bun.file(ENRICHED_FIXTURE));
+}
 
 describe("DSH plugin bundles", () => {
   test("discovers at least one dsh-plugin* bundle at repository root", () => {
@@ -54,22 +65,14 @@ describe("DSH plugin bundles", () => {
       }
     });
 
-    // By design, dsh-plugin/verify-load.mjs reads operator-only customer PII
-    // (enriched_customers_full.json, gitignored per AGENTS.md:34-39). In CI (or
-    // when that local fixture is absent), all 5 bundles run the structural
-    // manifest check above, while verify-load runs for the 4 fixture-free
-    // bundles and skips dsh-plugin ("5 discovered, 4 verified in CI").
-    const shouldSkip =
-      bundle === "dsh-plugin" && (isCI || !hasEnrichedCustomers);
-    const verifyLabel =
-      bundle === "dsh-plugin"
-        ? `${bundle} verify-load passes (requires local enriched_customers_full.json; skipped in CI)`
-        : `${bundle} verify-load passes`;
+    // dsh-plugin/verify-load.mjs reads enriched_customers_full.json. CI copies the
+    // tracked backtest fixture into the gitignored path before running verify-load.
+    const shouldSkip = bundle === "dsh-plugin" && !isCI && !hasEnrichedCustomers;
+    const verifyLabel = `${bundle} verify-load passes`;
 
-    test.skipIf(shouldSkip)(
-      verifyLabel,
-      async () => {
-        const bundleDir = join(ROOT, bundle);
+    test.skipIf(shouldSkip)(verifyLabel, async () => {
+      await ensureEnrichedCustomersFixture();
+      const bundleDir = join(ROOT, bundle);
         const harness = join(bundleDir, "verify-load.mjs");
         expect(existsSync(harness), `${bundle} has no verify-load.mjs`).toBe(
           true,

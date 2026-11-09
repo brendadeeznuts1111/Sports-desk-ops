@@ -17,7 +17,7 @@
     - id: sportsdesk-ops
       name: dsh-plugin-sportsdesk-ops
       config:
-        repoPath: /Users/nolarose/code/sportsdesk-ops
+        # repoPath: required — absolute sportsdesk-ops checkout (see repo_path_resolve.js)
         bunPath: bun
         serviceUrl: http://127.0.0.1:4020
         timeoutMs: 60000

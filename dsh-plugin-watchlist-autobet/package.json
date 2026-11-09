@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-watchlist-autobet",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Paper-only watchlist autobet control plane for sportsdesk-ops: nine Host tools (status/signals/plan/queue/journal plus confirm-gated enqueue, approve/reject, paper execute and settle) and a Web UI operator page with an approval queue, decision tracking, intent context and same-origin control-plane routes. No live order path exists; live betting is not implemented.",

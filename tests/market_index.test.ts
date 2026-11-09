@@ -37,8 +37,14 @@ const EXPECTED_PATHS: Record<string, string> = {
   "dsh-plugin-watchlist-autobet": "dsh-plugin-watchlist-autobet",
 };
 
-const INDEX_PIN = "4f84743536a4de78a8ff81e09e00a8228ae09be6";
 const REPO_WEB = "https://github.com/bw496915-cmyk/Sports-desk-ops";
+
+async function indexGitPin(): Promise<string> {
+  const raw = await loadRawIndex();
+  const commit = raw.plugins[0]?.versions[0]?.source?.commit;
+  expect(commit, "index.json: plugins[0].versions[0].source.commit").toBeDefined();
+  return commit!;
+}
 
 /** Leading keyword = primary Discover search term for that card. */
 const SEARCH_LEADING_KEYWORD: Record<string, string> = {
@@ -71,6 +77,7 @@ type RawIndex = {
     versions: Array<{
       version: string;
       engines?: { dsh?: string };
+      source?: { commit?: string };
     }>;
   }>;
 };
@@ -229,6 +236,7 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
     });
 
     test("catalog meta: root copy, keywords, labels, categories, homepages", async () => {
+      const pin = await indexGitPin();
       const raw = await loadRawIndex();
       expect(raw.description?.en?.length ?? 0).toBeGreaterThan(20);
       const declaredLabels = Object.keys(raw.metadata?.labels ?? {});
@@ -283,7 +291,7 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
         ).toContain(category!);
         const bundlePath = EXPECTED_PATHS[plugin.name]!;
         expect(plugin.homepage, `${plugin.name}: homepage`).toBe(
-          `${REPO_WEB}/tree/${INDEX_PIN}/${bundlePath}`,
+          `${REPO_WEB}/tree/${pin}/${bundlePath}`,
         );
         const repo = plugin.repository;
         expect(repo?.url, `${plugin.name}: repository.url`).toBe(REPO_WEB);
