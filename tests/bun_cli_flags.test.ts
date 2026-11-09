@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { z } from "zod";
 
@@ -75,5 +78,75 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
     expect(readBunHelpFlags(["test", "--help"]).has("--update-snapshots")).toBe(
       true,
     );
+  });
+
+  test("bun run --parallel, --sequential, globbing, and hook grouping (v1.4.0)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-parallel-"));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "parallel-test",
+          scripts: {
+            "task:a": "echo 'Hello from A'",
+            "task:b": "echo 'Hello from B'",
+            "task:fail": "exit 1",
+            "pretask:c": "echo 'Pre-hook'",
+            "task:c": "echo 'Main task'",
+            "posttask:c": "echo 'Post-hook'",
+          },
+        }),
+      );
+
+      // 1. Parallel execution with Foreman-style prefixed output
+      const runParallel = Bun.spawnSync(
+        [process.execPath, "run", "--parallel", "task:a", "task:b"],
+        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(runParallel.exitCode).toBe(0);
+      const outParallel = runParallel.stdout.toString();
+      expect(outParallel).toContain("task:a |");
+      expect(outParallel).toContain("task:b |");
+      expect(outParallel).toContain("Hello from A");
+      expect(outParallel).toContain("Hello from B");
+
+      // 2. Glob matching and --no-exit-on-error fault tolerance (flags precede script globs)
+      const runGlob = Bun.spawnSync(
+        [process.execPath, "run", "--parallel", "--no-exit-on-error", "task:*"],
+        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+      );
+      const outGlob = runGlob.stdout.toString();
+      expect(outGlob).toMatch(/task:a\s+\|/);
+      expect(outGlob).toMatch(/task:b\s+\|/);
+      expect(outGlob).toMatch(/task:c\s+\|/);
+      // --no-exit-on-error runs through despite task:fail exiting with code 1
+      expect(runGlob.exitCode).toBe(1);
+
+      // 3. Lifecycle hook preservation: pretask/posttask grouped with main task
+      const runHooks = Bun.spawnSync(
+        [process.execPath, "run", "--parallel", "task:c"],
+        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(runHooks.exitCode).toBe(0);
+      const outHooks = runHooks.stdout.toString();
+      expect(outHooks).toContain("Pre-hook");
+      expect(outHooks).toContain("Main task");
+      expect(outHooks).toContain("Post-hook");
+
+      // 4. Sequential execution mode preserves order
+      const runSequential = Bun.spawnSync(
+        [process.execPath, "run", "--sequential", "task:a", "task:b"],
+        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(runSequential.exitCode).toBe(0);
+      const outSequential = runSequential.stdout.toString();
+      expect(outSequential).toContain("task:a |");
+      expect(outSequential).toContain("task:b |");
+      const idxA = outSequential.indexOf("Hello from A");
+      const idxB = outSequential.indexOf("Hello from B");
+      expect(idxA).toBeLessThan(idxB);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

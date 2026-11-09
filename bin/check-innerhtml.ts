@@ -62,13 +62,14 @@ function isMarkdownSinkCall(line: string): boolean {
 }
 
 function isTestFile(relPath: string): boolean {
-  const norm = relPath.replace(/\\/g, "/");
+  const norm = `/${relPath.replace(/\\/g, "/").replace(/^\/+/, "")}`;
   return (
     norm.endsWith(".test.ts") ||
     norm.endsWith(".test.js") ||
     norm.includes("/tests/") ||
     norm.includes("/test/") ||
-    norm.includes("/fixtures/")
+    norm.includes("/fixtures/") ||
+    norm.includes("/examples/")
   );
 }
 

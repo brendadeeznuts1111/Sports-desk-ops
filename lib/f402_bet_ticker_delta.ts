@@ -26,7 +26,7 @@
  */
 
 import type { F402TickerRow } from "./f402_ingest.ts";
-import { parseShortDesc } from "./live_wagers.ts";
+import { countShortDescLegs } from "./live_wagers.ts";
 
 /** The 11 bounded channel codes from the design note, plus the fail-closed `other`. */
 export const F402_BET_TICKER_CHANNELS = [
@@ -68,27 +68,159 @@ export const F402_BET_TICKER_R2_KEY = "f402-bet-ticker/latest.json";
 /** Gateway channel; `CHANNEL_PATTERN` in the gateway is `/^[a-z0-9-]{1,32}$/`. */
 export const F402_BET_TICKER_LIVE_CHANNEL = "f402-bet-ticker";
 
-const CHANNEL_BY_UPPER: ReadonlyMap<string, F402BetTickerChannel> = new Map(
-  F402_BET_TICKER_CHANNELS.map((channel) => [channel.toUpperCase(), channel]),
-);
-const WAGER_TYPE_SET: ReadonlySet<string> = new Set(
-  F402_BET_TICKER_WAGER_TYPES,
-);
+export {
+  F402_BET_TICKER_BINARY_SCHEMA_VERSION,
+  F402_BET_TICKER_BINARY_PAYLOAD_KIND,
+  F402_BET_TICKER_BINARY_FLAGS_LE,
+  F402_BET_TICKER_BINARY_BUFFER_BYTES,
+  F402_BET_TICKER_JSON_BYTE0,
+  F402_BET_TICKER_BINARY_BYTE0,
+  F402_BET_TICKER_R2_BINARY_KEY,
+  SchemaVersionMismatchError,
+  encodeF402TickerBinarySnapshot,
+  decodeF402TickerBinarySnapshot,
+  parseF402TickerSnapshotOrBinary,
+} from "./f402_bet_ticker_binary.ts";
+
+export const ORD_CHANNEL_UNKNOWN = 0;
+export const ORD_CHANNEL_INTERNET = 1;
+export const ORD_CHANNEL_ALERT = 2;
+export const ORD_CHANNEL_GSLIVE = 3;
+export const ORD_CHANNEL_GSBUILDER = 4;
+export const ORD_CHANNEL_LIVE_CWS = 5;
+export const ORD_CHANNEL_CSLEVEL2 = 6;
+export const ORD_CHANNEL_PHONE = 7;
+export const ORD_CHANNEL_HOUSE_BOOK = 8;
+export const ORD_CHANNEL_GATEWAY = 9;
+export const ORD_CHANNEL_BLOCKED = 10;
+export const ORD_CHANNEL_NON_SPORTS_DROP = 11;
+
+export const CHANNEL_BY_ORDINAL: readonly F402BetTickerChannel[] = [
+  "other",
+  "Internet",
+  "ALERT",
+  "GSLIVE",
+  "GSBUILDER",
+  "LIVE_CWS",
+  "CSLEVEL2",
+  "PHONE",
+  "HOUSE_BOOK",
+  "GATEWAY",
+  "BLOCKED",
+  "NON_SPORTS_DROP",
+];
+
+export const CHANNEL_RANK_ORDINALS: readonly number[] = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0,
+];
+
+export const ORD_WAGER_TYPE_UNKNOWN = 0;
+export const ORD_WAGER_TYPE_S = 1;
+export const ORD_WAGER_TYPE_M = 2;
+export const ORD_WAGER_TYPE_L = 3;
+export const ORD_WAGER_TYPE_E = 4;
+export const ORD_WAGER_TYPE_P = 5;
+export const ORD_WAGER_TYPE_T = 6;
+export const ORD_WAGER_TYPE_I = 7;
+export const ORD_WAGER_TYPE_G = 8;
+
+export const WAGER_TYPE_BY_ORDINAL: readonly F402BetTickerWagerType[] = [
+  "unknown",
+  "S",
+  "M",
+  "L",
+  "E",
+  "P",
+  "T",
+  "I",
+  "G",
+];
+
+export const WAGER_TYPE_RANK_ORDINALS: readonly number[] = [
+  1, 2, 3, 4, 5, 6, 7, 8, 0,
+];
+
+export const CHANNEL_ORDINAL_COUNT = CHANNEL_BY_ORDINAL.length;
+export const WAGER_TYPE_ORDINAL_COUNT = WAGER_TYPE_BY_ORDINAL.length;
+
+if (
+  CHANNEL_BY_ORDINAL.length !== CHANNEL_RANK_ORDINALS.length ||
+  WAGER_TYPE_BY_ORDINAL.length !== WAGER_TYPE_RANK_ORDINALS.length
+) {
+  throw new Error(
+    "Bridge 3a ordinal table length mismatch with rank ordinals: check channel/wagerType declarations",
+  );
+}
+
 const CENTS_PER_DOLLAR = 100;
 const MAX_ARTIFACT_BYTES = 256 * 1024;
 
+/** Demux `TicketWriter` to bounded channel ordinal; unknown writers map to `ORD_CHANNEL_UNKNOWN` (0). */
+export function ticketWriterToChannelOrdinal(ticketWriter: unknown): number {
+  if (typeof ticketWriter !== "string") return ORD_CHANNEL_UNKNOWN;
+  const raw = ticketWriter.trim().toUpperCase();
+  switch (raw) {
+    case "INTERNET":
+      return ORD_CHANNEL_INTERNET;
+    case "ALERT":
+      return ORD_CHANNEL_ALERT;
+    case "GSLIVE":
+      return ORD_CHANNEL_GSLIVE;
+    case "GSBUILDER":
+      return ORD_CHANNEL_GSBUILDER;
+    case "LIVE_CWS":
+      return ORD_CHANNEL_LIVE_CWS;
+    case "CSLEVEL2":
+      return ORD_CHANNEL_CSLEVEL2;
+    case "PHONE":
+      return ORD_CHANNEL_PHONE;
+    case "HOUSE_BOOK":
+      return ORD_CHANNEL_HOUSE_BOOK;
+    case "GATEWAY":
+      return ORD_CHANNEL_GATEWAY;
+    case "BLOCKED":
+      return ORD_CHANNEL_BLOCKED;
+    case "NON_SPORTS_DROP":
+      return ORD_CHANNEL_NON_SPORTS_DROP;
+    default:
+      return ORD_CHANNEL_UNKNOWN;
+  }
+}
+
 /** Demux `TicketWriter` into a bounded channel code; unknown writers are `other`. */
 export function demuxChannel(ticketWriter: unknown): F402BetTickerChannel {
-  const raw = typeof ticketWriter === "string" ? ticketWriter.trim() : "";
-  if (raw === "") return "other";
-  return CHANNEL_BY_UPPER.get(raw.toUpperCase()) ?? "other";
+  return CHANNEL_BY_ORDINAL[ticketWriterToChannelOrdinal(ticketWriter)]!;
+}
+
+/** Demux `WagerType` to bounded wager type ordinal; unknown types map to `ORD_WAGER_TYPE_UNKNOWN` (0). */
+export function demuxWagerTypeOrdinal(wagerType: unknown): number {
+  if (typeof wagerType !== "string") return ORD_WAGER_TYPE_UNKNOWN;
+  const raw = wagerType.trim().toUpperCase();
+  switch (raw) {
+    case "S":
+      return ORD_WAGER_TYPE_S;
+    case "M":
+      return ORD_WAGER_TYPE_M;
+    case "L":
+      return ORD_WAGER_TYPE_L;
+    case "E":
+      return ORD_WAGER_TYPE_E;
+    case "P":
+      return ORD_WAGER_TYPE_P;
+    case "T":
+      return ORD_WAGER_TYPE_T;
+    case "I":
+      return ORD_WAGER_TYPE_I;
+    case "G":
+      return ORD_WAGER_TYPE_G;
+    default:
+      return ORD_WAGER_TYPE_UNKNOWN;
+  }
 }
 
 /** Demux `WagerType` into a bounded code; anything outside the eight codes is `unknown`. */
 export function demuxWagerType(wagerType: unknown): F402BetTickerWagerType {
-  const raw =
-    typeof wagerType === "string" ? wagerType.trim().toUpperCase() : "";
-  return WAGER_TYPE_SET.has(raw) ? (raw as F402BetTickerWagerType) : "unknown";
+  return WAGER_TYPE_BY_ORDINAL[demuxWagerTypeOrdinal(wagerType)]!;
 }
 
 /**
@@ -122,18 +254,35 @@ export function ticketKey(row: F402TickerRow): string {
   return `${ticket}-${row.wagerNumber.trim()}`;
 }
 
-/** Numeric wager number, or null when the row's value is not a non-negative integer. */
+/** Maximum cents representable in a 32-bit signed integer (~$21.47 Million). */
+export const MAX_INT32_CENTS = 2_147_483_647;
+
+/** Maximum legs representable in a 16-bit unsigned integer (65,535). */
+export const MAX_UINT16_LEGS = 65_535;
+
+/** Maximum numeric wager number representable in a 32-bit unsigned integer (~4.29 Billion). */
+export const MAX_UINT32_WAGER_NUMBER = 4_294_967_295;
+
+/** Numeric wager number, or null when the row's value is not a non-negative integer within Uint32 bounds. */
 export function numericWagerNumber(row: F402TickerRow): number | null {
   const raw = row.wagerNumber.trim();
   if (!/^\d+$/.test(raw)) return null;
   const value = Number(raw);
-  return Number.isSafeInteger(value) ? value : null;
+  return Number.isSafeInteger(value) && value <= MAX_UINT32_WAGER_NUMBER
+    ? value
+    : null;
 }
 
 /** Exact dollars→cents for a whole-dollar ticker amount; absent/negative reads as zero. */
 export function amountToCents(value: number | null): number {
   if (value === null || !Number.isFinite(value) || value < 0) return 0;
-  return Math.round(value * CENTS_PER_DOLLAR);
+  const cents = Math.round(value * CENTS_PER_DOLLAR);
+  if (!Number.isSafeInteger(cents) || cents > MAX_INT32_CENTS) {
+    throw new RangeError(
+      `amountToCents: amount ${value} (${cents} cents) overflows Int32Array boundary (${MAX_INT32_CENTS} cents / ~$21.47M)`,
+    );
+  }
+  return cents;
 }
 
 /** `VolumeAmount` in cents, pinned to zero for every sentinel channel. */
@@ -157,69 +306,296 @@ export function canonicalToWinCents(row: F402TickerRow): number {
     : amountToCents(row.toWinAmount);
 }
 
-/** One deduped ticket: the non-sentinel owner carries money and legs; an ALERT twin is kept aside. */
-interface DedupedTicket {
-  readonly key: string;
-  readonly owner: F402TickerRow;
-  readonly alert: F402TickerRow | null;
-  readonly channel: F402BetTickerChannel;
-  readonly wagerType: F402BetTickerWagerType;
-  readonly legCount: number;
-  readonly canonicalVolumeCents: number;
-  /** Internal money axes; unpublished, but pinned to zero for sentinel channels. */
-  readonly riskCents: number;
-  readonly toWinCents: number;
+export const BRIDGE3A_FLAG_IS_ALERT = 1 << 0;
+export const BRIDGE3A_FLAG_IS_SENTINEL = 1 << 1;
+export const BRIDGE3A_FLAG_HAS_ALERT_TWIN = 1 << 2;
+export const BRIDGE3A_FLAG_IS_CONFIRMED = 1 << 3;
+export const BRIDGE3A_FLAG_IS_LATE = 1 << 4;
+export const BRIDGE3A_FLAG_IS_ORPHAN = 1 << 5;
+
+export function isSentinelChannelOrdinal(ordinal: number): boolean {
+  return (
+    ordinal === ORD_CHANNEL_ALERT ||
+    ordinal === ORD_CHANNEL_BLOCKED ||
+    ordinal === ORD_CHANNEL_NON_SPORTS_DROP
+  );
 }
 
-function legCountOf(row: F402TickerRow): number {
-  return parseShortDesc(row.shortDesc).legs.length;
-}
-
-function makeTicket(
-  key: string,
-  owner: F402TickerRow,
-  alert: F402TickerRow | null,
-): DedupedTicket {
-  return {
-    key,
-    owner,
-    alert,
-    channel: demuxChannel(owner.ticketWriter),
-    wagerType: demuxWagerType(owner.wagerType),
-    legCount: legCountOf(owner),
-    canonicalVolumeCents: canonicalVolumeCents(owner),
-    riskCents: canonicalRiskCents(owner),
-    toWinCents: canonicalToWinCents(owner),
-  };
+export function legCountOf(row: F402TickerRow): number {
+  const count = countShortDescLegs(row.shortDesc);
+  return count > MAX_UINT16_LEGS ? MAX_UINT16_LEGS : count;
 }
 
 /**
- * Dedupe once per ticket. A non-ALERT row owns the money and the legs; an ALERT row is an
- * alert-twin marker only. When only ALERT rows exist for a key, the first one is the owner and
- * its volume is zero by the ALERT rule.
+ * 32-bit FNV-1a hash for open-addressed slot lookups.
+ * Paired with full-string key equality on collision probes to guarantee distinct ticket isolation.
  */
-function dedupeTickets(
-  rows: readonly F402TickerRow[],
-): ReadonlyMap<string, DedupedTicket> {
-  const tickets = new Map<string, DedupedTicket>();
-  for (const row of rows) {
-    const key = ticketKey(row);
-    const channel = demuxChannel(row.ticketWriter);
-    const existing = tickets.get(key);
-    if (existing === undefined) {
-      tickets.set(key, makeTicket(key, row, channel === "ALERT" ? row : null));
-      continue;
-    }
-    if (channel === "ALERT") {
-      tickets.set(key, { ...existing, alert: existing.alert ?? row });
-      continue;
-    }
-    // The non-ALERT row owns the money; replace an ALERT-only ticket, keep the first real owner.
-    if (demuxChannel(existing.owner.ticketWriter) === "ALERT") {
-      tickets.set(key, makeTicket(key, row, existing.alert));
-    }
+function hashKey(key: string): number {
+  let h = 0x811c9dc5 | 0;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  return tickets;
+  return h >>> 0;
+}
+
+/**
+ * Fixed-capacity open-addressed slot table and SoA column store for Bridge 3a.
+ * Avoids collection allocations (Map, Set, dense boolean arrays) on the dedupe & aggregation path.
+ * String columns (login, agentLogin, shortDesc, ticketWriter) stay in a narrow side-channel.
+ */
+export class Bridge3aTicketColumnStore {
+  public readonly capacity: number;
+  public readonly slotCount: number;
+  public readonly slotMask: number;
+  public count: number = 0;
+  public highestNumericWagerNumber: number = 0;
+  public overflowRejectionCount: number = 0;
+
+  public readonly slots: Uint32Array;
+  public readonly routeFlagsBitSet32Col: Uint32Array;
+  public readonly channelOrdinalCol: Uint8Array;
+  public readonly wagerTypeOrdinalCol: Uint8Array;
+  public readonly legCountCol: Uint16Array;
+  public readonly canonicalVolumeCentsCol: Int32Array;
+  public readonly riskCentsCol: Int32Array;
+  public readonly toWinCentsCol: Int32Array;
+  public readonly wagerNumberCol: Uint32Array;
+  public readonly keyCol: string[];
+  public readonly rawStringsCol: Array<{
+    readonly login: string;
+    readonly agentLogin: string;
+    readonly shortDesc: string;
+    readonly ticketWriter: string;
+  } | null>;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    const rawSlots = Math.max(
+      16,
+      1 << (32 - Math.clz32(Math.max(1, capacity * 4) - 1)),
+    );
+    this.slotCount = rawSlots;
+    this.slotMask = rawSlots - 1;
+    this.slots = new Uint32Array(rawSlots);
+    this.routeFlagsBitSet32Col = new Uint32Array(capacity);
+    this.channelOrdinalCol = new Uint8Array(capacity);
+    this.wagerTypeOrdinalCol = new Uint8Array(capacity);
+    this.legCountCol = new Uint16Array(capacity);
+    this.canonicalVolumeCentsCol = new Int32Array(capacity);
+    this.riskCentsCol = new Int32Array(capacity);
+    this.toWinCentsCol = new Int32Array(capacity);
+    this.wagerNumberCol = new Uint32Array(capacity);
+    this.keyCol = Array.from<string>({ length: capacity });
+    this.rawStringsCol = Array.from({ length: capacity });
+  }
+
+  public lookup(key: string): number {
+    const h = hashKey(key);
+    let slot = h & this.slotMask;
+    for (let probe = 0; probe < this.slotCount; probe++) {
+      const entry = this.slots[slot]!;
+      if (entry === 0) return -1;
+      const idx = entry - 1;
+      if (this.keyCol[idx] === key) return idx;
+      slot = (slot + 1) & this.slotMask;
+    }
+    return -1;
+  }
+
+  public insertOrUpdate(row: F402TickerRow): number {
+    const numWager = numericWagerNumber(row);
+    if (numWager !== null && numWager > this.highestNumericWagerNumber) {
+      this.highestNumericWagerNumber = numWager;
+    }
+
+    const key = ticketKey(row);
+    const h = hashKey(key);
+    let slot = h & this.slotMask;
+    let foundIndex = -1;
+
+    for (let probe = 0; probe < this.slotCount; probe++) {
+      const entry = this.slots[slot]!;
+      if (entry === 0) break;
+      const idx = entry - 1;
+      if (this.keyCol[idx] === key) {
+        foundIndex = idx;
+        break;
+      }
+      slot = (slot + 1) & this.slotMask;
+    }
+
+    const chOrd = ticketWriterToChannelOrdinal(row.ticketWriter);
+    const isAlertRow = chOrd === ORD_CHANNEL_ALERT;
+    const isSentinel = isSentinelChannelOrdinal(chOrd);
+
+    // Guard amounts against Int32 overflow; reject corrupt row without aborting the batch
+    let volCents = 0;
+    let riskCents = 0;
+    let winCents = 0;
+    if (!isSentinel) {
+      try {
+        volCents = amountToCents(row.volumeAmount);
+        riskCents = amountToCents(row.amountWagered);
+        winCents = amountToCents(row.toWinAmount);
+      } catch (err) {
+        if (err instanceof RangeError) {
+          this.overflowRejectionCount += 1;
+          return -1;
+        }
+        throw err;
+      }
+    }
+
+    if (foundIndex === -1) {
+      if (this.count >= this.capacity) {
+        throw new Error(
+          `Bridge3aTicketColumnStore capacity exhausted at ${this.capacity}`,
+        );
+      }
+      const index = this.count++;
+      this.slots[slot] = index + 1;
+      this.keyCol[index] = key;
+      this.channelOrdinalCol[index] = chOrd;
+      this.wagerTypeOrdinalCol[index] = demuxWagerTypeOrdinal(row.wagerType);
+      this.legCountCol[index] = legCountOf(row);
+      this.wagerNumberCol[index] = numWager ?? 0;
+      this.rawStringsCol[index] = {
+        login: row.login,
+        agentLogin: row.agentLogin,
+        shortDesc: row.shortDesc,
+        ticketWriter: row.ticketWriter,
+      };
+
+      let flags = 0;
+      if (isAlertRow) {
+        flags |=
+          BRIDGE3A_FLAG_IS_ALERT |
+          BRIDGE3A_FLAG_HAS_ALERT_TWIN |
+          BRIDGE3A_FLAG_IS_ORPHAN;
+      }
+      if (isSentinel) {
+        flags |= BRIDGE3A_FLAG_IS_SENTINEL;
+      }
+      this.routeFlagsBitSet32Col[index] = flags;
+
+      this.canonicalVolumeCentsCol[index] = volCents;
+      this.riskCentsCol[index] = riskCents;
+      this.toWinCentsCol[index] = winCents;
+      return index;
+    }
+
+    const currentFlags = this.routeFlagsBitSet32Col[foundIndex]!;
+    if (isAlertRow) {
+      this.routeFlagsBitSet32Col[foundIndex] =
+        currentFlags | BRIDGE3A_FLAG_HAS_ALERT_TWIN;
+      return foundIndex;
+    }
+
+    if ((currentFlags & BRIDGE3A_FLAG_IS_ALERT) !== 0) {
+      this.channelOrdinalCol[foundIndex] = chOrd;
+      this.wagerTypeOrdinalCol[foundIndex] = demuxWagerTypeOrdinal(
+        row.wagerType,
+      );
+      this.legCountCol[foundIndex] = legCountOf(row);
+      this.rawStringsCol[foundIndex] = {
+        login: row.login,
+        agentLogin: row.agentLogin,
+        shortDesc: row.shortDesc,
+        ticketWriter: row.ticketWriter,
+      };
+
+      let newFlags =
+        (currentFlags & ~BRIDGE3A_FLAG_IS_ALERT) | BRIDGE3A_FLAG_HAS_ALERT_TWIN;
+      if (isSentinel) {
+        newFlags |= BRIDGE3A_FLAG_IS_SENTINEL;
+      } else {
+        newFlags &= ~BRIDGE3A_FLAG_IS_SENTINEL;
+      }
+      this.routeFlagsBitSet32Col[foundIndex] = newFlags;
+
+      this.canonicalVolumeCentsCol[foundIndex] = volCents;
+      this.riskCentsCol[foundIndex] = riskCents;
+      this.toWinCentsCol[foundIndex] = winCents;
+    }
+    return foundIndex;
+  }
+}
+
+export function serializeChannelAggregate(
+  agg: F402TickerChannelAggregate,
+): string {
+  return `{"canonicalVolumeCents":${agg.canonicalVolumeCents},"channel":${JSON.stringify(agg.channel)},"legCount":${agg.legCount},"ticketCount":${agg.ticketCount}}`;
+}
+
+export function serializeWagerTypeAggregate(
+  agg: F402TickerWagerTypeAggregate,
+): string {
+  return `{"legCount":${agg.legCount},"ticketCount":${agg.ticketCount},"wagerType":${JSON.stringify(agg.wagerType)}}`;
+}
+
+export function serializeF402TickerDeltaPayload(
+  payload: Omit<F402TickerDeltaEvent, "sourceSha256">,
+): string {
+  let byChannelJson = "";
+  for (let i = 0; i < payload.byChannel.length; i++) {
+    if (i > 0) byChannelJson += ",";
+    byChannelJson += serializeChannelAggregate(payload.byChannel[i]!);
+  }
+  let byWagerTypeJson = "";
+  for (let i = 0; i < payload.byWagerType.length; i++) {
+    if (i > 0) byWagerTypeJson += ",";
+    byWagerTypeJson += serializeWagerTypeAggregate(payload.byWagerType[i]!);
+  }
+  return (
+    `{"alertTwinCount":${payload.alertTwinCount}` +
+    `,"byChannel":[${byChannelJson}]` +
+    `,"byWagerType":[${byWagerTypeJson}]` +
+    `,"changedTickets":${payload.changedTickets}` +
+    `,"confirmCount":${payload.confirmCount}` +
+    `,"deskDate":${JSON.stringify(payload.deskDate)}` +
+    `,"deskHour":${payload.deskHour}` +
+    `,"goneTickets":${payload.goneTickets}` +
+    `,"kind":${JSON.stringify(payload.kind)}` +
+    `,"lateCount":${payload.lateCount}` +
+    `,"newTickets":${payload.newTickets}` +
+    `,"orphanCount":${payload.orphanCount}` +
+    `,"polledAt":${JSON.stringify(payload.polledAt)}` +
+    `,"schemaVersion":${payload.schemaVersion}` +
+    `,"watermark":${JSON.stringify(payload.watermark)}}`
+  );
+}
+
+export function serializeF402TickerSnapshotPayload(
+  payload: Omit<F402TickerSnapshot, "sourceSha256">,
+): string {
+  let byChannelJson = "";
+  for (let i = 0; i < payload.byChannel.length; i++) {
+    if (i > 0) byChannelJson += ",";
+    byChannelJson += serializeChannelAggregate(payload.byChannel[i]!);
+  }
+  let byWagerTypeJson = "";
+  for (let i = 0; i < payload.byWagerType.length; i++) {
+    if (i > 0) byWagerTypeJson += ",";
+    byWagerTypeJson += serializeWagerTypeAggregate(payload.byWagerType[i]!);
+  }
+  return (
+    `{"alertTwinCount":${payload.alertTwinCount}` +
+    `,"byChannel":[${byChannelJson}]` +
+    `,"byWagerType":[${byWagerTypeJson}]` +
+    `,"confirmCount":${payload.confirmCount}` +
+    `,"deskDate":${JSON.stringify(payload.deskDate)}` +
+    `,"deskHour":${payload.deskHour}` +
+    `,"generatedAt":${JSON.stringify(payload.generatedAt)}` +
+    `,"kind":${JSON.stringify(payload.kind)}` +
+    `,"lateCount":${payload.lateCount}` +
+    `,"legCount":${payload.legCount}` +
+    `,"orphanCount":${payload.orphanCount}` +
+    `,"rowCount":${payload.rowCount}` +
+    `,"schemaVersion":${payload.schemaVersion}` +
+    `,"ticketCount":${payload.ticketCount}` +
+    `,"watermark":${JSON.stringify(payload.watermark)}}`
+  );
 }
 
 const DESK_FORMAT = new Intl.DateTimeFormat("en-CA", {
@@ -349,69 +725,6 @@ export interface F402TickerSnapshot {
   readonly sourceSha256: string;
 }
 
-function channelRank(channel: F402BetTickerChannel): number {
-  const index = F402_BET_TICKER_CHANNELS.indexOf(
-    channel as (typeof F402_BET_TICKER_CHANNELS)[number],
-  );
-  return index === -1 ? F402_BET_TICKER_CHANNELS.length : index;
-}
-
-function wagerTypeRank(wagerType: F402BetTickerWagerType): number {
-  const index = F402_BET_TICKER_WAGER_TYPES.indexOf(
-    wagerType as (typeof F402_BET_TICKER_WAGER_TYPES)[number],
-  );
-  return index === -1 ? F402_BET_TICKER_WAGER_TYPES.length : index;
-}
-
-function aggregateChannels(
-  tickets: ReadonlyMap<string, DedupedTicket>,
-): F402TickerChannelAggregate[] {
-  const byChannel = new Map<F402BetTickerChannel, F402TickerChannelAggregate>();
-  for (const ticket of tickets.values()) {
-    const current = byChannel.get(ticket.channel) ?? {
-      channel: ticket.channel,
-      ticketCount: 0,
-      legCount: 0,
-      canonicalVolumeCents: 0,
-    };
-    byChannel.set(ticket.channel, {
-      channel: ticket.channel,
-      ticketCount: current.ticketCount + 1,
-      legCount: current.legCount + ticket.legCount,
-      canonicalVolumeCents:
-        current.canonicalVolumeCents + ticket.canonicalVolumeCents,
-    });
-  }
-  return [...byChannel.values()].sort(
-    (left, right) => channelRank(left.channel) - channelRank(right.channel),
-  );
-}
-
-function aggregateWagerTypes(
-  tickets: ReadonlyMap<string, DedupedTicket>,
-): F402TickerWagerTypeAggregate[] {
-  const byType = new Map<
-    F402BetTickerWagerType,
-    F402TickerWagerTypeAggregate
-  >();
-  for (const ticket of tickets.values()) {
-    const current = byType.get(ticket.wagerType) ?? {
-      wagerType: ticket.wagerType,
-      ticketCount: 0,
-      legCount: 0,
-    };
-    byType.set(ticket.wagerType, {
-      wagerType: ticket.wagerType,
-      ticketCount: current.ticketCount + 1,
-      legCount: current.legCount + ticket.legCount,
-    });
-  }
-  return [...byType.values()].sort(
-    (left, right) =>
-      wagerTypeRank(left.wagerType) - wagerTypeRank(right.wagerType),
-  );
-}
-
 /** Highest numeric wager number across rows, or 0 when none carries one. */
 export function highestWagerNumber(rows: readonly F402TickerRow[]): number {
   let highest = 0;
@@ -429,67 +742,132 @@ export function highestWagerNumber(rows: readonly F402TickerRow[]): number {
  * current ticket reads as new. Counts are deduped once per ticket; ALERT rows add no money and
  * are classified as confirmed (twin in this batch), late (twin arrived after the alert) or
  * orphan (no twin yet).
+ *
+ * Implements strict zero-collection allocation on the dedupe & aggregation path:
+ * open-addressed hash slots, SoA TypedArray columns, per-row bitset flags, and bounded ordinal tables.
  */
-export function projectF402TickerDelta(
-  previous: readonly F402TickerRow[],
-  current: readonly F402TickerRow[],
+export interface F402TickerBatchDiagnostics {
+  readonly beforeCount: number;
+  readonly afterCount: number;
+  readonly overflowRejectionCount: number;
+}
+
+/**
+ * Projects a delta event directly from populated column stores.
+ * Shared between standard and diagnostic projection paths to avoid code duplication.
+ */
+export function projectF402TickerDeltaFromStores(
+  beforeStore: Bridge3aTicketColumnStore,
+  afterStore: Bridge3aTicketColumnStore,
   polledAt: string,
 ): F402TickerDeltaEvent {
-  const before = dedupeTickets(previous);
-  const after = dedupeTickets(current);
-
   let newTickets = 0;
   let changedTickets = 0;
-  for (const [key, ticket] of after) {
-    const old = before.get(key);
-    if (old === undefined) {
+  for (let i = 0; i < afterStore.count; i++) {
+    const key = afterStore.keyCol[i]!;
+    const beforeIdx = beforeStore.lookup(key);
+    if (beforeIdx === -1) {
       newTickets += 1;
       continue;
     }
     if (
-      old.channel !== ticket.channel ||
-      old.wagerType !== ticket.wagerType ||
-      old.legCount !== ticket.legCount ||
-      old.canonicalVolumeCents !== ticket.canonicalVolumeCents ||
-      old.riskCents !== ticket.riskCents ||
-      old.toWinCents !== ticket.toWinCents
+      afterStore.channelOrdinalCol[i] !==
+        beforeStore.channelOrdinalCol[beforeIdx] ||
+      afterStore.wagerTypeOrdinalCol[i] !==
+        beforeStore.wagerTypeOrdinalCol[beforeIdx] ||
+      afterStore.legCountCol[i] !== beforeStore.legCountCol[beforeIdx] ||
+      afterStore.canonicalVolumeCentsCol[i] !==
+        beforeStore.canonicalVolumeCentsCol[beforeIdx] ||
+      afterStore.riskCentsCol[i] !== beforeStore.riskCentsCol[beforeIdx] ||
+      afterStore.toWinCentsCol[i] !== beforeStore.toWinCentsCol[beforeIdx]
     ) {
       changedTickets += 1;
     }
   }
   let goneTickets = 0;
-  for (const key of before.keys()) {
-    if (!after.has(key)) goneTickets += 1;
+  for (let i = 0; i < beforeStore.count; i++) {
+    if (afterStore.lookup(beforeStore.keyCol[i]!) === -1) goneTickets += 1;
   }
 
-  // An alert that had no twin in the previous poll and gains one now is a late confirm.
-  const previousAlertOnly = new Set<string>();
-  for (const [key, ticket] of before) {
-    if (
-      ticket.alert !== null &&
-      demuxChannel(ticket.owner.ticketWriter) === "ALERT"
-    ) {
-      previousAlertOnly.add(key);
-    }
-  }
   let alertTwinCount = 0;
   let confirmCount = 0;
   let lateCount = 0;
   let orphanCount = 0;
-  for (const [key, ticket] of after) {
-    if (ticket.alert === null) continue;
+  for (let i = 0; i < afterStore.count; i++) {
+    const flags = afterStore.routeFlagsBitSet32Col[i]!;
+    if ((flags & BRIDGE3A_FLAG_HAS_ALERT_TWIN) === 0) continue;
     alertTwinCount += 1;
-    if (demuxChannel(ticket.owner.ticketWriter) !== "ALERT") {
-      if (previousAlertOnly.has(key)) lateCount += 1;
-      else confirmCount += 1;
+
+    const isAlertOwner = (flags & BRIDGE3A_FLAG_IS_ALERT) !== 0;
+    if (!isAlertOwner) {
+      const beforeIdx = beforeStore.lookup(afterStore.keyCol[i]!);
+      const isLate =
+        beforeIdx !== -1 &&
+        (beforeStore.routeFlagsBitSet32Col[beforeIdx]! &
+          (BRIDGE3A_FLAG_IS_ALERT | BRIDGE3A_FLAG_HAS_ALERT_TWIN)) ===
+          (BRIDGE3A_FLAG_IS_ALERT | BRIDGE3A_FLAG_HAS_ALERT_TWIN);
+      if (isLate) {
+        lateCount += 1;
+      } else {
+        confirmCount += 1;
+      }
     } else {
       orphanCount += 1;
     }
   }
 
+  // Bounded aggregates using derived TypedArray capacities (no Map, no Set)
+  const channelTicketCounts = new Uint32Array(CHANNEL_ORDINAL_COUNT);
+  const channelLegCounts = new Uint32Array(CHANNEL_ORDINAL_COUNT);
+  const channelVolumeCents = new Float64Array(CHANNEL_ORDINAL_COUNT);
+
+  const wagerTypeTicketCounts = new Uint32Array(WAGER_TYPE_ORDINAL_COUNT);
+  const wagerTypeLegCounts = new Uint32Array(WAGER_TYPE_ORDINAL_COUNT);
+
+  for (let i = 0; i < afterStore.count; i++) {
+    const chOrd = afterStore.channelOrdinalCol[i]!;
+    channelTicketCounts[chOrd] = channelTicketCounts[chOrd]! + 1;
+    channelLegCounts[chOrd] =
+      channelLegCounts[chOrd]! + afterStore.legCountCol[i]!;
+    channelVolumeCents[chOrd] =
+      channelVolumeCents[chOrd]! + afterStore.canonicalVolumeCentsCol[i]!;
+
+    const wtOrd = afterStore.wagerTypeOrdinalCol[i]!;
+    wagerTypeTicketCounts[wtOrd] = wagerTypeTicketCounts[wtOrd]! + 1;
+    wagerTypeLegCounts[wtOrd] =
+      wagerTypeLegCounts[wtOrd]! + afterStore.legCountCol[i]!;
+  }
+
+  const byChannel: F402TickerChannelAggregate[] = [];
+  for (const chOrd of CHANNEL_RANK_ORDINALS) {
+    if (channelTicketCounts[chOrd]! > 0) {
+      byChannel.push({
+        channel: CHANNEL_BY_ORDINAL[chOrd]!,
+        ticketCount: channelTicketCounts[chOrd]!,
+        legCount: channelLegCounts[chOrd]!,
+        canonicalVolumeCents: channelVolumeCents[chOrd]!,
+      });
+    }
+  }
+
+  const byWagerType: F402TickerWagerTypeAggregate[] = [];
+  for (const wtOrd of WAGER_TYPE_RANK_ORDINALS) {
+    if (wagerTypeTicketCounts[wtOrd]! > 0) {
+      byWagerType.push({
+        wagerType: WAGER_TYPE_BY_ORDINAL[wtOrd]!,
+        ticketCount: wagerTypeTicketCounts[wtOrd]!,
+        legCount: wagerTypeLegCounts[wtOrd]!,
+      });
+    }
+  }
+
   const { deskDate, deskHour } = deskClock(polledAt);
+  // O(1) watermark advancement tracked during insertion into open-addressed slots
   const watermark = String(
-    Math.max(highestWagerNumber(current), highestWagerNumber(previous)),
+    Math.max(
+      afterStore.highestNumericWagerNumber,
+      beforeStore.highestNumericWagerNumber,
+    ),
   );
 
   const payload = {
@@ -506,11 +884,95 @@ export function projectF402TickerDelta(
     confirmCount,
     lateCount,
     orphanCount,
-    byChannel: aggregateChannels(after),
-    byWagerType: aggregateWagerTypes(after),
+    byChannel,
+    byWagerType,
   } as const;
 
-  return { ...payload, sourceSha256: sha256Hex(stableJson(payload)) };
+  return {
+    ...payload,
+    sourceSha256: sha256Hex(serializeF402TickerDeltaPayload(payload)),
+  };
+}
+
+/**
+ * Project one completed poll into the WS delta.
+ *
+ * `previous` is the previous poll's fully-drained row set; on a cold start it is empty and every
+ * current ticket reads as new. Counts are deduped once per ticket; ALERT rows add no money and
+ * are classified as confirmed (twin in this batch), late (twin arrived after the alert) or
+ * orphan (no twin yet).
+ *
+ * Implements strict zero-collection allocation on the dedupe & aggregation path:
+ * open-addressed hash slots, SoA TypedArray columns, per-row bitset flags, and bounded ordinal tables.
+ */
+export function projectF402TickerDelta(
+  previous: readonly F402TickerRow[],
+  current: readonly F402TickerRow[],
+  polledAt: string,
+  outDiagnostics?: { overflowRejectionCount?: number },
+): F402TickerDeltaEvent {
+  const beforeStore = new Bridge3aTicketColumnStore(
+    Math.max(16, previous.length),
+  );
+  for (let i = 0; i < previous.length; i++) {
+    beforeStore.insertOrUpdate(previous[i]!);
+  }
+
+  const afterStore = new Bridge3aTicketColumnStore(
+    Math.max(16, current.length),
+  );
+  for (let i = 0; i < current.length; i++) {
+    afterStore.insertOrUpdate(current[i]!);
+  }
+
+  if (outDiagnostics !== undefined) {
+    outDiagnostics.overflowRejectionCount =
+      beforeStore.overflowRejectionCount + afterStore.overflowRejectionCount;
+  }
+
+  return projectF402TickerDeltaFromStores(beforeStore, afterStore, polledAt);
+}
+
+/**
+ * Project a completed poll with full caller observability, returning both the delta event
+ * and batch-level diagnostics (counts, overflow rejections).
+ */
+export function projectF402TickerDeltaWithDiagnostics(
+  previous: readonly F402TickerRow[],
+  current: readonly F402TickerRow[],
+  polledAt: string,
+): {
+  readonly event: F402TickerDeltaEvent;
+  readonly diagnostics: F402TickerBatchDiagnostics;
+} {
+  const beforeStore = new Bridge3aTicketColumnStore(
+    Math.max(16, previous.length),
+  );
+  for (let i = 0; i < previous.length; i++) {
+    beforeStore.insertOrUpdate(previous[i]!);
+  }
+
+  const afterStore = new Bridge3aTicketColumnStore(
+    Math.max(16, current.length),
+  );
+  for (let i = 0; i < current.length; i++) {
+    afterStore.insertOrUpdate(current[i]!);
+  }
+
+  const event = projectF402TickerDeltaFromStores(
+    beforeStore,
+    afterStore,
+    polledAt,
+  );
+  return {
+    event,
+    diagnostics: {
+      beforeCount: beforeStore.count,
+      afterCount: afterStore.count,
+      overflowRejectionCount:
+        beforeStore.overflowRejectionCount + afterStore.overflowRejectionCount,
+    },
+  };
 }
 
 /** Build the sanitized R2 snapshot from a delta plus the raw row count of its drain. */
@@ -520,6 +982,12 @@ export function buildF402TickerSnapshot(
 ): F402TickerSnapshot {
   const byChannel = event.byChannel;
   const byWagerType = event.byWagerType;
+  let ticketCount = 0;
+  let legCount = 0;
+  for (let i = 0; i < byChannel.length; i++) {
+    ticketCount += byChannel[i]!.ticketCount;
+    legCount += byChannel[i]!.legCount;
+  }
   const payload = {
     schemaVersion: F402_BET_TICKER_SCHEMA_VERSION,
     kind: F402_BET_TICKER_KIND,
@@ -528,11 +996,8 @@ export function buildF402TickerSnapshot(
     deskHour: event.deskHour,
     watermark: event.watermark,
     rowCount,
-    ticketCount: byChannel.reduce(
-      (total, entry) => total + entry.ticketCount,
-      0,
-    ),
-    legCount: byChannel.reduce((total, entry) => total + entry.legCount, 0),
+    ticketCount,
+    legCount,
     alertTwinCount: event.alertTwinCount,
     confirmCount: event.confirmCount,
     lateCount: event.lateCount,
@@ -540,7 +1005,10 @@ export function buildF402TickerSnapshot(
     byChannel,
     byWagerType,
   } as const;
-  return { ...payload, sourceSha256: sha256Hex(stableJson(payload)) };
+  return {
+    ...payload,
+    sourceSha256: sha256Hex(serializeF402TickerSnapshotPayload(payload)),
+  };
 }
 
 const FORBIDDEN_KEY =

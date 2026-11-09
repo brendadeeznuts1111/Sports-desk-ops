@@ -93,27 +93,74 @@ const cleanText = (value: unknown): string =>
 const numberOrNull = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
+const firstNonEmpty = (...candidates: unknown[]): string => {
+  for (const c of candidates) {
+    const s = text(c);
+    if (s !== "") return s;
+  }
+  return "";
+};
+
+const firstNumber = (...candidates: unknown[]): number | null => {
+  for (const c of candidates) {
+    const n = numberOrNull(c);
+    if (n !== null) return n;
+    if (typeof c === "string" && c.trim() !== "") {
+      const parsed = Number(c.trim());
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+};
+
 /** Normalizes the captured identity/timing fields; money stays raw until the Bridge 3a projection. */
 export function parseF402TickerRow(value: unknown): F402TickerRow | null {
   if (value === null || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  const login = text(row.Login) || text(row.CustomerID);
+  const login = firstNonEmpty(
+    row.Login,
+    row.login,
+    row.CustomerID,
+    row.customerId,
+  );
   if (login === "") return null;
   return {
     login,
-    customerId: text(row.CustomerID),
-    agentId: text(row.AgentID),
-    agentLogin: text(row.AgentLogin),
-    ticketWriter: text(row.TicketWriter),
-    wagerNumber: text(row.WagerNumber),
-    ticketNumber: text(row.TicketNumber),
-    wagerType: text(row.WagerType),
-    shortDesc: cleanText(row.ShortDesc),
-    insertedAt: text(row.InsertDateTime),
-    vip: text(row.VIP),
-    amountWagered: numberOrNull(row.AmountWagered),
-    toWinAmount: numberOrNull(row.ToWinAmount),
-    volumeAmount: numberOrNull(row.VolumeAmount),
+    customerId: firstNonEmpty(row.CustomerID, row.customerId),
+    agentId: firstNonEmpty(row.AgentID, row.agentID, row.agentId),
+    agentLogin: firstNonEmpty(row.AgentLogin, row.agentLogin),
+    ticketWriter: firstNonEmpty(row.TicketWriter, row.ticketWriter),
+    wagerNumber: firstNonEmpty(row.WagerNumber, row.wagerNumber),
+    ticketNumber: firstNonEmpty(row.TicketNumber, row.ticketNumber),
+    wagerType: firstNonEmpty(row.WagerType, row.wagerType),
+    shortDesc: cleanText(
+      firstNonEmpty(
+        row.ShortDesc,
+        row.shortDesc,
+        row.Description,
+        row.description,
+      ),
+    ),
+    insertedAt: firstNonEmpty(
+      row.InsertDateTime,
+      row.insertDateTime,
+      row.InsertedAt,
+      row.insertedAt,
+    ),
+    vip: firstNonEmpty(row.VIP, row.vip),
+    amountWagered: firstNumber(
+      row.AmountWagered,
+      row.amountWagered,
+      row.Risk,
+      row.risk,
+    ),
+    toWinAmount: firstNumber(
+      row.ToWinAmount,
+      row.toWinAmount,
+      row.ToWin,
+      row.toWin,
+    ),
+    volumeAmount: firstNumber(row.VolumeAmount, row.volumeAmount),
   };
 }
 

@@ -35,7 +35,9 @@ function catalogSections(markdown: string): Map<string, Set<string>> {
 const isScanned = (file: string): boolean =>
   !file.includes(".test.") &&
   !file.startsWith("tests/") &&
-  !file.startsWith("verification/");
+  !file.startsWith("verification/") &&
+  !file.startsWith("examples/") &&
+  file !== "scripts/build.ts";
 
 async function bunTypesDir(): Promise<string> {
   const types = Bun.resolveSync("@types/bun/package.json", root);

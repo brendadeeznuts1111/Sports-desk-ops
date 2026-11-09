@@ -50,6 +50,32 @@ describe("parseF402TickerRow", () => {
     expect(row.shortDesc).toContain("Football");
   });
 
+  test("falls through empty string PascalCase fields to populated camelCase aliases", () => {
+    const mixed = {
+      Login: "",
+      login: "FALLBACK_LOGIN",
+      CustomerID: "   ",
+      customerId: "FALLBACK_CUST",
+      ShortDesc: "",
+      Description: "Basketball - Team X vs Team Y",
+      AmountWagered: "",
+      Risk: 1500,
+      ToWinAmount: null,
+      ToWin: "1200",
+      VolumeAmount: 1500,
+      WagerNumber: "888",
+    };
+    const row = parseF402TickerRow(mixed);
+    expect(row).not.toBeNull();
+    if (row === null) return;
+    expect(row.login).toBe("FALLBACK_LOGIN");
+    expect(row.customerId).toBe("FALLBACK_CUST");
+    expect(row.shortDesc).toBe("Basketball - Team X vs Team Y");
+    expect(row.amountWagered).toBe(1500);
+    expect(row.toWinAmount).toBe(1200);
+    expect(row.volumeAmount).toBe(1500);
+  });
+
   test("keeps TicketNumber when a future payload carries it", () => {
     const row = parseF402TickerRow({ ...rawRow(1), TicketNumber: "T-7" });
     expect(row?.ticketNumber).toBe("T-7");

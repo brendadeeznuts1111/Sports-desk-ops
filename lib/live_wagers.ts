@@ -166,19 +166,30 @@ const SPORT_PREFIXES = [...SPORT_CATEGORIES]
   .filter((name) => name !== "Other")
   .sort((a, b) => b.length - a.length);
 
+const KNOWN_SPORTS_LOWER = new Set(
+  SPORT_PREFIXES.map((name) => name.toLowerCase()),
+);
+
+const SPORT_PREFIX_TUPLES = SPORT_PREFIXES.map((sport) => ({
+  sport,
+  lower: sport.toLowerCase(),
+  length: sport.length,
+}));
+
 /** Splits `"Football #263 Eagles 8 -160 …"` into its sport and the remainder. */
 export function splitSportPrefix(header: string): {
   sport: string;
   rest: string;
 } {
   const trimmed = header.trim();
-  for (const sport of SPORT_PREFIXES) {
-    if (trimmed.toLowerCase().startsWith(sport.toLowerCase())) {
+  const lower = trimmed.toLowerCase();
+  for (const entry of SPORT_PREFIX_TUPLES) {
+    if (lower.startsWith(entry.lower)) {
       const rest = trimmed
-        .slice(sport.length)
+        .slice(entry.length)
         .replace(/^[\s:,-]+/, "")
         .trim();
-      return { sport, rest };
+      return { sport: entry.sport, rest };
     }
   }
   return { sport: trimmed, rest: "" };
@@ -206,9 +217,7 @@ function parseCompactLeg(header: string): {
   const { sport, rest } = splitSportPrefix(withoutCode);
   // `splitSportPrefix` returns the whole header as `sport` when nothing matched — that is "no
   // sport", not a sport called `LIVE #9263 Eagles (Live)`. Hand the text to the token parser.
-  const knownSport = SPORT_PREFIXES.some(
-    (name) => name.toLowerCase() === sport.toLowerCase(),
-  );
+  const knownSport = KNOWN_SPORTS_LOWER.has(sport.toLowerCase());
   let body = rest === "" ? (knownSport ? "" : withoutCode) : rest;
   let resolvedSport = rest === "" && !knownSport ? "" : sport;
   let live = false;
@@ -252,6 +261,33 @@ function parseCompactLeg(header: string): {
  * parser deliberately preserves them: the JSON source is correct, and if the client bug is
  * fixed the two stay aligned.
  */
+/**
+ * Fast zero-allocation leg counter for bet descriptions.
+ * Semantically identical to `parseShortDesc(shortDesc).legs.length` without allocating
+ * intermediate `LiveWagerLeg` objects or performing per-segment regex/string splitting.
+ */
+export function countShortDescLegs(shortDesc: unknown): number {
+  if (shortDesc === null || shortDesc === undefined) return 0;
+  const raw = String(shortDesc)
+    .replace(/&#x0D;?/gi, "\n")
+    .replace(/\\r\\n|\\n/g, "\n");
+  const lines = raw.split("\n");
+  let count = 0;
+  let firstNonEmpty: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.length === 0) continue;
+    if (firstNonEmpty === null) {
+      firstNonEmpty = trimmed;
+      if (/^[A-Z]\.(?:[A-Z]\d+)?$/.test(trimmed)) {
+        continue;
+      }
+    }
+    count++;
+  }
+  return count;
+}
+
 export function parseShortDesc(shortDesc: unknown): {
   legs: LiveWagerLeg[];
   descCode: string | null;
@@ -318,9 +354,7 @@ export function parseShortDesc(shortDesc: unknown): {
     const game = dash >= 0 ? header.slice(dash + 3).trim() : "";
 
     // Sport names arrive as `Football`, but guard against pads and stray codes anyway.
-    if (
-      !SPORT_PREFIXES.some((name) => name.toLowerCase() === sport.toLowerCase())
-    ) {
+    if (!KNOWN_SPORTS_LOWER.has(sport.toLowerCase())) {
       sport = splitSportPrefix(sport).sport;
     }
 

@@ -272,4 +272,107 @@ describe("f402 bet ticker sink", () => {
     expect(result.error).toContain("sanitized snapshot rejected");
     expect(wrote).toBe(false);
   });
+
+  test("dual-writes both latest.json and latest.bin when wireFormat is 'both'", async () => {
+    const backend = new FakeR2Backend();
+    const r2 = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const writes: Array<{ url: string; contentType: string; bytes: number }> =
+      [];
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const rawBody = init?.body;
+      const bytes =
+        rawBody instanceof Uint8Array
+          ? rawBody.byteLength
+          : typeof rawBody === "string"
+            ? new TextEncoder().encode(rawBody).byteLength
+            : 0;
+      writes.push({
+        url: String(input),
+        contentType: new Headers(init?.headers).get("content-type") ?? "",
+        bytes,
+      });
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const sink = createF402BetTickerSink({
+      liveBets: false,
+      r2: true,
+      r2Client: r2,
+      wireFormat: "both",
+    });
+    const result = await sink.publishR2(SNAPSHOT);
+    expect(result.ok).toBe(true);
+    expect(writes).toHaveLength(2);
+    expect(writes[0]!.url).toBe(
+      "https://r2.test/bucket/f402-bet-ticker/latest.json",
+    );
+    expect(writes[0]!.contentType).toBe("application/json");
+    expect(writes[1]!.url).toBe(
+      "https://r2.test/bucket/f402-bet-ticker/latest.bin",
+    );
+    expect(writes[1]!.contentType).toBe("application/octet-stream");
+    expect(writes[1]!.bytes).toBe(304);
+  });
+
+  test("writes only latest.bin when wireFormat is 'binary'", async () => {
+    const backend = new FakeR2Backend();
+    const r2 = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const writes: Array<{ url: string; contentType: string; bytes: number }> =
+      [];
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const rawBody = init?.body;
+      const bytes =
+        rawBody instanceof Uint8Array
+          ? rawBody.byteLength
+          : typeof rawBody === "string"
+            ? new TextEncoder().encode(rawBody).byteLength
+            : 0;
+      writes.push({
+        url: String(input),
+        contentType: new Headers(init?.headers).get("content-type") ?? "",
+        bytes,
+      });
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const sink = createF402BetTickerSink({
+      liveBets: false,
+      r2: true,
+      r2Client: r2,
+      wireFormat: "binary",
+    });
+    const result = await sink.publishR2(SNAPSHOT);
+    expect(result.ok).toBe(true);
+    expect(result.url).toBe("https://pub.test/f402-bet-ticker/latest.bin");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.url).toBe(
+      "https://r2.test/bucket/f402-bet-ticker/latest.bin",
+    );
+    expect(writes[0]!.contentType).toBe("application/octet-stream");
+    expect(writes[0]!.bytes).toBe(304);
+  });
 });

@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bun Feature Flags &amp; SportsDesk Risk Engine Dashboard</title>
+    <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  </head>
+  <body
+    class="bg-[var(--background)] text-[var(--foreground)] antialiased min-h-screen p-4 md:p-6 lg:p-8"
+  >
+    <div class="max-w-7xl mx-auto space-y-6">
+      <!-- Top Header -->
+      <header
+        class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+      >
+        <div>
+          <div class="flex items-center gap-3">
+            <span
+              class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+            >
+              Bun 1.4.4
+            </span>
+            <span
+              class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+            >
+              bun:bundle Registry
+            </span>
+            <span
+              class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            >
+              AST Invariant Enforced
+            </span>
+          </div>
+          <h1
+            class="text-2xl md:text-3xl font-bold tracking-tight mt-2 text-[var(--foreground)]"
+          >
+            SportsDesk Feature Flags &amp; Risk Engine
+          </h1>
+          <p class="text-[var(--muted-foreground)] text-sm mt-1">
+            Zero-overhead compile-time feature flags, dead-code elimination
+            (DCE), and native cross-process IPC.
+          </p>
+        </div>
+
+        <!-- Quick Preset Buttons (Dynamically generated from CANONICAL_BUILD_FEATURES) -->
+        <div
+          class="flex flex-wrap items-center gap-2"
+          id="preset-buttons-container"
+        ></div>
+      </header>
+
+      <!-- Main Grid: Left Column (Controls & Matrix), Right Column (DCE & Wager Simulator) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left Column: Feature Flag Controls & CLI Generator (5 cols) -->
+        <div class="lg:col-span-5 space-y-6">
+          <!-- Feature Flag Matrix Card -->
+          <section
+            class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4"
+          >
+            <div class="flex items-center justify-between">
+              <h2
+                class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+              >
+                <svg
+                  class="w-4 h-4 text-indigo-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                  ></path>
+                </svg>
+                Feature Flag Matrix
+              </h2>
+              <span
+                id="active-flag-count"
+                class="text-xs px-2 py-0.5 rounded-md bg-[var(--secondary)] text-[var(--muted-foreground)] font-mono"
+              >
+                3 active
+              </span>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Toggle compile-time flags to simulate dead-code elimination in
+              <code class="font-mono text-indigo-400">Bun.build</code> and
+              runtime branch activation.
+            </p>
+
+            <!-- Dynamically populated from CANONICAL_FEATURES -->
+            <div class="space-y-2.5 pt-1" id="flag-toggles-container"></div>
+          </section>
+
+          <!-- CLI Command & Subprocess Spawner -->
+          <section
+            class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-3"
+          >
+            <div class="flex items-center justify-between">
+              <h2
+                class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+              >
+                <svg
+                  class="w-4 h-4 text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  ></path>
+                </svg>
+                CLI &amp; Subprocess Invocation
+              </h2>
+              <button
+                onclick="copyCliCommand()"
+                class="text-xs px-2.5 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)] font-medium transition-colors"
+              >
+                Copy CLI
+              </button>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Exact CLI syntax with
+              <code class="font-mono text-emerald-400">--feature=NAME</code>
+              arguments placed before the script.
+            </p>
+            <div
+              class="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)] overflow-x-auto"
+            >
+              <code
+                id="cli-command"
+                class="text-xs font-mono text-emerald-400 whitespace-pre"
+                >bun --feature=DEBUG --feature=ANALYTICS --feature=EXPERIMENTAL
+                run examples/feature_flags/demo.ts</code
+              >
+            </div>
+            <div
+              class="text-xs text-[var(--muted-foreground)] flex items-center gap-1.5 pt-1"
+            >
+              <span class="text-amber-400 font-bold">!</span>
+              <span
+                >Remember: Space syntax (<code
+                  class="font-mono text-neutral-300"
+                  >--feature DEBUG</code
+                >) before subcommands consumes the subcommand. Always prefer
+                <code class="font-mono text-neutral-300">--feature=NAME</code
+                >.</span
+              >
+            </div>
+          </section>
+
+          <!-- Architecture Triad Card -->
+          <section
+            class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-3"
+          >
+            <h2
+              class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+            >
+              <svg
+                class="w-4 h-4 text-sky-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                ></path>
+              </svg>
+              Declaration Merging Triad
+            </h2>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+              <div
+                class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)]"
+              >
+                <div class="font-mono text-indigo-400 font-semibold">
+                  bun:bundle
+                </div>
+                <div class="text-[11px] text-[var(--muted-foreground)] mt-1">
+                  interface Registry
+                </div>
+                <div class="text-[11px] text-emerald-400 font-mono mt-0.5">
+                  features: Feature
+                </div>
+              </div>
+              <div
+                class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)]"
+              >
+                <div class="font-mono text-purple-400 font-semibold">bun</div>
+                <div class="text-[11px] text-[var(--muted-foreground)] mt-1">
+                  interface Env
+                </div>
+                <div class="text-[11px] text-emerald-400 font-mono mt-0.5">
+                  process.env types
+                </div>
+              </div>
+              <div
+                class="p-2.5 rounded-xl border border-[var(--border)] bg-[var(--background)]"
+              >
+                <div class="font-mono text-sky-400 font-semibold">bun:test</div>
+                <div class="text-[11px] text-[var(--muted-foreground)] mt-1">
+                  interface Matchers
+                </div>
+                <div class="text-[11px] text-emerald-400 font-mono mt-0.5">
+                  custom matchers
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right Column: Dead Code Elimination Inspector & Wager Risk Simulator (7 cols) -->
+        <div class="lg:col-span-7 space-y-6">
+          <!-- Dead Code Elimination (DCE) Inspector Card -->
+          <section
+            class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <h2
+                  class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+                >
+                  <svg
+                    class="w-4 h-4 text-purple-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    ></path>
+                  </svg>
+                  Dead-Code Elimination (DCE) Live Inspector
+                </h2>
+                <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+                  Observe branches eliminated at build time when flags are
+                  disabled
+                </p>
+              </div>
+              <div class="text-right flex items-center gap-2">
+                <span
+                  id="backend-status-badge"
+                  class="hidden px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                >
+                  Live Bun.build API Connected
+                </span>
+                <span
+                  id="bundle-size-badge"
+                  class="px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                >
+                  Bundle: ~610 bytes
+                </span>
+              </div>
+            </div>
+
+            <!-- Code View with active/dead highlighting -->
+            <div
+              class="rounded-xl border border-[var(--border)] bg-[var(--background)] overflow-hidden font-mono text-xs"
+            >
+              <div
+                class="bg-[var(--card)] px-4 py-2 border-b border-[var(--border)] flex items-center justify-between text-xs text-[var(--muted-foreground)]"
+              >
+                <span>risk_engine.ts (Compiled AST Projection)</span>
+                <span
+                  id="dce-savings-stat"
+                  class="text-emerald-400 font-semibold"
+                  >DCE Savings: 0%</span
+                >
+              </div>
+              <div class="p-4 space-y-1 overflow-x-auto" id="code-container">
+                <!-- Rendered via JS -->
+              </div>
+            </div>
+
+            <!-- AST Invariant Banner -->
+            <div
+              class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2.5"
+            >
+              <span class="font-bold text-sm leading-none mt-0.5">⚠️</span>
+              <div>
+                <span class="font-semibold"
+                  >Bun Transpiler AST Constraint:</span
+                >
+                <code class="text-amber-200">feature()</code> can
+                <strong class="underline">only</strong> be used directly in an
+                <code class="text-amber-200">if</code> statement or ternary
+                condition (<code class="text-amber-200"
+                  >feature("DEBUG") ? a : b</code
+                >). Passing it to functions (<code class="text-amber-200"
+                  >expect(feature("DEBUG"))</code
+                >) crashes the transpiler.
+              </div>
+            </div>
+          </section>
+
+          <!-- SportsDesk Live Wager Risk Simulator -->
+          <section
+            class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4"
+          >
+            <div class="flex items-center justify-between">
+              <h2
+                class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+              >
+                <svg
+                  class="w-4 h-4 text-emerald-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                Live SportsDesk Wager Risk Simulator
+              </h2>
+              <div class="flex gap-1.5">
+                <button
+                  onclick="loadWagerSample('whale')"
+                  class="text-xs px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)]"
+                >
+                  Whale Sample
+                </button>
+                <button
+                  onclick="loadWagerSample('syndicate')"
+                  class="text-xs px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)]"
+                >
+                  Syndicate Sample
+                </button>
+                <button
+                  onclick="loadWagerSample('normal')"
+                  class="text-xs px-2 py-1 rounded bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)]"
+                >
+                  Clean Sample
+                </button>
+              </div>
+            </div>
+
+            <!-- Wager Input Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label
+                  class="block text-xs font-medium text-[var(--muted-foreground)] mb-1"
+                  >Ticket ID</label
+                >
+                <input
+                  type="text"
+                  id="wager-ticket"
+                  value="TKT-402-9901"
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label
+                  class="block text-xs font-medium text-[var(--muted-foreground)] mb-1"
+                  >Customer Login</label
+                >
+                <input
+                  type="text"
+                  id="wager-customer"
+                  value="agent_syn_99"
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label
+                  class="block text-xs font-medium text-[var(--muted-foreground)] mb-1"
+                  >Stake ($)</label
+                >
+                <input
+                  type="number"
+                  id="wager-stake"
+                  value="12500"
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label
+                  class="block text-xs font-medium text-[var(--muted-foreground)] mb-1"
+                  >American Odds</label
+                >
+                <input
+                  type="number"
+                  id="wager-odds"
+                  value="450"
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs font-mono text-[var(--foreground)] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <label
+                class="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-[var(--foreground)]"
+              >
+                <input
+                  type="checkbox"
+                  id="wager-live"
+                  checked
+                  class="rounded border-[var(--border)] text-indigo-600 focus:ring-0"
+                />
+                <span>In-Play / Live Wager</span>
+              </label>
+              <button
+                onclick="evaluateRiskSimulation()"
+                class="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm flex items-center gap-1.5 transition-colors"
+              >
+                <svg
+                  class="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                  ></path>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                Evaluate Wager Risk
+              </button>
+            </div>
+
+            <!-- Assessment Result Card -->
+            <div
+              class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-3"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span
+                    class="text-xs text-[var(--muted-foreground)] font-medium"
+                    >Risk Score:</span
+                  >
+                  <span
+                    id="risk-score-display"
+                    class="text-2xl font-bold font-mono text-amber-400"
+                    >70</span
+                  >
+                  <span
+                    id="risk-action-badge"
+                    class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                  >
+                    REJECT
+                  </span>
+                </div>
+                <div
+                  id="risk-flags-container"
+                  class="flex flex-wrap gap-1.5 justify-end"
+                >
+                  <!-- Badges populated by JS -->
+                </div>
+              </div>
+
+              <!-- Debug Trace Stream (Only if DEBUG flag enabled) -->
+              <div
+                id="debug-trace-panel"
+                class="pt-2 border-t border-[var(--border)] space-y-1.5"
+              >
+                <div
+                  class="flex items-center justify-between text-[11px] font-semibold text-[var(--muted-foreground)]"
+                >
+                  <span class="flex items-center gap-1.5">
+                    <span
+                      class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+                    ></span>
+                    Telemetry &amp; Trace Output (feature("DEBUG") &amp;
+                    feature("ANALYTICS"))
+                  </span>
+                  <span class="font-mono text-indigo-400"
+                    >IPC Stream active</span
+                  >
+                </div>
+                <pre
+                  id="debug-trace-log"
+                  class="p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)] font-mono text-xs text-neutral-300 max-h-36 overflow-y-auto"
+                ></pre>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Bottom Architecture / IPC Section -->
+      <section
+        class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 shadow-sm space-y-4"
+      >
+        <h2
+          class="text-base font-semibold text-[var(--foreground)] flex items-center gap-2"
+        >
+          <svg
+            class="w-4 h-4 text-indigo-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+            ></path>
+          </svg>
+          Native IPC Process Orchestration Flow
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Node 1: Parent Process -->
+          <div
+            class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-xs font-bold text-indigo-400"
+                >demo.ts (Parent)</span
+              >
+              <span
+                class="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300"
+                >Bun.spawn</span
+              >
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Spawns worker via
+              <code class="font-mono text-neutral-300">process.execPath</code>
+              with compile-time flags like
+              <code class="font-mono text-neutral-300">--feature=DEBUG</code>.
+            </p>
+            <div
+              class="p-2 rounded bg-[var(--card)] font-mono text-[11px] text-neutral-400 border border-[var(--border)]"
+            >
+              child.send({ ticketId, stake, ... })
+            </div>
+          </div>
+
+          <!-- Node 2: IPC Pipe -->
+          <div
+            class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2 flex flex-col justify-between"
+          >
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-xs font-bold text-emerald-400"
+                  >IPC Channel</span
+                >
+                <span
+                  class="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300"
+                  >json serialization</span
+                >
+              </div>
+              <p class="text-xs text-[var(--muted-foreground)] mt-2">
+                High-throughput bi-directional message pipe. Zero
+                string-splitting or JSON.parse boilerplate needed.
+              </p>
+            </div>
+            <div
+              class="text-center font-mono text-xs text-emerald-400 py-1 bg-emerald-500/5 rounded border border-emerald-500/20"
+            >
+              &larr; structured objects &rarr;
+            </div>
+          </div>
+
+          <!-- Node 3: Worker Subprocess -->
+          <div
+            class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2"
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-xs font-bold text-purple-400"
+                >ipc_worker.ts (Worker)</span
+              >
+              <span
+                class="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-300"
+                >Isolated V8/JSC</span
+              >
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Executes risk assessment in dedicated thread/process with zero
+              impact on operator event loop.
+            </p>
+            <div
+              class="p-2 rounded bg-[var(--card)] font-mono text-[11px] text-neutral-400 border border-[var(--border)]"
+            >
+              process.send(assessmentResult)
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Client-Side State & Simulation Script -->
+    <script id="sportsdesk-ssot-config">
+      window.CANONICAL_FEATURES = [
+        "DEBUG",
+        "PROD",
+        "TEST",
+        "ANALYTICS",
+        "EXPERIMENTAL",
+      ];
+      window.CANONICAL_BUILD_FEATURES = {
+        dev: ["DEBUG", "TEST", "ANALYTICS", "EXPERIMENTAL"],
+        prod: ["PROD", "ANALYTICS"],
+        test: ["DEBUG", "TEST", "ANALYTICS"],
+      };
+      window.CANONICAL_DESCRIPTIONS = {
+        DEBUG: "Verbose logging and dev-only assertions.",
+        PROD: "Production-only code paths.",
+        TEST: "Test-harness hooks; stripped in prod.",
+        ANALYTICS: "Telemetry emission.",
+        EXPERIMENTAL: "Unstable features behind opt-in.",
+      };
+    </script>
+    <script>
+      const CANONICAL_FEATURES = window.CANONICAL_FEATURES || [];
+      const CANONICAL_BUILD_FEATURES = window.CANONICAL_BUILD_FEATURES || {};
+      const CANONICAL_DESCRIPTIONS = window.CANONICAL_DESCRIPTIONS || {};
+
+      const flags = {};
+      CANONICAL_FEATURES.forEach((f) => {
+        flags[f] = (CANONICAL_BUILD_FEATURES.dev || []).includes(f);
+      });
+
+      function updateFlagCounts() {
+        const active = Object.values(flags).filter(Boolean).length;
+        document.getElementById("active-flag-count").textContent =
+          `${active} active`;
+
+        // Update CLI string
+        const activeNames = Object.entries(flags)
+          .filter(([_, v]) => v)
+          .map(([k]) => `--feature=${k}`);
+        const flagArgs =
+          activeNames.length > 0 ? activeNames.join(" ") + " " : "";
+        document.getElementById("cli-command").textContent =
+          `bun ${flagArgs}run examples/feature_flags/demo.ts`;
+
+        renderCodeDce();
+        evaluateRiskSimulation();
+      }
+
+      function toggleFlag(name) {
+        flags[name] = document.getElementById(`flag-${name}`).checked;
+        updateFlagCounts();
+      }
+
+      function applyPreset(preset) {
+        const targetFlags = CANONICAL_BUILD_FEATURES[preset] || [];
+        CANONICAL_FEATURES.forEach((f) => {
+          flags[f] = targetFlags.includes(f);
+          const el = document.getElementById(`flag-${f}`);
+          if (el) el.checked = flags[f];
+        });
+
+        // Update button styling
+        Object.keys(CANONICAL_BUILD_FEATURES).forEach((p) => {
+          const btn = document.getElementById(`btn-preset-${p}`);
+          if (btn) {
+            if (p === preset) {
+              btn.className =
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm";
+            } else {
+              btn.className =
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--border)]";
+            }
+          }
+        });
+
+        updateFlagCounts();
+      }
+
+      function renderPresetButtons(activePreset = "dev") {
+        const container = document.getElementById("preset-buttons-container");
+        if (!container) return;
+        const targets = Object.keys(CANONICAL_BUILD_FEATURES);
+        container.innerHTML = `
+          <span class="text-xs font-medium text-[var(--muted-foreground)] mr-1">Target Preset:</span>
+          ${targets
+            .map(
+              (t) => `
+            <button
+              onclick="applyPreset('${t}')"
+              id="btn-preset-${t}"
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                t === activePreset
+                  ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm"
+                  : "bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--border)]"
+              }"
+            >
+              ${t.toUpperCase()} (${t})
+            </button>
+          `,
+            )
+            .join("")}
+        `;
+      }
+
+      function renderFlagToggles() {
+        const container = document.getElementById("flag-toggles-container");
+        if (!container) return;
+        container.innerHTML = CANONICAL_FEATURES.map((f) => {
+          const targets = Object.entries(CANONICAL_BUILD_FEATURES)
+            .filter(([_, list]) => list.includes(f))
+            .map(([target]) => target);
+          const badgeText = targets.length > 0 ? targets.join(", ") : "manual";
+          const desc = CANONICAL_DESCRIPTIONS[f];
+          const isChecked = !!flags[f];
+
+          return `
+            <div class="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:border-indigo-500/40 transition-colors">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono font-semibold text-xs text-[var(--foreground)]">${f}</span>
+                  <span class="text-[11px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400 font-medium">${badgeText}</span>
+                </div>
+                <p class="text-xs text-[var(--muted-foreground)]">${desc}</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer ml-3">
+                <input
+                  type="checkbox"
+                  id="flag-${f}"
+                  class="sr-only peer"
+                  ${isChecked ? "checked" : ""}
+                  onchange="toggleFlag('${f}')"
+                />
+                <div class="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function renderCodeDce() {
+        const container = document.getElementById("code-container");
+        const debugActive = flags.DEBUG;
+        const expActive = flags.EXPERIMENTAL;
+        const analyticsActive = flags.ANALYTICS;
+
+        // Calculate approximate bundle size
+        let size = 289;
+        if (debugActive) size += 155;
+        if (expActive) size += 112;
+        if (analyticsActive) size += 54;
+
+        document.getElementById("bundle-size-badge").textContent =
+          `Bundle: ~${size} bytes`;
+
+        const maxDevSize = 610;
+        const savings = Math.round(((maxDevSize - size) / maxDevSize) * 100);
+        document.getElementById("dce-savings-stat").textContent =
+          `DCE Savings: ${savings}% stripped`;
+
+        // Check live backend API if served via HTTP
+        if (window.location.protocol.startsWith("http")) {
+          const activeFlagsList = Object.entries(flags)
+            .filter(([_, v]) => v)
+            .map(([k]) => k);
+          fetch("/api/build", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ features: activeFlagsList }),
+          })
+            .then((r) => r.json())
+            .then((data) => {
+              if (data && data.success && typeof data.byteSize === "number") {
+                const badge = document.getElementById("backend-status-badge");
+                if (badge) badge.classList.remove("hidden");
+                document.getElementById("bundle-size-badge").textContent =
+                  `Bun.build Output: ${data.byteSize} bytes`;
+              }
+            })
+            .catch(() => {});
+        }
+
+        const line = (code, status, tag) => {
+          let opacityClass =
+            status === "dead"
+              ? "opacity-30 line-through text-neutral-500"
+              : "text-neutral-200";
+          let badge = "";
+          if (status === "dead") {
+            badge = `<span class="float-right text-[10px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 font-sans">ELIMINATED</span>`;
+          } else if (tag) {
+            badge = `<span class="float-right text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-sans">${tag}</span>`;
+          }
+          return `<div class="${opacityClass} hover:bg-neutral-800/40 px-1 py-0.5 rounded transition-opacity">${code}${badge}</div>`;
+        };
+
+        container.innerHTML = [
+          line(
+            `import { feature } from "bun:bundle";`,
+            debugActive || expActive || analyticsActive ? "active" : "dead",
+            debugActive || expActive || analyticsActive
+              ? "transpiled"
+              : "STRIPPED",
+          ),
+          line(
+            `export function evaluateWagerRisk(wager: Wager): RiskAssessment {`,
+            "active",
+          ),
+          line(`  let riskScore = 0; const flags: string[] = [];`, "active"),
+          line(
+            `  if (wager.stake >= 10_000 && wager.isLive) { riskScore += 40; flags.push("HIGH_STAKE_LIVE"); }`,
+            "active",
+          ),
+          line(
+            `  if (wager.odds >= 400) { riskScore += 30; flags.push("HIGH_ODDS_EXPOSURE"); }`,
+            "active",
+          ),
+          line(
+            `  // Branch guarded by EXPERIMENTAL`,
+            expActive ? "active" : "dead",
+          ),
+          line(
+            `  if (feature("EXPERIMENTAL")) {`,
+            expActive ? "active" : "dead",
+          ),
+          line(
+            `    if (wager.customerLogin.startsWith("agent_syn_")) {`,
+            expActive ? "active" : "dead",
+          ),
+          line(
+            `      riskScore += 50; flags.push("EXPERIMENTAL_SYNDICATE_SUSPECT");`,
+            expActive ? "active" : "dead",
+          ),
+          line(`    }`, expActive ? "active" : "dead"),
+          line(`  }`, expActive ? "active" : "dead"),
+          line(`  // Branch guarded by DEBUG`, debugActive ? "active" : "dead"),
+          line(`  if (feature("DEBUG")) {`, debugActive ? "active" : "dead"),
+          line(
+            `    console.debug(\`[SportsDesk:DEBUG] Ticket \${wager.ticketId} score=\${riskScore}\`);`,
+            debugActive ? "active" : "dead",
+          ),
+          line(`  }`, debugActive ? "active" : "dead"),
+          line(
+            `  return { ticketId: wager.ticketId, riskScore, action, flags };`,
+            "active",
+          ),
+          line(`}`, "active"),
+        ].join("");
+      }
+
+      function loadWagerSample(type) {
+        if (type === "whale") {
+          document.getElementById("wager-ticket").value = "TKT-402-8812";
+          document.getElementById("wager-customer").value = "cust_vip_441";
+          document.getElementById("wager-stake").value = 25000;
+          document.getElementById("wager-odds").value = 150;
+          document.getElementById("wager-live").checked = true;
+        } else if (type === "syndicate") {
+          document.getElementById("wager-ticket").value = "TKT-402-9901";
+          document.getElementById("wager-customer").value = "agent_syn_77";
+          document.getElementById("wager-stake").value = 8500;
+          document.getElementById("wager-odds").value = 550;
+          document.getElementById("wager-live").checked = true;
+        } else {
+          document.getElementById("wager-ticket").value = "TKT-402-1004";
+          document.getElementById("wager-customer").value = "cust_clean_12";
+          document.getElementById("wager-stake").value = 250;
+          document.getElementById("wager-odds").value = -110;
+          document.getElementById("wager-live").checked = false;
+        }
+        evaluateRiskSimulation();
+      }
+
+      function evaluateRiskSimulation() {
+        const ticketId = document.getElementById("wager-ticket").value;
+        const customerLogin = document.getElementById("wager-customer").value;
+        const stake =
+          parseFloat(document.getElementById("wager-stake").value) || 0;
+        const odds =
+          parseFloat(document.getElementById("wager-odds").value) || 0;
+        const isLive = document.getElementById("wager-live").checked;
+
+        let riskScore = 0;
+        const riskFlags = [];
+
+        if (stake >= 10000 && isLive) {
+          riskScore += 40;
+          riskFlags.push("HIGH_STAKE_LIVE");
+        }
+
+        if (odds >= 400) {
+          riskScore += 30;
+          riskFlags.push("HIGH_ODDS_EXPOSURE");
+        }
+
+        // EXPERIMENTAL branch
+        if (flags.EXPERIMENTAL) {
+          if (customerLogin.startsWith("agent_syn_")) {
+            riskScore += 50;
+            riskFlags.push("EXPERIMENTAL_SYNDICATE_SUSPECT");
+          }
+        }
+
+        let action = "APPROVE";
+        let actionClass =
+          "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+        if (riskScore >= 70) {
+          action = "REJECT";
+          actionClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+        } else if (riskScore > 30) {
+          action = "REVIEW";
+          actionClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+        }
+
+        document.getElementById("risk-score-display").textContent = riskScore;
+        const badge = document.getElementById("risk-action-badge");
+        badge.textContent = action;
+        badge.className = `px-2.5 py-0.5 rounded-full text-xs font-semibold border ${actionClass}`;
+
+        // Badges
+        const flagsContainer = document.getElementById("risk-flags-container");
+        if (riskFlags.length === 0) {
+          flagsContainer.innerHTML = `<span class="text-xs text-[var(--muted-foreground)]">No risk flags</span>`;
+        } else {
+          flagsContainer.innerHTML = riskFlags
+            .map((f) => {
+              let bg = "bg-neutral-800 text-neutral-300 border-neutral-700";
+              if (f.includes("SYNDICATE"))
+                bg = "bg-rose-500/15 text-rose-300 border-rose-500/30";
+              if (f.includes("STAKE"))
+                bg = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+              return `<span class="text-xs px-2 py-0.5 rounded-md border font-mono ${bg}">${f}</span>`;
+            })
+            .join("");
+        }
+
+        // Debug trace stream
+        const tracePanel = document.getElementById("debug-trace-panel");
+        const traceLog = document.getElementById("debug-trace-log");
+        if (flags.DEBUG) {
+          tracePanel.style.display = "block";
+          const timestamp = new Date().toISOString().substring(11, 23);
+          const traceLines = [
+            `[${timestamp}] [DEBUG:risk_engine] Inbound wager ${ticketId} for customer ${customerLogin}`,
+            `[${timestamp}] [DEBUG:risk_engine] Live check: isLive=${isLive}, stake=$${stake.toLocaleString()}, odds=${odds > 0 ? "+" : ""}${odds}`,
+            flags.EXPERIMENTAL
+              ? `[${timestamp}] [DEBUG:experimental] Heuristic syndicate check evaluated: login_match=${customerLogin.startsWith("agent_syn_")}`
+              : `[${timestamp}] [DEBUG:dce] Experimental syndicate check branch STRIPPED at compile time.`,
+            `[${timestamp}] [DEBUG:risk_engine] Final score: ${riskScore} -> Action: ${action}`,
+            flags.ANALYTICS
+              ? `[${timestamp}] [ANALYTICS:rollup] Dispatched wager exposure telemetry to R2 analytics bucket.`
+              : `[${timestamp}] [ANALYTICS] Telemetry disabled.`,
+          ];
+          traceLog.textContent = traceLines.join("\n");
+        } else {
+          tracePanel.style.display = "block";
+          traceLog.textContent = `// [Zero Runtime Overhead]\n// feature("DEBUG") is false in this build target.\n// All console.debug statements and microsecond trace code have been completely pruned from the JS bundle by Bun's dead-code eliminator.`;
+        }
+      }
+
+      function copyCliCommand() {
+        const text = document.getElementById("cli-command").textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          alert("Copied CLI command to clipboard!");
+        });
+      }
+
+      // Initial render
+      window.addEventListener("DOMContentLoaded", () => {
+        renderPresetButtons("dev");
+        renderFlagToggles();
+        applyPreset("dev");
+      });
+    </script>
+  </body>
+</html>

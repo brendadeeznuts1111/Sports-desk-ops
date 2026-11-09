@@ -77,6 +77,10 @@ with `bun run audit:tool-calls`.
   (under `scripts/`) so a live refresh does not rewrite the committed 4-week backtest artifact.
 - **Deploy credentials** come from `./cloudflare.env` or `$XDG_CONFIG_HOME/cloudflare/pages.env`;
   never source `.env` (1Password FIFO plus R2/F402 secrets that shadow the Pages token).
+- **`bun:bundle` AST constraint:** `feature()` from `"bun:bundle"` can only appear directly
+  inside an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it directly to
+  functions (like `expect()` or `expectTypeOf()`) fails at parse time. Testing `--feature=FLAG`
+  requires subprocess spawning (`Bun.spawnSync`), as flags cannot be toggled mid-process.
 
 ## DSH Discover (plugin market index)
 

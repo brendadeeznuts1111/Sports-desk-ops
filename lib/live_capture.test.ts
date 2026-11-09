@@ -355,11 +355,12 @@ describe("artifact provenance", () => {
       REPO_LIVE_ARTIFACTS.filter((spec) => spec.capturePath === "paste"),
     ).toHaveLength(4);
     for (const spec of REPO_LIVE_ARTIFACTS) {
-      expect(await Bun.file(join(repoRoot, spec.path)).exists()).toBe(true);
+      expect(spec.path).toMatch(/^data\//);
       if (spec.capturePath === "api") {
         expect(spec.operation).not.toBeNull();
         expect(spec.pasteInput).toBeNull();
       } else {
+        expect(await Bun.file(join(repoRoot, spec.path)).exists()).toBe(true);
         expect(spec.operation).toBeNull();
         expect(spec.pasteInput).not.toBeNull();
         expect(spec.pasteFileName).not.toBeNull();

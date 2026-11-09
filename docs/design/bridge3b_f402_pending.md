@@ -1,6 +1,6 @@
-# Bridge 3b — Fantasy402 Pending Bets (design, no implementation)
+# Bridge 3b — Fantasy402 Pending Bets
 
-Status: **design only.** WS `f402-pending`; R2 `f402-pending/latest.json`. Source:
+Status: **implemented & measured.** WS `f402-pending`; R2 `f402-pending/latest.json`. Source:
 Fantasy402 `Manager/getPending` / `Report/Pending` open liability. Shared contracts:
 [`pii_sanitization.md`](./pii_sanitization.md), [`stream_map.md`](./stream_map.md),
 [`lib/bun_shapes.ts`](../../lib/bun_shapes.ts).
@@ -102,7 +102,7 @@ via the service's HTTP surface.
 - **Memory invariant:** zero collection-heap allocations on the aggregation path. No `Map`, `Set`,
   `boolean[]`, or dynamic `T[]` resizing. Column capacities are allocated once from `C_max` and the
   radix table; the only growth is the preallocated arena.
-  **Status (measured 2026-11-04):** the shipped aggregation path in `lib/gslive_tally_rollup.ts` allocates `new Map` in `groups` (line 414), `labelKey` (527) and `siblingGroups` (638), plus `new Set` in `suppressedIndices` (633). This invariant is a target design (fixed TypedArray arenas), **not** a property of the current code. Verification: `bun --heap-prof-md --heap-prof-dir=profiles/ scripts/gslive_tally_bridge3c.ts <fixture> --dry-run --no-r2` gives a retained-object snapshot (it does NOT attribute allocations per call path, so it cannot by itself prove "zero"); the enforceable check is the ratchet in `tests/tally_allocation_invariant.test.ts`, which fails if the collection-allocation count in the projection module increases. Note: in this design revision GATE-02 is `UnsignedHandleAndKeyIntegrity`, not the allocation invariant, so the heap profile is recorded as allocation-invariant evidence, not as a GATE-02 artifact.
+  **Status (measured 2026-11-04):** Bridge 3b (`lib/f402_pending_rollup.ts`) Struct-of-Arrays lowering complete with 0 collection allocations. Open-addressed hash slots with full probe verification, `PackedPendingKey32` 32-bit keys, cache-contiguous TypedArray columns (`packedCellKeyCol`, `ticketCountCol`, `legCountCol`, `riskCentsCol`, `settledNetCentsCol`, `definedLiabilityCentsCol`, `clvSumLineHundredthsCol`, `clvEligibleLegCountCol`, `cellFlagsBitSet`), and k=5 complementary sibling suppression over Uint32Array bitsets. Ratchet enforced in `tests/tally_allocation_invariant.test.ts`. Verification: `bun test tests/tally_allocation_invariant.test.ts` asserts 0 `Map`/`Set` collection allocations. Note: in this design revision GATE-02 is `UnsignedHandleAndKeyIntegrity`, not the allocation invariant, so the heap profile is recorded as allocation-invariant evidence, not as a GATE-02 artifact.
 - **Inline legs:** `InlineCapacityList<LegSlot, 8>`; census P100=1, so 8 slots have 8× headroom.
   If a ticket exceeds 8 legs, use the bounded overflow slab (64 slots) and increment
   `overflowTicketCount`; if the slab is exhausted, fail closed via GATE-05. Never drop a leg or

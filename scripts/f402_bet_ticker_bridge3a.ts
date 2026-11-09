@@ -79,6 +79,7 @@ const HELP = [
   "  --no-ws              do not publish the gateway delta",
   "  --no-r2              do not write the R2 snapshot",
   "  --publish-baseline   emit the first poll as a delta instead of establishing a silent watermark",
+  "  --wire-format <fmt>  R2 wire format: json | binary | both (default: json or BRIDGE3A_WIRE_FORMAT)",
   "  --dry-run            no sinks; one poll; print the sanitized delta/snapshot JSON to stdout",
   "",
   "Auth: a session file (bun run session:login), F402_SESSION_FILE or F402_REPLAY_PROXY_URL.",
@@ -111,6 +112,7 @@ const { values } = (() => {
         "no-ws": { type: "boolean", default: false },
         "no-r2": { type: "boolean", default: false },
         "publish-baseline": { type: "boolean", default: false },
+        "wire-format": { type: "string" },
         "dry-run": { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
@@ -126,6 +128,17 @@ if (values.help) {
 }
 
 const dryRun = values["dry-run"];
+const rawWireFormat =
+  values["wire-format"] ?? Bun.env.BRIDGE3A_WIRE_FORMAT ?? "json";
+if (
+  rawWireFormat !== "json" &&
+  rawWireFormat !== "binary" &&
+  rawWireFormat !== "both"
+) {
+  usage("--wire-format must be one of: json, binary, both");
+}
+const wireFormat = rawWireFormat as "json" | "binary" | "both";
+
 const intervalMs = (() => {
   if (values.once || dryRun) return 0;
   const raw = values["interval-ms"];
@@ -265,19 +278,45 @@ function sinkStatus(result: {
 
 function logOutcome(outcome: F402BetTickerPollOutcome): number {
   switch (outcome.status) {
-    case "published":
+    case "published": {
+      const diagSuffix =
+        outcome.diagnostics && outcome.diagnostics.overflowRejectionCount > 0
+          ? ` overflowRejections=${outcome.diagnostics.overflowRejectionCount}`
+          : "";
       console.error(
         `[bridge3a] published new=${outcome.event.newTickets} gone=${outcome.event.goneTickets} ` +
           `changed=${outcome.event.changedTickets} watermark=${outcome.event.watermark} ` +
-          `ws=${sinkStatus(outcome.liveBets)} r2=${sinkStatus(outcome.r2)}`,
+          `ws=${sinkStatus(outcome.liveBets)} r2=${sinkStatus(outcome.r2)}${diagSuffix}`,
       );
+      if (
+        outcome.diagnostics &&
+        outcome.diagnostics.overflowRejectionCount > 0
+      ) {
+        console.error(
+          `[bridge3a] WARNING: ${outcome.diagnostics.overflowRejectionCount} ticket(s) rejected due to amount overflow in batch`,
+        );
+      }
       return 0;
-    case "baseline":
+    }
+    case "baseline": {
+      const diagSuffix =
+        outcome.diagnostics && outcome.diagnostics.overflowRejectionCount > 0
+          ? ` overflowRejections=${outcome.diagnostics.overflowRejectionCount}`
+          : "";
       console.error(
         `[bridge3a] baseline rows=${outcome.snapshot.rowCount} ` +
-          `watermark=${outcome.snapshot.watermark} r2=${sinkStatus(outcome.r2)}`,
+          `watermark=${outcome.snapshot.watermark} r2=${sinkStatus(outcome.r2)}${diagSuffix}`,
       );
+      if (
+        outcome.diagnostics &&
+        outcome.diagnostics.overflowRejectionCount > 0
+      ) {
+        console.error(
+          `[bridge3a] WARNING: ${outcome.diagnostics.overflowRejectionCount} ticket(s) rejected due to amount overflow in batch`,
+        );
+      }
       return 0;
+    }
     case "noop":
       console.error(`[bridge3a] noop (${outcome.reason})`);
       return 0;
@@ -386,6 +425,7 @@ async function main(): Promise<number> {
     liveBets: dryRun ? false : !values["no-ws"],
     r2: dryRun ? false : !values["no-r2"],
     apiToken: Bun.env.BLOB_API_TOKEN ?? "",
+    wireFormat,
   });
   const sink = {
     publishLiveBets: (event: Parameters<typeof baseSink.publishLiveBets>[0]) =>
@@ -492,6 +532,7 @@ async function main(): Promise<number> {
           JSON.stringify(
             {
               status: outcome.status,
+              wireFormat,
               event: outcome.event,
               snapshot: outcome.snapshot,
             },

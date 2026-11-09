@@ -247,4 +247,25 @@ describe("pollF402BetTickerOnce", () => {
     expect(outcome.event.newTickets).toBe(1);
     expect(liveBets).toHaveLength(1);
   });
+
+  test("forwards batch diagnostics including overflow rejections on outcome", async () => {
+    const { sink } = recorder();
+    const overflowRow = {
+      ...tick(2),
+      amountWagered: 30_000_000,
+    };
+    const outcome = await pollF402BetTickerOnce({
+      probe: queue([page([tick(1), overflowRow, tick(3)])]).probe,
+      sink,
+      state: { watermark: 1, previousRows: [tick(1)] },
+      now: () => NOW,
+    });
+    expect(outcome.status).toBe("published");
+    if (outcome.status !== "published") return;
+    expect(outcome.diagnostics).toBeDefined();
+    expect(outcome.diagnostics?.overflowRejectionCount).toBe(1);
+    expect(outcome.diagnostics?.afterCount).toBe(2); // tick(1) and tick(3)
+    expect(outcome.event.newTickets).toBe(1); // tick(3)
+    expect(outcome.event.watermark).toBe("3");
+  });
 });

@@ -10,7 +10,8 @@
 import {
   buildF402TickerSnapshot,
   highestWagerNumber,
-  projectF402TickerDelta,
+  projectF402TickerDeltaWithDiagnostics,
+  type F402TickerBatchDiagnostics,
   type F402TickerDeltaEvent,
   type F402TickerSnapshot,
 } from "./f402_bet_ticker_delta.ts";
@@ -54,6 +55,7 @@ export type F402BetTickerPollOutcome =
       readonly liveBets: F402BetTickerSinkResult;
       readonly r2: F402BetTickerSinkResult;
       readonly state: F402BetTickerPollState;
+      readonly diagnostics?: F402TickerBatchDiagnostics;
     }
   | {
       readonly status: "baseline";
@@ -61,6 +63,7 @@ export type F402BetTickerPollOutcome =
       readonly snapshot: F402TickerSnapshot;
       readonly r2: F402BetTickerSinkResult;
       readonly state: F402BetTickerPollState;
+      readonly diagnostics?: F402TickerBatchDiagnostics;
     }
   | {
       readonly status: "noop";
@@ -140,7 +143,11 @@ export async function pollF402BetTickerOnce(
     options.state.watermark === 0 && options.state.previousRows.length === 0;
 
   if (coldStart && options.publishBaseline !== true) {
-    const event = projectF402TickerDelta([], rows, polledAt);
+    const { event, diagnostics } = projectF402TickerDeltaWithDiagnostics(
+      [],
+      rows,
+      polledAt,
+    );
     const snapshot = buildF402TickerSnapshot(event, rows.length);
     const r2 = await options.sink.publishR2(snapshot);
     return {
@@ -149,6 +156,7 @@ export async function pollF402BetTickerOnce(
       snapshot,
       r2,
       state: { watermark: drain.watermark, previousRows: rows },
+      diagnostics,
     };
   }
 
@@ -165,7 +173,7 @@ export async function pollF402BetTickerOnce(
     };
   }
 
-  const event = projectF402TickerDelta(
+  const { event, diagnostics } = projectF402TickerDeltaWithDiagnostics(
     options.state.previousRows,
     rows,
     polledAt,
@@ -180,5 +188,6 @@ export async function pollF402BetTickerOnce(
     liveBets,
     r2,
     state: { watermark: drain.watermark, previousRows: rows },
+    diagnostics,
   };
 }

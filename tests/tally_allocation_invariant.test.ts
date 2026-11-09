@@ -10,10 +10,12 @@
  */
 import { describe, expect, test } from "bun:test";
 
-const SOURCE = "lib/gslive_tally_rollup.ts";
+const SOURCES = [
+  "lib/gslive_tally_rollup.ts",
+  "lib/f402_bet_ticker_delta.ts",
+  "lib/f402_pending_rollup.ts",
+] as const;
 const BASELINE_COLLECTION_ALLOCATIONS = 0;
-
-const source = await Bun.file(SOURCE).text();
 
 function countCollectionAllocations(text: string): readonly string[] {
   const pattern = /\bnew\s+(Map|Set|WeakMap|WeakSet)\s*[<(]/g;
@@ -21,20 +23,26 @@ function countCollectionAllocations(text: string): readonly string[] {
 }
 
 describe("tally aggregation allocation invariant (design target)", () => {
-  test(`the projection module keeps its collection allocations at or below ${BASELINE_COLLECTION_ALLOCATIONS}`, async () => {
-    const allocations = countCollectionAllocations(source);
-    // If this starts failing with a higher count, a `Map`/`Set` was added to the aggregation path:
-    // either restore the arena discipline or move the allocation out of the projection.
-    expect(allocations.length).toBeLessThanOrEqual(
-      BASELINE_COLLECTION_ALLOCATIONS,
-    );
-  });
+  for (const sourcePath of SOURCES) {
+    describe(sourcePath, () => {
+      test(`keeps its collection allocations at or below ${BASELINE_COLLECTION_ALLOCATIONS}`, async () => {
+        const source = await Bun.file(sourcePath).text();
+        const allocations = countCollectionAllocations(source);
+        // If this starts failing with a higher count, a `Map`/`Set` was added to the aggregation path:
+        // either restore the arena discipline or move the allocation out of the projection.
+        expect(allocations.length).toBeLessThanOrEqual(
+          BASELINE_COLLECTION_ALLOCATIONS,
+        );
+      });
 
-  test("no boolean[] on the aggregation path; flags are Uint32 bitsets", () => {
-    expect(source).not.toMatch(/\bboolean\s*\[\s*\]/);
-    expect(source).not.toMatch(/Array<\s*boolean\s*>/);
-    expect(source).toContain("new Uint32Array");
-  });
+      test("no boolean[] on the aggregation path; flags are Uint32 bitsets", async () => {
+        const source = await Bun.file(sourcePath).text();
+        expect(source).not.toMatch(/\bboolean\s*\[\s*\]/);
+        expect(source).not.toMatch(/Array<\s*boolean\s*>/);
+        expect(source).toContain("new Uint32Array");
+      });
+    });
+  }
 
   test("the design docs state the measured status instead of implying the invariant holds", async () => {
     for (const path of [

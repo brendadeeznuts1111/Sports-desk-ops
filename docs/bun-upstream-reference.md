@@ -28,12 +28,12 @@ Legal list and licenses: [project/license → type declarations](https://bun.com
 
 Four URL shapes, each with one job (counts read off the site on 2026-11-03):
 
-| URL                                                               | Covers                                                                  | Use when                                 |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
-| [`/reference`](https://bun.com/reference)                         | the tree: 51 `node:*` pages, 6 `bun:*` pages, and `/reference/globals`  | you do not know which namespace holds it |
-| [`/reference/globals/bun`](https://bun.com/reference/globals/bun) | every symbol in the `bun` module, value and type — **322** symbol pages | you have a name and need its page        |
-| `/reference/node/<module>`                                        | Node-compat surface, one page per module                                | a dependency's Node call, not repo code  |
-| `/reference/bun/<module>`                                         | `bun:test`, `bun:sqlite`, `bun:ffi`, `bun:jsc`, `bun:bundle`            | the module behind an import              |
+| URL                                                               | Covers                                                                                                      | Use when                                 |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| [`/reference`](https://bun.com/reference)                         | the tree: 51 `node:*` pages, 6 `bun:*` pages, and [`/reference/globals`](https://bun.com/reference/globals) | you do not know which namespace holds it |
+| [`/reference/globals/bun`](https://bun.com/reference/globals/bun) | every symbol in the `bun` module, value and type — **322** symbol pages                                     | you have a name and need its page        |
+| `/reference/node/<module>`                                        | Node-compat surface, one page per module                                                                    | a dependency's Node call, not repo code  |
+| `/reference/bun/<module>`                                         | `bun`, `bun:bundle`, `bun:ffi`, `bun:jsc`, `bun:sqlite`, `bun:test`                                         | the module behind an import              |
 
 Search is **UI-only**: press `/` on the site, and note there is no addressable query — `/reference?q=stringWidth` returns byte-identical HTML, and `/reference/search` is 404 (both checked 2026-11-03). So the shareable unit is a symbol permalink, never a search URL; that is why this doc cites `/reference/globals/bun/<symbol>` rather than pointing at a query.
 
@@ -174,7 +174,58 @@ The permalink grammar is `/reference/globals/bun/<Namespace>/<Member>`, and **ne
 | [`WebView`](https://bun.com/reference/globals/bun/WebView)                                                                                                                                                                                                                                    | headless WebView surface                                                             | `scripts/capture/webview.ts`                                           |
 | [`Image`](https://bun.com/reference/globals/bun/Image) + [`ConstructorOptions`](https://bun.com/reference/globals/bun/Image/ConstructorOptions), [`Image/backend`](https://bun.com/reference/globals/bun/Image/backend), [`ErrorCode`](https://bun.com/reference/globals/bun/Image/ErrorCode) | `maxPixels`/`autoOrient` gating, backend pinning, rejection codes                    | `lib/logo_image.ts`, `lib/screenshot_encode.ts`, `lib/image_errors.ts` |
 
-Module pages cover imports, not globals: [`bun:test`](https://bun.com/reference/bun/test) (nearly every test file here, 251 of them at 2026-11-03, 6 without it), [`bun:sqlite`](https://bun.com/reference/bun/sqlite) (21 imports), [`bun:ffi`](https://bun.com/reference/bun/ffi) (2), [`bun:jsc`](https://bun.com/reference/bun/jsc) (1) — [`bun:bundle`](https://bun.com/reference/bun/bundle) is build-time only.
+### Built-in module reference (`/reference/bun/<module>`)
+
+Module pages cover imports, not globals:
+
+| Module                                               | Purpose                                    | Key Symbols & Patterns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`bun:test`](https://bun.com/reference/bun/test)     | Native test runner and assertion framework | [`expect`](https://bun.com/reference/bun/test/expect), [`test`](https://bun.com/reference/bun/test/test), [`describe`](https://bun.com/reference/bun/test/describe), [`expectTypeOf`](https://bun.com/reference/bun/test/expectTypeOf), [`onTestFinished`](https://bun.com/reference/bun/test/onTestFinished), [`setSystemTime`](https://bun.com/reference/bun/test/setSystemTime), [`mock`](https://bun.com/reference/bun/test/mock), [`spyOn`](https://bun.com/reference/bun/test/spyOn); declaration merging via `interface Matchers<T>`. |
+| [`bun:bundle`](https://bun.com/reference/bun/bundle) | Build-time dead-code elimination           | [`feature`](https://bun.com/reference/bun/bundle/feature) (compile-time flag replacement; call sites must be an `if` condition or ternary) and [`Registry`](https://bun.com/reference/bun/bundle/Registry) (declaration merging for type-safe flag unions).                                                                                                                                                                                                                                                                                  |
+| [`bun:sqlite`](https://bun.com/reference/bun/sqlite) | In-process high-performance SQLite driver  | `Database`, `Statement`, transaction helpers, zero-copy serialization.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| [`bun:ffi`](https://bun.com/reference/bun/ffi)       | Foreign Function Interface                 | `dlopen`, `ptr`, `FFIType`, `CString`, direct C library interop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| [`bun:jsc`](https://bun.com/reference/bun/jsc)       | JavaScriptCore engine internals            | Heap profiling, GC triggers, memory inspection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+#### `bun:test` core patterns
+
+1. **The Declaration Merging Triad:** Together with `Bun.Env` and `bun:bundle` `Registry`, `bun:test` exposes the third official declaration-merging point in Bun:
+   ```ts
+   declare module "bun:test" {
+     interface Matchers<T> {
+       toBeCustomAssertion(param: number): void;
+     }
+     interface AsymmetricMatchers {
+       toBeCustomAssertion(param: number): void;
+     }
+   }
+   ```
+2. **First-Class Type Testing (`expectTypeOf`):** Directly exported from `bun:test` (vendoring `expect-type`) for compile-time type assertions in `.test-d.ts` suites without external dependencies.
+3. **Scoped Cleanup (`onTestFinished`):** Registers teardown logic directly scoped to the test body, executing after `afterEach` even if assertions fail.
+4. **Deterministic Clock (`setSystemTime`):** Zero-dependency native system clock mocking (`setSystemTime(new Date(...))` and `setSystemTime()` to reset).
+
+#### `bun:bundle` & `Bun.build` core patterns ([docs/bundler#features](https://bun.com/docs/bundler#features))
+
+1. **The `Registry` vs `BuildConfig` Type Boundary:**
+   `bun:bundle` defines an empty interface intended specifically for declaration merging:
+   ```ts
+   declare module "bun:bundle" {
+     interface Registry {}
+     function feature(
+       flag: Registry extends { features: infer Features extends string }
+         ? Features
+         : string,
+     ): boolean;
+   }
+   ```
+   Augmenting `interface Registry { features: Feature }` narrows `feature()` to your union (`"DEBUG" | "PROD"`). Conversely, in `"bun"`, `BuildConfig` declares `features?: string[]`. Attempting to merge a narrowed `features?: Feature[]` onto `BuildConfig` fails with `TS2717: Subsequent property declarations must have the same type`. Type safety for `Bun.build` options is enforced by custom wrappers (e.g. `TargetBuildConfig`) typed against `BUILD_FEATURES`.
+2. **Build-Time Dead-Code Elimination Triad:**
+   - **`feature("FLAG")`:** Compile-time AST macro. Replaced with `true` or `false` by Bun's Zig bundler; unreachable `if` or ternary branches are pruned completely from the bundle. Must appear strictly inside an `if` or ternary condition and requires a literal string argument (no dynamic values).
+   - **Minification Collapsing:** When `--minify` / `minify: true` is enabled, Bun collapses ternary expressions into scalar values (e.g. `const mode = feature("PREMIUM") ? "premium" : "free"` collapses directly to `var mode = "premium"` or `var mode = "free"`).
+   - **Import Removal:** Bun completely prunes the `import { feature } from "bun:bundle"` statement from the final bundled output.
+   - **`drop: string[]`:** Drops function call sites at bundle time (e.g. `drop: ["console.debug"]`).
+   - **`define` / `env: "inline"`:** Inlines constants/env-vars, enabling standard AST constant-folding and tree-shaking.
+3. **`BuildOutput` and `BuildArtifact` Contract:**
+   `Bun.build(options: BuildOptions): Promise<BuildOutput>` produces artifacts where `BuildArtifact extends Blob`. Bundled code is read directly via `await artifact.text()` or streamed via `artifact.stream()` without intermediate filesystem round-trips. Failed builds return `{ success: false, logs: BuildMessage[] }` when `throw: false` is configured.
 
 The index also carries one page per `node:*` module under `/reference/node/<module>` — Bun's Node-compatibility surface, module by module ([`node:fs`](https://bun.com/reference/node/fs), [`node:child_process`](https://bun.com/reference/node/child_process), [`node:dns`](https://bun.com/reference/node/dns), [`node:util`](https://bun.com/reference/node/util), [`node:zlib`](https://bun.com/reference/node/zlib)). That answers a dependency's Node usage — whether the call exists and what it does under Bun — and it is not licence for Node-style code here: `bun run policy:check` decides that, and the frozen baseline is where exceptions live.
 
@@ -1013,3 +1064,92 @@ suggests `--no-sandbox`: disabling the browser's sandbox is not a fix for a cred
 binary search follows Bun's documented order (`BUN_CHROME_PATH`, PATH candidates, macOS install
 paths) and a configured-but-missing `BUN_CHROME_PATH` reports `not-found` instead of silently
 falling back.
+
+### `Bun.Terminal` and `TerminalSession` Agent Architecture (Bun v1.4.4)
+
+`Bun.Terminal` introduced zero-dependency native pseudo-terminal support (`#25415` macOS/Linux, `#29522` Windows ConPTY) without `node-pty`.
+
+#### Architectural Distinctions: Process I/O vs Session Orchestration
+
+| Component                      | Bun Native API                  | `TerminalSession` Responsibility                     |
+| :----------------------------- | :------------------------------ | :--------------------------------------------------- |
+| **Interactive agent sessions** | `Bun.spawn({ terminal })`       | Process lifecycle & ownership                        |
+| **Noninteractive commands**    | `Bun.$` or ordinary `Bun.spawn` | Reserved for deterministic pipeline tasks            |
+| **Live terminal output**       | `terminal.data` callback        | Multiplexed stream, live streaming listener          |
+| **User / agent input**         | `terminal.write()`              | Stream stdin driving via `.write()` / `.writeLine()` |
+| **Dynamic terminal sizing**    | `terminal.resize()`             | Runtime resize via `.resize(cols, rows)`             |
+| **Process completion**         | `proc.exited`                   | Awaits `proc.exited`, distinct from PTY stream EOF   |
+| **Session cleanup**            | `terminal.close()`              | Async resource disposal via `[Symbol.asyncDispose]`  |
+
+#### Two Critical Implementation Subtleties
+
+1. **`proc.exited` vs PTY `exit` callback**: The terminal's PTY `exit` callback describes the PTY stream closing (`0` for clean EOF, `1` for read error), NOT the subprocess exit code. Subprocess exit status (e.g. exit 42) must always be resolved via `await proc.exited`.
+2. **Multiplexed stream & raw ANSI bytes**: PTY multiplexes stdout and stderr into a single terminal stream. `TerminalSession` preserves the verbatim ANSI bytes in `.raw` for accurate terminal replay and web streaming, while `.text` provides clean plain-text stripping (`stripPtyCapture`) for assertion engines and loggers.
+3. **Compile-time flags under PTY**: `TerminalSession.startBun(script, args, { target: "dev" | "prod" })` merges `BUILD_FEATURES` into `--feature=FLAG` arguments placed before the script, executing feature-flagged scripts inside a real PTY.
+
+### `bun:ffi` Native Interop and the Three-Tier Agent Execution Model (Bun v1.4.4)
+
+For operator and AI agent infrastructure in Bun, three execution layers must be kept architecturally distinct:
+
+| Layer                                 | Execution Mechanism                | Primary Use Case                                                             | Performance & Isolation Characteristics                                                      |
+| :------------------------------------ | :--------------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| **Tier 1: Shell Automation**          | `Bun.$` / `Bun.spawn`              | Deterministic pipeline scripts, tool wrappers, non-interactive CI gates      | Subprocess isolation, pipe streams, zero TTY overhead                                        |
+| **Tier 2: Interactive Terminal**      | `Bun.Terminal` / `TerminalSession` | Interactive CLI driving, agent debugging, TTY streaming, ANSI replay         | Real PTY allocation (`/dev/pty`), session ownership, dynamic resize, async resource disposal |
+| **Tier 3: Native In-Process Interop** | `bun:ffi` (`dlopen`)               | Performance-critical parsers, compression, specialized cryptographic digests | In-process C ABI, zero process/IPC overhead, direct pointer manipulation                     |
+
+#### High-Performance Bun FFI Capabilities
+
+Bun FFI simplifies native library interop with two zero-copy idioms:
+
+1. **Automatic Buffer-Length Resolution (`"buffer"` + `"buffer_length"`):**
+
+   ```ts
+   import { dlopen } from "bun:ffi";
+
+   const { symbols } = dlopen("libhash.so", {
+     hash: {
+       args: ["buffer", "buffer_length"],
+       returns: "cstring",
+     },
+   });
+
+   const data = new TextEncoder().encode("SportsDesk");
+   // Passing the same buffer twice:
+   // Arg 0 receives the memory pointer (`const uint8_t *`)
+   // Arg 1 receives the current byte length (`size_t`) evaluated at call time
+   const digest = symbols.hash(data, data);
+   ```
+
+   _Advantage:_ Bun extracts the pointer and `.byteLength` at the moment of invocation. This avoids separate length evaluations in JavaScript that could become stale or race when using resizable, transferred, or sub-allocated `ArrayBuffer` views.
+
+2. **Native C-String Conversion (`"cstring"`):**
+   - **Arguments:** JavaScript strings passed to a `"cstring"` argument are automatically transformed into null-terminated UTF-8 C strings (`const char *`).
+   - **Returns:** Null-terminated C string pointers returned from native functions are automatically converted into JavaScript `string` primitives (or `null` for null pointers).
+
+#### Operational Precautions for Native Interop
+
+1. **Memory Ownership:** Returning `"cstring"` copies the native string into a JavaScript string managed by JSC, but it does **not** free native heap memory allocated by the native library (`malloc`). Native functions returning dynamically allocated strings must expose a matching native `free()` symbol or accept a caller-owned output buffer (`["buffer", "buffer_length"]`).
+2. **Production Stability Boundary:** Bun upstream documents `bun:ffi` as experimental and explicitly recommends Node-API (`napi`) for production-critical native extensions requiring long-term ABI stability guarantees.
+
+### `bun run --parallel` and `--sequential` (Bun v1.4.0 / PR #26551)
+
+Bun v1.4 natively runs multiple `package.json` scripts concurrently with Foreman-style name-prefixed output, replacing npm packages like `concurrently` and `npm-run-all`.
+
+#### Core Capabilities & CLI Semantics
+
+1. **Concurrent Execution:** `bun run --parallel scriptA scriptB` executes scripts concurrently, prefixing each line of stdout and stderr with the aligned task name (e.g. `typecheck | ...`).
+2. **Sequential Execution:** `bun run --sequential scriptA scriptB` runs scripts sequentially with identical Foreman-style prefixing.
+3. **Glob Matching:** `bun run --parallel "build:*"` expands glob patterns against script names in `package.json`.
+4. **Workspace Fan-Out:** `bun run --parallel --filter '*' build` or `--workspaces` executes the target across all monorepo packages.
+5. **Lifecycle Hook Grouping:** `pre<script>` and `post<script>` lifecycle hooks are automatically grouped and executed in dependency order with their main script under the same prefix.
+6. **Fault Tolerance (`--no-exit-on-error`):** By default, when any script fails, Bun sends `SIGINT` to cancel sibling scripts. Passing `--no-exit-on-error` (which must precede positional script arguments or globs) keeps running remaining scripts to completion.
+
+### Dev Tooling & Process Lifecycle Contracts (Bun v1.4.0)
+
+| Tooling Feature        | Upstream PR                                                                                              | Primary Mechanism & Flags                                                | Operational Invariant in `sportsdesk-ops`                                                                                                                            |
+| :--------------------- | :------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CPU Profiling**      | [#24112](https://github.com/oven-sh/bun/pull/24112), [#26327](https://github.com/oven-sh/bun/pull/26327) | `--cpu-prof`, `--cpu-prof-md`, `BUN_CPU_PROFILE=1`                       | Markdown reports are written to gitignored `scratch/profiles/` for LLM inspection; `BUN_CPU_PROFILE=1` profiles daemons started via supervisor without editing argv. |
+| **Heap Profiling**     | [#26326](https://github.com/oven-sh/bun/pull/26326)                                                      | `--heap-prof`, `--heap-prof-md`                                          | Retained-size breakdown & GC roots in Markdown; used to verify fixed-capacity TypedArray allocations and zero-allocation invariants.                                 |
+| **Async Stack Traces** | [#28652](https://github.com/oven-sh/bun/pull/28652)                                                      | Automatic across `Bun.file()`, `fs.promises`, S3, DNS, crypto, `fetch()` | Native errors preserve call frame continuity back to the application `await` site, eliminating blind async rejections in telemetry.                                  |
+| **Orphan Prevention**  | [#29930](https://github.com/oven-sh/bun/pull/29930)                                                      | `--no-orphans` (`[run] noOrphans = true`)                                | Enforced on all long-lived workers and watch scripts (`wagers:watch`, `positions:cron`, `supervisor.ts`); exits when parent dies and SIGKILLs descendants.           |
+| **Env File Isolation** | [#24767](https://github.com/oven-sh/bun/pull/24767)                                                      | `--no-env-file` (`env = false` in `bunfig.toml`)                         | Enforced on cron jobs to prevent accidental loading of local 1Password `.env` pipes; secrets are injected via `Bun.secrets` or explicit supervisor env.              |

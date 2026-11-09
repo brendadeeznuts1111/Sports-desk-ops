@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { heapStats } from "bun:jsc";
 
 import {
+  amountToCents,
   assertSanitizedTickerArtifact,
+  Bridge3aTicketColumnStore,
   buildF402TickerSnapshot,
   canonicalRiskCents,
   canonicalToWinCents,
@@ -11,13 +14,22 @@ import {
   deskClock,
   F402_BET_TICKER_CHANNELS,
   highestWagerNumber,
+  legCountOf,
+  MAX_INT32_CENTS,
+  MAX_UINT16_LEGS,
+  MAX_UINT32_WAGER_NUMBER,
+  numericWagerNumber,
+  ORD_CHANNEL_INTERNET,
+  ORD_CHANNEL_UNKNOWN,
+  ticketWriterToChannelOrdinal,
   type F402BetTickerWagerType,
   projectF402TickerDelta,
+  projectF402TickerDeltaWithDiagnostics,
   sha256Hex,
   stableJson,
   ticketKey,
 } from "../lib/f402_bet_ticker_delta.ts";
-import type { F402TickerRow } from "../lib/f402_ingest.ts";
+import { parseF402TickerRow, type F402TickerRow } from "../lib/f402_ingest.ts";
 
 const ONE_LEG =
   "Football - Team A vs Team B / Game / Winner (2 way) / Team A -110";
@@ -58,6 +70,21 @@ describe("bounded demux", () => {
     expect(demuxChannel("WILBANKS.")).toBe("other");
     expect(demuxChannel("")).toBe("other");
     expect(demuxChannel(null)).toBe("other");
+  });
+
+  test("novel channel maps to explicit UNKNOWN ordinal and other, not Internet", () => {
+    expect(ticketWriterToChannelOrdinal("NOVEL_CHANNEL")).toBe(
+      ORD_CHANNEL_UNKNOWN,
+    );
+    expect(ticketWriterToChannelOrdinal("NOVEL_CHANNEL")).not.toBe(
+      ORD_CHANNEL_INTERNET,
+    );
+    expect(demuxChannel("NOVEL_CHANNEL")).toBe("other");
+    expect(demuxChannel("NOVEL_CHANNEL")).not.toBe("Internet");
+    expect(ticketWriterToChannelOrdinal("  crypto_desk_feed  ")).toBe(
+      ORD_CHANNEL_UNKNOWN,
+    );
+    expect(demuxChannel("  crypto_desk_feed  ")).toBe("other");
   });
 
   test("maps the eight wager types and fails closed to unknown", () => {
@@ -395,5 +422,207 @@ describe("assertSanitizedTickerArtifact", () => {
     expect(() =>
       assertSanitizedTickerArtifact({ note: "x".repeat(300_000) }),
     ).toThrow();
+  });
+});
+
+describe("Int32Array overflow guard", () => {
+  test("accepts valid amounts up to MAX_INT32_CENTS", () => {
+    expect(amountToCents(21_474_836)).toBe(2_147_483_600);
+    expect(amountToCents(21_474_836.47)).toBe(MAX_INT32_CENTS);
+  });
+
+  test("rejects amounts exceeding Int32Array boundary with RangeError", () => {
+    // $30M is 3,000,000,000 cents > 2,147,483,647
+    expect(() => amountToCents(30_000_000)).toThrow(RangeError);
+    expect(() =>
+      canonicalVolumeCents(row({ volumeAmount: 30_000_000 })),
+    ).toThrow(RangeError);
+  });
+
+  test("a batch containing a $30M wager skips the overflowing row without aborting valid tickets", () => {
+    const valid1 = row({ wagerNumber: "101", volumeAmount: 500 });
+    const corrupt = row({ wagerNumber: "102", volumeAmount: 30_000_000 });
+    const valid2 = row({ wagerNumber: "103", volumeAmount: 700 });
+
+    const store = new Bridge3aTicketColumnStore(16);
+    expect(store.insertOrUpdate(valid1)).toBe(0);
+    expect(store.insertOrUpdate(corrupt)).toBe(-1); // safely rejected
+    expect(store.overflowRejectionCount).toBe(1);
+    expect(store.insertOrUpdate(valid2)).toBe(1);
+    expect(store.count).toBe(2);
+
+    // projectF402TickerDelta also processes valid tickets without throwing
+    const delta = projectF402TickerDelta(
+      [],
+      [valid1, corrupt, valid2],
+      "2026-11-03T18:00:00.000Z",
+    );
+    expect(delta.newTickets).toBe(2);
+    expect(delta.watermark).toBe("103");
+  });
+});
+
+describe("Bridge3aTicketColumnStore collision safety", () => {
+  test("preserves distinct keys and probes correctly under slot collisions", () => {
+    const store = new Bridge3aTicketColumnStore(16);
+    const r1 = row({ wagerNumber: "100" });
+    const r2 = row({ wagerNumber: "200" });
+    const idx1 = store.insertOrUpdate(r1);
+    const idx2 = store.insertOrUpdate(r2);
+    expect(idx1).not.toBe(idx2);
+    expect(store.lookup(ticketKey(r1))).toBe(idx1);
+    expect(store.lookup(ticketKey(r2))).toBe(idx2);
+    expect(store.keyCol[idx1]).toBe("100-100");
+    expect(store.keyCol[idx2]).toBe("200-200");
+  });
+});
+
+describe("watermark semantics under out-of-order and duplicate arrivals", () => {
+  test("duplicate row arrival preserves stable watermark", () => {
+    const r1 = row({ wagerNumber: "900001" });
+    const r1Dup = row({ wagerNumber: "900001" });
+    const delta = projectF402TickerDelta(
+      [],
+      [r1, r1Dup],
+      "2026-11-03T18:00:00.000Z",
+    );
+    expect(delta.watermark).toBe("900001");
+    expect(delta.newTickets).toBe(1);
+    expect(delta.changedTickets).toBe(0);
+  });
+
+  test("out-of-order arrival advances watermark and backfilled ticket does not regress it", () => {
+    // Poll 1: Ticket 900003 arrives first
+    const r3 = row({ wagerNumber: "900003" });
+    const delta1 = projectF402TickerDelta([], [r3], "2026-11-03T18:00:00.000Z");
+    expect(delta1.watermark).toBe("900003");
+    expect(delta1.newTickets).toBe(1);
+
+    // Poll 2: Older ticket 900002 arrives out of order alongside 900003
+    const r2 = row({ wagerNumber: "900002" });
+    const delta2 = projectF402TickerDelta(
+      [r3],
+      [r3, r2],
+      "2026-11-03T18:05:00.000Z",
+    );
+    // Watermark must NOT regress to 900002
+    expect(delta2.watermark).toBe("900003");
+    expect(delta2.newTickets).toBe(1);
+    // changedTickets is 0 because ticket 900003's fields did not mutate between polls.
+    // Out-of-order tickets do trigger change detection if their fields mutated.
+    expect(delta2.changedTickets).toBe(0);
+    expect(delta2.goneTickets).toBe(0);
+
+    // Both tickets are accounted for
+    const totalTickets = delta2.byChannel.reduce(
+      (sum, ch) => sum + ch.ticketCount,
+      0,
+    );
+    expect(totalTickets).toBe(2);
+  });
+});
+
+describe("column boundary and range assertions", () => {
+  test("legCountOf clamps at MAX_UINT16_LEGS (65535)", () => {
+    const normalRow = row({ shortDesc: TWO_LEGS });
+    expect(legCountOf(normalRow)).toBe(2);
+
+    // Mock an oversized leg payload
+    const fakeLegs = Array.from(
+      { length: 70_000 },
+      (_, i) => `Basketball - Leg ${i} / Win`,
+    ).join("\r\n");
+    const massiveRow = row({ shortDesc: fakeLegs });
+    expect(legCountOf(massiveRow)).toBe(MAX_UINT16_LEGS);
+
+    // Store assigns correctly without Uint16 overflow
+    const store = new Bridge3aTicketColumnStore(4);
+    const idx = store.insertOrUpdate(massiveRow);
+    expect(idx).toBe(0);
+    expect(store.legCountCol[idx]).toBe(MAX_UINT16_LEGS);
+  });
+
+  test("numericWagerNumber bounds against MAX_UINT32_WAGER_NUMBER (4.29B)", () => {
+    expect(MAX_UINT32_WAGER_NUMBER).toBe(4_294_967_295);
+    expect(
+      numericWagerNumber(row({ wagerNumber: String(MAX_UINT32_WAGER_NUMBER) })),
+    ).toBe(MAX_UINT32_WAGER_NUMBER);
+    expect(numericWagerNumber(row({ wagerNumber: "4294967296" }))).toBeNull();
+    expect(numericWagerNumber(row({ wagerNumber: "9999999999" }))).toBeNull();
+
+    const store = new Bridge3aTicketColumnStore(4);
+    const rValid = row({ wagerNumber: String(MAX_UINT32_WAGER_NUMBER) });
+    const rExceed = row({ wagerNumber: "5000000000" });
+
+    store.insertOrUpdate(rValid);
+    expect(store.wagerNumberCol[0]).toBe(MAX_UINT32_WAGER_NUMBER);
+
+    store.insertOrUpdate(rExceed);
+    expect(store.wagerNumberCol[1]).toBe(0);
+  });
+
+  test("projectF402TickerDeltaWithDiagnostics surfaces batch diagnostics and overflow counts", () => {
+    const valid1 = row({ wagerNumber: "101", amountWagered: 100 });
+    const overflow = row({ wagerNumber: "102", amountWagered: 30_000_000 });
+    const valid2 = row({ wagerNumber: "103", amountWagered: 250 });
+
+    const result = projectF402TickerDeltaWithDiagnostics(
+      [valid1],
+      [valid1, overflow, valid2],
+      "2026-11-03T18:00:00.000Z",
+    );
+
+    expect(result.diagnostics.beforeCount).toBe(1);
+    expect(result.diagnostics.afterCount).toBe(2);
+    expect(result.diagnostics.overflowRejectionCount).toBe(1);
+    expect(result.event.newTickets).toBe(1);
+    expect(result.event.watermark).toBe("103");
+  });
+});
+
+describe("JSC heapStats Structure and PropertyTable invariant", () => {
+  test("steady-state iteration produces 0 delta in PropertyTable and bounds Structure delta", async () => {
+    const fixtureFile = Bun.file("tests/fixtures/live-wagers-LIST-100.json");
+    const json = (await fixtureFile.json()) as { LIST: unknown[] };
+    const rows = json.LIST.slice(0, 10)
+      .map((r) => parseF402TickerRow(r))
+      .filter((r): r is F402TickerRow => r !== null);
+
+    // Warmup 50 iterations to ensure shapes are stabilized and JSC JIT tiers up fully
+    for (let i = 0; i < 50; i++) {
+      const delta = projectF402TickerDelta(
+        [],
+        rows,
+        "2026-11-08T18:00:00.000Z",
+      );
+      buildF402TickerSnapshot(delta, rows.length);
+    }
+    if (typeof Bun.gc === "function") Bun.gc(true);
+
+    const base = heapStats().objectTypeCounts;
+    const baseStructure = base.Structure ?? 0;
+    const basePropertyTable = base.PropertyTable ?? 0;
+
+    // Run 50 steady-state iterations
+    for (let i = 0; i < 50; i++) {
+      const delta = projectF402TickerDelta(
+        [],
+        rows,
+        "2026-11-08T18:00:00.000Z",
+      );
+      buildF402TickerSnapshot(delta, rows.length);
+    }
+    if (typeof Bun.gc === "function") Bun.gc(true);
+
+    const after = heapStats().objectTypeCounts;
+    const deltaStructure = (after.Structure ?? 0) - baseStructure;
+    const deltaPropertyTable = (after.PropertyTable ?? 0) - basePropertyTable;
+
+    // PropertyTable delta <= 1 in full multi-test runner suites (0 in dedicated runs)
+    // proves objects never degrade into dictionary mode.
+    expect(deltaPropertyTable).toBeLessThanOrEqual(1);
+    // Delta-based assertion: measures net growth over steady-state iterations rather than absolute
+    // baseline count, ensuring test stability across JSC version bumps (test runner overhead is <120).
+    expect(deltaStructure).toBeLessThan(120);
   });
 });

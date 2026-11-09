@@ -12,10 +12,12 @@
 
 import { R2S3Client, resolveSecretBackedEnv } from "./r2_s3_client.ts";
 import {
+  assertSanitizedTickerArtifact,
+  encodeF402TickerBinarySnapshot,
   F402_BET_TICKER_KIND,
   F402_BET_TICKER_LIVE_CHANNEL,
+  F402_BET_TICKER_R2_BINARY_KEY,
   F402_BET_TICKER_R2_KEY,
-  assertSanitizedTickerArtifact,
   type F402TickerDeltaEvent,
   type F402TickerSnapshot,
 } from "./f402_bet_ticker_delta.ts";
@@ -33,11 +35,15 @@ export interface F402BetTickerSinkResult {
   readonly url?: string;
 }
 
+export type F402BetTickerWireFormat = "json" | "binary" | "both";
+
 export interface F402BetTickerSinkOptions {
   readonly liveBets: boolean;
   readonly r2: boolean;
   readonly gatewayUrl?: string;
   readonly apiToken?: string;
+  /** Wire format for R2 snapshots: "json" (v1), "binary" (v2 304B), or "both" (dual-write). */
+  readonly wireFormat?: F402BetTickerWireFormat;
   /** Test seam for the env → Bun.secrets token fallback. */
   readonly apiTokenResolver?: () => Promise<string>;
   readonly fetchImpl?: (
@@ -150,7 +156,6 @@ export function createF402BetTickerSink(
           error: `sanitized snapshot rejected: ${errorMessage(error)}`,
         };
       }
-      const text = `${JSON.stringify(snapshot, null, 2)}\n`;
       const client =
         options.r2Client === undefined
           ? await R2S3Client.fromEnvOrSecrets()
@@ -158,25 +163,60 @@ export function createF402BetTickerSink(
       if (client === null) {
         return { ok: false, error: "R2 credentials are unavailable" };
       }
+
+      const wireFormat: F402BetTickerWireFormat =
+        options.wireFormat ??
+        (Bun.env.BRIDGE3A_WIRE_FORMAT as F402BetTickerWireFormat | undefined) ??
+        "json";
+      const writeJson = wireFormat === "json" || wireFormat === "both";
+      const writeBinary = wireFormat === "binary" || wireFormat === "both";
+
       try {
-        await client.writeWithMetadata(
-          F402_BET_TICKER_R2_KEY,
-          new TextEncoder().encode(text),
-          {
-            type: "application/json",
-            metadata: {
-              pii: "none",
-              "schema-version": String(snapshot.schemaVersion),
-              "desk-date": snapshot.deskDate,
-              "generated-at": snapshot.generatedAt,
-              sha256: snapshot.sourceSha256,
-              source: F402_BET_TICKER_SOURCE,
+        if (writeJson) {
+          const text = `${JSON.stringify(snapshot, null, 2)}\n`;
+          await client.writeWithMetadata(
+            F402_BET_TICKER_R2_KEY,
+            new TextEncoder().encode(text),
+            {
+              type: "application/json",
+              metadata: {
+                pii: "none",
+                "schema-version": String(snapshot.schemaVersion),
+                "desk-date": snapshot.deskDate,
+                "generated-at": snapshot.generatedAt,
+                sha256: snapshot.sourceSha256,
+                source: F402_BET_TICKER_SOURCE,
+              },
             },
-          },
-        );
+          );
+        }
+
+        if (writeBinary) {
+          const binBytes = encodeF402TickerBinarySnapshot(snapshot);
+          await client.writeWithMetadata(
+            F402_BET_TICKER_R2_BINARY_KEY,
+            binBytes,
+            {
+              type: "application/octet-stream",
+              metadata: {
+                pii: "none",
+                "schema-version": "2",
+                "desk-date": snapshot.deskDate,
+                "generated-at": snapshot.generatedAt,
+                sha256: snapshot.sourceSha256,
+                source: F402_BET_TICKER_SOURCE,
+              },
+            },
+          );
+        }
+
+        const primaryKey =
+          wireFormat === "binary"
+            ? F402_BET_TICKER_R2_BINARY_KEY
+            : F402_BET_TICKER_R2_KEY;
         return {
           ok: true,
-          url: `${client.publicBase}/${F402_BET_TICKER_R2_KEY}`,
+          url: `${client.publicBase}/${primaryKey}`,
         };
       } catch (error) {
         return { ok: false, error: errorMessage(error) };

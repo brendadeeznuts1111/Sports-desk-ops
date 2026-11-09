@@ -12,6 +12,7 @@ export const REQUIRED_BUN_CLI_FLAGS = [
   "--env-file",
   "--no-env-file",
   "--no-orphans",
+  "--parallel",
 ] as const;
 
 export interface BunCliSurface {
