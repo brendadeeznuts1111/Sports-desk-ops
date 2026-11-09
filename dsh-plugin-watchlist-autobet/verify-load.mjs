@@ -18,14 +18,14 @@
  *   - the disposer releases all nine registrations.
  *
  * WHAT IT DOES NOT PROVE: that a tool's CLI answer is correct, or that the Host (Electron's
- * Node main process) runs it. It deliberately points `repoPath` at a non-existent temp
- * directory so it never depends on the CLI existing and never mutates a real ledger.
+ * Node main process) runs it. It uses a temp checkout with a valid root `package.json` but no
+ * CLI so tools answer `cli_missing` without mutating a real ledger.
  *
  * Run: node dsh-plugin-watchlist-autobet/verify-load.mjs
  */
 
 // ast-grep-ignore: node-fs-read-write-file -- this smoke test reads its own index.js to prove the bundle imports only node: builtins.
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,10 +33,17 @@ import { fileURLToPath } from "node:url";
 // Runs under Node as well as Bun: import.meta.dir is Bun-only.
 // ast-grep-ignore: bun-import-meta-dir
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** The bundle must never reach the real repo in this smoke test. */
-const MISSING_REPO = join(tmpdir(), `dsh-autobet-verify-no-cli-${process.pid}`);
+function smokeCheckout(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), `${prefix}-${process.pid}-`));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "@tennis-hq/sportsdesk-workspace", private: true }),
+  );
+  return dir;
+}
+const SMOKE_REPO = smokeCheckout("dsh-autobet-verify");
 const CLI_RELATIVE_PATH = "cli/watchlist_autobet_cli.ts";
-const EXPECTED_CLI_PATH = join(MISSING_REPO, CLI_RELATIVE_PATH);
+const EXPECTED_CLI_PATH = join(SMOKE_REPO, CLI_RELATIVE_PATH);
 
 /** Sorted, so the comparison is order-independent. */
 const EXPECTED_TOOL_NAMES = [
@@ -150,7 +157,7 @@ const SOURCE = readFileSync(join(HERE, "index.js"), "utf8");
 
 const harness = makeContext();
 const dispose = plugin.apply(harness.ctx, {
-  repoPath: MISSING_REPO,
+  repoPath: SMOKE_REPO,
   bunPath: "bun-not-required-for-this-smoke-test",
   configPath: "config/watchlist-autobet.json",
   timeoutMs: 5000,
