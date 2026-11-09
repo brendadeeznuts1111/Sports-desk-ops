@@ -12,16 +12,14 @@ Operational knowledge and procedures for auditing, detecting, and mitigating poi
 
 ---
 
-## 1. Architectural Reality: Pricing Bug vs. Syndicate Profiling
+## 1. Architectural Reality: Deliberate Underpricing, Retail Elasticity & Syndicate Profiling
 
 ### Core Thesis
 
-When syndicates repeatedly buy half-points on football lines, **the trading desk has a structural pricing bug** — not merely a customer-behavior problem.
+Flat -120/-125 pricing on football spreads is a **deliberate retail product simplification**, not an accidental calculation bug. It functions as a high-margin product across casual action (dead numbers, quarters, parlays), but becomes **vulnerable to exploitation when sharp syndicates concentrate five-figure volume exclusively on key numbers (3, 7, 10, 14, 21)**.
 
-- **Football Key Numbers (3, 7, 14, 21)**: Margin distributions have discrete clustering due to scoring quanta (field goals = 3, touchdowns = 7). Moving across 3 or 7 has a **20¢ to 28¢ fair value**.
-- **Desk Pricing Bug**: The desk charges a flat **10¢ to 15¢** (`-120` to `-125`) regardless of the number.
-- **Economic Result**: Syndicates harvest **+7¢ to +18¢ of positive expected value (+EV)** on every ticket buying onto, off, or across 3 and 7.
-- **The P0 Fix**: Reprice half-points on 3 and 7 dynamically to **`-135` / `-140`** in `SportsVigSetup`. Profiling provides telemetry, but repricing eliminates the exploit.
+- **Football Key Numbers (3, 7, 14, 21)**: Margin distributions have discrete clustering due to scoring quanta (field goals = 3, touchdowns = 7). Moving onto or across 3 or 7 has a **20¢ to 28¢ fair value**.
+- **Retail Elasticity Constraint**: Hiking catalog prices across the board reduces overall desk hold because recreational volume drops off. The P0 intervention is **real-time profile alerts and per-account stake limits**, evaluated against historical settled databases via counterfactual shadow-pricing (`scripts/shadow_price.ts`).
 
 ### Why the Bug Does NOT Apply to Basketball
 
@@ -272,13 +270,40 @@ Fantasy402 wagers store price and payout terms in three simultaneous formats:
 
 ---
 
-## 7. Dynamic Repricing Formulation for Football Spreads
+## 7. Repricing Formulation & Operational Policy for Football Spreads
 
-To fix the football pricing bug without disabling point buys:
+### Exact American Odds Conversion
 
-$$|M_{\text{fair}}| = \left( \frac{P_0 + \Delta P}{1 - (P_0 + \Delta P)} \right) \times 100$$
+For win probability $p > 0.50$, the fair American moneyline price is negative:
 
-- **Key 3.0**: $\Delta P = +5.5\% \implies$ Set desk price to **`-140`** (currently `-120`).
-- **Key 7.0**: $\Delta P = +4.5\% \implies$ Set desk price to **`-135`** (currently `-125`).
-- **Key 14.0 / 21.0**: $\Delta P = +2.5\%\text{--}3.0\% \implies$ Set desk price to **`-125` to `-128`**.
-- **Dead Numbers**: Maintain **`-120`**.
+$$\text{American}(p) = -\frac{100 \cdot p}{1 - p}$$
+
+For an unadjusted $-110$ spread baseline ($P_0 = 0.5238$):
+
+- **Key 3.0** ($\Delta P = +5.5\% \implies p = 0.5788$): Fair Breakeven = **`-137.4`** ($\approx -138$).
+- **Key 7.0** ($\Delta P = +4.5\% \implies p = 0.5688$): Fair Breakeven = **`-131.9`** ($\approx -132$).
+- **Key 14 / 21** ($\Delta P = +2.8\% \implies p = 0.5518$): Fair Breakeven = **`-123.1`** ($\approx -123$).
+- **Dead Numbers** ($\Delta P \approx +1.8\% \implies p = 0.5418$): Fair Breakeven = **`-118.2`** ($\approx -118$).
+
+### Policy Trade-Off: Indifference vs. House Hold vs. Targeted Limits
+
+1. **Option A (Indifference Ladder)**: Sets desk price equal to fair breakeven (`-138` on 3, `-132` on 7). Bettor EV is $0.0\%$, desk margin on the move is $0.0\%$.
+2. **Option B (Standard House Hold Ladder)**: Adds standard $\sim 4.5\%$ house margin (`-150` on 3, `-142` on 7, `-130` on 14/21).
+3. **Operational Recommendation (Alerts & Max-Risk Limits over Global Repricing)**:
+   - Empirical shadow-pricing across 108,667 settled point-buys (`./bin/dx shadow-price`) demonstrates that point-buying as a whole generated **+$491.8k in net desk profit**.
+   - Universal repricing risks a retail turnover drop (a 15% retail drop costs the desk **-$15.3k** in lost margin).
+   - Recommended desk action is **real-time profiling alerts (`evaluateTicketForProfileAlert`) and a $2,500 maximum risk cap** on key-number buys for flagged syndicate accounts (`GP301`, `BRT5235`, `DD008`), preserving casual volume while containing syndicate exposure.
+
+---
+
+## 8. Counterfactual Shadow-Pricing Harness (`scripts/shadow_price.ts`)
+
+Before deploying catalog changes, run:
+
+```bash
+bun run scripts/shadow_price.ts --ladder-3=-140 --ladder-7=-135 --elasticity=0.15
+# Or via DX entrypoint:
+./bin/dx shadow-price --ladder-3=-140 --ladder-7=-135 --elasticity=0.15
+```
+
+Evaluates counterfactual P&L across `hist-mine.db`, isolating sharp syndicate savings ($N \ge 15$, Key Rate $\ge 40\%$) from retail elasticity turnover attrition.

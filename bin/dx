@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge"
+DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price"
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -331,6 +331,8 @@ Usage: ./bin/dx <command> [args...]
                                     Normalize wagers to canonical 0-6 portal period enum with multi-family dates
     ./bin/dx edge [--input=<path>] [--sort=leak|hold|edge|volume] [--min-wagers=N] [--inspect]
                                     Market edge & leakage dashboard slicing by sport, period & market
+    ./bin/dx shadow-price [--db=<path>] [--ladder-3=odds] [--ladder-7=odds] [--min-volume=N] [--elasticity=0.15]
+                                    Simulate counterfactual point-buy pricing ladders against settled history
 
   Deploy
     ./bin/dx stage                  Regenerate + stage dist/ (no upload)
@@ -665,6 +667,9 @@ VERSION_HELP
     ;;
   edge)
     exec bun run "$REPO_ROOT/scripts/market_edge_dashboard.ts" "$@"
+    ;;
+  shadow-price)
+    exec bun run "$REPO_ROOT/scripts/shadow_price.ts" "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies
