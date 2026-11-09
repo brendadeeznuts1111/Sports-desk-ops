@@ -267,6 +267,14 @@ window.__ModuleLoader__.load({
         rawHealth: "Raw /health",
         rawStatus: "Raw /api/status",
         dotTitle: "SportsDesk desk: {status}",
+        liveCounterStrip: "Live counters",
+        overviewSourceStrip: "Overview sources",
+        operatorDesk: "Desk host",
+        liveReads: "F402 live reads",
+        liveReadsOk: "ticker and pending reachable",
+        liveReadsPartial: "live reads degraded",
+        legacyPortalLead: "Actions in legacy portal:",
+        legacyPortalLink: "Fantasy402 Manager",
         marketFeed: "Market feed",
         book: "Book",
         executionCard: "Paper execution",
@@ -445,6 +453,14 @@ window.__ModuleLoader__.load({
         rawHealth: "原始 /health",
         rawStatus: "原始 /api/status",
         dotTitle: "SportsDesk 工作台：{status}",
+        liveCounterStrip: "实时计数",
+        overviewSourceStrip: "概览数据源",
+        operatorDesk: "工作台主机",
+        liveReads: "F402 实盘读取",
+        liveReadsOk: "ticker 与 pending 可达",
+        liveReadsPartial: "实盘读取降级",
+        legacyPortalLead: "旧版门户操作：",
+        legacyPortalLink: "Fantasy402 Manager",
         marketFeed: "市场行情",
         book: "账目",
         executionCard: "模拟执行",
@@ -589,6 +605,8 @@ window.__ModuleLoader__.load({
       telegramReason: null,
       checks: null,
       schedules: null,
+      deskHostname: null,
+      liveReadsLine: null,
       missing: [],
       sources: Object.freeze({
         health: null,
@@ -1419,6 +1437,7 @@ window.__ModuleLoader__.load({
         telegram !== null && isRecord(telegram.status) ? telegram.status : null;
       const statusHttp =
         statusState.httpStatus === null ? null : statusState.httpStatus;
+      const liveReadsLine = readLiveReadsSummary(statusBody);
 
       return {
         ...INITIAL,
@@ -1440,9 +1459,32 @@ window.__ModuleLoader__.load({
         telegramReason: readText(telegramStatus && telegramStatus.modeReason),
         checks: readChecks(statusBody && statusBody.checks),
         schedules: readSchedules(telegram && telegram.schedules),
+        deskHostname: readText(healthBody.hostname),
+        liveReadsLine,
         missing,
         sources,
       };
+    }
+
+    /**
+     * One secret-free line from `/api/status.live` (ticker/pending reachability).
+     * @param {unknown} statusBody
+     * @returns {string | null}
+     */
+    function readLiveReadsSummary(statusBody) {
+      if (!isRecord(statusBody) || !isRecord(statusBody.live)) return null;
+      const live = statusBody.live;
+      const ticker = isRecord(live.ticker) ? live.ticker : null;
+      const pending = isRecord(live.pending) ? live.pending : null;
+      const parts = [];
+      if (ticker !== null && typeof ticker.status === "string") {
+        parts.push(`ticker ${ticker.status}`);
+      }
+      if (pending !== null && typeof pending.status === "string") {
+        parts.push(`pending ${pending.status}`);
+      }
+      if (parts.length === 0) return null;
+      return parts.join(" · ");
     }
 
     /* --- shared live store ----------------------------------------------- */
@@ -2572,6 +2614,110 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Compact top strip of SSE/poll counters (legacy balance-strip position).
+     * Non-interactive: read-only values, not navigation tiles.
+     * @param {(key: string, params?: object) => string} t
+     * @param {typeof LIVE_INITIAL} live
+     * @param {number} now
+     */
+    function liveCounterStrip(t, live, now) {
+      if (live.values === null || live.values.counts === null) return null;
+      const counts = live.values.counts;
+      const items = [];
+      for (const key of LIVE_COUNTER_KEYS) {
+        const value = counts[key];
+        if (typeof value !== "number") continue;
+        items.push(
+          h(
+            "span",
+            {
+              className: "spsd-strip-item",
+              key,
+              title: t(LIVE_COUNTER_LABELS[key] ?? key),
+            },
+            h("span", { className: "spsd-strip-label" }, t(LIVE_COUNTER_LABELS[key] ?? key)),
+            h(
+              "span",
+              { className: "spsd-strip-value" },
+              liveCounterText(key, value),
+            ),
+          ),
+        );
+      }
+      if (items.length === 0) return null;
+      return h(
+        "section",
+        {
+          className: "spsd-strip spsd-live-strip",
+          key: "live-strip",
+          "aria-label": t("liveCounterStrip"),
+        },
+        h("span", { className: "spsd-strip-title" }, t("liveCounterStrip")),
+        h("div", { className: "spsd-strip-items" }, ...items),
+      );
+    }
+
+    /**
+     * Overview source states in one scannable row (not a tile grid).
+     * @param {(key: string, params?: object) => string} t
+     * @param {ReadonlyArray<{ readonly id: string, readonly label: string, readonly state: string }>} rows
+     */
+    function overviewSourceStrip(t, rows) {
+      const visible = rows.filter((row) => row.state !== "checking");
+      if (visible.length === 0) return null;
+      return h(
+        "section",
+        {
+          className: "spsd-strip spsd-source-strip",
+          key: "source-strip",
+          "aria-label": t("overviewSourceStrip"),
+        },
+        h("span", { className: "spsd-strip-title" }, t("overviewSourceStrip")),
+        h(
+          "div",
+          { className: "spsd-strip-items" },
+          ...visible.map((row) =>
+            h(
+              "span",
+              {
+                key: row.id,
+                className: "spsd-chip-state",
+                "data-state": row.state,
+                title: row.label,
+              },
+              row.label,
+            ),
+          ),
+        ),
+      );
+    }
+
+    const LEGACY_PORTAL_URL = "https://fantasy402.com/manager.html";
+
+    /**
+     * One-line link for operators who still use the Fantasy402 Manager UI.
+     * @param {(key: string, params?: object) => string} t
+     */
+    function legacyPortalRow(t) {
+      return h(
+        "p",
+        { className: "spsd-legacy-portal", key: "legacy-portal" },
+        t("legacyPortalLead"),
+        " ",
+        h(
+          "a",
+          {
+            className: "spsd-link",
+            href: LEGACY_PORTAL_URL,
+            target: "_blank",
+            rel: "noreferrer",
+          },
+          t("legacyPortalLink"),
+        ),
+      );
+    }
+
+    /**
      * The Live stream card: the desk's own Server-Sent Events connection,
      * rendered from what actually arrived — connection state, HTTP status,
      * frames/heartbeats/bytes, the latest frame's counters, and the counter
@@ -2666,21 +2812,7 @@ window.__ModuleLoader__.load({
       if (live.values === null) {
         rows.push(noteLine(t("liveNoValues"), undefined, "live-no-values"));
       } else {
-        const counts = live.values.counts;
         const values = [];
-        if (counts !== null) {
-          for (const key of LIVE_COUNTER_KEYS) {
-            const value = counts[key];
-            if (typeof value !== "number") continue;
-            values.push(
-              kvRow(
-                t(LIVE_COUNTER_LABELS[key] ?? key),
-                liveCounterText(key, value),
-                key,
-              ),
-            );
-          }
-        }
         if (live.values.feedStatus !== null) {
           values.push(
             kvRow(
@@ -2716,9 +2848,7 @@ window.__ModuleLoader__.load({
             ),
           );
         }
-        if (values.length === 0) {
-          rows.push(noteLine(t("liveNoValues"), undefined, "live-no-values"));
-        } else {
+        if (values.length > 0) {
           rows.push(
             subSection(
               t("liveCounters"),
@@ -2726,6 +2856,8 @@ window.__ModuleLoader__.load({
               "live-values",
             ),
           );
+        } else {
+          rows.push(noteLine(t("liveNoValues"), undefined, "live-no-values"));
         }
       }
 
@@ -2833,6 +2965,12 @@ window.__ModuleLoader__.load({
      */
     function serviceCard(t, state) {
       const rows = [];
+      if (state.deskHostname !== null) {
+        rows.push(metaRow(t("operatorDesk"), state.deskHostname));
+      }
+      if (state.liveReadsLine !== null) {
+        rows.push(metaRow(t("liveReads"), state.liveReadsLine));
+      }
       if (state.runtime !== null)
         rows.push(metaRow(t("runtime"), state.runtime));
       if (state.pid !== null) rows.push(metaRow(t("pid"), String(state.pid)));
@@ -4035,6 +4173,14 @@ window.__ModuleLoader__.load({
 .spsd-note-line[data-tone='warn'] { color: var(--dsw-alias-state-warn-primary); }
 .spsd-source-error { margin: 0; color: var(--dsw-alias-state-error-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .spsd-lastgood { margin: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-state-warn-primary); border-radius: var(--dsw-radius-sm, 6px); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+.spsd-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 14px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1); }
+.spsd-strip-title { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.spsd-strip-items { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.spsd-strip-item { display: inline-flex; align-items: baseline; gap: 6px; color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.spsd-strip-label { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.spsd-strip-value { font-weight: 500; }
+.spsd-source-strip .spsd-chip-state { cursor: default; }
+.spsd-legacy-portal { margin: 10px 0 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 .spsd-ovfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
 .spsd-ovtransport { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 .spsd-retry { align-self: flex-start; }
@@ -4260,6 +4406,7 @@ window.__ModuleLoader__.load({
         state.checkedAt === null
           ? t("checking")
           : `${t("lastMeasured")} ${formatClock(state.checkedAt) ?? t("never")} · ${formatAgo(t, state.checkedAt, now)}`;
+      const counterStrip = liveCounterStrip(t, live, now);
 
       const graphSource = sources.graph;
       const graphState = cardState(graphSource, isGraphStale(graphPayload));
@@ -4270,6 +4417,11 @@ window.__ModuleLoader__.load({
         executionSource,
         isExecutionStale(executionPayload),
       );
+      const sourceStrip = overviewSourceStrip(t, [
+        { id: "graph", label: t("marketFeed"), state: graphState },
+        { id: "kpis", label: t("book"), state: kpisState },
+        { id: "execution", label: t("executionCard"), state: executionState },
+      ]);
 
       const overview = h(
         "div",
@@ -4375,6 +4527,9 @@ window.__ModuleLoader__.load({
               { className: "spsd-lastmeasured", key: "last-measured" },
               lastMeasured,
             ),
+            counterStrip,
+            sourceStrip,
+            legacyPortalRow(t),
             h(
               "section",
               {
