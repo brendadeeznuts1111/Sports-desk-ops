@@ -3385,10 +3385,10 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       inboxDispatchRoute: "inbox://ops-desk/client-seam",
       coPilotReviewerRole: "security/operator",
       coPilotReviewerName: "Tariq Al-Mansoor",
-      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE", "PR #131"],
+      resolutionStatus: "FIXED_AND_MERGED",
       reviewAndMergeNote:
-        "applyAgentManagementThinEscaper active in client/overlay/security-seams.preload.js, wrapping setPassword, setName, and setColsAgentManagement with strict targeted markup escaping and throw-safe restoration; module sink anchor registered in lib/f402_client_seams.ts.",
+        "applyAgentManagementThinEscaper active in client/overlay/security-seams.preload.js, wrapping setPassword, setName, and setColsAgentManagement with strict targeted markup escaping and throw-safe restoration; module sink anchor registered in lib/f402_client_seams.ts; reviewed and merged in PR #131.",
       verificationCommand: "bun test tests/f402_client_seams.test.ts",
     },
     {
@@ -3404,10 +3404,10 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       coPilotReviewerRole: "security/operator",
       coPilotReviewerName: "Tariq Al-Mansoor",
       linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "Dispatched to Soren Lindqvist (client/seam) under P0.5 to extend MODULE_SINK_WRAPPERS to pending-thin source render before .html() copy.",
-      verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+        "applyPendingThinEscaper active in client/overlay/security-seams.preload.js, wrapping getResultTicketPending, getResultTicketMobileDetails, and getResultTicketMobile with input leg data escaping before template interpolation, eliminating stored DOM XSS in .gameReport and preventing downstream exfiltration in delete-confirm bet-desc copy; anchors registered in lib/f402_client_seams.ts.",
+      verificationCommand: "bun test tests/f402_client_seams.test.ts",
     },
     {
       itemRef: "ISSUE-20",
