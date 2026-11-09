@@ -79,6 +79,11 @@ export const MODULE_SINK_ANCHORS: Readonly<Record<string, readonly string[]>> =
       "bet-desc",
       "gameReport",
     ],
+    "https://www.fantasy402.com/app/manager/module/agent-management-thin.js": [
+      '[data-action="setPassword"]',
+      '[data-action="setName"]',
+      'data-col="password"',
+    ],
   } as const;
 
 export const EXTERNAL_VIEW_GUARD_ANCHORS: readonly string[] = [

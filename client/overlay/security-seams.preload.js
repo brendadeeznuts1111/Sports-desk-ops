@@ -162,6 +162,9 @@
           communicationMessagesListEscaperFailure,
         playerInfoEscaperInstalled: playerInfoEscaperInstalled,
         playerInfoEscaperFailure: playerInfoEscaperFailure,
+        agentManagementThinEscaperInstalled:
+          agentManagementThinEscaperInstalled,
+        agentManagementThinEscaperFailure: agentManagementThinEscaperFailure,
         rejectCount: rejectBuffer().length,
         unflushedRejects: rejectBuffer().filter(function (entry) {
           return entry.flushed !== true;
@@ -1098,11 +1101,186 @@
     return true;
   }
 
+  // agent-management-thin: escapes operator-entered passwords and names on updateCustomerField
+  // AJAX success before .html() rendering into [data-action="setPassword"] and [data-action="setName"],
+  // and escapes server-provided passwords in setColsAgentManagement on [data-col="password"] li rows.
+  // Input .val() and internal store values stay raw.
+  var agentManagementThinEscaperInstalled = false;
+  var agentManagementThinEscaperFailure = null;
+
+  function applyAgentManagementThinEscaper(AgentManagementThin) {
+    if (agentManagementThinEscaperInstalled) return false;
+    if (!AgentManagementThin || !AgentManagementThin.prototype) {
+      agentManagementThinEscaperFailure = "agent-management-thin-invalid";
+      return false;
+    }
+    var proto = AgentManagementThin.prototype;
+    agentManagementThinEscaperInstalled = true;
+
+    var originalSetPassword = proto.setPassword;
+    if (typeof originalSetPassword === "function") {
+      Object.defineProperty(proto, "setPassword", {
+        configurable: true,
+        writable: true,
+        value: function () {
+          var api = searchEscaperApi();
+          var jq = window.jQuery || window.$;
+          if (
+            !api ||
+            typeof api.escHtml !== "function" ||
+            !jq ||
+            typeof jq.ajax !== "function"
+          ) {
+            return originalSetPassword.apply(this, arguments);
+          }
+          var baseAjax = jq.ajax;
+          jq.ajax = function (options) {
+            if (
+              options &&
+              options.data &&
+              options.data.operation === "updateCustomerField" &&
+              options.data.field === "Password" &&
+              typeof options.success === "function"
+            ) {
+              var rawSuccess = options.success;
+              options.success = function () {
+                var baseHtml = jq.fn.html;
+                jq.fn.html = function (value) {
+                  if (
+                    typeof value === "string" &&
+                    this &&
+                    typeof this.is === "function" &&
+                    this.is('[data-action="setPassword"]')
+                  ) {
+                    return baseHtml.call(this, api.escHtml(value));
+                  }
+                  return baseHtml.apply(this, arguments);
+                };
+                try {
+                  return rawSuccess.apply(this, arguments);
+                } finally {
+                  jq.fn.html = baseHtml;
+                }
+              };
+            }
+            return baseAjax.apply(this, arguments);
+          };
+          try {
+            return originalSetPassword.apply(this, arguments);
+          } finally {
+            jq.ajax = baseAjax;
+          }
+        },
+      });
+    }
+
+    var originalSetName = proto.setName;
+    if (typeof originalSetName === "function") {
+      Object.defineProperty(proto, "setName", {
+        configurable: true,
+        writable: true,
+        value: function () {
+          var api = searchEscaperApi();
+          var jq = window.jQuery || window.$;
+          if (
+            !api ||
+            typeof api.escHtml !== "function" ||
+            !jq ||
+            typeof jq.ajax !== "function"
+          ) {
+            return originalSetName.apply(this, arguments);
+          }
+          var baseAjax = jq.ajax;
+          jq.ajax = function (options) {
+            if (
+              options &&
+              options.data &&
+              options.data.operation === "updateCustomerField" &&
+              options.data.field === "NameFirst" &&
+              typeof options.success === "function"
+            ) {
+              var rawSuccess = options.success;
+              options.success = function () {
+                var baseHtml = jq.fn.html;
+                jq.fn.html = function (value) {
+                  if (
+                    typeof value === "string" &&
+                    this &&
+                    typeof this.is === "function" &&
+                    this.is('[data-action="setName"]')
+                  ) {
+                    return baseHtml.call(this, api.escHtml(value));
+                  }
+                  return baseHtml.apply(this, arguments);
+                };
+                try {
+                  return rawSuccess.apply(this, arguments);
+                } finally {
+                  jq.fn.html = baseHtml;
+                }
+              };
+            }
+            return baseAjax.apply(this, arguments);
+          };
+          try {
+            return originalSetName.apply(this, arguments);
+          } finally {
+            jq.ajax = baseAjax;
+          }
+        },
+      });
+    }
+
+    var originalSetCols = proto.setColsAgentManagement;
+    if (typeof originalSetCols === "function") {
+      Object.defineProperty(proto, "setColsAgentManagement", {
+        configurable: true,
+        writable: true,
+        value: function () {
+          var api = searchEscaperApi();
+          var jq = window.jQuery || window.$;
+          if (
+            !api ||
+            typeof api.escHtml !== "function" ||
+            !jq ||
+            !jq.fn ||
+            typeof jq.fn.html !== "function"
+          ) {
+            return originalSetCols.apply(this, arguments);
+          }
+          var baseHtml = jq.fn.html;
+          jq.fn.html = function (value) {
+            if (
+              typeof value === "string" &&
+              this &&
+              typeof this.is === "function" &&
+              ((typeof this.closest === "function" &&
+                this.closest('[data-col="password"]').length > 0) ||
+                this.is('[data-col="password"] li') ||
+                this.is('[data-field="password"]'))
+            ) {
+              return baseHtml.call(this, api.escHtml(value));
+            }
+            return baseHtml.apply(this, arguments);
+          };
+          try {
+            return originalSetCols.apply(this, arguments);
+          } finally {
+            jq.fn.html = baseHtml;
+          }
+        },
+      });
+    }
+
+    return true;
+  }
+
   // Module-level sink wrappers. A module is cheap to add: name its export and a wrapper, and the
   // loader hook + watchdog sweep apply it. The pin gate's MODULE_SINK_ANCHORS separately verifies
   // the selector/entry point still exists in the live bytes.
   var MODULE_SINK_WRAPPERS = {
     "manager/module/player-info": applyPlayerInfoEscaper,
+    "manager/module/agent-management-thin": applyAgentManagementThinEscaper,
   };
 
   function applyModuleSinkWrapper(name, moduleExport) {

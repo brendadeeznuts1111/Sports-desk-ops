@@ -3386,10 +3386,10 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       coPilotReviewerRole: "security/operator",
       coPilotReviewerName: "Tariq Al-Mansoor",
       linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
-        "applyPlayerInfoEscaper active in client/overlay/security-seams.preload.js; dispatched remaining agent-management-thin modal sink audit to Soren Lindqvist & Tariq Al-Mansoor.",
-      verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+        "applyAgentManagementThinEscaper active in client/overlay/security-seams.preload.js, wrapping setPassword, setName, and setColsAgentManagement with strict targeted markup escaping and throw-safe restoration; module sink anchor registered in lib/f402_client_seams.ts.",
+      verificationCommand: "bun test tests/f402_client_seams.test.ts",
     },
     {
       itemRef: "ISSUE-21",

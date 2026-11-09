@@ -47,6 +47,10 @@ they were unpinned. Fixed by adding `DYNAMIC_APP_MODULES` to the coverage list; 
 
 - `player-info.js` `password-h` — confirmed `.html(n.Password)` sink; **fixed** in the overlay
   (`7c8b6ad`), restore-on-throw test added, module anchor present.
+- `agent-management-thin.js` `u.Password`, `setPassword`, `setName` — confirmed `.html()` sinks
+  rendering server-supplied passwords and operator inputs; **fixed** in the overlay via
+  `applyAgentManagementThinEscaper` (`MODULE_SINK_WRAPPERS["manager/module/agent-management-thin"]`),
+  restore-on-throw tests added, module sink anchors registered in `lib/f402_client_seams.ts`.
 - `pending-thin.js` `bet-desc` — copy of `.gameReport`; **anchor-protected but not closed**. Source
   render `getResultTicketPending`/`getResultTicketMobileDetails` is the fix; tracked as its own
   ticket.
@@ -80,8 +84,8 @@ coverage proof.
 
 ## Next audit order
 
-1. `game-admin.js` and `agent-management-thin.js` — most candidate calls, `Login`/`Password`/
-   `Description` nearby.
+1. `game-admin.js` — candidate calls with `ChosenTeamID`/`Description` nearby (`agent-management-thin.js`
+   credential/name sinks now wrapped and anchor-protected).
 2. `player-info.js` beyond `password-h`, `customer-admin.js`, `message.js`.
 3. `pending-thin.js` source render (tracked).
 4. Re-run this census after each module wrapper lands; a count reduction is not the success metric —

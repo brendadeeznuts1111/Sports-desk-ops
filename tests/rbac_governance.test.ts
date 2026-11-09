@@ -531,7 +531,7 @@ describe("dashboard section, standalone HTML & CLI", () => {
     // Verify GitHub Issue (#16..#115) & PR (#104..#128) Triage, Review & Merge Ledger
     expect(GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER.length).toBe(23);
     expect(report.summary.githubIssuesTriagedCount).toBe(19);
-    expect(report.summary.githubIssuesResolvedCount).toBe(10);
+    expect(report.summary.githubIssuesResolvedCount).toBe(11);
     expect(report.summary.githubPrsReviewedAndMergedCount).toBe(4);
     for (const entry of GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER) {
       expect(DESK_ROLE_IDS).toContain(entry.primaryOwnerRole);
