@@ -2,6 +2,22 @@
 
 Upstream contract: one **HTTPS URL** → one `index.json` → Discover lists bundles; **install** still uses Plugins → Installed / `plugin_manager`.
 
+## Copy style (Discover metadata)
+
+**Title** — Title Case, 2–4 words. Acronyms uppercase (`UI`, `API`, `F402`); product fragments like `GSLive` as published. No trailing period.
+
+**Description** — Sentence case, ends with a period, about 8–16 words. Structure: what it does · data it touches · behavior (`read-only`, `live`, `automated`). No filler adjectives.
+
+**Publisher** — Format 1 field is **`author`**, not `publisher`. Use **`Sportsdesk Ops`** on every plugin row (Discover maps this to the publisher line). Never omit.
+
+**Tags** — 2–5 lowercase kebab-case strings in `metadata.keywords`. Do not repeat `dsh-plugin` there (keep it in `metadata.labels` for the pill).
+
+**Category** — Declare ids under index `metadata.categories`, then set `metadata.category` on each plugin (`operations`, `security`, `ui`, `automation`). List order in `plugins[]` follows category: Operations → Security → UI → Automation.
+
+**Version** — semver; `dist-tags.latest` must match a `versions[]` row.
+
+Icons: optional `icon` URL when you have real assets; otherwise skip (generic placeholder is fine).
+
 ## Default (this machine)
 
 Leave **Index sources** empty. Install from checkout:
@@ -74,7 +90,7 @@ Cut a **new** tag on every index bump (`market-index-2`, `market-index-3`, …).
 Current Discover URL:
 
 ```text
-https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-2/market/index.json
+https://raw.githubusercontent.com/bw496915-cmyk/Sports-desk-ops/market-index-3/market/index.json
 ```
 
 GitHub raw may cache for a few minutes after push. Body is usually served as `text/plain`; Discover parses JSON from the body.

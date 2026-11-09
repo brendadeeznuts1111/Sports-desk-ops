@@ -165,6 +165,23 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
     expect(doc.plugins).toHaveLength(Object.keys(EXPECTED_PATHS).length)
   })
 
+  test("every plugin has author and localized description for Discover", async () => {
+    const raw = JSON.parse(readFileSync(INDEX_PATH, "utf8")) as {
+      plugins: Array<{
+        name: string
+        author?: string
+        description?: { en?: string }
+      }>
+    }
+    for (const plugin of raw.plugins) {
+      expect(plugin.author, `${plugin.name}: author`).toBe("Sportsdesk Ops")
+      const desc = plugin.description?.en
+      expect(desc, `${plugin.name}: description.en`).toBeDefined()
+      expect(desc!.length, `${plugin.name}: description length`).toBeGreaterThan(20)
+      expect(desc!.endsWith("."), `${plugin.name}: description period`).toBe(true)
+    }
+  })
+
   test("dist-tags.latest matches a versions[] row per plugin", async () => {
     const raw = loadRawIndex()
     for (const plugin of raw.plugins) {
