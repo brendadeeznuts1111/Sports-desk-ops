@@ -7,7 +7,11 @@
 
 import { join } from "node:path";
 
-import { readF402Session } from "./f402_session.ts";
+import {
+  readF402Session,
+  refreshF402Session,
+  writeF402Session,
+} from "./f402_session.ts";
 
 export const DEPRECATED_F402_COOKIE_ENV = "F402_COOKIE";
 
@@ -36,10 +40,22 @@ export interface F402ReplayTransport {
   close(): Promise<void>;
 }
 
-export async function createF402ReplayTransport(options?: {
+export interface F402ReplayTransportOptions {
   readonly proxyUrl?: string | undefined;
   readonly env?: NodeJS.ProcessEnv;
-}): Promise<F402ReplayTransport> {
+  /** Test seam: replace the Bun FetchSession wire call. */
+  readonly fetchImpl?: (
+    url: string,
+    init: RequestInit,
+  ) => Promise<Response>;
+  /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `writeF402Session`). */
+  readonly refreshSession?: () => Promise<void>;
+  readonly readSession?: () => ReturnType<typeof readF402Session>;
+}
+
+export async function createF402ReplayTransport(
+  options?: F402ReplayTransportOptions,
+): Promise<F402ReplayTransport> {
   const env = options?.env ?? Bun.env;
   warnIfDeprecatedCookieEnv(env);
 
@@ -66,33 +82,60 @@ export async function createF402ReplayTransport(options?: {
     };
   }
 
-  const session = new Bun.FetchSession({
+  const bunSession = new Bun.FetchSession({
     tls: { rejectUnauthorized: true },
   });
 
-  const cached = readF402Session();
+  const readSession = options?.readSession ?? (() => readF402Session());
+  const initial = readSession();
   const deprecatedCookie = env[DEPRECATED_F402_COOKIE_ENV]?.trim() ?? "";
+
+  const wireFetch =
+    options?.fetchImpl ??
+    ((url: string, init: RequestInit) => bunSession.fetch(url, init));
+
+  async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
+    const headers = new Headers(init.headers);
+    if (!headers.has("cookie")) {
+      const session = readSession();
+      if (session !== null) {
+        headers.set("cookie", session.cookieHeader);
+      } else if (deprecatedCookie !== "") {
+        headers.set("cookie", deprecatedCookie);
+      }
+    }
+    return wireFetch(url, { ...init, headers });
+  }
+
+  async function remintAfterUnauthorized(): Promise<void> {
+    if (options?.refreshSession !== undefined) {
+      await options.refreshSession();
+      return;
+    }
+    const fresh = await refreshF402Session({ env });
+    writeF402Session(fresh);
+  }
 
   return {
     label:
-      cached !== null
+      initial !== null
         ? "session-file"
         : deprecatedCookie !== ""
           ? "deprecated-cookie"
           : "datastore-fetch-session",
     async fetch(url: string, init: RequestInit): Promise<Response> {
-      const headers = new Headers(init.headers);
-      if (!headers.has("cookie")) {
-        if (cached !== null) {
-          headers.set("cookie", cached.cookieHeader);
-        } else if (deprecatedCookie !== "") {
-          headers.set("cookie", deprecatedCookie);
-        }
+      let response = await fetchOnce(url, init);
+      if (response.status !== 401) return response;
+      try {
+        await remintAfterUnauthorized();
+      } catch {
+        return response;
       }
-      return session.fetch(url, { ...init, headers });
+      response = await fetchOnce(url, init);
+      return response;
     },
     async close(): Promise<void> {
-      await session.close();
+      await bunSession.close();
     },
   };
 }
