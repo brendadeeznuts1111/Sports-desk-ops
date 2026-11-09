@@ -2245,13 +2245,13 @@ function surfaceOperationSpecs(
       summary:
         "Manager getHistory (wired settlement-history poll; no response capture)",
       description:
-        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:547-568). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:569-587). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
+        "The only upstream Fantasy402 route in this repository with a real fetch client: resolveHistoryPollUrl builds `${SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory` and pollManagerGetHistory POSTs with no request body (lib/fantasy402_settlement_ingest.ts:841-862). The response must be a JSON array or {data: []} or the poll throws (lib/fantasy402_settlement_ingest.ts:863-881). The request contract (agent scope, date window, auth) is therefore unknown, and row field shapes are not captured; tests/fixtures/fantasy402-history-poll.json is a placeholder shape sample. Surface: surface.manager-getHistory (tier D).",
       requiredCapture:
         "Capture one getHistory request/response (redacted) to record the upstream request contract (body/agent scope/date window/auth) and a real response body; this repo only proves the URL, the bodyless POST and the array-or-{data:[]} acceptance.",
       responses: {
         "200": {
           description:
-            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:574-587). Row fields are not captured, so only raw/unknown objects are described.",
+            "JSON array of raw settlement rows, or an object with a data array. Any other shape throws (lib/fantasy402_settlement_ingest.ts:868-881). Row fields are not captured, so only raw/unknown objects are described.",
           content: {
             "application/json": {
               schema: {
@@ -2287,7 +2287,7 @@ function surfaceOperationSpecs(
         },
         default: {
           description:
-            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:569-571).",
+            "Non-2xx status is not captured; the poll throws on !res.ok (lib/fantasy402_settlement_ingest.ts:863-865).",
         },
       },
     },
@@ -2549,6 +2549,78 @@ function surfaceOperationSpecs(
       },
     },
     {
+      path: "/api/customer/profile",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-analysis",
+      tag: TAG_DAEMON,
+      summary: "Comprehensive customer profiling and behavioral forensics",
+      description:
+        "Generates a multi-dimensional customer behavioral profile including stake distribution, Gini inequality, market specialization, syndicate cluster analysis, reverse DNS classification, portfolio risk forensics, correlated parlay exposure, and composite sharpness tier. Guarded by PII rejection: non-loopback clients must present SPORTSDESK_ADMIN_TOKEN. Surface: surface.daemon-analysis (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/customer/profile (handler-verified only).",
+      parameters: [
+        {
+          name: "id",
+          in: "query",
+          required: true,
+          schema: { type: "string" },
+          description: "Customer login ID (e.g. SYNTH_SYN_01 or RF2003)",
+        },
+      ],
+      responses: {
+        "200": jsonSurfaceResponse("Comprehensive customer profile envelope.", {
+          success: { type: "boolean" },
+          profile: { type: "object" },
+          generatedAt: { type: "string" },
+        }),
+        "400": jsonSurfaceResponse("Missing required customer ID parameter.", {
+          success: { type: "boolean" },
+          error: { type: "string" },
+        }),
+        ...adminRejectionResponses(),
+        "404": jsonSurfaceResponse("Customer record not found.", {
+          success: { type: "boolean" },
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
+      path: "/api/customer/rating",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-analysis",
+      tag: TAG_DAEMON,
+      summary: "Customer rating with Bayesian skill and Kelly sizing metrics",
+      description:
+        "Evaluates a bettor's sharpness using Bayesian win rate skill inference, fractional Kelly stake optimization, CLV t-statistic significance, component scoring, and desk action directives. Guarded by PII rejection. Surface: surface.daemon-analysis (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/customer/rating (handler-verified only).",
+      parameters: [
+        {
+          name: "id",
+          in: "query",
+          required: true,
+          schema: { type: "string" },
+          description: "Customer login ID",
+        },
+      ],
+      responses: {
+        "200": jsonSurfaceResponse("Customer rating envelope.", {
+          success: { type: "boolean" },
+          rating: { type: "object" },
+          generatedAt: { type: "string" },
+        }),
+        "400": jsonSurfaceResponse("Missing required customer ID parameter.", {
+          success: { type: "boolean" },
+          error: { type: "string" },
+        }),
+        ...adminRejectionResponses(),
+        "404": jsonSurfaceResponse("Customer record not found.", {
+          success: { type: "boolean" },
+          error: { type: "string" },
+        }),
+      },
+    },
+    {
       path: "/api/agents/search",
       httpMethod: "GET",
       surfaceId: "surface.daemon-agent-search",
@@ -2723,6 +2795,25 @@ function surfaceOperationSpecs(
             generatedAt: { type: "string", format: "date-time" },
           },
         ),
+      },
+    },
+    {
+      path: "/api/dns/telemetry",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-dashboard",
+      tag: TAG_DAEMON,
+      summary: "Bun native DNS resolver cache telemetry and core host metrics",
+      description:
+        "Operational telemetry reporting Bun's native DNS subsystem statistics: completed cache hits, inflight hits, misses, cache table size, hit rate percentage, and configured TTL settings. Surface: surface.daemon-dashboard (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/dns/telemetry (handler-verified only).",
+      responses: {
+        "200": jsonSurfaceResponse("DNS cache telemetry envelope.", {
+          success: { type: "boolean" },
+          telemetry: { type: "object" },
+          coreHosts: { type: "array", items: { type: "object" } },
+          generatedAt: { type: "string" },
+        }),
       },
     },
     {
@@ -3109,6 +3200,31 @@ function surfaceOperationSpecs(
           content: { "text/event-stream": { schema: { type: "string" } } },
         },
         ...adminRejectionResponses(),
+      },
+    },
+    {
+      path: "/api/bridge3c/status",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-graph-data-plane",
+      tag: TAG_DAEMON,
+      summary: "GSLive Bridge 3c gap-halt boundary and telemetry status",
+      description:
+        "Reports the Class D GSLive gap halt boundary state, read-only enforcement contract, AJAX endpoint target, and recent bridge rollup telemetry cycle. Surface: surface.daemon-graph-data-plane (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/bridge3c/status (handler-verified only).",
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Bridge 3c partition and telemetry status.",
+          {
+            success: { type: "boolean" },
+            boundary: { type: "string" },
+            readOnly: { type: "boolean" },
+            endpoint: { type: "string" },
+            userAgent: { type: "string" },
+            rollup: { type: "object" },
+            generatedAt: { type: "string" },
+          },
+        ),
       },
     },
     {

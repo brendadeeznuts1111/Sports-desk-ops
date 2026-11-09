@@ -3477,6 +3477,173 @@ export function startServer(options?: ServerOptions) {
         });
       }
 
+      // 13. Customer profiling: unified behavioral forensics & composite sharpness
+      if (pathname === "/api/customer/profile" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+
+        const id = (url.searchParams.get("id") ?? "").trim();
+        if (!id) {
+          return Response.json(
+            { success: false, error: "Missing required parameter 'id'" },
+            { status: 400, headers: cors },
+          );
+        }
+
+        const row = await findCustomerRow(id);
+        if (!row) {
+          return Response.json(
+            { success: false, error: `Customer '${id}' not found` },
+            { status: 404, headers: cors },
+          );
+        }
+
+        const { buildComprehensiveCustomerProfile } =
+          await import("../lib/customer_profiling_enhanced.ts");
+        const profile = buildComprehensiveCustomerProfile(
+          row as unknown as CustomerBookRow,
+        );
+        return Response.json(
+          {
+            success: true,
+            profile,
+            generatedAt: new Date().toISOString(),
+          },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
+        );
+      }
+
+      // 13b. Customer rating: Bayesian skill profile, Kelly sizing & statistical CLV
+      if (pathname === "/api/customer/rating" && req.method === "GET") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+
+        const id = (url.searchParams.get("id") ?? "").trim();
+        if (!id) {
+          return Response.json(
+            { success: false, error: "Missing required parameter 'id'" },
+            { status: 400, headers: cors },
+          );
+        }
+
+        const row = await findCustomerRow(id);
+        if (!row) {
+          return Response.json(
+            { success: false, error: `Customer '${id}' not found` },
+            { status: 404, headers: cors },
+          );
+        }
+
+        const [
+          { CustomerObservations },
+          {
+            rateCustomerFromObservations,
+            computeBayesianSkillProfile,
+            computeKellyMetrics,
+          },
+          { buildPortfolioRiskForensics },
+        ] = await Promise.all([
+          import("../lib/customer_profile.ts"),
+          import("../lib/customer_rating.ts"),
+          import("../lib/customer_profiling_enhanced.ts"),
+        ]);
+
+        const tickets = Array.isArray(row.recent_tickets)
+          ? (row.recent_tickets as unknown as readonly import("../lib/customer_profile.ts").TicketRow[])
+          : [];
+        const riskForensics = buildPortfolioRiskForensics(
+          row as unknown as CustomerBookRow,
+          tickets,
+        );
+        const obs = new CustomerObservations(
+          String(row.customer_id ?? id),
+          tickets.length,
+          riskForensics.lifetimeVolumeUsd,
+          riskForensics.lifetimeNetUsd,
+          [],
+          "2026-10-01",
+          "2026-11-09",
+        );
+        const baseRating = rateCustomerFromObservations(obs);
+        const bayesianSkill = computeBayesianSkillProfile([]);
+        const kellyMetrics = computeKellyMetrics(
+          -110,
+          bayesianSkill.posteriorMeanWinRate,
+          obs.nTickets > 0 ? obs.totalRiskUsd / obs.nTickets : 100,
+        );
+        const rating = {
+          ...baseRating,
+          bayesianSkill,
+          kellyMetrics,
+        };
+
+        return Response.json(
+          {
+            success: true,
+            rating,
+            generatedAt: new Date().toISOString(),
+          },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
+        );
+      }
+
+      // 13c. Bun DNS cache telemetry & core host resolution metrics
+      if (pathname === "/api/dns/telemetry" && req.method === "GET") {
+        const { getDnsTelemetry, SPORTSDESK_CORE_HOSTS } =
+          await import("../lib/bun_dns.ts");
+        const telemetry = getDnsTelemetry();
+        return Response.json(
+          {
+            success: true,
+            telemetry,
+            coreHosts: SPORTSDESK_CORE_HOSTS.map((h) => ({
+              hostname: h.hostname,
+              port: h.port,
+              serviceName: h.serviceName,
+            })),
+            generatedAt: new Date().toISOString(),
+          },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
+        );
+      }
+
+      // 13d. GSLive Bridge 3c partition status & watermark telemetry
+      if (pathname === "/api/bridge3c/status" && req.method === "GET") {
+        const { CLASS_D_GSLIVE_GAP_HALT, GSLIVE_AJAX_URL, GSLIVE_USER_AGENT } =
+          await import("../scripts/gslive_tally_bridge3c.ts");
+        const rollup = await readBridgeRollupState();
+        return Response.json(
+          {
+            success: true,
+            boundary: CLASS_D_GSLIVE_GAP_HALT,
+            readOnly: true,
+            endpoint: GSLIVE_AJAX_URL,
+            userAgent: GSLIVE_USER_AGENT,
+            rollup,
+            generatedAt: new Date().toISOString(),
+          },
+          { headers: { ...cors, "Cache-Control": "no-store" } },
+        );
+      }
+
       // 14. 404 Fallback
       return Response.json(
         {
@@ -3999,4 +4166,63 @@ async function serveGovernanceRoute(
       "Cache-Control": "no-store",
     },
   });
+}
+
+type CustomerBookRow = import("../lib/customer_profile.ts").CustomerRow;
+
+/**
+ * Look up a customer record in enriched_customers_full.json, fixtures, or data/customer-profiles.json.
+ */
+async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
+  const normId = id.trim().toUpperCase();
+  const candidatePaths = [
+    resolve(repoRoot, "enriched_customers_full.json"),
+    resolve(repoRoot, "tests/fixtures/backtest/enriched_customers_full.json"),
+    resolve(
+      repoRoot,
+      "tests/fixtures/verify-load/enriched_customers_full.json",
+    ),
+  ];
+  for (const enrichedPath of candidatePaths) {
+    const enrichedFile = Bun.file(enrichedPath);
+    if (await enrichedFile.exists()) {
+      try {
+        const rows = (await enrichedFile.json()) as CustomerBookRow[];
+        if (Array.isArray(rows)) {
+          const found = rows.find(
+            (r) =>
+              typeof r.customer_id === "string" &&
+              r.customer_id.trim().toUpperCase() === normId,
+          );
+          if (found) return found;
+        }
+      } catch {
+        // ignore read/parse failure
+      }
+    }
+  }
+  const profilesPath = resolve(repoRoot, "data/customer-profiles.json");
+  const profilesFile = Bun.file(profilesPath);
+  if (await profilesFile.exists()) {
+    try {
+      const data = (await profilesFile.json()) as {
+        profiles?: CustomerBookRow[];
+      };
+      if (Array.isArray(data?.profiles)) {
+        const found = data.profiles.find((p) => {
+          const custId =
+            typeof p.customer_id === "string"
+              ? p.customer_id
+              : typeof (p as { customerId?: string }).customerId === "string"
+                ? ((p as { customerId?: string }).customerId ?? "")
+                : "";
+          return custId.trim().toUpperCase() === normId;
+        });
+        if (found) return found;
+      }
+    } catch {
+      // ignore read/parse failure
+    }
+  }
+  return null;
 }

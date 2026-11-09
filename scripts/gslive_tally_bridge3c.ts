@@ -222,7 +222,7 @@ export async function runBridge3c(
     if (raw === undefined) return undefined;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      throw new Error("--timeout must be a positive number of seconds");
+      throw new Error("--timeout must be a positive integer");
     }
     return parsed < 1000 ? Math.round(parsed * 1000) : Math.round(parsed);
   })();
@@ -258,7 +258,7 @@ export async function runBridge3c(
       openFrom: fromSec,
       openTo: toSec,
       lastCommittedGid,
-      timeoutMs,
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
     });
   }
 

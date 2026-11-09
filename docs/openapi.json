@@ -4656,6 +4656,370 @@
         "x-surface-id": "surface.daemon-analysis"
       }
     },
+    "/api/customer/profile": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Comprehensive customer profiling and behavioral forensics",
+        "description": "Generates a multi-dimensional customer behavioral profile including stake distribution, Gini inequality, market specialization, syndicate cluster analysis, reverse DNS classification, portfolio risk forensics, correlated parlay exposure, and composite sharpness tier. Guarded by PII rejection: non-loopback clients must present SPORTSDESK_ADMIN_TOKEN. Surface: surface.daemon-analysis (tier D).",
+        "operationId": "getApiCustomerProfile",
+        "responses": {
+          "200": {
+            "description": "Comprehensive customer profile envelope.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "profile": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required customer ID parameter.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer record not found.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/analysis"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/customer/profile (handler-verified only)."
+        },
+        "x-surface-id": "surface.daemon-analysis",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Customer login ID (e.g. SYNTH_SYN_01 or RF2003)"
+          }
+        ]
+      }
+    },
+    "/api/customer/rating": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Customer rating with Bayesian skill and Kelly sizing metrics",
+        "description": "Evaluates a bettor's sharpness using Bayesian win rate skill inference, fractional Kelly stake optimization, CLV t-statistic significance, component scoring, and desk action directives. Guarded by PII rejection. Surface: surface.daemon-analysis (tier D).",
+        "operationId": "getApiCustomerRating",
+        "responses": {
+          "200": {
+            "description": "Customer rating envelope.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "rating": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required customer ID parameter.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or wrong admin token (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer record not found.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "SPORTSDESK_ADMIN_TOKEN is not set on the server (services/sportsdesk_webview_server.ts).",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "error"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/analysis"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/customer/rating (handler-verified only)."
+        },
+        "x-surface-id": "surface.daemon-analysis",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Customer login ID"
+          }
+        ]
+      }
+    },
     "/api/agents/search": {
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
@@ -5222,6 +5586,61 @@
           "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-dashboard"
+      }
+    },
+    "/api/dns/telemetry": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Bun native DNS resolver cache telemetry and core host metrics",
+        "description": "Operational telemetry reporting Bun's native DNS subsystem statistics: completed cache hits, inflight hits, misses, cache table size, hit rate percentage, and configured TTL settings. Surface: surface.daemon-dashboard (tier D).",
+        "operationId": "getApiDnsTelemetry",
+        "responses": {
+          "200": {
+            "description": "DNS cache telemetry envelope.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "telemetry": {
+                      "type": "object"
+                    },
+                    "coreHosts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/dns/telemetry (handler-verified only)."
         },
         "x-surface-id": "surface.daemon-dashboard"
       }
@@ -6331,6 +6750,70 @@
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one SSE connection, including the initial summary frame and a heartbeat (handler-verified only; no streaming response was captured)."
+        },
+        "x-surface-id": "surface.daemon-graph-data-plane"
+      }
+    },
+    "/api/bridge3c/status": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "GSLive Bridge 3c gap-halt boundary and telemetry status",
+        "description": "Reports the Class D GSLive gap halt boundary state, read-only enforcement contract, AJAX endpoint target, and recent bridge rollup telemetry cycle. Surface: surface.daemon-graph-data-plane (tier D).",
+        "operationId": "getApiBridge3cStatus",
+        "responses": {
+          "200": {
+            "description": "Bridge 3c partition and telemetry status.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "boundary": {
+                      "type": "string"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "endpoint": {
+                      "type": "string"
+                    },
+                    "userAgent": {
+                      "type": "string"
+                    },
+                    "rollup": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/bridge3c/status (handler-verified only)."
         },
         "x-surface-id": "surface.daemon-graph-data-plane"
       }

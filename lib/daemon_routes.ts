@@ -109,6 +109,27 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     surface: "surface.daemon-analysis",
   }),
   defineRoute({
+    path: "/api/bridge3c/status",
+    method: "GET",
+    guard: "none",
+    dataClass: "operational",
+    surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/customer/profile",
+    method: "GET",
+    guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-analysis",
+  }),
+  defineRoute({
+    path: "/api/customer/rating",
+    method: "GET",
+    guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-analysis",
+  }),
+  defineRoute({
     path: "/api/contests",
     method: "ANY",
     guard: "none",
@@ -128,6 +149,13 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
     guard: "admin",
     dataClass: "aggregate",
     surface: "surface.daemon-graph-data-plane",
+  }),
+  defineRoute({
+    path: "/api/dns/telemetry",
+    method: "GET",
+    guard: "none",
+    dataClass: "operational",
+    surface: "surface.daemon-dashboard",
   }),
   defineRoute({
     path: "/api/execution/mode",

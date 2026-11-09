@@ -388,7 +388,8 @@ export function runGovernanceCli(argv: readonly string[]): number {
     if (wantRedTeam || wantWagers || roleFilter !== null) {
       const drills = ws.redTeamDrills.filter(
         (d) =>
-          roleFilter === null || d.ownerRoles.includes(roleFilter as DeskRoleId),
+          roleFilter === null ||
+          d.ownerRoles.includes(roleFilter as DeskRoleId),
       );
       console.log("");
       console.log(
@@ -442,4 +443,3 @@ export function runGovernanceCli(argv: readonly string[]): number {
 if (import.meta.main) {
   process.exit(runGovernanceCli(process.argv.slice(2)));
 }
-

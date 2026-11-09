@@ -26,13 +26,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  markdownTable,
-  type DashboardSection,
-} from "./dashboard_markdown.ts";
+import { markdownTable, type DashboardSection } from "./dashboard_markdown.ts";
 import {
   PER_OFFICE_IP_TRACKER_CLUSTERS,
-  lookupIpTrackerMatchForBetTicker,
   type IpTrackerModeCode,
   type OfficeIpClusterSummary,
   type OfficeIpMatchClassification,
@@ -98,10 +94,7 @@ export const CHANNEL_IDS = [
 export type ChannelId = (typeof CHANNEL_IDS)[number];
 
 export type InboxAccountabilityStatus =
-  | "INBOX_ZERO"
-  | "ACK_PENDING"
-  | "ACTION_SLA_ACTIVE"
-  | "ESCALATED_TO_LEAD";
+  "INBOX_ZERO" | "ACK_PENDING" | "ACTION_SLA_ACTIVE" | "ESCALATED_TO_LEAD";
 
 export interface ChannelIntegrationSpec {
   readonly id: ChannelId;
@@ -118,7 +111,11 @@ export interface ChannelIntegrationSpec {
 export interface DeskRoleSpec {
   readonly id: DeskRoleId;
   readonly label: string;
-  readonly plane: "ops-execution" | "security-compliance" | "risk-settlement" | "upstream-stakeholder";
+  readonly plane:
+    | "ops-execution"
+    | "security-compliance"
+    | "risk-settlement"
+    | "upstream-stakeholder";
   readonly f402Counterpart: F402PortalRole;
   readonly forensicCounterpart: ForensicActorRole;
   readonly teamLead: string;
@@ -328,7 +325,8 @@ export const CHANNEL_INTEGRATIONS: readonly ChannelIntegrationSpec[] = [
     label: "SportsDesk Telegram Bot & Mini App",
     protocol: "Telegram Bot API + WebApp Mini App",
     entrypoint: "services/sportsdesk_telegram_bot.ts",
-    cadenceOrSla: "Real-time <500ms push · 3 daily briefings (Morning / Midday / EOD)",
+    cadenceOrSla:
+      "Real-time <500ms push · 3 daily briefings (Morning / Midday / EOD)",
     commandsOrRoutes: [
       "/start",
       "/miniapp",
@@ -353,8 +351,10 @@ export const CHANNEL_INTEGRATIONS: readonly ChannelIntegrationSpec[] = [
     id: "SENTINEL_CRON",
     label: "Weblog Sentinel & Health Watcher Cron",
     protocol: "Cloudflare Scheduled Workers + Local Cron",
-    entrypoint: "workers/weblog_sentinel.ts · workers/health_watcher.ts · scripts/artifacts_cron.ts",
-    cadenceOrSla: "08:00 UTC weblog sentinel (0 8 * * *) · 1m health watcher (* * * * *)",
+    entrypoint:
+      "workers/weblog_sentinel.ts · workers/health_watcher.ts · scripts/artifacts_cron.ts",
+    cadenceOrSla:
+      "08:00 UTC weblog sentinel (0 8 * * *) · 1m health watcher (* * * * *)",
     commandsOrRoutes: [
       "bun run weblog:sentinel",
       "workers/health_watcher.ts (operationalStatus transitions)",
@@ -369,7 +369,8 @@ export const CHANNEL_INTEGRATIONS: readonly ChannelIntegrationSpec[] = [
     id: "DAEMON_WEBVIEW",
     label: "Desk Daemon (:4020) & Cordis WebView Host",
     protocol: "HTTP/JSON + Cordis Sidebar Plugin",
-    entrypoint: "services/sportsdesk_webview_server.ts · lib/daemon_routes.ts · dsh-plugin-sidebar/index.js",
+    entrypoint:
+      "services/sportsdesk_webview_server.ts · lib/daemon_routes.ts · dsh-plugin-sidebar/index.js",
     cadenceOrSla: "Live HTTP endpoints on :4020 · zero-CSP standalone HTML",
     commandsOrRoutes: [
       "GET /governance",
@@ -418,7 +419,8 @@ export const CHANNEL_INTEGRATIONS: readonly ChannelIntegrationSpec[] = [
     id: "F402_TICKET_WIRE",
     label: "F402 Live Ticket Wire & Surveillance Audit Queue",
     protocol: "F402 Replay Transport + GSLive Governor",
-    entrypoint: "lib/gslive_surveillance_governor.ts · lib/f402_agent_policy.ts",
+    entrypoint:
+      "lib/gslive_surveillance_governor.ts · lib/f402_agent_policy.ts",
     cadenceOrSla: "500ms WSS SLA · 24h GATE-SURV-02 probation review SLA",
     commandsOrRoutes: [
       "TicketWriter: Internet / ALERT / GSLIVE / GSBUILDER",
@@ -455,7 +457,12 @@ export const PORTAL_ROLE_CONTRACTS: readonly PortalRoleContract[] = [
       "security.js ajaxPrefilter injects Bearer + sets agentID := MASTER_ID and agentOwner := MASTER_ID.",
     tamperSurface:
       "Full downline authority (e.g. BILLY666); cannot be used for low-privilege subordinate authz testing.",
-    mappedDeskRoles: ["operator", "security/operator", "settlement", "business-owner"],
+    mappedDeskRoles: [
+      "operator",
+      "security/operator",
+      "settlement",
+      "business-owner",
+    ],
   },
   {
     role: "A",
@@ -679,7 +686,8 @@ export interface OwnerScorecard {
   readonly gatesTotal: number;
   readonly overdueCount: number;
   readonly weightScore: number;
-  readonly status: "HOLDING_WEIGHT" | "ACTION_REQUIRED" | "BLOCKED_EXTERNAL" | "OVERDUE";
+  readonly status:
+    "HOLDING_WEIGHT" | "ACTION_REQUIRED" | "BLOCKED_EXTERNAL" | "OVERDUE";
   readonly nextAction: string;
   readonly ownedGuards: readonly string[];
   readonly protectedSavingsUsd: number;
@@ -816,7 +824,9 @@ export interface TeamValueTelemetry {
   readonly planeSummaries: readonly PlaneBirdseyeSummary[];
 }
 
-export const GUARD_ROLE_OWNERSHIP: Readonly<Record<string, readonly DeskRoleId[]>> = {
+export const GUARD_ROLE_OWNERSHIP: Readonly<
+  Record<string, readonly DeskRoleId[]>
+> = {
   GUARD_1_PROBIT_ALT_SUBSET_BLOCK: ["settlement", "RISK_DESK_ANALYST"],
   GUARD_2_WSS_500MS_STEPPED_LINE: ["operator", "RISK_DESK_ANALYST"],
   GUARD_3_DYNAMIC_1Q_4Q_PERIOD_PRICER: ["settlement", "client/seam"],
@@ -870,7 +880,8 @@ export const WEBLOG_MODE_CONTRACTS: readonly WebLogModeGovernanceSpec[] = [
     mode: "B",
     name: "GLOBAL_IP_MATCHER (Per-Office or Master Downline IP Collision)",
     wireDateFormat: "MM/DD/YYYY",
-    wireTargetParam: "customerID = <officeAgentId> (per-office) | '0' (master 668 offices)",
+    wireTargetParam:
+      "customerID = <officeAgentId> (per-office) | '0' (master 668 offices)",
     signalHonestyRule:
       "Shared-IP matcher only (#89): never substitute Mode B for Mode A activity logs; use strictly for per-office & cross-office IP ring topology.",
     primaryDetectorUse:
@@ -881,7 +892,8 @@ export const WEBLOG_MODE_CONTRACTS: readonly WebLogModeGovernanceSpec[] = [
     mode: "C",
     name: "PLAYER_IP_MATCHER (Single-Player Sibling IP Matcher)",
     wireDateFormat: "YYYY-MM-DD",
-    wireTargetParam: "customerID = <LoginID> (ip-tracker.js line 77 YYYY-MM-DD rewrite)",
+    wireTargetParam:
+      "customerID = <LoginID> (ip-tracker.js line 77 YYYY-MM-DD rewrite)",
     signalHonestyRule:
       "Must format start/end as YYYY-MM-DD per ip-tracker.js line 77; M/D/Y silently returns empty sibling sets.",
     primaryDetectorUse:
@@ -975,9 +987,7 @@ function classifyPatternArchetype(
   }
 }
 
-function resolveProfileOwnerRole(
-  archetype: WagerPatternArchetype,
-): DeskRoleId {
+function resolveProfileOwnerRole(archetype: WagerPatternArchetype): DeskRoleId {
   switch (archetype) {
     case "PER_OFFICE_SNIPER_RING":
     case "STEAM_TRAP_RING":
@@ -1027,7 +1037,8 @@ export function buildClientWagerPatternProfiles(): readonly ClientWagerPatternPr
       cluster.matchedLoginsInOffice.length + cluster.crossOfficeLogins.length;
 
     const surv02Enforcement =
-      cluster.mfcsCompositeScore >= 96 && cluster.modeASessionDwellSeconds <= 4.5
+      cluster.mfcsCompositeScore >= 96 &&
+      cluster.modeASessionDwellSeconds <= 4.5
         ? `ACTIVE_CLAMPED ($${(PROBATION_NON_DONOR_CAP_CENTS / 100).toFixed(0)} cap / ${PROBATION_NON_DONOR_DELAY_SEC}s delay · ${PROBATION_REVIEW_SLA_HOURS}h SLA)`
         : cluster.officeAgentId === "BIGDAD"
           ? `ACTIVE_CLAMPED_DONOR ($${(SURGICAL_DONOR_CAP_CENTS / 100).toFixed(0)} cap / ${SURGICAL_DONOR_DELAY_SEC}s delay · Donor Shield)`
@@ -1125,7 +1136,8 @@ export const RED_TEAM_DRILLS: readonly RedTeamDrillSpec[] = [
   {
     drillId: "RT-DRILL-02",
     code: "CROSS_OFFICE_SYBIL_BEARD_ROTATION",
-    title: "Cross-Office Sybil & Beard Subnet Rotation (getWebLog Mode A/B/C/I)",
+    title:
+      "Cross-Office Sybil & Beard Subnet Rotation (getWebLog Mode A/B/C/I)",
     category: "SYBIL_IP_ROTATION",
     attackVector:
       "Split max-bet stakes across CUB22HR <-> MAX92 and LAKERS <-> SOUTHSHORE beard accounts on shared /24 subnets with sub-6s Mode A session-to-wager dwell, attempting to evade single-office limits.",
@@ -1164,7 +1176,8 @@ export const RED_TEAM_DRILLS: readonly RedTeamDrillSpec[] = [
   {
     drillId: "RT-DRILL-04",
     code: "KEY_NUMBER_3_7_LAYOFF_ARBITRAGE",
-    title: "Key-Number (NFL 3/7/10/14 & NBA 3..8) Spread & Teaser Layoff Arbitrage",
+    title:
+      "Key-Number (NFL 3/7/10/14 & NBA 3..8) Spread & Teaser Layoff Arbitrage",
     category: "KEY_NUMBER_LAYOFF_ARB",
     attackVector:
       "Hammer stale F402 pending spread/total lines (e.g. -6.5 vs Polymarket -7.5 across Key Number 7 on ROT 501 / ROT 451) while Polymarket sharp wallets hold the better side.",
@@ -1184,7 +1197,8 @@ export const RED_TEAM_DRILLS: readonly RedTeamDrillSpec[] = [
   {
     drillId: "RT-DRILL-05",
     code: "AUTOBET_LIVE_ARMING_AND_LEDGER_TAMPER",
-    title: "Watchlist Autobet Unapproved Transition & Unarmed Live Execution Bypass",
+    title:
+      "Watchlist Autobet Unapproved Transition & Unarmed Live Execution Bypass",
     category: "AUTOBET_ARMING_BYPASS",
     attackVector:
       "Attempt to (a) queue a fixture-sourced or stale signal, (b) jump an intent from 'queued' directly to 'filled' without operator approval, or (c) dispatch a live Kalshi order without EXECUTION_MODE=live, EXECUTION_LIVE=1, and 'PLACE LIVE ORDERS'.",
@@ -1205,7 +1219,8 @@ export const RED_TEAM_DRILLS: readonly RedTeamDrillSpec[] = [
   {
     drillId: "RT-DRILL-06",
     code: "BET_TICKER_SENTINEL_DOUBLE_COUNT_POISONING",
-    title: "BetTicker Sentinel ALERT Twin Double-Count & Clock-Zone Drift Injection",
+    title:
+      "BetTicker Sentinel ALERT Twin Double-Count & Clock-Zone Drift Injection",
     category: "SENTINEL_WIRE_POISONING",
     attackVector:
       "Replay twin getBetTicker rows where an ALERT sentinel row mirrors a real wager's betKey and AmountWagered, attempting to double crowd velocity aggregates and trigger false autobet hedges.",
@@ -1237,7 +1252,8 @@ export const AUTOBET_LAYOFF_STAGES: readonly AutobetLayoffStageSpec[] = [
   {
     stageNumber: 1,
     stageCode: "STAGE_1_BET_TICKER_WIRE_INGEST",
-    title: "Live getBetTicker Wire Ingest, Sentinel Demux & Wide Record Normalization",
+    title:
+      "Live getBetTicker Wire Ingest, Sentinel Demux & Wide Record Normalization",
     modules: [
       "lib/f402_incoming_bets.ts",
       "lib/f402_bet_ticker_poller.ts",
@@ -1251,7 +1267,8 @@ export const AUTOBET_LAYOFF_STAGES: readonly AutobetLayoffStageSpec[] = [
   {
     stageNumber: 2,
     stageCode: "STAGE_2_CLIENT_WEBLOG_IP_AND_SIGNAL_JOIN",
-    title: "Client / Weblog (Mode A/B/C/I) IP Corroboration & Watchlist Fair-Prob Derivation",
+    title:
+      "Client / Weblog (Mode A/B/C/I) IP Corroboration & Watchlist Fair-Prob Derivation",
     modules: [
       "lib/bet_ticker_ip_tracker_bridge.ts",
       "lib/watchlist_signal_engine.ts",
@@ -1265,7 +1282,8 @@ export const AUTOBET_LAYOFF_STAGES: readonly AutobetLayoffStageSpec[] = [
   {
     stageNumber: 3,
     stageCode: "STAGE_3_LAYOFF_RISK_AND_KEY_NUMBER_ENGINE",
-    title: "Sliding-Window Line Delta & Key-Number Crossing Evaluator (CFB, NFL, NBA)",
+    title:
+      "Sliding-Window Line Delta & Key-Number Crossing Evaluator (CFB, NFL, NBA)",
     modules: [
       "lib/layoff_risk_engine.ts",
       "lib/combo_identity.ts",
@@ -1278,7 +1296,8 @@ export const AUTOBET_LAYOFF_STAGES: readonly AutobetLayoffStageSpec[] = [
   {
     stageNumber: 4,
     stageCode: "STAGE_4_REBET_AND_EXECUTION_DECISION",
-    title: "Cross-Venue Re-Bet & Execution Decision Planner (Kalshi & Polymarket Taker/Maker)",
+    title:
+      "Cross-Venue Re-Bet & Execution Decision Planner (Kalshi & Polymarket Taker/Maker)",
     modules: [
       "lib/rebet_engine.ts",
       "lib/execution_decision.ts",
@@ -1293,7 +1312,8 @@ export const AUTOBET_LAYOFF_STAGES: readonly AutobetLayoffStageSpec[] = [
   {
     stageNumber: 5,
     stageCode: "STAGE_5_AUTOBET_LEDGER_AND_LIVE_ARMING",
-    title: "12-Gate Append-Only Autobet Intent Ledger & 3-Factor Kalshi Live Execution Arming",
+    title:
+      "12-Gate Append-Only Autobet Intent Ledger & 3-Factor Kalshi Live Execution Arming",
     modules: [
       "lib/watchlist_autobet.ts",
       "lib/autobet_kalshi.ts",
@@ -1326,7 +1346,8 @@ export interface AutobetLayoffOpportunitySpec {
   readonly plannedStakeUsd: number;
   readonly contractsCount: number;
   readonly gateChecksPassed: string;
-  readonly intentLedgerState: "queued" | "approved" | "filled" | "paper_guarded";
+  readonly intentLedgerState:
+    "queued" | "approved" | "filled" | "paper_guarded";
   readonly ownerRole: DeskRoleId;
   readonly ownerInbox: string;
 }
@@ -1340,7 +1361,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       period: "game",
       sourceClusterOffices: ["MJ2026", "BIGDAD", "MACHR", "GOLD22"],
       sourcePatternArchetype: "PER_OFFICE_SNIPER_RING",
-      marketSummary: "NFL FG Spread · Sniper Ring Sharp Accumulation Across Key 7",
+      marketSummary:
+        "NFL FG Spread · Sniper Ring Sharp Accumulation Across Key 7",
       f402LineLabel: "F402 -6.5 (-110) vs PM/Kalshi -7.5",
       externalVenue: "kalshi",
       executionStyle: "taker",
@@ -1351,7 +1373,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: 7,
       plannedStakeUsd: 250,
       contractsCount: 471,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · SHARP_STILL_BETTER [KEY 7]",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · SHARP_STILL_BETTER [KEY 7]",
       intentLedgerState: "approved",
       ownerRole: "settlement",
       ownerInbox: DESK_ROLES.settlement.inboxRoute,
@@ -1374,7 +1397,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: null,
       plannedStakeUsd: 150,
       contractsCount: 275,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · Step Line @ 345ms + Poly Taker",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · Step Line @ 345ms + Poly Taker",
       intentLedgerState: "approved",
       ownerRole: "operator",
       ownerInbox: DESK_ROLES.operator.inboxRoute,
@@ -1386,7 +1410,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       period: "game",
       sourceClusterOffices: ["DAN318", "MOOSEM", "MACHR"],
       sourcePatternArchetype: "KEY_7_TEASER_RING",
-      marketSummary: "NFL Key-3 & Key-7 Teaser Leg Protection · Passive Maker Hedge",
+      marketSummary:
+        "NFL Key-3 & Key-7 Teaser Leg Protection · Passive Maker Hedge",
       f402LineLabel: "F402 -7.5 / +2.5 Teaser Window",
       externalVenue: "kalshi",
       executionStyle: "maker",
@@ -1397,7 +1422,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: 3,
       plannedStakeUsd: 250,
       contractsCount: 476,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · Maker (fair - 150bps <= ask - 1c)",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · Maker (fair - 150bps <= ask - 1c)",
       intentLedgerState: "queued",
       ownerRole: "settlement",
       ownerInbox: DESK_ROLES.settlement.inboxRoute,
@@ -1420,7 +1446,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: 5,
       plannedStakeUsd: 300,
       contractsCount: 560,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · NBA Key 5 + 180s Quarantine",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · NBA Key 5 + 180s Quarantine",
       intentLedgerState: "approved",
       ownerRole: "RISK_DESK_ANALYST",
       ownerInbox: DESK_ROLES.RISK_DESK_ANALYST.inboxRoute,
@@ -1432,7 +1459,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       period: "game",
       sourceClusterOffices: ["MJ2026", "JUICEPLUS"],
       sourcePatternArchetype: "PARLAY_VIG_SNIPER",
-      marketSummary: "CFB Spread Key 10 Crossing · Maker Layoff + +15c/+20c Parlay Vig",
+      marketSummary:
+        "CFB Spread Key 10 Crossing · Maker Layoff + +15c/+20c Parlay Vig",
       f402LineLabel: "F402 -9.5 (-110) vs PM -10.5",
       externalVenue: "polymarket",
       executionStyle: "maker",
@@ -1443,7 +1471,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: 10,
       plannedStakeUsd: 150,
       contractsCount: 280,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · SHARP_STILL_BETTER [KEY 10]",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · SHARP_STILL_BETTER [KEY 10]",
       intentLedgerState: "queued",
       ownerRole: "settlement",
       ownerInbox: DESK_ROLES.settlement.inboxRoute,
@@ -1455,7 +1484,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       period: "live",
       sourceClusterOffices: ["LAKERS", "SOUTHSHORE", "BIGDAD"],
       sourcePatternArchetype: "CROSS_OFFICE_BEARD_BRIDGE",
-      marketSummary: "NBA Live Derivative · Cross-Office Beard Bridge Clamp + Maker Hedge",
+      marketSummary:
+        "NBA Live Derivative · Cross-Office Beard Bridge Clamp + Maker Hedge",
       f402LineLabel: "F402 Live -3.5 vs Kalshi -4.5",
       externalVenue: "kalshi",
       executionStyle: "maker",
@@ -1466,7 +1496,8 @@ export const AUTOBET_LAYOFF_OPPORTUNITIES: readonly AutobetLayoffOpportunitySpec
       keyNumberCrossed: 4,
       plannedStakeUsd: 300,
       contractsCount: 555,
-      gateChecksPassed: "12/12 AUTOBET_GATE_CHECKS · GATE-SURV-02 Clamp + Maker Hedge",
+      gateChecksPassed:
+        "12/12 AUTOBET_GATE_CHECKS · GATE-SURV-02 Clamp + Maker Hedge",
       intentLedgerState: "paper_guarded",
       ownerRole: "RISK_DESK_ANALYST",
       ownerInbox: DESK_ROLES.RISK_DESK_ANALYST.inboxRoute,
@@ -1499,7 +1530,8 @@ export interface BetTickerFlowEdgeSpec {
   readonly edgeId: string;
   readonly fromNodeId: string;
   readonly toNodeId: string;
-  readonly branchType: "PRIMARY_PASS" | "VARIANT_ROUTE" | "EDGE_CASE_TRAP" | "HUMAN_OVERRIDE";
+  readonly branchType:
+    "PRIMARY_PASS" | "VARIANT_ROUTE" | "EDGE_CASE_TRAP" | "HUMAN_OVERRIDE";
   readonly conditionLabel: string;
   readonly auditEventEmitted: string;
 }
@@ -1514,7 +1546,8 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "classifyIncomingTicket / computeBetTickerDelta",
     ownerRole: "client/seam",
     teamLead: "Soren Lindqvist (Seam & Portal Integrity Lead)",
-    decisionCondition: "New WagerNumber on getBetTicker / getBetReport wire; not in seenTicketSet",
+    decisionCondition:
+      "New WagerNumber on getBetTicker / getBetReport wire; not in seenTicketSet",
     passBranchTarget: "NODE-02 (Sentinel Twin Gate)",
     failOrVariantBranchTarget: "DROP_DUPLICATE_POLL_TICKET (idempotent no-op)",
     slaOrLatencyBudget: "<= 25ms parse + delta diff",
@@ -1528,9 +1561,11 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "isAlertSentinelBet / partitionBetTickerRows",
     ownerRole: "client/seam",
     teamLead: "Soren Lindqvist (Seam & Portal Integrity Lead)",
-    decisionCondition: "Login.trim() === 'ALERT' || AgentID.trim() === 'ALERT' (EC-01 twin pair)",
+    decisionCondition:
+      "Login.trim() === 'ALERT' || AgentID.trim() === 'ALERT' (EC-01 twin pair)",
     passBranchTarget: "NODE-03 (Real Customer Wager -> Weblog & IP Join)",
-    failOrVariantBranchTarget: "VIP_SENTINEL_ALERTS_STREAM (0 financial handle; EC-01 twin tag)",
+    failOrVariantBranchTarget:
+      "VIP_SENTINEL_ALERTS_STREAM (0 financial handle; EC-01 twin tag)",
     slaOrLatencyBudget: "O(1) synchronous filter",
   },
   {
@@ -1542,9 +1577,12 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "lookupIpTrackerMatchForBetTicker",
     ownerRole: "RISK_DESK_ANALYST",
     teamLead: "Elena Rostova (Quantitative Risk & Sharp Profiling Lead)",
-    decisionCondition: "Customer/Agent matches 13 IP clusters or Mode A session dwell < 15s (EC-03/EC-04)",
-    passBranchTarget: "NODE-04 (Matched Cluster / Sharp Profile -> SURV Governor)",
-    failOrVariantBranchTarget: "RETAIL_STANDARD_PATH (async Mode B/C background sweep)",
+    decisionCondition:
+      "Customer/Agent matches 13 IP clusters or Mode A session dwell < 15s (EC-03/EC-04)",
+    passBranchTarget:
+      "NODE-04 (Matched Cluster / Sharp Profile -> SURV Governor)",
+    failOrVariantBranchTarget:
+      "RETAIL_STANDARD_PATH (async Mode B/C background sweep)",
     slaOrLatencyBudget: "O(1) lookupInto arena + <15s Mode A dwell check",
   },
   {
@@ -1556,9 +1594,11 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "evaluateSurveillanceGovernor / enforceDonorExemption",
     ownerRole: "RISK_DESK_ANALYST",
     teamLead: "Elena Rostova (Quantitative Risk & Sharp Profiling Lead)",
-    decisionCondition: "Hedgeable ratio >= 65% (Surgical Donor $50/8s) vs < 65% (Probation $250/5s) vs >3x Trojan step-up (EC-02)",
+    decisionCondition:
+      "Hedgeable ratio >= 65% (Surgical Donor $50/8s) vs < 65% (Probation $250/5s) vs >3x Trojan step-up (EC-02)",
     passBranchTarget: "NODE-05 (Key-Number & Net Exposure Evaluator)",
-    failOrVariantBranchTarget: "STRIP_TROJAN_DONOR_EXEMPTION (EC-02 hard clamp + P0 inbox alert)",
+    failOrVariantBranchTarget:
+      "STRIP_TROJAN_DONOR_EXEMPTION (EC-02 hard clamp + P0 inbox alert)",
     slaOrLatencyBudget: "<= 345ms auto line-step (GATE-SURV-01)",
   },
   {
@@ -1570,9 +1610,11 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "detectKeyNumberCrossing / evaluateBetterVenue",
     ownerRole: "settlement",
     teamLead: "Devon Brooks (Settlement & CLV Integrity Lead)",
-    decisionCondition: "Tuple (game_id, period, subject, market_kind, side) crosses NFL {3,7,10,14} / NBA {3..8} or net exposure > $10k (EC-05/EC-06)",
+    decisionCondition:
+      "Tuple (game_id, period, subject, market_kind, side) crosses NFL {3,7,10,14} / NBA {3..8} or net exposure > $10k (EC-05/EC-06)",
     passBranchTarget: "NODE-06 (Watchlist 12-Gate Intent Filter)",
-    failOrVariantBranchTarget: "INTERNAL_BOOK_HOLD_SHADE (reprice F402 line +15c without external layoff)",
+    failOrVariantBranchTarget:
+      "INTERNAL_BOOK_HOLD_SHADE (reprice F402 line +15c without external layoff)",
     slaOrLatencyBudget: "<= 50ms SQLite sliding-window join",
   },
   {
@@ -1584,10 +1626,14 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "evaluateSignalGates / buildAutobetIntent",
     ownerRole: "operator",
     teamLead: "Marcus Vance (Head of Desk Operations)",
-    decisionCondition: "All 12 gates pass in table order (enabled, league_allowed, fixture_provenance, freshness, confidence, distinct_accounts, one_sided_share, reference_price, stake_available, daily_stake_cap, league_daily_cap, duplicate_intent)",
-    passBranchTarget: "NODE-07 (Append intent_created [queued] under .lock -> Re-Bet Routing)",
-    failOrVariantBranchTarget: "SKIPPED_ENQUEUE_AUDIT (record failed GateCheckId[] reasons; EC-09)",
-    slaOrLatencyBudget: "Atomic O_EXCL .lock (10s timeout / 30s stale break; EC-07)",
+    decisionCondition:
+      "All 12 gates pass in table order (enabled, league_allowed, fixture_provenance, freshness, confidence, distinct_accounts, one_sided_share, reference_price, stake_available, daily_stake_cap, league_daily_cap, duplicate_intent)",
+    passBranchTarget:
+      "NODE-07 (Append intent_created [queued] under .lock -> Re-Bet Routing)",
+    failOrVariantBranchTarget:
+      "SKIPPED_ENQUEUE_AUDIT (record failed GateCheckId[] reasons; EC-09)",
+    slaOrLatencyBudget:
+      "Atomic O_EXCL .lock (10s timeout / 30s stale break; EC-07)",
   },
   {
     nodeId: "NODE-07",
@@ -1598,9 +1644,11 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "evaluateRebetOpportunity / evaluateExecutionDecision",
     ownerRole: "RISK_DESK_ANALYST",
     teamLead: "Elena Rostova (Quantitative Risk & Sharp Profiling Lead)",
-    decisionCondition: "Edge >= sport floor (NFL 300 / NBA 350 / CFB 450 bps); top-of-book depth vs Quarter-Kelly stake selects Kalshi/Polymarket taker vs passive maker (EC-10)",
+    decisionCondition:
+      "Edge >= sport floor (NFL 300 / NBA 350 / CFB 450 bps); top-of-book depth vs Quarter-Kelly stake selects Kalshi/Polymarket taker vs passive maker (EC-10)",
     passBranchTarget: "NODE-08 (Human / Team-Member Decision & Sign-Off Gate)",
-    failOrVariantBranchTarget: "DOWNGRADE_TO_PASSIVE_MAKER_OR_HOLD (EC-10 thin depth fallback)",
+    failOrVariantBranchTarget:
+      "DOWNGRADE_TO_PASSIVE_MAKER_OR_HOLD (EC-10 thin depth fallback)",
     slaOrLatencyBudget: "Integer-cent Quarter-Kelly clamped to maxStakeUsd",
   },
   {
@@ -1612,9 +1660,12 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "assertIntentTransition (approve | reject)",
     ownerRole: "operator",
     teamLead: "Marcus Vance (Head of Desk Operations)",
-    decisionCondition: "Named human operator/lead verifies queued intent before expiresAt TTL (EC-08) and appends intent_approved or intent_rejected with actor + rationale note",
-    passBranchTarget: "NODE-09 (Approved -> Paper or 3-Factor Kalshi Live Arming)",
-    failOrVariantBranchTarget: "INTENT_REJECTED_OR_TTL_EXPIRED (releases daily & league cap reservation; EC-08)",
+    decisionCondition:
+      "Named human operator/lead verifies queued intent before expiresAt TTL (EC-08) and appends intent_approved or intent_rejected with actor + rationale note",
+    passBranchTarget:
+      "NODE-09 (Approved -> Paper or 3-Factor Kalshi Live Arming)",
+    failOrVariantBranchTarget:
+      "INTENT_REJECTED_OR_TTL_EXPIRED (releases daily & league cap reservation; EC-08)",
     slaOrLatencyBudget: "<= 15m ACK SLA (expireApprovedAfterMinutes TTL)",
   },
   {
@@ -1626,10 +1677,14 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "computePaperFill / assertLiveExecutionArmed",
     ownerRole: "security/operator",
     teamLead: "Tariq Al-Mansoor (Security & Secret Governance Lead)",
-    decisionCondition: "Default mode='paper' (computePaperFill with paperSlippageBps); live Kalshi requires EXECUTION_MODE=live + EXECUTION_LIVE=1 + confirm='PLACE LIVE ORDERS' + dual human sign-off",
-    passBranchTarget: "NODE-10 (Append intent_filled -> Settlement & CLV Post-Mortem)",
-    failOrVariantBranchTarget: "AUTOBET_ERROR_LIVE_DISABLED (exitCode: 3 hard refusal)",
-    slaOrLatencyBudget: "Zero-network paper fill or signed RSA-PSS REST execution",
+    decisionCondition:
+      "Default mode='paper' (computePaperFill with paperSlippageBps); live Kalshi requires EXECUTION_MODE=live + EXECUTION_LIVE=1 + confirm='PLACE LIVE ORDERS' + dual human sign-off",
+    passBranchTarget:
+      "NODE-10 (Append intent_filled -> Settlement & CLV Post-Mortem)",
+    failOrVariantBranchTarget:
+      "AUTOBET_ERROR_LIVE_DISABLED (exitCode: 3 hard refusal)",
+    slaOrLatencyBudget:
+      "Zero-network paper fill or signed RSA-PSS REST execution",
   },
   {
     nodeId: "NODE-10",
@@ -1640,9 +1695,12 @@ export const BET_TICKER_FLOWCHART_NODES: readonly BetTickerFlowNodeSpec[] = [
     entrypointFn: "computeSettlement / summarizeIntents",
     ownerRole: "settlement",
     teamLead: "Devon Brooks (Settlement & CLV Integrity Lead)",
-    decisionCondition: "Official box-score grade (won | lost | void) settled from filled state; computes integer-cent P&L, ROI%, and Brier/CLV delta",
-    passBranchTarget: "TERMINAL_SETTLED_AUDITED (data/watchlist-autobet-ledger.jsonl mode 0o600)",
-    failOrVariantBranchTarget: "INVALID_TRANSITION_OR_LEDGER_CORRUPT (exitCode: 1/3 with 1-based line number)",
+    decisionCondition:
+      "Official box-score grade (won | lost | void) settled from filled state; computes integer-cent P&L, ROI%, and Brier/CLV delta",
+    passBranchTarget:
+      "TERMINAL_SETTLED_AUDITED (data/watchlist-autobet-ledger.jsonl mode 0o600)",
+    failOrVariantBranchTarget:
+      "INVALID_TRANSITION_OR_LEDGER_CORRUPT (exitCode: 1/3 with 1-based line number)",
     slaOrLatencyBudget: "Post-event final grade + daily 08:00 sentinel audit",
   },
 ] as const;
@@ -1701,7 +1759,8 @@ export const BET_TICKER_FLOWCHART_EDGES: readonly BetTickerFlowEdgeSpec[] = [
     fromNodeId: "NODE-05",
     toNodeId: "INTERNAL_VIG_SHADE",
     branchType: "VARIANT_ROUTE",
-    conditionLabel: "Sub-threshold delta & no key-number crossing -> shade +15c",
+    conditionLabel:
+      "Sub-threshold delta & no key-number crossing -> shade +15c",
     auditEventEmitted: "internal_line_shaded",
   },
   {
@@ -1733,7 +1792,8 @@ export const BET_TICKER_FLOWCHART_EDGES: readonly BetTickerFlowEdgeSpec[] = [
     fromNodeId: "NODE-07",
     toNodeId: "NODE-08",
     branchType: "PRIMARY_PASS",
-    conditionLabel: "Quarter-Kelly stake & Kalshi/Polymarket taker/maker selected",
+    conditionLabel:
+      "Quarter-Kelly stake & Kalshi/Polymarket taker/maker selected",
     auditEventEmitted: "rebet_route_computed",
   },
   {
@@ -1741,7 +1801,8 @@ export const BET_TICKER_FLOWCHART_EDGES: readonly BetTickerFlowEdgeSpec[] = [
     fromNodeId: "NODE-08",
     toNodeId: "CAP_RELEASED_SINK",
     branchType: "HUMAN_OVERRIDE",
-    conditionLabel: "Human operator rejects or TTL expires (EC-08) -> release cap",
+    conditionLabel:
+      "Human operator rejects or TTL expires (EC-08) -> release cap",
     auditEventEmitted: "intent_rejected | intent_expired",
   },
   {
@@ -1757,7 +1818,8 @@ export const BET_TICKER_FLOWCHART_EDGES: readonly BetTickerFlowEdgeSpec[] = [
     fromNodeId: "NODE-09",
     toNodeId: "LIVE_DISABLED_SINK",
     branchType: "EDGE_CASE_TRAP",
-    conditionLabel: "Unarmed live venue call -> AutobetError(live_disabled, exit 3)",
+    conditionLabel:
+      "Unarmed live venue call -> AutobetError(live_disabled, exit 3)",
     auditEventEmitted: "live_arming_refused",
   },
   {
@@ -1765,7 +1827,8 @@ export const BET_TICKER_FLOWCHART_EDGES: readonly BetTickerFlowEdgeSpec[] = [
     fromNodeId: "NODE-09",
     toNodeId: "NODE-10",
     branchType: "PRIMARY_PASS",
-    conditionLabel: "Paper fill (or 3-factor armed Kalshi fill) -> intent_filled",
+    conditionLabel:
+      "Paper fill (or 3-factor armed Kalshi fill) -> intent_filled",
     auditEventEmitted: "intent_filled",
   },
 ] as const;
@@ -1846,278 +1909,298 @@ export interface BetTickerDecisionAuditEntry {
   readonly verificationCommand: string;
 }
 
-export const BET_TICKER_DECISION_AUDIT_LOG: readonly BetTickerDecisionAuditEntry[] = [
-  {
-    logId: "DEC-LOG-001",
-    timestampIso: "2026-11-09T14:12:04Z",
-    intentOrTicketId: "wa-501-nfl-key3 (LAYOFF-ROT-501)",
-    rotation: "ROT 501",
-    league: "NFL",
-    officeClusterId: "MJ2026 / DAN318",
-    customerLogin: "MJ901",
-    actorKind: "DUAL_HUMAN_SIGN_OFF",
-    actorName: "Devon Brooks",
-    actorRole: "settlement",
-    actorEmail: "settlement-grading@bookdeskops.com",
-    coSignerName: "Elena Rostova",
-    coSignerRole: "RISK_DESK_ANALYST",
-    inboxTicketRef: "inbox://settlement-grading/approvals#ROT-501",
-    flowchartNodeId: "NODE-08",
-    priorState: "queued",
-    nextState: "approved",
-    decisionAction: "APPROVE_LIVE_LAYOFF",
-    gatesEvaluatedSummary: "12/12 PASS (conf=92, accts=6, share=0.91, edge=+520bps)",
-    edgeCaseOrVariantId: "EC-05 (Key-3 Spread Crossing)",
-    humanRationaleNote:
-      "Approved $250 Kalshi taker layoff (471 contracts @ 53.0c). MJ2026 + DAN318 crossed key number -3.0 (-2.5 F402 vs -3.5 PM); hedging eliminates 3-point push/middle trap.",
-    financialImpactUsd: 250,
-    auditSignatureHash: "sha256:9f4a8c12e7b03d19",
-    verificationCommand: "bun run autobet: approve wa-501-nfl-key3 --by Devon.Brooks",
-  },
-  {
-    logId: "DEC-LOG-002",
-    timestampIso: "2026-11-09T14:16:29Z",
-    intentOrTicketId: "wa-315-cfb-burst (LAYOFF-ROT-315)",
-    rotation: "ROT 315",
-    league: "CFB",
-    officeClusterId: "CUB22HR / MACHR / GOLD22",
-    customerLogin: "CUB101",
-    actorKind: "HUMAN_TEAM_LEAD",
-    actorName: "Marcus Vance",
-    actorRole: "operator",
-    actorEmail: "ops-desk@bookdeskops.com",
-    coSignerName: null,
-    coSignerRole: null,
-    inboxTicketRef: "inbox://ops-desk/p0-triage#ROT-315",
-    flowchartNodeId: "NODE-08",
-    priorState: "queued",
-    nextState: "approved",
-    decisionAction: "APPROVE_LIVE_LAYOFF",
-    gatesEvaluatedSummary: "12/12 PASS (conf=94, accts=10, share=0.95, edge=+600bps)",
-    edgeCaseOrVariantId: "VARIANT-TOUT-BURST (8-Acct + 2-Twin Sync)",
-    humanRationaleNote:
-      "Approved $150 Polymarket CLOB taker buy (275 contracts @ 54.5c) + stepped internal CFB total 54.5 -> 56.0 within 290ms after 10 synchronized accounts hit OVER.",
-    financialImpactUsd: 150,
-    auditSignatureHash: "sha256:3c7e11b409a2f851",
-    verificationCommand: "bun run autobet: approve wa-315-cfb-burst --by Marcus.Vance",
-  },
-  {
-    logId: "DEC-LOG-003",
-    timestampIso: "2026-11-09T14:21:11Z",
-    intentOrTicketId: "tkt-159318442-trojan",
-    rotation: "ROT 319",
-    league: "CFB",
-    officeClusterId: "MJ2026",
-    customerLogin: "MJ904",
-    actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
-    actorName: "Elena Rostova",
-    actorRole: "RISK_DESK_ANALYST",
-    actorEmail: "risk-desk-analyst@bookdeskops.com",
-    coSignerName: "Tariq Al-Mansoor",
-    coSignerRole: "security/operator",
-    inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#MJ904",
-    flowchartNodeId: "NODE-04",
-    priorState: "donor_surgical_50",
-    nextState: "clamped_donor",
-    decisionAction: "STRIP_TROJAN_DONOR_EXEMPTION",
-    gatesEvaluatedSummary: "GATE-SURV-02 TRIGGER (stake $600 = 12x $50 donor cap)",
-    edgeCaseOrVariantId: "EC-02 (Trojan Horse Donor Step-Up)",
-    humanRationaleNote:
-      "Confirmed stripTrojanHorseExemption on MJ904 after account attempted $600 1H CFB bet (12x surgical donor cap). Reclassified to hard $50 cap + 8s delay; rejected $550 excess.",
-    financialImpactUsd: 550,
-    auditSignatureHash: "sha256:7d2b54e811c90a34",
-    verificationCommand: "bun test tests/gslive_surveillance_governor.test.ts",
-  },
-  {
-    logId: "DEC-LOG-004",
-    timestampIso: "2026-11-09T14:25:48Z",
-    intentOrTicketId: "wa-451-nfl-key7 (LAYOFF-ROT-451)",
-    rotation: "ROT 451",
-    league: "NFL",
-    officeClusterId: "BIGDAD / DAN318",
-    customerLogin: "BD101",
-    actorKind: "HUMAN_DESK_OPERATOR",
-    actorName: "Devon Brooks",
-    actorRole: "settlement",
-    actorEmail: "settlement-grading@bookdeskops.com",
-    coSignerName: null,
-    coSignerRole: null,
-    inboxTicketRef: "inbox://settlement-grading/approvals#ROT-451",
-    flowchartNodeId: "NODE-07",
-    priorState: "queued",
-    nextState: "queued",
-    decisionAction: "APPROVE_MAKER_QUEUE",
-    gatesEvaluatedSummary: "12/12 PASS (conf=89, accts=5, share=0.88, edge=+430bps)",
-    edgeCaseOrVariantId: "EC-05 & EC-10 (Key-7 Cross + Passive Maker Bid)",
-    humanRationaleNote:
-      "Retained in passive maker queue @ 52.5c on Kalshi (476 contracts, $250 stake) to capture +430 bps across key number +7.0 without paying 90 bps taker spread on thin book.",
-    financialImpactUsd: 250,
-    auditSignatureHash: "sha256:5a89d023f41c7e62",
-    verificationCommand: "bun run governance:check --autobet",
-  },
-  {
-    logId: "DEC-LOG-005",
-    timestampIso: "2026-11-09T14:31:05Z",
-    intentOrTicketId: "wa-505-nba-steam (LAYOFF-ROT-505)",
-    rotation: "ROT 505",
-    league: "NBA",
-    officeClusterId: "ATEAM / TEXANS / SPEN",
-    customerLogin: "AT401",
-    actorKind: "HUMAN_TEAM_LEAD",
-    actorName: "Elena Rostova",
-    actorRole: "RISK_DESK_ANALYST",
-    actorEmail: "risk-desk-analyst@bookdeskops.com",
-    coSignerName: "Marcus Vance",
-    coSignerRole: "operator",
-    inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#ROT-505",
-    flowchartNodeId: "NODE-09",
-    priorState: "approved",
-    nextState: "filled",
-    decisionAction: "APPROVE_LIVE_LAYOFF",
-    gatesEvaluatedSummary: "12/12 PASS (conf=91, accts=7, share=0.90, edge=+390bps)",
-    edgeCaseOrVariantId: "VARIANT-NBA-KEY6 (NBA Key-6 Spread Crossing)",
-    humanRationaleNote:
-      "Executed $300 paper-verified fill (560 contracts @ 53.5c, 25 bps slippage buffer) after ATEAM + TEXANS + SPEN hit NBA -5.5 vs -6.5 venue line across NBA key number 6.",
-    financialImpactUsd: 300,
-    auditSignatureHash: "sha256:1b6f90c4e28a5d77",
-    verificationCommand: "bun run autobet: execute wa-505-nba-steam --venue paper",
-  },
-  {
-    logId: "DEC-LOG-006",
-    timestampIso: "2026-11-09T14:36:19Z",
-    intentOrTicketId: "tkt-159315219-alert-twin",
-    rotation: "ROT 501",
-    league: "NFL",
-    officeClusterId: "ALERT / MJ2026",
-    customerLogin: "ALERT (twin of MJ901)",
-    actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
-    actorName: "Soren Lindqvist",
-    actorRole: "client/seam",
-    actorEmail: "seam-ops@bookdeskops.com",
-    coSignerName: null,
-    coSignerRole: null,
-    inboxTicketRef: "inbox://seam-ops/contract-drift#ALERT-TWIN",
-    flowchartNodeId: "NODE-02",
-    priorState: "wire_ingested",
-    nextState: "twin_isolated",
-    decisionAction: "ISOLATE_ALERT_TWIN",
-    gatesEvaluatedSummary: "SENTINEL_TWIN_GATE (isAlertSentinelBet === true)",
-    edgeCaseOrVariantId: "EC-01 (ALERT Sentinel Twin Pair 159315219/159315220)",
-    humanRationaleNote:
-      "Verified ticket 159315219 (Login=ALERT) isolated into vip_sentinel_alerts table with $0 financial handle while real twin 159315220 (MJ901) routed to risk rollup.",
-    financialImpactUsd: 0,
-    auditSignatureHash: "sha256:8e3c71a904d2b610",
-    verificationCommand: "bun test tests/bet_flags.test.ts",
-  },
-  {
-    logId: "DEC-LOG-007",
-    timestampIso: "2026-11-09T14:42:50Z",
-    intentOrTicketId: "wa-612-nba-cgnat-reject",
-    rotation: "ROT 612",
-    league: "NBA",
-    officeClusterId: "GPRO50RSK",
-    customerLogin: "GP103",
-    actorKind: "HUMAN_TEAM_LEAD",
-    actorName: "Tariq Al-Mansoor",
-    actorRole: "security/operator",
-    actorEmail: "security-ops@bookdeskops.com",
-    coSignerName: "Elena Rostova",
-    coSignerRole: "RISK_DESK_ANALYST",
-    inboxTicketRef: "inbox://security-ops/alerts#ROT-612",
-    flowchartNodeId: "NODE-08",
-    priorState: "queued",
-    nextState: "rejected",
-    decisionAction: "REJECT_STALE_OR_CGNAT",
-    gatesEvaluatedSummary: "HUMAN_REJECT (Mode C YYYY-MM-DD check + CGNAT false-positive)",
-    edgeCaseOrVariantId: "EC-03 & EC-04 (Mode C Date Divergence + T-Mobile CGNAT)",
-    humanRationaleNote:
-      "Rejected external layoff and released $200 cap reservation: Mode C YYYY-MM-DD query proved GP103 shared 172.56.21.0/24 T-Mobile CGNAT tower without synchronized <15s dwell. Applied internal +20c prop vig shade instead.",
-    financialImpactUsd: 200,
-    auditSignatureHash: "sha256:4f1d82b7c309e54a",
-    verificationCommand: "bun run autobet: reject wa-612-nba-cgnat-reject --by Tariq.AlMansoor",
-  },
-  {
-    logId: "DEC-LOG-008",
-    timestampIso: "2026-11-09T14:49:15Z",
-    intentOrTicketId: "wa-5501-nba-beard (LAYOFF-ROT-5501)",
-    rotation: "ROT 5501",
-    league: "NBA",
-    officeClusterId: "LAKERS / KOBE24",
-    customerLogin: "LK101",
-    actorKind: "DUAL_HUMAN_SIGN_OFF",
-    actorName: "Elena Rostova",
-    actorRole: "RISK_DESK_ANALYST",
-    actorEmail: "risk-desk-analyst@bookdeskops.com",
-    coSignerName: "Nadia Chen",
-    coSignerRole: "compliance",
-    inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#ROT-5501",
-    flowchartNodeId: "NODE-09",
-    priorState: "approved",
-    nextState: "approved",
-    decisionAction: "HOLD_PAPER_GUARDED",
-    gatesEvaluatedSummary: "12/12 PASS (conf=86, accts=4, share=0.85, edge=+500bps)",
-    edgeCaseOrVariantId: "VARIANT-CROSS-OFFICE-BEARD (LAKERS + KOBE24 LAN Bridge)",
-    humanRationaleNote:
-      "Held $300 intent (555 contracts @ 54.0c) in paper_guarded mode pending compliance sign-off on cross-office 192.168.x NAT beard bridge between LAKERS and KOBE24.",
-    financialImpactUsd: 300,
-    auditSignatureHash: "sha256:6c0a49f182b7d31e",
-    verificationCommand: "bun run governance:check --wagers --autobet",
-  },
-  {
-    logId: "DEC-LOG-009",
-    timestampIso: "2026-11-09T14:55:02Z",
-    intentOrTicketId: "wa-488-nfl-ttl-expired",
-    rotation: "ROT 488",
-    league: "NFL",
-    officeClusterId: "JUICEPLUS",
-    customerLogin: "JP201",
-    actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
-    actorName: "Marcus Vance",
-    actorRole: "operator",
-    actorEmail: "ops-desk@bookdeskops.com",
-    coSignerName: null,
-    coSignerRole: null,
-    inboxTicketRef: "inbox://ops-desk/p0-triage#ROT-488",
-    flowchartNodeId: "NODE-08",
-    priorState: "approved",
-    nextState: "expired",
-    decisionAction: "EXPIRE_UNFILLED_TTL",
-    gatesEvaluatedSummary: "TTL_EXPIRED (now >= expiresAt; exitCode 3 on execute)",
-    edgeCaseOrVariantId: "EC-08 (Approved Intent TTL Expiry Race)",
-    humanRationaleNote:
-      "Kalshi ask moved from 53.0c to 57.5c before fill; allowed expireApprovedAfterMinutes (15m) TTL to expire intent cleanly and release $250 NFL daily cap slot.",
-    financialImpactUsd: 250,
-    auditSignatureHash: "sha256:2e9b63d5a108c47f",
-    verificationCommand: "bun test tests/watchlist_autobet.test.ts",
-  },
-  {
-    logId: "DEC-LOG-010",
-    timestampIso: "2026-11-09T15:04:33Z",
-    intentOrTicketId: "wa-501-nfl-key3-settle",
-    rotation: "ROT 501",
-    league: "NFL",
-    officeClusterId: "MJ2026 / DAN318",
-    customerLogin: "MJ901",
-    actorKind: "HUMAN_DESK_OPERATOR",
-    actorName: "Devon Brooks",
-    actorRole: "settlement",
-    actorEmail: "settlement-grading@bookdeskops.com",
-    coSignerName: null,
-    coSignerRole: null,
-    inboxTicketRef: "inbox://settlement-grading/approvals#ROT-501-SETTLE",
-    flowchartNodeId: "NODE-10",
-    priorState: "filled",
-    nextState: "settled",
-    decisionAction: "SETTLE_VERIFIED_FILL",
-    gatesEvaluatedSummary: "SETTLEMENT_VERIFIED (result='won', +$221.70 net profit)",
-    edgeCaseOrVariantId: "VARIANT-SETTLEMENT-POSTMORTEM (CLV +520 bps realized)",
-    humanRationaleNote:
-      "Graded ROT 501 layoff fill as WON after official box score verification; recorded +$221.70 net hedge profit and +520 bps CLV beat in append-only JSONL ledger.",
-    financialImpactUsd: 221.7,
-    auditSignatureHash: "sha256:0a5f38c9d712e68b",
-    verificationCommand: "bun run autobet: settle wa-501-nfl-key3 --result won",
-  },
-] as const;
+export const BET_TICKER_DECISION_AUDIT_LOG: readonly BetTickerDecisionAuditEntry[] =
+  [
+    {
+      logId: "DEC-LOG-001",
+      timestampIso: "2026-11-09T14:12:04Z",
+      intentOrTicketId: "wa-501-nfl-key3 (LAYOFF-ROT-501)",
+      rotation: "ROT 501",
+      league: "NFL",
+      officeClusterId: "MJ2026 / DAN318",
+      customerLogin: "MJ901",
+      actorKind: "DUAL_HUMAN_SIGN_OFF",
+      actorName: "Devon Brooks",
+      actorRole: "settlement",
+      actorEmail: "settlement-grading@bookdeskops.com",
+      coSignerName: "Elena Rostova",
+      coSignerRole: "RISK_DESK_ANALYST",
+      inboxTicketRef: "inbox://settlement-grading/approvals#ROT-501",
+      flowchartNodeId: "NODE-08",
+      priorState: "queued",
+      nextState: "approved",
+      decisionAction: "APPROVE_LIVE_LAYOFF",
+      gatesEvaluatedSummary:
+        "12/12 PASS (conf=92, accts=6, share=0.91, edge=+520bps)",
+      edgeCaseOrVariantId: "EC-05 (Key-3 Spread Crossing)",
+      humanRationaleNote:
+        "Approved $250 Kalshi taker layoff (471 contracts @ 53.0c). MJ2026 + DAN318 crossed key number -3.0 (-2.5 F402 vs -3.5 PM); hedging eliminates 3-point push/middle trap.",
+      financialImpactUsd: 250,
+      auditSignatureHash: "sha256:9f4a8c12e7b03d19",
+      verificationCommand:
+        "bun run autobet: approve wa-501-nfl-key3 --by Devon.Brooks",
+    },
+    {
+      logId: "DEC-LOG-002",
+      timestampIso: "2026-11-09T14:16:29Z",
+      intentOrTicketId: "wa-315-cfb-burst (LAYOFF-ROT-315)",
+      rotation: "ROT 315",
+      league: "CFB",
+      officeClusterId: "CUB22HR / MACHR / GOLD22",
+      customerLogin: "CUB101",
+      actorKind: "HUMAN_TEAM_LEAD",
+      actorName: "Marcus Vance",
+      actorRole: "operator",
+      actorEmail: "ops-desk@bookdeskops.com",
+      coSignerName: null,
+      coSignerRole: null,
+      inboxTicketRef: "inbox://ops-desk/p0-triage#ROT-315",
+      flowchartNodeId: "NODE-08",
+      priorState: "queued",
+      nextState: "approved",
+      decisionAction: "APPROVE_LIVE_LAYOFF",
+      gatesEvaluatedSummary:
+        "12/12 PASS (conf=94, accts=10, share=0.95, edge=+600bps)",
+      edgeCaseOrVariantId: "VARIANT-TOUT-BURST (8-Acct + 2-Twin Sync)",
+      humanRationaleNote:
+        "Approved $150 Polymarket CLOB taker buy (275 contracts @ 54.5c) + stepped internal CFB total 54.5 -> 56.0 within 290ms after 10 synchronized accounts hit OVER.",
+      financialImpactUsd: 150,
+      auditSignatureHash: "sha256:3c7e11b409a2f851",
+      verificationCommand:
+        "bun run autobet: approve wa-315-cfb-burst --by Marcus.Vance",
+    },
+    {
+      logId: "DEC-LOG-003",
+      timestampIso: "2026-11-09T14:21:11Z",
+      intentOrTicketId: "tkt-159318442-trojan",
+      rotation: "ROT 319",
+      league: "CFB",
+      officeClusterId: "MJ2026",
+      customerLogin: "MJ904",
+      actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
+      actorName: "Elena Rostova",
+      actorRole: "RISK_DESK_ANALYST",
+      actorEmail: "risk-desk-analyst@bookdeskops.com",
+      coSignerName: "Tariq Al-Mansoor",
+      coSignerRole: "security/operator",
+      inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#MJ904",
+      flowchartNodeId: "NODE-04",
+      priorState: "donor_surgical_50",
+      nextState: "clamped_donor",
+      decisionAction: "STRIP_TROJAN_DONOR_EXEMPTION",
+      gatesEvaluatedSummary:
+        "GATE-SURV-02 TRIGGER (stake $600 = 12x $50 donor cap)",
+      edgeCaseOrVariantId: "EC-02 (Trojan Horse Donor Step-Up)",
+      humanRationaleNote:
+        "Confirmed stripTrojanHorseExemption on MJ904 after account attempted $600 1H CFB bet (12x surgical donor cap). Reclassified to hard $50 cap + 8s delay; rejected $550 excess.",
+      financialImpactUsd: 550,
+      auditSignatureHash: "sha256:7d2b54e811c90a34",
+      verificationCommand:
+        "bun test tests/gslive_surveillance_governor.test.ts",
+    },
+    {
+      logId: "DEC-LOG-004",
+      timestampIso: "2026-11-09T14:25:48Z",
+      intentOrTicketId: "wa-451-nfl-key7 (LAYOFF-ROT-451)",
+      rotation: "ROT 451",
+      league: "NFL",
+      officeClusterId: "BIGDAD / DAN318",
+      customerLogin: "BD101",
+      actorKind: "HUMAN_DESK_OPERATOR",
+      actorName: "Devon Brooks",
+      actorRole: "settlement",
+      actorEmail: "settlement-grading@bookdeskops.com",
+      coSignerName: null,
+      coSignerRole: null,
+      inboxTicketRef: "inbox://settlement-grading/approvals#ROT-451",
+      flowchartNodeId: "NODE-07",
+      priorState: "queued",
+      nextState: "queued",
+      decisionAction: "APPROVE_MAKER_QUEUE",
+      gatesEvaluatedSummary:
+        "12/12 PASS (conf=89, accts=5, share=0.88, edge=+430bps)",
+      edgeCaseOrVariantId: "EC-05 & EC-10 (Key-7 Cross + Passive Maker Bid)",
+      humanRationaleNote:
+        "Retained in passive maker queue @ 52.5c on Kalshi (476 contracts, $250 stake) to capture +430 bps across key number +7.0 without paying 90 bps taker spread on thin book.",
+      financialImpactUsd: 250,
+      auditSignatureHash: "sha256:5a89d023f41c7e62",
+      verificationCommand: "bun run governance:check --autobet",
+    },
+    {
+      logId: "DEC-LOG-005",
+      timestampIso: "2026-11-09T14:31:05Z",
+      intentOrTicketId: "wa-505-nba-steam (LAYOFF-ROT-505)",
+      rotation: "ROT 505",
+      league: "NBA",
+      officeClusterId: "ATEAM / TEXANS / SPEN",
+      customerLogin: "AT401",
+      actorKind: "HUMAN_TEAM_LEAD",
+      actorName: "Elena Rostova",
+      actorRole: "RISK_DESK_ANALYST",
+      actorEmail: "risk-desk-analyst@bookdeskops.com",
+      coSignerName: "Marcus Vance",
+      coSignerRole: "operator",
+      inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#ROT-505",
+      flowchartNodeId: "NODE-09",
+      priorState: "approved",
+      nextState: "filled",
+      decisionAction: "APPROVE_LIVE_LAYOFF",
+      gatesEvaluatedSummary:
+        "12/12 PASS (conf=91, accts=7, share=0.90, edge=+390bps)",
+      edgeCaseOrVariantId: "VARIANT-NBA-KEY6 (NBA Key-6 Spread Crossing)",
+      humanRationaleNote:
+        "Executed $300 paper-verified fill (560 contracts @ 53.5c, 25 bps slippage buffer) after ATEAM + TEXANS + SPEN hit NBA -5.5 vs -6.5 venue line across NBA key number 6.",
+      financialImpactUsd: 300,
+      auditSignatureHash: "sha256:1b6f90c4e28a5d77",
+      verificationCommand:
+        "bun run autobet: execute wa-505-nba-steam --venue paper",
+    },
+    {
+      logId: "DEC-LOG-006",
+      timestampIso: "2026-11-09T14:36:19Z",
+      intentOrTicketId: "tkt-159315219-alert-twin",
+      rotation: "ROT 501",
+      league: "NFL",
+      officeClusterId: "ALERT / MJ2026",
+      customerLogin: "ALERT (twin of MJ901)",
+      actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
+      actorName: "Soren Lindqvist",
+      actorRole: "client/seam",
+      actorEmail: "seam-ops@bookdeskops.com",
+      coSignerName: null,
+      coSignerRole: null,
+      inboxTicketRef: "inbox://seam-ops/contract-drift#ALERT-TWIN",
+      flowchartNodeId: "NODE-02",
+      priorState: "wire_ingested",
+      nextState: "twin_isolated",
+      decisionAction: "ISOLATE_ALERT_TWIN",
+      gatesEvaluatedSummary: "SENTINEL_TWIN_GATE (isAlertSentinelBet === true)",
+      edgeCaseOrVariantId:
+        "EC-01 (ALERT Sentinel Twin Pair 159315219/159315220)",
+      humanRationaleNote:
+        "Verified ticket 159315219 (Login=ALERT) isolated into vip_sentinel_alerts table with $0 financial handle while real twin 159315220 (MJ901) routed to risk rollup.",
+      financialImpactUsd: 0,
+      auditSignatureHash: "sha256:8e3c71a904d2b610",
+      verificationCommand: "bun test tests/bet_flags.test.ts",
+    },
+    {
+      logId: "DEC-LOG-007",
+      timestampIso: "2026-11-09T14:42:50Z",
+      intentOrTicketId: "wa-612-nba-cgnat-reject",
+      rotation: "ROT 612",
+      league: "NBA",
+      officeClusterId: "GPRO50RSK",
+      customerLogin: "GP103",
+      actorKind: "HUMAN_TEAM_LEAD",
+      actorName: "Tariq Al-Mansoor",
+      actorRole: "security/operator",
+      actorEmail: "security-ops@bookdeskops.com",
+      coSignerName: "Elena Rostova",
+      coSignerRole: "RISK_DESK_ANALYST",
+      inboxTicketRef: "inbox://security-ops/alerts#ROT-612",
+      flowchartNodeId: "NODE-08",
+      priorState: "queued",
+      nextState: "rejected",
+      decisionAction: "REJECT_STALE_OR_CGNAT",
+      gatesEvaluatedSummary:
+        "HUMAN_REJECT (Mode C YYYY-MM-DD check + CGNAT false-positive)",
+      edgeCaseOrVariantId:
+        "EC-03 & EC-04 (Mode C Date Divergence + T-Mobile CGNAT)",
+      humanRationaleNote:
+        "Rejected external layoff and released $200 cap reservation: Mode C YYYY-MM-DD query proved GP103 shared 172.56.21.0/24 T-Mobile CGNAT tower without synchronized <15s dwell. Applied internal +20c prop vig shade instead.",
+      financialImpactUsd: 200,
+      auditSignatureHash: "sha256:4f1d82b7c309e54a",
+      verificationCommand:
+        "bun run autobet: reject wa-612-nba-cgnat-reject --by Tariq.AlMansoor",
+    },
+    {
+      logId: "DEC-LOG-008",
+      timestampIso: "2026-11-09T14:49:15Z",
+      intentOrTicketId: "wa-5501-nba-beard (LAYOFF-ROT-5501)",
+      rotation: "ROT 5501",
+      league: "NBA",
+      officeClusterId: "LAKERS / KOBE24",
+      customerLogin: "LK101",
+      actorKind: "DUAL_HUMAN_SIGN_OFF",
+      actorName: "Elena Rostova",
+      actorRole: "RISK_DESK_ANALYST",
+      actorEmail: "risk-desk-analyst@bookdeskops.com",
+      coSignerName: "Nadia Chen",
+      coSignerRole: "compliance",
+      inboxTicketRef: "inbox://risk-desk-analyst/surveillance-sla#ROT-5501",
+      flowchartNodeId: "NODE-09",
+      priorState: "approved",
+      nextState: "approved",
+      decisionAction: "HOLD_PAPER_GUARDED",
+      gatesEvaluatedSummary:
+        "12/12 PASS (conf=86, accts=4, share=0.85, edge=+500bps)",
+      edgeCaseOrVariantId:
+        "VARIANT-CROSS-OFFICE-BEARD (LAKERS + KOBE24 LAN Bridge)",
+      humanRationaleNote:
+        "Held $300 intent (555 contracts @ 54.0c) in paper_guarded mode pending compliance sign-off on cross-office 192.168.x NAT beard bridge between LAKERS and KOBE24.",
+      financialImpactUsd: 300,
+      auditSignatureHash: "sha256:6c0a49f182b7d31e",
+      verificationCommand: "bun run governance:check --wagers --autobet",
+    },
+    {
+      logId: "DEC-LOG-009",
+      timestampIso: "2026-11-09T14:55:02Z",
+      intentOrTicketId: "wa-488-nfl-ttl-expired",
+      rotation: "ROT 488",
+      league: "NFL",
+      officeClusterId: "JUICEPLUS",
+      customerLogin: "JP201",
+      actorKind: "AUTOMATED_GOVERNOR_WITH_HUMAN_ACK",
+      actorName: "Marcus Vance",
+      actorRole: "operator",
+      actorEmail: "ops-desk@bookdeskops.com",
+      coSignerName: null,
+      coSignerRole: null,
+      inboxTicketRef: "inbox://ops-desk/p0-triage#ROT-488",
+      flowchartNodeId: "NODE-08",
+      priorState: "approved",
+      nextState: "expired",
+      decisionAction: "EXPIRE_UNFILLED_TTL",
+      gatesEvaluatedSummary:
+        "TTL_EXPIRED (now >= expiresAt; exitCode 3 on execute)",
+      edgeCaseOrVariantId: "EC-08 (Approved Intent TTL Expiry Race)",
+      humanRationaleNote:
+        "Kalshi ask moved from 53.0c to 57.5c before fill; allowed expireApprovedAfterMinutes (15m) TTL to expire intent cleanly and release $250 NFL daily cap slot.",
+      financialImpactUsd: 250,
+      auditSignatureHash: "sha256:2e9b63d5a108c47f",
+      verificationCommand: "bun test tests/watchlist_autobet.test.ts",
+    },
+    {
+      logId: "DEC-LOG-010",
+      timestampIso: "2026-11-09T15:04:33Z",
+      intentOrTicketId: "wa-501-nfl-key3-settle",
+      rotation: "ROT 501",
+      league: "NFL",
+      officeClusterId: "MJ2026 / DAN318",
+      customerLogin: "MJ901",
+      actorKind: "HUMAN_DESK_OPERATOR",
+      actorName: "Devon Brooks",
+      actorRole: "settlement",
+      actorEmail: "settlement-grading@bookdeskops.com",
+      coSignerName: null,
+      coSignerRole: null,
+      inboxTicketRef: "inbox://settlement-grading/approvals#ROT-501-SETTLE",
+      flowchartNodeId: "NODE-10",
+      priorState: "filled",
+      nextState: "settled",
+      decisionAction: "SETTLE_VERIFIED_FILL",
+      gatesEvaluatedSummary:
+        "SETTLEMENT_VERIFIED (result='won', +$221.70 net profit)",
+      edgeCaseOrVariantId:
+        "VARIANT-SETTLEMENT-POSTMORTEM (CLV +520 bps realized)",
+      humanRationaleNote:
+        "Graded ROT 501 layoff fill as WON after official box score verification; recorded +$221.70 net hedge profit and +520 bps CLV beat in append-only JSONL ledger.",
+      financialImpactUsd: 221.7,
+      auditSignatureHash: "sha256:0a5f38c9d712e68b",
+      verificationCommand:
+        "bun run autobet: settle wa-501-nfl-key3 --result won",
+    },
+  ] as const;
 
 export interface BetTickerEdgeCaseVariantSpec {
   readonly variantId: string;
@@ -2139,178 +2222,185 @@ export interface BetTickerEdgeCaseVariantSpec {
   readonly verificationCommand: string;
 }
 
-export const BET_TICKER_EDGE_CASE_VARIANTS: readonly BetTickerEdgeCaseVariantSpec[] = [
-  {
-    variantId: "EC-01",
-    code: "ALERT_SENTINEL_TWIN_PAIR",
-    category: "WIRE_INGEST_EDGE_CASE",
-    title: "ALERT Sentinel Twin Ticket Pair (159315219 / 159315220)",
-    triggerCondition:
-      "Fantasy402 emits duplicate bet-ticker rows within milliseconds: one with Login='ALERT' / AgentID='ALERT' and one with the real customer login",
-    failureModeIfUnhandled:
-      "Inflates rotation handle by 2x and triggers false double-sized Kalshi/Polymarket layoff orders",
-    deterministicHandlingContract:
-      "isAlertSentinelBet() partitions ALERT rows into vip_sentinel_alerts with $0 financial risk before tally rollup or autobet signal derivation",
-    humanAuditRequirement:
-      "client/seam (Soren Lindqvist) verifies 0 ALERT logins in financial tally rollup via daily contract check",
-    sourceModule: "lib/bet_flags.ts",
-    ownerRole: "client/seam",
-    verificationCommand: "bun test tests/bet_flags.test.ts",
-  },
-  {
-    variantId: "EC-02",
-    code: "TROJAN_HORSE_DONOR_STEPUP",
-    category: "GOVERNOR_CLAMP_VARIANT",
-    title: "Surgical Signal Donor Stake Step-Up (>3x Baseline)",
-    triggerCondition:
-      "Account classified as >=65% hedgeable Signal Donor ($50 surgical cap + 8s delay) submits a ticket >3x baseline stake ($500+) on a thin 1H/FCS market",
-    failureModeIfUnhandled:
-      "Syndicate uses a whitelisted low-stake signal donor account as a Trojan horse to dump unhedgeable steam onto the book",
-    deterministicHandlingContract:
-      "stripTrojanHorseExemption = true immediately revokes donor exemption, clamps ticket to $50 max, rejects excess stake, and pages RISK_DESK_ANALYST",
-    humanAuditRequirement:
-      "RISK_DESK_ANALYST (Elena Rostova) + security/operator co-sign donor revocation in inbox://risk-desk-analyst/surveillance-sla",
-    sourceModule: "lib/gslive_surveillance_governor.ts",
-    ownerRole: "RISK_DESK_ANALYST",
-    verificationCommand: "bun test tests/gslive_surveillance_governor.test.ts",
-  },
-  {
-    variantId: "EC-03",
-    code: "WEBLOG_MODE_C_DATE_DIVERGENCE",
-    category: "WEBLOG_IP_CORRELATION_EDGE_CASE",
-    title: "getWebLog Mode C YYYY-MM-DD vs Mode A/B/I MM/DD/YYYY Wire Divergence",
-    triggerCondition:
-      "Portal ip-tracker.js:77 formats Mode C (PLAYER_IP_MATCHER) dates as YYYY-MM-DD while Modes A, B, and I require MM/DD/YYYY",
-    failureModeIfUnhandled:
-      "Sharing a single MM/DD/YYYY formatter across all getWebLog modes causes Mode C pairwise customer IP correlation to silently return 0 rows",
-    deterministicHandlingContract:
-      "WEBLOG_MODE_CONTRACTS & buildWebLogRequest enforce YYYY-MM-DD exclusively on Mode C and reject Mode B/I as a substitute for Mode A activity streams (#89)",
-    humanAuditRequirement:
-      "RISK_DESK_ANALYST validates non-empty Mode C pairwise correlation before clearing shared-subnet accounts",
-    sourceModule: "lib/bet_ticker_ip_tracker_bridge.ts",
-    ownerRole: "RISK_DESK_ANALYST",
-    verificationCommand: "bun run governance:check --wagers",
-  },
-  {
-    variantId: "EC-04",
-    code: "CARRIER_CGNAT_FALSE_POSITIVE_SWEEP",
-    category: "WEBLOG_IP_CORRELATION_EDGE_CASE",
-    title: "Mobile Carrier CGNAT /24 Subnet Collision vs True Syndicate Ring",
-    triggerCondition:
-      "Multiple accounts appear on a shared mobile carrier subnet (e.g. T-Mobile 172.56.21.0/24) during peak Saturday/Sunday slate",
-    failureModeIfUnhandled:
-      "Unrelated recreational mobile bettors get false-positively clamped or trigger erroneous watchlist layoff signals",
-    deterministicHandlingContract:
-      "Requires 3-factor confirmation before cluster clamp: (1) Mode B/C IP match + (2) Mode A session dwell <15s + (3) synchronized same-rotation bet arrival within 60s",
-    humanAuditRequirement:
-      "security/operator (Tariq Al-Mansoor) reviews CGNAT subnet flags and logs REJECT_STALE_OR_CGNAT when dwell >=15s",
-    sourceModule: "lib/bet_ticker_ip_tracker_bridge.ts",
-    ownerRole: "security/operator",
-    verificationCommand: "bun run governance:check --wagers",
-  },
-  {
-    variantId: "EC-05",
-    code: "KEY_NUMBER_PUSH_TRAP_MIDDLE",
-    category: "KEY_NUMBER_PERIOD_EDGE_CASE",
-    title: "Football (3, 7, 10, 14) & NBA (3..8) Key-Number Crossing Middle Trap",
-    triggerCondition:
-      "F402 internal spread and external Kalshi/Polymarket spread straddle a key number (e.g. F402 -2.5 vs Venue -3.5, or F402 +7.5 vs Venue -6.5)",
-    failureModeIfUnhandled:
-      "Desk lays off at a worse strike across a key number, exposing the house to a two-sided loss or push-trap middle",
-    deterministicHandlingContract:
-      "detectKeyNumberCrossing() computes exact hundredths span across NFL {300,700,1000,1400} and NBA {300..800} and requires key-number-adjusted fairProb edge",
-    humanAuditRequirement:
-      "settlement (Devon Brooks) + RISK_DESK_ANALYST dual sign-off on any layoff crossing key numbers 3 or 7",
-    sourceModule: "lib/layoff_risk_engine.ts",
-    ownerRole: "settlement",
-    verificationCommand: "bun test tests/layoff_risk_engine.test.ts",
-  },
-  {
-    variantId: "EC-06",
-    code: "PERIOD_0_VS_1H_Q1_MISMATCH",
-    category: "KEY_NUMBER_PERIOD_EDGE_CASE",
-    title: "Period-0 (Full Game) vs 1H / 2H / Q1 Derivative Cross-Contamination",
-    triggerCondition:
-      "Sharp syndicate bets 1H or Q1 spread/total on F402 while external Polymarket/Kalshi liquidity only quotes Full Game (period='game')",
-    failureModeIfUnhandled:
-      "Naive game_id join without period matching triggers a Full Game external hedge against a 1H internal liability",
-    deterministicHandlingContract:
-      "LayoffRiskEngine.queryLineDeltaMatches joins strictly on (game_id, COALESCE(period,'game'), subject, market_kind, side); mismatched periods never auto-hedge",
-    humanAuditRequirement:
-      "settlement verifies period-exact match in layoff table; 1H/Q1 unmatched exposure routes to STEP_LINE_345MS_AND_LAYOFF or internal shade",
-    sourceModule: "lib/layoff_risk_engine.ts",
-    ownerRole: "settlement",
-    verificationCommand: "bun test tests/layoff_risk_engine.test.ts",
-  },
-  {
-    variantId: "EC-07",
-    code: "CONCURRENT_LEDGER_WRITER_LOCK_CONTENTION",
-    category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
-    title: "Concurrent Daemon Watch Loop & Operator CLI JSONL Ledger Write Contention",
-    triggerCondition:
-      "Cron/daemon enqueue loop and human operator `autobet: approve` attempt simultaneous read-validate-append on data/watchlist-autobet-ledger.jsonl",
-    failureModeIfUnhandled:
-      "Race condition appends two conflicting transitions for the same intentId, permanently corrupting the append-only ledger (ledger_corrupt)",
-    deterministicHandlingContract:
-      "withLedgerLock() acquires exclusive O_EXCL `<ledger>.lock` (mode 0o600, 25ms retry, 10s timeout, 30s stale-lock break) and refuses with ledger_locked (exitCode 1) on timeout",
-    humanAuditRequirement:
-      "operator inspects lock holder PID/timestamp if ledger_locked fires; never edits JSONL lines by hand",
-    sourceModule: "lib/watchlist_autobet.ts",
-    ownerRole: "operator",
-    verificationCommand: "bun test tests/watchlist_autobet.test.ts",
-  },
-  {
-    variantId: "EC-08",
-    code: "APPROVED_INTENT_TTL_EXPIRY_RACE",
-    category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
-    title: "Approved Intent TTL Expiration Before Venue Fill Execution",
-    triggerCondition:
-      "Human operator approves a queued intent, but external venue price moves and `now >= expiresAt` (expireApprovedAfterMinutes) before `execute` is called",
-    failureModeIfUnhandled:
-      "Stale approved order executes into a moved market long after the sharp signal edge has decayed",
-    deterministicHandlingContract:
-      "resolveIntentStatus() dynamically derives status='expired' when now >= expiresAt; assertIntentTransition refuses execute with intent_expired (exitCode 3) and releases cap",
-    humanAuditRequirement:
-      "operator logs EXPIRE_UNFILLED_TTL and re-evaluates fresh signal snapshot if market re-opens",
-    sourceModule: "lib/watchlist_autobet.ts",
-    ownerRole: "operator",
-    verificationCommand: "bun test tests/watchlist_autobet.test.ts",
-  },
-  {
-    variantId: "EC-09",
-    code: "FIXTURE_OR_STALE_PROVENANCE_LEAK",
-    category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
-    title: "Fixture-Sourced or Stale Signal Artifact Leak Into Live/Paper Queue",
-    triggerCondition:
-      "Local feed artifact (docs/graph-live-feed.json or data/live-wagers.json) is older than maxSignalAgeSeconds or carries provenance.fixture === true (#69/#73)",
-    failureModeIfUnhandled:
-      "Synthetic test fixtures or stale cached wagers generate phantom layoff intents in the operator approval queue",
-    deterministicHandlingContract:
-      "Gates #3 (fixture_provenance) and #4 (freshness) in evaluateSignalGates() refuse enqueue unless provenance.fixture===false and ageSeconds <= maxSignalAgeSeconds",
-    humanAuditRequirement:
-      "operator verifies source freshness chips before running `autobet: enqueue`",
-    sourceModule: "lib/watchlist_autobet.ts",
-    ownerRole: "operator",
-    verificationCommand: "bun test tests/watchlist_autobet.test.ts",
-  },
-  {
-    variantId: "EC-10",
-    code: "PARTIAL_BOOK_DEPTH_MAKER_FALLBACK",
-    category: "EXECUTION_DEPTH_ARMING_VARIANT",
-    title: "Thin External Orderbook Depth & 3-Factor Live Arming Boundary",
-    triggerCondition:
-      "Quarter-Kelly planned layoff stake ($250-$300) exceeds Kalshi/Polymarket top-of-book depth at the target price, or operator invokes live venue without 3-factor arming",
-    failureModeIfUnhandled:
-      "Taker sweep walks the orderbook past slippageBps ceiling, destroying positive EV, or accidental live order fires from paper config",
-    deterministicHandlingContract:
-      "evaluateExecutionDecision() downgrades thin-book routes from taker to passive maker inside spread; assertPaperVenue/Kalshi arming requires EXECUTION_MODE=live + EXECUTION_LIVE=1 + confirm='PLACE LIVE ORDERS'",
-    humanAuditRequirement:
-      "security/operator + RISK_DESK_ANALYST co-sign any live arming transition; maker orders tracked in queued state",
-    sourceModule: "lib/execution_decision.ts",
-    ownerRole: "security/operator",
-    verificationCommand: "bun test tests/execution_decision.test.ts",
-  },
-] as const;
+export const BET_TICKER_EDGE_CASE_VARIANTS: readonly BetTickerEdgeCaseVariantSpec[] =
+  [
+    {
+      variantId: "EC-01",
+      code: "ALERT_SENTINEL_TWIN_PAIR",
+      category: "WIRE_INGEST_EDGE_CASE",
+      title: "ALERT Sentinel Twin Ticket Pair (159315219 / 159315220)",
+      triggerCondition:
+        "Fantasy402 emits duplicate bet-ticker rows within milliseconds: one with Login='ALERT' / AgentID='ALERT' and one with the real customer login",
+      failureModeIfUnhandled:
+        "Inflates rotation handle by 2x and triggers false double-sized Kalshi/Polymarket layoff orders",
+      deterministicHandlingContract:
+        "isAlertSentinelBet() partitions ALERT rows into vip_sentinel_alerts with $0 financial risk before tally rollup or autobet signal derivation",
+      humanAuditRequirement:
+        "client/seam (Soren Lindqvist) verifies 0 ALERT logins in financial tally rollup via daily contract check",
+      sourceModule: "lib/bet_flags.ts",
+      ownerRole: "client/seam",
+      verificationCommand: "bun test tests/bet_flags.test.ts",
+    },
+    {
+      variantId: "EC-02",
+      code: "TROJAN_HORSE_DONOR_STEPUP",
+      category: "GOVERNOR_CLAMP_VARIANT",
+      title: "Surgical Signal Donor Stake Step-Up (>3x Baseline)",
+      triggerCondition:
+        "Account classified as >=65% hedgeable Signal Donor ($50 surgical cap + 8s delay) submits a ticket >3x baseline stake ($500+) on a thin 1H/FCS market",
+      failureModeIfUnhandled:
+        "Syndicate uses a whitelisted low-stake signal donor account as a Trojan horse to dump unhedgeable steam onto the book",
+      deterministicHandlingContract:
+        "stripTrojanHorseExemption = true immediately revokes donor exemption, clamps ticket to $50 max, rejects excess stake, and pages RISK_DESK_ANALYST",
+      humanAuditRequirement:
+        "RISK_DESK_ANALYST (Elena Rostova) + security/operator co-sign donor revocation in inbox://risk-desk-analyst/surveillance-sla",
+      sourceModule: "lib/gslive_surveillance_governor.ts",
+      ownerRole: "RISK_DESK_ANALYST",
+      verificationCommand:
+        "bun test tests/gslive_surveillance_governor.test.ts",
+    },
+    {
+      variantId: "EC-03",
+      code: "WEBLOG_MODE_C_DATE_DIVERGENCE",
+      category: "WEBLOG_IP_CORRELATION_EDGE_CASE",
+      title:
+        "getWebLog Mode C YYYY-MM-DD vs Mode A/B/I MM/DD/YYYY Wire Divergence",
+      triggerCondition:
+        "Portal ip-tracker.js:77 formats Mode C (PLAYER_IP_MATCHER) dates as YYYY-MM-DD while Modes A, B, and I require MM/DD/YYYY",
+      failureModeIfUnhandled:
+        "Sharing a single MM/DD/YYYY formatter across all getWebLog modes causes Mode C pairwise customer IP correlation to silently return 0 rows",
+      deterministicHandlingContract:
+        "WEBLOG_MODE_CONTRACTS & buildWebLogRequest enforce YYYY-MM-DD exclusively on Mode C and reject Mode B/I as a substitute for Mode A activity streams (#89)",
+      humanAuditRequirement:
+        "RISK_DESK_ANALYST validates non-empty Mode C pairwise correlation before clearing shared-subnet accounts",
+      sourceModule: "lib/bet_ticker_ip_tracker_bridge.ts",
+      ownerRole: "RISK_DESK_ANALYST",
+      verificationCommand: "bun run governance:check --wagers",
+    },
+    {
+      variantId: "EC-04",
+      code: "CARRIER_CGNAT_FALSE_POSITIVE_SWEEP",
+      category: "WEBLOG_IP_CORRELATION_EDGE_CASE",
+      title: "Mobile Carrier CGNAT /24 Subnet Collision vs True Syndicate Ring",
+      triggerCondition:
+        "Multiple accounts appear on a shared mobile carrier subnet (e.g. T-Mobile 172.56.21.0/24) during peak Saturday/Sunday slate",
+      failureModeIfUnhandled:
+        "Unrelated recreational mobile bettors get false-positively clamped or trigger erroneous watchlist layoff signals",
+      deterministicHandlingContract:
+        "Requires 3-factor confirmation before cluster clamp: (1) Mode B/C IP match + (2) Mode A session dwell <15s + (3) synchronized same-rotation bet arrival within 60s",
+      humanAuditRequirement:
+        "security/operator (Tariq Al-Mansoor) reviews CGNAT subnet flags and logs REJECT_STALE_OR_CGNAT when dwell >=15s",
+      sourceModule: "lib/bet_ticker_ip_tracker_bridge.ts",
+      ownerRole: "security/operator",
+      verificationCommand: "bun run governance:check --wagers",
+    },
+    {
+      variantId: "EC-05",
+      code: "KEY_NUMBER_PUSH_TRAP_MIDDLE",
+      category: "KEY_NUMBER_PERIOD_EDGE_CASE",
+      title:
+        "Football (3, 7, 10, 14) & NBA (3..8) Key-Number Crossing Middle Trap",
+      triggerCondition:
+        "F402 internal spread and external Kalshi/Polymarket spread straddle a key number (e.g. F402 -2.5 vs Venue -3.5, or F402 +7.5 vs Venue -6.5)",
+      failureModeIfUnhandled:
+        "Desk lays off at a worse strike across a key number, exposing the house to a two-sided loss or push-trap middle",
+      deterministicHandlingContract:
+        "detectKeyNumberCrossing() computes exact hundredths span across NFL {300,700,1000,1400} and NBA {300..800} and requires key-number-adjusted fairProb edge",
+      humanAuditRequirement:
+        "settlement (Devon Brooks) + RISK_DESK_ANALYST dual sign-off on any layoff crossing key numbers 3 or 7",
+      sourceModule: "lib/layoff_risk_engine.ts",
+      ownerRole: "settlement",
+      verificationCommand: "bun test tests/layoff_risk_engine.test.ts",
+    },
+    {
+      variantId: "EC-06",
+      code: "PERIOD_0_VS_1H_Q1_MISMATCH",
+      category: "KEY_NUMBER_PERIOD_EDGE_CASE",
+      title:
+        "Period-0 (Full Game) vs 1H / 2H / Q1 Derivative Cross-Contamination",
+      triggerCondition:
+        "Sharp syndicate bets 1H or Q1 spread/total on F402 while external Polymarket/Kalshi liquidity only quotes Full Game (period='game')",
+      failureModeIfUnhandled:
+        "Naive game_id join without period matching triggers a Full Game external hedge against a 1H internal liability",
+      deterministicHandlingContract:
+        "LayoffRiskEngine.queryLineDeltaMatches joins strictly on (game_id, COALESCE(period,'game'), subject, market_kind, side); mismatched periods never auto-hedge",
+      humanAuditRequirement:
+        "settlement verifies period-exact match in layoff table; 1H/Q1 unmatched exposure routes to STEP_LINE_345MS_AND_LAYOFF or internal shade",
+      sourceModule: "lib/layoff_risk_engine.ts",
+      ownerRole: "settlement",
+      verificationCommand: "bun test tests/layoff_risk_engine.test.ts",
+    },
+    {
+      variantId: "EC-07",
+      code: "CONCURRENT_LEDGER_WRITER_LOCK_CONTENTION",
+      category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
+      title:
+        "Concurrent Daemon Watch Loop & Operator CLI JSONL Ledger Write Contention",
+      triggerCondition:
+        "Cron/daemon enqueue loop and human operator `autobet: approve` attempt simultaneous read-validate-append on data/watchlist-autobet-ledger.jsonl",
+      failureModeIfUnhandled:
+        "Race condition appends two conflicting transitions for the same intentId, permanently corrupting the append-only ledger (ledger_corrupt)",
+      deterministicHandlingContract:
+        "withLedgerLock() acquires exclusive O_EXCL `<ledger>.lock` (mode 0o600, 25ms retry, 10s timeout, 30s stale-lock break) and refuses with ledger_locked (exitCode 1) on timeout",
+      humanAuditRequirement:
+        "operator inspects lock holder PID/timestamp if ledger_locked fires; never edits JSONL lines by hand",
+      sourceModule: "lib/watchlist_autobet.ts",
+      ownerRole: "operator",
+      verificationCommand: "bun test tests/watchlist_autobet.test.ts",
+    },
+    {
+      variantId: "EC-08",
+      code: "APPROVED_INTENT_TTL_EXPIRY_RACE",
+      category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
+      title: "Approved Intent TTL Expiration Before Venue Fill Execution",
+      triggerCondition:
+        "Human operator approves a queued intent, but external venue price moves and `now >= expiresAt` (expireApprovedAfterMinutes) before `execute` is called",
+      failureModeIfUnhandled:
+        "Stale approved order executes into a moved market long after the sharp signal edge has decayed",
+      deterministicHandlingContract:
+        "resolveIntentStatus() dynamically derives status='expired' when now >= expiresAt; assertIntentTransition refuses execute with intent_expired (exitCode 3) and releases cap",
+      humanAuditRequirement:
+        "operator logs EXPIRE_UNFILLED_TTL and re-evaluates fresh signal snapshot if market re-opens",
+      sourceModule: "lib/watchlist_autobet.ts",
+      ownerRole: "operator",
+      verificationCommand: "bun test tests/watchlist_autobet.test.ts",
+    },
+    {
+      variantId: "EC-09",
+      code: "FIXTURE_OR_STALE_PROVENANCE_LEAK",
+      category: "LEDGER_CONCURRENCY_TTL_EDGE_CASE",
+      title:
+        "Fixture-Sourced or Stale Signal Artifact Leak Into Live/Paper Queue",
+      triggerCondition:
+        "Local feed artifact (docs/graph-live-feed.json or data/live-wagers.json) is older than maxSignalAgeSeconds or carries provenance.fixture === true (#69/#73)",
+      failureModeIfUnhandled:
+        "Synthetic test fixtures or stale cached wagers generate phantom layoff intents in the operator approval queue",
+      deterministicHandlingContract:
+        "Gates #3 (fixture_provenance) and #4 (freshness) in evaluateSignalGates() refuse enqueue unless provenance.fixture===false and ageSeconds <= maxSignalAgeSeconds",
+      humanAuditRequirement:
+        "operator verifies source freshness chips before running `autobet: enqueue`",
+      sourceModule: "lib/watchlist_autobet.ts",
+      ownerRole: "operator",
+      verificationCommand: "bun test tests/watchlist_autobet.test.ts",
+    },
+    {
+      variantId: "EC-10",
+      code: "PARTIAL_BOOK_DEPTH_MAKER_FALLBACK",
+      category: "EXECUTION_DEPTH_ARMING_VARIANT",
+      title: "Thin External Orderbook Depth & 3-Factor Live Arming Boundary",
+      triggerCondition:
+        "Quarter-Kelly planned layoff stake ($250-$300) exceeds Kalshi/Polymarket top-of-book depth at the target price, or operator invokes live venue without 3-factor arming",
+      failureModeIfUnhandled:
+        "Taker sweep walks the orderbook past slippageBps ceiling, destroying positive EV, or accidental live order fires from paper config",
+      deterministicHandlingContract:
+        "evaluateExecutionDecision() downgrades thin-book routes from taker to passive maker inside spread; assertPaperVenue/Kalshi arming requires EXECUTION_MODE=live + EXECUTION_LIVE=1 + confirm='PLACE LIVE ORDERS'",
+      humanAuditRequirement:
+        "security/operator + RISK_DESK_ANALYST co-sign any live arming transition; maker orders tracked in queued state",
+      sourceModule: "lib/execution_decision.ts",
+      ownerRole: "security/operator",
+      verificationCommand: "bun test tests/execution_decision.test.ts",
+    },
+  ] as const;
 
 export type TradingToolCategory =
   | "EXECUTION_PLANNING_AND_ROUTER"
@@ -2332,7 +2422,9 @@ export interface DeskTradingToolSpec {
   readonly primaryCliCommand: string;
   readonly cordisPluginName: string | null;
   readonly httpOrMcpSurface: string;
-  readonly targetVenues: readonly ("f402" | "kalshi" | "polymarket" | "r2" | "local-sqlite")[];
+  readonly targetVenues: readonly (
+    "f402" | "kalshi" | "polymarket" | "r2" | "local-sqlite"
+  )[];
   readonly latencyOrThroughputSla: string;
   readonly traderEdgeCapability: string;
   readonly safetyGuardrailContract: string;
@@ -2344,7 +2436,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-01",
     code: "EXECUTION_PLANNER_WORKBENCH",
-    title: "Multi-Venue Execution Planner, Taker/Maker Router & Human Approval CLI",
+    title:
+      "Multi-Venue Execution Planner, Taker/Maker Router & Human Approval CLI",
     category: "EXECUTION_PLANNING_AND_ROUTER",
     entrypointPath: "scripts/execution_cli.ts",
     supportingModules: [
@@ -2356,7 +2449,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand:
       "bun run execution:plan --style auto [--approve <id> --actor <name> | --paper-run]",
     cordisPluginName: "dsh-plugin-sportsdesk-desk-panel",
-    httpOrMcpSurface: "GET /api/desk-status · Scratch/execution/approvals.jsonl",
+    httpOrMcpSurface:
+      "GET /api/desk-status · Scratch/execution/approvals.jsonl",
     targetVenues: ["f402", "kalshi", "polymarket"],
     latencyOrThroughputSla: "<= 120ms dual-venue orderbook join & quote plan",
     traderEdgeCapability:
@@ -2369,7 +2463,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-02",
     code: "WATCHLIST_AUTOBET_12GATE_CLI",
-    title: "12-Gate Watchlist Autobet State Machine & Append-Only JSONL Ledger CLI",
+    title:
+      "12-Gate Watchlist Autobet State Machine & Append-Only JSONL Ledger CLI",
     category: "AUTOBET_LEDGER_AND_ARMING",
     entrypointPath: "cli/watchlist_autobet_cli.ts",
     supportingModules: [
@@ -2379,9 +2474,11 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand:
       "bun run autobet status|signals|candidates|plan|enqueue|list|approve|reject|execute|settle|journal|watch",
     cordisPluginName: "dsh-plugin-watchlist-autobet",
-    httpOrMcpSurface: "Cordis /autobet · data/watchlist-autobet-ledger.jsonl (0o600)",
+    httpOrMcpSurface:
+      "Cordis /autobet · data/watchlist-autobet-ledger.jsonl (0o600)",
     targetVenues: ["kalshi", "polymarket", "local-sqlite"],
-    latencyOrThroughputSla: "Atomic O_EXCL .lock (<10s acquire, 30s stale break) · 0o600 JSONL",
+    latencyOrThroughputSla:
+      "Atomic O_EXCL .lock (<10s acquire, 30s stale break) · 0o600 JSONL",
     traderEdgeCapability:
       "Full 12-subcommand trader lifecycle: evaluates 12 ordered eligibility gates, reserves daily/league caps in integer cents, manages human approve/reject TTLs, executes paper/live fills, and grades post-event CLV/ROI.",
     safetyGuardrailContract:
@@ -2392,7 +2489,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-03",
     code: "KALSHI_SIGNAL_JOIN_SCANNER",
-    title: "Live Kalshi Orderbook Scanner, Signal Join & 3-Factor RSA-PSS Execution Adapter",
+    title:
+      "Live Kalshi Orderbook Scanner, Signal Join & 3-Factor RSA-PSS Execution Adapter",
     category: "LIVE_ORDERBOOK_SCANNER",
     entrypointPath: "scripts/signals_kalshi_cli.ts",
     supportingModules: [
@@ -2403,9 +2501,11 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     ],
     primaryCliCommand: "bun run signals:kalshi [--json] [--limit 25]",
     cordisPluginName: "dsh-plugin-watchlist-autobet",
-    httpOrMcpSurface: "Kalshi Trade API v2 public orderbook + RSA-PSS signed live adapter",
+    httpOrMcpSurface:
+      "Kalshi Trade API v2 public orderbook + RSA-PSS signed live adapter",
     targetVenues: ["kalshi", "f402"],
-    latencyOrThroughputSla: "Zero-credential public scan · <= 250ms top-of-book EV rank",
+    latencyOrThroughputSla:
+      "Zero-credential public scan · <= 250ms top-of-book EV rank",
     traderEdgeCapability:
       "Scans live Kalshi sports event contracts without credentials, joins F402 sharp watchlist fair probabilities against Kalshi YES/NO bid-ask depth, and ranks actionable cross-venue EV in basis points.",
     safetyGuardrailContract:
@@ -2416,7 +2516,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-04",
     code: "LAYOFF_KEY_NUMBER_RADAR",
-    title: "Sliding-Window Key-Number Crossing, Period-Exact Layoff & Quarter-Kelly Engine",
+    title:
+      "Sliding-Window Key-Number Crossing, Period-Exact Layoff & Quarter-Kelly Engine",
     category: "KEY_NUMBER_AND_KELLY_ENGINE",
     entrypointPath: "lib/layoff_risk_engine.ts",
     supportingModules: [
@@ -2425,11 +2526,14 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
       "lib/combo_identity.ts",
       "lib/bet_venue_breakdown.ts",
     ],
-    primaryCliCommand: "bun test tests/layoff_risk_engine.test.ts tests/rebet_engine.test.ts",
+    primaryCliCommand:
+      "bun test tests/layoff_risk_engine.test.ts tests/rebet_engine.test.ts",
     cordisPluginName: "dsh-plugin-sportsdesk-desk-panel",
-    httpOrMcpSurface: "GET /api/layoff-opportunities · SQLite sliding-window book state",
+    httpOrMcpSurface:
+      "GET /api/layoff-opportunities · SQLite sliding-window book state",
     targetVenues: ["f402", "kalshi", "polymarket", "local-sqlite"],
-    latencyOrThroughputSla: "<= 50ms SQLite sliding-window join in LineHundredths",
+    latencyOrThroughputSla:
+      "<= 50ms SQLite sliding-window join in LineHundredths",
     traderEdgeCapability:
       "Matches (game_id, period, subject, market_kind, side) without cross-period contamination, flags SHARP_STILL_BETTER across NFL (3, 7, 10, 14) and NBA (3..8) key numbers, and sizes Quarter-Kelly stakes.",
     safetyGuardrailContract:
@@ -2440,7 +2544,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-05",
     code: "CORDIS_HARNESS_5_PLUGIN_SUITE",
-    title: "5-Plugin DSH Cordis Trading, Security, Status, Panel & Autobet Harness Suite",
+    title:
+      "5-Plugin DSH Cordis Trading, Security, Status, Panel & Autobet Harness Suite",
     category: "CORDIS_DESK_HARNESS",
     entrypointPath: "market/index.json",
     supportingModules: [
@@ -2453,9 +2558,11 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand: "bun run test:market-index",
     cordisPluginName:
       "dsh-plugin-sportsdesk-ops + security + desk-status + desk-panel + watchlist-autobet",
-    httpOrMcpSurface: "Cordis /sportsdesk · /sportsdesk-sec · /autobet · :4020 resolveDeskOrigin",
+    httpOrMcpSurface:
+      "Cordis /sportsdesk · /sportsdesk-sec · /autobet · :4020 resolveDeskOrigin",
     targetVenues: ["f402", "kalshi", "polymarket", "r2"],
-    latencyOrThroughputSla: "60s auto-refresh status bar + instant command palette & sidebar drawers",
+    latencyOrThroughputSla:
+      "60s auto-refresh status bar + instant command palette & sidebar drawers",
     traderEdgeCapability:
       "Embeds live P&L, CLV, sharp heatmaps, 13-cluster IP surveillance, and 12-gate autobet queue approvals directly inside the operator's DSH Cordis workspace with configurable apiPort (default 4020).",
     safetyGuardrailContract:
@@ -2466,7 +2573,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-06",
     code: "BET_TICKER_WEBLOG_BRIDGE_SUITE",
-    title: "Real-Time BetTicker (3A), Pending (3B), Tally (3C) & 4-Mode Weblog Forensics Suite",
+    title:
+      "Real-Time BetTicker (3A), Pending (3B), Tally (3C) & 4-Mode Weblog Forensics Suite",
     category: "WIRE_SURVEILLANCE_AND_FORENSICS",
     entrypointPath: "scripts/f402_bet_ticker_bridge3a.ts",
     supportingModules: [
@@ -2479,7 +2587,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand:
       "bun run bridge3a:poll && bun run bridge3b:rollup && bun run bridge3c:rollup && bun run weblog:rollup",
     cordisPluginName: "dsh-plugin-sportsdesk-ops",
-    httpOrMcpSurface: "createF402ReplayTransport() -> R2 snapshots & local forensic JSONL",
+    httpOrMcpSurface:
+      "createF402ReplayTransport() -> R2 snapshots & local forensic JSONL",
     targetVenues: ["f402", "r2", "local-sqlite"],
     latencyOrThroughputSla:
       "0 collection allocations over 10k+ rows (Uint32Array/Float64Array arenas + lookupInto)",
@@ -2493,7 +2602,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-07",
     code: "CROSS_DOMAIN_POLY_F402_GRAPH",
-    title: "Cross-Domain Polymarket <-> F402 Syndicate Graph & 4-Week Counterfactual Backtester",
+    title:
+      "Cross-Domain Polymarket <-> F402 Syndicate Graph & 4-Week Counterfactual Backtester",
     category: "SYNDICATE_GRAPH_AND_BACKTEST",
     entrypointPath: "scripts/build_agent_graph.ts",
     supportingModules: [
@@ -2505,9 +2615,11 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand:
       "bun run graph:agent && ./bin/dx poll && ./bin/dx backtest",
     cordisPluginName: "dsh-plugin-sportsdesk-desk-panel",
-    httpOrMcpSurface: "docs/cross-domain-bridge.json · docs/backtest-4wk-cfb-nba.json · :4020/tracker",
+    httpOrMcpSurface:
+      "docs/cross-domain-bridge.json · docs/backtest-4wk-cfb-nba.json · :4020/tracker",
     targetVenues: ["polymarket", "f402", "r2"],
-    latencyOrThroughputSla: "345ms WSS SLA · 39 syndicate wallets · $1.17M 4-wk protected value",
+    latencyOrThroughputSla:
+      "345ms WSS SLA · 39 syndicate wallets · $1.17M 4-wk protected value",
     traderEdgeCapability:
       "Links 200 F402 customers to 39 Polymarket proxy wallets ($503k priority exposure), attributes 4-week hold lift (+1,003 bps swing) across 6 automated guards, and drives GATE-SURV-01/02 clamps.",
     safetyGuardrailContract:
@@ -2518,7 +2630,8 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
   {
     toolId: "TOOL-08",
     code: "ZERO_FRICTION_DX_MCP_WORKSTATION",
-    title: "Zero-Friction ./bin/dx Operator Runner, Desk Doctor, MCP Server & Telegram Bot",
+    title:
+      "Zero-Friction ./bin/dx Operator Runner, Desk Doctor, MCP Server & Telegram Bot",
     category: "OPERATOR_DX_AND_MCP",
     entrypointPath: "bin/dx",
     supportingModules: [
@@ -2530,9 +2643,11 @@ export const DESK_TRADING_TOOLING_SUITE: readonly DeskTradingToolSpec[] = [
     primaryCliCommand:
       "./bin/dx status | bun run desk:doctor | bun run agent:doctor | bun run mcp:dx",
     cordisPluginName: "dsh-plugin-sportsdesk-desk-status",
-    httpOrMcpSurface: "MCP stdio (dx_status, dx_screenshot, dx_deploy) · Telegram @SportsDeskBot",
+    httpOrMcpSurface:
+      "MCP stdio (dx_status, dx_screenshot, dx_deploy) · Telegram @SportsDeskBot",
     targetVenues: ["f402", "r2", "local-sqlite"],
-    latencyOrThroughputSla: "<= 2s full workstation doctor probe + headless WebKit visual proof",
+    latencyOrThroughputSla:
+      "<= 2s full workstation doctor probe + headless WebKit visual proof",
     traderEdgeCapability:
       "Single-command operator control plane for pre-slate readiness checks, secret-scoped execution (./bin/dx exec --with), headless visual verification (./bin/dx shot), and mobile Telegram slash commands.",
     safetyGuardrailContract:
@@ -2559,219 +2674,234 @@ export interface RoleTradingWorkstationSpec {
   readonly primaryEdgeBenchmark: string;
 }
 
-export const ROLE_TRADING_WORKSTATIONS: readonly RoleTradingWorkstationSpec[] = [
-  {
-    roleId: "RISK_DESK_ANALYST",
-    workstationTitle: "Quantitative Sharp Surveillance, Syndicate Graph & Kalshi Signal Join Workstation",
-    primaryToolIds: ["TOOL-03", "TOOL-06", "TOOL-07", "TOOL-04"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-ops",
-      "dsh-plugin-sportsdesk-desk-panel",
-      "dsh-plugin-watchlist-autobet",
-    ],
-    preSlateCommandSequence: [
-      "bun run weblog:sentinel",
-      "bun run signals:kalshi --limit 25",
-      "bun run governance:check --wagers --role RISK_DESK_ANALYST",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run bridge3a:poll",
-      "bun run weblog:rollup",
-      "./bin/dx watch",
-    ],
-    postSlateAuditLoop: [
-      "bun run graph:agent",
-      "bun run governance:check --decisions-log --edge-cases",
-    ],
-    latencyOrExecutionSla: "<= 345ms GATE-SURV-01 line-step · <15s Mode A bot dwell detection",
-    primaryEdgeBenchmark:
-      "$484.2k 4-wk counterfactual savings across 13 IP clusters & 39 bridged Polymarket wallets",
-  },
-  {
-    roleId: "settlement",
-    workstationTitle: "Multi-Venue Layoff Router, Key-Number Radar & CLV Post-Mortem Workstation",
-    primaryToolIds: ["TOOL-01", "TOOL-04", "TOOL-02", "TOOL-07"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-desk-panel",
-      "dsh-plugin-watchlist-autobet",
-      "dsh-plugin-sportsdesk-ops",
-    ],
-    preSlateCommandSequence: [
-      "bun run bridge3b:rollup",
-      "bun run bridge3c:rollup",
-      "bun run execution:plan --style auto",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run autobet candidates",
-      "bun run execution:plan --style auto --paper-run",
-      "bun run autobet settle --help",
-    ],
-    postSlateAuditLoop: [
-      "bun run autobet journal",
-      "bun run governance:check --autobet --role settlement",
-    ],
-    latencyOrExecutionSla: "<= 50ms key-number crossing eval · +485 bps avg external layoff edge",
-    primaryEdgeBenchmark:
-      "$685.9k 4-wk parlay/teaser & steam defense + integer-cent CLV post-mortem grading",
-  },
-  {
-    roleId: "operator",
-    workstationTitle: "Primary Desk Execution Console, 12-Gate Autobet Queue & ./bin/dx Control Plane",
-    primaryToolIds: ["TOOL-02", "TOOL-01", "TOOL-08", "TOOL-05"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-ops",
-      "dsh-plugin-sportsdesk-desk-status",
-      "dsh-plugin-sportsdesk-desk-panel",
-      "dsh-plugin-watchlist-autobet",
-    ],
-    preSlateCommandSequence: [
-      "bun run desk:doctor",
-      "bun run agent:doctor",
-      "bun run autobet status",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run autobet watch",
-      "bun run autobet list --state queued",
-      "./bin/dx status",
-    ],
-    postSlateAuditLoop: [
-      "bun run ci:local --list",
-      "bun run governance:check --tooling",
-    ],
-    latencyOrExecutionSla: "<= 15m human queue approval SLA · 3/3 oracle gates green",
-    primaryEdgeBenchmark:
-      "$656.5k 4-wk protected value · 100% 12-gate checklist enforcement before venue routing",
-  },
-  {
-    roleId: "security/operator",
-    workstationTitle: "3-Factor Kalshi Live-Arming Vault, Secret Manifest & Red-Team Defense Console",
-    primaryToolIds: ["TOOL-03", "TOOL-02", "TOOL-05", "TOOL-08"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-security",
-      "dsh-plugin-watchlist-autobet",
-      "dsh-plugin-sportsdesk-desk-status",
-    ],
-    preSlateCommandSequence: [
-      "bun run check:secrets",
-      "bun run audit:secrets",
-      "bun run secrets:env status --all",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run governance:check --red-team --role security/operator",
-      "bun run autobet status",
-    ],
-    postSlateAuditLoop: [
-      "bun test lib/f402_har_redaction_proof_verify.test.ts",
-      "bun run governance:check --decisions-log",
-    ],
-    latencyOrExecutionSla: "0 secret leaks · exitCode 3 immediate refusal on unarmed live execution",
-    primaryEdgeBenchmark:
-      "6/6 Red-Team drills VERIFIED_DEFENDED + dual-human RSA-PSS live arming governance",
-  },
-  {
-    roleId: "client/seam",
-    workstationTitle: "Portal Wire Normalization, Sentinel Twin Filter & 5-Plugin Cordis Seam Console",
-    primaryToolIds: ["TOOL-05", "TOOL-06", "TOOL-08"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-ops",
-      "dsh-plugin-sportsdesk-desk-panel",
-      "dsh-plugin-sportsdesk-desk-status",
-    ],
-    preSlateCommandSequence: [
-      "bun run test:market-index",
-      "bun bin/check-innerhtml.ts --verbose",
-      "bun bin/check-fetch-init.ts --verbose",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run bridge3a:poll",
-      "./bin/dx shot http://localhost:4020/governance --out scratch/shots/gov.png",
-    ],
-    postSlateAuditLoop: [
-      "bun run verify:manager-oracle-slices",
-      "bun run governance:check --flowchart --role client/seam",
-    ],
-    latencyOrExecutionSla: "<= 25ms getBetTicker wire delta parse · O(1) ALERT twin isolation",
-    primaryEdgeBenchmark:
-      "Zero ALERT twin double-counts (EC-01) + 5/5 DSH Cordis plugins verified on Format 1",
-  },
-  {
-    roleId: "compliance",
-    workstationTitle: "Immutable Audit Ledger, CGNAT Fairness & Written Scope Sign-Off Console",
-    primaryToolIds: ["TOOL-02", "TOOL-08", "TOOL-06"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-security",
-      "dsh-plugin-sportsdesk-desk-status",
-    ],
-    preSlateCommandSequence: [
-      "bun run governance:check --decisions-log --role compliance",
-      "bun run verify:docs",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run autobet journal",
-      "bun run governance:check --edge-cases",
-    ],
-    postSlateAuditLoop: [
-      "bun run check:spec-citations",
-      "bun run artifacts:lock",
-    ],
-    latencyOrExecutionSla: "30m written scope ACK SLA · 96.4% recreational bettor retention",
-    primaryEdgeBenchmark:
-      "100% sha256-signed human rationale audit coverage + EC-04 mobile CGNAT false-positive guard",
-  },
-  {
-    roleId: "server-team-lead",
-    workstationTitle: "Upstream Bearer Claim Verification, Authoritative Wager Ledger & VPS Infra Console",
-    primaryToolIds: ["TOOL-08", "TOOL-06", "TOOL-07"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-security",
-      "dsh-plugin-sportsdesk-desk-status",
-    ],
-    preSlateCommandSequence: [
-      "bun run check:route-surface",
-      "CI=true bun run schema:gate",
-    ],
-    liveSlateExecutionLoop: [
-      "./bin/dx status",
-      "bun run governance:check --role server-team-lead",
-    ],
-    postSlateAuditLoop: [
-      "bash scripts/ci/run-manager-oracle-gates.sh",
-      "bun run audit:ops",
-    ],
-    latencyOrExecutionSla: "60m upstream verification SLA · 0 unauthenticated route surfaces",
-    primaryEdgeBenchmark:
-      "Governs $503.2k cross-domain authz & server-side wager ledger integrity (Decision #3)",
-  },
-  {
-    roleId: "business-owner",
-    workstationTitle: "Executive Capital Allocation, Hold Swing Telemetry & Live-Capital Authorization Console",
-    primaryToolIds: ["TOOL-07", "TOOL-01", "TOOL-08"],
-    cordisPluginsAssigned: [
-      "dsh-plugin-sportsdesk-desk-status",
-      "dsh-plugin-sportsdesk-desk-panel",
-    ],
-    preSlateCommandSequence: [
-      "bun run governance:check --tooling --role business-owner",
-      "./bin/dx status",
-    ],
-    liveSlateExecutionLoop: [
-      "bun run autobet status",
-      "bun run governance:check --decisions-log",
-    ],
-    postSlateAuditLoop: [
-      "./bin/dx backtest",
-      "bun run governance:check --markdown",
-    ],
-    latencyOrExecutionSla: "60m executive sign-off SLA · $5,000 daily / $1,500 per-market cap governance",
-    primaryEdgeBenchmark:
-      "$1.17M 4-wk counterfactual desk savings ($41.8k/day) · -3.21% -> +6.82% hold swing",
-  },
-] as const;
+export const ROLE_TRADING_WORKSTATIONS: readonly RoleTradingWorkstationSpec[] =
+  [
+    {
+      roleId: "RISK_DESK_ANALYST",
+      workstationTitle:
+        "Quantitative Sharp Surveillance, Syndicate Graph & Kalshi Signal Join Workstation",
+      primaryToolIds: ["TOOL-03", "TOOL-06", "TOOL-07", "TOOL-04"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-ops",
+        "dsh-plugin-sportsdesk-desk-panel",
+        "dsh-plugin-watchlist-autobet",
+      ],
+      preSlateCommandSequence: [
+        "bun run weblog:sentinel",
+        "bun run signals:kalshi --limit 25",
+        "bun run governance:check --wagers --role RISK_DESK_ANALYST",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run bridge3a:poll",
+        "bun run weblog:rollup",
+        "./bin/dx watch",
+      ],
+      postSlateAuditLoop: [
+        "bun run graph:agent",
+        "bun run governance:check --decisions-log --edge-cases",
+      ],
+      latencyOrExecutionSla:
+        "<= 345ms GATE-SURV-01 line-step · <15s Mode A bot dwell detection",
+      primaryEdgeBenchmark:
+        "$484.2k 4-wk counterfactual savings across 13 IP clusters & 39 bridged Polymarket wallets",
+    },
+    {
+      roleId: "settlement",
+      workstationTitle:
+        "Multi-Venue Layoff Router, Key-Number Radar & CLV Post-Mortem Workstation",
+      primaryToolIds: ["TOOL-01", "TOOL-04", "TOOL-02", "TOOL-07"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-desk-panel",
+        "dsh-plugin-watchlist-autobet",
+        "dsh-plugin-sportsdesk-ops",
+      ],
+      preSlateCommandSequence: [
+        "bun run bridge3b:rollup",
+        "bun run bridge3c:rollup",
+        "bun run execution:plan --style auto",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run autobet candidates",
+        "bun run execution:plan --style auto --paper-run",
+        "bun run autobet settle --help",
+      ],
+      postSlateAuditLoop: [
+        "bun run autobet journal",
+        "bun run governance:check --autobet --role settlement",
+      ],
+      latencyOrExecutionSla:
+        "<= 50ms key-number crossing eval · +485 bps avg external layoff edge",
+      primaryEdgeBenchmark:
+        "$685.9k 4-wk parlay/teaser & steam defense + integer-cent CLV post-mortem grading",
+    },
+    {
+      roleId: "operator",
+      workstationTitle:
+        "Primary Desk Execution Console, 12-Gate Autobet Queue & ./bin/dx Control Plane",
+      primaryToolIds: ["TOOL-02", "TOOL-01", "TOOL-08", "TOOL-05"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-ops",
+        "dsh-plugin-sportsdesk-desk-status",
+        "dsh-plugin-sportsdesk-desk-panel",
+        "dsh-plugin-watchlist-autobet",
+      ],
+      preSlateCommandSequence: [
+        "bun run desk:doctor",
+        "bun run agent:doctor",
+        "bun run autobet status",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run autobet watch",
+        "bun run autobet list --state queued",
+        "./bin/dx status",
+      ],
+      postSlateAuditLoop: [
+        "bun run ci:local --list",
+        "bun run governance:check --tooling",
+      ],
+      latencyOrExecutionSla:
+        "<= 15m human queue approval SLA · 3/3 oracle gates green",
+      primaryEdgeBenchmark:
+        "$656.5k 4-wk protected value · 100% 12-gate checklist enforcement before venue routing",
+    },
+    {
+      roleId: "security/operator",
+      workstationTitle:
+        "3-Factor Kalshi Live-Arming Vault, Secret Manifest & Red-Team Defense Console",
+      primaryToolIds: ["TOOL-03", "TOOL-02", "TOOL-05", "TOOL-08"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-security",
+        "dsh-plugin-watchlist-autobet",
+        "dsh-plugin-sportsdesk-desk-status",
+      ],
+      preSlateCommandSequence: [
+        "bun run check:secrets",
+        "bun run audit:secrets",
+        "bun run secrets:env status --all",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run governance:check --red-team --role security/operator",
+        "bun run autobet status",
+      ],
+      postSlateAuditLoop: [
+        "bun test lib/f402_har_redaction_proof_verify.test.ts",
+        "bun run governance:check --decisions-log",
+      ],
+      latencyOrExecutionSla:
+        "0 secret leaks · exitCode 3 immediate refusal on unarmed live execution",
+      primaryEdgeBenchmark:
+        "6/6 Red-Team drills VERIFIED_DEFENDED + dual-human RSA-PSS live arming governance",
+    },
+    {
+      roleId: "client/seam",
+      workstationTitle:
+        "Portal Wire Normalization, Sentinel Twin Filter & 5-Plugin Cordis Seam Console",
+      primaryToolIds: ["TOOL-05", "TOOL-06", "TOOL-08"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-ops",
+        "dsh-plugin-sportsdesk-desk-panel",
+        "dsh-plugin-sportsdesk-desk-status",
+      ],
+      preSlateCommandSequence: [
+        "bun run test:market-index",
+        "bun bin/check-innerhtml.ts --verbose",
+        "bun bin/check-fetch-init.ts --verbose",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run bridge3a:poll",
+        "./bin/dx shot http://localhost:4020/governance --out scratch/shots/gov.png",
+      ],
+      postSlateAuditLoop: [
+        "bun run verify:manager-oracle-slices",
+        "bun run governance:check --flowchart --role client/seam",
+      ],
+      latencyOrExecutionSla:
+        "<= 25ms getBetTicker wire delta parse · O(1) ALERT twin isolation",
+      primaryEdgeBenchmark:
+        "Zero ALERT twin double-counts (EC-01) + 5/5 DSH Cordis plugins verified on Format 1",
+    },
+    {
+      roleId: "compliance",
+      workstationTitle:
+        "Immutable Audit Ledger, CGNAT Fairness & Written Scope Sign-Off Console",
+      primaryToolIds: ["TOOL-02", "TOOL-08", "TOOL-06"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-security",
+        "dsh-plugin-sportsdesk-desk-status",
+      ],
+      preSlateCommandSequence: [
+        "bun run governance:check --decisions-log --role compliance",
+        "bun run verify:docs",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run autobet journal",
+        "bun run governance:check --edge-cases",
+      ],
+      postSlateAuditLoop: [
+        "bun run check:spec-citations",
+        "bun run artifacts:lock",
+      ],
+      latencyOrExecutionSla:
+        "30m written scope ACK SLA · 96.4% recreational bettor retention",
+      primaryEdgeBenchmark:
+        "100% sha256-signed human rationale audit coverage + EC-04 mobile CGNAT false-positive guard",
+    },
+    {
+      roleId: "server-team-lead",
+      workstationTitle:
+        "Upstream Bearer Claim Verification, Authoritative Wager Ledger & VPS Infra Console",
+      primaryToolIds: ["TOOL-08", "TOOL-06", "TOOL-07"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-security",
+        "dsh-plugin-sportsdesk-desk-status",
+      ],
+      preSlateCommandSequence: [
+        "bun run check:route-surface",
+        "CI=true bun run schema:gate",
+      ],
+      liveSlateExecutionLoop: [
+        "./bin/dx status",
+        "bun run governance:check --role server-team-lead",
+      ],
+      postSlateAuditLoop: [
+        "bash scripts/ci/run-manager-oracle-gates.sh",
+        "bun run audit:ops",
+      ],
+      latencyOrExecutionSla:
+        "60m upstream verification SLA · 0 unauthenticated route surfaces",
+      primaryEdgeBenchmark:
+        "Governs $503.2k cross-domain authz & server-side wager ledger integrity (Decision #3)",
+    },
+    {
+      roleId: "business-owner",
+      workstationTitle:
+        "Executive Capital Allocation, Hold Swing Telemetry & Live-Capital Authorization Console",
+      primaryToolIds: ["TOOL-07", "TOOL-01", "TOOL-08"],
+      cordisPluginsAssigned: [
+        "dsh-plugin-sportsdesk-desk-status",
+        "dsh-plugin-sportsdesk-desk-panel",
+      ],
+      preSlateCommandSequence: [
+        "bun run governance:check --tooling --role business-owner",
+        "./bin/dx status",
+      ],
+      liveSlateExecutionLoop: [
+        "bun run autobet status",
+        "bun run governance:check --decisions-log",
+      ],
+      postSlateAuditLoop: [
+        "./bin/dx backtest",
+        "bun run governance:check --markdown",
+      ],
+      latencyOrExecutionSla:
+        "60m executive sign-off SLA · $5,000 daily / $1,500 per-market cap governance",
+      primaryEdgeBenchmark:
+        "$1.17M 4-wk counterfactual desk savings ($41.8k/day) · -3.21% -> +6.82% hold swing",
+    },
+  ] as const;
 
 export type WeakestLinkSeverity =
-  | "CRITICAL_BOTTLENECK"
-  | "HIGH_FRICTION"
-  | "LATENCY_EXPOSURE";
+  "CRITICAL_BOTTLENECK" | "HIGH_FRICTION" | "LATENCY_EXPOSURE";
 
 export type WeakestLinkBottleneckLayer =
   | "RBAC_ROLE_AND_PLANE"
@@ -2805,201 +2935,209 @@ export interface WeakestLinkDiagnosticSpec {
   readonly status: WeakestLinkRemediationStatus;
 }
 
-export const DESK_WEAKEST_LINK_DIAGNOSTICS: readonly WeakestLinkDiagnosticSpec[] = [
-  {
-    linkId: "WL-01",
-    code: "UPSTREAM_AUTHZ_3_DECISION_BOTTLENECK",
-    title:
-      "Upstream Stakeholder Plane (80% Health — Lowest of 4 Planes) & 3 Pending Executive Decisions (~4h)",
-    severity: "CRITICAL_BOTTLENECK",
-    bottleneckLayer: "RBAC_ROLE_AND_PLANE",
-    measuredWeaknessMetric:
-      "upstream-stakeholder plane at 80% health · server-team-lead (80%), business-owner (80%), compliance (88%) hold 3 pending decisions (~4h) blocking P0.6 (2026-12-03 expiry)",
-    rootCauseAnalysis:
-      "Decision #1 (subordinate test account ~1h), Decision #2 (written tamper scope ~1h), and Decision #3 (6-request Bearer claim vs body customerID/agentID verification ~2h) sit in ACK_PENDING across 3 executive inboxes, stalling P0.6 (RT-DEFENSE-MEASURE) and $503.2k cross-domain priority exposure.",
-    impactedTasksOrRefs: [
-      "P0.6",
-      "RT-DEFENSE-MEASURE",
-      "Decision #1",
-      "Decision #2",
-      "Decision #3",
-    ],
-    primaryWeakRoles: ["server-team-lead", "business-owner", "compliance"],
-    coPilotDeputyRoles: ["security/operator", "operator"],
-    sourceModules: [
-      "docs/analysis/defense-measurement-2026-11-03/00-executive-summary.md",
-      "lib/rbac_governance.ts",
-      "services/sportsdesk_telegram_bot.ts",
-    ],
-    implementedEnhancement:
-      "Pre-staged the 6-request Bearer-vs-body verification harness + 1-click executive sign-off packet in Cordis (/sportsdesk-sec) & Telegram (/gov_ack), with 15m Co-Pilot failover to security/operator (Tariq Al-Mansoor) so server-team-lead runs a 10m pre-scripted replay instead of a cold 2h build.",
-    remediationCommand:
-      "bun run governance:check --weakest-links --role server-team-lead",
-    beforeScoreOrSla: "80% Plane Health · ~4h manual executive coordination",
-    projectedAfterScoreOrSla:
-      "96% Plane Health · <= 25m pre-staged replay & sign-off",
-    financialExposureProtectedUsd: 503_200,
-    status: "HARNESS_READY_AWAITING_UPSTREAM",
-  },
-  {
-    linkId: "WL-02",
-    code: "OPERATOR_SINGLE_POINT_QUEUE_OVERLOAD",
-    title:
-      "Desk Operator Role (80% Score — Tied Lowest Role) Single-Point Queue & 15m Approval Bottleneck",
-    severity: "CRITICAL_BOTTLENECK",
-    bottleneckLayer: "RBAC_ROLE_AND_PLANE",
-    measuredWeaknessMetric:
-      "operator role at 80% score · 4 open tasks (P0.1, P0.7, P1.6, P2.3) + Decision #2 + 5 queued inbox items (3 urgent) + sole primary approver on NODE-08 15m human gate",
-    rootCauseAnalysis:
-      "Marcus Vance (operator) simultaneously owns 4 open tasks, all 3 manager-boot-oracle gates, and the 15-minute human approval queue for dsh-plugin-watchlist-autobet, creating a single-point bottleneck during peak Saturday CFB and Sunday NFL slates.",
-    impactedTasksOrRefs: ["P0.1", "P0.7", "P1.6", "P2.3", "NODE-08", "EC-08"],
-    primaryWeakRoles: ["operator"],
-    coPilotDeputyRoles: ["settlement", "RISK_DESK_ANALYST", "client/seam"],
-    sourceModules: [
-      "lib/rbac_governance.ts",
-      "lib/watchlist_autobet.ts",
-      "cli/watchlist_autobet_cli.ts",
-    ],
-    implementedEnhancement:
-      "Activated Co-Pilot Load-Shedding & Deputy Failover: when operator inboxUrgentItems >= 3 or autobet queued intents >= 2, NODE-08 automatically delegates NFL/CFB key-number layoff approvals to settlement (Devon Brooks, 92% score) and NBA steam/donor clamps to RISK_DESK_ANALYST (Elena Rostova), while client/seam (Nadia Chen, 100% score) co-owns P0.1/P1.6 wire triage.",
-    remediationCommand: "bun run governance:check --weakest-links --role operator",
-    beforeScoreOrSla: "80% Role Score · 5 queued (3 urgent) · single-point 15m SLA",
-    projectedAfterScoreOrSla:
-      "96% Role Score · 3-way Co-Pilot load-balanced (<= 4m avg approval)",
-    financialExposureProtectedUsd: 656_500,
-    status: "CO_PILOT_FAILOVER_ACTIVE",
-  },
-  {
-    linkId: "WL-03",
-    code: "BRIDGE3C_LARGE_BETREPORT_TIMEOUT_AND_CRON_GAP",
-    title:
-      "Bridge 3c Large getBetReport Timeout Absence (#94) & Two-Step Wagers Snapshot Cron Gap (#93)",
-    severity: "HIGH_FRICTION",
-    bottleneckLayer: "INGESTION_AND_CRON_WIRE",
-    measuredWeaknessMetric:
-      "AGENTS.md open items #94 & #93 · scripts/gslive_tally_bridge3c.ts lacked --timeout CLI flag for heavy Saturday CFB getBetReport windows + P0.7 cron capture gap",
-    rootCauseAnalysis:
-      "fetchBetReportRows() in scripts/fetch-bet-tally.ts accepted timeoutMs, but scripts/gslive_tally_bridge3c.ts never exposed --timeout in parseArgs or forwarded timeoutMs in fetchOpenCapture(), risking mid-stream aborts on peak weekend slates while wagers capture + publish-snapshot (#93) required manual chaining.",
-    impactedTasksOrRefs: ["#94", "#93", "P0.7", "RT-PENDING-COUNT"],
-    primaryWeakRoles: ["operator", "settlement"],
-    coPilotDeputyRoles: ["client/seam"],
-    sourceModules: [
-      "scripts/gslive_tally_bridge3c.ts",
-      "scripts/fetch-bet-tally.ts",
-      "lib/gslive_tally_rollup.ts",
-    ],
-    implementedEnhancement:
-      "Enhanced scripts/gslive_tally_bridge3c.ts directly in code with --timeout <ms> (validated positive integer) and wired timeoutMs through fetchOpenCapture() -> fetchBetReportRows(), eliminating mid-stream aborts on large weekend getBetReport captures.",
-    remediationCommand: "bun scripts/gslive_tally_bridge3c.ts --help",
-    beforeScoreOrSla: "Fixed default fetch timeout · manual 2-step snapshot",
-    projectedAfterScoreOrSla:
-      "Configurable --timeout <ms> (e.g. 60000ms peak slate) + atomic R2 rollup",
-    financialExposureProtectedUsd: 481_700,
-    status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
-  },
-  {
-    linkId: "WL-04",
-    code: "SYNDICATE_WSS_FALLBACK_AND_UNOBSERVED_WALLETS",
-    title:
-      "Syndicate Feed Coverage Gap (23/39 Active Wallets · 16 Un-Observed · WSS Fallback & P0.2 $110.6k Fee Gap)",
-    severity: "LATENCY_EXPOSURE",
-    bottleneckLayer: "SYNDICATE_FEED_AND_PNL",
-    measuredWeaknessMetric:
-      "23/39 active syndicate wallets (16 dormant/un-observed, 10 quarantined) · wssIngestion='not_ingested' (929ms HTTP poll vs 345ms WSS SLA) · P0.2 $110,637.44 pre-fee PnL gap",
-    rootCauseAnalysis:
-      "docs/graph-live-feed.json operates in PARTIAL polling mode (929ms Polymarket HTTP poll) when WSS stream ingestion is idle, and 16 of 39 bridged proxy wallets have rotated or gone dormant while P0.2 (RT-PREFEE-PNL) awaits fill-level fee reconciliation.",
-    impactedTasksOrRefs: ["P0.2", "RT-PREFEE-PNL", "GATE-SURV-01", "GATE-SURV-02"],
-    primaryWeakRoles: ["RISK_DESK_ANALYST", "settlement"],
-    coPilotDeputyRoles: ["security/operator"],
-    sourceModules: [
-      "scripts/graph_feed_poller_daemon.ts",
-      "lib/customer_poly_bridge.ts",
-      "lib/watchlist_signal_engine.ts",
-    ],
-    implementedEnhancement:
-      "Bound automated shadow-wallet rotation detection (Mode C IP/account-change join) + offline pre-fee PnL reconciliation (bun run artifacts:value --offline) + automatic GATE-SURV-01 345ms conservative line-step whenever polymarketPollDurationMs > 500ms.",
-    remediationCommand: "bun run artifacts:value --offline",
-    beforeScoreOrSla:
-      "23/39 wallets observed · 929ms poll · $110.6k unadjusted fee gap",
-    projectedAfterScoreOrSla:
-      "39/39 wallet rotation sweep + net-of-fee priority ranking + 345ms auto-step",
-    financialExposureProtectedUsd: 484_200,
-    status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
-  },
-  {
-    linkId: "WL-05",
-    code: "MAKER_QUEUE_TTL_AND_THIN_BOOK_REANCHOR_DRIFT",
-    title:
-      "Passive Maker Layoff Queue Drift (3/6 Routes in Maker Mode) & Pre-Expiry Quote Re-Anchoring",
-    severity: "LATENCY_EXPOSURE",
-    bottleneckLayer: "EXECUTION_QUEUE_AND_MAKER_TTL",
-    measuredWeaknessMetric:
-      "3 of 6 layoff opportunities (LAYOFF-ROT-451, LAYOFF-ROT-507, LAYOFF-ROT-5501 · $720 / 1,288 contracts) sit in queued/paper_guarded passive maker state exposed to EC-08 TTL expiry",
-    rootCauseAnalysis:
-      "Thin external orderbook depth on CFB Totals (ROT-451) and NBA 1H/Derivatives (ROT-5501) downgrades evaluateExecutionDecision() from taker to passive maker (min(fair - makerMarginBps, ask - 1c)); if top-of-book moves before sign-off, resting quotes risk missing fill or expiring at the 15m TTL cliff (EC-08).",
-    impactedTasksOrRefs: [
-      "EC-08",
-      "EC-10",
-      "LAYOFF-ROT-451",
-      "LAYOFF-ROT-507",
-      "LAYOFF-ROT-5501",
-    ],
-    primaryWeakRoles: ["settlement", "operator"],
-    coPilotDeputyRoles: ["RISK_DESK_ANALYST"],
-    sourceModules: [
-      "lib/execution_planner.ts",
-      "lib/execution_decision.ts",
-      "lib/watchlist_autobet.ts",
-    ],
-    implementedEnhancement:
-      "Added dynamic maker quote re-anchoring (bun run execution:plan --style auto) with automatic 5-minute pre-expiry Telegram/Cordis escalation to Co-Pilot approver (Devon Brooks / Elena Rostova) so resting maker intents are re-priced or split into taker tranches before TTL expiration.",
-    remediationCommand:
-      "bun test tests/execution_planner.test.ts tests/execution_decision.test.ts",
-    beforeScoreOrSla: "Static maker quote · 15m hard TTL expiry cliff (EC-08)",
-    projectedAfterScoreOrSla:
-      "Dynamic spread re-anchor + 5m pre-expiry Co-Pilot ping (0 stale expiries)",
-    financialExposureProtectedUsd: 218_400,
-    status: "CO_PILOT_FAILOVER_ACTIVE",
-  },
-  {
-    linkId: "WL-06",
-    code: "CLIENT_SINK_WRAPPERS_AND_500_ON_BOTH_WIRE_GAPS",
-    title:
-      "Portal Wire 500-on-Both Unknowns (P0.1 getGradedWagerByCustomer / getTicketDetailPrint) & Client Sink Hardening (P0.5)",
-    severity: "HIGH_FRICTION",
-    bottleneckLayer: "CLIENT_WIRE_AND_DOM_SINKS",
-    measuredWeaknessMetric:
-      "2 remaining [unknown] portal operations (P0.1 0-byte HTTP 500s) + P0.5 client searchComponent DOM sink wrapper enforcement + lib/fraud_model.ts advisory debt",
-    rootCauseAnalysis:
-      "getGradedWagerByCustomer and getTicketDetailPrint return 0-byte HTTP 500 responses when invoked without graded ticketNumber/wagerNumber/flag/week parameters, while legacy portal views require MODULE_SINK_WRAPPERS and zero-innerHTML enforcement.",
-    impactedTasksOrRefs: [
-      "P0.1",
-      "P0.5",
-      "RT-F402-CAPTURE",
-      "RT-SEARCH-ESCAPE",
-    ],
-    primaryWeakRoles: ["client/seam", "security/operator"],
-    coPilotDeputyRoles: ["operator"],
-    sourceModules: [
-      "lib/blob_ingest.ts",
-      "bin/check-innerhtml.ts",
-      "lib/fraud_model.ts",
-    ],
-    implementedEnhancement:
-      "Enforced strict preflight parameter validation (--week 0, --ticket, --wager, --flag) + parseF402ListEnvelope() polymorphic LIST guard in lib/blob_ingest.ts + zero-innerHTML gate across all operator dashboards and Cordis plugins.",
-    remediationCommand: "bun bin/check-innerhtml.ts --verbose",
-    beforeScoreOrSla: "2 [unknown] 0-byte 500s · unescaped legacy search render",
-    projectedAfterScoreOrSla:
-      "7/7 typed wire envelopes + 0 innerHTML violations across all surfaces",
-    financialExposureProtectedUsd: 196_800,
-    status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
-  },
-] as const;
+export const DESK_WEAKEST_LINK_DIAGNOSTICS: readonly WeakestLinkDiagnosticSpec[] =
+  [
+    {
+      linkId: "WL-01",
+      code: "UPSTREAM_AUTHZ_3_DECISION_BOTTLENECK",
+      title:
+        "Upstream Stakeholder Plane (80% Health — Lowest of 4 Planes) & 3 Pending Executive Decisions (~4h)",
+      severity: "CRITICAL_BOTTLENECK",
+      bottleneckLayer: "RBAC_ROLE_AND_PLANE",
+      measuredWeaknessMetric:
+        "upstream-stakeholder plane at 80% health · server-team-lead (80%), business-owner (80%), compliance (88%) hold 3 pending decisions (~4h) blocking P0.6 (2026-12-03 expiry)",
+      rootCauseAnalysis:
+        "Decision #1 (subordinate test account ~1h), Decision #2 (written tamper scope ~1h), and Decision #3 (6-request Bearer claim vs body customerID/agentID verification ~2h) sit in ACK_PENDING across 3 executive inboxes, stalling P0.6 (RT-DEFENSE-MEASURE) and $503.2k cross-domain priority exposure.",
+      impactedTasksOrRefs: [
+        "P0.6",
+        "RT-DEFENSE-MEASURE",
+        "Decision #1",
+        "Decision #2",
+        "Decision #3",
+      ],
+      primaryWeakRoles: ["server-team-lead", "business-owner", "compliance"],
+      coPilotDeputyRoles: ["security/operator", "operator"],
+      sourceModules: [
+        "docs/analysis/defense-measurement-2026-11-03/00-executive-summary.md",
+        "lib/rbac_governance.ts",
+        "services/sportsdesk_telegram_bot.ts",
+      ],
+      implementedEnhancement:
+        "Pre-staged the 6-request Bearer-vs-body verification harness + 1-click executive sign-off packet in Cordis (/sportsdesk-sec) & Telegram (/gov_ack), with 15m Co-Pilot failover to security/operator (Tariq Al-Mansoor) so server-team-lead runs a 10m pre-scripted replay instead of a cold 2h build.",
+      remediationCommand:
+        "bun run governance:check --weakest-links --role server-team-lead",
+      beforeScoreOrSla: "80% Plane Health · ~4h manual executive coordination",
+      projectedAfterScoreOrSla:
+        "96% Plane Health · <= 25m pre-staged replay & sign-off",
+      financialExposureProtectedUsd: 503_200,
+      status: "HARNESS_READY_AWAITING_UPSTREAM",
+    },
+    {
+      linkId: "WL-02",
+      code: "OPERATOR_SINGLE_POINT_QUEUE_OVERLOAD",
+      title:
+        "Desk Operator Role (80% Score — Tied Lowest Role) Single-Point Queue & 15m Approval Bottleneck",
+      severity: "CRITICAL_BOTTLENECK",
+      bottleneckLayer: "RBAC_ROLE_AND_PLANE",
+      measuredWeaknessMetric:
+        "operator role at 80% score · 4 open tasks (P0.1, P0.7, P1.6, P2.3) + Decision #2 + 5 queued inbox items (3 urgent) + sole primary approver on NODE-08 15m human gate",
+      rootCauseAnalysis:
+        "Marcus Vance (operator) simultaneously owns 4 open tasks, all 3 manager-boot-oracle gates, and the 15-minute human approval queue for dsh-plugin-watchlist-autobet, creating a single-point bottleneck during peak Saturday CFB and Sunday NFL slates.",
+      impactedTasksOrRefs: ["P0.1", "P0.7", "P1.6", "P2.3", "NODE-08", "EC-08"],
+      primaryWeakRoles: ["operator"],
+      coPilotDeputyRoles: ["settlement", "RISK_DESK_ANALYST", "client/seam"],
+      sourceModules: [
+        "lib/rbac_governance.ts",
+        "lib/watchlist_autobet.ts",
+        "cli/watchlist_autobet_cli.ts",
+      ],
+      implementedEnhancement:
+        "Activated Co-Pilot Load-Shedding & Deputy Failover: when operator inboxUrgentItems >= 3 or autobet queued intents >= 2, NODE-08 automatically delegates NFL/CFB key-number layoff approvals to settlement (Devon Brooks, 92% score) and NBA steam/donor clamps to RISK_DESK_ANALYST (Elena Rostova), while client/seam (Nadia Chen, 100% score) co-owns P0.1/P1.6 wire triage.",
+      remediationCommand:
+        "bun run governance:check --weakest-links --role operator",
+      beforeScoreOrSla:
+        "80% Role Score · 5 queued (3 urgent) · single-point 15m SLA",
+      projectedAfterScoreOrSla:
+        "96% Role Score · 3-way Co-Pilot load-balanced (<= 4m avg approval)",
+      financialExposureProtectedUsd: 656_500,
+      status: "CO_PILOT_FAILOVER_ACTIVE",
+    },
+    {
+      linkId: "WL-03",
+      code: "BRIDGE3C_LARGE_BETREPORT_TIMEOUT_AND_CRON_GAP",
+      title:
+        "Bridge 3c Large getBetReport Timeout Absence (#94) & Two-Step Wagers Snapshot Cron Gap (#93)",
+      severity: "HIGH_FRICTION",
+      bottleneckLayer: "INGESTION_AND_CRON_WIRE",
+      measuredWeaknessMetric:
+        "AGENTS.md open items #94 & #93 · scripts/gslive_tally_bridge3c.ts lacked --timeout CLI flag for heavy Saturday CFB getBetReport windows + P0.7 cron capture gap",
+      rootCauseAnalysis:
+        "fetchBetReportRows() in scripts/fetch-bet-tally.ts accepted timeoutMs, but scripts/gslive_tally_bridge3c.ts never exposed --timeout in parseArgs or forwarded timeoutMs in fetchOpenCapture(), risking mid-stream aborts on peak weekend slates while wagers capture + publish-snapshot (#93) required manual chaining.",
+      impactedTasksOrRefs: ["#94", "#93", "P0.7", "RT-PENDING-COUNT"],
+      primaryWeakRoles: ["operator", "settlement"],
+      coPilotDeputyRoles: ["client/seam"],
+      sourceModules: [
+        "scripts/gslive_tally_bridge3c.ts",
+        "scripts/fetch-bet-tally.ts",
+        "lib/gslive_tally_rollup.ts",
+      ],
+      implementedEnhancement:
+        "Enhanced scripts/gslive_tally_bridge3c.ts directly in code with --timeout <ms> (validated positive integer) and wired timeoutMs through fetchOpenCapture() -> fetchBetReportRows(), eliminating mid-stream aborts on large weekend getBetReport captures.",
+      remediationCommand: "bun scripts/gslive_tally_bridge3c.ts --help",
+      beforeScoreOrSla: "Fixed default fetch timeout · manual 2-step snapshot",
+      projectedAfterScoreOrSla:
+        "Configurable --timeout <ms> (e.g. 60000ms peak slate) + atomic R2 rollup",
+      financialExposureProtectedUsd: 481_700,
+      status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
+    },
+    {
+      linkId: "WL-04",
+      code: "SYNDICATE_WSS_FALLBACK_AND_UNOBSERVED_WALLETS",
+      title:
+        "Syndicate Feed Coverage Gap (23/39 Active Wallets · 16 Un-Observed · WSS Fallback & P0.2 $110.6k Fee Gap)",
+      severity: "LATENCY_EXPOSURE",
+      bottleneckLayer: "SYNDICATE_FEED_AND_PNL",
+      measuredWeaknessMetric:
+        "23/39 active syndicate wallets (16 dormant/un-observed, 10 quarantined) · wssIngestion='not_ingested' (929ms HTTP poll vs 345ms WSS SLA) · P0.2 $110,637.44 pre-fee PnL gap",
+      rootCauseAnalysis:
+        "docs/graph-live-feed.json operates in PARTIAL polling mode (929ms Polymarket HTTP poll) when WSS stream ingestion is idle, and 16 of 39 bridged proxy wallets have rotated or gone dormant while P0.2 (RT-PREFEE-PNL) awaits fill-level fee reconciliation.",
+      impactedTasksOrRefs: [
+        "P0.2",
+        "RT-PREFEE-PNL",
+        "GATE-SURV-01",
+        "GATE-SURV-02",
+      ],
+      primaryWeakRoles: ["RISK_DESK_ANALYST", "settlement"],
+      coPilotDeputyRoles: ["security/operator"],
+      sourceModules: [
+        "scripts/graph_feed_poller_daemon.ts",
+        "lib/customer_poly_bridge.ts",
+        "lib/watchlist_signal_engine.ts",
+      ],
+      implementedEnhancement:
+        "Bound automated shadow-wallet rotation detection (Mode C IP/account-change join) + offline pre-fee PnL reconciliation (bun run artifacts:value --offline) + automatic GATE-SURV-01 345ms conservative line-step whenever polymarketPollDurationMs > 500ms.",
+      remediationCommand: "bun run artifacts:value --offline",
+      beforeScoreOrSla:
+        "23/39 wallets observed · 929ms poll · $110.6k unadjusted fee gap",
+      projectedAfterScoreOrSla:
+        "39/39 wallet rotation sweep + net-of-fee priority ranking + 345ms auto-step",
+      financialExposureProtectedUsd: 484_200,
+      status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
+    },
+    {
+      linkId: "WL-05",
+      code: "MAKER_QUEUE_TTL_AND_THIN_BOOK_REANCHOR_DRIFT",
+      title:
+        "Passive Maker Layoff Queue Drift (3/6 Routes in Maker Mode) & Pre-Expiry Quote Re-Anchoring",
+      severity: "LATENCY_EXPOSURE",
+      bottleneckLayer: "EXECUTION_QUEUE_AND_MAKER_TTL",
+      measuredWeaknessMetric:
+        "3 of 6 layoff opportunities (LAYOFF-ROT-451, LAYOFF-ROT-507, LAYOFF-ROT-5501 · $720 / 1,288 contracts) sit in queued/paper_guarded passive maker state exposed to EC-08 TTL expiry",
+      rootCauseAnalysis:
+        "Thin external orderbook depth on CFB Totals (ROT-451) and NBA 1H/Derivatives (ROT-5501) downgrades evaluateExecutionDecision() from taker to passive maker (min(fair - makerMarginBps, ask - 1c)); if top-of-book moves before sign-off, resting quotes risk missing fill or expiring at the 15m TTL cliff (EC-08).",
+      impactedTasksOrRefs: [
+        "EC-08",
+        "EC-10",
+        "LAYOFF-ROT-451",
+        "LAYOFF-ROT-507",
+        "LAYOFF-ROT-5501",
+      ],
+      primaryWeakRoles: ["settlement", "operator"],
+      coPilotDeputyRoles: ["RISK_DESK_ANALYST"],
+      sourceModules: [
+        "lib/execution_planner.ts",
+        "lib/execution_decision.ts",
+        "lib/watchlist_autobet.ts",
+      ],
+      implementedEnhancement:
+        "Added dynamic maker quote re-anchoring (bun run execution:plan --style auto) with automatic 5-minute pre-expiry Telegram/Cordis escalation to Co-Pilot approver (Devon Brooks / Elena Rostova) so resting maker intents are re-priced or split into taker tranches before TTL expiration.",
+      remediationCommand:
+        "bun test tests/execution_planner.test.ts tests/execution_decision.test.ts",
+      beforeScoreOrSla:
+        "Static maker quote · 15m hard TTL expiry cliff (EC-08)",
+      projectedAfterScoreOrSla:
+        "Dynamic spread re-anchor + 5m pre-expiry Co-Pilot ping (0 stale expiries)",
+      financialExposureProtectedUsd: 218_400,
+      status: "CO_PILOT_FAILOVER_ACTIVE",
+    },
+    {
+      linkId: "WL-06",
+      code: "CLIENT_SINK_WRAPPERS_AND_500_ON_BOTH_WIRE_GAPS",
+      title:
+        "Portal Wire 500-on-Both Unknowns (P0.1 getGradedWagerByCustomer / getTicketDetailPrint) & Client Sink Hardening (P0.5)",
+      severity: "HIGH_FRICTION",
+      bottleneckLayer: "CLIENT_WIRE_AND_DOM_SINKS",
+      measuredWeaknessMetric:
+        "2 remaining [unknown] portal operations (P0.1 0-byte HTTP 500s) + P0.5 client searchComponent DOM sink wrapper enforcement + lib/fraud_model.ts advisory debt",
+      rootCauseAnalysis:
+        "getGradedWagerByCustomer and getTicketDetailPrint return 0-byte HTTP 500 responses when invoked without graded ticketNumber/wagerNumber/flag/week parameters, while legacy portal views require MODULE_SINK_WRAPPERS and zero-innerHTML enforcement.",
+      impactedTasksOrRefs: [
+        "P0.1",
+        "P0.5",
+        "RT-F402-CAPTURE",
+        "RT-SEARCH-ESCAPE",
+      ],
+      primaryWeakRoles: ["client/seam", "security/operator"],
+      coPilotDeputyRoles: ["operator"],
+      sourceModules: [
+        "lib/blob_ingest.ts",
+        "bin/check-innerhtml.ts",
+        "lib/fraud_model.ts",
+      ],
+      implementedEnhancement:
+        "Enforced strict preflight parameter validation (--week 0, --ticket, --wager, --flag) + parseF402ListEnvelope() polymorphic LIST guard in lib/blob_ingest.ts + zero-innerHTML gate across all operator dashboards and Cordis plugins.",
+      remediationCommand: "bun bin/check-innerhtml.ts --verbose",
+      beforeScoreOrSla:
+        "2 [unknown] 0-byte 500s · unescaped legacy search render",
+      projectedAfterScoreOrSla:
+        "7/7 typed wire envelopes + 0 innerHTML violations across all surfaces",
+      financialExposureProtectedUsd: 196_800,
+      status: "ENHANCED_IN_CODE_AND_GOVERNANCE",
+    },
+  ] as const;
 
 export type IssuePrResolutionStatus =
-  | "FIXED_AND_MERGED"
-  | "FIXED_IN_CURRENT_PR"
-  | "DISPATCHED_TO_TEAMMATE_INBOX";
+  "FIXED_AND_MERGED" | "FIXED_IN_CURRENT_PR" | "DISPATCHED_TO_TEAMMATE_INBOX";
 
 export interface GitHubIssueAndPrTriageEntry {
   readonly itemRef: string;
@@ -3018,399 +3156,435 @@ export interface GitHubIssueAndPrTriageEntry {
   readonly verificationCommand: string;
 }
 
-export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageEntry[] = [
-  {
-    itemRef: "ISSUE-115",
-    kind: "GITHUB_ISSUE",
-    number: 115,
-    title: "fix(daemon/dsh-proxy): unify Bun-native port cascade (4020 vs 3000) and Host/Client proxy port contracts",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "client/seam",
-    coPilotReviewerName: "Soren Lindqvist",
-    linkedPrsOrIssues: ["PR #114", "PR #129"],
-    resolutionStatus: "FIXED_IN_CURRENT_PR",
-    reviewAndMergeNote:
-      "Added resolveSportsdeskDaemonPort(env, 4020) in lib/bun_serve_port.ts (BUN_PORT -> PORT -> NODE_PORT -> 4020) and wired lib/health_watcher.ts alongside Cordis config.apiPort in dsh-plugin-sidebar.",
-    verificationCommand: "bun test tests/supervisor.test.ts tests/rbac_governance.test.ts",
-  },
-  {
-    itemRef: "ISSUE-103",
-    kind: "GITHUB_ISSUE",
-    number: 103,
-    title: "fix(bridge3b): credential gate ignores session.authorizationHeader",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["PR #104"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #104 (80014a4): resolveF402BearerTokenDetailed honors session.authorizationHeader across lib/f402_pending_fetch.ts, lib/bridge_rollup_cron.ts, and scripts/f402_pending_bridge3b.ts.",
-    verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
-  },
-  {
-    itemRef: "ISSUE-101",
-    kind: "GITHUB_ISSUE",
-    number: 101,
-    title: "wagers:by-state default calcTime misreports data freshness for desk KPIs",
-    primaryOwnerRole: "settlement",
-    assigneeName: "Devon Brooks",
-    assigneeEmail: "settlement@bookdeskops.com",
-    inboxDispatchRoute: "inbox://risk-settlement/grading",
-    coPilotReviewerRole: "operator",
-    coPilotReviewerName: "Marcus Vance",
-    linkedPrsOrIssues: ["PR #104"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #104 (80014a4): live wagers capture defaults to betTime so pending wagers report real placement freshness instead of 1969-12-31 calcTime sentinel.",
-    verificationCommand: "bun test tests/gslive_wagers_by_state.test.ts",
-  },
-  {
-    itemRef: "ISSUE-96",
-    kind: "GITHUB_ISSUE",
-    number: 96,
-    title: "chore(lint): add ast-grep rule to ban generic throws",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["PR #119"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #119 (3c87c7d): bin/check-signal-honesty.ts + tests/check_signal_honesty_meta.test.ts enforce structured signal-honesty throws in CI.",
-    verificationCommand: "bun test tests/check_signal_honesty_meta.test.ts",
-  },
-  {
-    itemRef: "ISSUE-93",
-    kind: "GITHUB_ISSUE",
-    number: 93,
-    title: "feat(cron): wire wagers-by-state + publish-snapshot into bridge_rollup_cron",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "settlement",
-    coPilotReviewerName: "Devon Brooks",
-    linkedPrsOrIssues: ["PR #119"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #119 (3c87c7d): wagers-by-state and wagers-publish are wired into BRIDGE_ROLLUP_JOBS in lib/bridge_rollup_cron.ts and services/reporting_scheduler_service.ts.",
-    verificationCommand: "bun test tests/bridge_rollup_cron.test.ts",
-  },
-  {
-    itemRef: "ISSUE-91",
-    kind: "GITHUB_ISSUE",
-    number: 91,
-    title: "f402-weblog: automate activity JSONL producer (Nov 4+)",
-    primaryOwnerRole: "RISK_DESK_ANALYST",
-    assigneeName: "Elena Rostova",
-    assigneeEmail: "risk-analyst@bookdeskops.com",
-    inboxDispatchRoute: "inbox://risk-settlement/surveillance",
-    coPilotReviewerRole: "operator",
-    coPilotReviewerName: "Marcus Vance",
-    linkedPrsOrIssues: ["PR #119", "P0.1"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "08:00 weblog:sentinel + 3-tier corpus active (#90/#91/#92); dispatched to Elena Rostova & Marcus Vance to keep manual portal export + sentinel verification green.",
-    verificationCommand: "bun run weblog:sentinel",
-  },
-  {
-    itemRef: "ISSUE-80",
-    kind: "GITHUB_ISSUE",
-    number: 80,
-    title: "desk panel: legacy portal UX parity (status strip, freshness, compact density, drill-down)",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "RISK_DESK_ANALYST",
-    coPilotReviewerName: "Elena Rostova",
-    linkedPrsOrIssues: ["PR #119", "PR #127"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #119 (3c87c7d) and PR #127 (28b7c9b): provenance chips, data-age status strip, and gap-halt drill-down shipped in dsh-plugin-sidebar.",
-    verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
-  },
-  {
-    itemRef: "ISSUE-79",
-    kind: "GITHUB_ISSUE",
-    number: 79,
-    title: "ux: distinguish scratch fallback vs intentional sample fixture chip",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "operator",
-    coPilotReviewerName: "Marcus Vance",
-    linkedPrsOrIssues: ["PR #119"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #119 (3c87c7d): lib/sidebar_fixture_provenance.ts distinguishes scratch fallback from intentional sample fixture chips.",
-    verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
-  },
-  {
-    itemRef: "ISSUE-78",
-    kind: "GITHUB_ISSUE",
-    number: 78,
-    title: "ux: fixture [not live] chip should say why (session expired vs fixture mode vs offline)",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "RISK_DESK_ANALYST",
-    coPilotReviewerName: "Elena Rostova",
-    linkedPrsOrIssues: ["PR #119"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed & merged in PR #119 (3c87c7d): lib/sidebar_fixture_provenance.ts + lib/desk_enhanced_health.ts surface exact non-live reason (session expired vs fixture vs R2 age).",
-    verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
-  },
-  {
-    itemRef: "ISSUE-77",
-    kind: "GITHUB_ISSUE",
-    number: 77,
-    title: "live KPI: F402_BEARER_TOKEN fallback for Manager reads (needs wire proof)",
-    primaryOwnerRole: "server-team-lead",
-    assigneeName: "Vikram Patel",
-    assigneeEmail: "server-lead@bookdeskops.com",
-    inboxDispatchRoute: "inbox://upstream/server-team",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["PR #104", "Decision #3"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "session.authorizationHeader fallback landed in PR #104; dispatched wire proof verification to Vikram Patel & Tariq Al-Mansoor alongside Decision #3.",
-    verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
-  },
-  {
-    itemRef: "ISSUE-76",
-    kind: "GITHUB_ISSUE",
-    number: 76,
-    title: "sched: wire f402_session_refresh into reporting scheduler (optional)",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "server-team-lead",
-    coPilotReviewerName: "Vikram Patel",
-    linkedPrsOrIssues: ["PR #119"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "Dispatched optional scheduler hook review to Marcus Vance & Vikram Patel in services/reporting_scheduler_service.ts.",
-    verificationCommand: "bun test tests/bridge_rollup_cron.test.ts",
-  },
-  {
-    itemRef: "ISSUE-23",
-    kind: "GITHUB_ISSUE",
-    number: 23,
-    title: "Pending-customer count blocked: transaction log + definitions + test environment",
-    primaryOwnerRole: "settlement",
-    assigneeName: "Devon Brooks",
-    assigneeEmail: "settlement@bookdeskops.com",
-    inboxDispatchRoute: "inbox://risk-settlement/grading",
-    coPilotReviewerRole: "compliance",
-    coPilotReviewerName: "Nadia Chen",
-    linkedPrsOrIssues: ["P0.7", "RT-PENDING-COUNT"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "Governed under P0.7 (RT-PENDING-COUNT): dispatched to Devon Brooks, Nadia Chen & Marcus Vance for server-side wager ledger & written pending definition.",
-    verificationCommand: "bun run governance:check --audit --role settlement",
-  },
-  {
-    itemRef: "ISSUE-22",
-    kind: "GITHUB_ISSUE",
-    number: 22,
-    title: "Triage agent-management-thin credential sinks (password/name renders)",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "applyPlayerInfoEscaper active in client/overlay/security-seams.preload.js; dispatched remaining agent-management-thin modal sink audit to Soren Lindqvist & Tariq Al-Mansoor.",
-    verificationCommand: "bun bin/check-innerhtml.ts --verbose",
-  },
-  {
-    itemRef: "ISSUE-21",
-    kind: "GITHUB_ISSUE",
-    number: 21,
-    title: "Escape pending-thin wager-detail source render (bet-desc/gameReport are copies)",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "Dispatched to Soren Lindqvist (client/seam) under P0.5 to extend MODULE_SINK_WRAPPERS to pending-thin source render before .html() copy.",
-    verificationCommand: "bun bin/check-innerhtml.ts --verbose",
-  },
-  {
-    itemRef: "ISSUE-20",
-    kind: "GITHUB_ISSUE",
-    number: 20,
-    title: "Reconcile PLAYERS scale: ~5.7k in boot evidence vs 57,763 in the full envelope",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "client/seam",
-    coPilotReviewerName: "Soren Lindqvist",
-    linkedPrsOrIssues: ["PR #129"],
-    resolutionStatus: "FIXED_IN_CURRENT_PR",
-    reviewAndMergeNote:
-      "Reconciled in docs/evidence/manager-boot-primary-sources.md with explicit F402_PLAYERS_MODE capture-mode qualifier (projected ~5.7k on boot capture i' vs full 57,763 in raw-f402-list-agents.json).",
-    verificationCommand: "bun run verify:docs",
-  },
-  {
-    itemRef: "ISSUE-19",
-    kind: "GITHUB_ISSUE",
-    number: 19,
-    title: "PII retention: Scratch backups and raw dumps are not in the deletion path",
-    primaryOwnerRole: "compliance",
-    assigneeName: "Nadia Chen",
-    assigneeEmail: "compliance@bookdeskops.com",
-    inboxDispatchRoute: "inbox://security/compliance",
-    coPilotReviewerRole: "operator",
-    coPilotReviewerName: "Marcus Vance",
-    linkedPrsOrIssues: ["tests/data_artifacts_tracking.test.ts"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "tests/data_artifacts_tracking.test.ts blocks tracked live dumps; dispatched scratch/backups retention sweep policy to Nadia Chen & Marcus Vance.",
-    verificationCommand: "bun test tests/data_artifacts_tracking.test.ts",
-  },
-  {
-    itemRef: "ISSUE-18",
-    kind: "GITHUB_ISSUE",
-    number: 18,
-    title: "Auth-adjacent artifacts: cached Chrome profile / Web Data hold a live agent id",
-    primaryOwnerRole: "security/operator",
-    assigneeName: "Tariq Al-Mansoor",
-    assigneeEmail: "security@bookdeskops.com",
-    inboxDispatchRoute: "inbox://security/red-team",
-    coPilotReviewerRole: "operator",
-    coPilotReviewerName: "Marcus Vance",
-    linkedPrsOrIssues: ["lib/f402_har_redaction_proof_verify.test.ts"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "HAR redaction proof gate active; dispatched Chrome profile / Web Data scrub runbook check to Tariq Al-Mansoor & Marcus Vance.",
-    verificationCommand: "bun test lib/f402_har_redaction_proof_verify.test.ts",
-  },
-  {
-    itemRef: "ISSUE-17",
-    kind: "GITHUB_ISSUE",
-    number: 17,
-    title: "Unblock: Bearer verdict + financial ledger (decisions, owners, ~4 hours total)",
-    primaryOwnerRole: "server-team-lead",
-    assigneeName: "Vikram Patel",
-    assigneeEmail: "server-lead@bookdeskops.com",
-    inboxDispatchRoute: "inbox://upstream/server-team",
-    coPilotReviewerRole: "business-owner",
-    coPilotReviewerName: "Arthur Pendelton",
-    linkedPrsOrIssues: ["P0.6", "WL-01", "Decision #1", "Decision #2", "Decision #3"],
-    resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
-    reviewAndMergeNote:
-      "Pre-staged 6-request Bearer-vs-body verification harness under WL-01; dispatched to Vikram Patel, Arthur Pendelton & Nadia Chen for executive sign-off before 2026-12-03.",
-    verificationCommand: "bun run governance:check --weakest-links --role server-team-lead",
-  },
-  {
-    itemRef: "ISSUE-16",
-    kind: "GITHUB_ISSUE",
-    number: 16,
-    title: "searchComponent render sink: escape NameFirst/Password before .html()",
-    primaryOwnerRole: "client/seam",
-    assigneeName: "Soren Lindqvist",
-    assigneeEmail: "client-seam@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/client-seam",
-    coPilotReviewerRole: "security/operator",
-    coPilotReviewerName: "Tariq Al-Mansoor",
-    linkedPrsOrIssues: ["PR #129", "RT-SEARCH-ESCAPE"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Verified all 8 MODULE_SINK_WRAPPERS (applySearchEscaper, applySetHistoryEscaper, applyMessageInitEscaper, applyPopUpMessagesEscaper, applySetCommunicationMessagesEscaper, applySearchCustomerEscaper, applyGetCommunicationMessagesEscaper, applyPlayerInfoEscaper) active in client/overlay/security-seams.preload.js.",
-    verificationCommand: "bun bin/check-innerhtml.ts --verbose",
-  },
-  {
-    itemRef: "PR-127",
-    kind: "GITHUB_PR",
-    number: 127,
-    title: "feat(tally-3c): halt rollup on pagination gap + surface banner in sidebar",
-    primaryOwnerRole: "settlement",
-    assigneeName: "Devon Brooks",
-    assigneeEmail: "settlement@bookdeskops.com",
-    inboxDispatchRoute: "inbox://risk-settlement/grading",
-    coPilotReviewerRole: "client/seam",
-    coPilotReviewerName: "Soren Lindqvist",
-    linkedPrsOrIssues: ["PR #128", "ISSUE-80"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed by Devon Brooks & Soren Lindqvist and merged to main (28b7c9b) with market-index pin follow-up in PR #128 (ef249fa).",
-    verificationCommand: "bun test tests/gslive_tally_bridge3c.test.ts",
-  },
-  {
-    itemRef: "PR-125",
-    kind: "GITHUB_PR",
-    number: 125,
-    title: "feat(autobet): wire Kalshi live execution adapter + 3-factor arming gate",
-    primaryOwnerRole: "security/operator",
-    assigneeName: "Tariq Al-Mansoor",
-    assigneeEmail: "security@bookdeskops.com",
-    inboxDispatchRoute: "inbox://security/red-team",
-    coPilotReviewerRole: "RISK_DESK_ANALYST",
-    coPilotReviewerName: "Elena Rostova",
-    linkedPrsOrIssues: ["PR #126", "TOOL-03"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed by Tariq Al-Mansoor & Elena Rostova and merged to main (3aa16da) with market-index pin update in PR #126 (e0b05f4).",
-    verificationCommand: "bun test tests/kalshi_live_execution.test.ts",
-  },
-  {
-    itemRef: "PR-119",
-    kind: "GITHUB_PR",
-    number: 119,
-    title: "chore(ci): scope verify job to PR-changed files and plugins",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "client/seam",
-    coPilotReviewerName: "Soren Lindqvist",
-    linkedPrsOrIssues: ["ISSUE-96", "ISSUE-93", "ISSUE-80", "ISSUE-79", "ISSUE-78"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed by Marcus Vance & Soren Lindqvist and merged to main (3c87c7d), resolving #96, #93, #80, #79, #78, and #94.",
-    verificationCommand: "bun run test:market-index",
-  },
-  {
-    itemRef: "PR-104",
-    kind: "GITHUB_PR",
-    number: 104,
-    title: "fix(f402): resolve bearer token from session.authorizationHeader + default wagers capture to betTime (#101, #103)",
-    primaryOwnerRole: "operator",
-    assigneeName: "Marcus Vance",
-    assigneeEmail: "ops-desk@bookdeskops.com",
-    inboxDispatchRoute: "inbox://ops-desk/triage",
-    coPilotReviewerRole: "settlement",
-    coPilotReviewerName: "Devon Brooks",
-    linkedPrsOrIssues: ["ISSUE-103", "ISSUE-101"],
-    resolutionStatus: "FIXED_AND_MERGED",
-    reviewAndMergeNote:
-      "Reviewed by Marcus Vance & Devon Brooks and merged to main (80014a4), resolving #103 and #101.",
-    verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
-  },
-] as const;
+export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageEntry[] =
+  [
+    {
+      itemRef: "ISSUE-115",
+      kind: "GITHUB_ISSUE",
+      number: 115,
+      title:
+        "fix(daemon/dsh-proxy): unify Bun-native port cascade (4020 vs 3000) and Host/Client proxy port contracts",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "client/seam",
+      coPilotReviewerName: "Soren Lindqvist",
+      linkedPrsOrIssues: ["PR #114", "PR #129"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      reviewAndMergeNote:
+        "Added resolveSportsdeskDaemonPort(env, 4020) in lib/bun_serve_port.ts (BUN_PORT -> PORT -> NODE_PORT -> 4020) and wired lib/health_watcher.ts alongside Cordis config.apiPort in dsh-plugin-sidebar.",
+      verificationCommand:
+        "bun test tests/supervisor.test.ts tests/rbac_governance.test.ts",
+    },
+    {
+      itemRef: "ISSUE-103",
+      kind: "GITHUB_ISSUE",
+      number: 103,
+      title:
+        "fix(bridge3b): credential gate ignores session.authorizationHeader",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["PR #104"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #104 (80014a4): resolveF402BearerTokenDetailed honors session.authorizationHeader across lib/f402_pending_fetch.ts, lib/bridge_rollup_cron.ts, and scripts/f402_pending_bridge3b.ts.",
+      verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
+    },
+    {
+      itemRef: "ISSUE-101",
+      kind: "GITHUB_ISSUE",
+      number: 101,
+      title:
+        "wagers:by-state default calcTime misreports data freshness for desk KPIs",
+      primaryOwnerRole: "settlement",
+      assigneeName: "Devon Brooks",
+      assigneeEmail: "settlement@bookdeskops.com",
+      inboxDispatchRoute: "inbox://risk-settlement/grading",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["PR #104"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #104 (80014a4): live wagers capture defaults to betTime so pending wagers report real placement freshness instead of 1969-12-31 calcTime sentinel.",
+      verificationCommand: "bun test tests/gslive_wagers_by_state.test.ts",
+    },
+    {
+      itemRef: "ISSUE-96",
+      kind: "GITHUB_ISSUE",
+      number: 96,
+      title: "chore(lint): add ast-grep rule to ban generic throws",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["PR #119"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #119 (3c87c7d): bin/check-signal-honesty.ts + tests/check_signal_honesty_meta.test.ts enforce structured signal-honesty throws in CI.",
+      verificationCommand: "bun test tests/check_signal_honesty_meta.test.ts",
+    },
+    {
+      itemRef: "ISSUE-93",
+      kind: "GITHUB_ISSUE",
+      number: 93,
+      title:
+        "feat(cron): wire wagers-by-state + publish-snapshot into bridge_rollup_cron",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "settlement",
+      coPilotReviewerName: "Devon Brooks",
+      linkedPrsOrIssues: ["PR #119"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #119 (3c87c7d): wagers-by-state and wagers-publish are wired into BRIDGE_ROLLUP_JOBS in lib/bridge_rollup_cron.ts and services/reporting_scheduler_service.ts.",
+      verificationCommand: "bun test tests/bridge_rollup_cron.test.ts",
+    },
+    {
+      itemRef: "ISSUE-91",
+      kind: "GITHUB_ISSUE",
+      number: 91,
+      title: "f402-weblog: automate activity JSONL producer (Nov 4+)",
+      primaryOwnerRole: "RISK_DESK_ANALYST",
+      assigneeName: "Elena Rostova",
+      assigneeEmail: "risk-analyst@bookdeskops.com",
+      inboxDispatchRoute: "inbox://risk-settlement/surveillance",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["PR #119", "P0.1"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "08:00 weblog:sentinel + 3-tier corpus active (#90/#91/#92); dispatched to Elena Rostova & Marcus Vance to keep manual portal export + sentinel verification green.",
+      verificationCommand: "bun run weblog:sentinel",
+    },
+    {
+      itemRef: "ISSUE-80",
+      kind: "GITHUB_ISSUE",
+      number: 80,
+      title:
+        "desk panel: legacy portal UX parity (status strip, freshness, compact density, drill-down)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "RISK_DESK_ANALYST",
+      coPilotReviewerName: "Elena Rostova",
+      linkedPrsOrIssues: ["PR #119", "PR #127"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #119 (3c87c7d) and PR #127 (28b7c9b): provenance chips, data-age status strip, and gap-halt drill-down shipped in dsh-plugin-sidebar.",
+      verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
+    },
+    {
+      itemRef: "ISSUE-79",
+      kind: "GITHUB_ISSUE",
+      number: 79,
+      title:
+        "ux: distinguish scratch fallback vs intentional sample fixture chip",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["PR #119"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #119 (3c87c7d): lib/sidebar_fixture_provenance.ts distinguishes scratch fallback from intentional sample fixture chips.",
+      verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
+    },
+    {
+      itemRef: "ISSUE-78",
+      kind: "GITHUB_ISSUE",
+      number: 78,
+      title:
+        "ux: fixture [not live] chip should say why (session expired vs fixture mode vs offline)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "RISK_DESK_ANALYST",
+      coPilotReviewerName: "Elena Rostova",
+      linkedPrsOrIssues: ["PR #119"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed & merged in PR #119 (3c87c7d): lib/sidebar_fixture_provenance.ts + lib/desk_enhanced_health.ts surface exact non-live reason (session expired vs fixture vs R2 age).",
+      verificationCommand: "bun test tests/sidebar_provenance_chip.test.ts",
+    },
+    {
+      itemRef: "ISSUE-77",
+      kind: "GITHUB_ISSUE",
+      number: 77,
+      title:
+        "live KPI: F402_BEARER_TOKEN fallback for Manager reads (needs wire proof)",
+      primaryOwnerRole: "server-team-lead",
+      assigneeName: "Vikram Patel",
+      assigneeEmail: "server-lead@bookdeskops.com",
+      inboxDispatchRoute: "inbox://upstream/server-team",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["PR #104", "Decision #3"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "session.authorizationHeader fallback landed in PR #104; dispatched wire proof verification to Vikram Patel & Tariq Al-Mansoor alongside Decision #3.",
+      verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
+    },
+    {
+      itemRef: "ISSUE-76",
+      kind: "GITHUB_ISSUE",
+      number: 76,
+      title:
+        "sched: wire f402_session_refresh into reporting scheduler (optional)",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "server-team-lead",
+      coPilotReviewerName: "Vikram Patel",
+      linkedPrsOrIssues: ["PR #119"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "Dispatched optional scheduler hook review to Marcus Vance & Vikram Patel in services/reporting_scheduler_service.ts.",
+      verificationCommand: "bun test tests/bridge_rollup_cron.test.ts",
+    },
+    {
+      itemRef: "ISSUE-23",
+      kind: "GITHUB_ISSUE",
+      number: 23,
+      title:
+        "Pending-customer count blocked: transaction log + definitions + test environment",
+      primaryOwnerRole: "settlement",
+      assigneeName: "Devon Brooks",
+      assigneeEmail: "settlement@bookdeskops.com",
+      inboxDispatchRoute: "inbox://risk-settlement/grading",
+      coPilotReviewerRole: "compliance",
+      coPilotReviewerName: "Nadia Chen",
+      linkedPrsOrIssues: ["P0.7", "RT-PENDING-COUNT"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "Governed under P0.7 (RT-PENDING-COUNT): dispatched to Devon Brooks, Nadia Chen & Marcus Vance for server-side wager ledger & written pending definition.",
+      verificationCommand: "bun run governance:check --audit --role settlement",
+    },
+    {
+      itemRef: "ISSUE-22",
+      kind: "GITHUB_ISSUE",
+      number: 22,
+      title:
+        "Triage agent-management-thin credential sinks (password/name renders)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "applyPlayerInfoEscaper active in client/overlay/security-seams.preload.js; dispatched remaining agent-management-thin modal sink audit to Soren Lindqvist & Tariq Al-Mansoor.",
+      verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+    },
+    {
+      itemRef: "ISSUE-21",
+      kind: "GITHUB_ISSUE",
+      number: 21,
+      title:
+        "Escape pending-thin wager-detail source render (bet-desc/gameReport are copies)",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["P0.5", "RT-SEARCH-ESCAPE"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "Dispatched to Soren Lindqvist (client/seam) under P0.5 to extend MODULE_SINK_WRAPPERS to pending-thin source render before .html() copy.",
+      verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+    },
+    {
+      itemRef: "ISSUE-20",
+      kind: "GITHUB_ISSUE",
+      number: 20,
+      title:
+        "Reconcile PLAYERS scale: ~5.7k in boot evidence vs 57,763 in the full envelope",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "client/seam",
+      coPilotReviewerName: "Soren Lindqvist",
+      linkedPrsOrIssues: ["PR #129"],
+      resolutionStatus: "FIXED_IN_CURRENT_PR",
+      reviewAndMergeNote:
+        "Reconciled in docs/evidence/manager-boot-primary-sources.md with explicit F402_PLAYERS_MODE capture-mode qualifier (projected ~5.7k on boot capture i' vs full 57,763 in raw-f402-list-agents.json).",
+      verificationCommand: "bun run verify:docs",
+    },
+    {
+      itemRef: "ISSUE-19",
+      kind: "GITHUB_ISSUE",
+      number: 19,
+      title:
+        "PII retention: Scratch backups and raw dumps are not in the deletion path",
+      primaryOwnerRole: "compliance",
+      assigneeName: "Nadia Chen",
+      assigneeEmail: "compliance@bookdeskops.com",
+      inboxDispatchRoute: "inbox://security/compliance",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["tests/data_artifacts_tracking.test.ts"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "tests/data_artifacts_tracking.test.ts blocks tracked live dumps; dispatched scratch/backups retention sweep policy to Nadia Chen & Marcus Vance.",
+      verificationCommand: "bun test tests/data_artifacts_tracking.test.ts",
+    },
+    {
+      itemRef: "ISSUE-18",
+      kind: "GITHUB_ISSUE",
+      number: 18,
+      title:
+        "Auth-adjacent artifacts: cached Chrome profile / Web Data hold a live agent id",
+      primaryOwnerRole: "security/operator",
+      assigneeName: "Tariq Al-Mansoor",
+      assigneeEmail: "security@bookdeskops.com",
+      inboxDispatchRoute: "inbox://security/red-team",
+      coPilotReviewerRole: "operator",
+      coPilotReviewerName: "Marcus Vance",
+      linkedPrsOrIssues: ["lib/f402_har_redaction_proof_verify.test.ts"],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "HAR redaction proof gate active; dispatched Chrome profile / Web Data scrub runbook check to Tariq Al-Mansoor & Marcus Vance.",
+      verificationCommand:
+        "bun test lib/f402_har_redaction_proof_verify.test.ts",
+    },
+    {
+      itemRef: "ISSUE-17",
+      kind: "GITHUB_ISSUE",
+      number: 17,
+      title:
+        "Unblock: Bearer verdict + financial ledger (decisions, owners, ~4 hours total)",
+      primaryOwnerRole: "server-team-lead",
+      assigneeName: "Vikram Patel",
+      assigneeEmail: "server-lead@bookdeskops.com",
+      inboxDispatchRoute: "inbox://upstream/server-team",
+      coPilotReviewerRole: "business-owner",
+      coPilotReviewerName: "Arthur Pendelton",
+      linkedPrsOrIssues: [
+        "P0.6",
+        "WL-01",
+        "Decision #1",
+        "Decision #2",
+        "Decision #3",
+      ],
+      resolutionStatus: "DISPATCHED_TO_TEAMMATE_INBOX",
+      reviewAndMergeNote:
+        "Pre-staged 6-request Bearer-vs-body verification harness under WL-01; dispatched to Vikram Patel, Arthur Pendelton & Nadia Chen for executive sign-off before 2026-12-03.",
+      verificationCommand:
+        "bun run governance:check --weakest-links --role server-team-lead",
+    },
+    {
+      itemRef: "ISSUE-16",
+      kind: "GITHUB_ISSUE",
+      number: 16,
+      title:
+        "searchComponent render sink: escape NameFirst/Password before .html()",
+      primaryOwnerRole: "client/seam",
+      assigneeName: "Soren Lindqvist",
+      assigneeEmail: "client-seam@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/client-seam",
+      coPilotReviewerRole: "security/operator",
+      coPilotReviewerName: "Tariq Al-Mansoor",
+      linkedPrsOrIssues: ["PR #129", "RT-SEARCH-ESCAPE"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Verified all 8 MODULE_SINK_WRAPPERS (applySearchEscaper, applySetHistoryEscaper, applyMessageInitEscaper, applyPopUpMessagesEscaper, applySetCommunicationMessagesEscaper, applySearchCustomerEscaper, applyGetCommunicationMessagesEscaper, applyPlayerInfoEscaper) active in client/overlay/security-seams.preload.js.",
+      verificationCommand: "bun bin/check-innerhtml.ts --verbose",
+    },
+    {
+      itemRef: "PR-127",
+      kind: "GITHUB_PR",
+      number: 127,
+      title:
+        "feat(tally-3c): halt rollup on pagination gap + surface banner in sidebar",
+      primaryOwnerRole: "settlement",
+      assigneeName: "Devon Brooks",
+      assigneeEmail: "settlement@bookdeskops.com",
+      inboxDispatchRoute: "inbox://risk-settlement/grading",
+      coPilotReviewerRole: "client/seam",
+      coPilotReviewerName: "Soren Lindqvist",
+      linkedPrsOrIssues: ["PR #128", "ISSUE-80"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Devon Brooks & Soren Lindqvist and merged to main (28b7c9b) with market-index pin follow-up in PR #128 (ef249fa).",
+      verificationCommand: "bun test tests/gslive_tally_bridge3c.test.ts",
+    },
+    {
+      itemRef: "PR-125",
+      kind: "GITHUB_PR",
+      number: 125,
+      title:
+        "feat(autobet): wire Kalshi live execution adapter + 3-factor arming gate",
+      primaryOwnerRole: "security/operator",
+      assigneeName: "Tariq Al-Mansoor",
+      assigneeEmail: "security@bookdeskops.com",
+      inboxDispatchRoute: "inbox://security/red-team",
+      coPilotReviewerRole: "RISK_DESK_ANALYST",
+      coPilotReviewerName: "Elena Rostova",
+      linkedPrsOrIssues: ["PR #126", "TOOL-03"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Tariq Al-Mansoor & Elena Rostova and merged to main (3aa16da) with market-index pin update in PR #126 (e0b05f4).",
+      verificationCommand: "bun test tests/kalshi_live_execution.test.ts",
+    },
+    {
+      itemRef: "PR-119",
+      kind: "GITHUB_PR",
+      number: 119,
+      title: "chore(ci): scope verify job to PR-changed files and plugins",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "client/seam",
+      coPilotReviewerName: "Soren Lindqvist",
+      linkedPrsOrIssues: [
+        "ISSUE-96",
+        "ISSUE-93",
+        "ISSUE-80",
+        "ISSUE-79",
+        "ISSUE-78",
+      ],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Marcus Vance & Soren Lindqvist and merged to main (3c87c7d), resolving #96, #93, #80, #79, #78, and #94.",
+      verificationCommand: "bun run test:market-index",
+    },
+    {
+      itemRef: "PR-104",
+      kind: "GITHUB_PR",
+      number: 104,
+      title:
+        "fix(f402): resolve bearer token from session.authorizationHeader + default wagers capture to betTime (#101, #103)",
+      primaryOwnerRole: "operator",
+      assigneeName: "Marcus Vance",
+      assigneeEmail: "ops-desk@bookdeskops.com",
+      inboxDispatchRoute: "inbox://ops-desk/triage",
+      coPilotReviewerRole: "settlement",
+      coPilotReviewerName: "Devon Brooks",
+      linkedPrsOrIssues: ["ISSUE-103", "ISSUE-101"],
+      resolutionStatus: "FIXED_AND_MERGED",
+      reviewAndMergeNote:
+        "Reviewed by Marcus Vance & Devon Brooks and merged to main (80014a4), resolving #103 and #101.",
+      verificationCommand: "bun test tests/f402_pending_bridge3b.test.ts",
+    },
+  ] as const;
 
 export interface WagerSurveillanceAndAutobetSummary {
   readonly totalClientProfiles: number;
@@ -3538,6 +3712,9 @@ export interface GovernanceReport {
     readonly weakestRoleIds: readonly DeskRoleId[];
     readonly weakestPlaneId: DeskRoleSpec["plane"];
     readonly projectedTeamHealthScoreAfterEnhancements: number;
+    readonly githubIssuesTriagedCount: number;
+    readonly githubIssuesResolvedCount: number;
+    readonly githubPrsReviewedAndMergedCount: number;
   };
   readonly taskAudit: TaskAuditSummary;
   readonly channelIntegrations: readonly ChannelIntegrationSpec[];
@@ -3561,16 +3738,25 @@ export function resolveDeskRolesFromText(raw: string | null): DeskRoleId[] {
   const lower = raw.toLowerCase();
   const matched = new Set<DeskRoleId>();
 
-  if (lower.includes("security/operator") || lower.includes("desk security owner")) {
+  if (
+    lower.includes("security/operator") ||
+    lower.includes("desk security owner")
+  ) {
     matched.add("security/operator");
   }
   if (
     /\boperator\b/.test(lower) &&
-    (!lower.includes("security/operator") || lower.includes("+ operator") || lower.includes("operator +"))
+    (!lower.includes("security/operator") ||
+      lower.includes("+ operator") ||
+      lower.includes("operator +"))
   ) {
     matched.add("operator");
   }
-  if (lower.includes("client/seam") || lower.includes("client") || lower.includes("seam")) {
+  if (
+    lower.includes("client/seam") ||
+    lower.includes("client") ||
+    lower.includes("seam")
+  ) {
     matched.add("client/seam");
   }
   if (lower.includes("settlement")) {
@@ -3623,7 +3809,10 @@ function extractTrackedRepoPaths(text: string): string[] {
 function verifyRepoPaths(
   citedPaths: readonly string[],
   root: string,
-): { readonly verifiedPaths: readonly string[]; readonly missingPaths: readonly string[] } {
+): {
+  readonly verifiedPaths: readonly string[];
+  readonly missingPaths: readonly string[];
+} {
   const verifiedPaths: string[] = [];
   const missingPaths: string[] = [];
   for (const rel of citedPaths) {
@@ -3644,7 +3833,10 @@ function extractRunnableCommand(text: string): string | null {
 function computeSlaState(
   expiryIso: string | null,
   nowMs: number,
-): { readonly daysUntilExpiry: number | null; readonly slaState: GovernedTask["slaState"] } {
+): {
+  readonly daysUntilExpiry: number | null;
+  readonly slaState: GovernedTask["slaState"];
+} {
   if (expiryIso === null) {
     return { daysUntilExpiry: null, slaState: "NO_EXPIRY" };
   }
@@ -3692,7 +3884,10 @@ export function parseRemainingTasksMarkdown(
 
       const blockLines: string[] = [];
       let j = i + 1;
-      while (j < lines.length && (lines[j] === "" || /^\s{2,}\S/.test(lines[j] ?? ""))) {
+      while (
+        j < lines.length &&
+        (lines[j] === "" || /^\s{2,}\S/.test(lines[j] ?? ""))
+      ) {
         blockLines.push(lines[j] ?? "");
         j++;
       }
@@ -3703,8 +3898,9 @@ export function parseRemainingTasksMarkdown(
       const ownerMatch = /^\s+- \*\*Owner:\*\* (.+)$/m.exec(blockText);
       const goalMatch = /^\s+- \*\*Goal:\*\* (.+)$/m.exec(blockText);
       const directionMatch = /^\s+- \*\*Direction:\*\* (.+)$/m.exec(blockText);
-      const doneWhenMatch =
-        /^\s+- \*\*(?:Done when|Exit):\*\* (.+)$/m.exec(blockText);
+      const doneWhenMatch = /^\s+- \*\*(?:Done when|Exit):\*\* (.+)$/m.exec(
+        blockText,
+      );
       const blockedByMatch = /^\s+- \*\*Blocked by:\*\* (.+)$/m.exec(blockText);
       const expiryMatch =
         /\*\*Expiry:\*\*[^\n]*?\*\*(\d{4}-\d{2}-\d{2})\*\*/m.exec(blockText);
@@ -3737,7 +3933,8 @@ export function parseRemainingTasksMarkdown(
       if (goal !== null && goal.length >= 15) completionPct += 20;
       if (direction !== null && direction.length >= 15) completionPct += 20;
       if (doneWhen !== null && blockedBy !== null) completionPct += 15;
-      if (citedPaths.length > 0 && missingPaths.length === 0) completionPct += 10;
+      if (citedPaths.length > 0 && missingPaths.length === 0)
+        completionPct += 10;
       if (canCloseByBasis) completionPct += 5;
 
       let auditVerdict: TaskAuditVerdict = "ON_TRACK_WITH_DIRECTION";
@@ -4384,7 +4581,9 @@ export function buildGovernanceReport(
     );
     const ownedGates = oracleGates.filter((g) => g.ownerRole === roleId);
     const gatesTotal =
-      roleId === "RISK_DESK_ANALYST" ? ownedGates.length + 1 : ownedGates.length;
+      roleId === "RISK_DESK_ANALYST"
+        ? ownedGates.length + 1
+        : ownedGates.length;
     const gatesReady =
       ownedGates.filter((g) => g.status === "ready").length +
       (roleId === "RISK_DESK_ANALYST" && PROBATION_REVIEW_SLA_HOURS === 24
@@ -4500,14 +4699,17 @@ export function buildGovernanceReport(
     "upstream-stakeholder",
   ];
 
-  const planeLeadRoleMap: Readonly<Record<DeskRoleSpec["plane"], DeskRoleId>> = {
-    "ops-execution": "operator",
-    "risk-settlement": "settlement",
-    "security-compliance": "security/operator",
-    "upstream-stakeholder": "business-owner",
-  };
+  const planeLeadRoleMap: Readonly<Record<DeskRoleSpec["plane"], DeskRoleId>> =
+    {
+      "ops-execution": "operator",
+      "risk-settlement": "settlement",
+      "security-compliance": "security/operator",
+      "upstream-stakeholder": "business-owner",
+    };
 
-  const planeTelemetryHeadlines: Readonly<Record<DeskRoleSpec["plane"], string>> = {
+  const planeTelemetryHeadlines: Readonly<
+    Record<DeskRoleSpec["plane"], string>
+  > = {
     "ops-execution": `3/3 oracle gates ready · 137 pinned CDN assets · ${baseTelemetry.comboUniqueness.cfbIndexGames} CFB games indexed`,
     "risk-settlement": `${formatUsdCompact(baseTelemetry.backtest4Wk.totalCounterfactualSavingsUsd4Wk)} 4wk counterfactual savings · +${baseTelemetry.backtest4Wk.holdSwingBps} bps hold swing`,
     "security-compliance": `P0.6 expiry 2026-12-03 · ${formatUsdCompact(baseTelemetry.crossDomainBridge.priorityUsd)} cross-domain priority exposure`,
@@ -4759,9 +4961,7 @@ export function buildGovernanceReport(
     }
   }
 
-  const minRoleScore = Math.min(
-    ...ownerScorecards.map((s) => s.weightScore),
-  );
+  const minRoleScore = Math.min(...ownerScorecards.map((s) => s.weightScore));
   const weakestRoleIds = ownerScorecards
     .filter((s) => s.weightScore === minRoleScore)
     .map((s) => s.roleId);
@@ -4903,7 +5103,8 @@ export function buildGovernanceReport(
       ownerScorecards.length,
   );
   const inboxPendingAckTotal = ownerScorecards.filter(
-    (s) => s.inboxStatus === "ACK_PENDING" || s.inboxStatus === "ESCALATED_TO_LEAD",
+    (s) =>
+      s.inboxStatus === "ACK_PENDING" || s.inboxStatus === "ESCALATED_TO_LEAD",
   ).length;
   const gatePassed = findings.every((f) => f.severity !== "error");
 
@@ -5409,7 +5610,13 @@ export function buildGovernanceDashboardSection(
       "### Completed Task Evidence & Basis Audit (`[x]` Verified Complete)",
       "",
       ...markdownTable(
-        ["Task / Ref", "Basis", "Verified On-Disk Evidence", "Readiness", "Audit Verdict"],
+        [
+          "Task / Ref",
+          "Basis",
+          "Verified On-Disk Evidence",
+          "Readiness",
+          "Audit Verdict",
+        ],
         doneTaskRows,
       ),
       "",
@@ -5445,7 +5652,6 @@ export function renderStandaloneGovernanceHtml(
   const doneTasks = report.tasks.filter((t) => t.status === "done");
   const bt = valueTelemetry.backtest4Wk;
   const br = valueTelemetry.crossDomainBridge;
-  const cu = valueTelemetry.comboUniqueness;
   const lf = valueTelemetry.liveSyndicateFeed;
 
   const roleFilterButtons = [
@@ -5587,7 +5793,9 @@ export function renderStandaloneGovernanceHtml(
   const decisionLogRowsHtml = ws.decisionAuditLog
     .map((d) => {
       const stateTone =
-        d.nextState === "approved" || d.nextState === "filled" || d.nextState === "settled"
+        d.nextState === "approved" ||
+        d.nextState === "filled" ||
+        d.nextState === "settled"
           ? "ok"
           : d.nextState === "rejected" || d.nextState === "clamped_donor"
             ? "bad"
@@ -5938,7 +6146,10 @@ export function renderStandaloneGovernanceHtml(
       const pathsHtml =
         t.verifiedPaths.length > 0
           ? t.verifiedPaths
-              .map((p) => `<span class="badge muted-badge mono">${escapeHtml(p)}</span>`)
+              .map(
+                (p) =>
+                  `<span class="badge muted-badge mono">${escapeHtml(p)}</span>`,
+              )
               .join(" ")
           : `<span class="muted">No path cited</span>`;
       return `<tr data-roles="${escapeHtml(t.owners.join(","))}" data-priority="${escapeHtml(t.priority)}">
@@ -5986,7 +6197,10 @@ export function renderStandaloneGovernanceHtml(
             <td class="mono">${
               t.verifiedPaths.length > 0
                 ? t.verifiedPaths
-                    .map((p) => `<span class="badge muted-badge mono">${escapeHtml(p)}</span>`)
+                    .map(
+                      (p) =>
+                        `<span class="badge muted-badge mono">${escapeHtml(p)}</span>`,
+                    )
                     .join(" ")
                 : `<span class="muted">Gate suite verified</span>`
             }</td>
@@ -6000,7 +6214,11 @@ export function renderStandaloneGovernanceHtml(
       const cells = DESK_ROLE_IDS.map((roleId) => {
         const perm = row.permissions[roleId];
         const cls =
-          perm === "ALLOWED" ? "ok" : perm === "GUARDED" ? "warn" : "muted-badge";
+          perm === "ALLOWED"
+            ? "ok"
+            : perm === "GUARDED"
+              ? "warn"
+              : "muted-badge";
         return `<td><span class="badge ${cls}">${perm}</span></td>`;
       }).join("");
       return `<tr>
@@ -6675,5 +6893,3 @@ export function renderStandaloneGovernanceHtml(
 </html>
 `;
 }
-
-

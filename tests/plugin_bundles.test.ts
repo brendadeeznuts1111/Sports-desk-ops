@@ -32,6 +32,7 @@ const VERIFY_LOAD_FIXTURES = "tests/fixtures/verify-load";
 const hasEnrichedCustomers = existsSync(
   join(ROOT, "enriched_customers_full.json"),
 );
+const hasDownlineData = existsSync(join(ROOT, "sportsdesk_downline_data.json"));
 
 describe("DSH plugin bundles", () => {
   test("discovers at least one dsh-plugin* bundle at repository root", () => {
@@ -78,7 +79,7 @@ describe("DSH plugin bundles", () => {
           cwd: bundleDir,
           env: {
             ...process.env,
-            ...(isCI && bundle === "dsh-plugin"
+            ...((isCI || !hasDownlineData) && bundle === "dsh-plugin"
               ? { VERIFY_LOAD_FIXTURES }
               : {}),
           },

@@ -132,4 +132,61 @@ describe("daemon endpoint smoke", () => {
       expect(response.status, path).toBe(200);
     }
   });
+
+  test("deliberate error probe /api/test/error answers 500 without stack leak", async () => {
+    const response = await fetch(new URL("/api/test/error", server.url), {
+      signal: AbortSignal.timeout(8_000),
+    });
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.success).toBe(false);
+    expect(body.error).toBe("Internal Server Error");
+    expect(body.stack).toBeUndefined();
+  });
+
+  test("specialized data plane routes respond with valid envelopes", async () => {
+    const specialized = [
+      "/api/graph-feed",
+      "/api/gslive/weblogs",
+      "/api/gslive/session-health?probe=0",
+      "/api/signals/kalshi",
+      "/api/graph/summary",
+      "/api/execution/plan",
+      "/tracker",
+    ];
+    for (const path of specialized) {
+      const response = await fetch(new URL(path, server.url), {
+        signal: AbortSignal.timeout(8_000),
+      });
+      expect(response.status, path).toBeLessThan(500);
+      expect(response.status, path).toBe(200);
+      await response.body?.cancel();
+    }
+  });
+
+  test("streaming SSE route /api/graph/stream answers 200 and emits initial summary frame", async () => {
+    const response = await fetch(new URL("/api/graph/stream", server.url), {
+      signal: AbortSignal.timeout(8_000),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    if (reader) {
+      const { value } = await reader.read();
+      const text = new TextDecoder().decode(value);
+      expect(text).toContain("event: summary");
+      await reader.cancel();
+    }
+  });
+
+  test("raster route /agent-graph.webp answers without 5xx crash", async () => {
+    const response = await fetch(new URL("/agent-graph.webp", server.url), {
+      signal: AbortSignal.timeout(8_000),
+    });
+    // Missing raster is a 404/503 data state, never a 500 handler crash
+    expect(response.status).not.toBe(500);
+    expect([200, 404, 503]).toContain(response.status);
+    await response.body?.cancel();
+  });
 });

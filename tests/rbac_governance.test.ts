@@ -15,6 +15,7 @@ import {
   DESK_WEAKEST_LINK_DIAGNOSTICS,
   F402_PORTAL_ROLES,
   FORENSIC_ACTOR_ROLES,
+  GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER,
   PORTAL_ROLE_CONTRACTS,
   RBAC_PERMISSION_MATRIX,
   RED_TEAM_DRILLS,
@@ -31,6 +32,7 @@ import {
   resolveDeskRolesFromText,
 } from "../lib/rbac_governance.ts";
 import { runGovernanceCli } from "../scripts/governance_check.ts";
+import { resolveSportsdeskDaemonPort } from "../lib/bun_serve_port.ts";
 
 describe("RBAC role taxonomy, team leads, email/inbox accountability & channel bindings", () => {
   test("every DeskRoleId has a complete specification, team lead, @bookdeskops.com email, inbox route, and channel bindings", () => {
@@ -326,15 +328,18 @@ describe("bird's-eye telemetry, 6-guard value attribution & plane rollups", () =
       expect(card.teamLead.length).toBeGreaterThan(5);
       expect(card.email).toContain("@bookdeskops.com");
       expect(card.inboxRoute).toContain("inbox://");
-      expect(["INBOX_ZERO", "ACK_PENDING", "ACTION_SLA_ACTIVE", "ESCALATED_TO_LEAD"]).toContain(
-        card.inboxStatus,
-      );
+      expect([
+        "INBOX_ZERO",
+        "ACK_PENDING",
+        "ACTION_SLA_ACTIVE",
+        "ESCALATED_TO_LEAD",
+      ]).toContain(card.inboxStatus);
       expect(card.primaryChannels.length).toBeGreaterThan(0);
       expect(card.telemetryPulse.length).toBeGreaterThan(5);
       expect(card.valueSummary.length).toBeGreaterThan(5);
-      expect(
-        card.protectedSavingsUsd > 0 || card.priorityExposureUsd > 0,
-      ).toBe(true);
+      expect(card.protectedSavingsUsd > 0 || card.priorityExposureUsd > 0).toBe(
+        true,
+      );
     }
   });
 });
@@ -347,12 +352,8 @@ describe("dashboard section, standalone HTML & CLI", () => {
     const section = buildGovernanceDashboardSection(report);
     expect(section.id).toBe("rbac-governance");
     expect(section.state).toBe("measured");
-    expect(section.body.join("\n")).toContain(
-      "Weakest-Link Bottleneck Radar",
-    );
-    expect(section.body.join("\n")).toContain(
-      "Bird's-Eye Operational Planes",
-    );
+    expect(section.body.join("\n")).toContain("Weakest-Link Bottleneck Radar");
+    expect(section.body.join("\n")).toContain("Bird's-Eye Operational Planes");
     expect(section.body.join("\n")).toContain(
       "Multi-Channel Integration & Escalation Matrix",
     );
@@ -401,7 +402,9 @@ describe("dashboard section, standalone HTML & CLI", () => {
       expect(cp.bridgedPolymarketWallets.length).toBeGreaterThan(0);
       expect(cp.profilingTask.goal.length).toBeGreaterThanOrEqual(20);
       expect(cp.profilingTask.direction.length).toBeGreaterThan(20);
-      expect(cp.profilingTask.verificationCommand).toContain("governance:check");
+      expect(cp.profilingTask.verificationCommand).toContain(
+        "governance:check",
+      );
     }
 
     expect(WEBLOG_MODE_CONTRACTS.map((m) => m.mode)).toEqual([
@@ -470,7 +473,7 @@ describe("dashboard section, standalone HTML & CLI", () => {
       }
     }
 
-    expect([...ROLE_TRADING_WORKSTATIONS.map((w) => w.roleId)].sort()).toEqual(
+    expect(ROLE_TRADING_WORKSTATIONS.map((w) => w.roleId).sort()).toEqual(
       [...DESK_ROLE_IDS].sort(),
     );
     for (const ws of ROLE_TRADING_WORKSTATIONS) {
@@ -520,9 +523,7 @@ describe("dashboard section, standalone HTML & CLI", () => {
       "utf8",
     );
     expect(bridge3cSource).toContain('timeout: { type: "string" }');
-    expect(bridge3cSource).toContain(
-      "--timeout must be a positive integer",
-    );
+    expect(bridge3cSource).toContain("--timeout must be a positive integer");
     expect(bridge3cSource).toContain(
       "...(timeoutMs === undefined ? {} : { timeoutMs })",
     );
@@ -576,6 +577,3 @@ describe("dashboard section, standalone HTML & CLI", () => {
     expect(runGovernanceCli(["--role", "invalid-role"])).toBe(2);
   });
 });
-
-
-

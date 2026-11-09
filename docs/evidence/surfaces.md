@@ -183,7 +183,7 @@ Evidence of absence:
 
 - `services/sportsdesk_webview_server.ts:1137-3145` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
-  404 JSON fallback at `services/sportsdesk_webview_server.ts:3480-3488`. No `/api/desk` prefix is matched.
+  404 JSON fallback at `services/sportsdesk_webview_server.ts:3647-3655`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
   (`tests/capture_apply.test.ts:84,96`; re-measured 2026-11-02 — `tests/api_reference.test.ts`, cited here before, no longer mentions `/api/desk`) and the generator that wrote the spec
   (`scripts/enhance_docs.mjs:115,237,249,269,289,301,321`).
