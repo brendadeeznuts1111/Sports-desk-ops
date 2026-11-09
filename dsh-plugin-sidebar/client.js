@@ -223,6 +223,10 @@ window.__ModuleLoader__.load({
         copyFailed: "Copy failed",
         checking: "checking…",
         current: "current",
+        degraded: "degraded",
+        degradedHint:
+          "The daemon is up, but auth or pipeline checks failed: {reasons}",
+        degradedActionCopy: "Click to copy fix command",
         stale: "stale build (uptime {uptime})",
         staleUnknown: "stale build",
         down: "service down",
@@ -324,7 +328,9 @@ window.__ModuleLoader__.load({
         r2WagersAggregate: "Wagers aggregate",
         r2SinkFresh: "fresh",
         r2SinkStale: "stale",
-        r2SinkState: "{state} · {age}",
+        r2SinkStaleData: "stale data",
+        r2SinkState: "{state} · publish {age}",
+        r2SinkDataAge: "data {age}",
         attentionR2Stale: "R2 sink {sink} is stale ({reason})",
         liveField: "Live",
         risk: "Risk",
@@ -419,6 +425,9 @@ window.__ModuleLoader__.load({
         copyFailed: "复制失败",
         checking: "检测中…",
         current: "已是最新",
+        degraded: "降级",
+        degradedHint: "服务在线，但认证或管线检查未通过：{reasons}",
+        degradedActionCopy: "点击复制修复命令",
         stale: "旧构建（已运行 {uptime}）",
         staleUnknown: "旧构建",
         down: "服务未运行",
@@ -519,7 +528,9 @@ window.__ModuleLoader__.load({
         r2WagersAggregate: "分状态汇总",
         r2SinkFresh: "新鲜",
         r2SinkStale: "过期",
-        r2SinkState: "{state} · {age}",
+        r2SinkStaleData: "数据过期",
+        r2SinkState: "{state} · 发布 {age}",
+        r2SinkDataAge: "数据 {age}",
         attentionR2Stale: "R2 接收端 {sink} 已过期（{reason}）",
         liveField: "进行中",
         risk: "风险",
@@ -626,6 +637,8 @@ window.__ModuleLoader__.load({
       deskHostname: null,
       liveReadsLine: null,
       missing: [],
+      degradedReasons: [],
+      dataStatus: null,
       sources: Object.freeze({
         health: null,
         status: null,
@@ -1000,8 +1013,10 @@ window.__ModuleLoader__.load({
           id: spec.id,
           labelKey: spec.labelKey,
           stale: readBoolean(raw.stale) === true,
+          dataStale: readBoolean(raw.dataStale) === true,
           state: readText(raw.state),
           ageSeconds: readNumber(raw.ageSeconds),
+          dataAgeSeconds: readNumber(raw.dataAgeSeconds),
           reason: readText(raw.reason),
         });
       }
@@ -1493,6 +1508,19 @@ window.__ModuleLoader__.load({
       if (!hasIngress) missing.push("ingress");
       if (missing.length > 0) phase = "stale";
 
+      const degradedReasons = readDegradedReasons(healthBody.degradedReasons);
+      const operationalStatus = readText(healthBody.operationalStatus);
+      const dataStatus = readText(healthBody.dataStatus);
+      const healthStatus = readText(healthBody.status);
+      if (
+        phase === "current" &&
+        (operationalStatus === "degraded" ||
+          healthStatus === "degraded" ||
+          healthStatus === "down")
+      ) {
+        phase = "degraded";
+      }
+
       const healthData =
         statusBody !== null && isRecord(statusBody.health)
           ? statusBody.health
@@ -1534,8 +1562,41 @@ window.__ModuleLoader__.load({
         deskHostname: readText(healthBody.hostname),
         liveReadsLine,
         missing,
+        degradedReasons,
+        dataStatus,
         sources,
       };
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {{ message: string, kind: string, action: string | null, severity: "warn" | "error" }[]}
+     */
+    function readDegradedReasons(value) {
+      if (!Array.isArray(value)) return [];
+      const out = [];
+      for (const entry of value) {
+        if (typeof entry === "string") {
+          out.push({
+            message: entry,
+            kind: "data",
+            action: null,
+            severity: "warn",
+          });
+          continue;
+        }
+        if (!isRecord(entry)) continue;
+        const message = readText(entry.message);
+        if (message === null) continue;
+        const kind = readText(entry.kind) ?? "data";
+        out.push({
+          message,
+          kind,
+          action: readText(entry.action),
+          severity: readText(entry.severity) === "error" ? "error" : "warn",
+        });
+      }
+      return out;
     }
 
     /**
@@ -2418,6 +2479,19 @@ window.__ModuleLoader__.load({
         }
         case "down":
           return t("down");
+        case "degraded": {
+          const operationalReasons = state.degradedReasons.filter(
+            (reason) => reason.kind !== "data",
+          );
+          return operationalReasons.length === 0
+            ? t("degraded")
+            : t("degradedHint", {
+                reasons: operationalReasons
+                  .slice(0, 3)
+                  .map((reason) => reason.message)
+                  .join("; "),
+              });
+        }
         case "unknown":
           return t("unknown");
         default:
@@ -2578,12 +2652,61 @@ window.__ModuleLoader__.load({
       if (
         state.phase !== "stale" &&
         state.phase !== "down" &&
-        state.phase !== "unknown"
+        state.phase !== "unknown" &&
+        state.phase !== "degraded"
       ) {
         return null;
       }
       const content = [];
-      if (state.phase === "stale") {
+      if (state.phase === "degraded") {
+        content.push(
+          h("h2", { key: "heading" }, t("degraded")),
+          h("p", { key: "lead" }, statusText(t, state)),
+          state.degradedReasons.filter((r) => r.kind !== "data").length === 0
+            ? null
+            : h(
+                "ul",
+                { key: "reasons" },
+                state.degradedReasons
+                  .filter((reason) => reason.kind !== "data")
+                  .map((reason) =>
+                  h(
+                    "li",
+                    {
+                      key: reason.message,
+                      "data-severity": reason.severity,
+                    },
+                    reason.message,
+                    reason.action === null
+                      ? null
+                      : h(
+                          "button",
+                          {
+                            key: "action",
+                            type: "button",
+                            className: "spsd-command spsd-reason-action",
+                            title: t("degradedActionCopy"),
+                            onClick: () => {
+                              void (async () => {
+                                try {
+                                  if (navigator.clipboard?.writeText) {
+                                    await navigator.clipboard.writeText(
+                                      reason.action,
+                                    );
+                                  }
+                                } catch {
+                                  /* clipboard blocked */
+                                }
+                              })();
+                            },
+                          },
+                          reason.action,
+                        ),
+                  ),
+                ),
+              ),
+        );
+      } else if (state.phase === "stale") {
         content.push(
           h("h2", { key: "heading" }, t("staleFixTitle")),
           h("p", { key: "lead" }, t("staleFixLead")),
@@ -3247,7 +3370,21 @@ window.__ModuleLoader__.load({
       const state =
         sink.state ??
         (sink.stale ? t("r2SinkStale") : t("r2SinkFresh"));
-      return t("r2SinkState", { state, age });
+      const parts = [t("r2SinkState", { state, age })];
+      if (sink.dataAgeSeconds !== null) {
+        parts.push(
+          t("r2SinkDataAge", {
+            age: formatAgeSeconds(t, sink.dataAgeSeconds),
+          }),
+        );
+      }
+      const children = [h("span", { key: "r2-text" }, parts.join(" · "))];
+      if (sink.dataStale === true) {
+        children.push(
+          chip(t("r2SinkStaleData"), "warn", `r2-data-stale-${sink.id}`),
+        );
+      }
+      return h("span", { className: "spsd-kv-inline" }, children);
     }
 
     /**
@@ -3797,7 +3934,7 @@ window.__ModuleLoader__.load({
             t(sink.labelKey),
             formatR2SinkValue(t, sink, now),
             `r2-${sink.id}`,
-            sink.stale ? "warn" : undefined,
+            sink.stale || sink.dataStale ? "warn" : undefined,
           ),
         );
         blocks.push(
@@ -4066,7 +4203,8 @@ window.__ModuleLoader__.load({
       if (
         state.phase === "down" ||
         state.phase === "stale" ||
-        state.phase === "unknown"
+        state.phase === "unknown" ||
+        state.phase === "degraded"
       ) {
         items.push({
           key: "service",
@@ -4116,6 +4254,16 @@ window.__ModuleLoader__.load({
               value: agentsProv.source ?? "",
             }),
           });
+        }
+        if (state.dataStatus === "stale") {
+          for (const reason of state.degradedReasons) {
+            if (reason.kind !== "data") continue;
+            items.push({
+              key: `data-${reason.message}`,
+              source: t("r2PipelinesBlock"),
+              detail: reason.message,
+            });
+          }
         }
         if (kpisPayload.r2Sinks !== null) {
           for (const sink of kpisPayload.r2Sinks) {
@@ -4228,7 +4376,7 @@ window.__ModuleLoader__.load({
 .spsd-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .spsd-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-state-idle-primary); }
 .spsd-card[data-phase='current'] .spsd-dot { background: var(--dsw-alias-state-success-primary); }
-.spsd-card[data-phase='stale'] .spsd-dot, .spsd-card[data-phase='unknown'] .spsd-dot { background: var(--dsw-alias-state-warn-primary); }
+.spsd-card[data-phase='degraded'] .spsd-dot, .spsd-card[data-phase='stale'] .spsd-dot, .spsd-card[data-phase='unknown'] .spsd-dot { background: var(--dsw-alias-state-warn-primary); }
 .spsd-card[data-phase='down'] .spsd-dot { background: var(--dsw-alias-state-error-primary); }
 .spsd-status-text { font-size: 14px; font-weight: 500; }
 .spsd-status .spsd-chip { margin-left: auto; }
@@ -4258,6 +4406,8 @@ window.__ModuleLoader__.load({
 .spsd-callout-fix { margin-top: 12px; }
 .spsd-error { margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
 .spsd-command { display: inline-block; margin-top: 8px; padding: 4px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm, 6px); background: var(--dsw-alias-bg-base); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; }
+.spsd-reason-action { display: block; margin-top: 6px; cursor: pointer; text-align: left; color: inherit; }
+.spsd-callout li[data-severity='error'] { color: var(--dsw-alias-state-error-primary); }
 .spsd-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
 .spsd-link { color: var(--dsw-alias-brand-primary); font-size: 12px; text-decoration: none; }
 .spsd-link:hover { text-decoration: underline; }
@@ -4461,6 +4611,7 @@ window.__ModuleLoader__.load({
           healthLatencyMs: state.healthLatencyMs,
           statusLatencyMs: state.statusLatencyMs,
           error: state.error,
+          degradedReasons: state.degradedReasons,
           live: {
             state: live.state,
             url: live.url,

@@ -237,6 +237,9 @@ check("every file the bundle ships exists", () => {
  */
 const FIXTURE_HEALTH = {
   status: "healthy",
+  operationalStatus: "ok",
+  dataStatus: "ok",
+  httpStatus: 200,
   port: 4020,
   hostname: "localhost",
   url: "http://localhost:4020/",
@@ -245,6 +248,37 @@ const FIXTURE_HEALTH = {
   runtime: "Bun v1.4.4 (arm64-darwin)",
   ingress: { proxied: false, trustProxy: false },
   nodeEnv: "development",
+  version: {
+    gitSha: "fixture",
+    buildTime: "2026-11-04T18:13:39.531Z",
+    nodeEnv: "development",
+  },
+  checks: {
+    daemon: "ok",
+    auth: {
+      f402: { status: "ok", source: "session-file", expiresInSeconds: 3600 },
+      gslive: { status: "ok", source: "keychain", probeStatus: 200 },
+    },
+    pipelines: {
+      r2Fresh: 4,
+      r2Total: 4,
+      r2StaleKeys: [],
+      dataStaleKeys: [],
+      checks: {
+        ticker: "ok",
+        gslive: "ok",
+        weblog: "ok",
+        wagers: "ok",
+      },
+    },
+  },
+  sources: {
+    auth: {
+      f402: { status: "ok", source: "session-file", expiresInSeconds: 3600 },
+      gslive: { status: "ok", source: "keychain", probeStatus: 200 },
+    },
+  },
+  degradedReasons: [],
 };
 
 const FIXTURE_STATUS = {
@@ -415,6 +449,8 @@ const FIXTURE_KPIS = {
         state: "fresh",
         ageSeconds: 100,
         reason: "2m old",
+        dataAgeSeconds: 3_600,
+        dataStale: false,
       },
     },
   },

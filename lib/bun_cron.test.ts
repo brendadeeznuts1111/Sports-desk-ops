@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  bunCronLaunchAgentPlistPath,
+  bunCronMacLogPaths,
+  BUN_CRON_OS_REREGISTER_EXAMPLE,
   BUN_CRON_V14_BLOG_LOCAL_TZ_SHIP_NOTE,
   BUN_CRON_V14_BLOG_LOCAL_TZ_URL,
   BUN_CRON_OS_REGISTER_EXAMPLE,
@@ -111,10 +114,21 @@ describe("bun_cron", () => {
 
   test("OS-level doc examples exported", () => {
     expect(BUN_CRON_OS_REGISTER_EXAMPLE).toContain("weekly-report");
+    expect(BUN_CRON_OS_REREGISTER_EXAMPLE).toContain("replaces");
     expect(BUN_CRON_PARSE_EXAMPLE).toContain("Bun.cron.parse");
     expect(BUN_CRON_OS_WORKER_SCHEDULED_EXAMPLE).toContain(
-      "scheduled(controller)",
+      "scheduled(controller: Bun.CronController)",
     );
+  });
+
+  test("macOS launchd paths follow bun.cron.<title> convention", () => {
+    const title = "sportsdesk-health-watcher";
+    expect(bunCronLaunchAgentPlistPath(title)).toContain(
+      `LaunchAgents/bun.cron.${title}.plist`,
+    );
+    const logs = bunCronMacLogPaths(title);
+    expect(logs.stdout).toBe(`/tmp/bun.cron.${title}.stdout.log`);
+    expect(logs.stderr).toBe(`/tmp/bun.cron.${title}.stderr.log`);
   });
 
   test("parse quarter-hour cadence", () => {

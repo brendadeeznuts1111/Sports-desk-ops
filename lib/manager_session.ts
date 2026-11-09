@@ -14,6 +14,7 @@ import { env, secrets } from "bun";
 
 import {
   GSID_LEGACY_NAME,
+  GSLIVE_GANCHROW_SESSION_NAME,
   GSLIVE_SESSION_ID_NAME,
   gsliveSessionIdFromEnv,
 } from "./secrets.ts";
@@ -54,6 +55,11 @@ export const GSID_SECRET_LEGACY = {
   service: "sportsdesk-gslive",
   name: "GSID",
 } as const;
+/** OS-keychain `x-gs-session` gate (`ganchrowSessionId`) paired with {@link GSID_SECRET}. */
+export const GANCHROW_SESSION_SECRET = {
+  service: GSID_SECRET.service,
+  name: GSLIVE_GANCHROW_SESSION_NAME,
+} as const;
 
 /** Minimal injectable read surface so tests never touch the real keychain. */
 export interface SecretReader {
@@ -73,6 +79,8 @@ export type ManagerSessionSource =
 export interface ActiveManagerSession {
   readonly source: Exclude<ManagerSessionSource, "none">;
   readonly cookieHeader: string;
+  /** Sent as `x-gs-session` on `ajax.php` / `betLobbyV2` when non-empty. */
+  readonly sessionGate: string;
 }
 
 export interface NoManagerSession {
@@ -131,11 +139,12 @@ export async function resolveManagerSession(
   secretReader: SecretReader | null = defaultSecretReader(),
 ): Promise<ManagerSession> {
   const envCookie = cookieHeaderFromGsidCookie(environment);
+  const sessionGate = await resolveManagerSessionGate(environment, secretReader);
   if (envCookie !== "")
-    return { source: "env-cookie", cookieHeader: envCookie };
+    return { source: "env-cookie", cookieHeader: envCookie, sessionGate };
   const fileCookie = cookieHeaderFromSessionFile(environment);
   if (fileCookie !== "")
-    return { source: "session-file", cookieHeader: fileCookie };
+    return { source: "session-file", cookieHeader: fileCookie, sessionGate };
   if (secretReader !== null) {
     try {
       const gsid =
@@ -147,6 +156,7 @@ export async function resolveManagerSession(
         return {
           cookieHeader: cookieHeaderFromValue(gsid, environment.GA),
           source: "keychain",
+          sessionGate,
         };
       }
     } catch {
@@ -155,7 +165,7 @@ export async function resolveManagerSession(
   }
   const cookieHeader = cookieHeaderFromEnv(environment);
   if (cookieHeader === "") return { source: "none", cookieHeader: "" };
-  return { source: "env", cookieHeader };
+  return { source: "env", cookieHeader, sessionGate };
 }
 
 /** Resolve, or fail closed with the provisioning path. Never echoes a cookie value. */
@@ -179,4 +189,37 @@ export function sessionGateFromEnv(
   environment: Readonly<Record<string, string | undefined>>,
 ): string {
   return (environment.GS_SESSION ?? "").trim();
+}
+
+/** Resolve `x-gs-session`: `GS_SESSION` env, then keychain `GSLIVE_GANCHROW_SESSION`. */
+export async function resolveManagerSessionGate(
+  environment: Readonly<Record<string, string | undefined>> = env,
+  secretReader: SecretReader | null = defaultSecretReader(),
+): Promise<string> {
+  const fromEnv = sessionGateFromEnv(environment);
+  if (fromEnv !== "") return fromEnv;
+  if (secretReader === null) return "";
+  try {
+    const fromKeychain =
+      (await secretReader.get(GANCHROW_SESSION_SECRET))?.trim() ?? "";
+    return fromKeychain;
+  } catch {
+    return "";
+  }
+}
+
+/** Persist the browser `ganchrowSessionId` for dual-auth ajax probes (never logged). */
+export async function writeManagerSessionGate(value: string): Promise<void> {
+  const trimmed = value.trim();
+  if (trimmed === "") return;
+  try {
+    await Bun.secrets.set({
+      service: GANCHROW_SESSION_SECRET.service,
+      name: GANCHROW_SESSION_SECRET.name,
+      value: trimmed,
+      persist: "local",
+    } as never);
+  } catch {
+    /* best effort */
+  }
 }

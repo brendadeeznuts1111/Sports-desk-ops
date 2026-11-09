@@ -92,16 +92,20 @@ job.stop(); // cancel (or let \`using\` dispose)` as const;
 export const BUN_CRON_OS_REGISTER_EXAMPLE =
   `await Bun.cron("./worker.ts", "30 2 * * MON", "weekly-report");` as const;
 
+/** Same \`title\` overwrites schedule in place — no duplicate OS job. */
+export const BUN_CRON_OS_REREGISTER_EXAMPLE = `await Bun.cron("./worker.ts", "0 * * * *", "my-job"); // every hour
+await Bun.cron("./worker.ts", "*/15 * * * *", "my-job"); // replaces: every 15 min` as const;
+
 /** Next fire; local TZ by default — pass third arg `{ tz: "UTC" }` for UTC wall clock. */
 export const BUN_CRON_PARSE_EXAMPLE =
   `const next = Bun.cron.parse("*/15 * * * *");` as const;
 
 /** OS worker module — Bun invokes on schedule (async OK; waits before exit). */
 export const BUN_CRON_OS_WORKER_SCHEDULED_EXAMPLE = `export default {
-  async scheduled(controller) {
-    // controller.cron === "30 2 * * 1"
-    // controller.scheduledTime === 1737340200000
-    await doWork();
+  scheduled(controller: Bun.CronController) {
+    console.log(controller.cron); // "30 2 * * 1"
+    console.log(controller.type); // "scheduled"
+    console.log(controller.scheduledTime); // Date.now() at invocation
   },
 };` as const;
 
@@ -184,9 +188,26 @@ export interface OsCronInstallOptions {
   readonly title: string;
 }
 
+const OS_CRON_TITLE_PATTERN = /^[\w-]+$/;
+
+/**
+ * Register (or update) an OS-level job via `await Bun.cron(path, schedule, title)`.
+ *
+ * - `path`: absolute path to the worker module (`osCronWorkerPath`).
+ * - `schedule`: five-field cron or nickname (`@daily`, …).
+ * - `title`: unique id — **alphanumeric, hyphens, underscores only** (no dots).
+ *
+ * Re-registering with the **same title** overwrites the existing job in place (new schedule,
+ * no duplicate launchd/crontab entry).
+ */
 export async function installOsCronJob(
   options: OsCronInstallOptions,
 ): Promise<void> {
+  if (!OS_CRON_TITLE_PATTERN.test(options.title)) {
+    throw new Error(
+      `Cron title must contain only alphanumeric characters, hyphens, and underscores (got ${JSON.stringify(options.title)})`,
+    );
+  }
   await Bun.cron(
     osCronWorkerPath(options.workerImportMetaUrl),
     options.schedule,

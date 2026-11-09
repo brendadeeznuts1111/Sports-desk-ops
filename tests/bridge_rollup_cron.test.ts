@@ -103,6 +103,7 @@ function cycle(
     now: () => nowMs,
     spawnJob: OK_SPAWN,
     readArtifact: async (job) => artifacts[job.id] ?? null,
+    ensureGsliveSession: async () => {},
     ...overrides,
   });
 }
@@ -137,7 +138,7 @@ describe("bridge rollup cycle", () => {
     const result = await cycle(root, artifacts);
 
     expect(result.alerts).toEqual([]);
-    expect(result.jobs).toHaveLength(4);
+    expect(result.jobs).toHaveLength(6);
     expect(result.jobs.every((job) => job.ok)).toBe(true);
     expect(result.updatedAt).toBe(new Date(NOW).toISOString());
 
@@ -522,6 +523,8 @@ describe("bridge rollup cycle", () => {
 
     expect(calls.map((call) => call.id)).toEqual(["bridge3c", "weblog"]);
     expect(result.jobs.map((job) => job.id)).toEqual(["bridge3c", "weblog"]);
+    const openToEpoch = String(Math.floor(NOW / 1000));
+    const openFromEpoch = String(Math.floor(NOW / 1000) - 86_400);
     expect(calls[0]?.argv).toEqual([
       "bun",
       "--no-orphans",
@@ -529,6 +532,10 @@ describe("bridge rollup cycle", () => {
       "run",
       "scripts/gslive_tally_bridge3c.ts",
       "--fetch-open",
+      "--open-from",
+      openFromEpoch,
+      "--open-to",
+      openToEpoch,
       "--save-capture",
       join(root, "scratch", "bridge-rollup", "open-bets.json"),
       "--out",
@@ -550,6 +557,8 @@ describe("bridge rollup cycle", () => {
       "bridge3b",
       "bridge3c",
       "weblog",
+      "wagers-by-state",
+      "wagers-publish",
     ]);
   });
 
@@ -589,10 +598,29 @@ describe("bridge rollup cycle", () => {
       "run",
       "scripts/gslive_tally_bridge3c.ts",
       "--fetch-open",
+      "--open-from",
+      "{openFromEpoch}",
+      "--open-to",
+      "{openToEpoch}",
       "--save-capture",
       "{root}/scratch/bridge-rollup/open-bets.json",
       "--out",
       "{root}/scratch/bridge-rollup/bridge3c.json",
+    ]);
+    expect(byId("wagers-by-state").args).toEqual([
+      "bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/gslive_wagers_by_state.ts",
+      "--live",
+    ]);
+    expect(byId("wagers-publish").args).toEqual([
+      "bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/publish_wagers_snapshot.ts",
     ]);
     expect(byId("bridge3c").requiredEnv).toEqual([
       "GSLIVE_SESSION_ID",
@@ -846,6 +874,55 @@ describe("lastBridgeJobFailureHint", () => {
   });
 });
 
+describe("GSLive session JIT refresh", () => {
+  test("maps Cloudflare block to manual GSID cron message", async () => {
+    const root = makeRoot();
+    const { gsliveCloudflareBlockedError } = await import(
+      "../lib/gslive_auto_session.ts"
+    );
+    const result = await runBridgeRollupCycle({
+      root,
+      env: { GSID: "x", F402_AGENT_ID: "A" },
+      jobs: ["bridge3c"],
+      ensureGsliveSession: async () => {
+        throw gsliveCloudflareBlockedError();
+      },
+      spawnJob: async () => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+      }),
+      readArtifact: async () => null,
+    });
+    expect(result.jobs[0]?.error).toContain("Manual dual-auth required");
+    expect(result.jobs[0]?.error).toContain("set-gate");
+  });
+
+  test("skips GSLive jobs when ensureGsliveSession fails", async () => {
+    const root = makeRoot();
+    let spawned = false;
+    const result = await runBridgeRollupCycle({
+      root,
+      env: { GSID: "x", F402_AGENT_ID: "A" },
+      jobs: ["bridge3c", "wagers-by-state"],
+      ensureGsliveSession: async () => {
+        throw new Error("Mock auth fail");
+      },
+      spawnJob: async () => {
+        spawned = true;
+        return { exitCode: 0, stdout: "", stderr: "", timedOut: false };
+      },
+      readArtifact: async () => null,
+    });
+    expect(spawned).toBe(false);
+    expect(result.jobs).toHaveLength(2);
+    expect(result.jobs.every((job) => job.ok === false)).toBe(true);
+    expect(result.jobs[0]?.error).toContain("Mock auth fail");
+    expect(result.jobs[1]?.error).toContain("Mock auth fail");
+  });
+});
+
 describe("bridge job failure surfacing", () => {
   test("records stdout fatal in the cron job error field", async () => {
     const root = makeRoot();
@@ -859,6 +936,7 @@ describe("bridge job failure surfacing", () => {
       root,
       env: { GSID: "x", F402_AGENT_ID: "A" },
       jobs: ["bridge3c"],
+      ensureGsliveSession: async () => {},
       spawnJob: failSpawn,
       readArtifact: async () => null,
     });

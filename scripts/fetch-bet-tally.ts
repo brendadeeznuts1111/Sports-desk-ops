@@ -27,7 +27,9 @@ import { parseArgs } from "node:util";
 import { sessionFromGsliveProfile } from "../lib/gslive_session.ts";
 import {
   requireManagerSession,
+  resolveManagerSessionGate,
   sessionGateFromEnv,
+  writeManagerSessionGate,
 } from "../lib/manager_session.ts";
 
 import { z } from "zod";
@@ -205,9 +207,12 @@ export {
   GSID_SECRET,
   GSID_SECRET_PRE_RENAME,
   GSID_SECRET_LEGACY,
+  GANCHROW_SESSION_SECRET,
   resolveManagerSession,
+  resolveManagerSessionGate,
   requireManagerSession,
   sessionGateFromEnv,
+  writeManagerSessionGate,
 } from "../lib/manager_session.ts";
 export type {
   SecretReader,
@@ -438,8 +443,21 @@ export interface FetchBetRowsOptions {
   readonly url?: string;
 }
 
-/** Fetch the raw wager rows for one state filter (default All) from `ajax.php`. */
-export async function fetchBetReportRows(
+const MIN_BET_REPORT_WINDOW_SEC = 3_600;
+
+function isRetryableBetReportError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const name = error.name;
+  const msg = error.message.toLowerCase();
+  if (name === "TimeoutError" || name === "AbortError") return true;
+  return (
+    msg.includes("econnreset") ||
+    msg.includes("timed out") ||
+    msg.includes("timeout")
+  );
+}
+
+async function fetchBetReportRowsOnce(
   opts: FetchBetRowsOptions,
 ): Promise<readonly unknown[]> {
   const payload = await postBetReport({
@@ -456,6 +474,28 @@ export async function fetchBetReportRows(
     ...(opts.url === undefined ? {} : { url: opts.url }),
   });
   return extractBetRows(payload);
+}
+
+/** Fetch the raw wager rows for one state filter (default All) from `ajax.php`. */
+export async function fetchBetReportRows(
+  opts: FetchBetRowsOptions,
+): Promise<readonly unknown[]> {
+  let fromEpochSec = opts.fromEpochSec;
+  let toEpochSec = opts.toEpochSec;
+  for (;;) {
+    try {
+      return await fetchBetReportRowsOnce({
+        ...opts,
+        fromEpochSec,
+        toEpochSec,
+      });
+    } catch (error) {
+      if (!isRetryableBetReportError(error)) throw error;
+      const span = toEpochSec - fromEpochSec;
+      if (span <= MIN_BET_REPORT_WINDOW_SEC) throw error;
+      toEpochSec = fromEpochSec + Math.floor(span / 2);
+    }
+  }
 }
 
 /**
@@ -716,9 +756,16 @@ async function main(args: readonly string[]): Promise<void> {
       ? await requireManagerSession(env)
       : await sessionFromGsliveProfile({ profileDir: webviewProfile });
   const cookieHeader = session.cookieHeader;
-  let sessionGate = sessionGateFromEnv(env);
+  let sessionGate =
+    "sessionGate" in session && session.sessionGate !== ""
+      ? session.sessionGate
+      : await resolveManagerSessionGate(env);
+  if (sessionGate === "") {
+    sessionGate = sessionGateFromEnv(env);
+  }
   if (values["bootstrap-session"] && sessionGate === "") {
     sessionGate = await bootstrapGanchrowSession({ cookieHeader });
+    await writeManagerSessionGate(sessionGate);
   }
 
   const result = await runBetTally({

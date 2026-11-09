@@ -16,6 +16,7 @@ import {
   GSID_SECRET,
   requireManagerSession,
   resolveManagerSession,
+  resolveManagerSessionGate,
   GSLIVE_NUMERIC_STATE_MAP,
   parseBetReportRequest,
   runBetTally,
@@ -535,5 +536,34 @@ describe("keychain-first manager session", () => {
       reader("   "),
     );
     expect(session.source).toBe("env");
+  });
+
+  test("resolveManagerSessionGate prefers GS_SESSION then keychain", async () => {
+    const gateReader = {
+      async get(options: { name: string }) {
+        if (options.name === "GSLIVE_GANCHROW_SESSION") return "gate-from-keychain";
+        return null;
+      },
+    };
+    expect(await resolveManagerSessionGate({ GS_SESSION: "env-gate" })).toBe(
+      "env-gate",
+    );
+    expect(await resolveManagerSessionGate({}, gateReader)).toBe(
+      "gate-from-keychain",
+    );
+  });
+
+  test("resolved sessions carry sessionGate for dual-auth fetches", async () => {
+    const gateReader = {
+      async get(options: { name: string }) {
+        if (options.name === "GSLIVE_GANCHROW_SESSION") return "paired-gate";
+        if (options.name === "GSLIVE_SESSION_ID") return "paired-gsid";
+        return null;
+      },
+    };
+    const session = await resolveManagerSession({}, gateReader);
+    if (session.source === "none") throw new Error("expected active session");
+    expect(session.sessionGate).toBe("paired-gate");
+    expect(session.cookieHeader).toBe("GSID=paired-gsid");
   });
 });

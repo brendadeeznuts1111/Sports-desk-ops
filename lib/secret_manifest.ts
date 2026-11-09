@@ -172,7 +172,7 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
   },
   {
     envName: "GS_SESSION",
-    keychainName: null,
+    keychainName: "GSLIVE_GANCHROW_SESSION",
     groups: ["gslive"],
     inject: false,
     description:

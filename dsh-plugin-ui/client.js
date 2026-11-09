@@ -72,6 +72,7 @@ window.__ModuleLoader__.load({
         brand: "SportsDesk",
         checking: "checking…",
         current: "current",
+        degraded: "degraded",
         stale: "stale build (uptime {uptime})",
         staleUnknown: "stale build",
         down: "service down",
@@ -84,6 +85,7 @@ window.__ModuleLoader__.load({
         brand: "SportsDesk",
         checking: "检测中…",
         current: "已是最新",
+        degraded: "降级",
         stale: "旧构建（已运行 {uptime}）",
         staleUnknown: "旧构建",
         down: "服务未运行",
@@ -247,8 +249,26 @@ window.__ModuleLoader__.load({
         };
       }
       const stale = status.status === 404 || hasIngress === false;
+      if (stale) {
+        return {
+          phase: "stale",
+          uptimeSeconds,
+          httpStatus: status.status,
+          checkedAt,
+          error: null,
+        };
+      }
+      const operational =
+        body !== null && typeof body === "object"
+          ? body.operationalStatus ?? body.status
+          : null;
+      const degraded =
+        operational === "degraded" ||
+        (body !== null &&
+          typeof body === "object" &&
+          body.status === "degraded");
       return {
-        phase: stale ? "stale" : "current",
+        phase: degraded ? "degraded" : "current",
         uptimeSeconds,
         httpStatus: status.status,
         checkedAt,
@@ -274,6 +294,7 @@ window.__ModuleLoader__.load({
     const DOT_COLOR = {
       checking: "var(--dsw-alias-state-idle-primary)",
       current: "var(--dsw-alias-state-success-primary)",
+      degraded: "var(--dsw-alias-state-warn-primary)",
       stale: "var(--dsw-alias-state-warn-primary)",
       down: "var(--dsw-alias-state-error-primary)",
       unknown: "var(--dsw-alias-state-warn-primary)",
@@ -299,6 +320,8 @@ window.__ModuleLoader__.load({
       const text =
         state.phase === "current"
           ? t("current")
+          : state.phase === "degraded"
+            ? t("degraded")
           : state.phase === "stale"
             ? uptime === null
               ? t("staleUnknown")

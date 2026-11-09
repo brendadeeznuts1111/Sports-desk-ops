@@ -1,21 +1,27 @@
 /**
  * GSLive Manager Tools session health.
  *
- * The v4 Manager Tools surface is cookie-only: `GET /manager-tools/*` sends the browser-managed
- * `GSID` cookie and needs no `x-gs-session` handshake. The legacy `ajax.php` POSTs are the only
- * calls that need the per-run signin session, and this process never persists that session.
+ * Session health uses the same wire path as {@link ensureGsid}: bootstrap via `signin`, then a
+ * lightweight `ajax.php` POST (`getBetLog`). `partnerConfig/` can return HTTP 200 HTML for a live
+ * cookie — that false negative is intentionally not used for health.
  *
- * This module answers one question for the dashboard: can the daemon still read Manager Tools
- * with the configured cookie? It never returns, logs, hashes into the response, or journals the
- * cookie value. Only cookie *names*, the resolution source, and the probe classification leave.
+ * This module answers one question for the dashboard: can the daemon still call manager ajax with
+ * the configured cookie? It never returns, logs, hashes into the response, or journals the cookie
+ * value. Only cookie *names*, the resolution source, and the probe classification leave.
  */
 import { CookieMap } from "bun";
 
+import { resolveManagerSessionGate } from "./manager_session.ts";
+import { bootstrapGanchrowSession } from "../scripts/fetch-bet-tally.ts";
 import { MANAGER_REFERER, MANAGER_USER_AGENT } from "./manager_fetch.ts";
 
-/** Cookie-only v4 endpoint; no signin session, no query parameters. */
+/** Cookie-only v4 endpoint (documented in the surface map; not used for health probes). */
 export const GSLIVE_PARTNER_CONFIG_URL =
   "https://plive.sportswidgets.pro/manager-tools/partnerConfig/" as const;
+
+/** Same endpoint {@link probeGsliveSession} and `lib/gslive_auto_session.ts` verify against. */
+export const GSLIVE_AJAX_PROBE_URL =
+  "https://plive.sportswidgets.pro/manager-tools/ajax.php" as const;
 
 /** Reuse the cookie health for two minutes; the widget refreshes every 30s. */
 export const GSLIVE_SESSION_PROBE_TTL_MS = 120_000;
@@ -144,6 +150,8 @@ export interface GsliveProbeOptions {
   readonly fetchImpl?: typeof fetch;
   readonly now?: () => number;
   readonly timeoutMs?: number;
+  /** Test seam: keychain `GSLIVE_GANCHROW_SESSION` / `GS_SESSION` resolution. */
+  readonly readSessionGate?: () => Promise<string>;
 }
 
 const AUTH_MODEL = {
@@ -162,9 +170,101 @@ export function gsliveCookieNames(cookieHeader: string): readonly string[] {
   }
 }
 
+/** Pure classification for an `ajax.php` session probe (parity with `ensureGsid`). */
+export function classifyAjaxSessionProbe(input: {
+  readonly httpStatus: number;
+  readonly body: string;
+  readonly latencyMs: number | null;
+  readonly checkedAt: string;
+  readonly cfMitigated: string | null;
+}): GsliveSessionProbe {
+  const base = {
+    httpStatus: input.httpStatus,
+    latencyMs: input.latencyMs,
+    checkedAt: input.checkedAt,
+    cfMitigated: input.cfMitigated,
+  };
+  const trimmed = input.body.trim();
+  const loginSniff = trimmed.slice(0, 400);
+
+  if (input.httpStatus >= 300 && input.httpStatus < 400) {
+    return {
+      ...base,
+      status: "expired",
+      detail: "ajax.php redirected — the GSID cookie is expired.",
+    };
+  }
+  if (input.httpStatus === 401) {
+    return {
+      ...base,
+      status: "expired",
+      detail: "ajax.php rejected the session (HTTP 401).",
+    };
+  }
+  if (input.httpStatus === 403) {
+    return input.cfMitigated !== null
+      ? {
+          ...base,
+          status: "challenge",
+          detail: `Cloudflare challenge (cf-mitigated: ${input.cfMitigated}) — human login required.`,
+        }
+      : {
+          ...base,
+          status: "forbidden",
+          detail: "Forbidden (HTTP 403) — the cookie is valid but lacks access.",
+        };
+  }
+  if (input.httpStatus === 429) {
+    return {
+      ...base,
+      status: "throttled",
+      detail: "ajax.php is rate-limiting this host (HTTP 429).",
+    };
+  }
+  if (input.httpStatus >= 500) {
+    return {
+      ...base,
+      status: "unreachable",
+      detail: `ajax.php returned HTTP ${input.httpStatus}.`,
+    };
+  }
+  if (input.httpStatus >= 200 && input.httpStatus < 300) {
+    if (
+      trimmed === "" ||
+      trimmed.startsWith("<") ||
+      !trimmed.startsWith("{") ||
+      /login|unauthor|forbidden/i.test(loginSniff)
+    ) {
+      return {
+        ...base,
+        status: "expired",
+        detail: "ajax.php returned a login HTML page instead of JSON.",
+      };
+    }
+    try {
+      JSON.parse(trimmed);
+      return {
+        ...base,
+        status: "ok",
+        detail: "Cookie accepted by ajax.php getBetLog probe.",
+      };
+    } catch {
+      return {
+        ...base,
+        status: "expired",
+        detail: "ajax.php returned non-JSON — likely the login HTML page.",
+      };
+    }
+  }
+  return {
+    ...base,
+    status: "forbidden",
+    detail: `Unexpected HTTP ${input.httpStatus} from ajax.php.`,
+  };
+}
+
 /**
- * One probe. `partnerConfig` is a v4 GET: a 302/HTML body is the expired-cookie trap, and a
- * `cf-mitigated` header means a human has to clear the challenge.
+ * One probe: bootstrap `x-gs-session`, then POST `getBetLog` — same contract as `ensureGsid`.
  */
 export async function probeGsliveSession(
   cookieHeader: string,
@@ -183,34 +283,62 @@ export async function probeGsliveSession(
     };
   }
 
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 10_000;
   const started = now();
+  const readGate = options.readSessionGate ?? resolveManagerSessionGate;
+  let sessionGate = await readGate();
+  if (sessionGate === "") {
+    try {
+      sessionGate = await bootstrapGanchrowSession({
+        cookieHeader,
+        fetchImpl,
+        timeoutMs,
+      });
+    } catch {
+      return {
+        status: "expired",
+        httpStatus: 401,
+        latencyMs: Math.max(0, now() - started),
+        checkedAt,
+        cfMitigated: null,
+        detail:
+          "signin bootstrap failed — provision GSID and GSLIVE_GANCHROW_SESSION (x-gs-session).",
+      };
+    }
+  }
+
   try {
-    const response = await (options.fetchImpl ?? fetch)(
-      GSLIVE_PARTNER_CONFIG_URL,
-      {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-          cookie: cookieHeader,
-          referer: MANAGER_REFERER,
-          "user-agent": MANAGER_USER_AGENT,
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(options.timeoutMs ?? 5_000),
-      },
-    );
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      "content-type": "application/x-www-form-urlencoded",
+      cookie: cookieHeader,
+      referer: MANAGER_REFERER,
+      "user-agent": MANAGER_USER_AGENT,
+    };
+    if (sessionGate !== "") headers["x-gs-session"] = sessionGate;
+
+    const response = await fetchImpl(GSLIVE_AJAX_PROBE_URL, {
+      method: "POST",
+      headers,
+      body: new URLSearchParams({
+        action: "getBetLog",
+        betId: "0",
+        partnerId: "118",
+      }).toString(),
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     const latencyMs = Math.max(0, now() - started);
-    const contentType = response.headers.get("content-type") ?? "";
     const cfMitigated = response.headers.get("cf-mitigated");
     const body = await response.text().catch(() => "");
 
-    return classifyProbe({
+    return classifyAjaxSessionProbe({
       httpStatus: response.status,
-      contentType,
-      cfMitigated,
       body,
       latencyMs,
       checkedAt,
+      cfMitigated,
     });
   } catch (error) {
     return {
@@ -221,8 +349,8 @@ export async function probeGsliveSession(
       cfMitigated: null,
       detail:
         error instanceof Error && error.name === "TimeoutError"
-          ? "Timed out waiting for Manager Tools."
-          : "No response from Manager Tools (network, DNS or TLS).",
+          ? "Timed out waiting for ajax.php."
+          : "No response from ajax.php (network, DNS or TLS).",
     };
   }
 }
@@ -362,11 +490,14 @@ export interface GsliveSessionMonitorOptions {
   readonly now?: () => number;
   readonly ttlMs?: number;
   readonly timeoutMs?: number;
+  readonly readSessionGate?: () => Promise<string>;
 }
 
 export interface GsliveSessionMonitor {
   /** `force` skips the cache; the widget's normal refresh stays on the cached probe. */
   read(force?: boolean): Promise<GsliveSessionHealth>;
+  /** Drop the cached partnerConfig probe (after a GSID rotation). */
+  clearProbeCache(): void;
 }
 
 /**
@@ -415,9 +546,15 @@ export function createGsliveSessionMonitor(
         ...(options.timeoutMs !== undefined
           ? { timeoutMs: options.timeoutMs }
           : {}),
+        ...(options.readSessionGate !== undefined
+          ? { readSessionGate: options.readSessionGate }
+          : {}),
       });
       cached = { key, at: nowMs, probe };
       return healthFor(resolution, probe, false, generatedAt);
+    },
+    clearProbeCache() {
+      cached = null;
     },
   };
 }

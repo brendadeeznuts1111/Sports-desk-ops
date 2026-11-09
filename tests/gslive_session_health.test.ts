@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  classifyAjaxSessionProbe,
   classifyProbe,
   createGsliveSessionMonitor,
   GSLIVE_SURFACE_MAP,
@@ -30,7 +31,28 @@ function classify(
 }
 
 describe("GSLive session probe classification", () => {
-  test("JSON 200 is healthy; a login HTML 200 is expired", () => {
+  test("ajax JSON 200 is healthy; login HTML is expired", () => {
+    expect(
+      classifyAjaxSessionProbe({
+        httpStatus: 200,
+        body: '{"r":[]}',
+        latencyMs: 1,
+        checkedAt,
+        cfMitigated: null,
+      }).status,
+    ).toBe("ok");
+    expect(
+      classifyAjaxSessionProbe({
+        httpStatus: 200,
+        body: "<html>login</html>",
+        latencyMs: 1,
+        checkedAt,
+        cfMitigated: null,
+      }).status,
+    ).toBe("expired");
+  });
+
+  test("legacy partnerConfig classifier: JSON 200 is healthy; a login HTML 200 is expired", () => {
     expect(classify(200).status).toBe("ok");
     expect(
       classify(200, {
@@ -73,12 +95,43 @@ describe("GSLive cookie handling", () => {
     expect(gsliveCookieNames("")).toEqual([]);
   });
 
-  test("the probe sends the cookie but never returns it", async () => {
-    let seen: RequestInit | undefined;
+  test("uses stored ganchrow gate without signin bootstrap", async () => {
+    const calls: string[] = [];
     const probe = await probeGsliveSession("GSID=live-secret", {
       now: () => Date.parse(checkedAt),
-      fetchImpl: (async (_url: string, init?: RequestInit) => {
-        seen = init;
+      readSessionGate: async () => "stored-gate",
+      fetchImpl: (async (url: string) => {
+        calls.push(String(url));
+        return new Response('{"ok":true}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof fetch,
+    });
+    expect(probe.status).toBe("ok");
+    expect(calls.some((u) => u.includes("signin"))).toBe(false);
+    expect(calls.some((u) => u.includes("ajax.php"))).toBe(true);
+  });
+
+  test("the probe bootstraps signin then posts ajax but never returns the cookie", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const probe = await probeGsliveSession("GSID=live-secret", {
+      now: () => Date.parse(checkedAt),
+      readSessionGate: async () => "",
+      fetchImpl: (async (url: string, init?: RequestInit) => {
+        calls.push(
+          init === undefined ? { url } : { url, init },
+        );
+        if (String(url).includes("signin")) {
+          return new Response(
+            JSON.stringify({
+              ganchrowSessionId: "gate-1",
+              adminUserName: "a",
+              agentName: "b",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
         return new Response('{"ok":true}', {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -87,16 +140,29 @@ describe("GSLive cookie handling", () => {
     });
 
     expect(probe.status).toBe("ok");
-    const headers = new Headers(seen?.headers);
+    const ajax = calls.find((call) => call.url.includes("ajax.php"));
+    expect(ajax?.init?.method).toBe("POST");
+    const headers = new Headers(ajax?.init?.headers);
     expect(headers.get("cookie")).toBe("GSID=live-secret");
-    expect(seen?.redirect).toBe("manual");
+    expect(headers.get("x-gs-session")).toBe("gate-1");
     expect(JSON.stringify(probe)).not.toContain("live-secret");
   });
 
   test("network failure is unreachable, not an empty session", async () => {
     const probe = await probeGsliveSession("GSID=live-secret", {
       now: () => Date.parse(checkedAt),
-      fetchImpl: (async () => {
+      readSessionGate: async () => "",
+      fetchImpl: (async (url: string) => {
+        if (String(url).includes("signin")) {
+          return new Response(
+            JSON.stringify({
+              ganchrowSessionId: "gate",
+              adminUserName: "a",
+              agentName: "b",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
         throw new TypeError("fetch failed");
       }) as unknown as typeof fetch,
     });
@@ -117,10 +183,21 @@ describe("GSLive session monitor", () => {
         source: "env-cookie",
         cookieHeader: current,
       }),
+      readSessionGate: async () => "",
       now: () => clock,
-      fetchImpl: (async () => {
+      fetchImpl: (async (url: string) => {
         calls += 1;
-        return new Response('{"partner":118}', {
+        if (String(url).includes("signin")) {
+          return new Response(
+            JSON.stringify({
+              ganchrowSessionId: "gate",
+              adminUserName: "a",
+              agentName: "b",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response('{"r":[]}', {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -132,21 +209,21 @@ describe("GSLive session monitor", () => {
     expect(first.probe.cached).toBe(false);
     expect(first.session.cookieNames).toEqual(["GSID", "cf_clearance"]);
     expect(first.surfaceMap.length).toBeGreaterThan(4);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
 
     clock += 30_000;
     const second = await monitor.read();
     expect(second.probe.cached).toBe(true);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
 
     const forced = await monitor.read(true);
     expect(forced.probe.cached).toBe(false);
-    expect(calls).toBe(2);
+    expect(calls).toBe(4);
 
     current = "GSID=rotated-secret";
     const rotated = await monitor.read();
     expect(rotated.probe.cached).toBe(false);
-    expect(calls).toBe(3);
+    expect(calls).toBe(6);
 
     expect(JSON.stringify([first, second, forced, rotated])).not.toContain(
       "live-secret",

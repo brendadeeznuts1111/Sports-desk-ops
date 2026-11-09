@@ -71,6 +71,7 @@ import {
   parseBetReportRequest,
   parseDateFilterBy,
   resolveManagerSession,
+  resolveManagerSessionGate,
   type ManagerSession,
   type ManagerSessionSource,
   sessionGateFromEnv,
@@ -1139,12 +1140,25 @@ async function main(args: readonly string[]): Promise<void> {
     (env.GSLIVE_WEBVIEW_PROFILE ?? "").trim() ||
     cfg.session.webviewProfile;
   const resolveSession = async (): Promise<ManagerSession> => {
-    if (values["attach-chrome"]) return sessionFromRunningChrome();
+    if (values["attach-chrome"]) {
+      const chrome = await sessionFromRunningChrome();
+      const sessionGate = await resolveManagerSessionGate(env);
+      return {
+        cookieHeader: chrome.cookieHeader,
+        source: chrome.source,
+        sessionGate,
+      } satisfies import("../lib/manager_session.ts").ActiveManagerSession;
+    }
     if (webviewProfile === "") return resolveManagerSession(env);
-    const session = await sessionFromGsliveProfile({
+    const profile = await sessionFromGsliveProfile({
       profileDir: webviewProfile,
     });
-    return { cookieHeader: session.cookieHeader, source: session.source };
+    const sessionGate = await resolveManagerSessionGate(env);
+    return {
+      cookieHeader: profile.cookieHeader,
+      source: profile.source,
+      sessionGate,
+    } satisfies import("../lib/manager_session.ts").ActiveManagerSession;
   };
 
   // ---- OS-level scheduling: validate/describe only; installation is an explicit flag. ----

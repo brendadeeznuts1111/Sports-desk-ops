@@ -96,6 +96,7 @@ import {
   recordedTime,
   type KpiInput,
 } from "../lib/desk_kpis.ts";
+import { buildDeskEnhancedHealth } from "../lib/desk_enhanced_health.ts";
 import { probeR2PipelineKpis } from "../lib/r2_pipeline_kpis.ts";
 import { ReportingSchedulerService } from "./reporting_scheduler_service.ts";
 import {
@@ -128,6 +129,10 @@ import {
   type WatchlistSignal,
 } from "../lib/watchlist_signal_engine.ts";
 import { loadGsliveWeblogActivity } from "../lib/gslive_weblog_activity.ts";
+import {
+  registerGsidRotationHook,
+  resetGsliveAutoSessionCache,
+} from "../lib/gslive_auto_session.ts";
 import { createGsliveSessionMonitor } from "../lib/gslive_session_health.ts";
 import { resolveManagerSession } from "../lib/manager_session.ts";
 import {
@@ -383,6 +388,10 @@ const analysisReportArtifact = cachedJsonFile(
 /** Lazily resolves the GSID and caches the cookie-only v4 probe for two minutes. */
 const gsliveSessionMonitor = createGsliveSessionMonitor({
   resolveSession: () => resolveManagerSession(),
+});
+registerGsidRotationHook(() => {
+  gsliveSessionMonitor.clearProbeCache();
+  resetGsliveAutoSessionCache();
 });
 
 const contestsArtifact = cachedJsonFile(
@@ -1573,25 +1582,24 @@ export function startServer(options?: ServerOptions) {
 
       // 6. Health & Telemetry Probe
       if (pathname === "/health") {
-        return Response.json(
-          {
-            status: "healthy",
-            port: server.port,
-            hostname: server.hostname,
-            url: server.url ? server.url.toString() : "unix://socket",
-            timestamp: new Date().toISOString(),
-            uptimeSeconds: Math.floor(process.uptime()),
-            runtime: `Bun v${Bun.version} (${process.arch}-${process.platform})`,
-            // Which peer-trust rule is in force, so "is the guard on?" is answerable from here
-            // instead of from a request that happens to come from the wrong address.
-            ingress,
-            nodeEnv:
-              (typeof Bun !== "undefined"
-                ? Bun.env.NODE_ENV
-                : process.env.NODE_ENV) || "development",
-          },
-          { headers: cors },
-        );
+        const nodeEnv =
+          (typeof Bun !== "undefined"
+            ? Bun.env.NODE_ENV
+            : process.env.NODE_ENV) || "development";
+        const health = await buildDeskEnhancedHealth({
+          port: server.port ?? Number(Bun.env.PORT ?? 4020),
+          hostname: server.hostname ?? "127.0.0.1",
+          url: server.url ? server.url.toString() : "unix://socket",
+          uptimeSeconds: Math.floor(process.uptime()),
+          runtime: `Bun v${Bun.version} (${process.arch}-${process.platform})`,
+          ingress,
+          nodeEnv,
+          readGsliveHealth: () => gsliveSessionMonitor.read(false),
+        });
+        return Response.json(health, {
+          status: health.httpStatus,
+          headers: cors,
+        });
       }
 
       if (

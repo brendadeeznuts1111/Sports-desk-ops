@@ -82,6 +82,8 @@ export const F402_KEYCHAIN_NAMES = {
  * and is never written, so existing `.env` files, cron environments and keychain entries work.
  */
 export const GSLIVE_SESSION_ID_NAME = "GSLIVE_SESSION_ID" as const;
+/** `x-gs-session` / `ganchrowSessionId` paired with the GSID cookie on ajax.php. */
+export const GSLIVE_GANCHROW_SESSION_NAME = "GSLIVE_GANCHROW_SESSION" as const;
 export const GSID_LEGACY_NAME = "GSID" as const;
 export const GSID_KEYCHAIN_NAME = GSLIVE_SESSION_ID_NAME;
 

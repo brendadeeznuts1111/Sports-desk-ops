@@ -15,8 +15,11 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 
 import { buildGsliveTallyRollup } from "../lib/gslive_tally_rollup.ts";
-import { requireManagerSession } from "./fetch-bet-tally.ts";
-import { fetchBetReportRows } from "./fetch-bet-tally.ts";
+import {
+  fetchBetReportRows,
+  requireManagerSession,
+  sessionGateFromEnv,
+} from "./fetch-bet-tally.ts";
 import { publishGsliveTallyRollup } from "../lib/gslive_tally_sink.ts";
 
 const { values } = parseArgs({
@@ -56,7 +59,7 @@ async function fetchOpenCapture(path: string): Promise<void> {
   const nowSec = Math.floor(Date.now() / 1000);
   const from =
     values["open-from"] === undefined
-      ? nowSec - 604_800
+      ? nowSec - 86_400
       : Number(values["open-from"]);
   const to =
     values["open-to"] === undefined ? nowSec : Number(values["open-to"]);
@@ -66,11 +69,15 @@ async function fetchOpenCapture(path: string): Promise<void> {
     );
   }
   const session = await requireManagerSession();
+  const sessionGate =
+    session.sessionGate !== ""
+      ? session.sessionGate
+      : sessionGateFromEnv(Bun.env);
   const rows = await fetchBetReportRows({
     fromEpochSec: from,
     toEpochSec: to,
     cookieHeader: session.cookieHeader,
-    sessionGate: (Bun.env.GS_SESSION ?? "").trim(),
+    sessionGate,
   });
   const open = rows.filter((row) =>
     row !== null && typeof row === "object" && "state" in row
