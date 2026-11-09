@@ -317,7 +317,7 @@ describe("GET /api/live-bets live-first", () => {
     );
     // The exact status object the dashboard renders; a field change must fail this test.
     expect(body.live).toEqual({
-      mode: "auto",
+      mode: "live",
       status: "live",
       ok: true,
       fetchedAt: observedAt,
@@ -454,7 +454,7 @@ describe("GET /api/live-bets with an unavailable live read", () => {
 
   test("falls back to the capture artifact with the live diagnostic, never a 500", async () => {
     const { status, body } = await getJson<LiveBetsBody>(
-      `${server.url}api/live-bets`,
+      `${server.url}api/live-bets?source=auto`,
     );
     expect(status).toBe(200);
     // The fallback keeps the artifact's own provenance: a capture is never relabelled live.
@@ -484,7 +484,9 @@ describe("GET /api/live-bets with an unavailable live read", () => {
 
   test("the failed read is cached too, so a poll pair POSTs once", async () => {
     const before = stub.calls();
-    const { body } = await getJson<LiveBetsBody>(`${server.url}api/live-bets`);
+    const { body } = await getJson<LiveBetsBody>(
+      `${server.url}api/live-bets?source=live`,
+    );
     expect(stub.calls()).toBe(before);
     expect(body.live?.servedFromCache).toBe(true);
     expect(body.live?.diagnostic?.code).toBe("unauthorized");
@@ -706,9 +708,9 @@ describe("live Pending with no customer scope", () => {
       now: () => new Date(OBSERVED_AT),
     });
     const { status, body } = await getJson<LiveBetsBody>(
-      `${server.url}api/live-bets`,
+      `${server.url}api/live-bets?source=live`,
     );
-    expect(status).toBe(200);
+    expect(status).toBe(503);
     expect(body.live?.status).toBe("unavailable");
     expect(body.live?.ok).toBe(false);
     expect(body.live?.diagnostic?.code).toBe("no_customer_scope");
@@ -784,9 +786,9 @@ describe("live Pending env gates", () => {
     });
     running.push(server);
     const { status, body } = await getJson<LiveBetsBody>(
-      `${server.url}api/live-bets`,
+      `${server.url}api/live-bets?source=live`,
     );
-    expect(status).toBe(200);
+    expect(status).toBe(503);
     expect(body.live?.status).toBe("disabled");
     expect(body.live?.ok).toBe(false);
     expect(body.live?.ttlMs).toBe(LIVE_PENDING_DEFAULT_TTL_MS);

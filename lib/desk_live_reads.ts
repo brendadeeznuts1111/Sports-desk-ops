@@ -297,7 +297,8 @@ function disabledPendingStatus(
 export function parseLiveSourceMode(
   raw: string | null,
 ): LiveSourceMode | "invalid" {
-  const value = (raw ?? "auto").trim().toLowerCase();
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "") return "live";
   if (value === "auto" || value === "live" || value === "file") return value;
   return "invalid";
 }

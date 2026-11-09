@@ -39,14 +39,17 @@ afterAll(() => {
 });
 
 describe("cross-origin reads are opt-in", () => {
+  /** Stable 200 route: default `/api/live-bets` is live-only and may 503 without a session. */
+  const probePath = "/health";
+
   test("a request with no Origin gets no grant", async () => {
-    const response = await fetch(`${base}/api/live-bets`);
+    const response = await fetch(`${base}${probePath}`);
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   test("a foreign Origin gets no grant, even though the body is still served", async () => {
-    const response = await fetch(`${base}/api/live-bets`, {
+    const response = await fetch(`${base}${probePath}`, {
       headers: { origin: "https://evil.example" },
     });
     expect(response.status).toBe(200);
@@ -57,7 +60,7 @@ describe("cross-origin reads are opt-in", () => {
   });
 
   test("a listed Origin is echoed back with Vary", async () => {
-    const response = await fetch(`${base}/api/live-bets`, {
+    const response = await fetch(`${base}${probePath}`, {
       headers: { origin: ALLOWED },
     });
     expect(response.status).toBe(200);
