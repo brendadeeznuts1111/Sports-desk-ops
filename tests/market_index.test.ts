@@ -38,10 +38,21 @@ const EXPECTED_PATHS: Record<string, string> = {
 };
 
 type RawIndex = {
+  description?: { en?: string };
+  metadata?: {
+    categories?: Record<string, unknown>;
+    labels?: Record<string, unknown>;
+  };
   plugins: Array<{
     name: string;
     author?: string;
     description?: { en?: string };
+    homepage?: string;
+    metadata?: {
+      category?: string;
+      keywords?: string[];
+      labels?: string[];
+    };
     "dist-tags"?: { latest?: string };
     versions: Array<{
       version: string;
@@ -192,9 +203,57 @@ describe.skipIf(!marketIndexTestsReady() && !REQUIRE_MARKET_INDEX)(
         expect(
           desc!.length,
           `${plugin.name}: description length`,
-        ).toBeGreaterThan(20);
+        ).toBeGreaterThanOrEqual(40);
+        expect(
+          desc!.length,
+          `${plugin.name}: description length`,
+        ).toBeLessThanOrEqual(200);
         expect(desc!.endsWith("."), `${plugin.name}: description period`).toBe(
           true,
+        );
+      }
+    });
+
+    test("catalog meta: root copy, keywords, labels, categories, homepages", async () => {
+      const raw = await loadRawIndex();
+      expect(raw.description?.en?.length ?? 0).toBeGreaterThan(20);
+      const declaredLabels = Object.keys(raw.metadata?.labels ?? {});
+      expect(declaredLabels.length).toBeGreaterThanOrEqual(4);
+      const declaredCategories = Object.keys(raw.metadata?.categories ?? {});
+      for (const plugin of raw.plugins) {
+        const keywords = plugin.metadata?.keywords ?? [];
+        expect(
+          keywords.length,
+          `${plugin.name}: keywords`,
+        ).toBeGreaterThanOrEqual(2);
+        expect(keywords.length, `${plugin.name}: keywords`).toBeLessThanOrEqual(
+          6,
+        );
+        expect(
+          keywords.every((k) => k === k.toLowerCase() && !k.includes(" ")),
+          `${plugin.name}: keyword shape`,
+        ).toBe(true);
+        const usedLabels = plugin.metadata?.labels ?? [];
+        expect(
+          usedLabels.length,
+          `${plugin.name}: labels`,
+        ).toBeGreaterThanOrEqual(1);
+        for (const label of usedLabels) {
+          expect(declaredLabels, `${plugin.name}: label ${label}`).toContain(
+            label,
+          );
+          expect(label, `${plugin.name}: dsh-plugin label`).not.toBe(
+            "dsh-plugin",
+          );
+        }
+        const category = plugin.metadata?.category;
+        expect(category, `${plugin.name}: category`).toBeDefined();
+        expect(
+          declaredCategories,
+          `${plugin.name}: category declared`,
+        ).toContain(category!);
+        expect(plugin.homepage, `${plugin.name}: homepage`).toMatch(
+          /^https:\/\/github\.com\/bw496915-cmyk\/Sports-desk-ops\/tree\/[0-9a-f]{40}\//,
         );
       }
     });

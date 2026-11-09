@@ -21,7 +21,9 @@ Machine layout: **`dsh-ops/notes/SPORTSDESK-MARKET.md`** (profiles, experimental
 
 **Publisher** — Format 1 field is **`author`**, not `publisher`. Use **`Sportsdesk Ops`** on every plugin row (Discover maps this to the publisher line). Never omit.
 
-**Tags** — 2–5 lowercase kebab-case strings in `metadata.keywords`. Do not repeat `dsh-plugin` there (keep it in `metadata.labels` for the pill).
+**Tags** — 2–6 lowercase kebab-case strings in `metadata.keywords`; lead with the word an operator would type in Discover search. Do not put `dsh-plugin` in keywords (renderer supplies bundle type).
+
+**Labels** — Declare ids under index `metadata.labels` (`stable`, `beta`, `read-only`, `internal`), then attach 1–2 per plugin in `metadata.labels`. No `color` field in format 1 (title only).
 
 **Category** — Declare ids under index `metadata.categories`, then set `metadata.category` on each plugin (`operations`, `security`, `ui`, `automation`). List order in `plugins[]` follows category: Operations → Security → UI → Automation.
 

@@ -1,10 +1,10 @@
 {
   "format": 1,
   "title": {
-    "en": "Sportsdesk Ops (DSH bundles)"
+    "en": "Sportsdesk Ops"
   },
   "description": {
-    "en": "Read-only SportsDesk / Fantasy402 desk bundles for the desktop profile. Pin updates by bumping each version entry commit SHA."
+    "en": "Operational and security tooling for the Sportsdesk ecosystem."
   },
   "metadata": {
     "categories": {
@@ -30,9 +30,24 @@
       }
     },
     "labels": {
-      "dsh-plugin": {
+      "stable": {
         "title": {
-          "en": "dsh-plugin"
+          "en": "Stable"
+        }
+      },
+      "beta": {
+        "title": {
+          "en": "Beta"
+        }
+      },
+      "read-only": {
+        "title": {
+          "en": "Read-only"
+        }
+      },
+      "internal": {
+        "title": {
+          "en": "Internal"
         }
       }
     }
@@ -44,17 +59,24 @@
         "en": "Sportsdesk Ops Tools"
       },
       "description": {
-        "en": "Desk status, GSLive deep links, capture health, and verification gates."
+        "en": "Desk status, GSLive deep links, capture health, and verification gates for the sports desk. Read-only aggregation over capture artifacts; writes nothing."
       },
       "author": "Sportsdesk Ops",
+      "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin",
       "repository": {
         "url": "https://github.com/bw496915-cmyk/Sports-desk-ops",
         "directory": "dsh-plugin"
       },
       "metadata": {
-        "labels": ["dsh-plugin"],
+        "labels": ["stable", "internal"],
         "category": "operations",
-        "keywords": ["ops", "gslive", "capture-health", "verification"]
+        "keywords": [
+          "ops",
+          "gslive",
+          "capture-health",
+          "verification",
+          "status"
+        ]
       },
       "dist-tags": {
         "latest": "0.10.0"
@@ -81,17 +103,25 @@
         "en": "Security Console"
       },
       "description": {
-        "en": "Fraud and risk read-only tools over GSLive and F402 artifacts."
+        "en": "Fraud and risk read-only tools over GSLive and F402 artifacts. Surfaces integrity findings, disposition coverage, and provenance gaps without writing to source systems."
       },
       "author": "Sportsdesk Ops",
+      "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-security",
       "repository": {
         "url": "https://github.com/bw496915-cmyk/Sports-desk-ops",
         "directory": "dsh-plugin-security"
       },
       "metadata": {
-        "labels": ["dsh-plugin"],
+        "labels": ["read-only", "internal"],
         "category": "security",
-        "keywords": ["security", "fraud", "gslive", "f402", "read-only"]
+        "keywords": [
+          "security",
+          "fraud",
+          "integrity",
+          "gslive",
+          "f402",
+          "read-only"
+        ]
       },
       "dist-tags": {
         "latest": "0.1.0"
@@ -118,17 +148,18 @@
         "en": "Desk Status UI"
       },
       "description": {
-        "en": "Live desk-status panel surfaced in the harness UI."
+        "en": "Live desk-status panel for the harness UI. At-a-glance desk state with drill-down into pending gates and open items."
       },
       "author": "Sportsdesk Ops",
+      "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-ui",
       "repository": {
         "url": "https://github.com/bw496915-cmyk/Sports-desk-ops",
         "directory": "dsh-plugin-ui"
       },
       "metadata": {
-        "labels": ["dsh-plugin"],
+        "labels": ["stable"],
         "category": "ui",
-        "keywords": ["ui", "desk-status", "live"]
+        "keywords": ["ui", "desk-status", "live", "panel"]
       },
       "dist-tags": {
         "latest": "0.1.2"
@@ -155,17 +186,18 @@
         "en": "Desk Sidebar Panel"
       },
       "description": {
-        "en": "Persistent sidebar panel for desk operations and quick actions."
+        "en": "Persistent sidebar for desk operations and quick actions. Sticky access to frequently used desk tools."
       },
       "author": "Sportsdesk Ops",
+      "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-sidebar",
       "repository": {
         "url": "https://github.com/bw496915-cmyk/Sports-desk-ops",
         "directory": "dsh-plugin-sidebar"
       },
       "metadata": {
-        "labels": ["dsh-plugin"],
+        "labels": ["stable"],
         "category": "ui",
-        "keywords": ["ui", "sidebar", "desk"]
+        "keywords": ["ui", "sidebar", "desk", "quick-actions"]
       },
       "dist-tags": {
         "latest": "0.4.0"
@@ -192,17 +224,18 @@
         "en": "Watchlist Autobet"
       },
       "description": {
-        "en": "Automated watchlist betting triggers with configurable rules."
+        "en": "Automated watchlist betting triggers with configurable rules. Watchlist-driven placement with policy-controlled rule evaluation."
       },
       "author": "Sportsdesk Ops",
+      "homepage": "https://github.com/bw496915-cmyk/Sports-desk-ops/tree/4f84743536a4de78a8ff81e09e00a8228ae09be6/dsh-plugin-watchlist-autobet",
       "repository": {
         "url": "https://github.com/bw496915-cmyk/Sports-desk-ops",
         "directory": "dsh-plugin-watchlist-autobet"
       },
       "metadata": {
-        "labels": ["dsh-plugin"],
+        "labels": ["beta"],
         "category": "automation",
-        "keywords": ["autobet", "watchlist", "automation"]
+        "keywords": ["autobet", "watchlist", "automation", "betting"]
       },
       "dist-tags": {
         "latest": "0.2.0"
