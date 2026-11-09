@@ -16,6 +16,7 @@ import {
   type BridgeRollupJobId,
   type BridgeSpawnResult,
 } from "../lib/bridge_rollup_cron.ts";
+import type { F402Session } from "../lib/f402_session.ts";
 import { F402_KEYCHAIN_NAMES, GSID_KEYCHAIN_NAME } from "../lib/secrets.ts";
 import { SECRET_NAMES } from "../scripts/capture/f402_login.ts";
 import { GSID_SECRET } from "../scripts/fetch-bet-tally.ts";
@@ -35,6 +36,8 @@ function keychain(
   overrides: {
     sessionPresent?: boolean;
     tokenFilePresent?: boolean;
+    readSession?: () => F402Session | null;
+    readFile?: (path: string) => string;
     env?: Readonly<Record<string, string | undefined>>;
   } = {},
 ) {
@@ -49,6 +52,12 @@ function keychain(
       },
       sessionPresent: () => overrides.sessionPresent ?? false,
       tokenFilePresent: () => overrides.tokenFilePresent ?? false,
+      readSession: overrides.readSession ?? (() => null),
+      readFile:
+        overrides.readFile ??
+        (() => {
+          throw new Error("ENOENT");
+        }),
     }),
   };
 }
@@ -112,15 +121,17 @@ describe("bridge3c: GSID is keychain-first", () => {
 
 describe("bridge3b: a bearer source only (Q2)", () => {
   test("the stored agent id/password do NOT satisfy the bearer fetch", async () => {
-    const { probe } = keychain({
-      [F402_KEYCHAIN_NAMES.agentId]: "agent",
-      [F402_KEYCHAIN_NAMES.password]: "password",
-    });
+    const { probe } = keychain(
+      {
+        [F402_KEYCHAIN_NAMES.agentId]: "agent",
+        [F402_KEYCHAIN_NAMES.password]: "password",
+      },
+      { readSession: () => null },
+    );
     const decision = await probe.check(job("bridge3b"));
     expect(decision.ok).toBe(false);
     if (!decision.ok) {
       expect(decision.error).toContain("bearer");
-      expect(decision.error).toContain("cookie session is not accepted");
     }
   });
 
@@ -136,10 +147,38 @@ describe("bridge3b: a bearer source only (Q2)", () => {
   });
 
   test("a token file satisfies 3b", async () => {
-    const { probe } = keychain({}, { tokenFilePresent: true });
+    const token = "x".repeat(32);
+    const { probe } = keychain(
+      {},
+      {
+        env: { HOME: "/tmp", F402_TOKEN_FILE: "/tmp/sportsdesk/f402-token" },
+        readFile: () => token,
+      },
+    );
     expect(await probe.check(job("bridge3b"))).toEqual({
       ok: true,
       source: "token-file",
+    });
+  });
+
+  test("session authorizationHeader satisfies 3b", async () => {
+    const token = "x".repeat(32);
+    const { probe } = keychain(
+      {},
+      {
+        readSession: () =>
+          ({
+            cookieHeader: "x=1",
+            cookieNames: ["x"],
+            authorizationHeader: token,
+            obtainedAtIso: "2026-01-01T00:00:00.000Z",
+            expiresAtIso: "2027-01-01T00:00:00.000Z",
+          }) satisfies F402Session,
+      },
+    );
+    expect(await probe.check(job("bridge3b"))).toEqual({
+      ok: true,
+      source: "session:bearer",
     });
   });
 });
@@ -194,11 +233,13 @@ describe("the default gate stays env-only (tests never read the real keychain)",
   test("a credential-less env skips every job without spawning", async () => {
     const root = mkdtempSync(join(tmpdir(), "bridge-cron-env-"));
     const spawned: BridgeRollupJobId[] = [];
+    const { probe } = keychain({}, { readSession: () => null });
     const result = await runBridgeRollupCycle({
       root,
       // weblog needs no credentials (its corpus is local), so keep the gate focused here.
       jobs: ["bridge3a", "bridge3b", "bridge3c"],
       env: { HOME: "/nonexistent" },
+      credentials: probe,
       statePath: join(root, "state.json"),
       historyPath: join(root, "history.jsonl"),
       spawnJob: async (context) => {

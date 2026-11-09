@@ -140,6 +140,39 @@ export function resolveF402BearerToken(
   return resolveF402BearerTokenDetailed(options).token;
 }
 
+/** True when {@link resolveF402BearerTokenDetailed} would succeed (no network). */
+export function f402BearerResolvable(
+  options: ResolveF402BearerOptions = {},
+): boolean {
+  try {
+    resolveF402BearerTokenDetailed(options);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function probeBearerSource(source: F402BearerSource): string {
+  switch (source) {
+    case "env":
+      return "env:F402_BEARER_TOKEN";
+    case "file":
+      return "token-file";
+    case "session":
+      return "session:bearer";
+    default:
+      return source;
+  }
+}
+
+/** Like {@link resolveF402BearerTokenDetailed} but maps to cron probe `source` labels. */
+export function resolveF402BearerForCredentialProbe(
+  options: ResolveF402BearerOptions = {},
+): ResolvedF402Bearer & { readonly probeSource: string } {
+  const resolved = resolveF402BearerTokenDetailed(options);
+  return { ...resolved, probeSource: probeBearerSource(resolved.source) };
+}
+
 /** `deskDate - 6d` in America/Chicago, for the 7-day open book. */
 export function defaultPendingDate(
   now = new Date(),

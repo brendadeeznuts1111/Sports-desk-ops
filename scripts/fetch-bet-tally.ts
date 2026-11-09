@@ -185,17 +185,17 @@ export function buildBetReportPayload(opts: {
   };
 }
 
-/** Normalise the `--date-filter-by` flag; unknown values keep the observed `calcTime` default. */
+/** Normalise the `--date-filter-by` flag; unknown values default to desk-live `betTime`. */
 export function parseDateFilterBy(value: string | undefined): DateFilterBy {
   for (const filter of BET_REPORT_DATE_FILTERS) {
     if (value === filter) return filter;
   }
   if (value !== undefined && value !== "") {
     console.warn(
-      `bet-report: unknown --date-filter-by ${JSON.stringify(value)}; using calcTime`,
+      `bet-report: unknown --date-filter-by ${JSON.stringify(value)}; using betTime`,
     );
   }
-  return "calcTime";
+  return "betTime";
 }
 
 /**
