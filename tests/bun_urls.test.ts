@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  BUN_ANSI_THEME_REFERENCE_URL,
   BUN_ORIGIN,
   bunReferenceUrl,
   bunUrl,
   canonicalBunUrl,
+  findBunReferenceSymbolsInText,
+  linkifyBunSymbolsInMarkdown,
+  matchBunReferenceSymbol,
+  parseBunReferenceUrl,
+  resolveBunSymbolReferenceUrl,
   textFragment,
 } from "../lib/bun_urls.ts";
 
@@ -134,5 +140,110 @@ describe("canonicalBunUrl", () => {
     ]) {
       expect(canonicalBunUrl(raw)).toBeNull();
     }
+  });
+});
+
+describe("Bun reference symbol matching", () => {
+  test("BUN_ANSI_THEME_REFERENCE_URL is the canonical AnsiTheme reference URL", () => {
+    expect(BUN_ANSI_THEME_REFERENCE_URL).toBe(
+      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+    );
+  });
+
+  test("parseBunReferenceUrl extracts symbol, module, and canonical URL", () => {
+    const ansi = parseBunReferenceUrl(
+      "https://bun.sh/reference/globals/bun/markdown/AnsiTheme",
+    );
+    expect(ansi).toEqual({
+      canonicalUrl: "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+      symbolPath: "globals/bun/markdown/AnsiTheme",
+      modulePath: "globals/bun/markdown",
+      symbolName: "AnsiTheme",
+    });
+
+    const importKind = parseBunReferenceUrl(
+      "https://www.bun.com/reference/globals/bun/ImportKind",
+    );
+    expect(importKind).toEqual({
+      canonicalUrl: "https://bun.com/reference/globals/bun/ImportKind",
+      symbolPath: "globals/bun/ImportKind",
+      modulePath: "globals/bun",
+      symbolName: "ImportKind",
+    });
+  });
+
+  test("parseBunReferenceUrl returns null for non-reference URLs", () => {
+    expect(
+      parseBunReferenceUrl("https://bun.com/docs/runtime/cron"),
+    ).toBeNull();
+    expect(parseBunReferenceUrl("https://bun.com/reference/")).toBeNull();
+    expect(
+      parseBunReferenceUrl("https://bun.com/reference/globals/"),
+    ).toBeNull();
+    expect(
+      parseBunReferenceUrl("https://evil.com/reference/globals/bun/AnsiTheme"),
+    ).toBeNull();
+  });
+
+  test("matchBunReferenceSymbol matches expected symbols", () => {
+    const url = "https://bun.sh/reference/globals/bun/markdown/AnsiTheme";
+    expect(matchBunReferenceSymbol(url, "AnsiTheme")).toBe(true);
+    expect(matchBunReferenceSymbol(url, "ansitheme")).toBe(true);
+    expect(matchBunReferenceSymbol(url, "ANSITHEME")).toBe(true);
+
+    expect(matchBunReferenceSymbol(url, "ansitheme", { exactCase: true })).toBe(
+      false,
+    );
+    expect(matchBunReferenceSymbol(url, "AnsiTheme", { exactCase: true })).toBe(
+      true,
+    );
+
+    expect(matchBunReferenceSymbol(url, "ImportKind")).toBe(false);
+    expect(
+      matchBunReferenceSymbol("https://bun.com/docs/runtime/cron", "AnsiTheme"),
+    ).toBe(false);
+  });
+
+  test("resolveBunSymbolReferenceUrl resolves known symbols to canonical URLs", () => {
+    expect(resolveBunSymbolReferenceUrl("AnsiTheme")).toBe(
+      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+    );
+    expect(resolveBunSymbolReferenceUrl("`AnsiTheme`")).toBe(
+      "https://bun.com/reference/globals/bun/markdown/AnsiTheme",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.markdown.ansi")).toBe(
+      "https://bun.com/reference/globals/bun/markdown/ansi",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.inspect.custom")).toBe(
+      "https://bun.com/reference/globals/bun/inspect",
+    );
+    expect(resolveBunSymbolReferenceUrl("Bun.Terminal")).toBe(
+      "https://bun.com/reference/globals/bun/Terminal",
+    );
+    expect(
+      resolveBunSymbolReferenceUrl("unknown_nonexistent_symbol"),
+    ).toBeNull();
+  });
+
+  test("findBunReferenceSymbolsInText extracts symbols present in text", () => {
+    const text =
+      "Use `AnsiTheme` along with Bun.markdown.ansi and Bun.serve to build CLI tools.";
+    const symbols = findBunReferenceSymbolsInText(text);
+    const names = symbols.map((s) => s.symbolName);
+    expect(names).toContain("AnsiTheme");
+    expect(names).toContain("ansi");
+    expect(names).toContain("serve");
+  });
+
+  test("linkifyBunSymbolsInMarkdown transforms code spans into OSC 8 markdown links", () => {
+    const input =
+      "Configure styling with `AnsiTheme` and render using `Bun.markdown.ansi`.";
+    const linked = linkifyBunSymbolsInMarkdown(input);
+    expect(linked).toContain(
+      "[`AnsiTheme`](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+    );
+    expect(linked).toContain(
+      "[`Bun.markdown.ansi`](https://bun.com/reference/globals/bun/markdown/ansi)",
+    );
   });
 });

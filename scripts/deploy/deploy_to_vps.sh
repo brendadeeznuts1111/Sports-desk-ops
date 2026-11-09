@@ -88,7 +88,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # `scripts` ships because services/ and lib/ import it (live_positions_cron, evidence_capture,
 # capture/*, check_spec_citations); tests/dashboard_credentials.test.ts bundles the unit's entry
 # points against this list and fails when an import leaves it.
-for dir in cli services lib scripts static catalog validation; do
+for dir in cli services lib scripts static catalog validation design; do
   mkdir -p "${APP_DIR}/${dir}"
   cp -R "${REPO_ROOT}/${dir}/." "${APP_DIR}/${dir}/" 2>/dev/null || true
 done
@@ -96,8 +96,6 @@ mkdir -p "${APP_DIR}/docs"
 cp -f "${REPO_ROOT}/docs/graph.html" "${REPO_ROOT}/docs/graph.js" "${REPO_ROOT}/docs/graph-live-feed.json" "${APP_DIR}/docs/" 2>/dev/null || true
 mkdir -p "${APP_DIR}/docs/assets"
 cp -R "${REPO_ROOT}/docs/assets/." "${APP_DIR}/docs/assets/" 2>/dev/null || true
-mkdir -p "${APP_DIR}/design"
-cp -R "${REPO_ROOT}/design/." "${APP_DIR}/design/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.json "${APP_DIR}/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.csv "${APP_DIR}/" 2>/dev/null || true
 cp -f "${REPO_ROOT}"/*.xlsx "${APP_DIR}/" 2>/dev/null || true

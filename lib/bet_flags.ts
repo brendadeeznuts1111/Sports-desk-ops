@@ -427,7 +427,7 @@ function portalWallClockToEpochMs(wallMs: number): number {
  * A portal timestamp -> ISO instant. An explicit zone (`Z`, `+05:30`) is already an instant and is
  * taken as written; a bare wall clock is read as the portal zone. `null` when unparseable.
  */
-function portalIso(value: unknown): string | null {
+export function portalIso(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   if (text === "") return null;

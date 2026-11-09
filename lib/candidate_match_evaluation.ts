@@ -141,16 +141,194 @@ export function metadataFieldState(
   return { state: "null" };
 }
 
+export const F402_DIRECTORY_EVIDENCE_NFL = "f402-directory-20261021-nfl";
+export const F402_DIRECTORY_EVIDENCE_NBA = "f402-directory-20261021-nba";
+export const F402_DIRECTORY_EVIDENCE_NCAAB = "f402-directory-20261021-ncaab";
+export const F402_DIRECTORY_EVIDENCE_WNBA = "f402-directory-20261021-wnba";
+export const F402_DIRECTORY_EVIDENCE_NHL = "f402-directory-20261021-nhl";
+export const F402_DIRECTORY_EVIDENCE_MLB = "f402-directory-20261021-mlb";
+export const F402_DIRECTORY_EVIDENCE_ATP = "f402-directory-20261021-atp";
+export const F402_DIRECTORY_EVIDENCE_WTA = "f402-directory-20261021-wta";
+export const F402_DIRECTORY_EVIDENCE_UFC = "f402-directory-20261021-ufc";
+export const F402_DIRECTORY_EVIDENCE_SOCCER = "f402-directory-20261021-soccer";
+
+const NCAAF_SUBSPORTS = new Set([
+  "college",
+  "coll ext",
+  "collalt",
+  "ncaaf",
+  "ncaaf future",
+  "ncaaf futures",
+  "ncaa sea win",
+  "ncaa sea wins",
+]);
+
+const NFL_SUBSPORTS = new Set([
+  "nfl",
+  "nflplayoffs",
+  "nfl playoffs",
+  "nfl seas win",
+  "nfl seas wins",
+  "nflplrprop1",
+  "nflgameprop",
+  "nfl futures",
+  "nfl props",
+]);
+
+const NBA_SUBSPORTS = new Set([
+  "nba",
+  "nba sea wins",
+  "nbaplayerpro",
+  "nbaplayerprops",
+  "nba futures",
+  "nba props",
+]);
+
+const NCAAB_SUBSPORTS = new Set([
+  "ncaa",
+  "ncaa extra",
+  "ncaab",
+  "wncaa",
+  "wncaa live",
+]);
+
+const NHL_SUBSPORTS = new Set([
+  "nhl",
+  "nhl futures",
+  "nhl props",
+  "nhl seas win",
+]);
+
+const MLB_SUBSPORTS = new Set([
+  "mlb",
+  "mlb futures",
+  "mlb series",
+  "mlb props",
+]);
+
+const ATP_SUBSPORTS = new Set([
+  "atp",
+  "atp matchu",
+  "atp matchups",
+  "atp futures",
+  "atp doubles",
+]);
+
+const WTA_SUBSPORTS = new Set([
+  "wta",
+  "wta matchu",
+  "wta matchups",
+  "wta futures",
+  "wta doubles",
+]);
+
+const UFC_SUBSPORTS = new Set([
+  "mma - ufc",
+  "ufc",
+  "mma",
+  "mma live",
+  "bellator",
+  "pfl",
+]);
+
 export function competitionFamilyFromDirectory(
   sportType: string | null,
   sportSubType: string | null,
 ): { competitionFamily: string | null; directoryEvidenceId: string | null } {
-  if (sportType === "Football" && sportSubType === "College") {
+  const st = sportType?.trim().toLowerCase() ?? "";
+  const sst = sportSubType?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+
+  if (st === "football" || st === "") {
+    if (NCAAF_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "NCAAF",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NCAAF,
+      };
+    }
+    if (NFL_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "NFL",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NFL,
+      };
+    }
+  }
+
+  if (st === "basketball" || st === "") {
+    if (NBA_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "NBA",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NBA,
+      };
+    }
+    if (sst === "wnba") {
+      return {
+        competitionFamily: "WNBA",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_WNBA,
+      };
+    }
+    if (st === "basketball" && NCAAB_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "NCAAB",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NCAAB,
+      };
+    }
+  }
+
+  if (st === "hockey" || st === "") {
+    if (NHL_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "NHL",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NHL,
+      };
+    }
+    if (st === "hockey" && (sst === "ncaa" || sst === "ncaa extra")) {
+      return {
+        competitionFamily: "NCAAH",
+        directoryEvidenceId: "f402-directory-20261021-ncaah",
+      };
+    }
+  }
+
+  if (st === "baseball" || st === "") {
+    if (MLB_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "MLB",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_MLB,
+      };
+    }
+  }
+
+  if (st === "tennis" || st === "") {
+    if (ATP_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "ATP",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_ATP,
+      };
+    }
+    if (WTA_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "WTA",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_WTA,
+      };
+    }
+  }
+
+  if (st === "martial arts" || st === "") {
+    if (UFC_SUBSPORTS.has(sst)) {
+      return {
+        competitionFamily: "UFC",
+        directoryEvidenceId: F402_DIRECTORY_EVIDENCE_UFC,
+      };
+    }
+  }
+
+  if (st === "soccer" && sst.length > 0) {
     return {
-      competitionFamily: "NCAAF",
-      directoryEvidenceId: F402_DIRECTORY_EVIDENCE_NCAAF,
+      competitionFamily: "SOCCER",
+      directoryEvidenceId: F402_DIRECTORY_EVIDENCE_SOCCER,
     };
   }
+
   return { competitionFamily: null, directoryEvidenceId: null };
 }
 

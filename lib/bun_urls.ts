@@ -47,6 +47,181 @@ export function bunReferenceUrl<const S extends string>(
   return bunUrl(`/reference/${symbolPath}`);
 }
 
+/**
+ * Canonical reference URL for Bun's AnsiTheme documentation.
+ * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
+ */
+export const BUN_ANSI_THEME_REFERENCE_URL = bunReferenceUrl(
+  "globals/bun/markdown/AnsiTheme",
+);
+
+export interface BunReferenceSymbol {
+  readonly canonicalUrl: BunUrl;
+  readonly symbolPath: string;
+  readonly modulePath: string;
+  readonly symbolName: string;
+}
+
+/**
+ * Parses a Bun reference URL (e.g. `https://bun.sh/reference/globals/bun/markdown/AnsiTheme`
+ * or `/reference/globals/bun/ImportKind`) into its constituent module path and symbol name.
+ * Returns `null` if the input is not a valid Bun reference URL.
+ */
+export function parseBunReferenceUrl(raw: string): BunReferenceSymbol | null {
+  const canonical = canonicalBunUrl(raw);
+  if (canonical === null) return null;
+
+  try {
+    const url = new URL(canonical);
+    const prefix = "/reference/";
+    if (!url.pathname.startsWith(prefix)) return null;
+
+    const symbolPath = url.pathname.slice(prefix.length);
+    if (symbolPath === "" || symbolPath.endsWith("/")) return null;
+
+    const lastSlash = symbolPath.lastIndexOf("/");
+    if (lastSlash <= 0) return null;
+
+    const modulePath = symbolPath.slice(0, lastSlash);
+    const symbolName = symbolPath.slice(lastSlash + 1);
+
+    if (symbolName === "") return null;
+
+    return {
+      canonicalUrl: canonical,
+      symbolPath,
+      modulePath,
+      symbolName,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks whether a given URL points to a Bun reference documentation page for a specific symbol name.
+ * Case-insensitive by default.
+ *
+ * E.g. `matchBunReferenceSymbol("https://bun.sh/reference/globals/bun/markdown/AnsiTheme", "AnsiTheme")` → `true`.
+ */
+export function matchBunReferenceSymbol(
+  raw: string,
+  expectedSymbol: string,
+  options?: { exactCase?: boolean },
+): boolean {
+  const parsed = parseBunReferenceUrl(raw);
+  if (parsed === null) return false;
+
+  const target =
+    options?.exactCase === true ? expectedSymbol : expectedSymbol.toLowerCase();
+  const actual =
+    options?.exactCase === true
+      ? parsed.symbolName
+      : parsed.symbolName.toLowerCase();
+  return actual === target;
+}
+
+/**
+ * Known Bun reference symbols and their canonical symbol paths under `/reference/`.
+ */
+export const BUN_KNOWN_REFERENCE_SYMBOLS: Readonly<Record<string, string>> = {
+  AnsiTheme: "globals/bun/markdown/AnsiTheme",
+  "Bun.markdown.ansi": "globals/bun/markdown/ansi",
+  "Bun.markdown": "globals/bun/markdown",
+  "Bun.inspect.custom": "globals/bun/inspect",
+  "Bun.inspect": "globals/bun/inspect",
+  "Bun.serve": "globals/bun/serve",
+  "Bun.Terminal": "globals/bun/Terminal",
+  "Bun.file": "globals/bun/file",
+  "Bun.write": "globals/bun/write",
+  "Bun.spawn": "globals/bun/spawn",
+  "Bun.Transpiler": "globals/bun/Transpiler",
+  ImportKind: "globals/bun/ImportKind",
+};
+
+/**
+ * Resolves a Bun symbol name (e.g. `"AnsiTheme"`, `"Bun.markdown.ansi"`, `"globals/bun/markdown/AnsiTheme"`)
+ * to its canonical Bun reference URL.
+ */
+export function resolveBunSymbolReferenceUrl(symbol: string): BunUrl | null {
+  const trimmed = symbol.trim().replace(/^`|`$/g, "");
+  if (!trimmed) return null;
+
+  // Direct match in known symbols catalog
+  if (trimmed in BUN_KNOWN_REFERENCE_SYMBOLS) {
+    const symbolPath = BUN_KNOWN_REFERENCE_SYMBOLS[trimmed]!;
+    return bunReferenceUrl(symbolPath);
+  }
+
+  // Case-insensitive match in known symbols catalog
+  const lower = trimmed.toLowerCase();
+  for (const [key, path] of Object.entries(BUN_KNOWN_REFERENCE_SYMBOLS)) {
+    if (key.toLowerCase() === lower) {
+      return bunReferenceUrl(path);
+    }
+  }
+
+  // If path format provided directly (e.g. globals/bun/markdown/AnsiTheme)
+  if (trimmed.startsWith("globals/bun/")) {
+    try {
+      return bunReferenceUrl(trimmed);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Scans a text or markdown string for occurrences of known Bun reference symbols
+ * and returns their extracted symbol metadata.
+ */
+export function findBunReferenceSymbolsInText(
+  text: string,
+): readonly BunReferenceSymbol[] {
+  const results: BunReferenceSymbol[] = [];
+  const seen = new Set<string>();
+
+  for (const [symbolName, symbolPath] of Object.entries(
+    BUN_KNOWN_REFERENCE_SYMBOLS,
+  )) {
+    // Match word boundaries or backticked symbols
+    const escaped = symbolName.replace(/\./g, "\\.");
+    const regex = new RegExp(
+      `(?<=^|[^a-zA-Z0-9_.])\`?${escaped}\`?(?=[^a-zA-Z0-9_.]|$)`,
+      "g",
+    );
+    if (regex.test(text) && !seen.has(symbolPath)) {
+      seen.add(symbolPath);
+      const parsed = parseBunReferenceUrl(bunReferenceUrl(symbolPath));
+      if (parsed) results.push(parsed);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Automatically transforms occurrences of recognized Bun symbols in Markdown into
+ * canonical OSC 8 Markdown hyperlinks pointing to Bun's official documentation.
+ */
+export function linkifyBunSymbolsInMarkdown(markdown: string): string {
+  let output = markdown;
+  for (const [symbolName, symbolPath] of Object.entries(
+    BUN_KNOWN_REFERENCE_SYMBOLS,
+  )) {
+    const targetUrl = bunReferenceUrl(symbolPath);
+    // Replace backticked `Symbol` not already inside a markdown link
+    const backtickedRegex = new RegExp(
+      `(?<!\\[)\`(${symbolName.replace(/\./g, "\\.")})\`(?!\\]|\\()`,
+      "g",
+    );
+    output = output.replace(backtickedRegex, `[\`$1\`](${targetUrl})`);
+  }
+  return output;
+}
+
 export interface TextDirective {
   readonly prefix?: string;
   readonly start: string;

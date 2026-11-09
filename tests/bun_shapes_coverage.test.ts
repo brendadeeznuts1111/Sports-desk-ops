@@ -37,7 +37,8 @@ const isScanned = (file: string): boolean =>
   !file.startsWith("tests/") &&
   !file.startsWith("verification/") &&
   !file.startsWith("examples/") &&
-  file !== "scripts/build.ts";
+  !file.startsWith("scripts/build") &&
+  !file.startsWith("scripts/dev_dashboard");
 
 async function bunTypesDir(): Promise<string> {
   const types = Bun.resolveSync("@types/bun/package.json", root);

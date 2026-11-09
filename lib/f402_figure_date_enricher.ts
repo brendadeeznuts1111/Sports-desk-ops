@@ -19,6 +19,7 @@ import {
   type PortalPeriodCode,
 } from "./portal_period_taxonomy.ts";
 import { sportCategoryFor } from "./sport_taxonomy.ts";
+import type { BunInspectOptions } from "./cli_inspect.ts";
 
 export interface FigureDateWager {
   readonly TicketNumber: number | string;
@@ -311,27 +312,161 @@ export function inferMarketType(
 /**
  * Extracts point purchases from wager descriptions (e.g. "- buying ½ For Game").
  */
-export function parseBuyPointsFromDesc(desc: string): number {
-  if (!desc) return 0;
-  const match = desc.match(
-    /buying\s+((?:[½¼¾\d.\s]|&#189;|&frac12;|&#188;|&frac14;|&#190;|&frac34;)+)/i,
+const FRACTION_CHAR_MAP: Readonly<Record<string, number>> = {
+  "½": 0.5,
+  "¼": 0.25,
+  "¾": 0.75,
+};
+
+export function normalizeFractionEntities(input: string): string {
+  return input
+    .replace(/&#189;|&#x0*bd;|&frac12;/gi, "½")
+    .replace(/&#188;|&#x0*bc;|&frac14;/gi, "¼")
+    .replace(/&#190;|&#x0*be;|&frac34;/gi, "¾");
+}
+
+export function parseNumericOrVulgarFraction(token: string): number | null {
+  const normalized = normalizeFractionEntities(token).trim();
+  if (normalized === "") return null;
+
+  const mixedMatch = /^([+-]?\d+)?\s*([½¼¾])$/.exec(normalized);
+  if (mixedMatch !== null) {
+    const wholeRaw = mixedMatch[1];
+    const fracChar = mixedMatch[2] ?? "";
+    const frac = FRACTION_CHAR_MAP[fracChar] ?? 0;
+    if (wholeRaw === undefined || wholeRaw === "" || wholeRaw === "+") {
+      return frac;
+    }
+    if (wholeRaw === "-") {
+      return -frac;
+    }
+    const whole = Number(wholeRaw);
+    if (!Number.isFinite(whole)) return null;
+    return whole < 0 ? whole - frac : whole + frac;
+  }
+
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(normalized)) {
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+const BUY_POINTS_REGEX =
+  /\bbuying\s+(\d+\s*[½¼¾]|\d+(?:\.\d+)?|[½¼¾])(?=\s|$)/i;
+
+export function parseBuyPointsFromDesc(desc: unknown): number {
+  if (typeof desc !== "string" || desc === "") return 0;
+  const normalized = normalizeFractionEntities(desc);
+  const match = BUY_POINTS_REGEX.exec(normalized);
+  if (match === null) return 0;
+  const value = parseNumericOrVulgarFraction(match[1] ?? "");
+  return value !== null && value > 0 ? value : 0;
+}
+
+export function stripBuyPointsClause(text: string): string {
+  const normalized = normalizeFractionEntities(text);
+  return normalized
+    .replace(
+      /\s*-\s*buying\s+(?:\d+\s*[½¼¾]|\d+(?:\.\d+)?|[½¼¾])(?=\s|$)/gi,
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export interface ParsedShortDescSelection {
+  readonly marketKind: "spread" | "total" | "moneyline" | "other";
+  readonly adjSpread: number | null;
+  readonly origSpread: number | null;
+  readonly buyPoints: number;
+  readonly finalMoney: number | null;
+  readonly periodDescription: string;
+}
+
+const COMPACT_SPREAD_ODDS_REGEX =
+  /([+-]?\s*(?:\d+\s*[½¼¾]|\d+(?:\.\d+)?|[½¼¾])|PK)\s+([+-]\d{3,4})\b/i;
+const COMPACT_TOTAL_ODDS_REGEX =
+  /\b(?:Over|Under|O|U)\s+(\d+\s*[½¼¾]|\d+(?:\.\d+)?|[½¼¾])\s+([+-]\d{3,4})\b/i;
+const COMPACT_ML_ODDS_REGEX = /\s([+-]\d{3,4})\b/;
+
+export function parseSpreadAndBuyFromShortDesc(
+  desc: unknown,
+): ParsedShortDescSelection {
+  const raw = typeof desc === "string" ? normalizeFractionEntities(desc) : "";
+  const buyPoints = parseBuyPointsFromDesc(raw);
+  const periodMatch =
+    /\bFor\s+(Game|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter)\b/i.exec(
+      raw,
+    );
+  const slashPeriodMatch =
+    /\/\s*(Game|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter)\s*\//i.exec(
+      raw,
+    );
+  const periodDescription = periodMatch?.[1] ?? slashPeriodMatch?.[1] ?? "Game";
+
+  const withoutBuying = stripBuyPointsClause(raw).replace(
+    /\s+-\s+For\s+(?:Game|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter).*$/i,
+    "",
   );
-  if (!match) return 0;
-  const raw =
-    match[1]
-      ?.replace(/&#189;|&frac12;/g, "½")
-      .replace(/&#188;|&frac14;/g, "¼")
-      .replace(/&#190;|&frac34;/g, "¾")
-      .trim() ?? "";
-  if (raw === "½") return 0.5;
-  if (raw === "1½" || raw === "1 ½") return 1.5;
-  if (raw === "2½" || raw === "2 ½") return 2.5;
-  if (raw === "¼") return 0.25;
-  if (raw === "¾") return 0.75;
-  const num = parseFloat(
-    raw.replace("½", ".5").replace("¼", ".25").replace("¾", ".75"),
-  );
-  return Number.isFinite(num) ? num : 0;
+
+  const totalMatch = COMPACT_TOTAL_ODDS_REGEX.exec(withoutBuying);
+  if (totalMatch !== null) {
+    const totalPts = parseNumericOrVulgarFraction(totalMatch[1] ?? "");
+    const odds = Number(totalMatch[2]);
+    return {
+      marketKind: "total",
+      adjSpread: totalPts,
+      origSpread: totalPts,
+      buyPoints,
+      finalMoney: Number.isFinite(odds) ? odds : null,
+      periodDescription,
+    };
+  }
+
+  const withoutRot = withoutBuying.replace(/#\d+\s+/g, "");
+  const spreadMatch = COMPACT_SPREAD_ODDS_REGEX.exec(withoutRot);
+  if (spreadMatch !== null) {
+    const spreadToken = (spreadMatch[1] ?? "").trim();
+    const adjSpread =
+      spreadToken.toUpperCase() === "PK"
+        ? 0
+        : parseNumericOrVulgarFraction(spreadToken.replace(/\s+/g, ""));
+    const odds = Number(spreadMatch[2]);
+    if (adjSpread !== null) {
+      const origSpread = buyPoints > 0 ? adjSpread - buyPoints : adjSpread;
+      return {
+        marketKind: "spread",
+        adjSpread,
+        origSpread,
+        buyPoints,
+        finalMoney: Number.isFinite(odds) ? odds : null,
+        periodDescription,
+      };
+    }
+  }
+
+  const mlMatch = COMPACT_ML_ODDS_REGEX.exec(withoutRot);
+  if (mlMatch !== null) {
+    const odds = Number(mlMatch[1]);
+    return {
+      marketKind: "moneyline",
+      adjSpread: null,
+      origSpread: null,
+      buyPoints,
+      finalMoney: Number.isFinite(odds) ? odds : null,
+      periodDescription,
+    };
+  }
+
+  return {
+    marketKind: "other",
+    adjSpread: null,
+    origSpread: null,
+    buyPoints,
+    finalMoney: null,
+    periodDescription,
+  };
 }
 
 /**
@@ -706,4 +841,131 @@ export function createEnrichedWagersDirectStream(
   return new ReadableStream(
     source as unknown as ConstructorParameters<typeof ReadableStream>[0],
   );
+}
+
+export type FigureDateWagerRow = FigureDateWager;
+
+export interface EnrichedTicketMaster {
+  readonly TicketNumber: string;
+  readonly WagerNumber: string;
+  readonly CustomerID: string;
+  readonly AgentID: string;
+  readonly sportType: string;
+  readonly sportSubType: string;
+  readonly periodDescription: string;
+  readonly marketKind: "spread" | "total" | "moneyline" | "other";
+  readonly origSpread: number | null;
+  readonly adjSpread: number | null;
+  readonly buyPoints: number;
+  readonly finalMoney: number | null;
+  readonly amountWageredUsd: number;
+  readonly toWinAmountUsd: number;
+  readonly ticketWriter: string;
+  readonly shortDesc: string;
+  readonly placedAt: string;
+  readonly [Bun.inspect.custom]?: (
+    depth: number,
+    options?: BunInspectOptions,
+  ) => string;
+  readonly toString?: () => string;
+}
+
+function finiteNumberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function enrichTicketWithBuyPoints(
+  row: FigureDateWagerRow | Record<string, unknown>,
+): EnrichedTicketMaster {
+  const record = row as Record<string, unknown>;
+  const shortDesc = cleanText(record["ShortDesc"] ?? record["Description"]);
+  const parsedDesc = parseSpreadAndBuyFromShortDesc(shortDesc);
+
+  const explicitBuy = finiteNumberOrNull(record["BuyPoints"]);
+  const buyPoints =
+    explicitBuy !== null && explicitBuy > 0
+      ? explicitBuy
+      : parsedDesc.buyPoints;
+
+  const explicitAdjSpread = finiteNumberOrNull(record["AdjSpread"]);
+  const explicitOrigSpread = finiteNumberOrNull(record["OrigSpread"]);
+
+  const adjSpread = explicitAdjSpread ?? parsedDesc.adjSpread;
+  const origSpread =
+    explicitOrigSpread ??
+    (adjSpread !== null
+      ? buyPoints > 0
+        ? adjSpread - buyPoints
+        : adjSpread
+      : null);
+
+  const finalMoney =
+    finiteNumberOrNull(record["FinalMoney"]) ?? parsedDesc.finalMoney;
+
+  const rawWagered = finiteNumberOrNull(record["AmountWagered"]) ?? 0;
+  const rawToWin = finiteNumberOrNull(record["ToWinAmount"]) ?? 0;
+
+  const customerId = cleanText(
+    record["CustomerID"] ?? record["customerID"] ?? record["Login"],
+  ).toUpperCase();
+  const wagerNumber = String(
+    record["WagerNumber"] ?? record["TicketNumber"] ?? "",
+  ).trim();
+  const ticketNumber = String(
+    record["TicketNumber"] ?? record["WagerNumber"] ?? "",
+  ).trim();
+
+  const enriched: EnrichedTicketMaster = {
+    TicketNumber: ticketNumber,
+    WagerNumber: wagerNumber,
+    CustomerID: customerId,
+    AgentID: cleanText(record["AgentID"]).toUpperCase(),
+    sportType: cleanText(record["SportType"]),
+    sportSubType: cleanText(record["SportSubType"]),
+    periodDescription:
+      cleanText(record["PeriodDescription"]) || parsedDesc.periodDescription,
+    marketKind: parsedDesc.marketKind,
+    origSpread,
+    adjSpread,
+    buyPoints,
+    finalMoney,
+    amountWageredUsd: rawWagered,
+    toWinAmountUsd: rawToWin,
+    ticketWriter: cleanText(record["TicketWriter"] ?? record["PlacedOn"]),
+    shortDesc,
+    placedAt: cleanText(record["InsertDateTime"] ?? record["AcceptedDateTime"]),
+    [Bun.inspect.custom](
+      depth: number,
+      options: BunInspectOptions = {},
+    ): string {
+      const c = options?.colors === true;
+      const bold = (s: string) => (c ? `\x1b[1m${s}\x1b[22m` : s);
+      const cyan = (s: string) => (c ? `\x1b[36m${s}\x1b[39m` : s);
+      const yellow = (s: string) => (c ? `\x1b[33m${s}\x1b[39m` : s);
+      const green = (s: string) => (c ? `\x1b[32m${s}\x1b[39m` : s);
+      if (depth <= 0) {
+        return `${bold("EnrichedTicketMaster")}(#${this.TicketNumber || this.WagerNumber})`;
+      }
+      const lineStr =
+        this.adjSpread !== null
+          ? this.buyPoints > 0
+            ? `PointBuy ${this.origSpread} → ${this.adjSpread} (+${this.buyPoints}pt)`
+            : `${this.adjSpread}`
+          : this.marketKind;
+      return `${bold("EnrichedTicketMaster")}(${cyan(this.CustomerID)} #${this.TicketNumber || this.WagerNumber} | ${yellow(lineStr)} | ${green(`$${this.amountWageredUsd.toFixed(2)}`)} | ${this.periodDescription})`;
+    },
+    toString(): string {
+      return this[Bun.inspect.custom]!(2, { colors: false });
+    },
+  };
+  return enriched;
 }

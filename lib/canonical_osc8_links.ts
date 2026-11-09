@@ -15,6 +15,11 @@ import {
   buildGsLiveUsersReportDeepLink,
   formatGsLivePlayerToken,
 } from "./gslive_manager_deeplink_sidecar.ts";
+import {
+  BUN_ANSI_THEME_REFERENCE_URL,
+  linkifyBunSymbolsInMarkdown,
+  resolveBunSymbolReferenceUrl,
+} from "./bun_urls.ts";
 
 export const CANONICAL_DOMAINS = {
   FANTASY402_PORTAL: "https://fantasy402.com",
@@ -127,11 +132,65 @@ export interface AnsiMarkdownOptions {
   readonly light?: boolean;
   readonly columns?: number;
   readonly kittyGraphics?: boolean;
+  readonly linkifySymbols?: boolean;
+}
+
+/**
+ * Type alias representing Bun's official Markdown AnsiTheme interface.
+ * Controls terminal ANSI rendering options for Bun.markdown.ansi().
+ *
+ * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
+ */
+export type AnsiTheme = AnsiMarkdownOptions;
+
+/** Dark terminal preset with ANSI colors and OSC 8 hyperlinks. */
+export const DARK_ANSI_THEME: AnsiTheme = {
+  colors: true,
+  hyperlinks: true,
+  light: false,
+} as const;
+
+/** Light terminal preset with ANSI colors and OSC 8 hyperlinks. */
+export const LIGHT_ANSI_THEME: AnsiTheme = {
+  colors: true,
+  hyperlinks: true,
+  light: true,
+} as const;
+
+/** Monochrome terminal preset with no escape codes or URLs. */
+export const MONOCHROME_ANSI_THEME: AnsiTheme = {
+  colors: false,
+  hyperlinks: false,
+} as const;
+
+/** Accessible terminal preset with OSC 8 hyperlinks. */
+export const ACCESSIBLE_OSC8_THEME: AnsiTheme = {
+  colors: true,
+  hyperlinks: true,
+} as const;
+
+/**
+ * Formats a Markdown link pointing to Bun's canonical AnsiTheme reference.
+ */
+export function formatAnsiThemeOsc8Markdown(): string {
+  return `[AnsiTheme](${BUN_ANSI_THEME_REFERENCE_URL})`;
+}
+
+/**
+ * Formats a Markdown link pointing to Bun's canonical reference for a specific symbol.
+ * Returns null if the symbol is not recognized.
+ */
+export function formatBunSymbolOsc8Markdown(symbol: string): string | null {
+  const url = resolveBunSymbolReferenceUrl(symbol);
+  if (!url) return null;
+  const cleanSymbol = symbol.trim().replace(/^`|`$/g, "");
+  return `[\`${cleanSymbol}\`](${url})`;
 }
 
 /**
  * Render Markdown to ANSI terminal string using native Bun.markdown.ansi().
- * Fully aligned with official https://bun.com/docs/runtime/markdown and Bun.AnsiTheme:
+ * Fully aligned with official Bun.AnsiTheme reference:
+ * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
  *  - colors: Emit ANSI styling (false for plain ASCII chrome without escapes)
  *  - hyperlinks: Emit clickable OSC 8 hyperlinks (\x1b]8;;URL\x1b\TEXT\x1b]8;;\x1b\)
  *  - light: Auto-detects or sets inline code palette for light backgrounds
@@ -150,7 +209,12 @@ export function renderAnsiMarkdown(
       ? options.columns
       : process.stdout?.columns || 80;
 
-  return Bun.markdown.ansi(markdown, {
+  const input =
+    options?.linkifySymbols === true
+      ? linkifyBunSymbolsInMarkdown(markdown)
+      : markdown;
+
+  return Bun.markdown.ansi(input, {
     colors: useColors,
     hyperlinks: useHyperlinks,
     columns:

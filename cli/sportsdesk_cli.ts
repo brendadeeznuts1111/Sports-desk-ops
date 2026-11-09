@@ -29,6 +29,7 @@ import {
   verifyR2Connection,
   getR2ConfigInfo,
 } from "../services/sportsdesk_r2_sync.ts";
+import { renderAnsiMarkdown } from "../lib/canonical_osc8_links.ts";
 
 import {
   parseAsCents,
@@ -1705,12 +1706,72 @@ Subcommands:
 `);
 }
 
+export async function handleDashboardCli(args: string[] = []): Promise<void> {
+  const dashboardPath = resolve(process.cwd(), "dashboard.md");
+  const file = Bun.file(dashboardPath);
+  if (!(await file.exists())) {
+    printHelp();
+    return;
+  }
+
+  const start = performance.now();
+  const content = await file.text();
+  const rendered = renderAnsiMarkdown(content, {
+    colors: !process.env.NO_COLOR && process.env.TERM !== "dumb",
+    hyperlinks: true,
+  });
+  const elapsed = (performance.now() - start).toFixed(2);
+
+  process.stdout.write(rendered);
+  console.log(
+    `\n\x1b[2m⚡ Rendered dashboard.md in ${elapsed}ms via Bun.markdown.ansi\x1b[0m`,
+  );
+
+  // If shell execution requested (--exec or -x)
+  if (args.includes("--exec") || args.includes("-x")) {
+    const codeBlockMatch = content.match(/```(?:sh|bash)\n([\s\S]*?)```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      const commands = codeBlockMatch[1]
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("#"));
+      for (const cmdLine of commands) {
+        console.log(`\x1b[36m$ ${cmdLine}\x1b[0m`);
+        try {
+          const proc = Bun.spawn(["sh", "-c", cmdLine], {
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "inherit",
+          });
+          await proc.exited;
+        } catch (err: unknown) {
+          console.error("Command execution failed:", err);
+        }
+      }
+    }
+  }
+}
+
 export async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
 
-  if (rawArgs.length === 0) {
-    printHelp();
-    return;
+  if (
+    rawArgs.length === 0 ||
+    rawArgs.includes("--exec") ||
+    rawArgs.includes("-x") ||
+    rawArgs[0] === "dashboard" ||
+    rawArgs[0] === "dash" ||
+    rawArgs[0] === "cli"
+  ) {
+    const dashboardFile = Bun.file(resolve(process.cwd(), "dashboard.md"));
+    if (await dashboardFile.exists()) {
+      await handleDashboardCli(rawArgs);
+      return;
+    }
+    if (rawArgs.length === 0) {
+      printHelp();
+      return;
+    }
   }
 
   const cmdArg = rawArgs[0];
@@ -1719,6 +1780,11 @@ export async function main(): Promise<void> {
     return;
   }
   const cmd = cmdArg.toLowerCase();
+
+  if (cmd === "dashboard" || cmd === "dash") {
+    await handleDashboardCli(rawArgs.slice(1));
+    return;
+  }
 
   if (cmd === "wire" || rawArgs.includes("--wire")) {
     await handleWireCommand(rawArgs.slice(1));

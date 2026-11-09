@@ -7,7 +7,12 @@ import {
   formatAgentOsc8Markdown,
   formatDocsOsc8Markdown,
   formatOpenApiSpecOsc8Markdown,
+  formatAnsiThemeOsc8Markdown,
+  formatBunSymbolOsc8Markdown,
   renderAnsiMarkdown,
+  DARK_ANSI_THEME,
+  LIGHT_ANSI_THEME,
+  MONOCHROME_ANSI_THEME,
   CANONICAL_DOMAINS,
 } from "../lib/canonical_osc8_links.ts";
 
@@ -50,6 +55,38 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
     );
   });
 
+  it("formats canonical AnsiTheme reference link", () => {
+    assert.equal(
+      formatAnsiThemeOsc8Markdown(),
+      "[AnsiTheme](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+    );
+  });
+
+  it("formats canonical symbol markdown reference links", () => {
+    assert.equal(
+      formatBunSymbolOsc8Markdown("AnsiTheme"),
+      "[`AnsiTheme`](https://bun.com/reference/globals/bun/markdown/AnsiTheme)",
+    );
+    assert.equal(
+      formatBunSymbolOsc8Markdown("Bun.inspect.custom"),
+      "[`Bun.inspect.custom`](https://bun.com/reference/globals/bun/inspect)",
+    );
+    assert.equal(formatBunSymbolOsc8Markdown("nonexistent_symbol"), null);
+  });
+
+  it("provides standard AnsiTheme presets conforming to Bun specifications", () => {
+    assert.equal(DARK_ANSI_THEME.colors, true);
+    assert.equal(DARK_ANSI_THEME.hyperlinks, true);
+    assert.equal(DARK_ANSI_THEME.light, false);
+
+    assert.equal(LIGHT_ANSI_THEME.colors, true);
+    assert.equal(LIGHT_ANSI_THEME.hyperlinks, true);
+    assert.equal(LIGHT_ANSI_THEME.light, true);
+
+    assert.equal(MONOCHROME_ANSI_THEME.colors, false);
+    assert.equal(MONOCHROME_ANSI_THEME.hyperlinks, false);
+  });
+
   it("renders ANSI markdown with OSC 8 escape sequences enabled", () => {
     const md = `Inspect [RF2003](https://fantasy402.com/manager.html?customer=RF2003) for details.`;
     const rendered = renderAnsiMarkdown(md, {
@@ -63,5 +100,14 @@ describe("Canonical OSC 8 Links & Terminal Hyperlinks Engine", () => {
       rendered.includes("\x1b]8;;") || rendered.includes("RF2003"),
       "Rendered ANSI string must contain OSC 8 hyperlinks or target text",
     );
+  });
+
+  it("renders ANSI markdown with linkifySymbols enabling symbol hyperlinks", () => {
+    const md = "See `AnsiTheme` for options.";
+    const rendered = renderAnsiMarkdown(md, {
+      hyperlinks: true,
+      linkifySymbols: true,
+    });
+    assert.ok(rendered.includes("AnsiTheme"), "Must render AnsiTheme symbol");
   });
 });
