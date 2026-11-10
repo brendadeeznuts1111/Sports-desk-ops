@@ -4,8 +4,12 @@ import {
   auditSliceBitsetVirtualSource,
 } from "../bin/check-slice-bitsets.ts";
 import {
+  evaluateHoldFloorFallbackSlo,
+  getHoldFloorResolutionTelemetry,
   loadHoldFloorConfig,
   parseHoldFloorConfigToml,
+  resetHoldFloorResolutionTelemetry,
+  resolveHoldFloor,
   resolveHoldFloorPct,
 } from "../src/risk/hold_floor_config.ts";
 import {
@@ -1180,5 +1184,173 @@ default_pct = 3.50
         `export function buildSliceIndexLookup(): number { const i = 3; return i | (1 << 16); }`,
       ).some((v) => v.rule === "no-packed-registry-index"),
     ).toBe(true);
+  });
+});
+
+describe("Hold-floor fallback chain resolved_via telemetry & SLO", () => {
+  test("resolveHoldFloor exercises all 4 precedence tiers and records hold_floor_resolutions_total{resolved_via}", () => {
+    const cfg = parseHoldFloorConfigToml(`
+[slo]
+blended_hold_floor_pct = 3.50
+max_default_fallback_share_pct = 0
+
+[hold_floors]
+default_pct = 3.50
+
+[hold_floors.by_slice]
+"football:nfl:p0_game:spread" = 4.25
+
+[hold_floors.by_sport]
+Basketball = 3.60
+
+[hold_floors.by_market]
+Moneyline = 3.10
+`);
+    expect(cfg.slo_max_default_fallback_share_pct).toBe(0);
+    resetHoldFloorResolutionTelemetry();
+
+    // Tier 1: by_slice beats by_sport and by_market
+    const rSlice = resolveHoldFloor(cfg, {
+      slice_id: "football:nfl:p0_game:spread",
+      sport: "Basketball",
+      market: "Moneyline",
+    });
+    expect(rSlice).toEqual({
+      hold_floor_pct: 4.25,
+      resolved_via: "by_slice",
+      matched_key: "football:nfl:p0_game:spread",
+    });
+
+    // Tier 2: by_sport beats by_market
+    const rSport = resolveHoldFloor(cfg, {
+      slice_id: "basketball:nba:p0_game:spread",
+      sport: "Basketball",
+      market: "Moneyline",
+    });
+    expect(rSport).toEqual({
+      hold_floor_pct: 3.6,
+      resolved_via: "by_sport",
+      matched_key: "Basketball",
+    });
+
+    // Tier 3: by_market beats default_pct
+    const rMarket = resolveHoldFloor(cfg, {
+      slice_id: "hockey:nhl:periods:all",
+      sport: "Hockey",
+      market: "Moneyline",
+    });
+    expect(rMarket).toEqual({
+      hold_floor_pct: 3.1,
+      resolved_via: "by_market",
+      matched_key: "Moneyline",
+    });
+
+    // Tier 4: catch-all default_pct fallback
+    const rDefault = resolveHoldFloor(cfg, {
+      slice_id: "baseball:mlb:f5:spread",
+      sport: "UnmappedSport",
+      market: "UnmappedMarket",
+    });
+    expect(rDefault).toEqual({
+      hold_floor_pct: 3.5,
+      resolved_via: "default",
+      matched_key: "default_pct",
+    });
+
+    const snap = getHoldFloorResolutionTelemetry();
+    expect(snap.hold_floor_resolutions_total).toBe(4);
+    expect(snap.by_resolved_via).toEqual({
+      by_slice: 1,
+      by_sport: 1,
+      by_market: 1,
+      default: 1,
+    });
+  });
+
+  test("SLICE_REGISTRY against config/wager_tiers.toml meets 0% default-fallback SLO, while unmapped slices breach SLO", async () => {
+    const holdConfig = await loadHoldFloorConfig("config/wager_tiers.toml");
+    resetHoldFloorResolutionTelemetry();
+
+    const rows = SLICE_REGISTRY.map((spec) => {
+      const seed = REPORT_SEVEN_ROW_FIXTURE.find(
+        (r) => r.slice_id === spec.slice_id,
+      )!;
+      const res = resolveHoldFloor(holdConfig, {
+        slice_id: spec.slice_id,
+        sport: spec.sport,
+        market: spec.market,
+      });
+      return deriveSliceMetrics({
+        slice_id: spec.slice_id,
+        sport: spec.sport,
+        league: spec.league,
+        period: spec.period,
+        market: spec.market,
+        legs: seed.legs,
+        buy_share_pct: seed.buy_share_pct,
+        handle_usd: seed.handle_usd,
+        hold_total_pct: seed.hold_total_pct,
+        hold_floor_pct: res.hold_floor_pct,
+        hold_floor_resolved_via: res.resolved_via,
+        policy: spec.policy,
+        policy_mechanism: spec.policy_mechanism,
+        policy_qualifier: spec.policy_qualifier,
+        block_enforced: true,
+        balanced_overround_pct: STANDARD_MINUS_110_BALANCED_HOLD_PCT,
+      });
+    });
+
+    const sloPass = evaluateHoldFloorFallbackSlo(
+      rows,
+      holdConfig.slo_max_default_fallback_share_pct,
+    );
+    expect(sloPass.total_slices).toBe(SLICE_REGISTRY.length);
+    expect(sloPass.total_handle_usd).toBe(67_677_705);
+    expect(sloPass.counts_by_tier.default).toBe(0);
+    expect(sloPass.default_slice_share_pct).toBe(0);
+    expect(sloPass.default_handle_share_pct).toBe(0);
+    expect(sloPass.default_fallback_slices).toEqual([]);
+    expect(sloPass.slo_met).toBe(true);
+
+    // Even a $0-handle slice falling through to `default` (or missing provenance `null`) breaches a 0% fallback SLO
+    const zeroHandleDriftRow = deriveSliceMetrics({
+      ...rows[0]!,
+      slice_id: "curling:world:p0:spread",
+      sport: "Curling",
+      handle_usd: 0,
+      hold_floor_resolved_via: "default",
+    });
+    const sloBreachZeroHandle = evaluateHoldFloorFallbackSlo(
+      [...rows, zeroHandleDriftRow],
+      0,
+    );
+    expect(sloBreachZeroHandle.counts_by_tier.default).toBe(1);
+    expect(sloBreachZeroHandle.default_handle_share_pct).toBe(0);
+    expect(sloBreachZeroHandle.default_slice_share_pct).toBeGreaterThan(0);
+    expect(sloBreachZeroHandle.default_fallback_slices).toEqual([
+      "curling:world:p0:spread",
+    ]);
+    expect(sloBreachZeroHandle.slo_met).toBe(false);
+
+    // SoA DataTable spine preserves all 5 hold_floor_resolved_via states (`null` + 4 tiers) without recomputation
+    const tiers = [
+      null,
+      "by_slice",
+      "by_sport",
+      "by_market",
+      "default",
+    ] as const;
+    const spine = new SliceMetricsSoASpine(16);
+    spine.flush(
+      tiers.map((tier, idx) => ({
+        ...rows[idx % rows.length]!,
+        slice_id: `football:tier_${idx}:p0:spread`,
+        hold_floor_resolved_via: tier,
+      })),
+    );
+    const projected = spine.readAllRows();
+    for (let i = 0; i < tiers.length; i++) {
+      expect(projected[i]?.hold_floor_resolved_via).toBe(tiers[i]!);
+    }
   });
 });
