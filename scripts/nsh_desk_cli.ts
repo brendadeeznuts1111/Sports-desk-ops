@@ -1015,16 +1015,14 @@ export async function runNshVerifyLoop(
   const commonRoot = await resolveGitCommonRoot(repoRoot);
   const defaultCache = path.join(commonRoot, ".agents", "tools", "nsh-cache");
 
-  const sequence: readonly ("check" | "build" | "test")[] = [
-    "check",
-    "build",
-    "test",
-  ];
-  const results: NshVerifyStepResult[] = [];
-  const loopStartNs = Bun.nanoseconds();
-  let allOk = true;
-
-  for (const step of sequence) {
+  const runStep = async (
+    step: "check" | "build" | "test",
+  ): Promise<{
+    readonly stepResult: NshVerifyStepResult;
+    readonly stdout: string;
+    readonly stderr: string;
+    readonly ok: boolean;
+  }> => {
     const nshArgs = buildNshArgv(appDir, [step]);
     if (!options.quiet) {
       console.error(
@@ -1037,34 +1035,55 @@ export async function runNshVerifyLoop(
       repoRoot,
       defaultCache,
     );
-    if (!options.quiet) {
-      if (res.stdout.length > 0) process.stderr.write(res.stdout);
-      if (res.stderr.length > 0) process.stderr.write(res.stderr);
-    }
-
-    const stepResult: NshVerifyStepResult = {
-      step,
-      exitCode: res.exitCode,
-      durationMs: res.durationMs,
-      stepCount: res.parsed.steps.length,
-      warningCount: res.parsed.warnings.length,
-      errorCount: res.parsed.errors.length,
-      warnings: res.parsed.warnings,
-      errors: res.parsed.errors,
-    };
-    results.push(stepResult);
-
     const failedWarningGate =
       !options.allowWarnings && res.parsed.warnings.length > 0;
-    if (res.exitCode !== 0 || failedWarningGate) {
-      allOk = false;
-      break;
+    return {
+      stepResult: {
+        step,
+        exitCode: res.exitCode,
+        durationMs: res.durationMs,
+        stepCount: res.parsed.steps.length,
+        warningCount: res.parsed.warnings.length,
+        errorCount: res.parsed.errors.length,
+        warnings: res.parsed.warnings,
+        errors: res.parsed.errors,
+      },
+      stdout: res.stdout,
+      stderr: res.stderr,
+      ok: res.exitCode === 0 && !failedWarningGate,
+    };
+  };
+
+  const results: NshVerifyStepResult[] = [];
+  const loopStartNs = Bun.nanoseconds();
+
+  // `nsh check` and `nsh build` are independent; run them concurrently before `nsh test`.
+  const [checkOut, buildOut] = await Promise.all([
+    runStep("check"),
+    runStep("build"),
+  ]);
+  for (const out of [checkOut, buildOut]) {
+    if (!options.quiet) {
+      if (out.stdout.length > 0) process.stderr.write(out.stdout);
+      if (out.stderr.length > 0) process.stderr.write(out.stderr);
     }
+    results.push(out.stepResult);
+  }
+
+  let allOk = checkOut.ok && buildOut.ok;
+  if (allOk) {
+    const testOut = await runStep("test");
+    if (!options.quiet) {
+      if (testOut.stdout.length > 0) process.stderr.write(testOut.stdout);
+      if (testOut.stderr.length > 0) process.stderr.write(testOut.stderr);
+    }
+    results.push(testOut.stepResult);
+    allOk = testOut.ok;
   }
 
   const totalDurationMs = (Bun.nanoseconds() - loopStartNs) / 1_000_000;
   return {
-    ok: allOk && results.length === sequence.length,
+    ok: allOk && results.length === 3,
     allowWarnings: options.allowWarnings,
     totalDurationMs,
     steps: results,

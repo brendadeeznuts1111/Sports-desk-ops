@@ -398,11 +398,27 @@ async function checkIsAncestor(
   return res.code === 0;
 }
 
+function parseAheadBehindAtom(raw: string): {
+  readonly ahead: number;
+  readonly behind: number;
+} | null {
+  const parts = raw.trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const ahead = Number.parseInt(parts[0] ?? "", 10);
+  const behind = Number.parseInt(parts[1] ?? "", 10);
+  if (Number.isNaN(ahead) || Number.isNaN(behind)) return null;
+  return { ahead, behind };
+}
+
 async function getAheadBehind(
   repoDir: string,
   candidateShaOrRef: string,
   baseRef: string,
-): Promise<{ readonly ahead: number; readonly behind: number }> {
+): Promise<{
+  readonly ahead: number;
+  readonly behind: number;
+  readonly ok: boolean;
+}> {
   const res = await runCmd(
     [
       "git",
@@ -413,11 +429,12 @@ async function getAheadBehind(
     ],
     repoDir,
   );
-  if (res.code !== 0) return { ahead: 0, behind: 0 };
+  if (res.code !== 0) return { ahead: 0, behind: 0, ok: false };
   const parts = res.stdout.trim().split(/\s+/);
   return {
     behind: Number.parseInt(parts[0] ?? "0", 10) || 0,
     ahead: Number.parseInt(parts[1] ?? "0", 10) || 0,
+    ok: true,
   };
 }
 
@@ -677,112 +694,142 @@ export async function runWorktreeHygiene(
   );
   const baseSha = baseShaRes.stdout.trim();
 
-  const ghState = options.offline
-    ? {
-        prsByBranch: new Map<string, readonly GithubPrRecord[]>(),
-        prCount: 0,
-        deleteBranchOnMerge: null,
-      }
-    : await loadGithubState(repoCommonRoot);
+  const [ghState, wtRaw, localRefsRes, remoteRefsRes] = await Promise.all([
+    options.offline
+      ? Promise.resolve({
+          prsByBranch: new Map<string, readonly GithubPrRecord[]>(),
+          prCount: 0,
+          deleteBranchOnMerge: null,
+        })
+      : loadGithubState(repoCommonRoot),
+    runCmd(["git", "worktree", "list", "--porcelain"], repoCommonRoot),
+    runCmd(
+      [
+        "git",
+        "for-each-ref",
+        "--sort=-committerdate",
+        `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(worktreepath)|%(ahead-behind:${baseRef})`,
+        "refs/heads/",
+      ],
+      repoCommonRoot,
+    ),
+    runCmd(
+      [
+        "git",
+        "for-each-ref",
+        "--sort=-committerdate",
+        `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(ahead-behind:${baseRef})`,
+        "refs/remotes/origin/",
+      ],
+      repoCommonRoot,
+    ),
+  ]);
 
-  const wtRaw = await runCmd(
-    ["git", "worktree", "list", "--porcelain"],
-    repoCommonRoot,
-  );
   const parsedWorktrees = parseWorktreeListPorcelain(wtRaw.stdout);
-  const registeredPaths = new Set<string>();
+  const resolvedWorktreeRows = await Promise.all(
+    parsedWorktrees.map(async (wt): Promise<WorktreeAuditRow> => {
+      const absPath = await canonicalPath(wt.path);
+      const isPrimary = absPath === repoCommonRoot;
+      const containsCwd =
+        resolvedCwd === absPath || resolvedCwd.startsWith(`${absPath}/`);
+      const existsOnDisk = await dirExists(absPath);
 
-  const worktreeRows: WorktreeAuditRow[] = [];
-  for (const wt of parsedWorktrees) {
-    const absPath = await canonicalPath(wt.path);
-    registeredPaths.add(absPath);
-    const isPrimary = absPath === repoCommonRoot;
-    const containsCwd =
-      resolvedCwd === absPath || resolvedCwd.startsWith(`${absPath}/`);
-    const existsOnDisk = await dirExists(absPath);
-
-    const dirtiness = existsOnDisk
-      ? await inspectWorktreeDirtiness(absPath)
-      : { modifiedCount: 0, untrackedCount: 0 };
-    const { ahead, behind } =
-      wt.headSha.length > 0
-        ? await getAheadBehind(repoCommonRoot, wt.headSha, baseRef)
-        : { ahead: 0, behind: 0 };
-    const isAnc =
-      wt.headSha.length > 0
-        ? await checkIsAncestor(repoCommonRoot, wt.headSha, baseRef)
-        : false;
-    const unapplied =
-      !isAnc && ahead > 0 && wt.headSha.length > 0
-        ? await getUnappliedCherryCount(repoCommonRoot, wt.headSha, baseRef)
-        : null;
-    const branchPrs =
-      wt.branch !== null ? (ghState.prsByBranch.get(wt.branch) ?? []) : [];
-    const mergeProof = classifyBranchMergeProof({
-      name: wt.branch ?? wt.headSha,
-      fullSha: wt.headSha,
-      isDefaultBranch: false,
-      checkedOutInKeptWorktree: false,
-      isAncestor: isAnc,
-      aheadCount: ahead,
-      unappliedCherryCount: unapplied,
-      prsForBranch: branchPrs,
-    });
-    const headMerged = isCleanBranchDisposition(mergeProof.disposition);
-    let anchoredBranch: string | null = null;
-    if (wt.detached && wt.headSha.length > 0 && !headMerged) {
-      const containsRes = await runCmd(
-        [
-          "git",
-          "for-each-ref",
-          "--contains",
-          wt.headSha,
-          "--format=%(refname:short)",
-          "refs/heads/",
-          "refs/remotes/origin/",
-        ],
-        repoCommonRoot,
+      const [dirtiness, abRes] = await Promise.all([
+        existsOnDisk
+          ? inspectWorktreeDirtiness(absPath)
+          : Promise.resolve({ modifiedCount: 0, untrackedCount: 0 }),
+        wt.headSha.length > 0
+          ? getAheadBehind(repoCommonRoot, wt.headSha, baseRef)
+          : Promise.resolve({ ahead: 0, behind: 0, ok: false }),
+      ]);
+      const ahead = abRes.ahead;
+      const behind = abRes.behind;
+      const isAnc =
+        wt.headSha.length > 0
+          ? abRes.ok
+            ? ahead === 0
+            : await checkIsAncestor(repoCommonRoot, wt.headSha, baseRef)
+          : false;
+      const branchPrs =
+        wt.branch !== null ? (ghState.prsByBranch.get(wt.branch) ?? []) : [];
+      const hasExactMergedPr = branchPrs.some(
+        (p) => p.state === "MERGED" && p.headRefOid === wt.headSha,
       );
-      if (containsRes.code === 0) {
-        const refNames = containsRes.stdout
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0 && s !== "origin" && s !== "origin/HEAD");
-        anchoredBranch = refNames[0] ?? null;
+      const unapplied =
+        !isAnc && ahead > 0 && wt.headSha.length > 0 && !hasExactMergedPr
+          ? await getUnappliedCherryCount(repoCommonRoot, wt.headSha, baseRef)
+          : null;
+      const mergeProof = classifyBranchMergeProof({
+        name: wt.branch ?? wt.headSha,
+        fullSha: wt.headSha,
+        isDefaultBranch: false,
+        checkedOutInKeptWorktree: false,
+        isAncestor: isAnc,
+        aheadCount: ahead,
+        unappliedCherryCount: unapplied,
+        prsForBranch: branchPrs,
+      });
+      const headMerged = isCleanBranchDisposition(mergeProof.disposition);
+      let anchoredBranch: string | null = null;
+      if (wt.detached && wt.headSha.length > 0 && !headMerged) {
+        const containsRes = await runCmd(
+          [
+            "git",
+            "for-each-ref",
+            "--contains",
+            wt.headSha,
+            "--format=%(refname:short)",
+            "refs/heads/",
+            "refs/remotes/origin/",
+          ],
+          repoCommonRoot,
+        );
+        if (containsRes.code === 0) {
+          const refNames = containsRes.stdout
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(
+              (s) => s.length > 0 && s !== "origin" && s !== "origin/HEAD",
+            );
+          anchoredBranch = refNames[0] ?? null;
+        }
       }
-    }
 
-    const classified = classifyWorktreeDisposition({
-      isPrimary,
-      containsCwd,
-      registered: true,
-      detached: wt.detached,
-      anchoredBranch,
-      locked: wt.locked,
-      prunable: wt.prunable,
-      existsOnDisk,
-      modifiedCount: dirtiness.modifiedCount,
-      untrackedCount: dirtiness.untrackedCount,
-      headMerged,
-      mergeReason: mergeProof.reason,
-      aheadCount: ahead,
-    });
+      const classified = classifyWorktreeDisposition({
+        isPrimary,
+        containsCwd,
+        registered: true,
+        detached: wt.detached,
+        anchoredBranch,
+        locked: wt.locked,
+        prunable: wt.prunable,
+        existsOnDisk,
+        modifiedCount: dirtiness.modifiedCount,
+        untrackedCount: dirtiness.untrackedCount,
+        headMerged,
+        mergeReason: mergeProof.reason,
+        aheadCount: ahead,
+      });
 
-    worktreeRows.push({
-      path: absPath,
-      label: compactWorktreeLabel(absPath, repoCommonRoot),
-      headShort: wt.headSha.slice(0, 7),
-      branch: wt.branch,
-      registered: true,
-      existsOnDisk,
-      modifiedCount: dirtiness.modifiedCount,
-      untrackedCount: dirtiness.untrackedCount,
-      aheadCount: ahead,
-      behindCount: behind,
-      disposition: classified.disposition,
-      reason: classified.reason,
-    });
-  }
+      return {
+        path: absPath,
+        label: compactWorktreeLabel(absPath, repoCommonRoot),
+        headShort: wt.headSha.slice(0, 7),
+        branch: wt.branch,
+        registered: true,
+        existsOnDisk,
+        modifiedCount: dirtiness.modifiedCount,
+        untrackedCount: dirtiness.untrackedCount,
+        aheadCount: ahead,
+        behindCount: behind,
+        disposition: classified.disposition,
+        reason: classified.reason,
+      };
+    }),
+  );
+
+  const registeredPaths = new Set(resolvedWorktreeRows.map((w) => w.path));
+  const worktreeRows: WorktreeAuditRow[] = [...resolvedWorktreeRows];
 
   // Scan known worktree container directories for unregistered orphan folders.
   const home = Bun.env["HOME"] ?? "";
@@ -837,115 +884,139 @@ export async function runWorktreeHygiene(
     }
   }
 
-  // Audit local branches.
-  const localRefsRes = await runCmd(
-    [
-      "git",
-      "for-each-ref",
-      "--sort=-committerdate",
-      "--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(worktreepath)",
-      "refs/heads/",
-    ],
-    repoCommonRoot,
-  );
-  const localBranches: BranchAuditRow[] = [];
-  for (const line of localRefsRes.stdout.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) continue;
-    const [name = "", sha = "", committerDate = "", wtPath = ""] =
-      trimmed.split("|");
-    if (name.length === 0 || sha.length === 0) continue;
+  // Audit local and remote branches in parallel using precomputed %(ahead-behind:<baseRef>).
+  const localRefEntries = localRefsRes.stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((line) => {
+      const [name = "", sha = "", committerDate = "", wtPath = "", abRaw = ""] =
+        line.split("|");
+      return { name, sha, committerDate, wtPath, abRaw };
+    })
+    .filter((e) => e.name.length > 0 && e.sha.length > 0);
 
-    const isDefault = name === "main" || name === "master";
-    const { ahead } = await getAheadBehind(repoCommonRoot, name, baseRef);
-    const isAnc = await checkIsAncestor(repoCommonRoot, name, baseRef);
-    const unapplied =
-      !isAnc && ahead > 0
-        ? await getUnappliedCherryCount(repoCommonRoot, name, baseRef)
-        : null;
-    const proof = classifyBranchMergeProof({
-      name,
-      fullSha: sha,
-      isDefaultBranch: isDefault,
-      checkedOutInKeptWorktree: keptWorktreeBranches.has(name),
-      isAncestor: isAnc,
-      aheadCount: ahead,
-      unappliedCherryCount: unapplied,
-      prsForBranch: ghState.prsByBranch.get(name) ?? [],
-    });
+  const remoteRefEntries = remoteRefsRes.stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((line) => {
+      const [shortRef = "", sha = "", committerDate = "", abRaw = ""] =
+        line.split("|");
+      return { shortRef, sha, committerDate, abRaw };
+    })
+    .filter(
+      (e) =>
+        e.shortRef !== "origin" &&
+        e.shortRef !== "origin/HEAD" &&
+        e.shortRef.length > 0 &&
+        e.sha.length > 0,
+    );
 
-    localBranches.push({
-      scope: "local",
-      name,
-      fullRef: `refs/heads/${name}`,
-      sha,
-      shortSha: sha.slice(0, 7),
-      committerDate,
-      worktreePath: wtPath.length > 0 ? wtPath : null,
-      aheadCount: ahead,
-      disposition: proof.disposition,
-      reason: proof.reason,
-    });
-  }
+  const [localBranches, remoteBranches] = await Promise.all([
+    Promise.all(
+      localRefEntries.map(async (entry): Promise<BranchAuditRow> => {
+        const isDefault = entry.name === "main" || entry.name === "master";
+        const parsedAb = parseAheadBehindAtom(entry.abRaw);
+        const ab =
+          parsedAb ??
+          (await getAheadBehind(repoCommonRoot, entry.name, baseRef));
+        const ahead = ab.ahead;
+        const isAnc =
+          parsedAb !== null
+            ? ahead === 0
+            : await checkIsAncestor(repoCommonRoot, entry.name, baseRef);
+        const prs = ghState.prsByBranch.get(entry.name) ?? [];
+        const hasExactMergedPr = prs.some(
+          (p) => p.state === "MERGED" && p.headRefOid === entry.sha,
+        );
+        const checkedOutInKept = keptWorktreeBranches.has(entry.name);
+        const unapplied =
+          !isDefault &&
+          !checkedOutInKept &&
+          !isAnc &&
+          ahead > 0 &&
+          !hasExactMergedPr
+            ? await getUnappliedCherryCount(repoCommonRoot, entry.name, baseRef)
+            : null;
+        const proof = classifyBranchMergeProof({
+          name: entry.name,
+          fullSha: entry.sha,
+          isDefaultBranch: isDefault,
+          checkedOutInKeptWorktree: checkedOutInKept,
+          isAncestor: isAnc,
+          aheadCount: ahead,
+          unappliedCherryCount: unapplied,
+          prsForBranch: prs,
+        });
 
-  // Audit remote branches on origin.
-  const remoteRefsRes = await runCmd(
-    [
-      "git",
-      "for-each-ref",
-      "--sort=-committerdate",
-      "--format=%(refname:short)|%(objectname)|%(committerdate:short)",
-      "refs/remotes/origin/",
-    ],
-    repoCommonRoot,
-  );
-  const remoteBranches: BranchAuditRow[] = [];
-  for (const line of remoteRefsRes.stdout.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) continue;
-    const [shortRef = "", sha = "", committerDate = ""] = trimmed.split("|");
-    if (
-      shortRef === "origin" ||
-      shortRef === "origin/HEAD" ||
-      shortRef.length === 0 ||
-      sha.length === 0
-    ) {
-      continue;
-    }
-    const name = shortRef.startsWith("origin/")
-      ? shortRef.slice("origin/".length)
-      : shortRef;
-    const isDefault = name === "main" || name === "master";
-    const { ahead } = await getAheadBehind(repoCommonRoot, shortRef, baseRef);
-    const isAnc = await checkIsAncestor(repoCommonRoot, shortRef, baseRef);
-    const unapplied =
-      !isAnc && ahead > 0
-        ? await getUnappliedCherryCount(repoCommonRoot, shortRef, baseRef)
-        : null;
-    const proof = classifyBranchMergeProof({
-      name,
-      fullSha: sha,
-      isDefaultBranch: isDefault,
-      checkedOutInKeptWorktree: false,
-      isAncestor: isAnc,
-      aheadCount: ahead,
-      unappliedCherryCount: unapplied,
-      prsForBranch: ghState.prsByBranch.get(name) ?? [],
-    });
+        return {
+          scope: "local",
+          name: entry.name,
+          fullRef: `refs/heads/${entry.name}`,
+          sha: entry.sha,
+          shortSha: entry.sha.slice(0, 7),
+          committerDate: entry.committerDate,
+          worktreePath: entry.wtPath.length > 0 ? entry.wtPath : null,
+          aheadCount: ahead,
+          disposition: proof.disposition,
+          reason: proof.reason,
+        };
+      }),
+    ),
+    Promise.all(
+      remoteRefEntries.map(async (entry): Promise<BranchAuditRow> => {
+        const name = entry.shortRef.startsWith("origin/")
+          ? entry.shortRef.slice("origin/".length)
+          : entry.shortRef;
+        const isDefault = name === "main" || name === "master";
+        const parsedAb = parseAheadBehindAtom(entry.abRaw);
+        const ab =
+          parsedAb ??
+          (await getAheadBehind(repoCommonRoot, entry.shortRef, baseRef));
+        const ahead = ab.ahead;
+        const isAnc =
+          parsedAb !== null
+            ? ahead === 0
+            : await checkIsAncestor(repoCommonRoot, entry.shortRef, baseRef);
+        const prs = ghState.prsByBranch.get(name) ?? [];
+        const hasExactMergedPr = prs.some(
+          (p) => p.state === "MERGED" && p.headRefOid === entry.sha,
+        );
+        const unapplied =
+          !isDefault && !isAnc && ahead > 0 && !hasExactMergedPr
+            ? await getUnappliedCherryCount(
+                repoCommonRoot,
+                entry.shortRef,
+                baseRef,
+              )
+            : null;
+        const proof = classifyBranchMergeProof({
+          name,
+          fullSha: entry.sha,
+          isDefaultBranch: isDefault,
+          checkedOutInKeptWorktree: false,
+          isAncestor: isAnc,
+          aheadCount: ahead,
+          unappliedCherryCount: unapplied,
+          prsForBranch: prs,
+        });
 
-    remoteBranches.push({
-      scope: "remote",
-      name,
-      fullRef: `refs/remotes/${shortRef}`,
-      sha,
-      shortSha: sha.slice(0, 7),
-      committerDate,
-      worktreePath: null,
-      aheadCount: ahead,
-      disposition: proof.disposition,
-      reason: proof.reason,
-    });
-  }
+        return {
+          scope: "remote",
+          name,
+          fullRef: `refs/remotes/${entry.shortRef}`,
+          sha: entry.sha,
+          shortSha: entry.sha.slice(0, 7),
+          committerDate: entry.committerDate,
+          worktreePath: null,
+          aheadCount: ahead,
+          disposition: proof.disposition,
+          reason: proof.reason,
+        };
+      }),
+    ),
+  ]);
 
   const pruneCount = worktreeRows.filter(
     (w) => w.disposition === "clean:missing-dir",

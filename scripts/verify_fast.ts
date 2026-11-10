@@ -62,7 +62,7 @@ function gitQuery(args: string[]): { ok: boolean; lines: string[] } {
 function collectRecentByMtime(minutes: number): string[] {
   const cutoff = Date.now() - minutes * 60_000;
   const glob = new Bun.Glob(
-    "{lib,src,scripts,tests,config,design,bin,cli,services,workers,types,migrations}/**/*.{ts,tsx,js,mjs,json,toml,md,sql}",
+    "{lib,src,packages,scripts,tests,config,design,bin,cli,services,workers,types,migrations}/**/*.{ts,tsx,js,mjs,json,toml,md,sql}",
   );
   const found: string[] = [];
   for (const rel of glob.scanSync({ cwd: ROOT, onlyFiles: true })) {
@@ -242,6 +242,14 @@ if (
   }
 }
 
+function resolveOxlintBin(): string | null {
+  const localBin = path.join(ROOT, "node_modules", ".bin", "oxlint");
+  if (existsSync(localBin)) return localBin;
+  return Bun.which("oxlint", { PATH: Bun.env.PATH ?? "" });
+}
+
+const oxlintBin = resolveOxlintBin();
+
 // Phase 2: Parallel typecheck + UI typecheck + scoped lint + targeted tests
 const tasks: Promise<TaskResult>[] = [
   runTask("typecheck", ["bun", "check", "--no-script", "-p", "tsconfig.json"]),
@@ -255,31 +263,31 @@ const tasks: Promise<TaskResult>[] = [
   runTask("ensure:tsconfig", ["bun", "run", "scripts/ensure_deep_tsconfig.ts"]),
 ];
 
-if (lintTargets.length > 0) {
+if (lintTargets.length > 0 && oxlintBin !== null) {
   tasks.push(
     runTask(`oxlint (${lintTargets.length})`, [
-      "bun",
-      "--bun",
-      "run",
-      "oxlint",
+      oxlintBin,
       "--deny-warnings",
       ...lintTargets,
     ]),
   );
 }
 
-if (values.deep) {
+if (values.deep && oxlintBin !== null) {
   tasks.push(
     runTask("oxlint:type-aware", [
-      "bun",
-      "--bun",
-      "run",
-      "oxlint",
+      oxlintBin,
       "--type-aware",
       "-c",
       ".oxlintrc.type-aware.json",
       "--deny-warnings",
     ]),
+  );
+}
+
+if (changed.some((f) => f.startsWith("packages/nsh-desk/"))) {
+  tasks.push(
+    runTask("nsh:check", ["bun", "run", "scripts/nsh_desk_cli.ts", "check"]),
   );
 }
 

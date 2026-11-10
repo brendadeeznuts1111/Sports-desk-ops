@@ -530,29 +530,79 @@ const COL_FAIR_PROB = 2;
 const COL_EDGE_BPS = 3;
 const COL_CONFIDENCE = 4;
 
+export interface SignalArenaIndex {
+  readonly items: readonly KalshiSignalItem[];
+  readonly metrics: Float64Array;
+  readonly baseRows: readonly string[][];
+  readonly indexById: ReadonlyMap<string, number>;
+}
+
 export interface SignalArenaView {
   readonly rows: string[][];
   readonly order: Uint32Array;
   readonly items: readonly KalshiSignalItem[];
 }
 
-export function buildSignalArenaView(
+/**
+ * Precomputes the fixed-stride `Float64Array` metric buffer, pre-formatted row
+ * cell arrays, and `O(1)` `id -> index` map once per `/api/signals/kalshi` snapshot.
+ */
+export function buildSignalArenaIndex(
   items: readonly KalshiSignalItem[],
+): SignalArenaIndex {
+  const count = items.length;
+  const metrics = new Float64Array(count * SIGNAL_METRIC_STRIDE);
+  const baseRows: string[][] = new Array(count);
+  const indexById = new Map<string, number>();
+
+  for (let i = 0; i < count; i++) {
+    const s = items[i]!;
+    const base = i * SIGNAL_METRIC_STRIDE;
+    metrics[base + COL_RISK] = s.riskUsd;
+    metrics[base + COL_ACCOUNTS] = s.distinctAccounts;
+    metrics[base + COL_FAIR_PROB] = s.fairProb ?? -1;
+    metrics[base + COL_EDGE_BPS] = s.edgeBps ?? Number.NEGATIVE_INFINITY;
+    metrics[base + COL_CONFIDENCE] = s.confidence;
+
+    if (!indexById.has(s.id)) {
+      indexById.set(s.id, i);
+    }
+
+    const edgeText =
+      s.edgeBps === null
+        ? "—"
+        : `${s.edgeBps >= 0 ? "+" : ""}${s.edgeBps.toFixed(0)} bps`;
+    const fairText =
+      s.fairProb === null ? "—" : `${(s.fairProb * 100).toFixed(1)}%`;
+    baseRows[i] = [
+      s.league,
+      s.marketLabel,
+      formatUsd(s.riskUsd),
+      String(s.distinctAccounts),
+      fairText,
+      edgeText,
+      `${s.confidence}%`,
+      s.verdict,
+      formatProvenanceCompact(s.provenance),
+    ];
+  }
+
+  return { items, metrics, baseRows, indexById };
+}
+
+/**
+ * Sorts a `Uint32Array` index permutation against a precomputed `SignalArenaIndex`
+ * without reallocating metric buffers or re-formatting cells on header clicks.
+ */
+export function sortSignalArenaIndex(
+  index: SignalArenaIndex,
   sortKey: string | null,
   sortDirection: "ascending" | "descending" | null,
 ): SignalArenaView {
+  const { items, metrics, baseRows } = index;
   const count = items.length;
-  const metrics = new Float64Array(count * SIGNAL_METRIC_STRIDE);
   const order = new Uint32Array(count);
-
   for (let i = 0; i < count; i++) {
-    const item = items[i]!;
-    const base = i * SIGNAL_METRIC_STRIDE;
-    metrics[base + COL_RISK] = item.riskUsd;
-    metrics[base + COL_ACCOUNTS] = item.distinctAccounts;
-    metrics[base + COL_FAIR_PROB] = item.fairProb ?? -1;
-    metrics[base + COL_EDGE_BPS] = item.edgeBps ?? Number.NEGATIVE_INFINITY;
-    metrics[base + COL_CONFIDENCE] = item.confidence;
     order[i] = i;
   }
 
@@ -589,28 +639,22 @@ export function buildSignalArenaView(
 
   const rows: string[][] = new Array(count);
   for (let pos = 0; pos < count; pos++) {
-    const idx = order[pos]!;
-    const s = items[idx]!;
-    const edgeText =
-      s.edgeBps === null
-        ? "—"
-        : `${s.edgeBps >= 0 ? "+" : ""}${s.edgeBps.toFixed(0)} bps`;
-    const fairText =
-      s.fairProb === null ? "—" : `${(s.fairProb * 100).toFixed(1)}%`;
-    rows[pos] = [
-      s.league,
-      s.marketLabel,
-      formatUsd(s.riskUsd),
-      String(s.distinctAccounts),
-      fairText,
-      edgeText,
-      `${s.confidence}%`,
-      s.verdict,
-      formatProvenanceCompact(s.provenance),
-    ];
+    rows[pos] = baseRows[order[pos]!]!;
   }
 
   return { rows, order, items };
+}
+
+export function buildSignalArenaView(
+  items: readonly KalshiSignalItem[],
+  sortKey: string | null,
+  sortDirection: "ascending" | "descending" | null,
+): SignalArenaView {
+  return sortSignalArenaIndex(
+    buildSignalArenaIndex(items),
+    sortKey,
+    sortDirection,
+  );
 }
 
 export interface ExposurePlotPoint {

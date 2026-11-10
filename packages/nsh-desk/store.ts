@@ -4,7 +4,7 @@ import {
   buildDiagnosticsSnapshotJson,
   buildExposurePlotData,
   buildScoreboardRows,
-  buildSignalArenaView,
+  buildSignalArenaIndex,
   DESK_PREFS_STORAGE_KEY,
   extractApiFailureCause,
   parseKalshiPayload,
@@ -14,6 +14,7 @@ import {
   parseWorkspacePrefsJson,
   resolveDeskOrigin,
   serializeWorkspacePrefs,
+  sortSignalArenaIndex,
   type DeskLeagueFilter,
   type EndpointSnapshot,
   type ParsedKalshiPayload,
@@ -50,6 +51,8 @@ export function defaultWorkspaceLayout(): DockAreaLayout {
   };
 }
 
+const ENDPOINT_FETCH_TIMEOUT_MS = 5_000;
+
 async function fetchJsonEndpoint<T>(
   origin: string,
   endpoint: string,
@@ -59,7 +62,10 @@ async function fetchJsonEndpoint<T>(
   const url = `${origin}${endpoint}`;
   let response: Response;
   try {
-    response = await fetch(url, { method: "GET" });
+    response = await fetch(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(ENDPOINT_FETCH_TIMEOUT_MS),
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
@@ -72,7 +78,20 @@ async function fetchJsonEndpoint<T>(
     };
   }
 
-  const bodyText = await response.text();
+  let bodyText: string;
+  try {
+    bodyText = await response.text();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      status: "unavailable",
+      endpoint,
+      httpStatus: response.status,
+      code: "body_read_failed",
+      cause: `${url} body read failed: ${msg}`,
+      fetchedAtIso,
+    };
+  }
   if (!response.ok) {
     const { code, cause } = extractApiFailureCause(
       endpoint,
@@ -251,26 +270,32 @@ export function createDeskStore() {
   }, 10_000);
   cleanup(() => clearInterval(timer));
 
-  const signalArena = computed(() => {
+  const signalArenaIndex = computed(() => {
     const snap = kalshiSnap();
-    if (snap.status !== "ready") {
-      return buildSignalArenaView([], null, null);
-    }
+    return buildSignalArenaIndex(
+      snap.status === "ready" ? snap.data.signals : [],
+    );
+  });
+
+  const signalArena = computed(() => {
     const s = signalSort();
-    return buildSignalArenaView(
-      snap.data.signals,
+    return sortSignalArenaIndex(
+      signalArenaIndex(),
       s?.key ?? null,
       s?.direction ?? null,
     );
   });
 
   const selectedSignal = computed(() => {
+    const idxData = signalArenaIndex();
     const arena = signalArena();
     if (arena.items.length === 0) return null;
     const targetId = selectedSignalId();
     if (targetId !== null) {
-      const matched = arena.items.find((item) => item.id === targetId);
-      if (matched) return matched;
+      const matchedIdx = idxData.indexById.get(targetId);
+      if (matchedIdx !== undefined) {
+        return arena.items[matchedIdx] ?? null;
+      }
     }
     const firstIdx = arena.order[0];
     return firstIdx !== undefined ? (arena.items[firstIdx] ?? null) : null;

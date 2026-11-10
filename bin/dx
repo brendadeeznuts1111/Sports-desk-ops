@@ -370,9 +370,52 @@ EOF
     ;;
   status)
     # Every line below is measured now, or says what it could not measure. Nothing is hardcoded OK.
+    # Slow subprocess / network probes run concurrently into a private scratch dir and join via `wait`.
     dx_ok() { echo "✅ $1"; }
     dx_warn() { echo "⚠️  $1"; }
     dx_bad() { echo "❌ $1"; }
+    dx_portal="https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html"
+    dx_probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/dx-status.XXXXXX")"
+    (
+      if out="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)"; then
+        if [[ -z "$out" ]]; then
+          printf '0|0\n' >"$dx_probe_dir/git"
+        else
+          printf '0|%s\n' "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" >"$dx_probe_dir/git"
+        fi
+      else
+        printf '1|0\n' >"$dx_probe_dir/git"
+      fi
+    ) &
+    (
+      if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
+        printf '%s\n' "not probed (DX_STATUS_OFFLINE=1)" >"$dx_probe_dir/wrangler"
+      else
+        (cd "$REPO_ROOT" && ./wrangler --version 2>/dev/null | head -n 1 || true) >"$dx_probe_dir/wrangler"
+      fi
+    ) &
+    (
+      if (cd "$REPO_ROOT" && bun scripts/publish_r2_graph.mjs --check-credentials >/dev/null 2>&1); then
+        printf 'ok\n' >"$dx_probe_dir/r2"
+      else
+        printf 'missing\n' >"$dx_probe_dir/r2"
+      fi
+    ) &
+    (
+      if [[ "${DX_STATUS_OFFLINE:-}" != "1" ]]; then
+        (curl -sS -o /dev/null -I -m 3 -w '%{http_code}' "$dx_portal" 2>/dev/null || true) >"$dx_probe_dir/portal"
+      fi
+    ) &
+    dx_bun_ver="$(bun -v 2>/dev/null || echo 'bun missing')"
+    dx_git_tip="$(git -C "$REPO_ROOT" log -n 1 --oneline)"
+    dx_staged_dist="$(ls -1 "$REPO_ROOT/dist" 2>/dev/null | tr '\n' ' ')"
+    wait
+    IFS='|' read -r dx_git_rc dx_dirty_count <"$dx_probe_dir/git" || { dx_git_rc="1"; dx_dirty_count="0"; }
+    dx_wrangler="$(cat "$dx_probe_dir/wrangler" 2>/dev/null || true)"
+    dx_r2_state="$(cat "$dx_probe_dir/r2" 2>/dev/null || true)"
+    dx_code="$(cat "$dx_probe_dir/portal" 2>/dev/null || true)"
+    rm -rf "$dx_probe_dir"
+
     echo "================================================================================"
     echo "  🛠️  SPORTSDESK & DOTFILES DX STATUS (measured $(date '+%Y-%m-%d %H:%M:%S %Z'))"
     echo "================================================================================"
@@ -387,9 +430,8 @@ EOF
     else
       echo "  • DOTFILES_ROOT        : ${DOTFILES_DIR} ($(dx_bad 'not found; set DX_DOTFILES_DIR'))"
     fi
-    if git -C "$REPO_ROOT" status -s >/dev/null 2>&1; then
+    if [[ "$dx_git_rc" == "0" ]]; then
       echo "  • git status           : $HOME/.gitconfig ($(dx_ok 'git status exits 0'))"
-      dx_dirty_count="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
       if [[ "${dx_dirty_count:-0}" == "0" ]]; then
         echo "  • Worktree cleanliness : $(dx_ok 'clean (0 uncommitted paths)')"
       else
@@ -404,16 +446,10 @@ EOF
     else
       echo "  • Home links           : $(dx_ok 'no conflicts')"
     fi
-    if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
-      # Offline mode must not touch a tool that may bootstrap or hit the network.
-      dx_wrangler="not probed (DX_STATUS_OFFLINE=1)"
-    else
-      dx_wrangler="$(cd "$REPO_ROOT" && ./wrangler --version 2>/dev/null | head -n 1 || true)"
-    fi
-    echo "  • Bun / Wrangler       : $(bun -v 2>/dev/null || echo 'bun missing') / ${dx_wrangler:-wrangler missing}"
-    echo "  • Git Branch & Tip     : $(git -C "$REPO_ROOT" log -n 1 --oneline)"
-    echo "  • Staged dist/ Assets  : $(ls -1 "$REPO_ROOT/dist" 2>/dev/null | tr '\n' ' ')"
-    if (cd "$REPO_ROOT" && bun scripts/publish_r2_graph.mjs --check-credentials >/dev/null 2>&1); then
+    echo "  • Bun / Wrangler       : ${dx_bun_ver} / ${dx_wrangler:-wrangler missing}"
+    echo "  • Git Branch & Tip     : ${dx_git_tip}"
+    echo "  • Staged dist/ Assets  : ${dx_staged_dist}"
+    if [[ "$dx_r2_state" == "ok" ]]; then
       echo "  • R2 S3 credentials    : $(dx_ok 'present (deploy signs with SigV4)')"
     else
       echo "  • R2 S3 credentials    : $(dx_warn 'missing; deploy falls back to Wrangler OAuth, without x-amz-meta-*')"
@@ -423,11 +459,9 @@ EOF
     else
       echo "  • Pages token          : $(dx_warn 'CLOUDFLARE_API_TOKEN unset; deploy skips the Pages step')"
     fi
-    dx_portal="https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev/graph.html"
     if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
       echo "  • R2 Edge Portal       : $dx_portal (not probed: DX_STATUS_OFFLINE=1)"
     else
-      dx_code="$(curl -sS -o /dev/null -I -m 3 -w '%{http_code}' "$dx_portal" 2>/dev/null || true)"
       if [[ "$dx_code" == "200" ]]; then
         echo "  • R2 Edge Portal       : $dx_portal ($(dx_ok 'HTTP 200 (HEAD, 3s timeout)'))"
       else

@@ -8,6 +8,7 @@ import {
   buildDiagnosticsSnapshotJson,
   buildExposurePlotData,
   buildScoreboardRows,
+  buildSignalArenaIndex,
   buildSignalArenaView,
   DESK_PREFS_STORAGE_KEY,
   defaultWorkspacePrefs,
@@ -18,6 +19,7 @@ import {
   parseWorkspacePrefsJson,
   resolveDeskOrigin,
   serializeWorkspacePrefs,
+  sortSignalArenaIndex,
 } from "../packages/nsh-desk/desk_model.ts";
 
 describe("packages/nsh-desk model and capability contracts", () => {
@@ -145,6 +147,15 @@ describe("packages/nsh-desk model and capability contracts", () => {
 
     const asc = buildSignalArenaView(kalshi.signals, "risk", "ascending");
     expect(Array.from(asc.order)).toEqual([0, 1]);
+
+    // Verify precomputed SignalArenaIndex reuses baseRows references across sort flips + O(1) indexById lookup
+    const arenaIdx = buildSignalArenaIndex(kalshi.signals);
+    expect(arenaIdx.indexById.get("NBA-LAL_BOS-total")).toBe(1);
+    expect(arenaIdx.indexById.get("NFL-BUF_KC-spread")).toBe(0);
+    const flipA = sortSignalArenaIndex(arenaIdx, "edge", "descending");
+    const flipB = sortSignalArenaIndex(arenaIdx, "edge", "ascending");
+    expect(flipA.rows[0]).toBe(flipB.rows[1]);
+    expect(flipA.rows[1]).toBe(flipB.rows[0]);
 
     const plot = buildExposurePlotData(kalshi.signals);
     expect(plot.map((p) => p.riskUsd)).toEqual([12000, 48000]);
