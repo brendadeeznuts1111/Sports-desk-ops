@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   loadHoldFloorConfig,
+  parseHoldFloorConfigToml,
   resolveHoldFloorPct,
 } from "../src/risk/hold_floor_config.ts";
 import {
@@ -26,6 +27,15 @@ import {
   gatePolicyDataConflict,
   type SliceMetricsInput,
 } from "../src/risk/slice_metrics.ts";
+import {
+  assertValidSliceRegistry,
+  buildSliceIndexLookup,
+  getSliceSpec,
+  isRegisteredSliceId,
+  SLICE_REGISTRY,
+  type SliceSpec,
+  validateHoldFloorSliceOverrides,
+} from "../src/risk/slice_registry.ts";
 
 /**
  * Deterministic Mulberry32 PRNG for reproducible property-based tests.
@@ -697,5 +707,110 @@ describe("DataTable SoA spine and DiffView pre/post-trade pair wiring", () => {
     expect(diff.alerts).toHaveLength(1);
     expect(diff.alerts[0]?.slice_id).toBe("live:all:p0_inplay:all");
     expect(diff.alerts[0]?.alert).toBe("BLOCK_ENFORCED_FLIPPED_FALSE");
+  });
+});
+
+describe("SLICE_REGISTRY AoS source-of-truth & derived handle invariants", () => {
+  test("SLICE_REGISTRY is valid AoS policy data and matches all report slice_ids without bit-packed handles", () => {
+    expect(() => assertValidSliceRegistry(SLICE_REGISTRY)).not.toThrow();
+
+    const indexLookup = buildSliceIndexLookup(SLICE_REGISTRY);
+    for (let i = 0; i < SLICE_REGISTRY.length; i++) {
+      const spec = SLICE_REGISTRY[i]!;
+      expect(isRegisteredSliceId(spec.slice_id)).toBe(true);
+      expect(getSliceSpec(spec.slice_id)).toEqual(spec);
+      // Derived index equals plain 0..N-1 position with zero upper-bit packing
+      expect(indexLookup.indexOf(spec.slice_id)).toBe(i);
+      expect(spec.slice_id.split(":")).toHaveLength(4);
+    }
+
+    for (const fixtureRow of REPORT_SEVEN_ROW_FIXTURE) {
+      const reg = getSliceSpec(fixtureRow.slice_id);
+      expect(reg).not.toBeNull();
+      expect(reg?.sport).toBe(fixtureRow.sport);
+      expect(reg?.league).toBe(fixtureRow.league);
+      expect(reg?.policy).toBe(fixtureRow.policy);
+      expect(reg?.policy_mechanism).toBe(fixtureRow.policy_mechanism);
+    }
+  });
+
+  test("reordering SLICE_REGISTRY shifts internal indices but never changes canonical slice_id joins", async () => {
+    const holdConfig = await loadHoldFloorConfig("config/wager_tiers.toml");
+    const reversedRegistry: readonly SliceSpec[] = [
+      ...SLICE_REGISTRY,
+    ].toReversed();
+    const forwardIdx = buildSliceIndexLookup(SLICE_REGISTRY);
+    const reversedIdx = buildSliceIndexLookup(reversedRegistry);
+
+    // Internal handles shift when registry order changes...
+    expect(forwardIdx.indexOf("football:nfl:p0_game:spread")).not.toBe(
+      reversedIdx.indexOf("football:nfl:p0_game:spread"),
+    );
+
+    // ...yet every join by slice_id (floors, router enforcement, SLO, DiffView) stays invariant
+    const router = createStaticRouterOrderQuery({
+      "live:all:p0_inplay:all": 7_704,
+    });
+    const evaluateInOrder = (registry: readonly SliceSpec[]) =>
+      registry.map((spec) => {
+        const seed = REPORT_SEVEN_ROW_FIXTURE.find(
+          (r) => r.slice_id === spec.slice_id,
+        )!;
+        return deriveSliceMetrics({
+          slice_id: spec.slice_id,
+          sport: spec.sport,
+          league: spec.league,
+          period: spec.period,
+          market: spec.market,
+          legs: seed.legs,
+          buy_share_pct: seed.buy_share_pct,
+          handle_usd: seed.handle_usd,
+          hold_total_pct: seed.hold_total_pct,
+          hold_floor_pct: resolveHoldFloorPct(holdConfig, spec),
+          policy: spec.policy,
+          policy_mechanism: spec.policy_mechanism,
+          policy_qualifier: spec.policy_qualifier,
+          block_enforced: queryBlockEnforced(router, spec.slice_id),
+          balanced_overround_pct: STANDARD_MINUS_110_BALANCED_HOLD_PCT,
+        });
+      });
+
+    const rowsA = evaluateInOrder(SLICE_REGISTRY);
+    const rowsB = evaluateInOrder(reversedRegistry);
+
+    for (const rowA of rowsA) {
+      const rowB = rowsB.find((r) => r.slice_id === rowA.slice_id);
+      expect(rowB).toEqual(rowA);
+    }
+    expect(
+      computeBlendedHoldSlo(rowsB, holdConfig.slo_blended_hold_floor_pct)
+        .slo_hold_pct,
+    ).toBeCloseTo(
+      computeBlendedHoldSlo(rowsA, holdConfig.slo_blended_hold_floor_pct)
+        .slo_hold_pct,
+      10,
+    );
+  });
+
+  test("wager_tiers.toml [hold_floors.by_slice] rejects numeric array indices and unregistered slice_ids", () => {
+    expect(
+      validateHoldFloorSliceOverrides({
+        "football:nfl:p0_game:spread": 3.75,
+      }),
+    ).toEqual([]);
+
+    expect(validateHoldFloorSliceOverrides({ "0": 3.5 })).toEqual(["0"]);
+    expect(
+      validateHoldFloorSliceOverrides({ "unknown:sport:p0:spread": 3.5 }),
+    ).toEqual(["unknown:sport:p0:spread"]);
+
+    expect(() =>
+      parseHoldFloorConfigToml(`
+[hold_floors]
+default_pct = 3.50
+[hold_floors.by_slice]
+"0" = 4.00
+`),
+    ).toThrow(/by_slice/);
   });
 });
