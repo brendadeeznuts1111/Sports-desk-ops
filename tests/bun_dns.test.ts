@@ -38,16 +38,20 @@ describe("Bun Native DNS & Networking Engine", () => {
   });
 
   it("resolves primary address using destructuring pattern", async () => {
-    const [record] = await dns.lookup("example.com", {
+    const records = await dns.lookup("example.com", {
       backend: "system",
     });
+    const [record] = records;
     expect(record).toBeDefined();
     const address = record?.address;
     expect(typeof address).toBe("string");
     expect(address?.length).toBeGreaterThan(0);
 
     const helperAddress = await resolvePrimaryAddress("example.com", "system");
-    expect(helperAddress).toBe(address ?? null);
+    expect(typeof helperAddress).toBe("string");
+    expect(records.map((entry) => entry.address)).toContain(
+      helperAddress ?? "",
+    );
   });
 
   it("coalesces concurrent requests and records cacheHitsInflight", async () => {

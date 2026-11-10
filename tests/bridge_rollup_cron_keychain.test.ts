@@ -5,9 +5,9 @@
  * must NOT do: hand the F402 password to a child process.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   BRIDGE_ROLLUP_JOBS,
@@ -34,6 +34,7 @@ const EMPTY_ENV: Readonly<Record<string, string | undefined>> = {
 function keychain(
   values: Readonly<Record<string, string>>,
   overrides: {
+    root?: string;
     sessionPresent?: boolean;
     tokenFilePresent?: boolean;
     readSession?: () => F402Session | null;
@@ -45,6 +46,7 @@ function keychain(
   return {
     reads,
     probe: keychainCredentialProbe({
+      ...(overrides.root === undefined ? {} : { root: overrides.root }),
       env: overrides.env ?? EMPTY_ENV,
       readSecret: async (name) => {
         reads.push(name);
@@ -221,77 +223,100 @@ describe("bridge3a: agent + session, agent injected only", () => {
 
 describe("weblog needs no credentials", () => {
   test("the corpus gate is always open", async () => {
-    const { probe } = keychain({});
-    expect(await probe.check(job("weblog"))).toEqual({
-      ok: true,
-      source: "corpus",
-    });
+    const root = mkdtempSync(join(tmpdir(), "bridge-cron-weblog-"));
+    try {
+      const staged = join(root, "out", "f402", "weblog", "11-08-2026.jsonl");
+      mkdirSync(dirname(staged), { recursive: true });
+      writeFileSync(staged, "{}\n");
+      const { probe } = keychain(
+        {},
+        { root, env: { ...EMPTY_ENV, F402_WEBLOG_FROM: staged } },
+      );
+      expect(await probe.check(job("weblog"))).toEqual({
+        ok: true,
+        source: "corpus",
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
 describe("the default gate stays env-only (tests never read the real keychain)", () => {
   test("a credential-less env skips every job without spawning", async () => {
     const root = mkdtempSync(join(tmpdir(), "bridge-cron-env-"));
-    const spawned: BridgeRollupJobId[] = [];
-    const { probe } = keychain({}, { readSession: () => null });
-    const result = await runBridgeRollupCycle({
-      root,
-      // weblog needs no credentials (its corpus is local), so keep the gate focused here.
-      jobs: ["bridge3a", "bridge3b", "bridge3c"],
-      env: { HOME: "/nonexistent" },
-      credentials: probe,
-      statePath: join(root, "state.json"),
-      historyPath: join(root, "history.jsonl"),
-      spawnJob: async (context) => {
-        spawned.push(context.id);
-        const ok: BridgeSpawnResult = {
-          exitCode: 0,
-          stdout: "{}",
-          stderr: "",
-          timedOut: false,
-        };
-        return ok;
-      },
-      readArtifact: async () => null,
-    });
-    expect(spawned).toEqual([]);
-    expect(result.jobs.every((entry) => !entry.ok)).toBe(true);
-    expect(result.jobs[0]?.error).toContain("missing credentials");
+    try {
+      const spawned: BridgeRollupJobId[] = [];
+      const { probe } = keychain({}, { readSession: () => null });
+      const result = await runBridgeRollupCycle({
+        root,
+        // weblog needs no credentials (its corpus is local), so keep the gate focused here.
+        jobs: ["bridge3a", "bridge3b", "bridge3c"],
+        env: { HOME: "/nonexistent" },
+        credentials: probe,
+        ensureF402Session: async () => {},
+        ensureGsliveSession: async () => {},
+        statePath: join(root, "state.json"),
+        historyPath: join(root, "history.jsonl"),
+        spawnJob: async (context) => {
+          spawned.push(context.id);
+          const ok: BridgeSpawnResult = {
+            exitCode: 0,
+            stdout: "{}",
+            stderr: "",
+            timedOut: false,
+          };
+          return ok;
+        },
+        readArtifact: async () => null,
+      });
+      expect(spawned).toEqual([]);
+      expect(result.jobs.every((entry) => !entry.ok)).toBe(true);
+      expect(result.jobs[0]?.error).toContain("missing credentials");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
 describe("the cycle hands the child the probe extras", () => {
   test("3a receives F402_AGENT_ID from the keychain, never the password", async () => {
     const root = mkdtempSync(join(tmpdir(), "bridge-cron-keychain-"));
-    const seenEnv: Readonly<Record<string, string | undefined>>[] = [];
-    const { probe } = keychain(
-      {
-        [F402_KEYCHAIN_NAMES.agentId]: "keychain-agent",
-        [F402_KEYCHAIN_NAMES.password]: "keychain-password",
-      },
-      { sessionPresent: true },
-    );
-    const result = await runBridgeRollupCycle({
-      root,
-      jobs: ["bridge3a"],
-      env: { HOME: "/nonexistent", F402_PASSWORD: "" },
-      credentials: probe,
-      statePath: join(root, "state.json"),
-      historyPath: join(root, "history.jsonl"),
-      spawnJob: async (context) => {
-        seenEnv.push(context.childEnv);
-        return {
-          exitCode: 0,
-          stdout: JSON.stringify({ ok: true }),
-          stderr: "",
-          timedOut: false,
-        } satisfies BridgeSpawnResult;
-      },
-      readArtifact: async () => null,
-    });
-    expect(seenEnv).toHaveLength(1);
-    expect(seenEnv[0]?.F402_AGENT_ID).toBe("keychain-agent");
-    expect(seenEnv[0]?.F402_PASSWORD ?? "").toBe("");
-    expect(result.jobs[0]?.ok).toBe(true);
+    try {
+      const seenEnv: Readonly<Record<string, string | undefined>>[] = [];
+      const { probe } = keychain(
+        {
+          [F402_KEYCHAIN_NAMES.agentId]: "keychain-agent",
+          [F402_KEYCHAIN_NAMES.password]: "keychain-password",
+        },
+        { sessionPresent: true },
+      );
+      const result = await runBridgeRollupCycle({
+        root,
+        jobs: ["bridge3a"],
+        env: { HOME: "/nonexistent", F402_PASSWORD: "" },
+        credentials: probe,
+        ensureF402Session: async () => {},
+        ensureGsliveSession: async () => {},
+        statePath: join(root, "state.json"),
+        historyPath: join(root, "history.jsonl"),
+        spawnJob: async (context) => {
+          seenEnv.push(context.childEnv);
+          return {
+            exitCode: 0,
+            stdout: JSON.stringify({ ok: true }),
+            stderr: "",
+            timedOut: false,
+          } satisfies BridgeSpawnResult;
+        },
+        readArtifact: async () => null,
+      });
+      expect(seenEnv).toHaveLength(1);
+      expect(seenEnv[0]?.F402_AGENT_ID).toBe("keychain-agent");
+      expect(seenEnv[0]?.F402_PASSWORD ?? "").toBe("");
+      expect(result.jobs[0]?.ok).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

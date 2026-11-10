@@ -63,8 +63,8 @@ describe("resolveAllowedOrigins", () => {
 });
 
 describe("cross-origin reads are opt-in", () => {
-  /** Stable 200 route: default `/api/live-bets` is live-only and may 503 without a session. */
-  const probePath = "/health";
+  /** Stable 200 JSON route: `/health` and `/api/live-bets` legitimately answer 503 without upstream auth. */
+  const probePath = "/api/status";
 
   test("a request with no Origin gets no grant", async () => {
     const response = await fetch(`${base}${probePath}`);

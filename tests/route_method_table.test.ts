@@ -76,7 +76,9 @@ describe("the method column matches the daemon", () => {
  * match the daemon.
  *
  * The assertion is deliberately narrow: not an auth refusal. A 200, 400, 404 or 500 all mean the
- * request was not gated; 401/403/503 would mean the table says `none` while the daemon refuses.
+ * request was not gated; 401/403 (or 503 on routes other than `/health`, which legitimately
+ * reports HTTP 503 `status: "down"` when neither upstream auth plane is configured) would mean the
+ * table says `none` while the daemon refuses.
  */
 const lan = Object.values(networkInterfaces())
   .flat()
@@ -97,7 +99,8 @@ describe.skipIf(lan === undefined)("public routes are not gated", () => {
         method: route.method === "ANY" ? "GET" : route.method,
       }).catch(() => null);
       expect(response).not.toBeNull();
-      expect([401, 403, 503]).not.toContain(response?.status);
+      const refused = route.path === "/health" ? [401, 403] : [401, 403, 503];
+      expect(refused).not.toContain(response?.status);
     });
   }
 

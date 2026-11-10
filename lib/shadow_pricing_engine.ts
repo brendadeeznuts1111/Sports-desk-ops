@@ -10,7 +10,8 @@
  *  - Single-digit millisecond interactive slice & counterfactual re-evaluation across 650k+ legs
  */
 
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
+import { openSportsdeskSqliteReadonly, sqlInt } from "./sportsdesk_sqlite.ts";
 import { isKeyNumberBuy } from "./customer_profile.ts";
 import {
   parseBuyPointsFromDesc,
@@ -180,11 +181,11 @@ function twoWayBalancedOverroundPctFromAmerican(odds: number): number {
 }
 
 export interface TaxonomyRawRow {
-  readonly account_id: number;
+  readonly account_id: number | bigint;
   readonly account_key: string;
-  readonly bet_id: number;
-  readonly stake: number | null;
-  readonly price_taken_american: number | null;
+  readonly bet_id: number | bigint;
+  readonly stake: number | bigint | null;
+  readonly price_taken_american: number | bigint | null;
   readonly raw_description: string;
   readonly result: string | null;
   readonly sport_code?: string | null | undefined;
@@ -402,12 +403,14 @@ export function buildArenaFromRows(
       accountNames.push(account);
     }
 
-    const stake = row.stake !== null && row.stake > 0 ? row.stake : 100;
-    const rawPrice = row.price_taken_american;
-    const price =
-      rawPrice !== null && rawPrice !== undefined && rawPrice !== 0
-        ? rawPrice
-        : -110;
+    const rawStake = row.stake === null ? 0 : Number(row.stake);
+    const stake = rawStake > 0 ? rawStake : 100;
+    const rawPrice =
+      row.price_taken_american === null ||
+      row.price_taken_american === undefined
+        ? 0
+        : Number(row.price_taken_american);
+    const price = rawPrice !== 0 ? rawPrice : -110;
     const outcome = encodeOutcome(row.result ?? "");
 
     const idx = legCount++;
@@ -1014,11 +1017,11 @@ function buildDynamicEventTeamMap(db: Database): Record<string, number> {
 
 function hasFullTaxonomyTables(db: Database): boolean {
   const row = db
-    .query<{ c: number }, []>(
+    .query<{ c: number | bigint }, []>(
       `SELECT COUNT(*) as c FROM sqlite_master WHERE type = 'table' AND name IN ('selection', 'market', 'event', 'league', 'sport')`,
     )
     .get();
-  return (row?.c ?? 0) === 5;
+  return sqlInt(row?.c) === 5;
 }
 
 let cachedLiveDbPath: string | null = null;
@@ -1066,7 +1069,7 @@ export async function loadShadowPricingArena(options?: {
   }
 
   const t0 = performance.now();
-  const db = new Database(candidatePath, { readonly: true });
+  const db = openSportsdeskSqliteReadonly(candidatePath);
   try {
     try {
       db.run("PRAGMA cache_size = -64000;");

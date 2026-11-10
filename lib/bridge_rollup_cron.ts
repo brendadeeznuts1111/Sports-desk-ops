@@ -551,10 +551,13 @@ function resolveArgv(
     readonly now: () => number;
   },
 ): readonly string[] {
-  const weblogFrom = resolveBridgeWeblogCorpusFrom(root, {
-    env: ctx.env,
-    now: () => new Date(ctx.now()),
-  });
+  const needsWeblogFrom = job.args.some((arg) => arg.includes("{weblogFrom}"));
+  const weblogFrom = needsWeblogFrom
+    ? resolveBridgeWeblogCorpusFrom(root, {
+        env: ctx.env,
+        now: () => new Date(ctx.now()),
+      })
+    : "";
   const nowSec = Math.floor(ctx.now() / 1000);
   const openToEpoch = String(nowSec);
   const openFromEpoch = String(nowSec - 86_400);
@@ -1301,7 +1304,20 @@ export async function runBridgeRollupCycle(
       ...env,
       ...decision.extraEnv,
     });
-    const argv = resolveArgv(job, root, { env, now });
+    let argv: readonly string[];
+    try {
+      argv = resolveArgv(job, root, { env, now });
+    } catch (error) {
+      jobs.push({
+        id: job.id,
+        label: job.label,
+        ok: false,
+        durationMs: 0,
+        error: describeError(error),
+      });
+      artifactStatus[job.id] = "missing";
+      continue;
+    }
     const startedAt = now();
     let spawnResult: BridgeSpawnResult;
     try {

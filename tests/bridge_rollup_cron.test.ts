@@ -77,6 +77,11 @@ const roots: string[] = [];
 function makeRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "bridge-rollup-cron-"));
   roots.push(root);
+  // Stage a hermetic weblog capture for NOW (2025-10-09 UTC) so tests do not rely on an
+  // operator-only probes directory outside the temp root.
+  const weblogCorpus = join(root, "out", "f402", "weblog", "10-09-2025.jsonl");
+  mkdirSync(dirname(weblogCorpus), { recursive: true });
+  writeFileSync(weblogCorpus, "{}\n");
   return root;
 }
 
@@ -443,6 +448,8 @@ describe("bridge rollup cycle", () => {
       jobs: [...jobs],
       env: { GSID: "test-session" },
       now: () => NOW,
+      ensureF402Session: async () => {},
+      ensureGsliveSession: async () => {},
       spawnJob,
     });
     stdout =
@@ -452,6 +459,8 @@ describe("bridge rollup cycle", () => {
       jobs: [...jobs],
       env: { GSID: "test-session" },
       now: () => NOW + 60_000,
+      ensureF402Session: async () => {},
+      ensureGsliveSession: async () => {},
       spawnJob,
     });
 
@@ -481,6 +490,8 @@ describe("bridge rollup cycle", () => {
       jobs: [...jobs],
       env: { GSID: "test-session" },
       now: () => NOW,
+      ensureF402Session: async () => {},
+      ensureGsliveSession: async () => {},
       spawnJob,
     });
     stderr = "[bridge3b] rows=3 GATE-01:fail GATE-02:pass GATE-08:skipped";
@@ -489,6 +500,8 @@ describe("bridge rollup cycle", () => {
       jobs: [...jobs],
       env: { GSID: "test-session" },
       now: () => NOW + 60_000,
+      ensureF402Session: async () => {},
+      ensureGsliveSession: async () => {},
       spawnJob,
     });
 

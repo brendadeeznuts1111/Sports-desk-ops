@@ -88,7 +88,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # `scripts` ships because services/ and lib/ import it (live_positions_cron, evidence_capture,
 # capture/*, check_spec_citations); tests/dashboard_credentials.test.ts bundles the unit's entry
 # points against this list and fails when an import leaves it.
-for dir in cli services lib scripts static catalog validation design; do
+for dir in cli services lib scripts src static catalog validation design; do
   mkdir -p "${APP_DIR}/${dir}"
   cp -R "${REPO_ROOT}/${dir}/." "${APP_DIR}/${dir}/" 2>/dev/null || true
 done

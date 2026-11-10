@@ -1,10 +1,64 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ansiToHtml,
   executeTerminalQuery,
   parseAnsiSegments,
 } from "../lib/terminal_emulator.ts";
 import { hasPty } from "./support/capabilities.ts";
+
+let fixtureDir = "";
+const savedBetsJsonl = Bun.env["F402_BETS_JSONL"];
+
+beforeAll(() => {
+  fixtureDir = mkdtempSync(join(tmpdir(), "sportsdesk-term-bets-"));
+  const corpusPath = join(fixtureDir, "f402-bets.jsonl");
+  const nowDate =
+    typeof Temporal !== "undefined"
+      ? Temporal.Now.zonedDateTimeISO("America/New_York")
+          .toPlainDate()
+          .toString()
+      : new Date().toISOString().slice(0, 10);
+  const rows = [
+    ...Array.from({ length: 12 }, () =>
+      JSON.stringify({
+        Login: "GP301",
+        AgentLogin: "CONDUIT_SA1",
+        AmountWagered: 5000000,
+        ToWinAmount: 4545000,
+        InsertDateTime: `${nowDate} 12:00:00`,
+        WagerType: "S",
+        TicketWriter: "ALERT_SHARP",
+        ShortDesc: "NFL Football Spread",
+      }),
+    ),
+    JSON.stringify({
+      Login: "RETAIL99",
+      AgentLogin: "RETAIL_SA2",
+      AmountWagered: 10000,
+      ToWinAmount: 25000,
+      InsertDateTime: `${nowDate} 13:00:00`,
+      WagerType: "P",
+      TicketWriter: "INTERNET",
+      ShortDesc: "NBA Basketball Parlay",
+    }),
+  ];
+  writeFileSync(corpusPath, `${rows.join("\n")}\n`, "utf8");
+  Reflect.set(Bun.env, "F402_BETS_JSONL", corpusPath);
+});
+
+afterAll(() => {
+  if (savedBetsJsonl === undefined) {
+    Reflect.deleteProperty(Bun.env, "F402_BETS_JSONL");
+  } else {
+    Reflect.set(Bun.env, "F402_BETS_JSONL", savedBetsJsonl);
+  }
+  if (fixtureDir) {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
+});
 
 describe("SportsDesk Terminal Emulator & Query Engine", () => {
   test("parseAnsiSegments tokenizes colors and styles accurately", () => {

@@ -69,9 +69,14 @@ describe("daemon endpoint smoke", () => {
             : route.path;
       const code = await status(path);
       // An unauthenticated admin route stops at the guard; every other route must reach its
-      // handler. 404/410/501 are data states, not crashes.
+      // handler. 404/410/501 are data states, not crashes, and /health reports HTTP 503 when
+      // neither upstream auth plane is configured (#100).
       expect(code, route.path).not.toBe(500);
-      expect(code, route.path).toBeLessThan(502);
+      if (route.path === "/health") {
+        expect([200, 503], route.path).toContain(code);
+      } else {
+        expect(code, route.path).toBeLessThan(502);
+      }
       if (route.guard === "admin") {
         expect(code, route.path).toBe(401);
       }

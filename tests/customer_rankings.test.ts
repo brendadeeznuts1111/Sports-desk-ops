@@ -4,6 +4,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   calculateCompositeScore,
   computeGini,
@@ -101,24 +104,61 @@ describe("periodWindow", () => {
 
 describe("runBatchedRanking", () => {
   it("aggregates the 30-day window and flags proxy conduits", async () => {
-    const res = await runBatchedRanking({ limitPlayers: 20 });
-    expect(res.inWindowWagers).toBeGreaterThan(0);
-    expect(res.totalHandleUsd).toBeGreaterThan(0);
-    expect(res.activeCustomerCount).toBeGreaterThan(0);
-    expect(res.topRankedPlayers.length).toBeGreaterThan(0);
+    const dir = mkdtempSync(join(tmpdir(), "sportsdesk-rankings-"));
+    try {
+      const corpusPath = join(dir, "f402-bets.jsonl");
+      const rows = [
+        ...Array.from({ length: 12 }, (_, idx) =>
+          JSON.stringify({
+            Login: "CONDUIT_PRO",
+            AgentLogin: "SUB_CONDUIT",
+            AmountWagered: 5000000, // $50,000 -> $600k total (>= $500k conduit threshold)
+            ToWinAmount: 4545000,
+            InsertDateTime: `2026-11-0${(idx % 8) + 1} 14:00:00`,
+            WagerType: "S",
+            TicketWriter: "ALERT_SHARP",
+            ShortDesc: "NFL Football Spread",
+          }),
+        ),
+        JSON.stringify({
+          Login: "RETAIL_1",
+          AgentLogin: "SUB_RETAIL",
+          AmountWagered: 5000,
+          ToWinAmount: 15000,
+          InsertDateTime: "2026-11-05 18:00:00",
+          WagerType: "P",
+          TicketWriter: "INTERNET",
+          ShortDesc: "NBA Basketball Parlay",
+        }),
+      ];
+      writeFileSync(corpusPath, `${rows.join("\n")}\n`, "utf8");
 
-    for (const player of res.topRankedPlayers) {
-      expect(player.rank).toBeGreaterThan(0);
-      expect(player.autoExecute).toBe(false);
-      expect(player.compositeScore).toBeGreaterThanOrEqual(0);
-      expect(player.compositeScore).toBeLessThanOrEqual(10);
-    }
+      const res = await runBatchedRanking({
+        corpusPath,
+        windowCutoff: "2026-10-15",
+        limitPlayers: 20,
+      });
+      expect(res.inWindowWagers).toBeGreaterThan(0);
+      expect(res.totalHandleUsd).toBeGreaterThan(0);
+      expect(res.activeCustomerCount).toBeGreaterThan(0);
+      expect(res.conduitSubAgentCount).toBeGreaterThan(0);
+      expect(res.topRankedPlayers.length).toBeGreaterThan(0);
 
-    // Top players should be sorted by score desc
-    for (let i = 1; i < res.topRankedPlayers.length; i++) {
-      const prev = res.topRankedPlayers[i - 1]!;
-      const curr = res.topRankedPlayers[i]!;
-      expect(prev.compositeScore).toBeGreaterThanOrEqual(curr.compositeScore);
+      for (const player of res.topRankedPlayers) {
+        expect(player.rank).toBeGreaterThan(0);
+        expect(player.autoExecute).toBe(false);
+        expect(player.compositeScore).toBeGreaterThanOrEqual(0);
+        expect(player.compositeScore).toBeLessThanOrEqual(10);
+      }
+
+      // Top players should be sorted by score desc
+      for (let i = 1; i < res.topRankedPlayers.length; i++) {
+        const prev = res.topRankedPlayers[i - 1]!;
+        const curr = res.topRankedPlayers[i]!;
+        expect(prev.compositeScore).toBeGreaterThanOrEqual(curr.compositeScore);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

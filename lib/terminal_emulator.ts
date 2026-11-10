@@ -44,13 +44,16 @@ const FG = (c: string) =>
     : "";
 const BG = (c: string) => FG(c).replace("\x1b[38;", "\x1b[48;");
 
-/** Gate every escape through Bun.enableANSIColors — mirrors AnsiTheme.colors */
-const S = (sgr: string) =>
-  typeof Bun !== "undefined" && Bun.enableANSIColors !== false ? sgr : "";
+/** Gate escapes through explicit colors option (default true for deterministic terminal encoders). */
+const S = (sgr: string, colors = true) => (colors ? sgr : "");
 const R = "\x1b[0m";
 
-export const renderWagerBadgeTerminal = (t: WagerTier, s: string): string =>
-  `${S(FG(TIER[t].fg) + BG(TIER[t].bg) + "\x1b[1m")} ${s} ${S(R)}`;
+export const renderWagerBadgeTerminal = (
+  t: WagerTier,
+  s: string,
+  colors = true,
+): string =>
+  `${S(FG(TIER[t].fg) + BG(TIER[t].bg) + "\x1b[1m", colors)} ${s} ${S(R, colors)}`;
 
 /**
  * Anchored regex for detecting wager tier keywords in markdown **bold** spans.
@@ -63,11 +66,15 @@ export const TIER_KEYWORD_RE =
  * Custom Bun.markdown.render callback map that translates Markdown AST elements
  * directly into ANSI SGR sequences using the exact TrueColor hex tokens from wagerBadge().
  */
-export function renderWagerMarkdownTerminal(markdown: string): string {
+export function renderWagerMarkdownTerminal(
+  markdown: string,
+  options?: { colors?: boolean },
+): string {
+  const colors = options?.colors !== false;
   // trusted-markdown: terminal emulator interactive markdown-to-ANSI custom renderer
   return Bun.markdown.render(markdown, {
     heading: (children, meta) =>
-      `${S(FG(SURFACE.text) + "\x1b[1m")}${"#".repeat(meta.level)} ${children}${S(R)}\n\n`,
+      `${S(FG(SURFACE.text) + "\x1b[1m", colors)}${"#".repeat(meta.level)} ${children}${S(R, colors)}\n\n`,
     paragraph: (children) => `${children}\n\n`,
     strong: (children) => {
       const text = String(children).trim();
@@ -75,29 +82,33 @@ export function renderWagerMarkdownTerminal(markdown: string): string {
       const tierMatch = TIER_KEYWORD_RE.exec(text);
       if (tierMatch) {
         const tier = tierMatch[1] as WagerTier;
-        return renderWagerBadgeTerminal(tier, text);
+        return renderWagerBadgeTerminal(tier, text, colors);
       }
-      return `${S(FG(SURFACE.text) + "\x1b[1m")}${children}${S("\x1b[22m")}`;
+      return `${S(FG(SURFACE.text) + "\x1b[1m", colors)}${children}${S("\x1b[22m", colors)}`;
     },
-    emphasis: (children) => `${S("\x1b[4m")}${children}${S("\x1b[24m")}`,
+    emphasis: (children) =>
+      `${S("\x1b[4m", colors)}${children}${S("\x1b[24m", colors)}`,
     codespan: (children) =>
-      `${S(FG(SURFACE.muted) + BG(composite(SURFACE.muted, 0.1, SURFACE.panel)))} ${children} ${S(R)}`,
-    code: (children) => `${S(FG(SURFACE.muted))}${children}${S(R)}\n`,
-    blockquote: (children) => `${S(FG(SURFACE.muted))}│ ${children}${S(R)}\n`,
+      `${S(FG(SURFACE.muted) + BG(composite(SURFACE.muted, 0.1, SURFACE.panel)), colors)} ${children} ${S(R, colors)}`,
+    code: (children) =>
+      `${S(FG(SURFACE.muted), colors)}${children}${S(R, colors)}\n`,
+    blockquote: (children) =>
+      `${S(FG(SURFACE.muted), colors)}│ ${children}${S(R, colors)}\n`,
     link: (children, meta) => {
       const { href } = meta;
       if (href.startsWith("http://") || href.startsWith("https://")) {
         return formatOsc8Hyperlink(href, String(children));
       }
-      return `${S(FG(SURFACE.accent) + "\x1b[4m")}${children}${S("\x1b[24m")} (${href})`;
+      return `${S(FG(SURFACE.accent) + "\x1b[4m", colors)}${children}${S("\x1b[24m", colors)} (${href})`;
     },
     list: (children) => `${children}\n`,
     listItem: (children) => `  • ${children}`,
     tr: (children) => `${children}\n`,
     th: (children) =>
-      `${S(FG(SURFACE.accent) + "\x1b[1m")}${children}${S(R)} | `,
+      `${S(FG(SURFACE.accent) + "\x1b[1m", colors)}${children}${S(R, colors)} | `,
     td: (children) => `${children} | `,
-    hr: () => `${S(FG(SURFACE.border))}${"─".repeat(50)}${S(R)}\n\n`,
+    hr: () =>
+      `${S(FG(SURFACE.border), colors)}${"─".repeat(50)}${S(R, colors)}\n\n`,
   });
 }
 
