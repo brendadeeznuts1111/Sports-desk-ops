@@ -18,7 +18,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveBunServePort } from "../lib/bun_serve_port.ts";
+import {
+  resolveBunServePort,
+  resolveSportsdeskDaemonPort,
+} from "../lib/bun_serve_port.ts";
 
 export type CheckStatus = "ok" | "warn" | "fail";
 
@@ -267,24 +270,34 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
         : `"${shell}" --no-sandbox --remote-debugging-port=9222 about:blank   # or: ./bin/dx shot <url>`,
   });
 
-  const daemonPort = resolveBunServePort(Bun.env);
-  const daemonUp =
-    daemonPort === 0
-      ? false
-      : await probe(`http://127.0.0.1:${daemonPort}/health`);
+  const sportsdeskPort = resolveSportsdeskDaemonPort(Bun.env, 4020);
+  const webviewPort = resolveBunServePort(Bun.env);
+  const sportsdeskUp = await probe(`http://127.0.0.1:${sportsdeskPort}/health`);
+  const webviewUp =
+    webviewPort !== 0 &&
+    (await probe(`http://127.0.0.1:${webviewPort}/health`));
+  const daemonUp = sportsdeskUp || webviewUp;
+  const activeDaemonPort = sportsdeskUp ? sportsdeskPort : webviewPort;
+
   checks.push({
     id: "daemon",
     status: daemonUp ? "ok" : "warn",
-    title:
-      daemonPort === 0
-        ? "webview daemon port is 0 (random); /health cannot be probed"
-        : daemonUp
-          ? `webview daemon up on :${daemonPort} (WS hub reachable)`
-          : `webview daemon not running on :${daemonPort} (live WS panel falls back to polling)`,
-    fix:
-      daemonPort === 0
-        ? "set BUN_PORT, PORT or NODE_PORT to a fixed port"
-        : `PORT=${daemonPort} bun run serve`,
+    title: daemonUp
+      ? `sportsdesk daemon up on :${activeDaemonPort} (API /health reachable)`
+      : `sportsdesk daemon not running on :${sportsdeskPort} (run: bun run serve)`,
+    fix: `PORT=${sportsdeskPort} bun run serve`,
+  });
+
+  const dashboardUp =
+    (await probe("http://127.0.0.1:4022/health")) ||
+    (await probe("http://127.0.0.1:4022/"));
+  checks.push({
+    id: "dashboard",
+    status: dashboardUp ? "ok" : "warn",
+    title: dashboardUp
+      ? "dashboard dev server up on :4022 (SPA, PTY terminal & live stream)"
+      : "dashboard dev server not running on :4022",
+    fix: "bun run dev",
   });
 
   const dshDir = path.join(os.homedir(), ".dsh");

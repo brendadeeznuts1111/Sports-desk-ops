@@ -39,7 +39,7 @@ export function isSafeAssetName(name: string): boolean {
   if (name === "" || name.includes("..")) return false;
   for (const ch of name) {
     const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || ch === "\\") return false;
+    if (code < 0x20 || code === 0x7f || ch === "\\") return false;
   }
   return !name.startsWith("/");
 }

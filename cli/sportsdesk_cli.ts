@@ -1969,6 +1969,13 @@ export async function printConnectedCliHelp(
 }
 
 export async function main(): Promise<void> {
+  // Pre-warm mission-critical desk endpoints in background
+  try {
+    prefetchSportsDeskEndpoints();
+  } catch {
+    // Non-fatal prefetch
+  }
+
   const rawArgs = process.argv.slice(2);
   const firstLower = rawArgs[0]?.toLowerCase();
 
@@ -1997,13 +2004,6 @@ export async function main(): Promise<void> {
       firstLower === "--bun-help",
     );
     return;
-  }
-
-  // Pre-warm mission-critical desk endpoints in background
-  try {
-    prefetchSportsDeskEndpoints();
-  } catch {
-    // Non-fatal prefetch
   }
 
   if (

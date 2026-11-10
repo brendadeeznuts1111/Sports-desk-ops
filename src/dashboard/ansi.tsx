@@ -87,16 +87,26 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
         linkUrl: urlMatch?.[1],
       });
     } else if (match[2] !== undefined) {
-      const codes = match[2]
-        .split(";")
-        .map((c) => (c === "" ? 0 : Number.parseInt(c, 10)));
-      for (const code of codes) {
+      const paramStr = match[2];
+      const codes =
+        paramStr === ""
+          ? [0]
+          : paramStr
+              .split(";")
+              .filter((c, idx, arr) => !(idx === arr.length - 1 && c === ""))
+              .map((c) => (c === "" ? 0 : Number.parseInt(c, 10)));
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i]!;
         if (code === 0) {
           currentColor = undefined;
           currentBg = undefined;
           currentBold = false;
           currentDim = false;
           currentUnderline = false;
+        } else if (code === 39) {
+          currentColor = undefined;
+        } else if (code === 49) {
+          currentBg = undefined;
         } else if (code === 1) {
           currentBold = true;
         } else if (code === 2) {
@@ -108,14 +118,32 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
           currentDim = false;
         } else if (code === 24) {
           currentUnderline = false;
+        } else if (
+          code === 38 &&
+          codes[i + 1] === 2 &&
+          codes[i + 4] !== undefined
+        ) {
+          // ANSI 24-bit TrueColor foreground: 38;2;r;g;b
+          const r = codes[i + 2]!;
+          const g = codes[i + 3]!;
+          const b = codes[i + 4]!;
+          currentColor = `rgb(${r}, ${g}, ${b})`;
+          i += 4;
+        } else if (
+          code === 48 &&
+          codes[i + 1] === 2 &&
+          codes[i + 4] !== undefined
+        ) {
+          // ANSI 24-bit TrueColor background: 48;2;r;g;b
+          const r = codes[i + 2]!;
+          const g = codes[i + 3]!;
+          const b = codes[i + 4]!;
+          currentBg = `rgb(${r}, ${g}, ${b})`;
+          i += 4;
         } else if (code >= 30 && code <= 37) {
           currentColor = ANSI_COLOR_MAP[code];
-        } else if (code === 39) {
-          currentColor = undefined;
         } else if (code >= 40 && code <= 47) {
           currentBg = ANSI_BG_MAP[code];
-        } else if (code === 49) {
-          currentBg = undefined;
         } else if (code >= 90 && code <= 97) {
           currentColor = ANSI_COLOR_MAP[code];
         } else if (code >= 100 && code <= 107) {

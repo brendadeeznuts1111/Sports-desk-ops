@@ -51,6 +51,7 @@ const COVERAGE: Readonly<Record<string, string>> = {
   mmd: "Mermaid verification artifact",
   tla: "TLA+ verification artifact",
   plist: "launchd template (macOS operator)",
+  sql: "SQL DDL statement check + db_integration tests",
   txt: "plain text document",
 };
 
@@ -222,6 +223,18 @@ describe("language coverage", () => {
         if (line.split(",").length !== width) {
           failures.push(`${path}:${index + 1} has a different column count`);
         }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  test("SQL migration files contain terminated DDL statements", async () => {
+    const failures: string[] = [];
+    for (const path of filesWith("sql")) {
+      const text = (await Bun.file(join(ROOT, path)).text()).trim();
+      const stripped = text.replace(/--[^\n]*/g, "").trim();
+      if (stripped.length === 0 || !stripped.endsWith(";")) {
+        failures.push(`${path}: expected non-empty SQL ending with ';'`);
       }
     }
     expect(failures).toEqual([]);

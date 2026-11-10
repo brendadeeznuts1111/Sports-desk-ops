@@ -130,6 +130,20 @@ jobs:
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sportsdesk_ci
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     # No continue-on-error: masking a failure reported this job green while every later
     # gate was skipped (2026-11-09: format:check failed; typecheck, lint, docs, route
     # surface, secrets and schema never ran). The chain is documented as stopping at the
@@ -234,6 +248,16 @@ jobs:
       - name: Execute Full Verification Test Suite
         timeout-minutes: 5
         run: bun test tests/ --parallel --reporter=junit --reporter-outfile=junit-report.xml
+      - name: "PostgreSQL Integration Test Suite (test:db)"
+        timeout-minutes: 3
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: sportsdesk_ci
+          PGPASSWORD: ci_test_password
+          PGDATABASE: sportsdesk_test
+          REQUIRE_DB_TESTS: "1"
+        run: bun run test:db
       - name: Colocated capture tests
         timeout-minutes: 2
         run: bun test scripts/capture/webview.test.ts scripts/capture/cookies.test.ts

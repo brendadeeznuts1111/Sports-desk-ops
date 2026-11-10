@@ -1,0 +1,127 @@
+/* ── Framed table: enables sticky header + frozen directive column ── */
+.profiles-wrap {
+  max-height: min(62vh, 720px);
+  overflow: auto;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background-color: var(--surface-panel);
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky-header);
+    background: #0f172a;
+    box-shadow: 0 1px 0 var(--border-strong);
+    user-select: none;
+
+    &.sortable {
+      cursor: pointer;
+      transition: color 0.15s ease;
+      &:hover {
+        color: var(--accent-primary);
+      }
+    }
+    .sort-arrow {
+      font-size: 0.7em;
+      margin-inline-start: 4px;
+      color: var(--accent-primary);
+    }
+  }
+
+  /* Frozen actionable column (right edge) — outranks thead th */
+  td.directive,
+  th.directive {
+    position: sticky;
+    right: 0;
+    z-index: var(--z-frozen-col);
+    background: var(--surface-overlay);
+    box-shadow: -2px 0 0 var(--border-default);
+  }
+  thead th.directive {
+    z-index: calc(var(--z-frozen-col) + 1);
+  }
+}
+
+/* ── Sticky detail inspector ── */
+.detail-panel {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  z-index: var(--z-inspector);
+}
+
+/* ── Semantic color grammar (desk-profit: green = desk retained, red = desk exposure) ── */
+.hold-pos {
+  color: var(--risk-retained);
+  font-weight: 600;
+}
+.hold-neg {
+  color: var(--risk-exposure);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+
+  &.tier-1 {
+    color: var(--color-red);
+  } /* 🚨 elite originator */
+  &.tier-2 {
+    color: var(--color-amber);
+  } /* ⚡ steam syndicate */
+  &.tier-3,
+  &.tier-4 {
+    color: var(--accent-primary);
+  }
+  &.tier-5 {
+    color: var(--risk-retained);
+  } /* ✅ recreational */
+  &.action-alert {
+    color: var(--risk-exposure);
+  }
+  &.action-monitor {
+    color: var(--risk-watch);
+  }
+  &.action-accept {
+    color: var(--risk-retained);
+  }
+}
+
+/* ── Collapsible KPI strip ── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+
+  &.collapsed {
+    display: none;
+  }
+}
+
+/* ── Live wager badge pulse ── */
+@keyframes alertPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.6);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 4px rgba(248, 113, 113, 0);
+  }
+}
+
+.live-alert-pulse {
+  animation: alertPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

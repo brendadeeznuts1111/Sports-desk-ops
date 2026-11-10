@@ -22,6 +22,23 @@ declare module "bun" {
     readonly BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS?: string;
     readonly BUN_SOCKET?: string;
 
+    // PostgreSQL & Operator Authentication Database
+    readonly PGUSER?: string;
+    readonly PGPASSWORD?: string;
+    readonly PGHOST?: string;
+    readonly PGPORT?: string;
+    readonly PGDATABASE?: string;
+    readonly SPORTSDESK_DB_TLS?: string;
+    readonly DATABASE_URL?: string;
+    readonly TRUST_PROXY?: string;
+    readonly SPORTSDESK_AUTH_REQUIRED?: string;
+    readonly SPORTSDESK_AUTH_DISABLED?: string;
+    readonly SPORTSDESK_CSRF_SECRET?: string;
+    readonly SPORTSDESK_AUDIT_DIR?: string;
+    readonly SPORTSDESK_AUDIT_MAX_BYTES?: string;
+    readonly SPORTSDESK_AUDIT_RETENTION_DAYS?: string;
+    readonly SPORTSDESK_ALERT_MAX_ATTEMPTS?: string;
+
     // Fantasy402 Portal Gateway
     readonly F402_BASE_URL?: string;
     /** Bun fetch: log request/response headers (`1` or `curl`). */

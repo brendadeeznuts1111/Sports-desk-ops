@@ -31,6 +31,19 @@ describe("ticket html", () => {
     expect(htmlToText("<p>Culiac&aacute;n</p>")).toBe("Culiacán");
   });
 
+  test("handles invalid, NUL and surrogate numeric codepoints safely without throwing", () => {
+    expect(() =>
+      decodeEntities(
+        "&#-1; &#0; &#x0; &#x110000; &#xD800; &#xDFFF; &#99999999;",
+      ),
+    ).not.toThrow();
+    expect(
+      decodeEntities(
+        "&#-1; &#0; &#x0; &#x110000; &#xD800; &#xDFFF; &#99999999;",
+      ),
+    ).toBe("&#-1; &#0; &#x0; &#x110000; &#xD800; &#xDFFF; &#99999999;");
+  });
+
   test("strips script, style and noscript bodies", () => {
     const stripped = stripNonContent(PAGE);
     expect(stripped).not.toContain("not-content");

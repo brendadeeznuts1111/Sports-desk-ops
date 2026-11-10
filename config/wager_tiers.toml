@@ -1,11 +1,279 @@
-# SportsDesk Wager Tiers & Slice Hold-Floor Policy (SSOT)
-# Consumed by src/risk/hold_floor_config.ts for SliceMetrics floor delta & SLO gates.
-# Constraint: Do NOT lower hold_floors to hide negative floor deltas; gates flag asymmetry instead.
+# config/wager_tiers.toml
+# =============================================================================
+# Wager Tier, Surveillance Alert & Slice Hold-Floor Policy (SSOT)
+# Format:      TOML 1.0 — Bun-native import: `import cfg from "...toml"`
+# Schema:      wager-tiers/v3   (was v2 — tier keys renamed, see [meta.deprecatedKeys])
+# Consumed by: src/config/wagerTiers.ts, lib/wager_config.ts, and src/risk/hold_floor_config.ts
+# Precedence:  CLI flags > runtime overrides > ENV > this file > built-in defaults
+# Owner:       risk-ops
+# =============================================================================
 
+schema = "wager-tiers/v3"
+version = "3.0.0"
+environment = "production"
+updatedAt = 2025-01-15T00:00:00Z
+timezone = "UTC"
+
+# ---------------------------------------------------------------------------
+# Metadata about this file (does not affect runtime behaviour)
+# ---------------------------------------------------------------------------
 [meta]
 schema_version = 1
-owner = "sportsdesk-risk"
+name = "Wager Tier & Surveillance Matrix"
+owner = "risk-ops@example.com" # canonical team alias; mirrors CODEOWNERS
+channel = "#risk-ops"
+oncall = "risk-ops-primary" # PagerDuty escalation policy ID
 
+# Validation policy (enforced by src/config/wagerTiers.ts:validate)
+[meta.validation]
+enforceMonotonicScores = true
+rejectUnknownTiers = true
+failClosedOnInvalid = true
+
+# Taxonomy composition — makes the three vocabularies explicit.
+# See lib/customer_rating.ts for the customer-side definitions.
+[meta.taxonomy]
+customerSharpnessSource = "lib/customer_rating.ts:CustomerSharpnessTier"
+customerRiskSource = "lib/customer_rating.ts:CustomerRiskLevel"
+wagerTierDimension = "wager_pattern" # NOT customer attribute
+compositionRule = "max_action_severity(customerRiskLevel, wagerTier)"
+# Ordered low → high; used by compositionRule
+severityOrder = [
+  "BASELINE",
+  "LATENCY_ARB",
+  "STEAM_MOVE",
+  "ORIGINATOR_HIGH_RISK",
+]
+
+# Backward-compatibility map for v2 → v3 tier keys.
+# The loader warns when old keys are accessed; remove after migration.
+[meta.deprecatedKeys]
+CRITICAL = "ORIGINATOR_HIGH_RISK"
+STEAM = "STEAM_MOVE"
+LATENCY = "LATENCY_ARB"
+RECREATIONAL = "BASELINE"
+
+# ---------------------------------------------------------------------------
+# UI theme tokens — resolved from design/tokens.toml at load time.
+# Every value MUST be a "@token:*" reference; literal hex is rejected by CI.
+# ---------------------------------------------------------------------------
+[surface]
+panel = "@token:sd-surface-panel"
+border = "@token:sd-border-default"
+text = "@token:sd-text-primary" # canonical #f1f5f9 (was #f8fafc — drift fixed)
+muted = "@token:sd-text-muted"
+accent = "@token:sd-accent"
+danger = "@token:sd-danger"
+warn = "@token:sd-warn"
+ok = "@token:sd-ok"
+
+[surface.typography]
+fontFamily = "Inter, ui-sans-serif, system-ui"
+monoFamily = "JetBrains Mono, ui-monospace"
+scale = 1.0
+
+# ---------------------------------------------------------------------------
+# Tiers — evaluated by descending minScore; maxScore is exclusive.
+# Keys describe WAGER PATTERN, not customer attributes (see [meta.taxonomy]).
+# Display badges intentionally unchanged from v2 to preserve UX.
+# ---------------------------------------------------------------------------
+
+[tiers.ORIGINATOR_HIGH_RISK]
+label = "Critical — T1 Originator"
+badge = "🚨 CRITICAL (T1 Originator)"
+priority = 1
+fg = "@token:sd-tier-originator-fg"
+bg = "@token:sd-tier-originator-bg"
+border = "@token:sd-tier-originator-border"
+minScore = 9.0
+action = "ALERT_OPERATOR"
+reviewSlaSeconds = 30
+cooldownSeconds = 15
+maxStakeUsd = 250
+auditLevel = "verbose"
+channels = ["telegram", "pagerduty", "webhook"]
+tags = ["originator", "high-value", "manual-review"]
+
+[tiers.STEAM_MOVE]
+label = "Steam — T2 Syndicate"
+badge = "⚡ STEAM (T2 Syndicate)"
+priority = 2
+fg = "@token:sd-tier-steam-fg"
+bg = "@token:sd-tier-steam-bg"
+border = "@token:sd-tier-steam-border"
+minScore = 8.0
+maxScore = 9.0
+action = "MONITOR_FLOW"
+reviewSlaSeconds = 120
+cooldownSeconds = 30
+maxStakeUsd = 500
+auditLevel = "standard"
+# Individual hits go to webhook (metrics). Aggregate bursts page Telegram.
+channels = ["webhook"]
+aggregateChannel = "telegram"
+aggregateWindowSeconds = 600 # 10 min
+aggregateMinCount = 5 # ≥5 STEAM in window → one Telegram digest
+tags = ["syndicate", "steam"]
+
+[tiers.LATENCY_ARB]
+label = "Latency — Arb / Off-Market"
+badge = "⚠️ LATENCY (Arb / Off-Market)"
+priority = 3
+fg = "@token:sd-tier-latency-fg"
+bg = "@token:sd-tier-latency-bg"
+border = "@token:sd-tier-latency-border"
+minScore = 7.0
+maxScore = 8.0
+action = "THROTTLE_INPLAY"
+# EXPLICIT: no human review — THROTTLE_INPLAY is fully automated.
+reviewSlaSeconds = 0
+cooldownSeconds = 60
+maxStakeUsd = 1000
+auditLevel = "standard"
+# Webhook only = false-positive metric sink; never pages humans.
+channels = ["webhook"]
+autoActionNotifyThreshold = 10 # alert ops only if ≥10 hits/window (false-pos watch)
+tags = ["arb", "off-market", "auto-action"]
+
+[tiers.BASELINE]
+label = "Recreational — Square / Retail"
+badge = "✅ RECREATIONAL (Square / Retail)"
+priority = 4
+fg = "@token:sd-tier-baseline-fg"
+bg = "@token:sd-tier-baseline-bg"
+border = "@token:sd-tier-baseline-border"
+minScore = 0.0
+maxScore = 7.0
+action = "STANDARD_ROUTING"
+reviewSlaSeconds = 0
+cooldownSeconds = 0
+maxStakeUsd = 25000
+auditLevel = "minimal"
+channels = []
+tags = ["retail"]
+
+# ---------------------------------------------------------------------------
+# Surveillance / risk engine
+# Every tunable carries a `# rationale:` comment — numbers without rationale
+# get changed by the next person who doesn't understand them.
+# ---------------------------------------------------------------------------
+[surveillance]
+highRiskThresholdUsd = 5000 # rationale: p95 wager ≈ $1.2k → 5k ≈ 4σ; tuned 2024-Q4 (#RISK-412)
+clvAlertThresholdCents = 10.0 # rationale: data-error floor; sharps avg 3¢ CLV — 10¢ = anomaly, not sharp
+steamTimeWindowSeconds = 120 # rationale: MUST match lib/syndicate_burst_guard.ts:BURST_WINDOW_S
+inplayDelaySeconds = 3 # rationale: sportsbook settlement lag; 3s covers 95% of feeds
+velocityWindowSeconds = 60 # rationale: rolling window for burst detection
+velocityBurstCount = 8 # rationale: 8/min ≈ top 0.5% of retail + all steam
+maxWagerPerTicketUsd = 25000 # rationale: hard cap; above this → manual review regardless of tier
+maxWagerPerMinuteUsd = 50000 # rationale: 2× ticket cap; prevents split-ticket evasion
+correlationWindowSeconds = 900 # rationale: 15 min = typical syndicate coordination window
+staleLineSeconds = 45 # rationale: feed SLA is 30s; 45s = feed failure signal
+minSampleSizeForClv = 25 # rationale: below 25 wagers, CLV is noise not signal
+
+[surveillance.scoring]
+weightsOriginator = 0.45
+weightsSteam = 0.25
+weightsLatency = 0.15
+weightsHistorical = 0.15
+decayHalfLifeHours = 72.0
+
+# ---------------------------------------------------------------------------
+# Notification channels (env:VAR resolved at load time)
+# ---------------------------------------------------------------------------
+[notifications.telegram]
+enabled = true
+endpoint = "env:TELEGRAM_WEBHOOK_URL"
+parseMode = "MarkdownV2"
+timeoutMs = 4000
+maxRetries = 3
+retryBackoffMs = 750
+
+[notifications.pagerduty]
+enabled = false
+endpoint = "env:PAGERDUTY_ROUTING_KEY"
+severityMap = "CRITICAL"
+timeoutMs = 4000
+maxRetries = 3
+retryBackoffMs = 750
+
+[notifications.webhook]
+enabled = true
+endpoint = "env:OPS_WEBHOOK_URL"
+signingSecret = "env:OPS_WEBHOOK_SECRET"
+timeoutMs = 5000
+maxRetries = 2
+retryBackoffMs = 1000
+
+# ---------------------------------------------------------------------------
+# Runtime overrides — TTL-scoped, whitelisted, audited.
+# File remains the source of truth; overrides sit above it and auto-expire.
+# API surface: POST/GET/DELETE /api/config/tiers/overrides
+# ---------------------------------------------------------------------------
+[overrides]
+enabled = true
+maxTtlSeconds = 86400 # hard 24h cap; beyond that, open a PR
+requireReason = true
+requireOperatorId = true
+requireTicketRef = false # set true when ticketing is integrated
+auditSink = "wager-overrides"
+# Only keys listed here can be overridden. Routing/actions are NEVER overridable.
+whitelist = [
+  "surveillance.highRiskThresholdUsd",
+  "surveillance.clvAlertThresholdCents",
+  "surveillance.steamTimeWindowSeconds",
+  "surveillance.velocityBurstCount",
+  "surveillance.maxWagerPerTicketUsd",
+  "surveillance.maxWagerPerMinuteUsd",
+  "tiers.ORIGINATOR_HIGH_RISK.maxStakeUsd",
+  "tiers.STEAM_MOVE.maxStakeUsd",
+  "tiers.LATENCY_ARB.maxStakeUsd",
+  "tiers.BASELINE.maxStakeUsd",
+]
+
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+[features]
+inlineScoreExplain = true
+shadowMode = false
+dryRunAlerts = false
+persistAuditTrail = true
+experimentalGraph = false
+steamDigestEnabled = true # aggregate STEAM → single Telegram digest
+latencyMetricsEnabled = true # count LATENCY false positives via webhook
+
+# ---------------------------------------------------------------------------
+# Per-action rate limits
+# ---------------------------------------------------------------------------
+[rateLimits.ALERT_OPERATOR]
+burst = 5
+perSeconds = 60
+
+[rateLimits.MONITOR_FLOW]
+burst = 20
+perSeconds = 60
+
+[rateLimits.THROTTLE_INPLAY]
+burst = 50
+perSeconds = 60
+
+[rateLimits.STANDARD_ROUTING]
+burst = 200
+perSeconds = 60
+
+# ---------------------------------------------------------------------------
+# Audit trail
+# ---------------------------------------------------------------------------
+[audit]
+sink = "stdout+file"
+filePath = "./var/audit/wager-tiers.log"
+sampleRate = 1.0
+redactPII = true
+
+# ---------------------------------------------------------------------------
+# Slice Hold-Floor Policy & Blended Hold SLO (src/risk/hold_floor_config.ts)
+# Constraint: Do NOT lower hold_floors to hide negative floor deltas; gates flag asymmetry instead.
+# ---------------------------------------------------------------------------
 [slo]
 blended_hold_floor_pct = 3.50
 exclude_blocked = true

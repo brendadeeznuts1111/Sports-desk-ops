@@ -1,0 +1,106 @@
+/**
+ * @file src/dashboard/styles/tokens.css
+ * @description Canonical Design Tokens for SportsDesk Operator Dashboard.
+ *
+ * Architecture rules:
+ * 1. Imported EXACTLY ONCE at application entry (src/dashboard/index.tsx).
+ * 2. CSS Modules do not hash custom properties; all extracted components inherit from :root.
+ * 3. Never import this file into a *.module.css file (avoids duplicate injection).
+ * 4. Colors use literal values with sRGB fallbacks so older browser baselines don't drop rules.
+ * 5. CI Invariant: `oklch(` may only appear in this file within src/dashboard/styles/.
+ */
+
+:root {
+  /* ══ 1. Color Primitives ══ */
+
+  /* Neutral scale (Dark-first desk surface palette)
+     Note: Steps 5, 6, 8 intentionally omitted; no surface exists between border-strong and text-muted */
+  --neutral-0: #070b14; /* oklch(10% 0.02 260) - deepest page/terminal backing */
+  --neutral-1: #0d1527; /* oklch(14% 0.03 260) - panel backdrop */
+  --neutral-2: #131d35; /* oklch(18% 0.04 260) - row hover / elevated card */
+  --neutral-3: #1e293b; /* oklch(24% 0.03 260) - default border */
+  --neutral-4: #334155; /* oklch(32% 0.03 260) - strong border / divider */
+  --neutral-7: #64748b; /* oklch(52% 0.04 260) - subtle caption / disabled */
+  --neutral-9: #94a3b8; /* oklch(68% 0.03 260) - muted text */
+  --neutral-10: #cbd5e1; /* oklch(84% 0.02 260) - secondary text */
+  --neutral-11: #f1f5f9; /* oklch(96% 0.01 260) - primary text */
+
+  /* Chromatic primitives (whole colors, named --color-* not --hue-*) */
+  --color-red: #f87171; /* oklch(63% 0.22 25)  - danger / originator threat */
+  --color-amber: #fbbf24; /* oklch(80% 0.16 80)  - warning / syndicate steam */
+  --color-green: #4ade80; /* oklch(80% 0.18 145) - retained profit / normal */
+  --color-blue: #38bdf8; /* oklch(74% 0.14 220) - desk accent / focus */
+  --color-violet: #c084fc; /* oklch(68% 0.18 300) - latency arb */
+
+  /* ══ 2. Semantic Roles: Surfaces, Borders, Text ══ */
+  --surface-page: var(--neutral-0);
+  --surface-panel: var(--neutral-1);
+  --surface-elevated: var(--neutral-2);
+  --surface-overlay: #0b1120;
+
+  --border-default: var(--neutral-3);
+  --border-strong: var(--neutral-4);
+
+  --text-primary: var(--neutral-11);
+  --text-secondary: var(--neutral-10);
+  --text-muted: var(--neutral-9);
+  --text-faint: var(--neutral-7);
+
+  --accent-primary: var(--color-blue);
+
+  /* ══ 3. Risk Grammar Axis (Desk Threat vs Retained Profit)
+     Rule: Exposure = threat TO THE DESK (bettor winning sharp).
+     Retained = desk keeps the money (+Hold).
+     Deliberately NOT "good/bad" — a red row is a sharp bettor threatening exposure. */
+  --risk-exposure: var(--color-red);
+  --risk-retained: var(--color-green);
+  --risk-watch: var(--color-amber);
+
+  /* Literal tinted row/card backgrounds (avoiding runtime relative color syntax) */
+  --risk-exposure-bg: #271418; /* oklch(22% 0.06 25) */
+  --risk-retained-bg: #0f241a; /* oklch(22% 0.05 155) */
+  --risk-watch-bg: #262010; /* oklch(24% 0.04 80) */
+
+  /* ══ 4. Status Axis (SEPARATE from Risk Grammar)
+     Rule: System health only. Rendered strictly as a 6-8px dot or badge in TopBar.
+     Never rendered as a row background or table cell treatment to prevent collision. */
+  --status-ok: var(--color-green);
+  --status-warn: var(--color-amber);
+  --status-error: var(--color-red);
+
+  /* ══ 5. Interaction States ══ */
+  --row-hover: var(--neutral-2);
+  --row-selected: rgba(56, 189, 248, 0.08);
+  --row-selected-border: var(--color-blue);
+  --row-focus-ring: var(--color-blue);
+  --focus-ring: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--color-blue);
+
+  /* ══ 6. Stacking Order (Z-Index Scale)
+     Invariant: --z-frozen-col MUST outrank --z-sticky-header (11 > 10)
+     so the pinned directive column stays above headers on horizontal scroll. */
+  --z-sticky-header: 10; /* BettorTable thead th */
+  --z-frozen-col: 11; /* directive column right edge */
+  --z-inspector: 20; /* DetailPanel sticky sidebar */
+  --z-pty: 30; /* terminal overlay / drawer */
+  --z-banner: 40; /* portal notice banner */
+  --z-modal: 50; /* shift handoff modal / dialogs */
+
+  /* ══ 7. ANSI / PTY Terminal Palette ══
+     Enables getComputedStyle(document.documentElement).getPropertyValue('--ansi-*') in xterm */
+  --ansi-black: #0f172a;
+  --ansi-red: #f87171;
+  --ansi-green: #4ade80;
+  --ansi-yellow: #fbbf24;
+  --ansi-blue: #38bdf8;
+  --ansi-magenta: #c084fc;
+  --ansi-cyan: #22d3ee;
+  --ansi-white: #f1f5f9;
+  --ansi-bright-black: #334155;
+  --ansi-bright-red: #fca5a5;
+  --ansi-bright-green: #86efac;
+  --ansi-bright-yellow: #fde047;
+  --ansi-bright-blue: #7dd3fc;
+  --ansi-bright-magenta: #e9d5ff;
+  --ansi-bright-cyan: #67e8f9;
+  --ansi-bright-white: #ffffff;
+}

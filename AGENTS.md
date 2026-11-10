@@ -3,12 +3,27 @@
 Operator tooling for the Fantasy402 sports desk: ingestion, settlement, combo/CLV analytics, the R2
 portal and the VPS service. Bun **1.4.4** (`package.json` `engines.bun` / `.bun-version`).
 
-## Entrypoint and the gate chain
+## Fast inner loop vs full main-branch gate chain
+
+### Inner loop (use this during active development — ~1–2s)
+
+Pull requests on GitHub run **`verify-changed`** (`bun run test:changed` + `test:changed-plugins`),
+not the full `main`-branch ratchet. Never run the entire test suite (`bun test` / `bun test tests/`)
+on iterative edits — use **`bun run verify:fast`** instead:
+
+```sh
+bun run verify:fast          # auto-formats changed files + runs typecheck (.ts+.tsx), scoped oxlint,
+                             # path-triggered gates, and test:changed (or test:shard on root config edits) in parallel
+bun run test:changed         # parallel changed-only tests
+bun run test:shard           # parallel head shard (1/8) when root configs (package.json/tsconfig.json) are dirty
+```
+
+### Full `main`-branch gate chain (`ci:local` — pre-merge / scheduled runs only)
 
 `./bin/dx` is the operator entrypoint (`README.md:11-15`); `scripts/deploy/deploy_to_vps.sh` / `./bin/dx deploy`
-ship to the VPS. CI job **`verify`** runs the steps below in order and stops at the first failure.
+ship to the VPS. CI job **`verify`** runs on `main` pushes and scheduled cadences in order and stops at the first failure.
 Job **`market-index`** is the required check on `main` for catalog edits (`bun run test:market-index`).
-Reproduce them locally before claiming a change works:
+Reserve the full chain below (`bun run ci:local`) for final `main`-branch verification:
 
 ```sh
 bun run verify:manager-oracle-slices
@@ -82,6 +97,20 @@ with `bun run audit:tool-calls`.
   inside an `if` condition or ternary (`feature("FLAG") ? true : false`). Passing it directly to
   functions (like `expect()` or `expectTypeOf()`) fails at parse time. Testing `--feature=FLAG`
   requires subprocess spawning (`Bun.spawnSync`), as flags cannot be toggled mid-process.
+- **`Bun.semver` vs npm `semver`:** `Bun.semver.satisfies` only accepts `(version, range)`.
+  It does NOT support `{ includePrerelease: true }`. The npm `semver` package in `devDependencies`
+  is strictly required for `tests/market_index.test.ts` (Discover index verification) to match
+  upstream Harness install behavior. Do not replace it with `Bun.semver`.
+- **Linting engine & Bun version gate:** In Bun 1.4.4, `bun lint` is NOT a native subcommand.
+  Setting `"lint": "bun lint"` causes infinite script recursion. All linting runs through `oxlint`
+  via `.oxlintrc.json` and `.oxlintrc.type-aware.json`. When migrating to native `bun lint` in
+  future Bun versions:
+  1. Pass explicit `-c .oxlintrc.type-aware.json` for type-aware checks (it is not auto-discovered).
+  2. Retain `oxlint` in `devDependencies` for editor LSP (`oxlint --lsp`), removing only `oxlint-tsgolint`.
+- **Squash-merge branch audit invariant:** In PR squash-merge workflows, commit SHAs diverge from
+  `main`. Do not rely on `git cherry` or `git branch --merged` alone; cross-reference PR titles via
+  `gh pr list --state all` or merge-base file diffs. Before deleting branches checked out in auxiliary
+  worktrees, detach HEAD or prune clean worktrees without touching dirty files.
 
 ## DSH Discover (plugin market index)
 

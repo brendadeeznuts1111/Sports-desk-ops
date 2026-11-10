@@ -212,3 +212,44 @@ max_hold_rate_basis_points = -5000
 max_deficit_cents = 10000000
 mitigation_kind = "MANAGER_LIMIT_CLAMP"
 operational_role = "Terminal Risk Containment & Manager Write-Gate"
+
+# ==============================================================================
+# Token Map for Wager Tiers and Surveillance (@token:<name> references)
+# ==============================================================================
+[tokens]
+
+# --- Surfaces & structure --------------------------------------------------
+"sd-surface-panel" = "#0d1527"
+"sd-surface-raised" = "#1a2436"
+"sd-border-default" = "#1e293b"
+"sd-border-strong" = "#334155"
+
+# --- Text ------------------------------------------------------------------
+"sd-text-primary" = "#f1f5f9" # canonical; wager_tiers previously drifted to #f8fafc
+"sd-text-secondary" = "#cbd5e1"
+"sd-text-muted" = "#94a3b8"
+
+# --- Semantic accents ------------------------------------------------------
+"sd-accent" = "#38bdf8"
+"sd-danger" = "#ef4444"
+"sd-warn" = "#f59e0b"
+"sd-ok" = "#22c55e"
+"sd-info" = "#818cf8"
+
+# --- Tier colors (bound to tier keys in wager_tiers.toml) ------------------
+"sd-tier-originator-fg" = "#f87171"
+"sd-tier-originator-bg" = "#302332"
+"sd-tier-originator-border" = "#ef4444"
+
+"sd-tier-steam-fg" = "#f59e0b" # canonical; wager_tiers previously drifted to #fb923c
+"sd-tier-steam-bg" = "#31282a"
+"sd-tier-steam-border" = "#f59e0b"
+
+"sd-tier-latency-fg" = "#c084fc"
+"sd-tier-latency-bg" = "#282647"
+"sd-tier-latency-border" = "#c084fc"
+
+"sd-tier-baseline-fg" = "#4ade80"
+"sd-tier-baseline-bg" = "#163334"
+"sd-tier-baseline-border" = "#22c55e"
+

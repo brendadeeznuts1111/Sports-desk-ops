@@ -12,10 +12,14 @@
  *  6. Tokenized ANSI parser (`parseAnsiSegments`) and safe HTML generator (`ansiToHtml`).
  *  7. Keybindings reference specification and autocomplete registry.
  *  8. Invariant: autoExecute: false across all directives and outputs.
+ *  9. Security Audit (2026-11-09): All subprocess execution uses array-form Bun.spawn
+ *     execve arguments without intermediate shell (no sh -c / bash -c). Injection via
+ *     semicolons, pipes, backticks, or subshells is impossible (covered by tests/pty_injection.test.ts).
  */
 
 import { resolve } from "node:path";
 import { TerminalSession, type SpawnInPtyOptions } from "./bun_terminal.ts";
+import { auditPty } from "./audit_log.ts";
 import { benchmarkResolverLatency, classifyIpAddress } from "./bun_dns.ts";
 import {
   KEY_NUMBER_BUYER_PROFILES,
@@ -32,6 +36,70 @@ import {
 } from "./canonical_osc8_links.ts";
 import { formatHalfPointLine } from "../design/domain-branded-types.ts";
 import { padDisplay } from "./cli_inspect.ts";
+import { TIER, SURFACE, composite, type WagerTier } from "./wager_tokens.ts";
+
+const FG = (c: string) =>
+  typeof Bun !== "undefined" && Bun.color
+    ? (Bun.color(c, "ansi-16m") ?? "")
+    : "";
+const BG = (c: string) => FG(c).replace("\x1b[38;", "\x1b[48;");
+
+/** Gate every escape through Bun.enableANSIColors — mirrors AnsiTheme.colors */
+const S = (sgr: string) =>
+  typeof Bun !== "undefined" && Bun.enableANSIColors !== false ? sgr : "";
+const R = "\x1b[0m";
+
+export const renderWagerBadgeTerminal = (t: WagerTier, s: string): string =>
+  `${S(FG(TIER[t].fg) + BG(TIER[t].bg) + "\x1b[1m")} ${s} ${S(R)}`;
+
+/**
+ * Anchored regex for detecting wager tier keywords in markdown **bold** spans.
+ * Rejects non-tier text and names like STEAM100 while allowing optional alert prefixes and parentheticals.
+ */
+export const TIER_KEYWORD_RE =
+  /^(?:#\s*|(?:🚨|⚡|⚠️|✅)\s*)?(CRITICAL|STEAM|LATENCY|RECREATIONAL)(?:\s*\([^)]+\))?$/u;
+
+/**
+ * Custom Bun.markdown.render callback map that translates Markdown AST elements
+ * directly into ANSI SGR sequences using the exact TrueColor hex tokens from wagerBadge().
+ */
+export function renderWagerMarkdownTerminal(markdown: string): string {
+  // trusted-markdown: terminal emulator interactive markdown-to-ANSI custom renderer
+  return Bun.markdown.render(markdown, {
+    heading: (children, meta) =>
+      `${S(FG(SURFACE.text) + "\x1b[1m")}${"#".repeat(meta.level)} ${children}${S(R)}\n\n`,
+    paragraph: (children) => `${children}\n\n`,
+    strong: (children) => {
+      const text = String(children).trim();
+      // Whole-span case-sensitive tier match (with optional # or alert emoji prefix, or parens)
+      const tierMatch = TIER_KEYWORD_RE.exec(text);
+      if (tierMatch) {
+        const tier = tierMatch[1] as WagerTier;
+        return renderWagerBadgeTerminal(tier, text);
+      }
+      return `${S(FG(SURFACE.text) + "\x1b[1m")}${children}${S("\x1b[22m")}`;
+    },
+    emphasis: (children) => `${S("\x1b[4m")}${children}${S("\x1b[24m")}`,
+    codespan: (children) =>
+      `${S(FG(SURFACE.muted) + BG(composite(SURFACE.muted, 0.1, SURFACE.panel)))} ${children} ${S(R)}`,
+    code: (children) => `${S(FG(SURFACE.muted))}${children}${S(R)}\n`,
+    blockquote: (children) => `${S(FG(SURFACE.muted))}│ ${children}${S(R)}\n`,
+    link: (children, meta) => {
+      const { href } = meta;
+      if (href.startsWith("http://") || href.startsWith("https://")) {
+        return formatOsc8Hyperlink(href, String(children));
+      }
+      return `${S(FG(SURFACE.accent) + "\x1b[4m")}${children}${S("\x1b[24m")} (${href})`;
+    },
+    list: (children) => `${children}\n`,
+    listItem: (children) => `  • ${children}`,
+    tr: (children) => `${children}\n`,
+    th: (children) =>
+      `${S(FG(SURFACE.accent) + "\x1b[1m")}${children}${S(R)} | `,
+    td: (children) => `${children} | `,
+    hr: () => `${S(FG(SURFACE.border))}${"─".repeat(50)}${S(R)}\n\n`,
+  });
+}
 
 let _cachedRanking: Promise<BatchedRankingResult> | null = null;
 function getCachedRanking(): Promise<BatchedRankingResult> {
@@ -842,16 +910,26 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
       });
       currentLink = undefined;
     } else if (match[2] !== undefined) {
-      const codes = match[2]
-        .split(";")
-        .map((c) => (c === "" ? 0 : Number.parseInt(c, 10)));
-      for (const code of codes) {
+      const paramStr = match[2];
+      const codes =
+        paramStr === ""
+          ? [0]
+          : paramStr
+              .split(";")
+              .filter((c, idx, arr) => !(idx === arr.length - 1 && c === ""))
+              .map((c) => (c === "" ? 0 : Number.parseInt(c, 10)));
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i]!;
         if (code === 0) {
           currentColor = undefined;
           currentBg = undefined;
           currentBold = false;
           currentDim = false;
           currentUnderline = false;
+        } else if (code === 39) {
+          currentColor = undefined;
+        } else if (code === 49) {
+          currentBg = undefined;
         } else if (code === 1) {
           currentBold = true;
         } else if (code === 2) {
@@ -863,14 +941,32 @@ export function parseAnsiSegments(raw: string): AnsiSegment[] {
           currentDim = false;
         } else if (code === 24) {
           currentUnderline = false;
+        } else if (
+          code === 38 &&
+          codes[i + 1] === 2 &&
+          codes[i + 4] !== undefined
+        ) {
+          // ANSI 24-bit TrueColor foreground: 38;2;r;g;b
+          const r = codes[i + 2]!;
+          const g = codes[i + 3]!;
+          const b = codes[i + 4]!;
+          currentColor = `rgb(${r}, ${g}, ${b})`;
+          i += 4;
+        } else if (
+          code === 48 &&
+          codes[i + 1] === 2 &&
+          codes[i + 4] !== undefined
+        ) {
+          // ANSI 24-bit TrueColor background: 48;2;r;g;b
+          const r = codes[i + 2]!;
+          const g = codes[i + 3]!;
+          const b = codes[i + 4]!;
+          currentBg = `rgb(${r}, ${g}, ${b})`;
+          i += 4;
         } else if (code >= 30 && code <= 37) {
           currentColor = ANSI_COLOR_MAP[code];
-        } else if (code === 39) {
-          currentColor = undefined;
         } else if (code >= 40 && code <= 47) {
           currentBg = ANSI_BG_MAP[code];
-        } else if (code === 49) {
-          currentBg = undefined;
         } else if (code >= 90 && code <= 97) {
           currentColor = ANSI_COLOR_MAP[code];
         } else if (code >= 100 && code <= 107) {
@@ -988,7 +1084,7 @@ function renderRadarAscii(cust: TerminalCustomerRecord): string {
 
   return [
     `┌────────────────────────────────────────────────────────┐`,
-    `│ 📊 SHARPNESS RADAR DECOMPOSITION: ${cust.id.padEnd(20)} │`,
+    `│ 📊 SHARPNESS RADAR DECOMPOSITION: ${padDisplay(cust.id, 20)} │`,
     `├───────────────────────┬──────┬─────────────────────────┤`,
     `│ Pillar                │ Score│ Visual Intensity Radar  │`,
     `├───────────────────────┼──────┼─────────────────────────┤`,
@@ -1063,15 +1159,57 @@ function renderKeyNumbersTable(): string {
     "┌──────────┬──────────────┬──────────┬──────────────┬──────┬──────────────────────────────┬────────────┬──────┐",
     "│ Customer │ Agent        │ Tickets  │ Risk Volume  │ 2H % │ Key Numbers Dist (3/7/10/14) │ Edge (Bps) │ Conf │",
     "├──────────┼──────────────┼──────────┼──────────────┼──────┼──────────────────────────────┼────────────┼──────┤",
-    `│ \x1b[1;36m${formatOsc8Hyperlink(getCanonicalCustomerUrl("GP301"), "GP301".padEnd(8))}\x1b[0m │ ${formatOsc8Hyperlink(getCanonicalAgentUrl("AG99"), "AG99".padEnd(12))} │      827 │   $3,718,373 │   1% │ 3:43% 7:36% 10:5% 14:9% 21:7%│ \x1b[32m   +11.5¢\x1b[0m │ 0.96 │`,
-    `│ \x1b[1;36m${formatOsc8Hyperlink(getCanonicalCustomerUrl("BRT5229"), "BRT5229".padEnd(8))}\x1b[0m │ ${formatOsc8Hyperlink(getCanonicalAgentUrl("AG_SHARP"), "AG_SHARP".padEnd(12))} │      612 │   $2,840,100 │   2% │ 3:41% 7:38% 10:6% 14:8% 21:7%│ \x1b[32m   +10.2¢\x1b[0m │ 0.94 │`,
-    `│ \x1b[1;36m${formatOsc8Hyperlink(getCanonicalCustomerUrl("BRT5235"), "BRT5235".padEnd(8))}\x1b[0m │ ${formatOsc8Hyperlink(getCanonicalAgentUrl("AG_SHARP"), "AG_SHARP".padEnd(12))} │      540 │   $2,150,000 │   1% │ 3:40% 7:39% 10:5% 14:10%21:6%│ \x1b[32m    +9.8¢\x1b[0m │ 0.92 │`,
-    `│ \x1b[1;36m${formatOsc8Hyperlink(getCanonicalCustomerUrl("CCC88412"), "CCC88412".padEnd(8))}\x1b[0m │ ${formatOsc8Hyperlink(getCanonicalAgentUrl("AG_SHARP"), "AG_SHARP".padEnd(12))} │      488 │   $1,920,400 │   3% │ 3:44% 7:35% 10:7% 14:8% 21:6%│ \x1b[32m   +12.1¢\x1b[0m │ 0.95 │`,
-    `│ \x1b[1;36m${formatOsc8Hyperlink(getCanonicalCustomerUrl("MJ107"), "MJ107".padEnd(8))}\x1b[0m │ ${formatOsc8Hyperlink(getCanonicalAgentUrl("AG_SHARP"), "AG_SHARP".padEnd(12))} │      395 │   $1,640,000 │   2% │ 3:42% 7:37% 10:6% 14:9% 21:6%│ \x1b[32m   +10.8¢\x1b[0m │ 0.93 │`,
-    "└──────────┴──────────────┴──────────┴──────────────┴──────┴──────────────────────────────┴────────────┴──────┘",
-    "\x1b[90mCohort Summary: 5 verified originators · Mean Edge: +10.9¢ · Combined Risk: $12.27M\x1b[0m",
-    "\x1b[90mTip: Type 'p GP301' or 'p CCC88412' to inspect individual behavioral radar.\x1b[0m",
   ];
+
+  let totalRisk = 0;
+  let totalEdge = 0;
+  let count = 0;
+
+  for (const [custId, prof] of KEY_NUMBER_BUYER_PROFILES) {
+    count++;
+    totalRisk += prof.totalRiskUsd;
+    totalEdge += prof.evidence.avgEdgeCents;
+
+    const agentId =
+      KNOWN_CUSTOMER_MAP.get(custId)?.agentId ??
+      (custId === "GP301" ? "AG99" : "AG_SHARP");
+    const idLink = formatOsc8Hyperlink(
+      getCanonicalCustomerUrl(custId),
+      padDisplay(custId, 8),
+    );
+    const agentLink = formatOsc8Hyperlink(
+      getCanonicalAgentUrl(agentId),
+      padDisplay(agentId, 12),
+    );
+    const tixPad = padDisplay(String(prof.nTickets), 8, "right");
+    const riskPad = padDisplay(
+      `$${Math.round(prof.totalRiskUsd).toLocaleString()}`,
+      12,
+      "right",
+    );
+    const twoHPad = padDisplay(
+      `${Math.round(prof.evidence.twoHalfBetRate * 100)}%`,
+      4,
+      "right",
+    );
+    const dist = prof.evidence.keyNumberConcentration;
+    const distStr = `3:${dist["3"] ?? 0} 7:${dist["7"] ?? 0} 10:${dist["10"] ?? 0} 14:${dist["14"] ?? 0} 21:${dist["21"] ?? 0}`;
+    const distPad = padDisplay(distStr, 28);
+    const edgeColored = `\x1b[32m${padDisplay(`+${prof.evidence.avgEdgeCents.toFixed(1)}¢`, 10, "right")}\x1b[0m`;
+    const confPad = padDisplay(prof.confidence.toFixed(2), 4, "right");
+
+    rows.push(
+      `│ \x1b[1;36m${idLink}\x1b[0m │ ${agentLink} │ ${tixPad} │ ${riskPad} │ ${twoHPad} │ ${distPad} │ ${edgeColored} │ ${confPad} │`,
+    );
+  }
+
+  const meanEdge = count > 0 ? (totalEdge / count).toFixed(1) : "0.0";
+  const riskM = (totalRisk / 1_000_000).toFixed(2);
+  rows.push(
+    "└──────────┴──────────────┴──────────┴──────────────┴──────┴──────────────────────────────┴────────────┴──────┘",
+    `\x1b[90mCohort Summary: ${count} verified originators · Mean Edge: +${meanEdge}¢ · Combined Risk: $${riskM}M\x1b[0m`,
+    "\x1b[90mTip: Type 'p GP301' or 'p CCC88412' to inspect individual behavioral radar.\x1b[0m",
+  );
   return rows.join("\n");
 }
 
@@ -1092,9 +1230,9 @@ function renderGiniRankingsTable(): string {
     const rankStr = String(rank++).padStart(4);
     const idPad = formatOsc8Hyperlink(
       getCanonicalCustomerUrl(c.id),
-      c.id.padEnd(8),
+      padDisplay(c.id, 8),
     );
-    const stratPad = c.sizingStrategy.slice(0, 20).padEnd(20);
+    const stratPad = padDisplay(c.sizingStrategy.slice(0, 20), 20);
     const giniStr = c.gini.toFixed(2).padStart(5);
     const meanStr = `$${c.meanStake.toLocaleString()}`.padStart(10);
     const ratioStr = `${c.maxMinRatio.toFixed(1)}x`.padStart(7);
@@ -1110,7 +1248,7 @@ function renderGiniRankingsTable(): string {
     }
 
     rows.push(
-      `│ ${rankStr} │ \x1b[1;36m${idPad}\x1b[0m │ ${stratPad} │ ${giniColored} │ ${meanStr} │ ${ratioStr} │ ${profileDesc.padEnd(28)} │`,
+      `│ ${rankStr} │ \x1b[1;36m${idPad}\x1b[0m │ ${stratPad} │ ${giniColored} │ ${meanStr} │ ${ratioStr} │ ${padDisplay(profileDesc, 28)} │`,
     );
   }
 
@@ -1189,9 +1327,9 @@ function renderRiskForensicsTable(): string {
     totalCvar += c.cvar95Usd;
     const idPad = formatOsc8Hyperlink(
       getCanonicalCustomerUrl(c.id),
-      c.id.padEnd(10),
+      padDisplay(c.id, 10),
     );
-    const tierPad = c.tier.slice(0, 27).padEnd(27);
+    const tierPad = padDisplay(c.tier.slice(0, 27), 27);
     const varStr = `$${c.var95Usd.toLocaleString()}`.padStart(11);
     const cvarStr = `$${c.cvar95Usd.toLocaleString()}`.padStart(11);
     const holdStr = `${c.holdPct.toFixed(1)}%`.padStart(6);
@@ -1199,7 +1337,7 @@ function renderRiskForensicsTable(): string {
       `${c.ltvUsd <= 0 ? "-" : "+"}$${Math.abs(c.ltvUsd).toLocaleString()}`.padStart(
         12,
       );
-    const actPad = c.action.slice(0, 9).padEnd(9);
+    const actPad = padDisplay(c.action.slice(0, 9), 9);
 
     const holdColored =
       c.holdPct < 0 ? `\x1b[31m${holdStr}\x1b[0m` : `\x1b[32m${holdStr}\x1b[0m`;
@@ -1286,7 +1424,7 @@ function renderKeybindingsCheatSheet(): string {
  * Uses Bun.Terminal PTY with Bun.spawn for authentic command execution,
  * with fast in-memory fallbacks for instant searches.
  */
-export async function executeTerminalQuery(
+async function executeTerminalQueryInner(
   rawInput: string,
   options: TerminalQueryOptions = {},
 ): Promise<TerminalQueryResult> {
@@ -1682,20 +1820,20 @@ export async function executeTerminalQuery(
     for (const m of matches.slice(0, 25)) {
       const idPad = formatOsc8Hyperlink(
         getCanonicalCustomerUrl(m.id),
-        m.id.padEnd(10),
+        padDisplay(m.id, 10),
       );
       const agentPad = formatOsc8Hyperlink(
         getCanonicalAgentUrl(m.agent),
-        m.agent.padEnd(12),
+        padDisplay(m.agent, 12),
       );
-      const tierPad = m.tier.slice(0, 24).padEnd(24);
+      const tierPad = padDisplay(m.tier.slice(0, 24), 24);
       const scoreStr = m.score.toFixed(1).padStart(5);
-      const actPad = (
+      const actRaw =
         m.action === "ALERT_OPERATOR"
           ? `\x1b[31m${m.action}\x1b[0m`
-          : `\x1b[33m${m.action}\x1b[0m`
-      ).padEnd(23);
-      const detPad = m.detail.slice(0, 38).padEnd(38);
+          : `\x1b[33m${m.action}\x1b[0m`;
+      const actPad = padDisplay(actRaw, 14);
+      const detPad = padDisplay(m.detail.slice(0, 38), 38);
 
       rows.push(
         `│ \x1b[1;36m${idPad}\x1b[0m │ ${agentPad} │ ${tierPad} │ \x1b[1m${scoreStr}\x1b[0m │ ${actPad} │ ${detPad} │`,
@@ -1838,7 +1976,7 @@ export async function executeTerminalQuery(
           mdText = await f.text();
         }
       }
-      const rendered = Bun.markdown.ansi(mdText);
+      const rendered = renderWagerMarkdownTerminal(mdText);
       return {
         command: trimmed,
         stdout: rendered,
@@ -1872,22 +2010,22 @@ export async function executeTerminalQuery(
         const rk = String(p.rank).padStart(2);
         const id = formatOsc8Hyperlink(
           getCanonicalCustomerUrl(p.customerId),
-          p.customerId.padEnd(10),
+          padDisplay(p.customerId, 10),
         );
         const sa = formatOsc8Hyperlink(
           getCanonicalAgentUrl(p.agentId),
-          p.agentId.padEnd(12),
+          padDisplay(p.agentId, 12),
         );
         const ma = formatOsc8Hyperlink(
           getCanonicalAgentUrl(p.masterAgent),
-          p.masterAgent.padEnd(12),
+          padDisplay(p.masterAgent, 12),
         );
         const handle = `$${p.handleUsd.toLocaleString()}`.padStart(12);
         const wagers = String(p.totalWagers).padStart(6);
         const gini = p.stakeGini.toFixed(3).padStart(5);
         const alerts = `${p.alertRatePct.toFixed(0)}%`.padStart(6);
         const score = p.compositeScore.toFixed(2).padStart(5);
-        const tier = p.tierLabel.padEnd(24);
+        const tier = padDisplay(p.tierLabel, 24);
         const status = p.isProxyConduit
           ? "\x1b[1;31m🚨 PROXY CONDUIT\x1b[0m"
           : p.compositeScore >= 7.0
@@ -1934,17 +2072,17 @@ export async function executeTerminalQuery(
       for (const c of conduits) {
         const sa = formatOsc8Hyperlink(
           getCanonicalAgentUrl(c.agentId),
-          c.agentId.padEnd(12),
+          padDisplay(c.agentId, 12),
         );
         const ma = formatOsc8Hyperlink(
           getCanonicalAgentUrl(c.masterAgent),
-          c.masterAgent.padEnd(12),
+          padDisplay(c.masterAgent, 12),
         );
         const handle = `$${c.totalHandleUsd.toLocaleString()}`.padStart(12);
         const wagers = String(c.totalWagers).padStart(6);
         const cust = formatOsc8Hyperlink(
           getCanonicalCustomerUrl(c.topCustomer),
-          c.topCustomer.padEnd(12),
+          padDisplay(c.topCustomer, 12),
         );
         const custConc =
           `${c.topCustomerConcentrationPct.toFixed(1)}%`.padStart(6);
@@ -1988,18 +2126,18 @@ export async function executeTerminalQuery(
       for (const s of data.topSubAgents.slice(0, 15)) {
         const sa = formatOsc8Hyperlink(
           getCanonicalAgentUrl(s.agentId),
-          s.agentId.padEnd(12),
+          padDisplay(s.agentId, 12),
         );
         const ma = formatOsc8Hyperlink(
           getCanonicalAgentUrl(s.masterAgent),
-          s.masterAgent.padEnd(12),
+          padDisplay(s.masterAgent, 12),
         );
         const handle = `$${s.totalHandleUsd.toLocaleString()}`.padStart(12);
         const wagers = String(s.totalWagers).padStart(6);
         const custs = String(s.customerCount).padStart(9);
         const topCust = formatOsc8Hyperlink(
           getCanonicalCustomerUrl(s.topCustomer),
-          s.topCustomer.padEnd(12),
+          padDisplay(s.topCustomer, 12),
         );
         const conc = `${s.topCustomerConcentrationPct.toFixed(1)}%`.padStart(6);
         const status = s.isProxyConduit
@@ -2201,4 +2339,23 @@ export async function executeTerminalQuery(
       timestamp: startedAt,
     };
   }
+}
+
+/**
+ * High-Level Terminal Query Dispatcher with append-only operational audit logging.
+ */
+export async function executeTerminalQuery(
+  rawInput: string,
+  options: TerminalQueryOptions = {},
+): Promise<TerminalQueryResult> {
+  const result = await executeTerminalQueryInner(rawInput, options);
+  if (result.command) {
+    auditPty({
+      command: result.command,
+      exitCode: result.exitCode,
+      durationMs: result.durationMs,
+      cwd: options.cwd,
+    });
+  }
+  return result;
 }

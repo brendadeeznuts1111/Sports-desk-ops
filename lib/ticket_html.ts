@@ -60,7 +60,19 @@ export function decodeEntities(text: string): string {
         code[1]?.toLowerCase() === "x"
           ? Number.parseInt(code.slice(2), 16)
           : Number.parseInt(code.slice(1), 10);
-      return Number.isFinite(value) ? String.fromCodePoint(value) : match;
+      if (
+        Number.isFinite(value) &&
+        value > 0 &&
+        value <= 0x10ffff &&
+        !(value >= 0xd800 && value <= 0xdfff)
+      ) {
+        try {
+          return String.fromCodePoint(value);
+        } catch {
+          return match;
+        }
+      }
+      return match;
     }
     return NAMED[code] ?? NAMED[code.toLowerCase()] ?? match;
   });

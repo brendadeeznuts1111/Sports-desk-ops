@@ -16,7 +16,15 @@
  */
 
 export type SecretGroup =
-  "r2" | "pages" | "blob" | "gslive" | "daemon" | "telegram" | "f402";
+  | "r2"
+  | "pages"
+  | "blob"
+  | "gslive"
+  | "daemon"
+  | "telegram"
+  | "f402"
+  | "db"
+  | "deploy";
 
 export interface SecretDefinition {
   /** The variable; a typo here fails `tsc` because it must be a key of `types/env.d.ts`. */
@@ -192,6 +200,78 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     groups: ["r2"],
     inject: false,
     description: "Cloudflare API token whose SHA-256 derives the R2 S3 secret",
+  },
+  {
+    envName: "PGPASSWORD",
+    keychainName: "SPORTSDESK_PGPASSWORD",
+    groups: ["db"],
+    inject: true,
+    description:
+      "PostgreSQL operator database password for migrations and user store",
+  },
+  {
+    envName: "TRUST_PROXY",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "When 1, trust x-forwarded-for and x-real-ip headers for client rate limiting",
+  },
+  {
+    envName: "SPORTSDESK_AUTH_REQUIRED",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "When 1 in development, enforce operator session authentication across data APIs",
+  },
+  {
+    envName: "SPORTSDESK_AUTH_DISABLED",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "When 1 in production, explicitly disable operator session authentication",
+  },
+  {
+    envName: "SPORTSDESK_CSRF_SECRET",
+    keychainName: null,
+    groups: ["db", "deploy"],
+    inject: false,
+    description:
+      "Shared secret for native Bun.CSRF token issuance across processes",
+  },
+  {
+    envName: "SPORTSDESK_AUDIT_DIR",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "Directory path for append-only JSONL audit logs (default: audit)",
+  },
+  {
+    envName: "SPORTSDESK_AUDIT_MAX_BYTES",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "Maximum file size in bytes before rotating audit logs (default: 52428800)",
+  },
+  {
+    envName: "SPORTSDESK_AUDIT_RETENTION_DAYS",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "Retention window in days for retaining daily audit logs (default: 90)",
+  },
+  {
+    envName: "SPORTSDESK_ALERT_MAX_ATTEMPTS",
+    keychainName: null,
+    groups: ["deploy"],
+    inject: false,
+    description:
+      "Maximum retry attempts before dead-lettering a surveillance alert (default: 5)",
   },
 ];
 

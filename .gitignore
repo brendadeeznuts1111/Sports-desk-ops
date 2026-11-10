@@ -70,6 +70,10 @@ junit-report.xml
 # Large report exports (contain identifiers; never commit)
 betReport*.json
 
+# Append-only audit logs (contain operator activity, IPs, and identifiers; local only)
+/audit/
+audit/
+
 # Agent worktrees and scratch: DSH agents create these under .agents/.
 /.agents/
 # Git worktrees checked out beside the main checkout.

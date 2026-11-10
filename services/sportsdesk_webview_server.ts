@@ -619,7 +619,7 @@ function isLogoName(name: string): boolean {
   if (!LOGO_EXTENSION.test(name) || name.includes("..")) return false;
   for (const ch of name) {
     const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || ch === "/" || ch === "\\") return false;
+    if (code < 0x20 || code === 0x7f || ch === "/" || ch === "\\") return false;
   }
   return true;
 }

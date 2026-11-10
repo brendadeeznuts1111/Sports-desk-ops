@@ -98,12 +98,13 @@ noOrphans = true
 depth = 8
 
 [test]
-# Ignore scratch experiments and generated gate artifacts from default test scans.
+# Ignore scratch experiments, heavy fixtures, and generated gate artifacts from default test scans.
 # Keeps colocated tests in lib/ and scripts/ active without traversing scratch/.
 pathIgnorePatterns = [
   "scratch/**",
   "Scratch/**",
-  "verification/gen-tokens-zero-drift-gate/out/**",
+  "verification/**",
+  "tests/fixtures/**",
 ]
 
 # Dual coverage reporting: preserves console text table while producing lcov.info for CI
