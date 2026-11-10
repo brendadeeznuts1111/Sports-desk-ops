@@ -191,6 +191,8 @@ async function loadParser() {
   };
 }
 
+// npm semver, dev-only: Bun.semver exposes satisfies/order with no
+// includePrerelease option, and the canonical-range assertions need it.
 function loadSemver(): SemverLike {
   const req = createRequire(join(ROOT, "package.json"));
   return req("semver") as SemverLike;
