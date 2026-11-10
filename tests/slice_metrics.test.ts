@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  auditSliceBitsetFiles,
+  auditSliceBitsetVirtualSource,
+} from "../bin/check-slice-bitsets.ts";
+import {
   loadHoldFloorConfig,
   parseHoldFloorConfigToml,
   resolveHoldFloorPct,
@@ -33,14 +37,18 @@ import {
   buildSliceIndexLookup,
   deriveSliceBitsetPredicate,
   getSliceSpec,
+  getSliceUnknownTelemetry,
   isAdvantageSlice,
   isBlockedSlice,
   isLeakSlice,
   isLiveLockoutSlice,
   isPreserveSlice,
   isRegisteredSliceId,
+  resetSliceUnknownTelemetry,
+  resolveDefaultUnknownSlicePolicy,
   SLICE_REGISTRY,
   type SliceSpec,
+  UnknownSliceIdError,
   validateHoldFloorSliceOverrides,
 } from "../src/risk/slice_registry.ts";
 
@@ -821,8 +829,42 @@ default_pct = 3.50
     ).toThrow(/by_slice/);
   });
 
-  test("per-slice booleans use derived bitsets keyed by registry index and exposed strictly via predicates", async () => {
-    // 1. Derived registry predicates match AoS policy/mechanism fields and expose only functions
+  test("no-packing invariant: buildSliceIndexLookup returns plain 0..n-1 positions with zero upper-bit flags", () => {
+    const lookup = buildSliceIndexLookup(SLICE_REGISTRY);
+    expect(lookup.size).toBe(SLICE_REGISTRY.length);
+
+    for (let i = 0; i < SLICE_REGISTRY.length; i++) {
+      const idx = lookup.indexOf(SLICE_REGISTRY[i]!.slice_id);
+      expect(Number.isInteger(idx)).toBe(true);
+      expect(idx).toBe(i);
+      // Zero upper-bit policy/axis/specificity packing in registry handles
+      expect(idx >>> 5).toBe(0);
+    }
+    expect(lookup.indexOf("missing:slice:p0:all")).toBe(-1);
+
+    // Synthetic 40-slice registry still returns plain 0..39 positions without upper-bit flags
+    const synthetic40: SliceSpec[] = [];
+    for (let k = 0; k < 40; k++) {
+      synthetic40.push({
+        slice_id: `football:synth_${k}:p0:spread`,
+        sport: "Football",
+        league: `S${k}`,
+        period: "P0 Game",
+        market: "Spread",
+        selector: { sport: "Football" },
+        policy: "LEAK",
+        policy_mechanism: "VIG",
+        policy_qualifier: "",
+      });
+    }
+    const lookup40 = buildSliceIndexLookup(synthetic40);
+    expect(lookup40.size).toBe(40);
+    for (let k = 0; k < 40; k++) {
+      expect(lookup40.indexOf(`football:synth_${k}:p0:spread`)).toBe(k);
+    }
+  });
+
+  test("coverage: derived bitset predicates exhaustively match SLICE_REGISTRY AoS fields and policy bitCount sums to registry.length", () => {
     expect(typeof isBlockedSlice).toBe("function");
     expect(typeof isAdvantageSlice).toBe("function");
     expect(typeof isLeakSlice).toBe("function");
@@ -830,22 +872,57 @@ default_pct = 3.50
     expect(typeof isLiveLockoutSlice).toBe("function");
 
     const registrySpecs: readonly SliceSpec[] = SLICE_REGISTRY;
-    for (const spec of registrySpecs) {
-      expect(isBlockedSlice(spec.slice_id)).toBe(spec.policy === "BLOCKED");
-      expect(isAdvantageSlice(spec.slice_id)).toBe(spec.policy === "ADVANTAGE");
-      expect(isLeakSlice(spec.slice_id)).toBe(spec.policy === "LEAK");
-      expect(isPreserveSlice(spec.slice_id)).toBe(spec.policy === "PRESERVE");
-      expect(isLiveLockoutSlice(spec.slice_id)).toBe(
-        spec.policy_mechanism === "LIVE_LOCKOUT",
-      );
-    }
-    expect(isBlockedSlice("nonexistent:slice:p0:all")).toBe(false);
-    expect(isBlockedSlice("0")).toBe(false);
+    expect(registrySpecs.length).toBeGreaterThan(0);
 
-    // 2. Custom >32-slice registry spans multiple 32-bit words cleanly and stays order-invariant
-    const multiWordRegistry: SliceSpec[] = [];
+    let blockedBits = 0;
+    let advantageBits = 0;
+    let leakBits = 0;
+    let preserveBits = 0;
+    let liveLockoutBits = 0;
+    let expectedLiveLockoutBits = 0;
+
+    for (let i = 0; i < registrySpecs.length; i++) {
+      const spec = registrySpecs[i]!;
+      const b = isBlockedSlice(spec.slice_id);
+      const a = isAdvantageSlice(spec.slice_id);
+      const l = isLeakSlice(spec.slice_id);
+      const p = isPreserveSlice(spec.slice_id);
+      const live = isLiveLockoutSlice(spec.slice_id);
+
+      // Exhaustive per-slice AoS equivalence across the entire registry
+      expect(b).toBe(spec.policy === "BLOCKED");
+      expect(a).toBe(spec.policy === "ADVANTAGE");
+      expect(l).toBe(spec.policy === "LEAK");
+      expect(p).toBe(spec.policy === "PRESERVE");
+      expect(live).toBe(spec.policy_mechanism === "LIVE_LOCKOUT");
+
+      // Policy bitsets form a strict 1-of-4 partition for every slice
+      const perSlicePolicyBitSum =
+        Number(b) + Number(a) + Number(l) + Number(p);
+      expect(perSlicePolicyBitSum).toBe(1);
+
+      blockedBits += Number(b);
+      advantageBits += Number(a);
+      leakBits += Number(l);
+      preserveBits += Number(p);
+      liveLockoutBits += Number(live);
+      if (spec.policy_mechanism === "LIVE_LOCKOUT") {
+        expectedLiveLockoutBits += 1;
+      }
+    }
+
+    // Coverage invariant: partition bitCount sums to SLICE_REGISTRY.length
+    expect(blockedBits + advantageBits + leakBits + preserveBits).toBe(
+      registrySpecs.length,
+    );
+    expect(liveLockoutBits).toBe(expectedLiveLockoutBits);
+  });
+
+  test("multi-word synthetic registry: crosses bit 31/32 unsigned boundary cleanly and leaves >= registry.length bits unset", () => {
+    // Synthetic 40-slice registry (distinct from 7-slice SLICE_REGISTRY; spans 2 Uint32 words)
+    const syntheticRegistry: SliceSpec[] = [];
     for (let k = 0; k < 40; k++) {
-      multiWordRegistry.push({
+      syntheticRegistry.push({
         slice_id: `football:league_${k}:p0:spread`,
         sport: "Football",
         league: `L${k}`,
@@ -857,13 +934,56 @@ default_pct = 3.50
         policy_qualifier: "",
       });
     }
+    expect(syntheticRegistry.length).toBe(40);
+    expect(syntheticRegistry.length).not.toBe(SLICE_REGISTRY.length);
+
+    // 1. Explicit bit 31 (word 0 sign bit: 1 << 31) vs bit 32 (word 1 bit 0) crossing
+    const onlyBit31 = deriveSliceBitsetPredicate(
+      (s) => s.slice_id === "football:league_31:p0:spread",
+      syntheticRegistry,
+    );
+    const onlyBit32 = deriveSliceBitsetPredicate(
+      (s) => s.slice_id === "football:league_32:p0:spread",
+      syntheticRegistry,
+    );
+    const bothBit31And32 = deriveSliceBitsetPredicate(
+      (s) =>
+        s.slice_id === "football:league_31:p0:spread" ||
+        s.slice_id === "football:league_32:p0:spread",
+      syntheticRegistry,
+    );
+
+    let count31 = 0;
+    let count32 = 0;
+    let countBoth = 0;
+    for (let k = 0; k < 40; k++) {
+      const id = `football:league_${k}:p0:spread`;
+      if (onlyBit31(id)) count31 += 1;
+      if (onlyBit32(id)) count32 += 1;
+      if (bothBit31And32(id)) countBoth += 1;
+    }
+    expect(onlyBit31("football:league_31:p0:spread")).toBe(true);
+    expect(onlyBit31("football:league_32:p0:spread")).toBe(false);
+    expect(count31).toBe(1);
+
+    expect(onlyBit32("football:league_31:p0:spread")).toBe(false);
+    expect(onlyBit32("football:league_32:p0:spread")).toBe(true);
+    expect(count32).toBe(1);
+
+    expect(bothBit31And32("football:league_30:p0:spread")).toBe(false);
+    expect(bothBit31And32("football:league_31:p0:spread")).toBe(true);
+    expect(bothBit31And32("football:league_32:p0:spread")).toBe(true);
+    expect(bothBit31And32("football:league_33:p0:spread")).toBe(false);
+    expect(countBoth).toBe(2);
+
+    // 2. Reorder invariance across multi-word synthetic registry
     const predForward = deriveSliceBitsetPredicate(
       (s) => s.policy === "BLOCKED",
-      multiWordRegistry,
+      syntheticRegistry,
     );
     const predReversed = deriveSliceBitsetPredicate(
       (s) => s.policy === "BLOCKED",
-      multiWordRegistry.toReversed(),
+      syntheticRegistry.toReversed(),
     );
     for (let k = 0; k < 40; k++) {
       const id = `football:league_${k}:p0:spread`;
@@ -871,24 +991,82 @@ default_pct = 3.50
       expect(predReversed(id)).toBe(k % 3 === 0);
     }
 
-    // 3. Router block_enforced snapshot derives a bitset predicate without exposing raw arrays
+    // 3. Truncation correctness: all-true predicate sets bits 0..39 only; indices >= 40 stay unset
+    resetSliceUnknownTelemetry();
+    const allSetTelemetryMode = deriveSliceBitsetPredicate(
+      () => true,
+      syntheticRegistry,
+      { onUnknownSlice: "telemetry" },
+    );
+    let activeTrueBits = 0;
+    for (let k = 0; k < 40; k++) {
+      if (allSetTelemetryMode(`football:league_${k}:p0:spread`)) {
+        activeTrueBits += 1;
+      }
+    }
+    expect(activeTrueBits).toBe(40);
+    expect(getSliceUnknownTelemetry().slice_unknown_total).toBe(0);
+
+    // Probe trailing unused bits in word 1 (40..63) and beyond word 1 (64..67)
+    for (let k = 40; k < 68; k++) {
+      expect(allSetTelemetryMode(`football:league_${k}:p0:spread`)).toBe(false);
+    }
+    expect(getSliceUnknownTelemetry().slice_unknown_total).toBe(28);
+  });
+
+  test("unknown slice_id: throws UnknownSliceIdError in dev/default mode and increments slice_unknown_total{slice_id} in telemetry mode", async () => {
+    expect(resolveDefaultUnknownSlicePolicy("production")).toBe("telemetry");
+    expect(resolveDefaultUnknownSlicePolicy("development")).toBe("throw");
+    expect(resolveDefaultUnknownSlicePolicy("test")).toBe("throw");
+    expect(resolveDefaultUnknownSlicePolicy(undefined)).toBe("throw");
+
+    resetSliceUnknownTelemetry();
+
+    // 1. Default (non-production) mode fails closed with UnknownSliceIdError AND records telemetry
+    expect(() => isBlockedSlice("typo:slice:p0:spread")).toThrow(
+      UnknownSliceIdError,
+    );
+    expect(() => isBlockedSlice("typo:slice:p0:spread")).toThrow(
+      /typo:slice:p0:spread/,
+    );
+    expect(() => isBlockedSlice("0")).toThrow(UnknownSliceIdError);
+
     const router = createStaticRouterOrderQuery({
       "hockey:nhl:periods:all": 27_816,
       "baseball:mlb:f5:spread": 0,
       "live:all:p0_inplay:all": 7_704,
     });
-    const isEnforced = deriveRouterBlockEnforcedPredicate(
+    const isEnforcedStrict = deriveRouterBlockEnforcedPredicate(
       router,
       SLICE_REGISTRY,
     );
-    expect(typeof isEnforced).toBe("function");
-    expect(isEnforced("hockey:nhl:periods:all")).toBe(false);
-    expect(isEnforced("baseball:mlb:f5:spread")).toBe(true);
-    expect(isEnforced("live:all:p0_inplay:all")).toBe(false);
-    expect(isEnforced("football:nfl:p0_game:spread")).toBe(true);
-    expect(isEnforced("unregistered:slice:p0:all")).toBe(false);
+    expect(isEnforcedStrict("hockey:nhl:periods:all")).toBe(false);
+    expect(isEnforcedStrict("baseball:mlb:f5:spread")).toBe(true);
+    expect(isEnforcedStrict("live:all:p0_inplay:all")).toBe(false);
+    expect(isEnforcedStrict("football:nfl:p0_game:spread")).toBe(true);
+    expect(() => isEnforcedStrict("unregistered:slice:p0:all")).toThrow(
+      UnknownSliceIdError,
+    );
 
-    // 4. DataTable SoA spine encapsulates block_enforced bitset behind predicates (not on columns)
+    const afterStrict = getSliceUnknownTelemetry();
+    expect(afterStrict.slice_unknown_total).toBe(4);
+    expect(afterStrict.by_slice_id["typo:slice:p0:spread"]).toBe(2);
+    expect(afterStrict.by_slice_id["0"]).toBe(1);
+    expect(afterStrict.by_slice_id["unregistered:slice:p0:all"]).toBe(1);
+
+    // 2. Production / telemetry mode returns false without throwing AND increments slice_unknown_total{slice_id}
+    const isEnforcedProd = deriveRouterBlockEnforcedPredicate(
+      router,
+      SLICE_REGISTRY,
+      { onUnknownSlice: "telemetry" },
+    );
+    expect(isEnforcedProd("unregistered:slice:p0:all")).toBe(false);
+    expect(getSliceUnknownTelemetry().slice_unknown_total).toBe(5);
+    expect(
+      getSliceUnknownTelemetry().by_slice_id["unregistered:slice:p0:all"],
+    ).toBe(2);
+
+    // 3. DataTable SoA spine encapsulates bitsets behind rowIndex & slice_id predicates
     const holdConfig = await loadHoldFloorConfig("config/wager_tiers.toml");
     const spine = new SliceMetricsSoASpine(16);
     spine.flush(
@@ -906,31 +1084,93 @@ default_pct = 3.50
         policy: spec.policy,
         policy_mechanism: spec.policy_mechanism,
         policy_qualifier: spec.policy_qualifier,
-        block_enforced: isEnforced(spec.slice_id),
+        block_enforced: isEnforcedStrict(spec.slice_id),
         balanced_overround_pct: STANDARD_MINUS_110_BALANCED_HOLD_PCT,
       })),
     );
     expect("block_enforced_bits" in spine.columns).toBe(false);
     expect("flags_mask" in spine.columns).toBe(false);
-    for (let i = 0; i < SLICE_REGISTRY.length; i++) {
-      const id = SLICE_REGISTRY[i]!.slice_id;
-      expect(spine.isBlockEnforcedAt(i)).toBe(isEnforced(id));
-      expect(spine.hasFlagAt(i, "HOLD_BELOW_FLOOR")).toBe(true);
-      expect(spine.hasFlagAt(i, "POLICY_DATA_CONFLICT")).toBe(
-        isBlockedSlice(id) && !isEnforced(id),
+    for (let rowIndex = 0; rowIndex < SLICE_REGISTRY.length; rowIndex++) {
+      const id = SLICE_REGISTRY[rowIndex]!.slice_id;
+      expect(spine.isBlockEnforcedAt(rowIndex)).toBe(isEnforcedStrict(id));
+      expect(spine.isSliceBlockEnforced(id)).toBe(isEnforcedStrict(id));
+      expect(spine.hasFlagAt(rowIndex, "HOLD_BELOW_FLOOR")).toBe(true);
+      expect(spine.hasFlagAt(rowIndex, "POLICY_DATA_CONFLICT")).toBe(
+        isBlockedSlice(id) && !isEnforcedStrict(id),
       );
     }
+    expect(() => spine.isSliceBlockEnforced("missing:slice:p0:all")).toThrow(
+      UnknownSliceIdError,
+    );
+    expect(
+      spine.isSliceBlockEnforced("missing:slice:p0:all", {
+        onUnknownSlice: "telemetry",
+      }),
+    ).toBe(false);
+    expect(getSliceUnknownTelemetry().by_slice_id["missing:slice:p0:all"]).toBe(
+      2,
+    );
+  });
 
-    // 5. Static source check: zero `boolean[]` or `Array<boolean>` in src/risk/*.ts
+  test("TypeScript type-checked AST scan: verifies src/risk/*.ts and catches all boolean-array evasion vectors", async () => {
+    const riskFiles: string[] = [];
     const glob = new Bun.Glob("src/risk/*.ts");
     for await (const relPath of glob.scan(".")) {
-      const src = await Bun.file(relPath).text();
-      // Strip comments so doc comments naming `boolean[]` as forbidden don't trip
-      const codeOnly = src
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/.*$/gm, "");
-      expect(codeOnly).not.toMatch(/\bboolean\s*\[\s*\]/);
-      expect(codeOnly).not.toMatch(/\bArray\s*<\s*boolean\s*>/);
+      riskFiles.push(relPath);
     }
+    expect(riskFiles.length).toBeGreaterThanOrEqual(6);
+    expect(auditSliceBitsetFiles(riskFiles)).toEqual([]);
+
+    // Evasion 1: direct boolean[] / readonly boolean[]
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_direct.ts",
+        `export const flags: readonly boolean[] = [false, true];`,
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // Evasion 2: ReadonlyArray<boolean> and boxed Array<Boolean>
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_readonly_generic.ts",
+        `export const ro: ReadonlyArray<boolean> = [];`,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_boxed_boolean.ts",
+        `export const boxed: Array<Boolean> = [];`,
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // Evasion 3: type alias indirection (`type FlagArray = boolean[]`)
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_type_alias.ts",
+        `type FlagArray = boolean[];\nexport function countSet(f: FlagArray): number { return f.length; }`,
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // Evasion 4: unannotated inferred boolean array (`new Array(n).fill(false)` & literal `[false, true]`)
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_inferred_fill.ts",
+        `export const flags = new Array(8).fill(false);`,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_inferred_literal.ts",
+        `export const flags = [false, true, false];`,
+      ).length,
+    ).toBeGreaterThan(0);
+
+    // Evasion 5: Uint8Array used as a 0/1 boolean array
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_uint8_bool.ts",
+        `export const blockedFlags = new Uint8Array(7);`,
+      ).length,
+    ).toBeGreaterThan(0);
   });
 });
