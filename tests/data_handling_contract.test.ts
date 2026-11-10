@@ -2,39 +2,63 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const BOOLEAN_ARRAY =
-  /\b(?:readonly\s+)?boolean\s*\[\s*\]|Array<\s*boolean\s*>/;
 
-/**
- * Dense flags are bitsets. The fraud feature model is the one known exception (its matrix is
- * offline and already marked for replacement in `scratch/data_handling_audit_focus.md`); every
- * other runtime module must not introduce `boolean[]`.
- */
+const BOOLEAN_ARRAY =
+  /\b(?:readonly\s+)?boolean\s*\[\s*\]|\b(?:Readonly)?Array<\s*boolean\s*>/;
+
+// Zero-exception contract: every entry is line-anchored AND stale-checked.
+const RATCHET: ReadonlyArray<{ file: string; line: number }> = [];
+
+const SCAN_ROOTS = [
+  "lib",
+  "src",
+  "types",
+  "cli",
+  "services",
+  "scripts",
+  "bin",
+] as const;
+
 describe("runtime data-handling contract", () => {
-  test("boolean[] is confined to the fraud-model exception", async () => {
+  test("boolean[] is confined to the pinned ratchet", async () => {
+    const ratchetSet = new Set(RATCHET.map((r) => `${r.file}:${r.line}`));
     const offenders: string[] = [];
-    const glob = new Bun.Glob("**/*.ts");
-    for await (const path of glob.scan({
-      cwd: join(ROOT, "lib"),
-      onlyFiles: true,
-    })) {
-      if (path.includes(".test.")) continue;
-      const text = await Bun.file(join(ROOT, "lib", path)).text();
-      for (const line of text.split("\n")) {
-        const trimmed = line.trim();
-        if (
-          trimmed.startsWith("*") ||
-          trimmed.startsWith("//") ||
-          trimmed.startsWith("/*")
-        ) {
-          continue;
-        }
-        if (BOOLEAN_ARRAY.test(line)) {
-          offenders.push(`lib/${path}`);
-          break;
+
+    for (const root of SCAN_ROOTS) {
+      const dir = join(ROOT, root);
+      const glob = new Bun.Glob("**/*.ts");
+      for await (const path of glob.scan({ cwd: dir, onlyFiles: true })) {
+        if (path.includes(".test.")) continue;
+        const rel = `${root}/${path}`;
+        const text = await Bun.file(join(dir, path)).text();
+        const lines = text.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const raw = lines[i]!;
+          const trimmed = raw.trim();
+          if (
+            trimmed.startsWith("*") ||
+            trimmed.startsWith("//") ||
+            trimmed.startsWith("/*")
+          ) {
+            continue;
+          }
+          if (!BOOLEAN_ARRAY.test(raw)) continue;
+          const key = `${rel}:${i + 1}`;
+          if (!ratchetSet.has(key)) offenders.push(key);
         }
       }
     }
-    expect([...new Set(offenders)].sort()).toEqual(["lib/fraud_model.ts"]);
+
+    const stale: string[] = [];
+    for (const entry of RATCHET) {
+      const line =
+        (await Bun.file(join(ROOT, entry.file)).text()).split("\n")[
+          entry.line - 1
+        ] ?? "";
+      if (!BOOLEAN_ARRAY.test(line)) stale.push(`${entry.file}:${entry.line}`);
+    }
+
+    expect(stale).toEqual([]);
+    expect(offenders).toEqual([]);
   });
 });

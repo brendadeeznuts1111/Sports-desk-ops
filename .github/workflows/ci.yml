@@ -105,6 +105,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - name: Format check (changed files)
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: |
+          rc=0
+          bun fmt --check --changed="origin/${GITHUB_BASE_REF}" || rc=$?
+          if [ "$rc" -eq 1 ]; then echo "::error::unformatted files (bun fmt --check)"; exit 1; fi
+          if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Bun test changed files

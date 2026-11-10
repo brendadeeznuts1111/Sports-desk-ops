@@ -22,6 +22,7 @@
 
 import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { Bits } from "./bits.ts";
 import {
   METRIC_METADATA_KINDS,
   isMetricMetadataKind,
@@ -351,7 +352,7 @@ export interface FraudFeatureRow {
   readonly accountId: string;
   readonly labels: FraudFeatureLabels;
   readonly values: readonly number[];
-  readonly missing: readonly boolean[];
+  readonly missing: Bits;
 }
 
 export interface FraudFeatureMatrix {
@@ -474,7 +475,7 @@ function buildFeatureRow(
   datacenterClasses: readonly string[],
 ): FraudFeatureRow {
   const values: number[] = [];
-  const missing: boolean[] = [];
+  const missing = new Bits(featureIds.length);
   const account = state.accounts.get(record.userId);
   const ip = record.ipTag === null ? undefined : state.ips.get(record.ipTag);
   const prefix =
@@ -596,10 +597,10 @@ function buildFeatureRow(
         return { value: 0, absent: true };
     }
   };
-  for (const id of featureIds) {
-    const feature = featureValue(id);
+  for (let i = 0; i < featureIds.length; i += 1) {
+    const feature = featureValue(featureIds[i]!);
     values.push(feature.value);
-    missing.push(feature.absent);
+    if (feature.absent) missing.set(i);
   }
   return {
     betId: record.betId,
@@ -659,18 +660,23 @@ export function extractFraudFeatures(
   return { featureIds, rows, droppedNoTimestamp };
 }
 
-/** Label array for a proxy over extracted rows. */
+/** Label bitset for a proxy over extracted rows. */
 export function labelVector(
   matrix: FraudFeatureMatrix,
   proxy: FraudProxyLabel,
-): boolean[] {
-  return matrix.rows.map((row) =>
-    proxy === "suspected_bot"
-      ? row.labels.suspectedBot
-      : proxy === "reversed_credit"
-        ? row.labels.reversedCredit
-        : row.labels.deskFlag,
-  );
+): Bits {
+  const out = new Bits(matrix.rows.length);
+  for (let i = 0; i < matrix.rows.length; i += 1) {
+    const row = matrix.rows[i]!;
+    const positive =
+      proxy === "suspected_bot"
+        ? row.labels.suspectedBot
+        : proxy === "reversed_credit"
+          ? row.labels.reversedCredit
+          : row.labels.deskFlag;
+    if (positive) out.set(i);
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -687,19 +693,15 @@ function sigmoid(z: number): number {
 }
 
 /** AUC-ROC with average ranks for ties; null when one class is absent. */
-export function aucRoc(
-  scores: readonly number[],
-  labels: readonly boolean[],
-): number | null {
+export function aucRoc(scores: readonly number[], labels: Bits): number | null {
   if (scores.length !== labels.length) {
     throw new Error("aucRoc: scores/labels length mismatch");
   }
-  let positives = 0;
-  for (const label of labels) if (label) positives += 1;
+  const positives = labels.count();
   const negatives = scores.length - positives;
   if (positives === 0 || negatives === 0) return null;
   const order = scores
-    .map((score, index) => ({ score, label: labels[index] === true, index }))
+    .map((score, index) => ({ score, label: labels.bit(index), index }))
     .sort((a, b) => a.score - b.score || a.index - b.index);
   let rankSumPositives = 0;
   let index = 0;
@@ -725,15 +727,15 @@ export function aucRoc(
 /** Average precision (PR-AUC) with score-tie grouping; null when no positives. */
 export function averagePrecision(
   scores: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
 ): number | null {
   if (scores.length !== labels.length) {
     throw new Error("averagePrecision: scores/labels length mismatch");
   }
-  const positives = labels.filter(Boolean).length;
+  const positives = labels.count();
   if (positives === 0) return null;
   const order = scores
-    .map((score, index) => ({ score, label: labels[index] === true, index }))
+    .map((score, index) => ({ score, label: labels.bit(index), index }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
   let truePositives = 0;
   let falsePositives = 0;
@@ -766,13 +768,13 @@ export function averagePrecision(
 /** Precision among the top `fraction` of holdout rows by score (at least one row). */
 export function precisionAtFraction(
   scores: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
   fraction: number,
 ): number | null {
   if (scores.length === 0) return null;
   const k = Math.max(1, Math.round(scores.length * fraction));
   const order = scores
-    .map((score, index) => ({ score, label: labels[index] === true, index }))
+    .map((score, index) => ({ score, label: labels.bit(index), index }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, k);
   const hits = order.filter((entry) => entry.label).length;
@@ -786,7 +788,7 @@ export function precisionAtFraction(
  */
 export function rowPrecisionAtK(
   scores: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
   k: number,
 ): FraudRowPrecisionAtK {
   if (scores.length !== labels.length) {
@@ -795,7 +797,7 @@ export function rowPrecisionAtK(
   if (!Number.isInteger(k) || k <= 0) {
     throw new Error("rowPrecisionAtK: k must be a positive integer");
   }
-  const positives = labels.filter(Boolean).length;
+  const positives = labels.count();
   const kSamples = Math.min(k, scores.length);
   if (kSamples === 0) {
     return {
@@ -809,7 +811,7 @@ export function rowPrecisionAtK(
     };
   }
   const order = scores
-    .map((score, index) => ({ score, label: labels[index] === true, index }))
+    .map((score, index) => ({ score, label: labels.bit(index), index }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, kSamples);
   const kPositives = order.filter((entry) => entry.label).length;
@@ -830,7 +832,7 @@ export function rowPrecisionAtK(
 /** The review-size table; each `k` larger than the scored rows is capped and says so. */
 export function rowPrecisionAtKTable(
   scores: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
   sizes: readonly number[] = FRAUD_ROW_REVIEW_SIZES,
 ): readonly FraudRowPrecisionAtK[] {
   return sizes.map((k) => rowPrecisionAtK(scores, labels, k));
@@ -838,13 +840,13 @@ export function rowPrecisionAtKTable(
 
 export function brierScore(
   probabilities: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
 ): number | null {
   if (probabilities.length === 0) return null;
   let sum = 0;
   for (let index = 0; index < probabilities.length; index += 1) {
     const probability = probabilities[index] ?? 0;
-    const label = labels[index] === true ? 1 : 0;
+    const label = labels.bit(index) ? 1 : 0;
     sum += (probability - label) * (probability - label);
   }
   return sum / probabilities.length;
@@ -853,7 +855,7 @@ export function brierScore(
 /** Equal-width calibration bins over [0,1]; empty bins report counts 0 and null rates. */
 export function calibrationBins(
   probabilities: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
   bins: number,
 ): FraudCalibrationBin[] {
   const result: FraudCalibrationBin[] = [];
@@ -865,7 +867,7 @@ export function calibrationBins(
     const bin = Math.min(bins - 1, Math.floor(probability * bins));
     counts[bin] = (counts[bin] ?? 0) + 1;
     probabilitySums[bin] = (probabilitySums[bin] ?? 0) + probability;
-    if (labels[index] === true) positives[bin] = (positives[bin] ?? 0) + 1;
+    if (labels.bit(index)) positives[bin] = (positives[bin] ?? 0) + 1;
   }
   for (let bin = 0; bin < bins; bin += 1) {
     const count = counts[bin] ?? 0;
@@ -882,7 +884,7 @@ export function calibrationBins(
 
 function classificationMetrics(
   scores: readonly number[],
-  labels: readonly boolean[],
+  labels: Bits,
 ): FraudClassificationMetrics {
   return {
     aucRoc: aucRoc(scores, labels),
@@ -1174,7 +1176,7 @@ function featureStats(
     mean += value;
     if (value < min) min = value;
     if (value > max) max = value;
-    if (entry.missing[column] === true) missing += 1;
+    if (entry.missing.bit(column)) missing += 1;
     if (row < trainCount) trainSum += value;
     else {
       holdoutSum += value;
@@ -1224,10 +1226,10 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   });
   const labels = labelVector(matrix, options.proxy);
   const rowCount = matrix.rows.length;
-  const positives = labels.filter(Boolean).length;
+  const positives = labels.count();
   const positiveAccounts = new Set<string>();
   for (let index = 0; index < rowCount; index += 1) {
-    if (labels[index] === true) {
+    if (labels.bit(index)) {
       const row = matrix.rows[index];
       if (row !== undefined) positiveAccounts.add(row.accountId.toUpperCase());
     }
@@ -1259,7 +1261,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   const featureCount = matrix.featureIds.length;
   const trainLabels = labels.slice(0, trainCount);
   const holdoutLabels = labels.slice(trainCount);
-  const trainPositives = trainLabels.filter(Boolean).length;
+  const trainPositives = trainLabels.count();
   const trainNegatives = trainCount - trainPositives;
   if (trainPositives === 0 || trainNegatives === 0) {
     throw new FraudModelError(
@@ -1291,18 +1293,19 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
   );
   const trainY = new Float64Array(trainCount);
   for (let index = 0; index < trainCount; index += 1) {
-    trainY[index] = trainLabels[index] === true ? 1 : 0;
+    trainY[index] = trainLabels.bit(index) ? 1 : 0;
   }
   const holdoutY = new Float64Array(holdoutCount);
   for (let index = 0; index < holdoutCount; index += 1) {
-    holdoutY[index] = holdoutLabels[index] === true ? 1 : 0;
+    holdoutY[index] = holdoutLabels.bit(index) ? 1 : 0;
   }
   const sampleWeights = new Float64Array(trainCount);
   const positiveWeight = trainCount / (2 * trainPositives);
   const negativeWeight = trainCount / (2 * trainNegatives);
   for (let index = 0; index < trainCount; index += 1) {
-    sampleWeights[index] =
-      trainLabels[index] === true ? positiveWeight : negativeWeight;
+    sampleWeights[index] = trainLabels.bit(index)
+      ? positiveWeight
+      : negativeWeight;
   }
   const trained = trainLogistic(
     trainX,
@@ -1348,12 +1351,13 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     }
     if (indices.length > 0) {
       const noPriorScores = indices.map((index) => scoreList[index] ?? 0);
-      const noPriorLabels = indices.map(
-        (index) => holdoutLabels[index] === true,
-      );
+      const noPriorLabels = new Bits(indices.length);
+      for (let j = 0; j < indices.length; j += 1) {
+        if (holdoutLabels.bit(indices[j]!)) noPriorLabels.set(j);
+      }
       noPriorBet = {
         rows: indices.length,
-        positives: noPriorLabels.filter(Boolean).length,
+        positives: noPriorLabels.count(),
         metrics: classificationMetrics(noPriorScores, noPriorLabels),
       };
     }
@@ -1402,6 +1406,7 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
     if (row.labels.reversedCredit) holdoutBySignal.reversedCredit += 1;
     if (row.labels.manualLog) holdoutBySignal.manualLog += 1;
   }
+  const holdoutPositives = holdoutLabels.count();
   const metrics: FraudModelMetrics = {
     aucRoc: holdoutMetrics.aucRoc,
     averagePrecision: holdoutMetrics.averagePrecision,
@@ -1414,8 +1419,8 @@ export function fitFraudModel(params: FraudFitParams): FraudFitResult {
       proxy: options.proxy,
       trainPositives,
       trainNegatives,
-      holdoutPositives: holdoutLabels.filter(Boolean).length,
-      holdoutNegatives: holdoutCount - holdoutLabels.filter(Boolean).length,
+      holdoutPositives,
+      holdoutNegatives: holdoutCount - holdoutPositives,
       totalPositives,
       prevalence: rowCount === 0 ? null : totalPositives / rowCount,
       holdoutDeskFlagPositives,

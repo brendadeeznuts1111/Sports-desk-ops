@@ -7,16 +7,16 @@ useTabs = false
 semi = true
 singleQuote = false
 ignorePatterns = [
-  # Minified portal oracle slices — never `bun fmt` (collides with slicer output).
+  # Minified portal oracle slices — `bun fmt` skips `*.min.js` on directory scans,
+  # and this entry also blocks explicit-path runs (`bun fmt verification/...`).
   "verification/manager-boot-oracle/extracted/**/*.min.js",
   # Pinned portal bundles: manifest.json pins their exact bytes.
   "verification/manager-boot-oracle/pinned/*.js",
   "tests/fixtures/**/*.golden.ast.json5",
   "tests/fixtures/**/*.golden.json",
   "tests/fixtures/fantasy402-sport-catalog-*.json",
-  # Generated artifacts: the poller/generators own their shape.
-  "dist/**",
-  "scratch/**",
+  # Generated artifacts (`dist/` and `scratch/` are already skipped via `.gitignore`):
+  # the poller/generators own their shape.
   "docs/graph-live-feed.json",
   "docs/backtest-4wk-cfb-nba.json",
   "docs/assets/pipeline-artifacts-metadata.json",

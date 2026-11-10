@@ -1205,3 +1205,11 @@ Kernel filters are defined as signed negative integer constants (ordinals), **no
 2. **Process and Socket Supervision under kqueue:**
    - In `bunfig.toml`, `noOrphans = true` registers `EVFILT_PROC` with `NOTE_EXIT` to guarantee that spawned child processes (including headless browser workers) terminate when parent daemons exit.
    - Long-lived daemons (`:4020` webview server, websocket streams, and `positions:cron`) on macOS rely on Bun versions containing this fix to avoid socket spin loops during idle write readiness.
+
+## `bun fmt`: CI gates vs. `pre-commit` (`--staged`)
+
+Bun 1.4.4 ships `bun fmt --staged`, `bun fmt --changed`, and `bun fmt --check` (exit `0` clean, `1` needs formatting, `2` syntax/tool error). In `sportsdesk-ops`, formatting is enforced at two layers and **intentionally not wired to a `pre-commit` hook**:
+
+- **PR gate (`.github/workflows/ci.yml` `verify-changed`):** runs `bun fmt --check --changed="origin/${GITHUB_BASE_REF}"`, distinguishing exit `1` (unformatted files) from exit `2` (tool/syntax failure).
+- **Mainline backstop (`.github/workflows/ci.yml` `verify` & `bun run format:check`):** runs full-repo `bun fmt --check` across all tracked files not excluded by `.gitignore` or `bunfig.toml [fmt].ignorePatterns`.
+- **Why `bun fmt --staged` is not wired to `pre-commit`:** `.git/hooks/` is untracked unless the repo adopts a `core.hooksPath` / hook-runner policy, reformatting partially staged files rewrites the working tree relative to staged hunks, and the existing `pre-push` gate plus PR `verify-changed` already catch drift without per-commit friction.
