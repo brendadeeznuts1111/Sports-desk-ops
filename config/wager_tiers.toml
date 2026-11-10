@@ -1,0 +1,33 @@
+# SportsDesk Wager Tiers & Slice Hold-Floor Policy (SSOT)
+# Consumed by src/risk/hold_floor_config.ts for SliceMetrics floor delta & SLO gates.
+# Constraint: Do NOT lower hold_floors to hide negative floor deltas; gates flag asymmetry instead.
+
+[meta]
+schema_version = 1
+owner = "sportsdesk-risk"
+
+[slo]
+blended_hold_floor_pct = 3.50
+exclude_blocked = true
+exclude_directional = true
+
+[hold_floors]
+default_pct = 3.50
+
+[hold_floors.by_slice]
+
+[hold_floors.by_sport]
+Football = 3.50
+Basketball = 3.50
+Hockey = 3.00
+Baseball = 3.00
+Soccer = 3.50
+LIVE = 4.00
+Other = 3.00
+
+[hold_floors.by_market]
+Moneyline = 3.25
+Spread = 3.50
+Total = 3.50
+"Team Total" = 3.75
+"All Markets" = 3.50
