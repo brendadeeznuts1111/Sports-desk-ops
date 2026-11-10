@@ -30,7 +30,6 @@ import {
   PERIOD_CODES,
   PERIOD_COUNT,
   PERIOD_DEFAULT_LABELS,
-  PERIOD_ID_F5,
   PERIOD_ID_GAME,
   PERIOD_PORTAL_NUMBERS,
   periodIndexOf,
@@ -38,7 +37,6 @@ import {
   SPORT_CODES,
   SPORT_COUNT,
   SPORT_ID_FOOTBALL,
-  SPORT_ID_LIVE,
   SPORT_LABELS,
   SUB_ID_COMBAT_GOLF,
   SUB_ID_MLB,
@@ -78,8 +76,8 @@ import {
   deriveSliceMetrics,
   type SliceMetrics,
   type SlicePolicy,
-  type SlicePolicyMechanism,
 } from "../src/risk/slice_metrics.ts";
+import { SLICE_REGISTRY, type SliceSpec } from "../src/risk/slice_registry.ts";
 import type {
   ElasticityFrontierPoint,
   KeyNumberBucketRow,
@@ -117,90 +115,39 @@ export type {
 const DEFAULT_HOLD_FLOOR_CONFIG: HoldFloorConfig =
   parseHoldFloorConfigDocument(wagerTiersTomlDoc);
 
-interface CanonicalDeskSliceSpec {
-  readonly slice_id: string;
-  readonly sport: string;
-  readonly league: string;
-  readonly period: string;
-  readonly market: string;
-  readonly policy: SlicePolicy;
-  readonly policy_mechanism: SlicePolicyMechanism;
-  readonly policy_qualifier: string;
+/**
+ * Internal derived coordinate table compiled from `SLICE_REGISTRY` (never hand-maintained,
+ * never exposed as canonical identity; `-1` denotes wildcard on that axis).
+ */
+interface DerivedArenaSliceTable {
+  readonly count: number;
+  readonly sportIds: Int8Array;
+  readonly subSportIds: Int8Array;
+  readonly periodIds: Int8Array;
+  readonly marketIds: Int8Array;
 }
 
-const CANON_SLICE_COUNT = 7;
-const CANON_DESK_SLICES: readonly CanonicalDeskSliceSpec[] = [
-  {
-    slice_id: "football:nfl:p0_game:spread",
-    sport: "Football",
-    league: "NFL",
-    period: "P0 Game",
-    market: "Spread",
-    policy: "LEAK",
-    policy_mechanism: "VIG",
-    policy_qualifier: "Key 3/7/10/14 buy exposure",
-  },
-  {
-    slice_id: "football:ncaaf:p0_game:spread",
-    sport: "Football",
-    league: "College FB",
-    period: "P0 Game",
-    market: "Spread",
-    policy: "LEAK",
-    policy_mechanism: "VIG",
-    policy_qualifier: "Key 3/7/10/14 buy exposure",
-  },
-  {
-    slice_id: "basketball:nba:p0_game:spread",
-    sport: "Basketball",
-    league: "NBA",
-    period: "P0 Game",
-    market: "Spread",
-    policy: "ADVANTAGE",
-    policy_mechanism: "BELL_CURVE",
-    policy_qualifier: "PRESERVE_BELL_CURVE_VIG",
-  },
-  {
-    slice_id: "basketball:ncaab:halves:all",
-    sport: "Basketball",
-    league: "NCAAB",
-    period: "P0/1H/2H",
-    market: "All Markets",
-    policy: "ADVANTAGE",
-    policy_mechanism: "BELL_CURVE",
-    policy_qualifier: "20m halves only",
-  },
-  {
-    slice_id: "hockey:nhl:periods:all",
-    sport: "Hockey",
-    league: "NHL",
-    period: "OT/Reg/P1-P3",
-    market: "All Markets",
-    policy: "BLOCKED",
-    policy_mechanism: "DERIVATIVE",
-    policy_qualifier: "DERIVATIVE_AND_LIVE_LOCKOUT",
-  },
-  {
-    slice_id: "baseball:mlb:f5:spread",
-    sport: "Baseball",
-    league: "MLB",
-    period: "F5",
-    market: "Spread",
-    policy: "BLOCKED",
-    policy_mechanism: "DERIVATIVE",
-    policy_qualifier: "DERIVATIVE_AND_LIVE_LOCKOUT",
-  },
-  {
-    slice_id: "live:all:p0_inplay:all",
-    sport: "LIVE",
-    league: "In-Play #9000",
-    period: "P0 In-Play",
-    market: "All Markets",
-    policy: "BLOCKED",
-    policy_mechanism: "LIVE_LOCKOUT",
-    policy_qualifier: "Clock/feed latency focus",
-  },
-];
+function compileArenaSliceTable(
+  registry: readonly SliceSpec[],
+): DerivedArenaSliceTable {
+  const count = registry.length;
+  const sportIds = new Int8Array(count);
+  const subSportIds = new Int8Array(count);
+  const periodIds = new Int8Array(count);
+  const marketIds = new Int8Array(count);
+  for (let i = 0; i < count; i++) {
+    const sel = registry[i]!.selector;
+    sportIds[i] = sel.sport !== undefined ? sportIndexOf(sel.sport) : -1;
+    subSportIds[i] =
+      sel.subSport !== undefined ? subSportIndexOf(sel.subSport) : -1;
+    periodIds[i] = sel.period !== undefined ? periodIndexOf(sel.period) : -1;
+    marketIds[i] = sel.market !== undefined ? marketIndexOf(sel.market) : -1;
+  }
+  return { count, sportIds, subSportIds, periodIds, marketIds };
+}
+
+const DERIVED_ARENA_SLICES: DerivedArenaSliceTable =
+  compileArenaSliceTable(SLICE_REGISTRY);
 
 function twoWayBalancedOverroundPctFromAmerican(odds: number): number {
   if (!Number.isFinite(odds) || odds === 0) {
@@ -1584,13 +1531,18 @@ export function evaluateArenaShadowPricing(
   let retailActualPnl = 0;
   let retailUnscaledShadowPnl = 0;
 
-  // Canonical 7-slice risk matrix TypedArray accumulators (computed once per evaluation)
-  const csLegs = new Int32Array(CANON_SLICE_COUNT);
-  const csSettled = new Int32Array(CANON_SLICE_COUNT);
-  const csBuyLegs = new Int32Array(CANON_SLICE_COUNT);
-  const csHandle = new Float64Array(CANON_SLICE_COUNT);
-  const csActualPnl = new Float64Array(CANON_SLICE_COUNT);
-  const csOverroundStakeSum = new Float64Array(CANON_SLICE_COUNT);
+  // Derived SLICE_REGISTRY TypedArray accumulators (count derived from SLICE_REGISTRY, never hardcoded)
+  const sliceRegCount = DERIVED_ARENA_SLICES.count;
+  const regSportIds = DERIVED_ARENA_SLICES.sportIds;
+  const regSubIds = DERIVED_ARENA_SLICES.subSportIds;
+  const regPerIds = DERIVED_ARENA_SLICES.periodIds;
+  const regMktIds = DERIVED_ARENA_SLICES.marketIds;
+  const csLegs = new Int32Array(sliceRegCount);
+  const csSettled = new Int32Array(sliceRegCount);
+  const csBuyLegs = new Int32Array(sliceRegCount);
+  const csHandle = new Float64Array(sliceRegCount);
+  const csActualPnl = new Float64Array(sliceRegCount);
+  const csOverroundStakeSum = new Float64Array(sliceRegCount);
 
   const sliceHasKeyLadderSurface =
     (fSport === -1 || fSport === SPORT_ID_FOOTBALL) &&
@@ -1765,51 +1717,28 @@ export function evaluateArenaShadowPricing(
       }
     }
 
-    // Canonical 7-Slice Risk Ledger rollup (unfiltered book view for SliceMetrics & Blended Hold SLO)
-    let csIdx = -1;
-    if (sp === SPORT_ID_LIVE) {
-      csIdx = 6;
-    } else if (
-      sub === SUB_ID_NFL &&
-      per === PERIOD_ID_GAME &&
-      mkt === MARKET_ID_SPREAD
-    ) {
-      csIdx = 0;
-    } else if (
-      sub === SUB_ID_NCAAF &&
-      per === PERIOD_ID_GAME &&
-      mkt === MARKET_ID_SPREAD
-    ) {
-      csIdx = 1;
-    } else if (
-      sub === SUB_ID_NBA &&
-      per === PERIOD_ID_GAME &&
-      mkt === MARKET_ID_SPREAD
-    ) {
-      csIdx = 2;
-    } else if (sub === SUB_ID_NCAAB) {
-      csIdx = 3;
-    } else if (sub === SUB_ID_NHL) {
-      csIdx = 4;
-    } else if (
-      sub === SUB_ID_MLB &&
-      per === PERIOD_ID_F5 &&
-      mkt === MARKET_ID_SPREAD
-    ) {
-      csIdx = 5;
-    }
+    // Derived SLICE_REGISTRY rollup (matches against compiled AoS selector coordinates)
+    for (let sIdx = 0; sIdx < sliceRegCount; sIdx++) {
+      const reqSp = regSportIds[sIdx]!;
+      if (reqSp !== -1 && sp !== reqSp) continue;
+      const reqSub = regSubIds[sIdx]!;
+      if (reqSub !== -1 && sub !== reqSub) continue;
+      const reqPer = regPerIds[sIdx]!;
+      if (reqPer !== -1 && per !== reqPer) continue;
+      const reqMkt = regMktIds[sIdx]!;
+      if (reqMkt !== -1 && mkt !== reqMkt) continue;
 
-    if (csIdx >= 0) {
-      csLegs[csIdx] = (csLegs[csIdx] ?? 0) + 1;
-      csSettled[csIdx] = (csSettled[csIdx] ?? 0) + isSettled;
-      csHandle[csIdx] = (csHandle[csIdx] ?? 0) + stake;
-      csActualPnl[csIdx] = (csActualPnl[csIdx] ?? 0) + actualPnl;
-      csOverroundStakeSum[csIdx] =
-        (csOverroundStakeSum[csIdx] ?? 0) +
+      csLegs[sIdx] = (csLegs[sIdx] ?? 0) + 1;
+      csSettled[sIdx] = (csSettled[sIdx] ?? 0) + isSettled;
+      csHandle[sIdx] = (csHandle[sIdx] ?? 0) + stake;
+      csActualPnl[sIdx] = (csActualPnl[sIdx] ?? 0) + actualPnl;
+      csOverroundStakeSum[sIdx] =
+        (csOverroundStakeSum[sIdx] ?? 0) +
         stake * twoWayBalancedOverroundPctFromAmerican(price);
       if (hasAnyBuy) {
-        csBuyLegs[csIdx] = (csBuyLegs[csIdx] ?? 0) + 1;
+        csBuyLegs[sIdx] = (csBuyLegs[sIdx] ?? 0) + 1;
       }
+      break;
     }
   }
 
@@ -2215,8 +2144,8 @@ export function evaluateArenaShadowPricing(
       : "observed_ledger";
 
   const postBlockAcceptedBySlice: Record<string, number> = {};
-  for (let k = 0; k < CANON_SLICE_COUNT; k++) {
-    const spec = CANON_DESK_SLICES[k]!;
+  for (let k = 0; k < sliceRegCount; k++) {
+    const spec = SLICE_REGISTRY[k]!;
     if (spec.policy === "BLOCKED") {
       postBlockAcceptedBySlice[spec.slice_id] =
         routerAuditMode === "enforced_lockout" ? 0 : csLegs[k]!;
@@ -2238,8 +2167,8 @@ export function evaluateArenaShadowPricing(
     readonly block_enforced: boolean;
   }[] = [];
 
-  for (let k = 0; k < CANON_SLICE_COUNT; k++) {
-    const spec = CANON_DESK_SLICES[k]!;
+  for (let k = 0; k < sliceRegCount; k++) {
+    const spec = SLICE_REGISTRY[k]!;
     const legs = csLegs[k]!;
     const settled = csSettled[k]!;
     const handle = Math.round(csHandle[k]!);

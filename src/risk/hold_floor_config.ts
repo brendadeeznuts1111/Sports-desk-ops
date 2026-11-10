@@ -4,6 +4,8 @@
  * `config/wager_tiers.toml` via `Bun.TOML.parse` (zero hardcoded floors in code).
  */
 
+import { validateHoldFloorSliceOverrides } from "./slice_registry.ts";
+
 export interface HoldFloorConfig {
   readonly schema_version: number;
   readonly default_pct: number;
@@ -92,10 +94,21 @@ export function parseHoldFloorConfigDocument(parsed: unknown): HoldFloorConfig {
       ? slo.exclude_directional
       : true;
 
+  const bySlice = parseNumericTable(
+    holdFloors.by_slice,
+    "hold_floors.by_slice",
+  );
+  const invalidSliceKeys = validateHoldFloorSliceOverrides(bySlice);
+  if (invalidSliceKeys.length > 0) {
+    throw new Error(
+      `Invalid [hold_floors.by_slice] key(s) in wager_tiers.toml (${invalidSliceKeys.join(", ")}): must match canonical SLICE_REGISTRY slice_id, never numeric indices`,
+    );
+  }
+
   return {
     schema_version: schemaVersion,
     default_pct: defaultPct,
-    by_slice: parseNumericTable(holdFloors.by_slice, "hold_floors.by_slice"),
+    by_slice: bySlice,
     by_sport: parseNumericTable(holdFloors.by_sport, "hold_floors.by_sport"),
     by_market: parseNumericTable(holdFloors.by_market, "hold_floors.by_market"),
     slo_blended_hold_floor_pct: sloFloorPct,
