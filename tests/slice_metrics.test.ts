@@ -1172,5 +1172,13 @@ default_pct = 3.50
         `export const blockedFlags = new Uint8Array(7);`,
       ).length,
     ).toBeGreaterThan(0);
+
+    // Evasion 6: upper-bit packing inside buildSliceIndexLookup
+    expect(
+      auditSliceBitsetVirtualSource(
+        "src/risk/evasion_packed_index.ts",
+        `export function buildSliceIndexLookup(): number { const i = 3; return i | (1 << 16); }`,
+      ).some((v) => v.rule === "no-packed-registry-index"),
+    ).toBe(true);
   });
 });

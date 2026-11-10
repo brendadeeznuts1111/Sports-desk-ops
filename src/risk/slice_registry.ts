@@ -198,8 +198,11 @@ export function assertValidSliceRegistry(
 
 /**
  * Builds an internal derived index lookup from a `SliceSpec[]` AoS registry.
- * Array indices are internal handles (`0..length-1`, `-1` when absent) and must
- * never be persisted or emitted in place of `slice_id`.
+ *
+ * No-packing invariant:
+ * - Returns plain `0..registry.length - 1` positions in registry order (`-1` when absent).
+ * - Never packs policy, axis, specificity, or flag bits into upper bits of the handle.
+ * - Never persist or emit these positions in place of canonical `slice_id`.
  */
 export function buildSliceIndexLookup(
   registry: readonly SliceSpec[] = SLICE_REGISTRY,
@@ -260,6 +263,92 @@ export function validateHoldFloorSliceOverrides(
 
 export type SlicePredicate = (slice_id: string) => boolean;
 
+export type UnknownSlicePolicy = "throw" | "telemetry";
+
+export interface SlicePredicateOptions {
+  readonly onUnknownSlice?: UnknownSlicePolicy;
+}
+
+export class UnknownSliceIdError extends RangeError {
+  readonly slice_id: string;
+
+  constructor(slice_id: string, context = "SLICE_REGISTRY") {
+    super(
+      `Unknown slice_id '${slice_id}' queried against ${context} predicate (not registered in SLICE_REGISTRY)`,
+    );
+    this.name = "UnknownSliceIdError";
+    this.slice_id = slice_id;
+  }
+}
+
+export interface SliceUnknownTelemetrySnapshot {
+  readonly slice_unknown_total: number;
+  readonly by_slice_id: Readonly<Record<string, number>>;
+}
+
+let sliceUnknownTotal = 0;
+let sliceUnknownById: Record<string, number> = Object.create(null) as Record<
+  string,
+  number
+>;
+
+function readRuntimeNodeEnv(): string | undefined {
+  if (typeof Bun !== "undefined") {
+    return Bun.env.NODE_ENV;
+  }
+  if (typeof process !== "undefined" && typeof process.env === "object") {
+    return process.env.NODE_ENV;
+  }
+  return undefined;
+}
+
+/**
+ * Resolves the default non-silent unknown-slice behavior:
+ * - `"production"` -> `"telemetry"` (increments `slice_unknown_total{slice_id}`, returns `false`)
+ * - all non-production profiles (`development`, `test`, unset) -> `"throw"` (`UnknownSliceIdError` + telemetry)
+ */
+export function resolveDefaultUnknownSlicePolicy(
+  nodeEnv: string | undefined = readRuntimeNodeEnv(),
+): UnknownSlicePolicy {
+  return nodeEnv === "production" ? "telemetry" : "throw";
+}
+
+export function getSliceUnknownTelemetry(): SliceUnknownTelemetrySnapshot {
+  const copy: Record<string, number> = {};
+  const keys = Object.keys(sliceUnknownById);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i]!;
+    copy[k] = sliceUnknownById[k]!;
+  }
+  return {
+    slice_unknown_total: sliceUnknownTotal,
+    by_slice_id: copy,
+  };
+}
+
+export function resetSliceUnknownTelemetry(): void {
+  sliceUnknownTotal = 0;
+  sliceUnknownById = Object.create(null) as Record<string, number>;
+}
+
+/**
+ * Records `slice_unknown_total{slice_id}` and enforces `UnknownSlicePolicy`
+ * so unregistered `slice_id` lookups are never silent.
+ */
+export function recordUnknownSliceId(
+  slice_id: string,
+  options?: SlicePredicateOptions,
+  context = "SLICE_REGISTRY",
+): false {
+  sliceUnknownTotal += 1;
+  sliceUnknownById[slice_id] = (sliceUnknownById[slice_id] ?? 0) + 1;
+  const policy = options?.onUnknownSlice ?? resolveDefaultUnknownSlicePolicy();
+  if (policy === "throw") {
+    throw new UnknownSliceIdError(slice_id, context);
+  }
+  return false;
+}
+
 /**
  * Derives an encapsulated `Uint32Array` bitset keyed by `SLICE_REGISTRY` index
  * from `predicate(spec)` — never a `boolean[]`, never packed into the index —
@@ -268,12 +357,19 @@ export type SlicePredicate = (slice_id: string) => boolean;
 export function deriveSliceBitsetPredicate(
   predicate: (spec: SliceSpec) => boolean,
   registry: readonly SliceSpec[] = SLICE_REGISTRY,
+  options?: SlicePredicateOptions,
 ): SlicePredicate {
   const lookup =
     registry === SLICE_REGISTRY
       ? DEFAULT_SLICE_LOOKUP
       : buildSliceIndexLookup(registry);
-  const words = new Uint32Array((registry.length + 31) >>> 5);
+  const wordCount = (registry.length + 31) >>> 5;
+  if (wordCount * 32 < registry.length) {
+    throw new RangeError(
+      `SLICE_REGISTRY bitset word-size invariant violated: length ${registry.length} > ${wordCount * 32}`,
+    );
+  }
+  const words = new Uint32Array(wordCount);
   for (let i = 0; i < registry.length; i++) {
     if (predicate(registry[i]!)) {
       words[i >>> 5] = ((words[i >>> 5] ?? 0) | (1 << (i & 31))) >>> 0;
@@ -282,7 +378,7 @@ export function deriveSliceBitsetPredicate(
   return (slice_id: string): boolean => {
     const idx = lookup.indexOf(slice_id);
     if (idx < 0) {
-      return false;
+      return recordUnknownSliceId(slice_id, options);
     }
     return ((words[idx >>> 5]! >>> (idx & 31)) & 1) === 1;
   };

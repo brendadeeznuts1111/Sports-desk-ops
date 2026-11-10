@@ -17,6 +17,10 @@ import {
   type SlicePolicy,
   type SlicePolicyMechanism,
 } from "./slice_metrics.ts";
+import {
+  recordUnknownSliceId,
+  type SlicePredicateOptions,
+} from "./slice_registry.ts";
 
 export const FLAG_BIT_BUY_SHARE_EXTREME = 1 << 0;
 export const FLAG_BIT_POLICY_DATA_CONFLICT = 1 << 1;
@@ -205,38 +209,53 @@ export class SliceMetricsSoASpine {
 
   /**
    * Predicate read over the encapsulated `blockEnforcedBits` `Uint32Array` bitset.
+   *
+   * @param rowIndex - Active **SoA flush-batch row index** (`0..rowCount - 1`),
+   *   NOT a `SLICE_REGISTRY` index (`flush()` accepts arbitrary filtered/ordered batches;
+   *   use {@link isSliceBlockEnforced} when querying by canonical `slice_id`).
    */
-  isBlockEnforcedAt(index: number): boolean {
-    if (index < 0 || index >= this.activeRowCount) {
+  isBlockEnforcedAt(rowIndex: number): boolean {
+    if (rowIndex < 0 || rowIndex >= this.activeRowCount) {
       throw new RangeError(
-        `Row index ${index} out of bounds (0..${this.activeRowCount})`,
+        `SoA rowIndex ${rowIndex} out of bounds (0..${this.activeRowCount})`,
       );
     }
-    return ((this.blockEnforcedBits[index >>> 5]! >>> (index & 31)) & 1) === 1;
+    return (
+      ((this.blockEnforcedBits[rowIndex >>> 5]! >>> (rowIndex & 31)) & 1) === 1
+    );
   }
 
   /**
-   * Predicate read of `block_enforced` by canonical `slice_id` over active rows.
+   * Policy-boundary predicate read of `block_enforced` by canonical `slice_id`
+   * over active flushed rows. Never fails silently on an absent `slice_id`:
+   * increments `slice_unknown_total{slice_id}` and throws `UnknownSliceIdError`
+   * in dev/test profiles (or returns `false` when `onUnknownSlice === "telemetry"`).
    */
-  isSliceBlockEnforced(slice_id: string): boolean {
-    for (let i = 0; i < this.activeRowCount; i++) {
-      if (this.sliceIds[i] === slice_id) {
-        return this.isBlockEnforcedAt(i);
+  isSliceBlockEnforced(
+    slice_id: string,
+    options?: SlicePredicateOptions,
+  ): boolean {
+    for (let rowIndex = 0; rowIndex < this.activeRowCount; rowIndex++) {
+      if (this.sliceIds[rowIndex] === slice_id) {
+        return this.isBlockEnforcedAt(rowIndex);
       }
     }
-    return false;
+    return recordUnknownSliceId(slice_id, options, "SliceMetricsSoASpine");
   }
 
   /**
    * Predicate read over the encapsulated `flagsMask` `Uint32Array` bitset.
+   *
+   * @param rowIndex - Active **SoA flush-batch row index** (`0..rowCount - 1`),
+   *   NOT a `SLICE_REGISTRY` index.
    */
-  hasFlagAt(index: number, flag: SliceFlag): boolean {
-    if (index < 0 || index >= this.activeRowCount) {
+  hasFlagAt(rowIndex: number, flag: SliceFlag): boolean {
+    if (rowIndex < 0 || rowIndex >= this.activeRowCount) {
       throw new RangeError(
-        `Row index ${index} out of bounds (0..${this.activeRowCount})`,
+        `SoA rowIndex ${rowIndex} out of bounds (0..${this.activeRowCount})`,
       );
     }
-    return (this.flagsMask[index]! & flagBitOf(flag)) !== 0;
+    return (this.flagsMask[rowIndex]! & flagBitOf(flag)) !== 0;
   }
 
   /**
@@ -300,43 +319,44 @@ export class SliceMetricsSoASpine {
   }
 
   /**
-   * Projects row `index` directly from the SoA TypedArray columns without
-   * invoking any derivation or gate evaluation functions.
+   * Projects row `rowIndex` (SoA flush-batch row position `0..rowCount - 1`,
+   * NOT a `SLICE_REGISTRY` index) directly from the SoA TypedArray columns
+   * without invoking any derivation or gate evaluation functions.
    */
-  readRowAt(index: number): SliceMetrics {
-    if (index < 0 || index >= this.activeRowCount) {
+  readRowAt(rowIndex: number): SliceMetrics {
+    if (rowIndex < 0 || rowIndex >= this.activeRowCount) {
       throw new RangeError(
-        `Row index ${index} out of bounds (0..${this.activeRowCount})`,
+        `SoA rowIndex ${rowIndex} out of bounds (0..${this.activeRowCount})`,
       );
     }
-    const vigRaw = this.columns.vig_capture_pct[index]!;
-    const dirRaw = this.columns.directional_pnl_usd[index]!;
-    const blockEnforced = this.isBlockEnforcedAt(index);
+    const vigRaw = this.columns.vig_capture_pct[rowIndex]!;
+    const dirRaw = this.columns.directional_pnl_usd[rowIndex]!;
+    const blockEnforced = this.isBlockEnforcedAt(rowIndex);
 
     return {
-      slice_id: this.sliceIds[index]!,
-      sport: this.sports[index]!,
-      league: this.leagues[index]!,
-      period: this.periods[index]!,
-      market: this.markets[index]!,
-      legs: this.columns.legs[index]!,
-      buy_share_pct: this.columns.buy_share_pct[index]!,
-      sell_share_pct: this.columns.sell_share_pct[index]!,
-      handle_usd: this.columns.handle_usd[index]!,
-      net_position_usd: this.columns.net_position_usd[index]!,
+      slice_id: this.sliceIds[rowIndex]!,
+      sport: this.sports[rowIndex]!,
+      league: this.leagues[rowIndex]!,
+      period: this.periods[rowIndex]!,
+      market: this.markets[rowIndex]!,
+      legs: this.columns.legs[rowIndex]!,
+      buy_share_pct: this.columns.buy_share_pct[rowIndex]!,
+      sell_share_pct: this.columns.sell_share_pct[rowIndex]!,
+      handle_usd: this.columns.handle_usd[rowIndex]!,
+      net_position_usd: this.columns.net_position_usd[rowIndex]!,
       vig_capture_pct: Number.isNaN(vigRaw) ? null : vigRaw,
       directional_pnl_usd: Number.isNaN(dirRaw) ? null : dirRaw,
-      hold_total_pct: this.columns.hold_total_pct[index]!,
-      gross_hold_usd: this.columns.gross_hold_usd[index]!,
-      hold_floor_pct: this.columns.hold_floor_pct[index]!,
-      floor_delta_pct: this.columns.floor_delta_pct[index]!,
-      floor_delta_usd: this.columns.floor_delta_usd[index]!,
-      policy: POLICY_BY_CODE[this.columns.policy_code[index]!] ?? "PRESERVE",
+      hold_total_pct: this.columns.hold_total_pct[rowIndex]!,
+      gross_hold_usd: this.columns.gross_hold_usd[rowIndex]!,
+      hold_floor_pct: this.columns.hold_floor_pct[rowIndex]!,
+      floor_delta_pct: this.columns.floor_delta_pct[rowIndex]!,
+      floor_delta_usd: this.columns.floor_delta_usd[rowIndex]!,
+      policy: POLICY_BY_CODE[this.columns.policy_code[rowIndex]!] ?? "PRESERVE",
       policy_mechanism:
-        MECHANISM_BY_CODE[this.columns.mechanism_code[index]!] ?? "VIG",
-      policy_qualifier: this.qualifiers[index]!,
+        MECHANISM_BY_CODE[this.columns.mechanism_code[rowIndex]!] ?? "VIG",
+      policy_qualifier: this.qualifiers[rowIndex]!,
       block_enforced: blockEnforced,
-      flags: decodeSliceFlagsMask(this.flagsMask[index]!),
+      flags: decodeSliceFlagsMask(this.flagsMask[rowIndex]!),
     };
   }
 

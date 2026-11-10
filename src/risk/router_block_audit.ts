@@ -13,6 +13,7 @@ import {
   deriveSliceBitsetPredicate,
   SLICE_REGISTRY,
   type SlicePredicate,
+  type SlicePredicateOptions,
   type SliceSpec,
 } from "./slice_registry.ts";
 
@@ -45,10 +46,12 @@ export function queryBlockEnforced(
 export function deriveRouterBlockEnforcedPredicate(
   router: SliceRouterOrderQuery,
   registry: readonly SliceSpec[] = SLICE_REGISTRY,
+  options?: SlicePredicateOptions,
 ): SlicePredicate {
   return deriveSliceBitsetPredicate(
     (spec) => queryBlockEnforced(router, spec.slice_id),
     registry,
+    options,
   );
 }
 
