@@ -25,6 +25,8 @@
     "test:market-index": "REQUIRE_MARKET_INDEX=1 bun test tests/market_index.test.ts",
     "test:changed-plugins": "bash scripts/ci/test-changed-plugins.sh",
     "audit:branches": "bash scripts/audit-branches.sh",
+    "worktrees": "bun run scripts/dx_worktrees.ts",
+    "worktrees:clean": "bun run scripts/dx_worktrees.ts --apply",
     "audit:plugins": "bash scripts/audit-plugins.sh",
     "check:plugin-boundaries": "bash scripts/check-plugin-boundaries.sh",
     "test:serial": "bun test",
@@ -294,7 +296,16 @@
     "execution:plan": "bun run scripts/execution_cli.ts",
     "signals:kalshi": "bun run scripts/signals_kalshi_cli.ts",
     "weblog:rollup": "bun run scripts/f402_weblog_bridge.ts",
-    "autobet": "bun run cli/watchlist_autobet_cli.ts"
+    "autobet": "bun run cli/watchlist_autobet_cli.ts",
+    "nsh": "bun run scripts/nsh_desk_cli.ts",
+    "nsh:doctor": "bun run scripts/nsh_desk_cli.ts doctor",
+    "nsh:artifacts": "bun run scripts/nsh_desk_cli.ts artifacts",
+    "nsh:verify": "bun run scripts/nsh_desk_cli.ts verify-loop",
+    "nsh:check": "bun run scripts/nsh_desk_cli.ts check",
+    "nsh:test": "bun run scripts/nsh_desk_cli.ts test",
+    "nsh:build": "bun run scripts/nsh_desk_cli.ts build",
+    "nsh:run": "bun run scripts/nsh_desk_cli.ts run",
+    "nsh:package:web": "bun run scripts/nsh_desk_cli.ts package-web"
   },
   "keywords": [
     "sportsdesk",

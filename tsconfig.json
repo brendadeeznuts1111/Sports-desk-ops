@@ -23,5 +23,13 @@
     "types": ["bun"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "reports", "Scratch"]
+  "exclude": [
+    "node_modules",
+    "reports",
+    "Scratch",
+    "packages/nsh-desk/.nsh",
+    "packages/nsh-desk/components",
+    "packages/nsh-desk/store.ts",
+    "packages/nsh-desk/ui"
+  ]
 }

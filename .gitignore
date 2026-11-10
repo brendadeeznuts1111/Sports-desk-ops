@@ -97,4 +97,7 @@ lib/.tmp-*/
 # Cloudflare Pages credentials read by bin/dx (`cloudflare.env` in the repo root or the workspace).
 /cloudflare.env
 cloudflare.env
+
+# Native Shell (nsh) generated types, bundles, and package outputs.
+.nsh/
 pages.env

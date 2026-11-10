@@ -1,0 +1,24 @@
+{
+  "name": "Sportsdesk Desk",
+  "id": "ops.sportsdesk.desk",
+  "version": "0.1.0",
+  "build": 1,
+  "theme": "theme.json",
+  "appearance": "system",
+  "statusBar": {
+    "foreground": "auto"
+  },
+  "capabilities": {
+    "network": {
+      "http": [
+        { "host": "127.0.0.1", "methods": ["GET"], "schemes": ["http"] },
+        { "host": "localhost", "methods": ["GET"], "schemes": ["http"] }
+      ]
+    },
+    "process": {
+      "env": ["SPORTSDESK_ORIGIN"]
+    },
+    "clipboard": true,
+    "statusBar": true
+  }
+}

@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Local branch hygiene: prune remotes, list locals without upstream.
+# Worktree + local/remote branch hygiene (delegates to scripts/dx_worktrees.ts).
 set -euo pipefail
 
-git fetch --prune
-echo "=== Local branches without upstream ==="
-git branch -vv | grep -v '\[origin/' || true
-echo "=== Merged into main (candidates to delete) ==="
-git branch --merged main | grep -v '^\* main$' || true
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec bun run "$REPO_ROOT/scripts/dx_worktrees.ts" --fetch "$@"

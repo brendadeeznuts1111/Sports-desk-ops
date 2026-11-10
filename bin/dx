@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -293,6 +293,10 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx live-bets [flags]      Control & monitor v2 live-bets (--source/--fallback/--daemon/--watch)
     ./bin/dx deps [add|remove|version|check]
                                     bun-deps (frozen-safe); version = pm version + lock refresh
+    ./bin/dx nsh [doctor|artifacts|verify-loop|check|build|test|run|...]
+                                    Native Shell (packages/nsh-desk) CLI & verification loop
+    ./bin/dx worktrees [--apply] [--remote] [--ensure-auto-delete] [--offline] [--json|--yaml]
+                                    Audit & clean stale Git worktrees and merged local/remote branches
 
   Manager Tools / partner config (GSID cookie auth — set GSLIVE_SESSION_ID in .env)
     ./bin/dx fetch-config           Fetch partnerConfig JSON → partnerConfig.json
@@ -708,6 +712,13 @@ VERSION_HELP
   shadow-price)
     cd "$REPO_ROOT"
     dx_bun_run "$REPO_ROOT/scripts/shadow_price.ts" "$@"
+    ;;
+  nsh)
+    cd "$REPO_ROOT"
+    exec bun run scripts/nsh_desk_cli.ts "$@"
+    ;;
+  worktrees)
+    exec bun run "$REPO_ROOT/scripts/dx_worktrees.ts" "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies

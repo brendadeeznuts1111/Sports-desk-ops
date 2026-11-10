@@ -105,6 +105,7 @@ pathIgnorePatterns = [
   "Scratch/**",
   "verification/**",
   "tests/fixtures/**",
+  "packages/nsh-desk/**",
 ]
 
 # Dual coverage reporting: preserves console text table while producing lcov.info for CI
