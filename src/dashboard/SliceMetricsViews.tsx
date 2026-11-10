@@ -218,12 +218,25 @@ export function SliceMetricsViews({
           </div>
 
           <div className="sd-kpi-box">
-            <div className="sd-kpi-label">SoA DataTable Spine Telemetry</div>
-            <div className="sd-kpi-value sd-mono" style={{ fontSize: "16px" }}>
-              Flush #{spine.flushCount} · Reads #{spine.renderReadCount}
+            <div className="sd-kpi-label">
+              Hold-Floor Fallback Chain &amp; SoA Spine
+            </div>
+            <div
+              className="sd-kpi-value sd-mono"
+              style={{
+                fontSize: "15px",
+                color: bundle.floorFallbackSlo.slo_met
+                  ? "var(--sd-theme-emerald)"
+                  : "var(--sd-tier-alert)",
+              }}
+            >
+              {bundle.floorFallbackSlo.slo_met
+                ? `0% default fallback (${bundle.floorFallbackSlo.counts_by_tier.by_slice}s/${bundle.floorFallbackSlo.counts_by_tier.by_sport}sp/${bundle.floorFallbackSlo.counts_by_tier.by_market}m)`
+                : `▲ ${bundle.floorFallbackSlo.default_slice_share_pct.toFixed(1)}% default fallback`}
             </div>
             <div className="sd-kpi-sub">
-              Derived once per flush ({spine.derivedRowComputeCount} row evals)
+              Flush #{spine.flushCount} · Reads #{spine.renderReadCount} (
+              {spine.derivedRowComputeCount} evals)
             </div>
           </div>
         </div>
@@ -375,10 +388,25 @@ export function SliceMetricsViews({
                           ? "var(--sd-theme-emerald)"
                           : "var(--sd-tier-alert)",
                     }}
-                    title={`Configured floor: ${row.hold_floor_pct.toFixed(2)}%`}
+                    title={`Configured floor: ${row.hold_floor_pct.toFixed(2)}% (resolved_via: ${row.hold_floor_resolved_via ?? "unspecified"})`}
                   >
-                    {formatSignedPct(row.floor_delta_pct)} (
-                    {formatUsdCompact(row.floor_delta_usd)})
+                    <div>
+                      {formatSignedPct(row.floor_delta_pct)} (
+                      {formatUsdCompact(row.floor_delta_usd)})
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color:
+                          row.hold_floor_resolved_via === "default" ||
+                          row.hold_floor_resolved_via === null
+                            ? "var(--sd-tier-alert)"
+                            : "var(--sd-text-muted)",
+                      }}
+                    >
+                      {row.hold_floor_pct.toFixed(2)}% ·{" "}
+                      {row.hold_floor_resolved_via ?? "untracked"}
+                    </div>
                   </td>
                   <td>
                     <div

@@ -11,6 +11,7 @@
 
 import {
   deriveSliceMetrics,
+  type HoldFloorResolvedVia,
   type SliceFlag,
   type SliceMetrics,
   type SliceMetricsInput,
@@ -68,6 +69,36 @@ function encodeMechanism(mechanism: SlicePolicyMechanism): number {
   }
 }
 
+function encodeResolvedVia(tier: HoldFloorResolvedVia | null): number {
+  switch (tier) {
+    case null:
+      return 0;
+    case "by_slice":
+      return 1;
+    case "by_sport":
+      return 2;
+    case "by_market":
+      return 3;
+    case "default":
+      return 4;
+  }
+}
+
+function decodeResolvedVia(code: number): HoldFloorResolvedVia | null {
+  switch (code) {
+    case 1:
+      return "by_slice";
+    case 2:
+      return "by_sport";
+    case 3:
+      return "by_market";
+    case 4:
+      return "default";
+    default:
+      return null;
+  }
+}
+
 function flagBitOf(flag: SliceFlag): number {
   switch (flag) {
     case "BUY_SHARE_EXTREME":
@@ -122,6 +153,7 @@ export interface SliceMetricsSoAColumns {
   readonly hold_total_pct: Float64Array;
   readonly gross_hold_usd: Float64Array;
   readonly hold_floor_pct: Float64Array;
+  readonly hold_floor_resolved_via_code: Uint8Array;
   readonly floor_delta_pct: Float64Array;
   readonly floor_delta_usd: Float64Array;
   readonly policy_code: Uint8Array;
@@ -169,6 +201,7 @@ export class SliceMetricsSoASpine {
       hold_total_pct: new Float64Array(capacity),
       gross_hold_usd: new Float64Array(capacity),
       hold_floor_pct: new Float64Array(capacity),
+      hold_floor_resolved_via_code: new Uint8Array(capacity),
       floor_delta_pct: new Float64Array(capacity),
       floor_delta_usd: new Float64Array(capacity),
       policy_code: new Uint8Array(capacity),
@@ -297,6 +330,9 @@ export class SliceMetricsSoASpine {
       this.columns.hold_total_pct[i] = derived.hold_total_pct;
       this.columns.gross_hold_usd[i] = derived.gross_hold_usd;
       this.columns.hold_floor_pct[i] = derived.hold_floor_pct;
+      this.columns.hold_floor_resolved_via_code[i] = encodeResolvedVia(
+        derived.hold_floor_resolved_via,
+      );
       this.columns.floor_delta_pct[i] = derived.floor_delta_pct;
       this.columns.floor_delta_usd[i] = derived.floor_delta_usd;
       this.columns.policy_code[i] = encodePolicy(derived.policy);
@@ -349,6 +385,9 @@ export class SliceMetricsSoASpine {
       hold_total_pct: this.columns.hold_total_pct[rowIndex]!,
       gross_hold_usd: this.columns.gross_hold_usd[rowIndex]!,
       hold_floor_pct: this.columns.hold_floor_pct[rowIndex]!,
+      hold_floor_resolved_via: decodeResolvedVia(
+        this.columns.hold_floor_resolved_via_code[rowIndex]!,
+      ),
       floor_delta_pct: this.columns.floor_delta_pct[rowIndex]!,
       floor_delta_usd: this.columns.floor_delta_usd[rowIndex]!,
       policy: POLICY_BY_CODE[this.columns.policy_code[rowIndex]!] ?? "PRESERVE",

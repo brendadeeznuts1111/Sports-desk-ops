@@ -7,6 +7,8 @@
 import type { SlicePolicyDiffReport } from "../src/risk/slice_diff_view.ts";
 import type {
   BlendedHoldSloSummary,
+  HoldFloorFallbackSloSummary,
+  HoldFloorResolvedVia,
   SliceFlag,
   SliceMetrics,
   SlicePolicy,
@@ -15,6 +17,8 @@ import type {
 
 export type {
   BlendedHoldSloSummary,
+  HoldFloorFallbackSloSummary,
+  HoldFloorResolvedVia,
   SliceFlag,
   SliceMetrics,
   SlicePolicy,
@@ -28,6 +32,7 @@ export interface SliceMetricsDashboardBundle {
   readonly routerAuditMode: RouterAuditMode;
   readonly rows: readonly SliceMetrics[];
   readonly blendedHoldSlo: BlendedHoldSloSummary;
+  readonly floorFallbackSlo: HoldFloorFallbackSloSummary;
   readonly policyDiff: SlicePolicyDiffReport;
 }
 

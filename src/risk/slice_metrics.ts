@@ -16,6 +16,31 @@ export type SliceFlag =
   | "DIRECTIONAL_DOMINANT"
   | "MISSING_VIG_SPLIT";
 
+export type HoldFloorResolvedVia =
+  "by_slice" | "by_sport" | "by_market" | "default";
+
+export interface HoldFloorFallbackSloSummary {
+  readonly total_slices: number;
+  readonly total_handle_usd: number;
+  readonly counts_by_tier: {
+    readonly by_slice: number;
+    readonly by_sport: number;
+    readonly by_market: number;
+    readonly default: number;
+  };
+  readonly handle_usd_by_tier: {
+    readonly by_slice: number;
+    readonly by_sport: number;
+    readonly by_market: number;
+    readonly default: number;
+  };
+  readonly default_slice_share_pct: number;
+  readonly default_handle_share_pct: number;
+  readonly max_default_fallback_share_pct: number;
+  readonly default_fallback_slices: readonly string[];
+  readonly slo_met: boolean;
+}
+
 export interface BalancedBookLegDistribution {
   readonly buy_stake_usd: number;
   readonly sell_stake_usd: number;
@@ -39,6 +64,7 @@ export interface SliceMetrics {
   readonly hold_total_pct: number;
   readonly gross_hold_usd: number;
   readonly hold_floor_pct: number;
+  readonly hold_floor_resolved_via: HoldFloorResolvedVia | null;
   readonly floor_delta_pct: number;
   readonly floor_delta_usd: number;
   readonly policy: SlicePolicy;
@@ -59,6 +85,7 @@ export interface SliceMetricsInput {
   readonly handle_usd: number;
   readonly hold_total_pct: number;
   readonly hold_floor_pct: number;
+  readonly hold_floor_resolved_via?: HoldFloorResolvedVia | null;
   readonly policy: SlicePolicy;
   readonly policy_mechanism: SlicePolicyMechanism;
   readonly policy_qualifier: string;
@@ -400,6 +427,10 @@ export function deriveSliceMetrics(
     hold_total_pct: input.hold_total_pct,
     gross_hold_usd,
     hold_floor_pct: input.hold_floor_pct,
+    hold_floor_resolved_via:
+      input.hold_floor_resolved_via !== undefined
+        ? input.hold_floor_resolved_via
+        : null,
     floor_delta_pct,
     floor_delta_usd,
     policy: input.policy,

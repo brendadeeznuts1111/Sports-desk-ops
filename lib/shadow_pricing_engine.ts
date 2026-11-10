@@ -61,10 +61,11 @@ import {
   type ShadowSimulationResult,
 } from "../scripts/shadow_price.ts";
 import {
+  evaluateHoldFloorFallbackSlo,
   type HoldFloorConfig,
   loadHoldFloorConfig,
   parseHoldFloorConfigDocument,
-  resolveHoldFloorPct,
+  resolveHoldFloor,
 } from "../src/risk/hold_floor_config.ts";
 import {
   createStaticRouterOrderQuery,
@@ -2188,7 +2189,7 @@ export function evaluateArenaShadowPricing(
         : 0;
     const balancedOverroundPct =
       csHandle[k]! > 0 ? csOverroundStakeSum[k]! / csHandle[k]! : null;
-    const holdFloorPct = resolveHoldFloorPct(holdFloorConfig, {
+    const floorRes = resolveHoldFloor(holdFloorConfig, {
       slice_id: spec.slice_id,
       sport: spec.sport,
       market: spec.market,
@@ -2206,7 +2207,8 @@ export function evaluateArenaShadowPricing(
         buy_share_pct: buySharePct,
         handle_usd: handle,
         hold_total_pct: holdTotalPct,
-        hold_floor_pct: holdFloorPct,
+        hold_floor_pct: floorRes.hold_floor_pct,
+        hold_floor_resolved_via: floorRes.resolved_via,
         policy: spec.policy,
         policy_mechanism: spec.policy_mechanism,
         policy_qualifier: spec.policy_qualifier,
@@ -2230,6 +2232,10 @@ export function evaluateArenaShadowPricing(
   const blendedHoldSlo = computeBlendedHoldSlo(
     sliceMetricsRows,
     holdFloorConfig.slo_blended_hold_floor_pct,
+  );
+  const floorFallbackSlo = evaluateHoldFloorFallbackSlo(
+    sliceMetricsRows,
+    holdFloorConfig.slo_max_default_fallback_share_pct,
   );
   const policyDiff = diffSlicePolicyPairs(
     preTradePolicyPairs,
@@ -2266,6 +2272,7 @@ export function evaluateArenaShadowPricing(
       routerAuditMode,
       rows: sliceMetricsRows,
       blendedHoldSlo,
+      floorFallbackSlo,
       policyDiff,
     },
   };

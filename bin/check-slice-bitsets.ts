@@ -39,6 +39,7 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
 const ALLOWED_ENUM_BYTE_COLUMN_NAMES: Readonly<Record<string, true>> = {
   policy_code: true,
   mechanism_code: true,
+  hold_floor_resolved_via_code: true,
 };
 
 function isBooleanOrBoxedBooleanType(type: ts.Type): boolean {
