@@ -44,7 +44,14 @@ describe("peerIsTrusted", () => {
   });
 });
 
-const PII = ["/api/live-bets", "/api/live-wagers", "/api/agent-tree", "/graph"];
+const PII = [
+  "/api/live-bets",
+  "/api/v1/live-bets",
+  "/api/v2/live-bets",
+  "/api/live-wagers",
+  "/api/agent-tree",
+  "/graph",
+];
 
 /** `Bun.env`/`process.env` properties are typed readonly; mutate through Reflect. */
 function setEnv(key: string, value: string | undefined): void {
@@ -108,11 +115,24 @@ describe("proxied ingress requires the token", () => {
       );
       expect([401, 403, 503]).toContain(response.status);
 
-      const ok = await fetch(`http://localhost/api/live-bets?source=auto`, {
+      const ok = await fetch(`http://localhost/api/v1/live-bets?source=auto`, {
         unix: socket,
         headers: { authorization: "Bearer the-real-token" },
       } as RequestInit);
       expect(ok.status).toBe(200);
+
+      const redirected = await fetch(
+        `http://localhost/api/live-bets?source=auto`,
+        {
+          unix: socket,
+          redirect: "manual",
+          headers: { authorization: "Bearer the-real-token" },
+        } as RequestInit,
+      );
+      expect(redirected.status).toBe(308);
+      expect(redirected.headers.get("location")).toBe(
+        "/api/v1/live-bets?source=auto",
+      );
     } finally {
       setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
     }
@@ -127,7 +147,8 @@ describe("proxied ingress requires the token", () => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", "dashboard-token");
     try {
       const paths = [
-        "/api/live-bets?source=auto",
+        "/api/v1/live-bets?source=auto",
+        "/api/v2/live-bets?source=file&fallback=strict",
         "/api/game-admin",
         "/api/sports",
         "/api/scoreboard",
@@ -181,7 +202,7 @@ describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary"
   });
 
   test("a pii route answers the proxy without a token", async () => {
-    const response = await overSocket(socket, "/api/live-bets?source=auto");
+    const response = await overSocket(socket, "/api/v1/live-bets?source=auto");
     expect(response.status).toBe(200);
   });
 });

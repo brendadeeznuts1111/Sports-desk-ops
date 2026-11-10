@@ -9,19 +9,32 @@
  */
 
 import { resolve } from "node:path";
-import { DAEMON_PATHS, DAEMON_PREFIX_PATHS } from "../lib/daemon_routes.ts";
+import {
+  DAEMON_PATHS,
+  DAEMON_PREFIX_PATHS,
+  DAEMON_ROUTES,
+} from "../lib/daemon_routes.ts";
 import {
   compareRouteSurfaces,
+  DEPRECATED_LIVE_BETS_V1_PATHS,
   readRouteSurfaceInputs,
+  REQUIRED_LIVE_BETS_V2_PATH,
 } from "../lib/route_surface.ts";
 
 const root = resolve(import.meta.dir, "..");
 // The table is the source. `readRouteSurfaceInputs` still reads the chain, but only so the test
 // can compare it with the table; its `served` set is deliberately not used here, or a prefix arm
 // the extractor cannot see would silently drop out of the comparison again.
-const { declared, spec } = await readRouteSurfaceInputs(root);
+const { declared, spec, specDeprecated } = await readRouteSurfaceInputs(root);
 const served = new Set([...DAEMON_PATHS, ...DAEMON_PREFIX_PATHS]);
-const findings = compareRouteSurfaces({ served, declared, spec });
+const findings = compareRouteSurfaces({
+  served,
+  declared,
+  spec,
+  routes: DAEMON_ROUTES,
+  specDeprecated,
+  requireLiveBetsV2: true,
+});
 
 if (findings.length === 0) {
   let localDeclaredCount = 0;
@@ -35,7 +48,7 @@ if (findings.length === 0) {
   }
   const uiAliasCount = served.size - localDeclaredCount;
   console.log(
-    `check:route-surface: ok — ${served.size} served path(s) (${localDeclaredCount}/${localDeclaredCount} local-route + ${uiAliasCount} UI aliases), ${declared.size} declared (${localDeclaredCount} local-route, ${upstreamDeclaredCount} upstream-route, ${unimplementedDeclaredCount} documented-not-implemented)`,
+    `check:route-surface: ok — ${served.size} served path(s) (${localDeclaredCount}/${localDeclaredCount} local-route + ${uiAliasCount} UI aliases), ${declared.size} declared (${localDeclaredCount} local-route, ${upstreamDeclaredCount} upstream-route, ${unimplementedDeclaredCount} documented-not-implemented); v2 registered (${REQUIRED_LIVE_BETS_V2_PATH}), v1 deprecated (${DEPRECATED_LIVE_BETS_V1_PATHS.join(", ")})`,
   );
   process.exit(0);
 }

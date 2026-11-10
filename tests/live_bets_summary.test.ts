@@ -1,6 +1,32 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { REPORT_PENDING_OPERATION } from "../lib/f402_live_pending.ts";
 import { WAGER_TYPE_LABELS } from "../lib/game_admin.ts";
-import { startServer } from "../services/sportsdesk_webview_server.ts";
+import {
+  buildArtifact,
+  hierarchyIndexFromAgentIndex,
+  readPendingRows,
+  type AgentKey,
+} from "../lib/live_bets.ts";
+import {
+  LIVE_BETS_V1_DEPRECATION_HEADER,
+  startServer,
+} from "../services/sportsdesk_webview_server.ts";
+import type {
+  LiveBetsV2Request,
+  LiveBetsV2Response,
+} from "../src/contracts/live_bets.v2.ts";
+
+const REPO_ROOT = resolve(import.meta.dir, "..");
+const SAMPLE_FIXTURE_REL = "tests/f402-pending-wager-sample.json";
+
+const V2_FIXTURE_REQUEST: LiveBetsV2Request = {
+  source: "fixture",
+  fallback: "sample",
+  path: SAMPLE_FIXTURE_REL,
+};
 
 interface Bucket {
   games: number;
@@ -16,40 +42,91 @@ interface Summary {
   bySubSport: Record<string, Bucket>;
   byAgent: Record<string, Bucket>;
   dataSource: string;
+  capturedAt: string | null;
 }
 
-describe("GET /api/live-bets/summary?source=auto", () => {
+describe("live-bets v2 contract, summary parity, and frozen v1", () => {
   let server: ReturnType<typeof startServer>;
+  let fixtureDir: string;
+  let liveBetsPath: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    fixtureDir = mkdtempSync(join(tmpdir(), "live-bets-summary-"));
+    liveBetsPath = join(fixtureDir, "live-bets.json");
+    const samplePayload: unknown = await Bun.file(
+      join(REPO_ROOT, SAMPLE_FIXTURE_REL),
+    ).json();
+    const agentIndexPayload: unknown = await Bun.file(
+      join(REPO_ROOT, "data/agent-index.json"),
+    ).json();
+    const built = buildArtifact(readPendingRows(samplePayload), {
+      operation: REPORT_PENDING_OPERATION,
+      capturedAt: null,
+      hierarchyIndex: hierarchyIndexFromAgentIndex(agentIndexPayload),
+    });
+    await Bun.write(
+      liveBetsPath,
+      JSON.stringify({
+        ...built,
+        dataSource: `fixture:${SAMPLE_FIXTURE_REL}`,
+      }),
+    );
+
     server = startServer({
       port: 0,
       hostname: "127.0.0.1",
       development: false,
+      liveBetsPath,
+      livePending: { enabled: false },
+      liveTicker: { enabled: false },
     });
   });
 
   afterAll(() => {
     server.stop(true);
+    rmSync(fixtureDir, { recursive: true, force: true });
   });
 
   const getSummary = async (): Promise<Summary> => {
-    const res = await fetch(`${server.url}api/live-bets/summary?source=auto`);
+    const res = await fetch(`${server.url}api/live-bets/summary?source=file`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { success: boolean; summary: Summary };
     expect(body.success).toBe(true);
     return body.summary;
   };
 
-  test("returns the documented summary shape", async () => {
+  const getV2 = async (
+    req: LiveBetsV2Request = V2_FIXTURE_REQUEST,
+  ): Promise<{ res: Response; body: LiveBetsV2Response }> => {
+    const params = new URLSearchParams({
+      source: req.source,
+      fallback: req.fallback,
+      ...(req.path === undefined ? {} : { path: req.path }),
+    });
+    const res = await fetch(
+      `${server.url}api/v2/live-bets?${params.toString()}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as LiveBetsV2Response;
+    return { res, body };
+  };
+
+  test("returns the documented summary shape with exact fixture totals", async () => {
     const summary = await getSummary();
-    expect(summary.totalGames).toBeNumber();
-    expect(summary.totalWagered).toBeNumber();
-    expect(summary.totalToWin).toBeNumber();
-    expect(summary.totalPending).toBeNumber();
-    expect(summary.bySubSport).toBeObject();
-    expect(summary.byAgent).toBeObject();
-    expect(summary.dataSource).toBeString();
+    expect(summary).toEqual({
+      totalGames: 1,
+      totalWagered: 22400000,
+      totalToWin: 20000000,
+      totalPending: 1,
+      bySubSport: {
+        NFL: { games: 1, wagered: 22400000, toWin: 20000000 },
+      },
+      byAgent: {
+        HRGROUP: { games: 1, wagered: 22400000, toWin: 20000000 },
+      },
+      dataSource: `fixture:${SAMPLE_FIXTURE_REL}`,
+      capturedAt: null,
+    });
   });
 
   test("sub-sport breakdown sums to the totals", async () => {
@@ -74,14 +151,9 @@ describe("GET /api/live-bets/summary?source=auto", () => {
     expect(buckets.reduce((n, b) => n + b.toWin, 0)).toBe(summary.totalToWin);
   });
 
-  test("agrees with the summary embedded in /api/live-bets", async () => {
+  test("agrees with the summary embedded in /api/v2/live-bets", async () => {
     const summary = await getSummary();
-    const full = (await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
-    ).json()) as {
-      summary: Summary;
-      games: unknown[];
-    };
+    const { body: full } = await getV2();
 
     expect(summary).toEqual(full.summary);
     expect(summary.totalGames).toBe(full.games.length);
@@ -89,13 +161,9 @@ describe("GET /api/live-bets/summary?source=auto", () => {
 
   test("is derived, not a stored literal", async () => {
     // A hand-maintained aggregate drifts from the game list; recompute independently.
-    const games = (
-      (await (
-        await fetch(`${server.url}api/live-bets?source=auto`)
-      ).json()) as {
-        games: Array<{ wagered: number; toWin: number }>;
-      }
-    ).games;
+    const {
+      body: { games },
+    } = await getV2();
     const summary = await getSummary();
 
     expect(games.reduce((n, g) => n + g.wagered, 0)).toBe(summary.totalWagered);
@@ -103,8 +171,13 @@ describe("GET /api/live-bets/summary?source=auto", () => {
   });
 
   test("never serves credentials or customer names", async () => {
+    const params = new URLSearchParams({
+      source: V2_FIXTURE_REQUEST.source,
+      fallback: V2_FIXTURE_REQUEST.fallback,
+      path: SAMPLE_FIXTURE_REL,
+    });
     const body = await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
+      await fetch(`${server.url}api/v2/live-bets?${params.toString()}`)
     ).text();
     for (const key of ["Password", "NameFirst", "Login"]) {
       expect(body).not.toContain(`"${key}"`);
@@ -112,11 +185,9 @@ describe("GET /api/live-bets/summary?source=auto", () => {
   });
 
   test("does not advertise home/away it cannot know", async () => {
-    const { games } = (await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
-    ).json()) as {
-      games: Array<Record<string, unknown>>;
-    };
+    const {
+      body: { games },
+    } = await getV2();
     for (const game of games) {
       expect(game).not.toHaveProperty("home");
       expect(game).not.toHaveProperty("away");
@@ -124,40 +195,32 @@ describe("GET /api/live-bets/summary?source=auto", () => {
   });
 
   test("marks the snapshot as non-cacheable", async () => {
-    const res = await fetch(`${server.url}api/live-bets?source=auto`);
+    const { res } = await getV2();
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  test("joins real scoreboard scores onto matching wagers only", async () => {
-    const body = (await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
-    ).json()) as {
-      games: Array<{
-        team1: { name: string };
-        team2: { name: string };
-        subSport: string;
-        scoreboard: { team1Score: number | null; period: string | null } | null;
-      }>;
-      scoreboard: {
-        source: string;
-        observedAt: string | null;
-        summary: { games: number };
-      } | null;
-    };
+  test("joins real scoreboard scores onto matching wagers", async () => {
+    const { body } = await getV2();
 
     expect(body.scoreboard).not.toBeNull();
     expect(body.scoreboard?.summary.games).toBeGreaterThan(0);
     expect(body.scoreboard?.source).toContain("scoreboard");
 
-    for (const game of body.games) {
-      const match = game.scoreboard;
-      if (match === null) continue;
-      // A joined score must name the same clubs the wager does.
-      expect(`${game.team1.name} ${game.team2.name}`.toLowerCase()).toContain(
-        "cardinals",
-      );
-      expect(match.period).toBeString();
-    }
+    expect(body.games).toHaveLength(1);
+    const [game] = body.games;
+    expect(game?.team1?.name).toBe("Arizona Cardinals");
+    expect(game?.team2?.name).toBe("Dallas Cowboys");
+    expect(game?.subSport).toBe("NFL");
+    expect(game?.scoreboard).toEqual({
+      team1Score: 33,
+      team2Score: 30,
+      status: "final",
+      period: "Final",
+      league: "NFL",
+      broadcast: "FOX",
+      observedAt: "2026-11-01",
+      source: "operator paste of fantasy402 manager.html scoreboard",
+    });
   });
 
   test("serves the scoreboard on its own endpoint", async () => {
@@ -179,14 +242,14 @@ describe("GET /api/live-bets/summary?source=auto", () => {
     const body = (await res.json()) as {
       all: string[];
       liveFilter: string;
-      wagers: Array<{ category: string; games: number }>;
+      wagers: Array<{ category: string; games: number; live: number }>;
       scoreboard: Array<{ category: string; games: number; live: number }>;
     };
 
     expect(body.liveFilter).toBe("LIVE");
     expect(body.all).toContain("Football");
     expect(body.all).not.toContain("All Sports");
-    expect(body.wagers.length).toBeGreaterThan(0);
+    expect(body.wagers).toEqual([{ category: "Football", games: 1, live: 0 }]);
 
     // Every reported category must exist in the taxonomy.
     for (const row of [...body.wagers, ...body.scoreboard]) {
@@ -195,13 +258,10 @@ describe("GET /api/live-bets/summary?source=auto", () => {
     }
   });
 
-  test("tags every wager with its taxonomy category", async () => {
-    const { games, sports } = (await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
-    ).json()) as {
-      games: Array<{ category: string; position: string; wagerType: string }>;
-      sports: { all: string[]; categories: Array<{ category: string }> };
-    };
+  test("tags every wager with its taxonomy category and exact category rollup", async () => {
+    const {
+      body: { games, sports },
+    } = await getV2();
     const positions = new Set<string>([
       ...Object.values(WAGER_TYPE_LABELS),
       "Other",
@@ -210,7 +270,13 @@ describe("GET /api/live-bets/summary?source=auto", () => {
       expect(sports.all).toContain(game.category);
       expect(positions).toContain(game.position);
     }
-    expect(sports.categories.length).toBeGreaterThan(0);
+    expect(games).toHaveLength(1);
+    expect(games[0]?.category).toBe("Football");
+    expect(games[0]?.position).toBe("Straight");
+    expect(games[0]?.wagerType).toBe("S");
+    expect(sports.categories).toEqual([
+      { category: "Football", games: 1, live: 0 },
+    ]);
   });
 
   test("serves the Game Admin exposure view per fixture", async () => {
@@ -228,6 +294,15 @@ describe("GET /api/live-bets/summary?source=auto", () => {
       }>;
     };
 
+    expect(body.games).toHaveLength(1);
+    expect(body.games[0]?.matchup).toBe("Cardinals vs Cowboys");
+    expect(body.games[0]?.league).toBe("NFL");
+    expect(body.games[0]?.total).toEqual({
+      wagers: 1,
+      wagered: 22400000,
+      toWin: 20000000,
+    });
+
     for (const game of body.games) {
       // Position buckets must add back up to the fixture total.
       const buckets = Object.values(game.positions);
@@ -241,43 +316,152 @@ describe("GET /api/live-bets/summary?source=auto", () => {
     }
   });
 
-  test("reports agent scope resolved against the hierarchy", async () => {
-    const { agents, games } = (await (
-      await fetch(`${server.url}api/live-bets?source=auto`)
-    ).json()) as {
-      agents: {
-        agents: Array<{ key: string; level: number | null; games: number }>;
-        unresolved: string[];
-        unassignedGames: number;
-        maxLevel: number | null;
-        hierarchyLoaded: boolean;
-        collisions: Array<{ key: string; agentIds: string[] }>;
-      };
-      games: Array<{ agent: { key: string; level: number | null } }>;
-    };
+  test("reports agent scope resolved against the committed hierarchy", async () => {
+    const {
+      body: { agents, games },
+    } = await getV2();
 
-    expect(agents.hierarchyLoaded).toBeBoolean();
-    expect(agents.agents.length).toBeGreaterThan(0);
-
-    // Every rolled-up agent must correspond to a game that named it, and levels must come
-    // from the hierarchy (null when no hierarchy was loaded) — never asserted from the row.
-    for (const entry of agents.agents) {
-      const named = games.filter((g) => g.agent.key === entry.key);
-      expect(named.length).toBe(entry.games);
-      for (const game of named) expect(game.agent.level).toBe(entry.level);
-    }
-
-    if (!agents.hierarchyLoaded) {
-      expect(agents.maxLevel).toBeNull();
-      expect(agents.agents.every((a) => a.level === null)).toBe(true);
-    } else {
-      expect(agents.maxLevel).toBeNumber();
-    }
+    expect(agents.hierarchyLoaded).toBe(true);
+    expect(agents.maxLevel).toBe(19);
+    expect(agents.unassignedGames).toBe(0);
+    expect(agents.unresolved).toEqual([]);
+    expect(agents.agents).toEqual([
+      {
+        key: "HRGROUP" as AgentKey,
+        id: "HRGROUP",
+        level: 6,
+        agentType: "A",
+        games: 1,
+        wagered: 22400000,
+        toWin: 20000000,
+      },
+    ]);
+    expect(games[0]?.agent).toEqual({
+      key: "HRGROUP" as AgentKey,
+      id: "HRGROUP",
+      level: 6,
+      agentType: "A",
+    });
 
     // Collisions are surfaced, never silently resolved.
     for (const collision of agents.collisions) {
       expect(collision.agentIds.length).toBeGreaterThan(1);
       expect(agents.agents.map((a) => a.key)).not.toContain(collision.key);
     }
+  });
+
+  test("strict + present file returns dataSource 'file', fallbackUsed false, and empty warnings", async () => {
+    const { body } = await getV2({
+      source: "file",
+      fallback: "strict",
+      path: liveBetsPath,
+    });
+
+    expect(body.apiVersion).toBe("2");
+    expect(body.dataSource).toBe("file");
+    expect(body.fallbackUsed).toBe(false);
+    expect(body.provenance.path).toBe(liveBetsPath);
+    expect(body.provenance.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(body.games).toHaveLength(1);
+    expect(body.pendingCount).toBe(1);
+    expect(body.warnings).toEqual([]);
+  });
+
+  test("sample + present file returns dataSource 'file', fallbackUsed false, and empty warnings", async () => {
+    const { body } = await getV2({
+      source: "file",
+      fallback: "sample",
+      path: liveBetsPath,
+    });
+
+    expect(body.apiVersion).toBe("2");
+    expect(body.dataSource).toBe("file");
+    expect(body.fallbackUsed).toBe(false);
+    expect(body.provenance.path).toBe(liveBetsPath);
+    expect(body.provenance.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(body.games).toHaveLength(1);
+    expect(body.pendingCount).toBe(1);
+    expect(body.warnings).toEqual([]);
+  });
+
+  test("strict + missing file returns dataSource 'none' with non-empty warnings", async () => {
+    const missingPath = join(fixtureDir, "does-not-exist.json");
+    const { body } = await getV2({
+      source: "file",
+      fallback: "strict",
+      path: missingPath,
+    });
+
+    expect(body.apiVersion).toBe("2");
+    expect(body.dataSource).toBe("none");
+    expect(body.fallbackUsed).toBe(false);
+    expect(body.provenance.path).toBeNull();
+    expect(body.provenance.hash).toBeNull();
+    expect(body.games).toEqual([]);
+    expect(body.pendingCount).toBe(0);
+    expect(body.warnings.length).toBeGreaterThan(0);
+    expect(body.warnings).toContain("no data");
+    expect(body.warnings.some((w) => w.includes("missing file"))).toBe(true);
+  });
+
+  test("sample + missing file falls back to sample fixture and records provenance", async () => {
+    const missingPath = join(fixtureDir, "does-not-exist.json");
+    const { body } = await getV2({
+      source: "file",
+      fallback: "sample",
+      path: missingPath,
+    });
+
+    expect(body.apiVersion).toBe("2");
+    expect(body.dataSource).toBe("fixture");
+    expect(body.fallbackUsed).toBe(true);
+    expect(body.provenance.path).toBe(SAMPLE_FIXTURE_REL);
+    expect(body.provenance.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(body.games).toHaveLength(1);
+    expect(body.pendingCount).toBe(1);
+    expect(body.warnings.length).toBeGreaterThan(0);
+    expect(body.warnings.some((w) => w.includes(SAMPLE_FIXTURE_REL))).toBe(
+      true,
+    );
+  });
+
+  test("v1 route keeps old shape, /api/live-bets 308-redirects, and v2 returns apiVersion '2' (rejecting auto)", async () => {
+    const v1Res = await fetch(`${server.url}api/v1/live-bets?source=file`);
+    expect(v1Res.status).toBe(200);
+    const v1Body = (await v1Res.json()) as Record<string, unknown>;
+    expect(v1Body.success).toBe(true);
+    expect(v1Body.freshness).toBeObject();
+    expect(v1Body.live).toBeObject();
+    expect(v1Body.generatedAt).toBeString();
+    expect(v1Body).not.toHaveProperty("apiVersion");
+    expect(v1Body).not.toHaveProperty("fallbackUsed");
+
+    const redirectRes = await fetch(`${server.url}api/live-bets?source=file`, {
+      redirect: "manual",
+    });
+    expect(redirectRes.status).toBe(308);
+    expect(redirectRes.headers.get("location")).toBe(
+      "/api/v1/live-bets?source=file",
+    );
+    expect(redirectRes.headers.get("x-deprecation")).toBe(
+      LIVE_BETS_V1_DEPRECATION_HEADER,
+    );
+
+    const v2PostRes = await fetch(`${server.url}api/v2/live-bets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(V2_FIXTURE_REQUEST),
+    });
+    expect(v2PostRes.status).toBe(200);
+    const v2Body = (await v2PostRes.json()) as LiveBetsV2Response;
+    expect(v2Body.apiVersion).toBe("2");
+    expect(v2Body.dataSource).toBe("fixture");
+    expect(v2Body.fallbackUsed).toBe(false);
+    expect(v2Body.provenance.path).toBe(SAMPLE_FIXTURE_REL);
+    expect(v2Body.provenance.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(v2Body.warnings).toEqual([]);
+
+    const autoRes = await fetch(`${server.url}api/v2/live-bets?source=auto`);
+    expect(autoRes.status).toBe(400);
   });
 });

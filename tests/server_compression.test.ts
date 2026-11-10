@@ -153,7 +153,7 @@ describe("identity clients", () => {
   });
 
   test("a small response is not worth framing", async () => {
-    const response = await rawGet("/api/live-bets?source=auto", {
+    const response = await rawGet("/api/v1/live-bets?source=auto", {
       "Accept-Encoding": "gzip",
     });
     expect(response.status).toBe(200);

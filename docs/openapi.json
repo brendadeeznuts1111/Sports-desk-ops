@@ -960,11 +960,11 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1583-1602",
+            "services/sportsdesk_webview_server.ts:1710-1729",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1583-1602 (add url + timestamp). A curl capture would only confirm the handler."
+          "requiredCapture": "Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1710-1729 (add url + timestamp). A curl capture would only confirm the handler."
         }
       }
     },
@@ -1086,11 +1086,11 @@
           "tier": "B",
           "sources": [
             "services/sportsdesk_webview_server.ts#GET /api/watchlist",
-            "services/sportsdesk_webview_server.ts:252-271",
+            "services/sportsdesk_webview_server.ts:256-275",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
-          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:252-271)."
+          "requiredCapture": "No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:256-275)."
         }
       }
     },
@@ -1258,7 +1258,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:3400-3425",
+            "services/sportsdesk_webview_server.ts:3529-3554",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -3715,6 +3715,73 @@
           "capturedResponse": false,
           "requiredCapture": "No live HTTP capture exists; this row is handler-verified tier B. Capture one live request/response to promote it to tier A."
         }
+      },
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Frozen v1 live bets derived from captured Report/Pending rows",
+        "description": "Frozen v1 live-bets endpoint (sportsdesk_webview_server.ts#GET /api/v1/live-bets), preserved for existing callers while new integrations migrate to /api/v2/live-bets. Derives the scoreboard payload from real wager rows using lib/live_bets.ts and src/live_bets/resolve.ts, stripping Password/NameFirst/Login by name and keeping amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).",
+        "operationId": "getApiV1LiveBets",
+        "responses": {
+          "200": {
+            "description": "Games, agent rollup and the aggregates derived from them.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "games": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "agents": {
+                      "type": "object"
+                    },
+                    "pendingCount": {
+                      "type": "integer"
+                    },
+                    "summary": {
+                      "type": "object"
+                    },
+                    "scoreboard": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "sports": {
+                      "type": "object"
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/v2/live-bets"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/v1/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-live-bets",
+        "deprecated": true
       }
     },
     "/ws/live-bets": {
@@ -3889,8 +3956,8 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1694-1701",
-            "services/sportsdesk_webview_server.ts:859-860"
+            "services/sportsdesk_webview_server.ts:1821-1828",
+            "services/sportsdesk_webview_server.ts:851-852"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /miniapp HTML (the route is handler-verified only; no HTTP response was captured)."
@@ -3930,7 +3997,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the served /dashboard HTML (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -3940,12 +4007,46 @@
     "/api/live-bets": {
       "get": {
         "tags": ["Local Desk & Telegram Gateway"],
-        "summary": "Live bets derived from captured Report/Pending rows",
-        "description": "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts#/api/live-bets); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+        "summary": "Deprecated alias redirecting (308) to /api/v1/live-bets",
+        "description": "Deprecated alias for /api/v1/live-bets (sportsdesk_webview_server.ts#GET /api/live-bets). Guards non-loopback peers with piiRejection, then answers 308 Permanent Redirect to /api/v1/live-bets preserving query parameters and setting X-Deprecation: /api/v2/live-bets; sunset=2027-05-10. Surface: surface.daemon-live-bets (tier D).",
         "operationId": "getApiLiveBets",
         "responses": {
+          "308": {
+            "description": "Permanent redirect to /api/v1/live-bets with X-Deprecation header.",
+            "headers": {
+              "Content-Security-Policy": {
+                "$ref": "#/components/headers/CSPHeader"
+              },
+              "X-Content-Type-Options": {
+                "$ref": "#/components/headers/XContentTypeOptionsHeader"
+              },
+              "Referrer-Policy": {
+                "$ref": "#/components/headers/ReferrerPolicyHeader"
+              }
+            }
+          }
+        },
+        "x-evidence": {
+          "tier": "D",
+          "sources": [
+            "services/sportsdesk_webview_server.ts#GET /api/v2/live-bets"
+          ],
+          "capturedResponse": false,
+          "requiredCapture": "HTTP capture of GET /api/live-bets redirect response (handler-verified only; no HTTP response was captured)."
+        },
+        "x-surface-id": "surface.daemon-live-bets",
+        "deprecated": true
+      }
+    },
+    "/api/v2/live-bets": {
+      "get": {
+        "tags": ["Local Desk & Telegram Gateway"],
+        "summary": "Live bets v2 with explicit source, fallback, provenance and warnings",
+        "description": "Resolves live-bets snapshots through resolveLiveBets (src/live_bets/resolve.ts, sportsdesk_webview_server.ts#GET /api/v2/live-bets) with explicit source (db | file | fixture | none; auto is rejected with 400) and fallback (strict | sample). Never returns a null dataSource or silently swallows missing files: strict returns dataSource: none with warnings, and sample records fallbackUsed and provenance.path/hash for whichever file answered. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).",
+        "operationId": "getApiV2LiveBets",
+        "responses": {
           "200": {
-            "description": "Games, agent rollup and the aggregates derived from them.",
+            "description": "Resolved v2 live-bets payload with provenance and warnings.",
             "headers": {
               "Content-Security-Policy": {
                 "$ref": "#/components/headers/CSPHeader"
@@ -3962,10 +4063,44 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "apiVersion": {
+                      "type": "string",
+                      "enum": ["2"]
+                    },
+                    "dataSource": {
+                      "type": "string",
+                      "enum": ["db", "file", "fixture", "none"]
+                    },
+                    "fallbackUsed": {
+                      "type": "boolean"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hash": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "generatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
                     "games": {
                       "type": "array",
                       "items": {
                         "type": "object"
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "agents": {
@@ -3983,10 +4118,6 @@
                     },
                     "sports": {
                       "type": "object"
-                    },
-                    "generatedAt": {
-                      "type": "string",
-                      "format": "date-time"
                     }
                   }
                 }
@@ -3997,12 +4128,40 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+            "services/sportsdesk_webview_server.ts#GET /api/v2/live-bets"
           ],
           "capturedResponse": false,
-          "requiredCapture": "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured)."
+          "requiredCapture": "HTTP capture of GET /api/v2/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured)."
         },
-        "x-surface-id": "surface.daemon-live-bets"
+        "x-surface-id": "surface.daemon-live-bets",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["db", "file", "fixture", "none"]
+            }
+          },
+          {
+            "name": "fallback",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["strict", "sample"]
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/live-bets/summary": {
@@ -4049,7 +4208,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+            "services/sportsdesk_webview_server.ts#GET /api/v2/live-bets"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/live-bets/summary (handler-verified only; no HTTP response was captured)."
@@ -4248,7 +4407,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:3073-3085"],
+          "sources": ["services/sportsdesk_webview_server.ts:3200-3212"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -5266,7 +5425,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:2834-2908"],
+          "sources": ["services/sportsdesk_webview_server.ts:2961-3035"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },
@@ -5515,7 +5674,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/status (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -5583,7 +5742,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/kpis (the route is handler-verified only; no HTTP response was captured)."
         },
@@ -5638,7 +5797,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/dns/telemetry (handler-verified only)."
         },
@@ -5729,7 +5888,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-formdata round trip (multipart and urlencoded)."
         },
@@ -5794,7 +5953,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-xml round trip (well-formed XML)."
         },
@@ -5859,7 +6018,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-customer-profile round trip."
         },
@@ -5924,7 +6083,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-bet-ticker round trip."
         },
@@ -5989,7 +6148,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-customer-performance round trip."
         },
@@ -6054,7 +6213,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-transactions round trip."
         },
@@ -6119,7 +6278,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-ajax-xml round trip."
         },
@@ -6184,7 +6343,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-fantasy402-ajax round trip."
         },
@@ -6249,7 +6408,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1674-1681"],
+          "sources": ["services/sportsdesk_webview_server.ts:1801-1808"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a POST /api/parse-toml round trip."
         },
@@ -6335,7 +6494,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:1470-1566"],
+          "sources": ["services/sportsdesk_webview_server.ts:1597-1693"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of one logo fetch, including a 404 from the CDN, to record the upstream status passthrough."
         },
@@ -6395,7 +6554,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts#GET /api/live-bets"
+            "services/sportsdesk_webview_server.ts#GET /api/v2/live-bets"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 410 body (handler-verified only)."
@@ -6498,7 +6657,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -6642,7 +6801,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -6745,7 +6904,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -6809,7 +6968,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -6986,7 +7145,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -7146,7 +7305,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -7397,7 +7556,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -7561,7 +7720,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -7749,7 +7908,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -7967,7 +8126,7 @@
         "x-evidence": {
           "tier": "D",
           "sources": [
-            "services/sportsdesk_webview_server.ts:1796-2474",
+            "services/sportsdesk_webview_server.ts:1923-2601",
             "services/sportsdesk_webview_server.ts#GET /agent-graph.webp"
           ],
           "capturedResponse": false,
@@ -8111,7 +8270,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:1153-1155,1146-1150"
+            "services/sportsdesk_webview_server.ts:1145-1147,1138-1142"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/status with a valid token."
@@ -8227,7 +8386,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:1153-1155,1146-1150"
+            "services/sportsdesk_webview_server.ts:1145-1147,1138-1142"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/telegram/activity with a valid token."
@@ -8405,7 +8564,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:1153-1155,1146-1150"
+            "services/sportsdesk_webview_server.ts:1145-1147,1138-1142"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of a set and a delete round trip against the Bot API."
@@ -8477,7 +8636,7 @@
           "sources": [
             "services/sportsdesk_webview_server.ts#POST /telegram/webhook",
             "services/sportsdesk_webview_server.ts#GET /api/telegram/status",
-            "services/sportsdesk_webview_server.ts:1153-1155,1146-1150"
+            "services/sportsdesk_webview_server.ts:1145-1147,1138-1142"
           ],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of the 500 body in production (asserted by tests/server_error.test.ts, not captured as an artifact)."

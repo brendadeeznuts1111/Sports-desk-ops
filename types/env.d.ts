@@ -114,6 +114,12 @@ declare module "bun" {
     readonly TELEGRAM_WEBHOOK_SECRET?: string;
     readonly TELEGRAM_ACTIVITY_LOG?: string;
     readonly TELEGRAM_ALERT_THRESHOLD_CENTS?: string;
+
+    // CLI Runtime Control & Offline Probe Flags
+    /** Extra `bun run` flags injected before the script target by `bin/dx` and `dx_run_control.ts`. */
+    readonly DX_BUN_FLAGS?: string;
+    /** Skip network probes in `./bin/dx status` and `./bin/dx monitor`. */
+    readonly DX_STATUS_OFFLINE?: string;
   }
 }
 

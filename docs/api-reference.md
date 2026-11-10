@@ -4,9 +4,9 @@ Evidence-labelled reference generated from `docs/openapi.json` (version `2026.10
 
 ## What is verified vs inferred
 
-1. **Verified (tier B, 14 of 101 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
+1. **Verified (tier B, 14 of 103 operations):** a captured request side or an implementation-verified route exists. **No response body was captured**, so no response shape here is a contract.
 2. **Inferred (tier C, 29 operations):** authored in the spec, a repo type or a UI/DOM observation. No request or response was observed; treat these as proposals.
-3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 47):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
+3. **Captured responses (tier A, 11) and recovered surfaces (tier D, 49):** tier A requires a captured response body and the count is above; tier D operations are real surfaces recovered from code or fixtures after being absent from the spec. No tier E operation remains in the spec — documented-but-unimplemented paths were removed.
 
 Ledger totals across every recorded row (including rows removed from the final spec): A 11 · B 15 · C 29 · E 10 · surfaces D 20 / E 1. Full model: [docs/EVIDENCE.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/EVIDENCE.md).
 
@@ -65,7 +65,7 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 | ---------------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Forensic Surveillance              | 2          | A 1 · B 1      | Cloud Manager surveillance operations with first-party evidence; tier-A rows carry a live request+response capture.                                                            |
 | Customer State Mutations           | 1          | A 1            | Cloud Manager customer state operations with first-party evidence; tier-A rows carry a live request+response capture.                                                          |
-| Local Desk &amp; Telegram Gateway  | 56         | B 10 · D 46    | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
+| Local Desk &amp; Telegram Gateway  | 58         | B 10 · D 48    | Routes served by sportsdesk_webview_server.ts, verified against the handler source rather than an HTTP capture.                                                                |
 | Downline Accounting                | 3          | B 3            | Downline accounting reports (weekly figure, agent performance). The agent-performance request was observed on 2026-11-01; no response body has been captured for any of them.  |
 | Settlement History                 | 1          | D 1            | Upstream settlement-history poll wired in code; the request contract and response rows are uncaptured.                                                                         |
 | Inferred (Unverified)              | 29         | C 29           | Tier C operations: inferred or authored only. No request or response was ever observed; path and method are candidates, not contracts.                                         |
@@ -77,7 +77,7 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 
 | Header             | Required    | Declared value                                                                   | Purpose                                                                                                   | Evidence                                                                                                                                                                                                                                                                                               |
 | ------------------ | ----------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Authorization`    | yes         | `Bearer <token>`                                                                 | Bearer token used by the local daemon surface.                                                            | Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:252-271`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). |
+| `Authorization`    | yes         | `Bearer <token>`                                                                 | Bearer token used by the local daemon surface.                                                            | Declared for the local daemon (`daemonBearer`) and implementation-verified there (`services/sportsdesk_webview_server.ts:256-275`). The 2026-10-28 Manager HAR sent **no** Authorization header: the observed Manager session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). |
 | `Content-Type`     | conditional | `application/x-www-form-urlencoded` or `application/json` depending on operation | Payload serialization announced by the caller.                                                            | Observed on the `getWebLog` mode-B request as `application/x-www-form-urlencoded; charset=UTF-8` (`docs/runbooks/operational_guardrails_runbook.md:129-140`); other content types are spec declarations, not captures.                                                                                 |
 | `Cookie`           | yes         | `session`                                                                        | Session cookie used by the cloud Manager surface.                                                         | Observed: the 2026-10-28 Manager HAR session is cookie-based (`docs/runbooks/operational_guardrails_runbook.md:153`). Cookie name, lifetime, renewal and scope were **not** captured.                                                                                                                  |
 | `X-Requested-With` | yes         | string, example `XMLHttpRequest`                                                 | Observed on the captured 2026-10-28 mode-B Manager request. Whether the portal enforces it is unverified. | Observed on the `getWebLog` mode-B request (`XMLHttpRequest`, `docs/runbooks/operational_guardrails_runbook.md:129-140`).                                                                                                                                                                              |
@@ -86,9 +86,9 @@ https://plive.sportswidgets.pro/manager-tools/#/events/bet-history?minVolume=0&m
 
 | Header                    | Declared value                                                                     | Purpose                                                                                                                                                                                     | Evidence                                                                                                                                     |
 | ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Content-Security-Policy` | `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:` | Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders). | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:855-869`). Upstream cloud response headers were not captured. |
-| `Referrer-Policy`         | `strict-origin-when-cross-origin`                                                  | Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                      | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:855-869`). Upstream cloud response headers were not captured. |
-| `X-Content-Type-Options`  | `nosniff`                                                                          | X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                                       | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:855-869`). Upstream cloud response headers were not captured. |
+| `Content-Security-Policy` | `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:` | Content-Security-Policy applied to daemon responses: frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram: (services/sportsdesk_webview_server.ts, baseHeaders). | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:847-861`). Upstream cloud response headers were not captured. |
+| `Referrer-Policy`         | `strict-origin-when-cross-origin`                                                  | Referrer-Policy: strict-origin-when-cross-origin (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                      | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:847-861`). Upstream cloud response headers were not captured. |
+| `X-Content-Type-Options`  | `nosniff`                                                                          | X-Content-Type-Options: nosniff (services/sportsdesk_webview_server.ts, baseHeaders).                                                                                                       | Implemented for local daemon responses (`services/sportsdesk_webview_server.ts:847-861`). Upstream cloud response headers were not captured. |
 
 ## Authentication & sessions
 
@@ -106,7 +106,7 @@ Observed: the 2026-10-28 Manager HAR session is cookie-based and sent no Authori
 
 Static daemon admin token: Authorization: Bearer &lt;SPORTSDESK_ADMIN_TOKEN>, compared with crypto.timingSafeEqual (services/sportsdesk_webview_server.ts, adminRejection). The daemon answers 503 when SPORTSDESK_ADMIN_TOKEN is unset and 401 otherwise.
 
-Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:252-271`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3119-3128`) and returns 503 when the token is not configured.
+Implementation-verified: the local daemon compares `Authorization: Bearer <token>` against `SPORTSDESK_ADMIN_TOKEN` in constant time (`services/sportsdesk_webview_server.ts:256-275`), protects `/api/watchlist` and `/api/telegram/*` (`services/sportsdesk_webview_server.ts:3246-3255`) and returns 503 when the token is not configured.
 
 ### Session lifecycle
 
@@ -372,7 +372,7 @@ Lists each stored result with the selection it was run under, so a client can se
 
 ### `GET /api/bridge3c/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **GSLive Bridge 3c gap-halt boundary and telemetry status**
 
@@ -538,7 +538,7 @@ Evaluates a bettor's sharpness using Bayesian win rate skill inference, fraction
 
 ### `GET /api/dns/telemetry`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Bun native DNS resolver cache telemetry and core host metrics**
 
@@ -561,7 +561,7 @@ Operational telemetry reporting Bun's native DNS subsystem statistics: completed
 
 ### `POST /api/execution/mode`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Paper/paused/live mode switch (POST /api/execution/mode)**
 
@@ -621,7 +621,7 @@ Sets the in-memory execution mode and audits the change in the local execution l
 
 ### `GET /api/execution/plan`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Execution plan, read-only (GET /api/execution/plan)**
 
@@ -665,7 +665,7 @@ Plans venue/style/size for the current watchlist signals from public books only 
 
 ### `POST /api/execution/run`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Run the plan: paper fills, or gated live placement (POST /api/execution/run)**
 
@@ -727,7 +727,7 @@ Plans once, then paper-fills (taker book walk / resting maker quotes) unless `li
 
 ### `GET /api/f402/get-pending`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/live-bets` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/v2/live-bets` · response not captured
 
 **Retired Pending endpoint (410 tombstone)**
 
@@ -800,7 +800,7 @@ Serves the transcribed Admin module: spread, moneyline, total and team-total sid
 
 ### `GET /api/graph-feed`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Graph live feed (GET /api/graph-feed, /graph-live-feed.json)**
 
@@ -833,7 +833,7 @@ Serves docs/graph-live-feed.json — the same dataset docs/graph.html embeds —
 
 ### `GET /api/graph/stream`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Dashboard summary stream (GET /api/graph/stream, SSE)**
 
@@ -866,7 +866,7 @@ Server-sent events: the first `event: summary` frame carries the /api/graph/summ
 
 ### `GET /api/graph/summary`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Derived dashboard summary (GET /api/graph/summary)**
 
@@ -906,7 +906,7 @@ Derives every metric docs/graph.html renders — feed counts, repo routes/citati
 
 ### `GET /api/gslive/session-health`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **GSLive Manager Tools session health (GET /api/gslive/session-health)**
 
@@ -947,7 +947,7 @@ Reports the resolved credential source and a cached cookie-only probe of `GET /m
 
 ### `GET /api/gslive/weblogs`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **GSLive WebLog activity (GET /api/gslive/weblogs)**
 
@@ -992,7 +992,7 @@ Serves the last GSLive WebLog audit pass from the local git-ignored artifact (li
 
 ### `GET /api/kpis`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Dashboard headline KPIs (GET /api/kpis)**
 
@@ -1014,33 +1014,25 @@ Derives the dashboard's KPI strip from the artifacts the daemon serves (lib/desk
 
 ### `GET /api/live-bets`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/live-bets` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/v2/live-bets` · response not captured
 
-**Live bets derived from captured Report/Pending rows**
+**Deprecated alias redirecting (308) to /api/v1/live-bets**
 
-Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts#/api/live-bets); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).
+Deprecated alias for /api/v1/live-bets (sportsdesk_webview_server.ts#GET /api/live-bets). Guards non-loopback peers with piiRejection, then answers 308 Permanent Redirect to /api/v1/live-bets preserving query parameters and setting X-Deprecation: /api/v2/live-bets; sunset=2027-05-10. Surface: surface.daemon-live-bets (tier D).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiLiveBets`
-- **Required capture:** HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).
+- **Required capture:** HTTP capture of GET /api/live-bets redirect response (handler-verified only; no HTTP response was captured).
 
 **Responses**
 
-- **HTTP 200** — Games, agent rollup and the aggregates derived from them.
+- **HTTP 308** — Permanent redirect to /api/v1/live-bets with X-Deprecation header.
   - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
   - response header `X-Content-Type-Options`: value `nosniff`
   - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
-  - content `application/json`: **authored response schema — no response body was captured**
-    - `games` (array of object) — no description
-    - `agents` (object) — no description
-    - `pendingCount` (integer) — no description
-    - `summary` (object) — no description
-    - `scoreboard` (object) — no description
-    - `sports` (object) — no description
-    - `generatedAt` (string (date-time)) — no description
 
 ### `GET /api/live-bets/summary`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/live-bets` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/v2/live-bets` · response not captured
 
 **Aggregates only, without the game list**
 
@@ -1096,7 +1088,7 @@ The {LIST: [...]} bet-ticker feed, which differs from Report/Pending: WagerNumbe
 
 ### `GET /api/logo/{name}`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1470-1566` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1597-1693` · response not captured
 
 **Team-logo proxy (GET /api/logo/{name})**
 
@@ -1132,7 +1124,7 @@ Fetches https://cdn.fastassets.io/images/team-logos/{name} and returns the image
 
 ### `POST /api/parse-ajax-xml`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **AJAX XML parse (POST /api/parse-ajax-xml)**
 
@@ -1157,7 +1149,7 @@ Parses one AJAX-delivered XML response via parseAjaxXml and returns the compact 
 
 ### `POST /api/parse-bet-ticker`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Bet-ticker XML parse (POST /api/parse-bet-ticker)**
 
@@ -1182,7 +1174,7 @@ Parses one bet-ticker XML feed via parseBetTickerXml (lib/live_wagers.ts) and re
 
 ### `POST /api/parse-customer-performance`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Customer performance XML parse (POST /api/parse-customer-performance)**
 
@@ -1207,7 +1199,7 @@ Parses one customer-performance XML document via parseCustomerPerformanceXml and
 
 ### `POST /api/parse-customer-profile`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Customer profile XML parse (POST /api/parse-customer-profile)**
 
@@ -1232,7 +1224,7 @@ Parses one customer-profile XML document via parseCustomerProfileXml (lib/custom
 
 ### `POST /api/parse-fantasy402-ajax`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Fantasy402 AJAX XML parse (POST /api/parse-fantasy402-ajax)**
 
@@ -1257,7 +1249,7 @@ Parses one Fantasy402 AJAX XML response via parseFantasy402AjaxXml and returns t
 
 ### `POST /api/parse-formdata`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Form-data parse probe (POST /api/parse-formdata)**
 
@@ -1286,7 +1278,7 @@ Echoes the fields of one multipart or urlencoded body as {name: string | string[
 
 ### `POST /api/parse-toml`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **TOML parse (POST /api/parse-toml)**
 
@@ -1311,7 +1303,7 @@ Parses one TOML document via parseToml and returns the result. Body bounded by t
 
 ### `POST /api/parse-transactions`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Transactions XML parse (POST /api/parse-transactions)**
 
@@ -1336,7 +1328,7 @@ Parses one transactions XML document via parseTransactionsXml and returns the co
 
 ### `POST /api/parse-xml`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **XML parse probe (POST /api/parse-xml)**
 
@@ -1361,7 +1353,7 @@ Parses one XML body with Bun.XML.parse and returns the compact tree (services/sp
 
 ### `GET /api/scoreboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:3073-3085` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:3200-3212` · response not captured
 
 **Transcribed portal scoreboard (games, scores, status)**
 
@@ -1392,7 +1384,7 @@ Serves data/scoreboard.json with a status summary (sportsdesk_webview_server.ts#
 
 ### `GET /api/signals/kalshi`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1796-2474`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1923-2601`, `services/sportsdesk_webview_server.ts#GET /agent-graph.webp` · response not captured
 
 **Watchlist signals joined to Kalshi markets (GET /api/signals/kalshi)**
 
@@ -1456,7 +1448,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/sports/catalog`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:2834-2908` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:2961-3035` · response not captured
 
 **Sub-sports and period menus with their types**
 
@@ -1485,7 +1477,7 @@ Returns the 18 portal categories plus counts for the loaded wagers and the score
 
 ### `GET /api/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Daemon status and process telemetry (GET /api/status, GET /status.json)**
 
@@ -1510,7 +1502,7 @@ Answers {ok, status, checks, health, telegram, timestamp} from the running proce
 
 ### `GET /api/telegram/activity`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1153-1155,1146-1150` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1145-1147,1138-1142` · response not captured
 
 **Recent Telegram activity (GET /api/telegram/activity)**
 
@@ -1545,7 +1537,7 @@ Returns {success, entries} from the activity log; `limit` defaults to 50 and cla
 
 ### `POST /api/telegram/alert`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3400-3425` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:3529-3554` · response not captured
 
 **Dispatch an instant Telegram alert**
 
@@ -1644,7 +1636,7 @@ Report type is selected by the ?type= query parameter and defaults to EVENING_SE
 
 ### `GET /api/telegram/status`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1153-1155,1146-1150` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1145-1147,1138-1142` · response not captured
 
 **Telegram configuration and schedules (GET /api/telegram/status)**
 
@@ -1681,7 +1673,7 @@ Returns {success, status, schedules, reportTypes} from the bot service and the i
 
 ### `POST /api/telegram/webhook`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1153-1155,1146-1150` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1145-1147,1138-1142` · response not captured
 
 **Register or delete the Telegram webhook (POST /api/telegram/webhook)**
 
@@ -1738,7 +1730,7 @@ Body {action: "set" | "delete"} calls telegramService.setWebhook()/deleteWebhook
 
 ### `GET /api/test/error`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1153-1155,1146-1150` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#POST /telegram/webhook`, `services/sportsdesk_webview_server.ts#GET /api/telegram/status`, `services/sportsdesk_webview_server.ts:1145-1147,1138-1142` · response not captured
 
 **Error-boundary probe (GET /api/test/error)**
 
@@ -1919,6 +1911,32 @@ Bearer-auth DELETE validates the key, returns 404 when the blob is absent, remov
   - content `application/json`: **authored response schema — no response body was captured**
     - `error` (object) — no description
 
+### `GET /api/v1/live-bets`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/v2/live-bets` · response not captured
+
+**Frozen v1 live bets derived from captured Report/Pending rows**
+
+Frozen v1 live-bets endpoint (sportsdesk_webview_server.ts#GET /api/v1/live-bets), preserved for existing callers while new integrations migrate to /api/v2/live-bets. Derives the scoreboard payload from real wager rows using lib/live_bets.ts and src/live_bets/resolve.ts, stripping Password/NameFirst/Login by name and keeping amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV1LiveBets`
+- **Required capture:** HTTP capture of GET /api/v1/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).
+
+**Responses**
+
+- **HTTP 200** — Games, agent rollup and the aggregates derived from them.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `games` (array of object) — no description
+    - `agents` (object) — no description
+    - `pendingCount` (integer) — no description
+    - `summary` (object) — no description
+    - `scoreboard` (object) — no description
+    - `sports` (object) — no description
+    - `generatedAt` (string (date-time)) — no description
+
 ### `POST /api/v1/live-bets`
 
 > **Evidence — tier B** · sources: `services/blob_and_live_bets_server.ts:457-503` · response not captured
@@ -2004,16 +2022,54 @@ Bearer-auth POST returns {ticket, expiresInSec}. The ticket is HMAC-SHA256 over 
   - content `application/json`: **authored response schema — no response body was captured**
     - `error` (object) — no description
 
+### `GET /api/v2/live-bets`
+
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts#GET /api/v2/live-bets` · response not captured
+
+**Live bets v2 with explicit source, fallback, provenance and warnings**
+
+Resolves live-bets snapshots through resolveLiveBets (src/live_bets/resolve.ts, sportsdesk_webview_server.ts#GET /api/v2/live-bets) with explicit source (db | file | fixture | none; auto is rejected with 400) and fallback (strict | sample). Never returns a null dataSource or silently swallows missing files: strict returns dataSource: none with warnings, and sample records fallbackUsed and provenance.path/hash for whichever file answered. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).
+
+- **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiV2LiveBets`
+- **Required capture:** HTTP capture of GET /api/v2/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).
+
+**Parameters**
+
+| Name       | In    | Required | Type                                     | Description |
+| ---------- | ----- | -------- | ---------------------------------------- | ----------- |
+| `source`   | query | no       | string — one of: db, file, fixture, none | —           |
+| `fallback` | query | no       | string — one of: strict, sample          | —           |
+| `path`     | query | no       | string                                   | —           |
+
+**Responses**
+
+- **HTTP 200** — Resolved v2 live-bets payload with provenance and warnings.
+  - response header `Content-Security-Policy`: value `frame-ancestors 'self' https://web.telegram.org https://*.telegram.org telegram:`
+  - response header `X-Content-Type-Options`: value `nosniff`
+  - response header `Referrer-Policy`: value `strict-origin-when-cross-origin`
+  - content `application/json`: **authored response schema — no response body was captured**
+    - `apiVersion` (string — one of: 2) — no description
+    - `dataSource` (string — one of: db, file, fixture, none) — no description
+    - `fallbackUsed` (boolean) — no description
+    - `provenance` (object) — no description
+    - `games` (array of object) — no description
+    - `warnings` (array of string) — no description
+    - `agents` (object) — no description
+    - `pendingCount` (integer) — no description
+    - `summary` (object) — no description
+    - `scoreboard` (object) — no description
+    - `sports` (object) — no description
+
 ### `GET /api/watchlist`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:252-271` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts#GET /api/watchlist`, `services/sportsdesk_webview_server.ts:256-275` · response not captured
 
 **Monitored watch-list accounts**
 
 Returns {success, count, data} from telegramService.getWatchList() (services/sportsdesk_webview_server.ts). Requires Authorization: Bearer &lt;SPORTSDESK_ADMIN_TOKEN>; adminRejection returns 503 when the token is unset and 401 otherwise (services/sportsdesk_webview_server.ts).
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getApiWatchlist`
-- **Required capture:** No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:252-271).
+- **Required capture:** No wire capture needed; add the 401/503 responses to the spec from adminRejection (services/sportsdesk_webview_server.ts:256-275).
 
 **Responses**
 
@@ -2042,7 +2098,7 @@ Returns {success, count, data} from telegramService.getWatchList() (services/spo
 
 ### `GET /dashboard`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1674-1681` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1801-1808` · response not captured
 
 **Operator dashboard (GET /dashboard)**
 
@@ -2061,14 +2117,14 @@ Serves customer-churn-simulation-dashboard.html as text/html (services/sportsdes
 
 ### `GET /health`
 
-> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1583-1602` · response not captured
+> **Evidence — tier B** · sources: `services/sportsdesk_webview_server.ts:1710-1729` · response not captured
 
 **Daemon health and telemetry probe**
 
 Handler-defined contract: services/sportsdesk_webview_server.ts returns the daemon's status, bound port/hostname, Bun-reported URL, timestamp, uptime, runtime and NODE_ENV. Verified against the handler source, not an HTTP capture. The daemon binds 0.0.0.0 by default (services/sportsdesk_webview_server.ts,1622-1625), so the example hostname is 0.0.0.0; the http://127.0.0.1:4020 server target is a loopback client view of that bind.
 
 - **Tag:** Local Desk &amp; Telegram Gateway · **operationId:** `getHealth`
-- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1583-1602 (add url + timestamp). A curl capture would only confirm the handler.
+- **Required capture:** Not a capture gap: reconcile the spec to services/sportsdesk_webview_server.ts:1710-1729 (add url + timestamp). A curl capture would only confirm the handler.
 
 **Responses**
 
@@ -2089,7 +2145,7 @@ Handler-defined contract: services/sportsdesk_webview_server.ts returns the daem
 
 ### `GET /miniapp`
 
-> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1694-1701`, `services/sportsdesk_webview_server.ts:859-860` · response not captured
+> **Evidence — tier D** · sources: `services/sportsdesk_webview_server.ts:1821-1828`, `services/sportsdesk_webview_server.ts:851-852` · response not captured
 
 **Telegram Mini App dashboard (GET /miniapp)**
 
@@ -2994,29 +3050,29 @@ Appendix rows: **29** (tier C in the ledger). The capture plan that would upgrad
 
 Real surfaces recorded by the ledger that the final spec does not (or cannot) present as operations. Full inventory: [docs/evidence/surfaces.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/evidence/surfaces.md) and [docs/EVIDENCE.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/EVIDENCE.md).
 
-| Surface                                | Tier | Category                   | What it is                                                                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | In final spec                                                                                                                                 |
-| -------------------------------------- | ---- | -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `surface.daemon-agent-search`          | D    | local-route                | Agent lookup for the Analysis form (GET /api/agents/search)                            | Case-insensitive prefix-first search over the committed agent tree; used to offer agent suggestions instead of a free-text field that silently accepts typos. Loopback-gated like the tree itself, because agent names are identity data.                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-agent-tree`            | D    | local-route                | Agent hierarchy with wager rollup (GET /api/agent-tree)                                | Serves data/agent-tree.json (2,276 agents, 4 roots) joined with per-agent exposure. Keys are canonical agentLoginKey values; a key owned by more than one AgentID is flagged and never given a level.                                                                                                                                                                                                                                                                                                                                                                          | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-analysis`              | D    | local-route                | Analysis report (GET /api/analysis, /api/analysis/filters, /api/analysis/reports)      | The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes. The recorded context names the agent the report was run for, so /api/analysis and /api/analysis/reports both carry the PII guard: loopback answers, any other peer must present SPORTSDESK_ADMIN_TOKEN. | yes (5/5 member path(s))                                                                                                                      |
-| `surface.daemon-contests`              | D    | local-route                | Contest / futures list (GET /api/contests)                                             | Every contest the sports nav links (data-action=get-games-prop), keyed by the portal's numeric contestNum with sport/market/subject parsed out of the padded type string.                                                                                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-dashboard`             | D    | local-route                | Daemon dashboard routes (GET / and GET /dashboard)                                     | GET / and GET /dashboard serve customer-churn-simulation-dashboard.html as text/html from the Bun daemon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | yes (13/16 member path(s))                                                                                                                    |
-| `surface.daemon-game-admin`            | D    | local-route                | Game Admin exposure (GET /api/game-admin)                                              | Exposure per fixture split by position (Straight/Parlay/Teaser), the report the portal manual v1.0.280 describes in F.A.Q. #4. preGame is computed from gameDateTime and is a fact about the fixture, not a claim about the operator's delete permission.                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-game-admin-board`      | D    | local-route                | Game Admin board with per-side exposure (GET /api/game-admin/board)                    | The Admin module of the portal's Game Admin report: each game's spread, moneyline, total and team-total lines with the money on each side. Amounts the portal abbreviates (120k) stay approximate and are excluded from every sum.                                                                                                                                                                                                                                                                                                                                             | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-graph-data-plane`      | D    | local-route                | Graph data plane (feed, companion JSON, assets)                                        | docs/graph.js fetches its data relative to the document, so the generated graph page was dead when served by the daemon. These paths serve it: the live feed at two paths, the two companion JSON files, docs/assets/*, and the dashboard's agent-tree raster.                                                                                                                                                                                                                                                                                                                 | yes (10/15 member path(s))                                                                                                                    |
-| `surface.daemon-live-bets`             | D    | local-route                | Live bets and its summary (GET /api/live-bets, GET /api/live-bets/summary)             | Derives a scoreboard payload from captured Report/Pending rows: games, agent rollup, and aggregates computed per request. Amounts stay in integer cents; Password/NameFirst/Login are stripped by name and the artifact builder refuses to write if any survive.                                                                                                                                                                                                                                                                                                               | yes (3/3 member path(s))                                                                                                                      |
-| `surface.daemon-live-wagers`           | D    | local-route                | Live wager ticker list (GET /api/live-wagers)                                          | The {LIST: [...]} bet-ticker feed, which is a different shape from Report/Pending: WagerNumber is the ticket id, ShortDesc carries one line per leg, and VolumeAmount can differ from AmountWagered. Both grammars of ShortDesc are parsed; the compact one is flagged. The response also carries the file's own provenance (source, observedAt, captureNote, partial), so a salvaged subset cannot be read as the whole ticker.                                                                                                                                               | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-logo-proxy`            | D    | local-route                | Team-logo proxy (GET /api/logo/{name})                                                 | Proxies a team logo from https://cdn.fastassets.io/images/team-logos/ and returns the image bytes with an immutable day-long cache. The name is validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL. A malformed percent-escape is 400 rather than the 500 it produced before 2026-11-02.                                                                                                                                                         | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-miniapp`               | D    | local-route                | Daemon Telegram Mini App route (GET /miniapp)                                          | GET /miniapp (and /miniapp/) serves telegram-miniapp-dashboard.html for Telegram webview embedding.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | yes (1/2 member path(s))                                                                                                                      |
-| `surface.daemon-scoreboard`            | D    | local-route                | Transcribed portal scoreboard (GET /api/scoreboard)                                    | Serves data/scoreboard.json: 22 games (NFL 12, NHL 5, NBA 4, NCAA 1) with scores, status and broadcast, transcribed from the manager page. The pasted logo column was offset, so logos are resolved by team name and fetched through /api/logo/{name}, which decodes them (the upstream content-type was only a claim) and reports their dimensions.                                                                                                                                                                                                                           | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-sport-catalog`         | D    | local-route                | Sport catalog: sub-sports and period menus (GET /api/sports/catalog)                   | 19 sports, 230 sub-sports and 42 period entries with the portal's own codes. Period numbers are sport-specific (1 is '1st Half' in Football, '1st Period' in Hockey, '1st 5 Innings' in Baseball), so the type index reports every name a number carries and flags the ambiguous ones.                                                                                                                                                                                                                                                                                         | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-sports-taxonomy`       | D    | local-route                | Sport taxonomy (GET /api/sports)                                                       | The portal's 18 sport categories with counts for the loaded wagers and the scoreboard. All Sports is the absence of a filter and LIVE is a state, so neither is modelled as a category; unmapped sports surface as Other.                                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
-| `surface.daemon-telegram-admin-routes` | D    | local-route                | Daemon auxiliary routes (webhook, telegram status/activity, preflight, error trigger)  | Auxiliary daemon routes: POST /telegram/webhook (Telegram secret-token verified), GET /api/telegram/status, GET /api/telegram/activity?limit=, POST /api/telegram/webhook {action:set\|delete}, OPTIONS preflight 204, GET /api/test/error, GET /api/watchlist and the alert/report dispatchers. All but POST /telegram/webhook (a Telegram-facing callback, not a client contract) and the OPTIONS preflight are published in docs/openapi.json.                                                                                                                              | yes (7/8 member path(s))                                                                                                                      |
-| `surface.fantasy402-sport-catalog`     | D    | catalog                    | Fantasy402 sport catalog                                                               | Desk navigation reference: 19 sports, 230 sub-sports, 42 period menus, 2 desk-link collision ids (Arena -> Football + Horse Racing; NCAA Extra -> Basketball + Hockey), 4 provenance digests (subSportTree, periodMenus, collisionRegistry, expectedEmptyPaths). capturedAt 2026-10-21T16:38:53.513Z; periodsCapturedAt 2026-10-30T04:59:14.572Z.                                                                                                                                                                                                                              | no — schemas only, no HTTP path                                                                                                               |
-| `surface.gs-manager-cli`               | D    | blocked-contract           | GS Manager CLI surfaces (6 report kinds + 9 jobs subcommands + orchestration commands) | GS Buckeye 2 manager-tools deliverable: 6 UI report kinds (summary, event, player, open-bet, bettor, last-bets), 9 'jobs' subcommands (add, list, run, logs, enable, disable, remove, tick, unlock) plus capabilities, report, serve, docs, cron print. Every upstream contract is blocked_contract; live acquisition is intentionally disabled.                                                                                                                                                                                                                               | no — blocked contract, see [gs-manager-contracts.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/gs-manager-contracts.md) |
-| `surface.manager-getGrading`           | D    | upstream-route             | Manager/getGrading (declared settlement feed)                                          | Manager/getGrading - graded-outcome feed declared as a settlement_history slice with ingestionStatus 'wired'; no fetch client exists.                                                                                                                                                                                                                                                                                                                                                                                                                                          | no — not present in the spec                                                                                                                  |
-| `surface.manager-getHistory`           | D    | upstream-route             | Manager/getHistory (wired settlement-history poll)                                     | POST {SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory - append-only settlement-history poll; response is an array or {data: []}.                                                                                                                                                                                                                                                                                                                                                                                                                                     | yes (1/1 member path(s))                                                                                                                      |
-| `surface.desk-api-unimplemented`       | E    | documented-not-implemented | /api/desk/* routes documented with no implementation                                   | 9 spec paths / 10 operations under /api/desk/* (auth session POST+DELETE, auth/me, hitl approve/queue/reject, forensics audit/scores, rfq quote/hedge) have no handler, no HMAC verifier, no CookieMap session code and no queue store anywhere in the repo.                                                                                                                                                                                                                                                                                                                   | no — no implementation exists; removed by design                                                                                              |
+| Surface                                | Tier | Category                   | What it is                                                                                                                          | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | In final spec                                                                                                                                 |
+| -------------------------------------- | ---- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `surface.daemon-agent-search`          | D    | local-route                | Agent lookup for the Analysis form (GET /api/agents/search)                                                                         | Case-insensitive prefix-first search over the committed agent tree; used to offer agent suggestions instead of a free-text field that silently accepts typos. Loopback-gated like the tree itself, because agent names are identity data.                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-agent-tree`            | D    | local-route                | Agent hierarchy with wager rollup (GET /api/agent-tree)                                                                             | Serves data/agent-tree.json (2,276 agents, 4 roots) joined with per-agent exposure. Keys are canonical agentLoginKey values; a key owned by more than one AgentID is flagged and never given a level.                                                                                                                                                                                                                                                                                                                                                                          | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-analysis`              | D    | local-route                | Analysis report (GET /api/analysis, /api/analysis/filters, /api/analysis/reports)                                                   | The portal's Analysis report vocabulary and any transcribed result. The filter vocabulary is transcribed from report.js; the report itself is POST /cloud/api/Manager/getAgentPerformance (request observed 2026-11-01, response never captured). A result is served only for the selection it was recorded under, and everything else answers 501 rather than zeroes. The recorded context names the agent the report was run for, so /api/analysis and /api/analysis/reports both carry the PII guard: loopback answers, any other peer must present SPORTSDESK_ADMIN_TOKEN. | yes (5/5 member path(s))                                                                                                                      |
+| `surface.daemon-contests`              | D    | local-route                | Contest / futures list (GET /api/contests)                                                                                          | Every contest the sports nav links (data-action=get-games-prop), keyed by the portal's numeric contestNum with sport/market/subject parsed out of the padded type string.                                                                                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-dashboard`             | D    | local-route                | Daemon dashboard routes (GET / and GET /dashboard)                                                                                  | GET / and GET /dashboard serve customer-churn-simulation-dashboard.html as text/html from the Bun daemon.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | yes (13/16 member path(s))                                                                                                                    |
+| `surface.daemon-game-admin`            | D    | local-route                | Game Admin exposure (GET /api/game-admin)                                                                                           | Exposure per fixture split by position (Straight/Parlay/Teaser), the report the portal manual v1.0.280 describes in F.A.Q. #4. preGame is computed from gameDateTime and is a fact about the fixture, not a claim about the operator's delete permission.                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-game-admin-board`      | D    | local-route                | Game Admin board with per-side exposure (GET /api/game-admin/board)                                                                 | The Admin module of the portal's Game Admin report: each game's spread, moneyline, total and team-total lines with the money on each side. Amounts the portal abbreviates (120k) stay approximate and are excluded from every sum.                                                                                                                                                                                                                                                                                                                                             | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-graph-data-plane`      | D    | local-route                | Graph data plane (feed, companion JSON, assets)                                                                                     | docs/graph.js fetches its data relative to the document, so the generated graph page was dead when served by the daemon. These paths serve it: the live feed at two paths, the two companion JSON files, docs/assets/*, and the dashboard's agent-tree raster.                                                                                                                                                                                                                                                                                                                 | yes (10/15 member path(s))                                                                                                                    |
+| `surface.daemon-live-bets`             | D    | local-route                | Live bets v2, frozen v1, and summary (GET /api/v2/live-bets, GET /api/v1/live-bets, GET /api/live-bets, GET /api/live-bets/summary) | Derives a scoreboard payload from captured Report/Pending rows: games, agent rollup, and aggregates computed per request through resolveLiveBets (src/live_bets/resolve.ts). /api/v2/live-bets carries explicit source/fallback/provenance/warnings; /api/v1/live-bets freezes the v1 shape; /api/live-bets answers 308 to /api/v1/live-bets with X-Deprecation. Amounts stay in integer cents; Password/NameFirst/Login are stripped by name.                                                                                                                                 | yes (5/5 member path(s))                                                                                                                      |
+| `surface.daemon-live-wagers`           | D    | local-route                | Live wager ticker list (GET /api/live-wagers)                                                                                       | The {LIST: [...]} bet-ticker feed, which is a different shape from Report/Pending: WagerNumber is the ticket id, ShortDesc carries one line per leg, and VolumeAmount can differ from AmountWagered. Both grammars of ShortDesc are parsed; the compact one is flagged. The response also carries the file's own provenance (source, observedAt, captureNote, partial), so a salvaged subset cannot be read as the whole ticker.                                                                                                                                               | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-logo-proxy`            | D    | local-route                | Team-logo proxy (GET /api/logo/{name})                                                                                              | Proxies a team logo from https://cdn.fastassets.io/images/team-logos/ and returns the image bytes with an immutable day-long cache. The name is validated by rejecting separators, control characters and `..` rather than by allowlisting the characters the feed happens to use, so a traversal never reaches the upstream URL. A malformed percent-escape is 400 rather than the 500 it produced before 2026-11-02.                                                                                                                                                         | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-miniapp`               | D    | local-route                | Daemon Telegram Mini App route (GET /miniapp)                                                                                       | GET /miniapp (and /miniapp/) serves telegram-miniapp-dashboard.html for Telegram webview embedding.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | yes (1/2 member path(s))                                                                                                                      |
+| `surface.daemon-scoreboard`            | D    | local-route                | Transcribed portal scoreboard (GET /api/scoreboard)                                                                                 | Serves data/scoreboard.json: 22 games (NFL 12, NHL 5, NBA 4, NCAA 1) with scores, status and broadcast, transcribed from the manager page. The pasted logo column was offset, so logos are resolved by team name and fetched through /api/logo/{name}, which decodes them (the upstream content-type was only a claim) and reports their dimensions.                                                                                                                                                                                                                           | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-sport-catalog`         | D    | local-route                | Sport catalog: sub-sports and period menus (GET /api/sports/catalog)                                                                | 19 sports, 230 sub-sports and 42 period entries with the portal's own codes. Period numbers are sport-specific (1 is '1st Half' in Football, '1st Period' in Hockey, '1st 5 Innings' in Baseball), so the type index reports every name a number carries and flags the ambiguous ones.                                                                                                                                                                                                                                                                                         | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-sports-taxonomy`       | D    | local-route                | Sport taxonomy (GET /api/sports)                                                                                                    | The portal's 18 sport categories with counts for the loaded wagers and the scoreboard. All Sports is the absence of a filter and LIVE is a state, so neither is modelled as a category; unmapped sports surface as Other.                                                                                                                                                                                                                                                                                                                                                      | yes (1/1 member path(s))                                                                                                                      |
+| `surface.daemon-telegram-admin-routes` | D    | local-route                | Daemon auxiliary routes (webhook, telegram status/activity, preflight, error trigger)                                               | Auxiliary daemon routes: POST /telegram/webhook (Telegram secret-token verified), GET /api/telegram/status, GET /api/telegram/activity?limit=, POST /api/telegram/webhook {action:set\|delete}, OPTIONS preflight 204, GET /api/test/error, GET /api/watchlist and the alert/report dispatchers. All but POST /telegram/webhook (a Telegram-facing callback, not a client contract) and the OPTIONS preflight are published in docs/openapi.json.                                                                                                                              | yes (7/8 member path(s))                                                                                                                      |
+| `surface.fantasy402-sport-catalog`     | D    | catalog                    | Fantasy402 sport catalog                                                                                                            | Desk navigation reference: 19 sports, 230 sub-sports, 42 period menus, 2 desk-link collision ids (Arena -> Football + Horse Racing; NCAA Extra -> Basketball + Hockey), 4 provenance digests (subSportTree, periodMenus, collisionRegistry, expectedEmptyPaths). capturedAt 2026-10-21T16:38:53.513Z; periodsCapturedAt 2026-10-30T04:59:14.572Z.                                                                                                                                                                                                                              | no — schemas only, no HTTP path                                                                                                               |
+| `surface.gs-manager-cli`               | D    | blocked-contract           | GS Manager CLI surfaces (6 report kinds + 9 jobs subcommands + orchestration commands)                                              | GS Buckeye 2 manager-tools deliverable: 6 UI report kinds (summary, event, player, open-bet, bettor, last-bets), 9 'jobs' subcommands (add, list, run, logs, enable, disable, remove, tick, unlock) plus capabilities, report, serve, docs, cron print. Every upstream contract is blocked_contract; live acquisition is intentionally disabled.                                                                                                                                                                                                                               | no — blocked contract, see [gs-manager-contracts.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/gs-manager-contracts.md) |
+| `surface.manager-getGrading`           | D    | upstream-route             | Manager/getGrading (declared settlement feed)                                                                                       | Manager/getGrading - graded-outcome feed declared as a settlement_history slice with ingestionStatus 'wired'; no fetch client exists.                                                                                                                                                                                                                                                                                                                                                                                                                                          | no — not present in the spec                                                                                                                  |
+| `surface.manager-getHistory`           | D    | upstream-route             | Manager/getHistory (wired settlement-history poll)                                                                                  | POST {SPORTSDESK_PORTAL_HTTP_BASE}/cloud/api/Manager/getHistory - append-only settlement-history poll; response is an array or {data: []}.                                                                                                                                                                                                                                                                                                                                                                                                                                     | yes (1/1 member path(s))                                                                                                                      |
+| `surface.desk-api-unimplemented`       | E    | documented-not-implemented | /api/desk/* routes documented with no implementation                                                                                | 9 spec paths / 10 operations under /api/desk/* (auth session POST+DELETE, auth/me, hitl approve/queue/reject, forensics audit/scores, rfq quote/hedge) have no handler, no HMAC verifier, no CookieMap session code and no queue store anywhere in the repo.                                                                                                                                                                                                                                                                                                                   | no — no implementation exists; removed by design                                                                                              |
 
 4 of 21 ledger surfaces are **not** presented as spec operations; the reason is in the “In final spec” column. The GS report surfaces are documented separately, because no HTTP contract exists for them ([gs-manager-contracts.md](https://github.com/bw496915-cmyk/Sports-desk-ops/blob/main/docs/gs-manager-contracts.md)).
 
@@ -3031,7 +3087,7 @@ Counts below are ledger totals (all recorded rows, including rows removed from t
 | A    | Captured wire contract: a real request AND a real response capture exist. Five operations qualify from the 2026-10-31 live session (getWebLog, getInfoPlayer, getBetTicker, getBetTickerConfig, getSportsVigSetup). |                 | 11              |
 | B    | Observed first-party evidence: captured request side, observed request payload, or a route verified against its handler source. The response may still be uncaptured.                                               |                 | 14              |
 | C    | Inferred only: authored in the spec/generators, a repo TypeScript type, or a UI/DOM observation. No request or response was observed.                                                                               |                 | 29              |
-| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 47              |
+| D    | Real surface recovered from code or fixtures after being absent from the earlier spec. No captured response; recorded in `surfaces[]` and, for three rows, as a spec operation.                                     | 20              | 49              |
 | E    | Documented operation with no implementation in this repository.                                                                                                                                                     | 1               | 0               |
 
 > The ledger distinguishes captured wire evidence from observation and inference: eight operations have live request+response captures — `getWebLog`, `getInfoPlayer`, `getBetTicker`, `getBetTickerConfig` and `getSportsVigSetup` from 2026-10-31, plus `Report/Pending`, `getTransactions` and `getGrading` from 2026-11-01 — and publish capture-derived response schemas. For four of them the captured body is an empty envelope, so the schema describes the envelope and nothing inside it. The Analysis report, `POST /cloud/api/Manager/getAgentPerformance`, has its request observed in full (three calls, 2026-11-01) but no response, and remains tier B. Every other response schema is authored unless its row says otherwise. Earlier wire artifacts are the 2026-10-28 Manager HAR (mode-B request only) and the 2026-10-31 live run, whose three remaining requests (`getPending`, `getInfoManager`, `getCustomerNotes`) returned HTTP 500 with the current request template. Sub-sport lanes and period menus are desk-navigation catalog data, not yet captured live; live pregame sports parity is verified separately (19/19 sports, `getSportsType`). GS Buckeye 2 Partner 118 live acquisition is blocked by design — no endpoint, method, authentication mechanism or response contract for any GS report has been verified, and the observed `getBetReport` payload does not establish a transport. The 11 "Tracked Operational Domains" entries are UI/DOM declarations with candidate URLs and methods, not wire contracts, and the `/api/desk/*` routes are documented without any implementation. Treat any schema or behaviour not backed by a cited capture as a proposal to be confirmed, not as a contract.

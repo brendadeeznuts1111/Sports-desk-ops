@@ -6,16 +6,23 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import {
+  BUN_RUN_FLAG_CATEGORIES,
   bunFlagsInScripts,
+  classifyBunRunFlag,
+  formatConnectedBunRunHelp,
   missingRequiredFlags,
   parseBunHelpFlags,
+  parseBunRunHelpEntries,
   readBunCliSurface,
   readBunHelpFlags,
+  readBunRunCliSurface,
   REQUIRED_BUN_CLI_FLAGS,
+  suggestBunRunFlag,
   unsupportedScriptFlags,
 } from "../lib/bun_cli_flags.ts";
 
 const SURFACE = readBunCliSurface();
+const RUN_SURFACE = readBunRunCliSurface();
 
 describe("pinned Bun CLI surface (1.4.4)", () => {
   test("every flag our tooling depends on is declared by the runtime", () => {
@@ -148,5 +155,73 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("connected bun run --help surface parses entries, categories, suggestions, and formatted help", () => {
+    expect(RUN_SURFACE.usage).toContain("Usage: bun run");
+    expect(RUN_SURFACE.entries.length).toBeGreaterThan(0);
+
+    // Sum of category buckets equals total parsed entries (derived, never hardcoded)
+    const bucketSum = BUN_RUN_FLAG_CATEGORIES.reduce(
+      (acc, cat) => acc + RUN_SURFACE.byCategory[cat].length,
+      0,
+    );
+    expect(bucketSum).toBe(RUN_SURFACE.entries.length);
+
+    // Every required Bun run flag is present in `bun run --help` as well
+    for (const flag of REQUIRED_BUN_CLI_FLAGS) {
+      expect(RUN_SURFACE.flags.has(flag)).toBe(true);
+    }
+
+    // Dotted flags like --tls-min-v1.0 and short-only flags like -i are parsed cleanly
+    expect(RUN_SURFACE.flags.has("--tls-min-v1.0")).toBe(true);
+    expect(RUN_SURFACE.entries.some((e) => e.name === "-i")).toBe(true);
+
+    expect(classifyBunRunFlag("--no-orphans")).toBe("control");
+    expect(classifyBunRunFlag("--cpu-prof-md")).toBe("monitor");
+    expect(classifyBunRunFlag("--parallel")).toBe("workspace");
+    expect(classifyBunRunFlag("--no-env-file")).toBe("environment");
+    expect(classifyBunRunFlag("--fetch-preconnect")).toBe("network");
+    expect(classifyBunRunFlag("--feature")).toBe("transpiler");
+
+    expect(suggestBunRunFlag("--no-orphan", RUN_SURFACE)).toBe("--no-orphans");
+    expect(suggestBunRunFlag("--cpu-prof-m", RUN_SURFACE)).toBe(
+      "--cpu-prof-md",
+    );
+    expect(
+      suggestBunRunFlag("--totally-unrelated-nonexistent-option", RUN_SURFACE),
+    ).toBeNull();
+
+    const parsedSample = parseBunRunHelpEntries(
+      [
+        "Usage: bun run [flags] <file or script>",
+        "      --no-orphans                   Exit when the parent process dies",
+        "  -F, --filter=<val>                 Run a script in matching workspace packages",
+        "  -i                                 Auto-install dependencies during execution",
+      ].join("\n"),
+    );
+    expect(parsedSample).toHaveLength(3);
+    expect(parsedSample[1]?.short).toBe("-F");
+    expect(parsedSample[1]?.valueHint).toBe("<val>");
+
+    const summary = formatConnectedBunRunHelp(RUN_SURFACE);
+    expect(summary).toContain("Bun Runtime Control & Monitoring");
+    expect(summary).toContain("--no-orphans");
+    expect(summary).toContain("--cpu-prof-md");
+
+    const monitorOnly = formatConnectedBunRunHelp(RUN_SURFACE, {
+      category: "monitor",
+    });
+    expect(monitorOnly).toContain("[MONITOR —");
+    expect(monitorOnly).toContain("--heap-prof-md");
+    expect(monitorOnly).not.toContain("[WORKSPACE —");
+
+    const filtered = formatConnectedBunRunHelp(RUN_SURFACE, {
+      filter: "orphans",
+    });
+    expect(filtered).toContain("--no-orphans");
+
+    const raw = formatConnectedBunRunHelp(RUN_SURFACE, { raw: true });
+    expect(raw).toContain(RUN_SURFACE.usage);
   });
 });

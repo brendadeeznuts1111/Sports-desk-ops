@@ -181,7 +181,20 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price"
+
+# dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
+# delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
+# `bun run --help` and checked for BUN_CONFIG_VERBOSE_FETCH secret safety.
+dx_bun_run() {
+  if [[ -n "${DX_BUN_FLAGS:-}" ]]; then
+    exec bun "$REPO_ROOT/scripts/dx_run_control.ts" run --no-containment -- "$@"
+  fi
+  if [[ -n "${BUN_CONFIG_VERBOSE_FETCH:-}" && "${BUN_CONFIG_VERBOSE_FETCH}" != "0" && "${BUN_CONFIG_VERBOSE_FETCH}" != "false" ]]; then
+    bun "$REPO_ROOT/scripts/dx_run_control.ts" check-env || exit $?
+  fi
+  exec bun run "$@"
+}
 
 # unknown_command <cmd>: exit 2 with a suggestion; never fall through to running <cmd>.
 unknown_command() {
@@ -260,17 +273,24 @@ dx_poller_warn_fixture() {
 
 case "$cmd" in
   help|--help|-h)
+    if (($# > 0)); then
+      cd "$REPO_ROOT"
+      exec bun "$REPO_ROOT/scripts/dx_run_control.ts" help "$@"
+    fi
     cat <<'EOF'
 SportsDesk DX — operator commands (Bun 1.4.4)
 
 Usage: ./bin/dx <command> [args...]
 
-  Environment / Diagnostics
+  Environment / Diagnostics / Runtime Control
     ./bin/dx status                 Measured environment: git, R2/Pages credentials, edge probe
                                     (DX_STATUS_OFFLINE=1 skips the network probe)
     ./bin/dx setup [--replace]      Report home links (~/.zshrc etc.); --replace backs up and links
     ./bin/dx scripts [filter]       Group the package.json scripts by prefix; filter by substring
     ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
+    ./bin/dx run [flags] <target>   Controlled Bun runner (connects live `bun run --help` + presets)
+    ./bin/dx monitor [flags]        Monitor Bun processes, daemon /health + /api/v2/live-bets, profiles
+    ./bin/dx live-bets [flags]      Control & monitor v2 live-bets (--source/--fallback/--daemon/--watch)
     ./bin/dx deps [add|remove|version|check]
                                     bun-deps (frozen-safe); version = pm version + lock refresh
 
@@ -341,6 +361,8 @@ Usage: ./bin/dx <command> [args...]
 
 Docs: README.md · docs/OPERATOR_QUICKSTART_AND_10_MODE_RUNBOOK.md
 EOF
+    echo ""
+    bun "$REPO_ROOT/scripts/dx_run_control.ts" help --connected-footer
     ;;
   status)
     # Every line below is measured now, or says what it could not measure. Nothing is hardcoded OK.
@@ -424,43 +446,55 @@ EOF
     ;;
   scripts)
     cd "$REPO_ROOT"
-    exec bun run scripts/dx_scripts.ts "$@"
+    dx_bun_run scripts/dx_scripts.ts "$@"
+    ;;
+  run)
+    cd "$REPO_ROOT"
+    exec bun "$REPO_ROOT/scripts/dx_run_control.ts" run "$@"
+    ;;
+  monitor)
+    cd "$REPO_ROOT"
+    exec bun "$REPO_ROOT/scripts/dx_run_control.ts" monitor "$@"
+    ;;
+  live-bets)
+    cd "$REPO_ROOT"
+    exec bun "$REPO_ROOT/scripts/dx_run_control.ts" live-bets "$@"
     ;;
   iptracker)
     cd "$REPO_ROOT"
-    exec bun run scripts/dx_iptracker.ts "$@"
+    dx_bun_run scripts/dx_iptracker.ts "$@"
     ;;
   modes)
     cd "$REPO_ROOT"
-    exec bun run scripts/dx_modes.ts "$@"
+    dx_bun_run scripts/dx_modes.ts "$@"
     ;;
   gslive)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_cli.ts gslive "$@"
+    dx_bun_run cli/sportsdesk_cli.ts gslive "$@"
     ;;
   docs|api-docs|api)
     cd "$REPO_ROOT"
-    exec bun run scripts/api_docs_cli.ts "$@"
+    dx_bun_run scripts/api_docs_cli.ts "$@"
     ;;
   stale)
     cd "$REPO_ROOT"
-    exec bun run scripts/stale_line_cohort_cli.ts "$@"
+    dx_bun_run scripts/stale_line_cohort_cli.ts "$@"
     ;;
   profile)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_cli.ts profile "$@"
+    dx_bun_run cli/sportsdesk_cli.ts profile "$@"
     ;;
   combo)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_cli.ts combo "$@"
+    dx_bun_run cli/sportsdesk_cli.ts combo "$@"
     ;;
   bridge|crossdomain)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_cli.ts bridge "$@"
+    dx_bun_run cli/sportsdesk_cli.ts bridge "$@"
     ;;
   shot|screenshot)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_cli.ts shot "$@"
+    dx_bun_run cli/sportsdesk_cli.ts shot "$@"
     ;;
   session)
     cd "$REPO_ROOT"
@@ -529,51 +563,51 @@ VERSION_HELP
     ;;
   fetch-config)
     cd "$REPO_ROOT"
-    exec bun run fetch-config.ts "$@"
+    dx_bun_run fetch-config.ts "$@"
     ;;
   fetch-i18n)
     cd "$REPO_ROOT"
-    exec bun run scripts/fetch-i18n.ts "$@"
+    dx_bun_run scripts/fetch-i18n.ts "$@"
     ;;
   fetch-common)
     cd "$REPO_ROOT"
-    exec bun run scripts/fetch-common.ts "$@"
+    dx_bun_run scripts/fetch-common.ts "$@"
     ;;
   fetch-live-data)
     cd "$REPO_ROOT"
-    exec bun run fetch-live-data.ts "$@"
+    dx_bun_run fetch-live-data.ts "$@"
     ;;
   fetch-report-status)
     cd "$REPO_ROOT"
-    exec bun run scripts/fetch-report-status.ts "$@"
+    dx_bun_run scripts/fetch-report-status.ts "$@"
     ;;
   fetch-report-periods)
     cd "$REPO_ROOT"
-    exec bun run fetch-report-periods.ts "$@"
+    dx_bun_run fetch-report-periods.ts "$@"
     ;;
   wagers-by-state)
     cd "$REPO_ROOT"
-    exec bun run scripts/wagers_by_state_last14.ts -- "$@"
+    dx_bun_run scripts/wagers_by_state_last14.ts -- "$@"
     ;;
   wagers-by-state-live)
     cd "$REPO_ROOT"
-    exec bun run scripts/wagers_by_state_live.ts -- "$@"
+    dx_bun_run scripts/wagers_by_state_live.ts -- "$@"
     ;;
   ticket)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_ticket_cli.ts "$@"
+    dx_bun_run cli/sportsdesk_ticket_cli.ts "$@"
     ;;
   flags)
     cd "$REPO_ROOT"
-    exec bun run cli/flags.ts "$@"
+    dx_bun_run cli/flags.ts "$@"
     ;;
   queue)
     cd "$REPO_ROOT"
-    exec bun run cli/sportsdesk_fraud_cli.ts queue "$@"
+    dx_bun_run cli/sportsdesk_fraud_cli.ts queue "$@"
     ;;
   backtest)
     cd "$REPO_ROOT"
-    exec bun run scripts/run_4wk_parlay_combo_backtest.ts "$@"
+    dx_bun_run scripts/run_4wk_parlay_combo_backtest.ts "$@"
     ;;
   poll)
     if dx_wants_help "$@"; then
@@ -582,7 +616,7 @@ VERSION_HELP
     fi
     dx_poller_warn_fixture "$@"
     cd "$REPO_ROOT"
-    exec bun run scripts/graph_feed_poller_daemon.ts "$@"
+    dx_bun_run scripts/graph_feed_poller_daemon.ts "$@"
     ;;
   watch)
     if dx_wants_help "$@"; then
@@ -591,7 +625,7 @@ VERSION_HELP
     fi
     dx_poller_warn_fixture "$@"
     cd "$REPO_ROOT"
-    exec bun --watch run scripts/graph_feed_poller_daemon.ts --cron "$@"
+    exec bun --no-orphans --watch run scripts/graph_feed_poller_daemon.ts --cron "$@"
     ;;
   pipeline)
     cd "$REPO_ROOT"
@@ -660,16 +694,20 @@ VERSION_HELP
     exec "$@"
     ;;
   enrich)
-    exec bun run "$REPO_ROOT/scripts/enrich_bets_from_figure_date.ts" "$@"
+    cd "$REPO_ROOT"
+    dx_bun_run "$REPO_ROOT/scripts/enrich_bets_from_figure_date.ts" "$@"
     ;;
   taxonomy)
-    exec bun run "$REPO_ROOT/scripts/normalize.ts" "$@"
+    cd "$REPO_ROOT"
+    dx_bun_run "$REPO_ROOT/scripts/normalize.ts" "$@"
     ;;
   edge)
-    exec bun run "$REPO_ROOT/scripts/market_edge_dashboard.ts" "$@"
+    cd "$REPO_ROOT"
+    dx_bun_run "$REPO_ROOT/scripts/market_edge_dashboard.ts" "$@"
     ;;
   shadow-price)
-    exec bun run "$REPO_ROOT/scripts/shadow_price.ts" "$@"
+    cd "$REPO_ROOT"
+    dx_bun_run "$REPO_ROOT/scripts/shadow_price.ts" "$@"
     ;;
   *)
     # A real program on PATH still runs (`dx wrangler ...`, `dx git ...`). A typo no longer dies

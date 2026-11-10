@@ -1948,15 +1948,63 @@ export async function handleDnsCommand(args: string[] = []): Promise<void> {
   console.log(`  • Total Invocations: ${telemetry.totalCount}\n`);
 }
 
+export async function printConnectedCliHelp(
+  restArgs: readonly string[] = [],
+  forceFullBun = false,
+): Promise<number> {
+  printHelp();
+  const controlMd = `### 10. RUNTIME CONTROL, MONITORING & LIVE BUN RUN SURFACE:
+* **run** [dx-presets | bun-run-flags] \`<script|file>\` [args...]: Controlled Bun runner (\`--profile-cpu\`, \`--profile-heap\`, \`--isolated-env\`, \`--low-mem\`, \`--watch-safe\`, \`--timeout-ms\`)
+* **monitor** [\`--url=<origin>\`] [\`--offline\`] [\`--watch\`] [\`--prune\`] [\`--json\`]: Inspect active Bun processes, daemon \`/health\` + \`/api/v2/live-bets\`, and \`scratch/profiles/\`
+* **live-bets** [\`--source=db|file|fixture|none\`] [\`--fallback=strict|sample\`] [\`--path=<file>\`] [\`--daemon\`] [\`--watch\`] [\`--json\`]: Control & monitor v2 live-bets contract
+* **help** [\`--bun\`] [\`--category=control|monitor|...\`] [\`--filter=TEXT\`] [\`--raw\`] / **\`--bun-help\`**: Inspect the connected live \`bun run --help\` surface
+`;
+  printAnsiMarkdown(controlMd);
+  const { runDxControlCli } = await import("../scripts/dx_run_control.ts");
+  return runDxControlCli([
+    "help",
+    ...(forceFullBun ? ["--bun"] : []),
+    ...restArgs,
+  ]);
+}
+
 export async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
+  const firstLower = rawArgs[0]?.toLowerCase();
+
+  if (
+    firstLower === "run" ||
+    firstLower === "monitor" ||
+    firstLower === "live-bets" ||
+    firstLower === "live_bets"
+  ) {
+    const { runDxControlCli } = await import("../scripts/dx_run_control.ts");
+    process.exitCode = await runDxControlCli([
+      firstLower === "live_bets" ? "live-bets" : firstLower,
+      ...rawArgs.slice(1),
+    ]);
+    return;
+  }
+
+  if (
+    firstLower === "help" ||
+    firstLower === "-h" ||
+    firstLower === "--help" ||
+    firstLower === "--bun-help"
+  ) {
+    process.exitCode = await printConnectedCliHelp(
+      rawArgs.slice(1),
+      firstLower === "--bun-help",
+    );
+    return;
+  }
+
   // Pre-warm mission-critical desk endpoints in background
   try {
     prefetchSportsDeskEndpoints();
   } catch {
     // Non-fatal prefetch
   }
-
-  const rawArgs = process.argv.slice(2);
 
   if (
     rawArgs.length === 0 ||
@@ -1972,14 +2020,14 @@ export async function main(): Promise<void> {
       return;
     }
     if (rawArgs.length === 0) {
-      printHelp();
+      await printConnectedCliHelp();
       return;
     }
   }
 
   const cmdArg = rawArgs[0];
   if (cmdArg === undefined) {
-    printHelp();
+    await printConnectedCliHelp();
     return;
   }
   const cmd = cmdArg.toLowerCase();
@@ -2823,7 +2871,7 @@ export async function main(): Promise<void> {
     return;
   }
 
-  printHelp();
+  await printConnectedCliHelp();
 }
 
 if (import.meta.main) {

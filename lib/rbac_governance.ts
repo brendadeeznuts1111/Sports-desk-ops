@@ -3263,7 +3263,8 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
         "Wired sched_weblog_sentinel_daily (08:00 America/Chicago) into BRIDGE_SCHEDULE_IDS in services/reporting_scheduler_service.ts alongside OS-level workers/weblog_sentinel.ts + 3-tier corpus.",
-      verificationCommand: "bun test tests/reporting_scheduler_captures.test.ts",
+      verificationCommand:
+        "bun test tests/reporting_scheduler_captures.test.ts",
     },
     {
       itemRef: "ISSUE-80",
@@ -3353,7 +3354,8 @@ export const GITHUB_ISSUE_AND_PR_TRIAGE_LEDGER: readonly GitHubIssueAndPrTriageE
       resolutionStatus: "FIXED_IN_CURRENT_PR",
       reviewAndMergeNote:
         "Wired sched_f402_session_refresh (*/5 * * * *) into BRIDGE_SCHEDULE_IDS in services/reporting_scheduler_service.ts, gated on F402_SESSION_REFRESH_SCHEDULER + F402_LIVE_LOGIN.",
-      verificationCommand: "bun test tests/reporting_scheduler_captures.test.ts",
+      verificationCommand:
+        "bun test tests/reporting_scheduler_captures.test.ts",
     },
     {
       itemRef: "ISSUE-23",

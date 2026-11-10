@@ -42,11 +42,10 @@ import {
 } from "./f402_live_pending.ts";
 import {
   livePendingArtifact,
-  summarizeGames,
-  type LiveBetGame,
   type LiveBetsArtifact,
-  type AgentScope,
+  type LiveBetsSummary,
 } from "./live_bets.ts";
+import { resolveLiveBets } from "../src/live_bets/resolve.ts";
 import {
   BET_TICKER_OPERATION,
   liveTickerFile,
@@ -152,7 +151,6 @@ export interface DeskLiveReadsOptions {
   readonly liveRefresh?: LiveRefreshOptions;
   /** When true, the daemon may start the refresh loop from env unless overridden. */
   readonly daemonEntry?: boolean;
-  readonly readLiveBetsArtifact?: () => Promise<LiveBetsArtifact | null>;
   readonly loadWagerList?: () => Promise<{
     readonly chosen: {
       readonly path: string;
@@ -703,44 +701,6 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
     return entry;
   }
 
-  async function readFallbackBets(): Promise<{
-    games: LiveBetGame[];
-    agents: AgentScope;
-    pendingCount: number;
-    dataSource: string;
-    capturedAt: string | null;
-    version: string;
-  }> {
-    if (options.readLiveBetsArtifact) {
-      const artifact = await options.readLiveBetsArtifact();
-      if (artifact !== null) {
-        return {
-          games: [...artifact.games],
-          agents: artifact.agents,
-          pendingCount: artifact.pendingCount,
-          dataSource: artifact.dataSource,
-          capturedAt: artifact.capturedAt,
-          version: `live-bets:artifact:${artifact.dataSource}`,
-        };
-      }
-    }
-    return {
-      games: [],
-      agents: {
-        agents: [],
-        unresolved: [],
-        unassignedGames: 0,
-        maxLevel: null,
-        hierarchyLoaded: false,
-        collisions: [],
-      },
-      pendingCount: 0,
-      dataSource: "none",
-      capturedAt: null,
-      version: "live-bets:none",
-    };
-  }
-
   async function loadFileWagers(): Promise<{
     chosen: {
       readonly path: string;
@@ -831,10 +791,14 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
     startRefreshLoop,
     statusBlock,
 
+    async readLivePendingArtifact(): Promise<LiveBetsArtifact | null> {
+      const live = await readPendingLive("live", false);
+      return live.status.status === "live" ? live.artifact : null;
+    },
+
     async serveLiveBets(mode: LiveSourceMode): Promise<LiveBetsServeResult> {
       const now = pendingNow();
       const live = await readPendingLive(mode, false);
-      const fallback = await readFallbackBets();
 
       const useLive = live.status.status === "live" && live.artifact !== null;
       if (mode === "live" && !useLive) {
@@ -848,27 +812,34 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
         };
       }
 
-      const artifact = useLive && mode !== "file" ? live.artifact! : null;
-      const fromFile =
-        artifact === null
-          ? fallback
-          : {
-              games: [...artifact.games],
-              agents: artifact.agents,
-              pendingCount: artifact.pendingCount,
-              dataSource: artifact.dataSource,
-              capturedAt: artifact.capturedAt,
-              version: `live-bets:${artifact.dataSource}`,
-            };
+      const resolved =
+        useLive && mode !== "file"
+          ? await resolveLiveBets(
+              { source: "db", fallback: "strict" },
+              {
+                repoRoot: options.repoRoot,
+                readDb: async () => live.artifact,
+                now: () => now,
+                scoreboard: null,
+              },
+            )
+          : await resolveLiveBets(
+              {
+                source: "file",
+                fallback: "strict",
+                path: options.liveBetsPath,
+              },
+              {
+                repoRoot: options.repoRoot,
+                defaultFilePath: options.liveBetsPath,
+                now: () => now,
+                scoreboard: null,
+              },
+            );
 
-      const summary = summarizeGames(
-        fromFile.games,
-        fromFile.pendingCount,
-        fromFile.dataSource,
-        fromFile.capturedAt,
-      );
+      const { summary } = resolved;
       const fresh = freshness(
-        fromFile.capturedAt,
+        summary.capturedAt,
         now,
         STALE_AFTER_SECONDS.liveBets,
         now,
@@ -881,11 +852,11 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
 
       return {
         httpStatus: 200,
-        etagParts: `${fromFile.dataSource}|${fromFile.capturedAt}|${JSON.stringify(liveStatus)}`,
+        etagParts: `${summary.dataSource}|${summary.capturedAt}|${JSON.stringify(liveStatus)}`,
         body: {
           success: true,
-          games: fromFile.games,
-          agents: fromFile.agents,
+          games: resolved.games,
+          agents: resolved.agents,
           pendingCount: summary.totalPending,
           summary,
           freshness: fresh,
@@ -901,7 +872,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
       const full = await this.serveLiveBets(mode);
       if (full.httpStatus !== 200) return full;
       const body = full.body;
-      const summary = body.summary as ReturnType<typeof summarizeGames>;
+      const summary = body.summary as LiveBetsSummary;
       const etagParts = `${full.etagParts}|${summary.totalGames}|${summary.totalWagered}|${summary.totalToWin}|${summary.totalPending}`;
       return {
         httpStatus: 200,
@@ -1035,23 +1006,32 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
       liveBets: KpiInput<LiveBetsArtifact> | null;
       liveWagers: KpiInput<WagerListArtifact> | null;
     }> {
+      const now = pendingNow();
       const [ticker, pending, fileBets, fileWagers] = await Promise.all([
         readTickerLive("auto", false),
         readPendingLive("auto", false),
-        readFallbackBets(),
+        resolveLiveBets(
+          { source: "file", fallback: "strict", path: options.liveBetsPath },
+          {
+            repoRoot: options.repoRoot,
+            defaultFilePath: options.liveBetsPath,
+            now: () => now,
+            scoreboard: null,
+          },
+        ),
         loadFileWagers(),
       ]);
 
-      const now = pendingNow();
       const liveBets: KpiInput<LiveBetsArtifact> | null =
         pending.artifact !== null && pending.status.ok
           ? { value: pending.artifact, mtime: now }
-          : fileBets.dataSource !== "none"
+          : fileBets.dataSource !== "none" &&
+              fileBets.summary.dataSource !== "none"
             ? {
                 value: {
                   schemaVersion: 1,
-                  dataSource: fileBets.dataSource,
-                  capturedAt: fileBets.capturedAt,
+                  dataSource: fileBets.summary.dataSource,
+                  capturedAt: fileBets.summary.capturedAt,
                   operation: REPORT_PENDING_OPERATION,
                   pendingCount: fileBets.pendingCount,
                   agents: fileBets.agents,

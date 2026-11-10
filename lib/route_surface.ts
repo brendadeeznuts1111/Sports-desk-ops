@@ -13,10 +13,35 @@
 import { z } from "zod";
 
 export type SurfaceFinding = {
-  readonly kind: "served-undocumented" | "declared-not-served" | "spec-missing";
+  readonly kind:
+    | "served-undocumented"
+    | "declared-not-served"
+    | "spec-missing"
+    | "v1-route-forbidden"
+    | "v1-not-deprecated"
+    | "v2-missing";
   readonly path: string;
   readonly detail: string;
 };
+
+/** Daemon-served `/api/v1/*` routes are frozen; any addition fails `check:route-surface`. */
+export const FROZEN_V1_DAEMON_PATHS: readonly string[] = [
+  "/api/v1/live-bets",
+] as const;
+
+/** Ledger/OpenAPI `/api/v1/*` routes (daemon + blob gateway) frozen against new v1 additions. */
+export const FROZEN_V1_SPEC_PATHS: readonly string[] = [
+  "/api/v1/blobs/*",
+  "/api/v1/live-bets",
+  "/api/v1/ws-tickets",
+] as const;
+
+export const DEPRECATED_LIVE_BETS_V1_PATHS: readonly string[] = [
+  "/api/live-bets",
+  "/api/v1/live-bets",
+] as const;
+
+export const REQUIRED_LIVE_BETS_V2_PATH = "/api/v2/live-bets";
 
 /** Normalise a ledger member (`GET /api/x`) to a bare path. */
 export function memberPath(member: unknown): string | undefined {
@@ -171,6 +196,25 @@ export function specPathsFromDocument(spec: unknown): Set<string> {
   return new Set(Object.keys(parsed.data.paths ?? {}));
 }
 
+/** Paths whose `get` operation in `docs/openapi.json` is marked `deprecated: true`. */
+export function specDeprecatedPathsFromDocument(spec: unknown): Set<string> {
+  const deprecated = new Set<string>();
+  const parsed = SpecSchema.safeParse(spec);
+  if (!parsed.success) return deprecated;
+  for (const [path, item] of Object.entries(parsed.data.paths ?? {})) {
+    if (typeof item !== "object" || item === null) continue;
+    const getOp = (item as Record<string, unknown>).get;
+    if (
+      typeof getOp === "object" &&
+      getOp !== null &&
+      (getOp as Record<string, unknown>).deprecated === true
+    ) {
+      deprecated.add(path);
+    }
+  }
+  return deprecated;
+}
+
 /**
  * `{name}` (the spec's notation) and `*` (the handler's) are the same route.
  *
@@ -193,6 +237,12 @@ export function compareRouteSurfaces(input: {
   readonly declared: ReadonlyMap<string, DeclaredPath>;
   readonly spec: ReadonlySet<string>;
   readonly allowUndeclaredUnserved?: readonly string[];
+  readonly routes?: readonly {
+    readonly path: string;
+    readonly deprecated?: boolean;
+  }[];
+  readonly specDeprecated?: ReadonlySet<string>;
+  readonly requireLiveBetsV2?: boolean;
 }): SurfaceFinding[] {
   const findings: SurfaceFinding[] = [];
   const allow = new Set(
@@ -214,6 +264,44 @@ export function compareRouteSurfaces(input: {
     // First declaration wins; a second surface listing the same route is not a finding.
     if (!declaredByCanonical.has(canonicalRoutePath(path))) {
       declaredByCanonical.set(canonicalRoutePath(path), declared);
+    }
+  }
+
+  const frozenV1Daemon = new Set(
+    FROZEN_V1_DAEMON_PATHS.map(canonicalRoutePath),
+  );
+  const frozenV1Spec = new Set(FROZEN_V1_SPEC_PATHS.map(canonicalRoutePath));
+  const isV1 = (path: string): boolean =>
+    path === "/api/v1" || path.startsWith("/api/v1/");
+
+  for (const path of [...input.served].sort()) {
+    if (isV1(path) && !frozenV1Daemon.has(canonicalRoutePath(path))) {
+      findings.push({
+        kind: "v1-route-forbidden",
+        path,
+        detail:
+          "v1 route surface is frozen; add new endpoints under /api/v2/* instead",
+      });
+    }
+  }
+  for (const path of [...input.declared.keys()].sort()) {
+    if (isV1(path) && !frozenV1Spec.has(canonicalRoutePath(path))) {
+      findings.push({
+        kind: "v1-route-forbidden",
+        path,
+        detail:
+          "ledger declares an unallowlisted /api/v1/* route; v1 surface is frozen",
+      });
+    }
+  }
+  for (const path of [...input.spec].sort()) {
+    if (isV1(path) && !frozenV1Spec.has(canonicalRoutePath(path))) {
+      findings.push({
+        kind: "v1-route-forbidden",
+        path,
+        detail:
+          "docs/openapi.json publishes an unallowlisted /api/v1/* route; v1 surface is frozen",
+      });
     }
   }
 
@@ -257,6 +345,58 @@ export function compareRouteSurfaces(input: {
       });
     }
   }
+
+  const checkLiveBetsVersioning =
+    input.requireLiveBetsV2 === true ||
+    input.routes !== undefined ||
+    input.specDeprecated !== undefined ||
+    input.served.has("/api/v1/live-bets") ||
+    input.declared.has("/api/v1/live-bets");
+
+  if (checkLiveBetsVersioning) {
+    const v2Canonical = canonicalRoutePath(REQUIRED_LIVE_BETS_V2_PATH);
+    if (
+      !servedByCanonical.has(v2Canonical) ||
+      !declaredByCanonical.has(v2Canonical) ||
+      !specCanonical.has(v2Canonical)
+    ) {
+      findings.push({
+        kind: "v2-missing",
+        path: REQUIRED_LIVE_BETS_V2_PATH,
+        detail:
+          "/api/v2/live-bets must be served, declared in ledger.json, and published in docs/openapi.json",
+      });
+    }
+
+    if (input.routes !== undefined) {
+      const routeByPath = new Map(input.routes.map((r) => [r.path, r]));
+      for (const deprecatedPath of DEPRECATED_LIVE_BETS_V1_PATHS) {
+        const row = routeByPath.get(deprecatedPath);
+        if (row?.deprecated !== true) {
+          findings.push({
+            kind: "v1-not-deprecated",
+            path: deprecatedPath,
+            detail:
+              "DAEMON_ROUTES must mark v1 live-bets routes deprecated: true",
+          });
+        }
+      }
+    }
+
+    if (input.specDeprecated !== undefined) {
+      for (const deprecatedPath of DEPRECATED_LIVE_BETS_V1_PATHS) {
+        if (!input.specDeprecated.has(deprecatedPath)) {
+          findings.push({
+            kind: "v1-not-deprecated",
+            path: deprecatedPath,
+            detail:
+              "docs/openapi.json must mark GET operation deprecated: true",
+          });
+        }
+      }
+    }
+  }
+
   return findings;
 }
 
@@ -267,6 +407,7 @@ export async function readRouteSurfaceInputs(
   readonly served: Set<string>;
   readonly declared: Map<string, DeclaredPath>;
   readonly spec: Set<string>;
+  readonly specDeprecated: Set<string>;
 }> {
   const source = await Bun.file(
     `${root}/services/sportsdesk_webview_server.ts`,
@@ -281,5 +422,6 @@ export async function readRouteSurfaceInputs(
     served: new Set([...servedPathsFromSource(source), ...prefixPaths]),
     declared: declaredPathsFromLedger(ledger),
     spec: specPathsFromDocument(spec),
+    specDeprecated: specDeprecatedPathsFromDocument(spec),
   };
 }

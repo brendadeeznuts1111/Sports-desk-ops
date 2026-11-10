@@ -38,6 +38,8 @@ export type RouteBase = {
   /** The ledger surface that owns this path, or null where none declares it yet. */
   readonly surface: string | null;
   readonly dataClass: DataClass;
+  /** True when the route is frozen/deprecated in favor of a newer API version. */
+  readonly deprecated?: boolean;
 };
 
 export type GuardedRoute = RouteBase & {
@@ -253,6 +255,22 @@ export const DAEMON_ROUTES: readonly DaemonRoute[] = [
   }),
   defineRoute({
     path: "/api/live-bets",
+    method: "ANY",
+    guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-live-bets",
+    deprecated: true,
+  }),
+  defineRoute({
+    path: "/api/v1/live-bets",
+    method: "ANY",
+    guard: "pii",
+    dataClass: "customer-identifying",
+    surface: "surface.daemon-live-bets",
+    deprecated: true,
+  }),
+  defineRoute({
+    path: "/api/v2/live-bets",
     method: "ANY",
     guard: "pii",
     dataClass: "customer-identifying",

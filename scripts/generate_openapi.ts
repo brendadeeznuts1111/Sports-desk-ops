@@ -1975,6 +1975,7 @@ interface SurfaceOperationSpec {
   readonly requestBody?: JsonObject;
   /** Path-item parameters (only the wildcard surfaces need them). */
   readonly parameters?: readonly JsonObject[];
+  readonly deprecated?: boolean;
 }
 
 function htmlResponse(description: string, contentType: string): JsonObject {
@@ -2330,11 +2331,31 @@ function surfaceOperationSpecs(
       httpMethod: "GET",
       surfaceId: "surface.daemon-live-bets",
       tag: TAG_DAEMON,
-      summary: "Live bets derived from captured Report/Pending rows",
+      deprecated: true,
+      summary: "Deprecated alias redirecting (308) to /api/v1/live-bets",
       description:
-        "Derives the scoreboard payload from real wager rows (sportsdesk_webview_server.ts#GET /api/live-bets) using lib/live_bets.ts, which strips Password/NameFirst/Login by name and keeps amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection, services/sportsdesk_webview_server.ts#/api/live-bets); a unix-socket listener counts every peer as proxied and requires the token unless the deployment sets SPORTSDESK_TRUST_PROXY=1. Scores are joined from the transcribed scoreboard, the sport category from lib/sport_taxonomy.ts, and the position label from lib/game_admin.ts. Surface: surface.daemon-live-bets (tier D).",
+        "Deprecated alias for /api/v1/live-bets (sportsdesk_webview_server.ts#GET /api/live-bets). Guards non-loopback peers with piiRejection, then answers 308 Permanent Redirect to /api/v1/live-bets preserving query parameters and setting X-Deprecation: /api/v2/live-bets; sunset=2027-05-10. Surface: surface.daemon-live-bets (tier D).",
       requiredCapture:
-        "HTTP capture of GET /api/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).",
+        "HTTP capture of GET /api/live-bets redirect response (handler-verified only; no HTTP response was captured).",
+      responses: {
+        "308": {
+          description:
+            "Permanent redirect to /api/v1/live-bets with X-Deprecation header.",
+          headers: daemonHeaders(),
+        },
+      },
+    },
+    {
+      path: "/api/v1/live-bets",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      deprecated: true,
+      summary: "Frozen v1 live bets derived from captured Report/Pending rows",
+      description:
+        "Frozen v1 live-bets endpoint (sportsdesk_webview_server.ts#GET /api/v1/live-bets), preserved for existing callers while new integrations migrate to /api/v2/live-bets. Derives the scoreboard payload from real wager rows using lib/live_bets.ts and src/live_bets/resolve.ts, stripping Password/NameFirst/Login by name and keeping amounts in integer cents. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/v1/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).",
       responses: {
         "200": jsonSurfaceResponse(
           "Games, agent rollup and the aggregates derived from them.",
@@ -2346,6 +2367,72 @@ function surfaceOperationSpecs(
             scoreboard: { type: "object", nullable: true },
             sports: { type: "object" },
             generatedAt: { type: "string", format: "date-time" },
+          },
+        ),
+      },
+    },
+    {
+      path: "/api/v2/live-bets",
+      httpMethod: "GET",
+      surfaceId: "surface.daemon-live-bets",
+      tag: TAG_DAEMON,
+      summary:
+        "Live bets v2 with explicit source, fallback, provenance and warnings",
+      description:
+        "Resolves live-bets snapshots through resolveLiveBets (src/live_bets/resolve.ts, sportsdesk_webview_server.ts#GET /api/v2/live-bets) with explicit source (db | file | fixture | none; auto is rejected with 400) and fallback (strict | sample). Never returns a null dataSource or silently swallows missing files: strict returns dataSource: none with warnings, and sample records fallbackUsed and provenance.path/hash for whichever file answered. Non-loopback peers must present SPORTSDESK_ADMIN_TOKEN (piiRejection). Surface: surface.daemon-live-bets (tier D).",
+      requiredCapture:
+        "HTTP capture of GET /api/v2/live-bets against a real Report/Pending capture (the route is handler-verified only; no HTTP response was captured).",
+      parameters: [
+        {
+          name: "source",
+          in: "query",
+          required: false,
+          schema: {
+            type: "string",
+            enum: ["db", "file", "fixture", "none"],
+          },
+        },
+        {
+          name: "fallback",
+          in: "query",
+          required: false,
+          schema: {
+            type: "string",
+            enum: ["strict", "sample"],
+          },
+        },
+        {
+          name: "path",
+          in: "query",
+          required: false,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": jsonSurfaceResponse(
+          "Resolved v2 live-bets payload with provenance and warnings.",
+          {
+            apiVersion: { type: "string", enum: ["2"] },
+            dataSource: {
+              type: "string",
+              enum: ["db", "file", "fixture", "none"],
+            },
+            fallbackUsed: { type: "boolean" },
+            provenance: {
+              type: "object",
+              properties: {
+                path: { type: "string", nullable: true },
+                hash: { type: "string", nullable: true },
+                generatedAt: { type: "string", format: "date-time" },
+              },
+            },
+            games: { type: "array", items: { type: "object" } },
+            warnings: { type: "array", items: { type: "string" } },
+            agents: { type: "object" },
+            pendingCount: { type: "integer" },
+            summary: { type: "object" },
+            scoreboard: { type: "object", nullable: true },
+            sports: { type: "object" },
           },
         ),
       },
@@ -3753,6 +3840,7 @@ function surfaceOperation(
     "x-evidence": evidenceFromSurface(surface, spec.requiredCapture),
     "x-surface-id": surface.id,
   };
+  if (spec.deprecated === true) operation.deprecated = true;
   if (spec.requestBody !== undefined) operation.requestBody = spec.requestBody;
   if (spec.parameters !== undefined)
     operation.parameters = [...spec.parameters];

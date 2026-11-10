@@ -16,7 +16,9 @@
 
 import type { TrackerState } from "../lib/tracker_dashboard.ts";
 import crypto from "node:crypto";
-import { resolve, dirname } from "node:path";
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   LIVE_FILTER,
   SPORT_CATEGORIES,
@@ -80,14 +82,16 @@ import {
   type ScoreboardFile,
 } from "../lib/scoreboard.ts";
 import {
-  readPendingRows,
-  summarizeAgents,
   summarizeGames,
-  toLiveBetGame,
   type AgentScope,
   type LiveBetGame,
-  type LiveBetsArtifact,
 } from "../lib/live_bets.ts";
+import {
+  isLiveBetsFallback,
+  isLiveBetsSource,
+  type LiveBetsV2Request,
+} from "../src/contracts/live_bets.v2.ts";
+import { resolveLiveBets } from "../src/live_bets/resolve.ts";
 import {
   deriveDeskKpis,
   freshness,
@@ -373,9 +377,46 @@ const LIVE_BETS_PATH = resolve(repoRoot, "data/live-bets.json");
 const AGENT_TREE_PATH = resolve(repoRoot, "data/agent-tree.json");
 const CUSTOMER_PROFILES_PATH = resolve(repoRoot, "data/customer-profiles.json");
 
-function liveBetsArtifactFor(path: string) {
-  return cachedJsonFile(path, (raw) => raw as LiveBetsArtifact);
+export const LIVE_BETS_V1_DEPRECATION_HEADER =
+  "/api/v2/live-bets; sunset=2027-05-10";
+
+const ALLOWED_TEMP_ROOTS: readonly string[] = (() => {
+  const roots = new Set<string>([tmpdir(), "/tmp", "/private/tmp"]);
+  try {
+    roots.add(realpathSync(tmpdir()));
+  } catch {
+    // Keep nominal tmpdir when realpath is unavailable.
+  }
+  return [...roots];
+})();
+
+function isInsideDir(target: string, root: string): boolean {
+  const rel = relative(root, target);
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
+
+function resolveSafeLiveBetsV2Path(rawPath: string): string | null {
+  const trimmed = rawPath.trim();
+  if (
+    trimmed === "" ||
+    trimmed.includes("\0") ||
+    !/\.json$/i.test(trimmed) ||
+    trimmed.split(/[\\/]/).includes("..")
+  ) {
+    return null;
+  }
+  const abs = resolve(repoRoot, trimmed);
+  if (isInsideDir(abs, repoRoot)) {
+    const relSegments = relative(repoRoot, abs).split(/[\\/]/);
+    if (relSegments.some((seg) => seg.startsWith("."))) return null;
+    return abs;
+  }
+  if (ALLOWED_TEMP_ROOTS.some((root) => isInsideDir(abs, root))) {
+    return abs;
+  }
+  return null;
+}
+
 const customerBookArtifact = cachedJsonFile(
   CUSTOMER_PROFILES_PATH,
   readCustomerBookSummary,
@@ -552,56 +593,6 @@ async function loadWagerList(
   if (newest === null) return { chosen: null, skipped };
   const { path, version, artifact, mtime } = newest;
   return { chosen: { path, version, artifact, mtime }, skipped };
-}
-
-/** Reads the committed artifact first; falls back to the captured sample row. */
-async function loadLiveBetsFrom(
-  liveBetsArtifact: ReturnType<typeof liveBetsArtifactFor>,
-): Promise<{
-  games: LiveBetGame[];
-  agents: AgentScope;
-  pendingCount: number;
-  dataSource: string;
-  capturedAt: string | null;
-  /** Which artifact version answered, so a response body can be cached on it. */
-  version: string;
-}> {
-  const artifact = await liveBetsArtifact.read();
-  if (artifact !== null) {
-    return {
-      games: [...artifact.value.games],
-      agents: artifact.value.agents,
-      pendingCount: artifact.value.pendingCount,
-      dataSource: artifact.value.dataSource,
-      capturedAt: artifact.value.capturedAt,
-      version: `live-bets:${artifact.version}`,
-    };
-  }
-
-  const sampleFile = Bun.file(
-    resolve(repoRoot, "tests/f402-pending-wager-sample.json"),
-  );
-  const sampleStat = await sampleFile.stat().catch(() => null);
-  if (sampleStat === null) {
-    return {
-      games: [],
-      agents: summarizeAgents([]),
-      pendingCount: 0,
-      dataSource: "none",
-      capturedAt: null,
-      version: "live-bets:none",
-    };
-  }
-  const pending = readPendingRows(await sampleFile.json());
-  const games = pending.map((row) => toLiveBetGame(row));
-  return {
-    games,
-    agents: summarizeAgents(games),
-    pendingCount: pending.length,
-    dataSource: "sample-fixture:tests/f402-pending-wager-sample.json",
-    capturedAt: null,
-    version: `live-bets:sample:${sampleStat.mtimeMs}:${sampleStat.size}`,
-  };
 }
 
 /** A stored Analysis report result, when one has been transcribed. */
@@ -796,7 +787,6 @@ export function startServer(options?: ServerOptions) {
   const wagerListDir = options?.wagerListDir ?? resolve(repoRoot, "data");
   const wagerLists = wagerListSources(wagerListDir);
   const resolvedLiveBetsPath = resolve(options?.liveBetsPath ?? LIVE_BETS_PATH);
-  const liveBetsArtifact = liveBetsArtifactFor(resolvedLiveBetsPath);
   const deskLive = createDeskLiveReads({
     repoRoot,
     liveBetsPath: resolvedLiveBetsPath,
@@ -811,12 +801,14 @@ export function startServer(options?: ServerOptions) {
       ? {}
       : { liveRefresh: options.liveRefresh }),
     daemonEntry: options?.daemonEntry === true,
-    readLiveBetsArtifact: async () =>
-      (await liveBetsArtifact.read())?.value ?? null,
     loadWagerList: () => loadWagerList(wagerLists),
   });
   deskLive.startRefreshLoop();
-  const loadLiveBets = () => loadLiveBetsFrom(liveBetsArtifact);
+  const resolveSampleLiveBets = (scoreboard: ScoreboardFile | null) =>
+    resolveLiveBets(
+      { source: "file", fallback: "sample", path: resolvedLiveBetsPath },
+      { repoRoot, defaultFilePath: resolvedLiveBetsPath, scoreboard },
+    );
   const customerDashboardPath = resolve(
     repoRoot,
     "static/customer-churn-simulation-dashboard.html",
@@ -1351,9 +1343,144 @@ export function startServer(options?: ServerOptions) {
       }
 
       // 3. Live bets context, derived from real Report/Pending captures.
-      // `/api/live-bets/summary` returns the same aggregates without the game list.
+      // `/api/live-bets` redirects to frozen `/api/v1/live-bets`; `/api/v2/live-bets` serves the
+      // explicit source/fallback contract (`resolveLiveBets`).
+      if (pathname === "/api/live-bets") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+        return new Response(null, {
+          status: 308,
+          headers: {
+            ...cors,
+            Location: `/api/v1/live-bets${url.search}`,
+            "X-Deprecation": LIVE_BETS_V1_DEPRECATION_HEADER,
+            "Cache-Control": "no-store",
+          },
+        });
+      }
+
+      if (pathname === "/api/v2/live-bets") {
+        const rejected = piiRejection(
+          req,
+          server.requestIP(req)?.address,
+          ingress,
+        );
+        if (rejected !== null) {
+          return Response.json(
+            { success: false, error: rejected.error },
+            { status: rejected.status, headers: cors },
+          );
+        }
+
+        let bodyParams: Record<string, unknown> | null = null;
+        if (req.method === "POST") {
+          const rawBody = (await req.text()).trim();
+          if (rawBody !== "") {
+            try {
+              const parsed: unknown = JSON.parse(rawBody);
+              if (
+                typeof parsed !== "object" ||
+                parsed === null ||
+                Array.isArray(parsed)
+              ) {
+                return Response.json(
+                  { error: "request body must be a JSON object" },
+                  { status: 400, headers: cors },
+                );
+              }
+              bodyParams = parsed as Record<string, unknown>;
+            } catch {
+              return Response.json(
+                { error: "invalid JSON request body" },
+                { status: 400, headers: cors },
+              );
+            }
+          }
+        }
+
+        const rawSource =
+          url.searchParams.get("source") ??
+          (typeof bodyParams?.source === "string"
+            ? bodyParams.source
+            : bodyParams?.source !== undefined
+              ? String(bodyParams.source)
+              : null);
+        const sourceValue =
+          rawSource === null || rawSource.trim() === ""
+            ? "file"
+            : rawSource.trim();
+        if (!isLiveBetsSource(sourceValue)) {
+          return Response.json(
+            { error: "source must be db, file, fixture or none" },
+            { status: 400, headers: cors },
+          );
+        }
+
+        const rawFallback =
+          url.searchParams.get("fallback") ??
+          (typeof bodyParams?.fallback === "string"
+            ? bodyParams.fallback
+            : bodyParams?.fallback !== undefined
+              ? String(bodyParams.fallback)
+              : null);
+        const fallbackValue =
+          rawFallback === null || rawFallback.trim() === ""
+            ? "strict"
+            : rawFallback.trim();
+        if (!isLiveBetsFallback(fallbackValue)) {
+          return Response.json(
+            { error: "fallback must be strict or sample" },
+            { status: 400, headers: cors },
+          );
+        }
+
+        const rawPath =
+          url.searchParams.get("path") ??
+          (typeof bodyParams?.path === "string"
+            ? bodyParams.path
+            : bodyParams?.path !== undefined && bodyParams.path !== null
+              ? String(bodyParams.path)
+              : null);
+        let safePath: string | undefined;
+        if (rawPath !== null && rawPath.trim() !== "") {
+          const resolved = resolveSafeLiveBetsV2Path(rawPath);
+          if (resolved === null) {
+            return Response.json(
+              { error: "invalid path parameter" },
+              { status: 400, headers: cors },
+            );
+          }
+          safePath = resolved;
+        }
+
+        const v2Req: LiveBetsV2Request = {
+          source: sourceValue,
+          fallback: fallbackValue,
+          ...(safePath === undefined ? {} : { path: safePath }),
+        };
+        const scoreboard = await loadScoreboard();
+        const resolved = await resolveLiveBets(v2Req, {
+          repoRoot,
+          defaultFilePath: resolvedLiveBetsPath,
+          readDb: () => deskLive.readLivePendingArtifact(),
+          scoreboard,
+        });
+        return Response.json(resolved, {
+          headers: { ...cors, "Cache-Control": "no-store" },
+        });
+      }
+
       if (
-        pathname === "/api/live-bets" ||
+        pathname === "/api/v1/live-bets" ||
         pathname === "/live-bets/summary" ||
         pathname === "/api/live-bets/summary"
       ) {
@@ -3025,7 +3152,7 @@ export function startServer(options?: ServerOptions) {
       // "Action on a game", the Game Admin report the portal manual documents (F.A.Q. #4):
       // exposure per fixture with the Straight/Parlay/Teaser split.
       if (pathname === "/api/game-admin") {
-        const { games } = await loadLiveBets();
+        const { games } = await resolveSampleLiveBets(null);
         const lineup = summarizeByGame(games, new Date());
         return Response.json(
           {
@@ -3043,8 +3170,8 @@ export function startServer(options?: ServerOptions) {
 
       // Portal sport taxonomy, with counts for whatever is currently loaded.
       if (pathname === "/api/sports") {
-        const { games } = await loadLiveBets();
         const scoreboard = await loadScoreboard();
+        const { games } = await resolveSampleLiveBets(scoreboard);
         const wagerRows = games.map((game) => ({
           category: sportCategoryFor({
             sportType: game.sport,
@@ -3198,7 +3325,9 @@ export function startServer(options?: ServerOptions) {
             { status: 404, headers: cors },
           );
         }
-        const { agents, version: betsVersion } = await loadLiveBets();
+        const liveBets = await resolveSampleLiveBets(null);
+        const { agents } = liveBets;
+        const betsVersion = liveBets.provenance.hash ?? liveBets.dataSource;
         const hierarchy = tree.value as RawHierarchyTree;
         const nodes = hierarchy.nodes ?? {};
         const counts: Record<

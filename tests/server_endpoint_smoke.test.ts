@@ -61,9 +61,12 @@ describe("daemon endpoint smoke", () => {
       if (route.method === "POST" || SKIP.has(route.path)) continue;
       // Live reads default to the live feed (#70): without a session they answer 503 rather
       // than the file. This test is about handler crashes, not data availability.
-      const path = /(^|\/)(live-bets|live-wagers)(\/|$)/.test(route.path)
-        ? `${route.path}?source=auto`
-        : route.path;
+      const path =
+        route.path === "/api/v2/live-bets"
+          ? "/api/v2/live-bets?source=file&fallback=strict"
+          : /(^|\/)(live-bets|live-wagers)(\/|$)/.test(route.path)
+            ? `${route.path}?source=auto`
+            : route.path;
       const code = await status(path);
       // An unauthenticated admin route stops at the guard; every other route must reach its
       // handler. 404/410/501 are data states, not crashes.

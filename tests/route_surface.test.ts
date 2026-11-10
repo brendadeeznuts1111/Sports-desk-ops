@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { DAEMON_PREFIX_PATHS } from "../lib/daemon_routes.ts";
+import { DAEMON_PREFIX_PATHS, DAEMON_ROUTES } from "../lib/daemon_routes.ts";
 import {
   canonicalRoutePath,
   compareRouteSurfaces,
@@ -204,6 +204,52 @@ describe("compareRouteSurfaces", () => {
       }),
     ).toEqual([]);
   });
+
+  test("rejects new /api/v1/* additions outside the frozen allowlist", () => {
+    const findings = compareRouteSurfaces({
+      served: new Set(["/api/v1/new-endpoint"]),
+      declared: new Map([
+        [
+          "/api/v1/new-endpoint",
+          { surface: "surface.local", category: "local-route" },
+        ],
+      ]),
+      spec: new Set(["/api/v1/new-endpoint"]),
+    });
+    expect(findings.filter((f) => f.kind === "v1-route-forbidden").length).toBe(
+      3,
+    );
+  });
+
+  test("enforces v2 registration and v1 deprecation when versioning is checked", () => {
+    const findings = compareRouteSurfaces({
+      served: new Set(["/api/v1/live-bets", "/api/live-bets"]),
+      declared: new Map([
+        [
+          "/api/v1/live-bets",
+          { surface: "surface.daemon-live-bets", category: "local-route" },
+        ],
+        [
+          "/api/live-bets",
+          { surface: "surface.daemon-live-bets", category: "local-route" },
+        ],
+      ]),
+      spec: new Set(["/api/v1/live-bets", "/api/live-bets"]),
+      routes: [
+        { path: "/api/v1/live-bets", deprecated: false },
+        { path: "/api/live-bets" },
+      ],
+      specDeprecated: new Set(),
+      requireLiveBetsV2: true,
+    });
+    expect(findings.map((f) => `${f.kind} ${f.path}`)).toEqual([
+      "v2-missing /api/v2/live-bets",
+      "v1-not-deprecated /api/live-bets",
+      "v1-not-deprecated /api/v1/live-bets",
+      "v1-not-deprecated /api/live-bets",
+      "v1-not-deprecated /api/v1/live-bets",
+    ]);
+  });
 });
 
 // Read once at module scope: `describe` bodies are synchronous, and this is a file read either way.
@@ -226,9 +272,11 @@ describe("the committed tree", () => {
     // This asserted eight outstanding spec gaps until the surface operations were added to
     // scripts/generate_openapi.ts. A non-zero count here now means a new route landed without a
     // spec path, which is what the CI step exists to catch.
-    expect(compareRouteSurfaces(inputs)).toEqual([]);
+    expect(compareRouteSurfaces({ ...inputs, routes: DAEMON_ROUTES })).toEqual(
+      [],
+    );
     // A ratchet: the count moves only with a reviewed route change, and the comparison above
     // is what proves each served path is declared and (unless it is a page) specified.
-    expect(inputs.served.size).toBe(71);
+    expect(inputs.served.size).toBe(73);
   });
 });
