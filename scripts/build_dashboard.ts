@@ -27,6 +27,9 @@ export interface DashboardArtifactSummary {
   readonly fileName: string;
   readonly kind: string;
   readonly bytes: number;
+  readonly zstdBytes?: number;
+  readonly gzipBytes?: number;
+  readonly contentHash?: string | null;
   readonly sha256: string;
 }
 
@@ -75,20 +78,41 @@ export async function buildEnhancedDashboard(
     );
   }
 
-  const artifacts: DashboardArtifactSummary[] = [];
-  for (const output of result.outputs) {
-    const buf = await output.arrayBuffer();
-    const hasher = new Bun.CryptoHasher("sha256");
-    hasher.update(buf);
-    const sha256 = hasher.digest("hex");
-    const fileName = output.path.split("/").pop() ?? output.path;
-    artifacts.push({
-      fileName,
-      kind: output.kind,
-      bytes: output.size,
-      sha256,
-    });
-  }
+  const artifacts: DashboardArtifactSummary[] = await Promise.all(
+    result.outputs.map(async (output): Promise<DashboardArtifactSummary> => {
+      const buf = new Uint8Array(await output.arrayBuffer());
+      const sha256 = new Bun.CryptoHasher("sha256").update(buf).digest("hex");
+      const fileName = output.path.split("/").pop() ?? output.path;
+      const compressible =
+        buf.byteLength >= 1024 &&
+        (fileName.endsWith(".js") ||
+          fileName.endsWith(".css") ||
+          fileName.endsWith(".html"));
+
+      let zstdBytes: number | undefined;
+      let gzipBytes: number | undefined;
+      if (compressible) {
+        const zst = Bun.zstdCompressSync(buf);
+        const gz = Bun.gzipSync(buf);
+        zstdBytes = zst.byteLength;
+        gzipBytes = gz.byteLength;
+        await Promise.all([
+          Bun.write(`${output.path}.zst`, zst),
+          Bun.write(`${output.path}.gz`, gz),
+        ]);
+      }
+
+      return {
+        fileName,
+        kind: output.kind,
+        bytes: output.size,
+        ...(zstdBytes === undefined ? {} : { zstdBytes }),
+        ...(gzipBytes === undefined ? {} : { gzipBytes }),
+        contentHash: output.hash,
+        sha256,
+      };
+    }),
+  );
 
   const elapsedMs = Number((performance.now() - start).toFixed(2));
   const manifest: DashboardBuildManifest = {
@@ -125,57 +149,50 @@ export async function computeDashboardDceMatrix(): Promise<
   }[]
 > {
   const targets: readonly BuildTarget[] = ["prod", "dev", "test"];
-  const rows: {
-    readonly target: BuildTarget;
-    readonly features: readonly Feature[];
-    readonly totalJsBytes: number;
-    readonly totalCssBytes: number;
-    readonly hasDebugSentinel: boolean;
-    readonly hasExperimentalSentinel: boolean;
-    readonly hasProdSentinel: boolean;
-  }[] = [];
-
-  for (const t of targets) {
-    const feats = [...BUILD_FEATURES[t]];
-    const build = await runBunBuild({
-      entrypoints: [DASHBOARD_HTML_ENTRY],
-      target: "browser",
-      features: feats,
-      minify: t === "prod",
-    });
-    if (!build.success) {
-      throw new Error(
-        `[build_dashboard] DCE matrix build failed for target=${t}`,
-      );
-    }
-
-    let totalJsBytes = 0;
-    let totalCssBytes = 0;
-    let jsCombined = "";
-
-    for (const out of build.outputs) {
-      if (out.path.endsWith(".js")) {
-        totalJsBytes += out.size;
-        jsCombined += await out.text();
-      } else if (out.path.endsWith(".css")) {
-        totalCssBytes += out.size;
+  return Promise.all(
+    targets.map(async (t) => {
+      const feats = [...BUILD_FEATURES[t]];
+      const build = await runBunBuild({
+        entrypoints: [DASHBOARD_HTML_ENTRY],
+        target: "browser",
+        features: feats,
+        minify: t === "prod",
+      });
+      if (!build.success) {
+        throw new Error(
+          `[build_dashboard] DCE matrix build failed for target=${t}`,
+        );
       }
-    }
 
-    rows.push({
-      target: t,
-      features: feats,
-      totalJsBytes,
-      totalCssBytes,
-      hasDebugSentinel: jsCombined.includes("[DCE_DEBUG_TRACE_ACTIVE]"),
-      hasExperimentalSentinel: jsCombined.includes(
-        "[DCE_EXPERIMENTAL_MATRIX_ACTIVE]",
-      ),
-      hasProdSentinel: jsCombined.includes("[DCE_PROD_TARGET_ACTIVE]"),
-    });
-  }
+      let totalJsBytes = 0;
+      let totalCssBytes = 0;
+      const jsChunks: string[] = [];
 
-  return rows;
+      await Promise.all(
+        build.outputs.map(async (out) => {
+          if (out.path.endsWith(".js")) {
+            totalJsBytes += out.size;
+            jsChunks.push(await out.text());
+          } else if (out.path.endsWith(".css")) {
+            totalCssBytes += out.size;
+          }
+        }),
+      );
+      const jsCombined = jsChunks.join("");
+
+      return {
+        target: t,
+        features: feats,
+        totalJsBytes,
+        totalCssBytes,
+        hasDebugSentinel: jsCombined.includes("[DCE_DEBUG_TRACE_ACTIVE]"),
+        hasExperimentalSentinel: jsCombined.includes(
+          "[DCE_EXPERIMENTAL_MATRIX_ACTIVE]",
+        ),
+        hasProdSentinel: jsCombined.includes("[DCE_PROD_TARGET_ACTIVE]"),
+      };
+    }),
+  );
 }
 
 if (import.meta.main) {

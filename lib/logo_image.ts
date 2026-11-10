@@ -26,6 +26,9 @@ export interface LogoMetadata {
 /** A 4 MP ceiling: a solid-colour 4096×4096 logo is 16 MP and still only a few KB compressed. */
 const MAX_PIXELS = 4_000_000;
 
+/** Pin Bun's deterministic cross-platform software backend instead of platform codecs (ImageIO/libvips). */
+Bun.Image.backend = "bun";
+
 const CONTENT_TYPES: Readonly<Record<LogoFormat, string>> = {
   png: "image/png",
   jpeg: "image/jpeg",
@@ -38,6 +41,13 @@ const CONTENT_TYPES: Readonly<Record<LogoFormat, string>> = {
 };
 
 const ENCODABLE = new Set<LogoFormat>(["png", "jpeg", "webp"]);
+export type EncodableLogoFormat = "png" | "jpeg" | "webp";
+
+export function isEncodableLogoFormat(
+  raw: string | null | undefined,
+): raw is EncodableLogoFormat {
+  return raw === "png" || raw === "jpeg" || raw === "webp";
+}
 
 export function contentTypeFor(format: LogoFormat): string {
   return CONTENT_TYPES[format] ?? "application/octet-stream";
@@ -60,6 +70,13 @@ export async function inspectLogo(
   };
 }
 
+/** Generate a compact inline base64 LQIP blur placeholder via `Bun.Image#placeholder()`. */
+export async function generateLogoPlaceholder(
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<string> {
+  return new Bun.Image(bytes, { maxPixels: MAX_PIXELS }).placeholder();
+}
+
 export interface ResizedLogo {
   readonly bytes: Uint8Array<ArrayBuffer>;
   readonly metadata: LogoMetadata;
@@ -68,31 +85,49 @@ export interface ResizedLogo {
 }
 
 /**
- * Downscale to `width` pixels, preserving the aspect ratio, and re-encode in the source format.
+ * Downscale to `width` pixels, preserving the aspect ratio, and re-encode in the source format
+ * (or an explicit `targetFormat` when transcoding to e.g. `webp`).
  *
- * `width` at or above the source width returns the original bytes: upscaling a 20-pixel league
- * logo to 512 makes a blurry file larger, which is the opposite of the point.
+ * `width` at or above the source width returns the original bytes unless an explicit format
+ * conversion (`targetFormat !== metadata.format`) was requested.
  */
 export async function resizeLogo(
   bytes: Uint8Array<ArrayBuffer>,
   metadata: LogoMetadata,
-  width: number,
+  width: number | null,
+  targetFormat?: EncodableLogoFormat,
 ): Promise<ResizedLogo> {
-  if (!ENCODABLE.has(metadata.format) || width >= metadata.width) {
+  const outFormat: LogoFormat = targetFormat ?? metadata.format;
+  const needsTranscode =
+    targetFormat !== undefined && targetFormat !== metadata.format;
+  const needsDownscale = width !== null && width < metadata.width;
+  if (!ENCODABLE.has(outFormat) || (!needsDownscale && !needsTranscode)) {
     return { bytes, metadata, resized: false };
   }
-  const builder = new Bun.Image(bytes, { maxPixels: MAX_PIXELS }).resize(width);
+  const sourceImage = new Bun.Image(bytes, { maxPixels: MAX_PIXELS });
+  const builder =
+    needsDownscale && width !== null ? sourceImage.resize(width) : sourceImage;
   const encoded =
-    metadata.format === "jpeg"
+    outFormat === "jpeg"
       ? await builder.jpeg({ quality: 82 }).bytes()
-      : metadata.format === "webp"
+      : outFormat === "webp"
         ? await builder.webp({ quality: 82 }).bytes()
         : await builder.png().bytes();
   const out = new Uint8Array(encoded);
+  // Header-only metadata() on bytes we just encoded avoids decoding every row + encoding a 1×1 PNG a second time.
+  const outMeta = await new Bun.Image(out, {
+    maxPixels: MAX_PIXELS,
+  }).metadata();
   return {
     bytes: out,
-    metadata: await inspectLogo(out),
-    resized: true,
+    metadata: {
+      width: outMeta.width,
+      height: outMeta.height,
+      format: outMeta.format,
+      bytes: out.byteLength,
+      contentType: contentTypeFor(outMeta.format),
+    },
+    resized: needsDownscale || needsTranscode,
   };
 }
 

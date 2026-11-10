@@ -32,6 +32,7 @@ import {
   requireCsrf,
   requireSession,
 } from "../lib/http_auth.ts";
+import { encodedResponse } from "../lib/http_compression.ts";
 import { SUBSPORT_TAXONOMY_CATALOG } from "../lib/market_taxonomy_catalog.ts";
 import {
   type MarketFilter,
@@ -96,6 +97,44 @@ async function enforceOptionalAuth(req: Request): Promise<Response | null> {
   return null;
 }
 
+const customerIndexCache = new Map<
+  string,
+  { readonly stamp: string; readonly byId: ReadonlyMap<string, CustomerRow> }
+>();
+const devJsonStatCache = new Map<
+  string,
+  { readonly stamp: string; readonly value: unknown }
+>();
+const devLiveWagersCache = new Map<
+  string,
+  { readonly stamp: string; readonly rows: Array<Record<string, unknown>> }
+>();
+
+async function statStamp(path: string): Promise<string | null> {
+  const st = await Bun.file(path)
+    .stat()
+    .catch(() => null);
+  return st === null ? null : `${st.mtimeMs}:${st.size}`;
+}
+
+async function readCachedJson<T>(
+  path: string,
+): Promise<{ stamp: string; value: T } | null> {
+  const stamp = await statStamp(path);
+  if (stamp === null) {
+    devJsonStatCache.delete(path);
+    return null;
+  }
+  const hit = devJsonStatCache.get(path);
+  if (hit !== undefined && hit.stamp === stamp) {
+    return { stamp, value: hit.value as T };
+  }
+  const value = (await Bun.file(path).json()) as T;
+  if (devJsonStatCache.size >= 24) devJsonStatCache.clear();
+  devJsonStatCache.set(path, { stamp, value });
+  return { stamp, value };
+}
+
 async function findCustomerRow(id: string): Promise<CustomerRow | null> {
   const normId = id.trim().toUpperCase();
   const candidatePaths = [
@@ -110,42 +149,60 @@ async function findCustomerRow(id: string): Promise<CustomerRow | null> {
     ),
   ];
   for (const enrichedPath of candidatePaths) {
-    const enrichedFile = Bun.file(enrichedPath);
-    if (await enrichedFile.exists()) {
+    const stamp = await statStamp(enrichedPath);
+    if (stamp !== null) {
       try {
-        const rows = (await enrichedFile.json()) as CustomerRow[];
-        if (Array.isArray(rows)) {
-          const found = rows.find(
-            (r) =>
-              typeof r.customer_id === "string" &&
-              r.customer_id.trim().toUpperCase() === normId,
-          );
-          if (found) return found;
+        let indexed = customerIndexCache.get(enrichedPath);
+        if (!indexed || indexed.stamp !== stamp) {
+          const rows = (await Bun.file(enrichedPath).json()) as CustomerRow[];
+          const byId = new Map<string, CustomerRow>();
+          if (Array.isArray(rows)) {
+            for (const r of rows) {
+              if (typeof r.customer_id === "string") {
+                const key = r.customer_id.trim().toUpperCase();
+                if (!byId.has(key)) byId.set(key, r);
+              }
+            }
+          }
+          indexed = { stamp, byId };
+          if (customerIndexCache.size >= 8) customerIndexCache.clear();
+          customerIndexCache.set(enrichedPath, indexed);
         }
+        const found = indexed.byId.get(normId);
+        if (found) return found;
       } catch {
         // signal-honesty: intentional-fallback-invalid-json-candidate
       }
     }
   }
   const profilesPath = resolve(process.cwd(), "data/customer-profiles.json");
-  const profilesFile = Bun.file(profilesPath);
-  if (await profilesFile.exists()) {
+  const stamp = await statStamp(profilesPath);
+  if (stamp !== null) {
     try {
-      const data = (await profilesFile.json()) as {
-        profiles?: CustomerRow[];
-      };
-      if (Array.isArray(data?.profiles)) {
-        const found = data.profiles.find((p) => {
-          const custId =
-            typeof p.customer_id === "string"
-              ? p.customer_id
-              : typeof (p as { customerId?: unknown }).customerId === "string"
-                ? String((p as { customerId?: unknown }).customerId)
-                : "";
-          return custId.trim().toUpperCase() === normId;
-        });
-        if (found) return found;
+      let indexed = customerIndexCache.get(profilesPath);
+      if (!indexed || indexed.stamp !== stamp) {
+        const data = (await Bun.file(profilesPath).json()) as {
+          profiles?: CustomerRow[];
+        };
+        const byId = new Map<string, CustomerRow>();
+        if (Array.isArray(data?.profiles)) {
+          for (const p of data.profiles) {
+            const custId =
+              typeof p.customer_id === "string"
+                ? p.customer_id
+                : typeof (p as { customerId?: unknown }).customerId === "string"
+                  ? String((p as { customerId?: unknown }).customerId)
+                  : "";
+            const key = custId.trim().toUpperCase();
+            if (key && !byId.has(key)) byId.set(key, p);
+          }
+        }
+        indexed = { stamp, byId };
+        if (customerIndexCache.size >= 8) customerIndexCache.clear();
+        customerIndexCache.set(profilesPath, indexed);
       }
+      const found = indexed.byId.get(normId);
+      if (found) return found;
     } catch {
       // signal-honesty: intentional-fallback-invalid-profiles-json
     }
@@ -162,10 +219,14 @@ async function loadDevLiveWagers(): Promise<Array<Record<string, unknown>>> {
   ];
 
   for (const p of candidatePaths) {
-    const file = Bun.file(p);
-    if (await file.exists()) {
+    const stamp = await statStamp(p);
+    if (stamp !== null) {
+      const hit = devLiveWagersCache.get(p);
+      if (hit !== undefined && hit.stamp === stamp) {
+        return hit.rows;
+      }
       try {
-        const data = (await file.json()) as
+        const data = (await Bun.file(p).json()) as
           | {
               LIST?: Array<Record<string, unknown>>;
               wagers?: Array<Record<string, unknown>>;
@@ -188,104 +249,110 @@ async function loadDevLiveWagers(): Promise<Array<Record<string, unknown>>> {
           const { KEY_NUMBER_BUYER_PROFILES } =
             await import("../lib/customer_profile.ts");
 
-          return list.map((item: Record<string, unknown>, idx: number) => {
-            const rawDesc =
-              item.ShortDesc ?? item.shortDesc ?? item.description ?? "";
-            const parsed = parseShortDesc(rawDesc);
-            const firstLeg = parsed.legs[0];
-            const customerId = String(
-              item.CustomerID ??
-                item.customerId ??
-                item.Login ??
-                item.login ??
-                `CUST-${idx}`,
-            ).trim();
-            const riskUsd = Number(
-              item.AmountWagered ?? item.amountWagered ?? item.riskUsd ?? 500,
-            );
-            const toWinUsd = Number(
-              item.ToWinAmount ??
-                item.toWinUsd ??
-                item.toWinAmount ??
-                Math.round(riskUsd * 0.9),
-            );
-            const isSharp = KEY_NUMBER_BUYER_PROFILES.has(
-              customerId.toUpperCase(),
-            );
-            const clvCents =
-              typeof item.clvCents === "number"
-                ? item.clvCents
-                : isSharp
-                  ? 12.5
-                  : riskUsd >= 5000
-                    ? 8.2
-                    : -2.4;
+          const rows = list.map(
+            (item: Record<string, unknown>, idx: number) => {
+              const rawDesc =
+                item.ShortDesc ?? item.shortDesc ?? item.description ?? "";
+              const parsed = parseShortDesc(rawDesc);
+              const firstLeg = parsed.legs[0];
+              const customerId = String(
+                item.CustomerID ??
+                  item.customerId ??
+                  item.Login ??
+                  item.login ??
+                  `CUST-${idx}`,
+              ).trim();
+              const riskUsd = Number(
+                item.AmountWagered ?? item.amountWagered ?? item.riskUsd ?? 500,
+              );
+              const toWinUsd = Number(
+                item.ToWinAmount ??
+                  item.toWinUsd ??
+                  item.toWinAmount ??
+                  Math.round(riskUsd * 0.9),
+              );
+              const isSharp = KEY_NUMBER_BUYER_PROFILES.has(
+                customerId.toUpperCase(),
+              );
+              const clvCents =
+                typeof item.clvCents === "number"
+                  ? item.clvCents
+                  : isSharp
+                    ? 12.5
+                    : riskUsd >= 5000
+                      ? 8.2
+                      : -2.4;
 
-            let alertTier = "RECREATIONAL";
-            let alertBadge = "✅ RECREATIONAL";
-            let operatorDirective = "Accept Normal (autoExecute: false)";
-            let maxRecommendedStake = 25000;
+              let alertTier = "RECREATIONAL";
+              let alertBadge = "✅ RECREATIONAL";
+              let operatorDirective = "Accept Normal (autoExecute: false)";
+              let maxRecommendedStake = 25000;
 
-            if (clvCents >= 10 || isSharp) {
-              alertTier = "CRITICAL";
-              alertBadge = isSharp
-                ? "🚨 CRITICAL (T1 Originator)"
-                : "🚨 CRITICAL (High CLV)";
-              operatorDirective = "Clamp Max $250 (autoExecute: false)";
-              maxRecommendedStake = 250;
-            } else if (clvCents >= 5) {
-              alertTier = "STEAM";
-              alertBadge = "⚡ STEAM (Line Mover)";
-              operatorDirective = "Clamp Max $500 (autoExecute: false)";
-              maxRecommendedStake = 500;
-            } else if (parsed.isLive || item.live) {
-              alertTier = "LATENCY";
-              alertBadge = "⚠️ LATENCY (In-Play)";
-              operatorDirective = "Delay 3s + Cap $1,000 (autoExecute: false)";
-              maxRecommendedStake = 1000;
-            }
+              if (clvCents >= 10 || isSharp) {
+                alertTier = "CRITICAL";
+                alertBadge = isSharp
+                  ? "🚨 CRITICAL (T1 Originator)"
+                  : "🚨 CRITICAL (High CLV)";
+                operatorDirective = "Clamp Max $250 (autoExecute: false)";
+                maxRecommendedStake = 250;
+              } else if (clvCents >= 5) {
+                alertTier = "STEAM";
+                alertBadge = "⚡ STEAM (Line Mover)";
+                operatorDirective = "Clamp Max $500 (autoExecute: false)";
+                maxRecommendedStake = 500;
+              } else if (parsed.isLive || item.live) {
+                alertTier = "LATENCY";
+                alertBadge = "⚠️ LATENCY (In-Play)";
+                operatorDirective =
+                  "Delay 3s + Cap $1,000 (autoExecute: false)";
+                maxRecommendedStake = 1000;
+              }
 
-            return {
-              ticketId: String(
-                item.WagerNumber ?? item.ticketId ?? `W-${109280 + idx}`,
-              ),
-              timestamp:
-                typeof item.InsertDateTime === "string" ||
-                typeof item.InsertDateTime === "number"
-                  ? new Date(item.InsertDateTime).toLocaleTimeString() + " ET"
-                  : String(item.timestamp ?? "14:30:00 ET"),
-              customerId,
-              agentId: String(item.AgentID ?? item.agentId ?? "AG01").trim(),
-              masterAgent: String(
-                item.AgentLogin ?? item.masterAgent ?? "MASTER_A",
-              ).trim(),
-              sport:
-                firstLeg?.sport?.toUpperCase() || (item.sport ?? "FOOTBALL"),
-              betType:
-                item.WagerType === "M"
-                  ? "Moneyline"
-                  : item.WagerType === "S"
-                    ? "Spread"
-                    : item.WagerType === "P"
-                      ? "Parlay"
-                      : (item.betType ?? "Straight"),
-              event: firstLeg?.game || (item.event ?? "Event Matchup"),
-              selection: firstLeg?.pick || (item.selection ?? "Selection"),
-              lineDisplay: firstLeg?.pick || (item.lineDisplay ?? "ML"),
-              oddsAmerican:
-                typeof item.oddsAmerican === "string"
-                  ? item.oddsAmerican
-                  : "-110",
-              riskUsd,
-              toWinUsd,
-              clvCents,
-              alertTier,
-              alertBadge,
-              operatorDirective,
-              maxRecommendedStake,
-              autoExecute: false as const,
-            };
-          });
+              return {
+                ticketId: String(
+                  item.WagerNumber ?? item.ticketId ?? `W-${109280 + idx}`,
+                ),
+                timestamp:
+                  typeof item.InsertDateTime === "string" ||
+                  typeof item.InsertDateTime === "number"
+                    ? new Date(item.InsertDateTime).toLocaleTimeString() + " ET"
+                    : String(item.timestamp ?? "14:30:00 ET"),
+                customerId,
+                agentId: String(item.AgentID ?? item.agentId ?? "AG01").trim(),
+                masterAgent: String(
+                  item.AgentLogin ?? item.masterAgent ?? "MASTER_A",
+                ).trim(),
+                sport:
+                  firstLeg?.sport?.toUpperCase() || (item.sport ?? "FOOTBALL"),
+                betType:
+                  item.WagerType === "M"
+                    ? "Moneyline"
+                    : item.WagerType === "S"
+                      ? "Spread"
+                      : item.WagerType === "P"
+                        ? "Parlay"
+                        : (item.betType ?? "Straight"),
+                event: firstLeg?.game || (item.event ?? "Event Matchup"),
+                selection: firstLeg?.pick || (item.selection ?? "Selection"),
+                lineDisplay: firstLeg?.pick || (item.lineDisplay ?? "ML"),
+                oddsAmerican:
+                  typeof item.oddsAmerican === "string"
+                    ? item.oddsAmerican
+                    : "-110",
+                riskUsd,
+                toWinUsd,
+                clvCents,
+                alertTier,
+                alertBadge,
+                operatorDirective,
+                maxRecommendedStake,
+                autoExecute: false as const,
+              };
+            },
+          );
+          if (devLiveWagersCache.size >= 8) devLiveWagersCache.clear();
+          devLiveWagersCache.set(p, { stamp, rows });
+          return rows;
         }
       } catch {
         // signal-honesty: intentional-fallback-next-wagers-fixture
@@ -393,6 +460,83 @@ export function startDashboardServer(
   let cachedDceMatrix: Awaited<
     ReturnType<typeof computeDashboardDceMatrix>
   > | null = null;
+
+  let cachedDashboardMd: {
+    readonly stamp: string;
+    readonly markdown: string;
+    readonly html: string;
+  } | null = null;
+
+  interface CachedLegacyBundle {
+    readonly jsBytes: Uint8Array<ArrayBuffer>;
+    readonly jsEtag: string;
+    readonly cssBytes: Uint8Array<ArrayBuffer> | null;
+    readonly cssEtag: string | null;
+  }
+  let cachedLegacyBundle: CachedLegacyBundle | null = null;
+  let inflightLegacyBundle: Promise<CachedLegacyBundle | null> | null = null;
+
+  const ensureLegacyBundle = async (): Promise<CachedLegacyBundle | null> => {
+    if (cachedLegacyBundle !== null) return cachedLegacyBundle;
+    if (inflightLegacyBundle !== null) return inflightLegacyBundle;
+
+    inflightLegacyBundle = (async () => {
+      const build = await runBunBuild({
+        entrypoints: [dashboardEntryPath],
+        target: "browser",
+        sourcemap: "inline",
+      });
+      if (!build.success || build.outputs.length === 0) {
+        console.error("Build failed:", build.logs);
+        return null;
+      }
+      const jsOutput =
+        build.outputs.find(
+          (o) => o.kind === "entry-point" || o.path.endsWith(".js"),
+        ) ?? build.outputs[0];
+      if (!jsOutput) return null;
+
+      const cssOutput =
+        build.outputs.find(
+          (o) => o.kind === "asset" && o.path.endsWith(".css"),
+        ) ?? null;
+
+      const [jsBuf, cssBuf] = await Promise.all([
+        jsOutput.arrayBuffer(),
+        cssOutput ? cssOutput.arrayBuffer() : Promise.resolve(null),
+      ]);
+      const jsBytes = new Uint8Array<ArrayBuffer>(jsBuf);
+      const jsHash =
+        jsOutput.hash ??
+        new Bun.CryptoHasher("sha256")
+          .update(jsBytes)
+          .digest("hex")
+          .slice(0, 16);
+      const cssBytes =
+        cssBuf !== null ? new Uint8Array<ArrayBuffer>(cssBuf) : null;
+      const cssHash =
+        cssOutput && cssBytes
+          ? (cssOutput.hash ??
+            new Bun.CryptoHasher("sha256")
+              .update(cssBytes)
+              .digest("hex")
+              .slice(0, 16))
+          : null;
+
+      const bundle: CachedLegacyBundle = {
+        jsBytes,
+        jsEtag: `"${jsHash}"`,
+        cssBytes,
+        cssEtag: cssHash ? `"${cssHash}"` : null,
+      };
+      cachedLegacyBundle = bundle;
+      return bundle;
+    })().finally(() => {
+      inflightLegacyBundle = null;
+    });
+
+    return inflightLegacyBundle;
+  };
 
   const buildDnsPayload = () => {
     const telemetry = getDnsTelemetry();
@@ -514,21 +658,32 @@ export function startDashboardServer(
           const denied = await enforceOptionalAuth(req);
           if (denied) return denied;
 
-          const file = Bun.file(dashboardMdPath);
-          if (!(await file.exists())) {
+          const stamp = await statStamp(dashboardMdPath);
+          if (stamp === null) {
+            cachedDashboardMd = null;
             return Response.json(
               { error: "dashboard.md not found" },
               { status: 404 },
             );
           }
 
-          const markdown = await file.text();
-          // trusted-markdown: local repo-owned dashboard.md rendered for operator dev server
-          const html = Bun.markdown.html(markdown);
-          return Response.json({
-            markdown,
-            html,
+          if (!cachedDashboardMd || cachedDashboardMd.stamp !== stamp) {
+            const markdown = await Bun.file(dashboardMdPath).text();
+            // trusted-markdown: local repo-owned dashboard.md rendered for operator dev server
+            const html = Bun.markdown.html(markdown);
+            cachedDashboardMd = { stamp, markdown, html };
+          }
+
+          const payload = {
+            markdown: cachedDashboardMd.markdown,
+            html: cachedDashboardMd.html,
             updatedAt: new Date().toISOString(),
+          };
+          return encodedResponse(req, {
+            version: `dev-dashboard-md|${stamp}`,
+            contentType: "application/json; charset=utf-8",
+            produce: () => new TextEncoder().encode(JSON.stringify(payload)),
+            headers: { "Cache-Control": "no-cache" },
           });
         },
       },
@@ -583,19 +738,21 @@ export function startDashboardServer(
           const denied = await enforceOptionalAuth(req);
           if (denied) return denied;
 
-          const backtestFile = Bun.file("docs/backtest-4wk-cfb-nba.json");
-          const backtestJson = (await backtestFile.exists())
-            ? ((await backtestFile.json()) as {
-                customerLeaderboard?: Array<Record<string, unknown>>;
-              })
-            : { customerLeaderboard: [] };
-
-          const fixtureFile = Bun.file(
-            "tests/fixtures/backtest/enriched_customers_full.json",
-          );
-          const fixtureJson = (await fixtureFile.exists())
-            ? ((await fixtureFile.json()) as Array<Record<string, unknown>>)
-            : [];
+          const [backtestCached, fixtureCached] = await Promise.all([
+            readCachedJson<{
+              customerLeaderboard?: Array<Record<string, unknown>>;
+            }>(resolve(process.cwd(), "docs/backtest-4wk-cfb-nba.json")),
+            readCachedJson<Array<Record<string, unknown>>>(
+              resolve(
+                process.cwd(),
+                "tests/fixtures/backtest/enriched_customers_full.json",
+              ),
+            ),
+          ]);
+          const backtestJson = backtestCached?.value ?? {
+            customerLeaderboard: [],
+          };
+          const fixtureJson = fixtureCached?.value ?? [];
 
           const {
             KEY_NUMBER_BUYER_PROFILES,
@@ -623,7 +780,7 @@ export function startDashboardServer(
             uniqueSurveillanceIds.add(key.trim().toUpperCase());
           }
 
-          return Response.json({
+          const payload = {
             cohorts: {
               backtestCount: backtestJson.customerLeaderboard?.length ?? 0,
               keyNumberSharpsCount: KEY_NUMBER_BUYER_PROFILES.size,
@@ -634,6 +791,11 @@ export function startDashboardServer(
             },
             backtestTop: (backtestJson.customerLeaderboard ?? []).slice(0, 20),
             fixtures: fixtureJson,
+          };
+          return encodedResponse(req, {
+            version: `dev-customers|${backtestCached?.stamp ?? "none"}|${fixtureCached?.stamp ?? "none"}`,
+            contentType: "application/json; charset=utf-8",
+            produce: () => new TextEncoder().encode(JSON.stringify(payload)),
           });
         },
       },
@@ -779,7 +941,11 @@ export function startDashboardServer(
               await import("../lib/customer_rankings.ts");
             const limit = Number(url.searchParams.get("limit")) || 100;
             const data = await runBatchedRanking({ limitPlayers: limit });
-            return Response.json(data);
+            return encodedResponse(req, {
+              version: `dev-rankings|${data.generatedAtIso}|${limit}`,
+              contentType: "application/json; charset=utf-8",
+              produce: () => new TextEncoder().encode(JSON.stringify(data)),
+            });
           } catch (err) {
             return Response.json(
               { error: err instanceof Error ? err.message : String(err) },
@@ -1100,59 +1266,59 @@ export function startDashboardServer(
         },
       },
 
-      // Legacy on-demand JS/CSS bundle endpoints for compatibility
+      // Legacy on-demand JS/CSS bundle endpoints (cached via BuildArtifact.hash + ETag + zstd/gzip)
       "/index.js": {
-        GET: async () => {
-          const build = await runBunBuild({
-            entrypoints: [dashboardEntryPath],
-            target: "browser",
-            sourcemap: "inline",
-          });
-
-          if (!build.success || build.outputs.length === 0) {
-            console.error("Build failed:", build.logs);
+        GET: async (req) => {
+          const bundle = await ensureLegacyBundle();
+          if (bundle === null) {
             return new Response("console.error('Bundle compilation failed');", {
               status: 500,
               headers: { "Content-Type": "application/javascript" },
             });
           }
-
-          const jsOutput =
-            build.outputs.find(
-              (o) => o.kind === "entry-point" || o.path.endsWith(".js"),
-            ) ?? build.outputs[0];
-          if (!jsOutput) {
-            return new Response("Missing output", { status: 500 });
+          const baseHeaders = {
+            "Cache-Control": "no-cache",
+            ETag: bundle.jsEtag,
+          };
+          if (req.headers.get("if-none-match") === bundle.jsEtag) {
+            return new Response(null, { status: 304, headers: baseHeaders });
           }
-          return new Response(await jsOutput.text(), {
-            headers: {
-              "Content-Type": "application/javascript",
-              "Cache-Control": "no-cache",
-            },
+          return encodedResponse(req, {
+            version: `dev-index-js|${bundle.jsEtag}`,
+            contentType: "application/javascript; charset=utf-8",
+            produce: () => bundle.jsBytes,
+            headers: baseHeaders,
           });
         },
       },
 
       "/index.css": {
-        GET: async () => {
-          const build = await runBunBuild({
-            entrypoints: [dashboardEntryPath],
-            target: "browser",
-            sourcemap: "inline",
-          });
-          const cssOutput = build.outputs.find(
-            (o) => o.kind === "asset" && o.path.endsWith(".css"),
-          );
-          if (!cssOutput) {
+        GET: async (req) => {
+          const bundle = await ensureLegacyBundle();
+          if (
+            bundle === null ||
+            bundle.cssBytes === null ||
+            bundle.cssEtag === null
+          ) {
             return new Response("/* No CSS emitted */", {
-              headers: { "Content-Type": "text/css" },
+              headers: {
+                "Content-Type": "text/css; charset=utf-8",
+                "Cache-Control": "no-cache",
+              },
             });
           }
-          return new Response(await cssOutput.text(), {
-            headers: {
-              "Content-Type": "text/css",
-              "Cache-Control": "no-cache",
-            },
+          const baseHeaders = {
+            "Cache-Control": "no-cache",
+            ETag: bundle.cssEtag,
+          };
+          if (req.headers.get("if-none-match") === bundle.cssEtag) {
+            return new Response(null, { status: 304, headers: baseHeaders });
+          }
+          return encodedResponse(req, {
+            version: `dev-index-css|${bundle.cssEtag}`,
+            contentType: "text/css; charset=utf-8",
+            produce: () => bundle.cssBytes!,
+            headers: baseHeaders,
           });
         },
       },
@@ -1279,6 +1445,7 @@ export function startDashboardServer(
           { recursive: true },
           () => {
             cachedDceMatrix = null;
+            cachedLegacyBundle = null;
             server.publish("dashboard", "reload");
             for (const ws of clients) {
               if (

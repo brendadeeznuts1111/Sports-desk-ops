@@ -341,14 +341,77 @@ async function secretPresent(name: string): Promise<boolean> {
   }
 }
 
+const F402_MINT_CACHE_TTL_MS = 30_000;
+let cachedF402MintState: {
+  readonly envKey: string;
+  readonly checkedAtMs: number;
+  readonly value: boolean;
+} | null = null;
+let inflightF402Mint: Promise<boolean> | null = null;
+
+const R2_DEFAULT_CACHE_TTL_MS = 5_000;
+let cachedDefaultR2Kpis: {
+  readonly checkedAtMs: number;
+  readonly kpis: R2PipelineKpis;
+} | null = null;
+let inflightDefaultR2Kpis: Promise<R2PipelineKpis> | null = null;
+
+export function resetDeskHealthProbeCaches(): void {
+  cachedF402MintState = null;
+  inflightF402Mint = null;
+  cachedDefaultR2Kpis = null;
+  inflightDefaultR2Kpis = null;
+}
+
 async function defaultHasF402MintCredentials(): Promise<boolean> {
-  const agent =
-    (Bun.env.F402_AGENT_ID ?? "").trim() !== "" ||
-    (await secretPresent("F402_AGENT_ID"));
-  const pass =
-    (Bun.env.F402_PASSWORD ?? "").trim() !== "" ||
-    (await secretPresent("F402_PASSWORD"));
-  return agent && pass;
+  const envAgent = (Bun.env.F402_AGENT_ID ?? "").trim() !== "";
+  const envPass = (Bun.env.F402_PASSWORD ?? "").trim() !== "";
+  if (envAgent && envPass) return true;
+
+  const envKey = `${envAgent ? "1" : "0"}:${envPass ? "1" : "0"}`;
+  const nowMs = Date.now();
+  if (
+    cachedF402MintState !== null &&
+    cachedF402MintState.envKey === envKey &&
+    nowMs - cachedF402MintState.checkedAtMs < F402_MINT_CACHE_TTL_MS
+  ) {
+    return cachedF402MintState.value;
+  }
+  if (inflightF402Mint !== null) return inflightF402Mint;
+
+  inflightF402Mint = (async () => {
+    const [agentOk, passOk] = await Promise.all([
+      envAgent ? Promise.resolve(true) : secretPresent("F402_AGENT_ID"),
+      envPass ? Promise.resolve(true) : secretPresent("F402_PASSWORD"),
+    ]);
+    const value = agentOk && passOk;
+    cachedF402MintState = { envKey, checkedAtMs: Date.now(), value };
+    return value;
+  })().finally(() => {
+    inflightF402Mint = null;
+  });
+  return inflightF402Mint;
+}
+
+async function readDefaultR2PipelineKpis(now: Date): Promise<R2PipelineKpis> {
+  const realNowMs = Date.now();
+  if (
+    cachedDefaultR2Kpis !== null &&
+    realNowMs - cachedDefaultR2Kpis.checkedAtMs < R2_DEFAULT_CACHE_TTL_MS
+  ) {
+    return cachedDefaultR2Kpis.kpis;
+  }
+  if (inflightDefaultR2Kpis !== null) return inflightDefaultR2Kpis;
+
+  inflightDefaultR2Kpis = probeR2PipelineKpis(now)
+    .then((kpis) => {
+      cachedDefaultR2Kpis = { checkedAtMs: Date.now(), kpis };
+      return kpis;
+    })
+    .finally(() => {
+      inflightDefaultR2Kpis = null;
+    });
+  return inflightDefaultR2Kpis;
 }
 
 function f402Remediation(
@@ -423,10 +486,18 @@ export async function buildDeskEnhancedHealth(
   const resolveGitSha = input.resolveGitSha ?? defaultGitSha;
 
   const f402Core = probeF402Auth(nowMs, readSession);
-  const gsliveHealth =
+  const [gsliveHealth, hasF402Mint, kpis] = await Promise.all([
     input.readGsliveHealth === undefined
-      ? null
-      : await input.readGsliveHealth().catch(() => null);
+      ? Promise.resolve(null)
+      : input.readGsliveHealth().catch(() => null),
+    input.hasF402MintCredentials === undefined
+      ? defaultHasF402MintCredentials()
+      : input.hasF402MintCredentials(),
+    (input.probeR2 !== undefined
+      ? probeR2(now)
+      : readDefaultR2PipelineKpis(now)
+    ).catch(() => ({}) as R2PipelineKpis),
+  ]);
   const gsliveCore: GsliveAuthCore =
     gsliveHealth === null
       ? {
@@ -436,16 +507,11 @@ export async function buildDeskEnhancedHealth(
         }
       : gsliveAuthFromHealth(gsliveHealth);
 
-  const hasF402Mint =
-    input.hasF402MintCredentials === undefined
-      ? await defaultHasF402MintCredentials()
-      : await input.hasF402MintCredentials();
   const mintLoop =
     (input.gsliveMintFailureStreak ?? gsliveConsecutiveMintFailures)() >= 3;
   const f402 = withF402MintFields(f402Core, hasF402Mint);
   const gslive = withGsliveMintFields(gsliveCore, mintLoop);
 
-  const kpis = await probeR2(now).catch(() => ({}) as R2PipelineKpis);
   const pipelines = summarizePipelines(kpis);
 
   const degradedReasons: DegradedReason[] = [];

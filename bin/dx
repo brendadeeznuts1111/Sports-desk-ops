@@ -181,7 +181,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -348,6 +348,8 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx shot <url>             Bun.WebView screenshot → scratch/shots/ (--f402-login, --profile <dir>)
     ./bin/dx session [status|login] Portal session file the replay transport reads (status is read-only)
     ./bin/dx image-meta <file>      Print image metadata via Bun.Image (or '-' for stdin)
+    ./bin/dx assets [--write] [--json|--yaml]
+                                    Audit & optimize repo image assets with Bun.file().image() & WebP siblings
     ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
     ./bin/dx enrich --figure=<path> [--ticker=<path>] [--output=<path>] [--format=inspect|jsonl|summary] [--inspect]
                                     Stream and join live ticker wagers with settled getWagersByFigureDate
@@ -550,6 +552,10 @@ EOF
   image-meta)
     cd "$REPO_ROOT"
     exec bun bin/image-meta.ts "$@"
+    ;;
+  assets)
+    cd "$REPO_ROOT"
+    exec bun run scripts/optimize_assets.ts "$@"
     ;;
   bun)
     cd "$REPO_ROOT"

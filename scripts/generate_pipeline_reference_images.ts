@@ -27,6 +27,8 @@ const docsAssetsDir = path.join(repoRoot, "docs", "assets");
 const distAssetsDir = path.join(repoRoot, "dist", "assets");
 const publicR2Base = "https://pub-d061f943df0e4477ba7ff200721eddb1.r2.dev";
 
+Bun.Image.backend = "bun";
+
 fs.mkdirSync(docsAssetsDir, { recursive: true });
 fs.mkdirSync(distAssetsDir, { recursive: true });
 
@@ -1449,130 +1451,142 @@ async function encodeWebpFromPng(
   return webp;
 }
 
-/** Copies a file into dist/assets, preserving bytes (ARCH-Guide is a JPEG payload and must not be rewritten). */
-function copyToDist(fileName: string): void {
-  const src = path.join(docsAssetsDir, fileName);
-  const dest = path.join(distAssetsDir, fileName);
-  if (!fs.existsSync(src)) return;
-  fs.copyFileSync(src, dest);
+/** Copies a file into dist/assets using zero-copy `Bun.write(destFile, srcFile)` (ARCH-Guide JPEG bytes stay untouched). */
+async function copyToDist(fileName: string): Promise<void> {
+  const srcFile = Bun.file(path.join(docsAssetsDir, fileName));
+  if (!(await srcFile.exists())) return;
+  await Bun.write(Bun.file(path.join(distAssetsDir, fileName)), srcFile);
 }
 
 export async function generateAllPipelineReferenceImages(): Promise<
   readonly GeneratedArtifactCatalogEntry[]
 > {
-  const catalogEntries: GeneratedArtifactCatalogEntry[] = [];
-
   // ARCH-Guide is an upstream JPEG baseline: it carries no PNG tEXt/iTXt chunks, so it is copied
-  // byte-for-byte. The filename extension matches the payload so Pages/R2 serve image/jpeg.
-  const existingArch = path.join(docsAssetsDir, "ARCH-Guide.jpg");
-  if (fs.existsSync(existingArch)) {
-    copyToDist("ARCH-Guide.jpg");
+  // byte-for-byte. Its deterministic WebP sibling (ARCH-Guide.webp) is also ensured via Bun.Image.
+  const existingArchFile = Bun.file(path.join(docsAssetsDir, "ARCH-Guide.jpg"));
+  if (await existingArchFile.exists()) {
+    await copyToDist("ARCH-Guide.jpg");
+    const archWebpDocsPath = path.join(docsAssetsDir, "ARCH-Guide.webp");
+    const archWebpFile = Bun.file(archWebpDocsPath);
+    if (!(await archWebpFile.exists())) {
+      const encodedArchWebp = await existingArchFile
+        .image()
+        .webp({ quality: 82 })
+        .bytes();
+      await Bun.write(archWebpDocsPath, encodedArchWebp);
+    }
+    await copyToDist("ARCH-Guide.webp");
     console.log(
-      "  • docs/assets/ARCH-Guide.jpg is a JPEG baseline — copied unchanged (no PNG chunks)",
+      "  • docs/assets/ARCH-Guide.jpg copied unchanged + ARCH-Guide.webp staged via Bun.file/Bun.Image",
     );
   }
 
-  for (const spec of PIPELINE_ARTIFACTS) {
-    const xmpXml = buildXmpPacket(spec);
-    const jsonLdObj = {
-      "@context": "https://schema.org",
-      "@type": "ImageObject",
-      "@id": `${publicR2Base}/assets/${spec.slug}.svg`,
-      identifier: spec.id,
-      name: spec.title,
-      alternateName: spec.subtitle,
-      description: spec.description,
-      contentUrl: `${publicR2Base}/assets/${spec.slug}.svg`,
-      thumbnailUrl: `${publicR2Base}/assets/${spec.slug}.png`,
-      encodingFormat: ["image/svg+xml", "image/png", "image/webp"],
-      creator: {
-        "@type": "Organization",
-        name: "SportsDesk & Fantasy402 Risk Engineering",
+  const catalogEntries = await Promise.all(
+    PIPELINE_ARTIFACTS.map(
+      async (spec): Promise<GeneratedArtifactCatalogEntry> => {
+        const xmpXml = buildXmpPacket(spec);
+        const jsonLdObj = {
+          "@context": "https://schema.org",
+          "@type": "ImageObject",
+          "@id": `${publicR2Base}/assets/${spec.slug}.svg`,
+          identifier: spec.id,
+          name: spec.title,
+          alternateName: spec.subtitle,
+          description: spec.description,
+          contentUrl: `${publicR2Base}/assets/${spec.slug}.svg`,
+          thumbnailUrl: `${publicR2Base}/assets/${spec.slug}.png`,
+          encodingFormat: ["image/svg+xml", "image/png", "image/webp"],
+          creator: {
+            "@type": "Organization",
+            name: "SportsDesk & Fantasy402 Risk Engineering",
+          },
+          keywords: [
+            ...spec.domainsCovered,
+            ...spec.upstreamModules,
+            ...spec.cleaningLayers,
+          ],
+          potentialAction: spec.operatorCliCommands,
+        };
+        const jsonLdString = JSON.stringify(jsonLdObj);
+
+        const svgContent = buildFullSvgDocument(spec, xmpXml, jsonLdObj);
+        const svgBuf = Buffer.from(svgContent, "utf8");
+        const svgDocsPath = path.join(docsAssetsDir, `${spec.slug}.svg`);
+        const svgDistPath = path.join(distAssetsDir, `${spec.slug}.svg`);
+        await Promise.all([
+          Bun.write(svgDocsPath, svgBuf),
+          Bun.write(svgDistPath, svgBuf),
+        ]);
+
+        // Real SVG rasterization, verified for ink. Throws instead of writing a blank banner.
+        const pngDocsPath = path.join(docsAssetsDir, `${spec.slug}.png`);
+        const pngDistPath = path.join(distAssetsDir, `${spec.slug}.png`);
+        const raster = rasterizeSvgToPng(svgDocsPath, pngDocsPath);
+
+        const [richPngBuf, webpBuf] = await Promise.all([
+          Promise.resolve(
+            injectRichMetadataIntoPng(raster.png, spec, xmpXml, jsonLdString),
+          ),
+          encodeWebpFromPng(raster.png, spec.slug),
+        ]);
+        const webpDocsPath = path.join(docsAssetsDir, `${spec.slug}.webp`);
+        const webpDistPath = path.join(distAssetsDir, `${spec.slug}.webp`);
+        await Promise.all([
+          Bun.write(pngDocsPath, richPngBuf),
+          Bun.write(pngDistPath, richPngBuf),
+          Bun.write(webpDocsPath, webpBuf),
+          Bun.write(webpDistPath, webpBuf),
+        ]);
+
+        return {
+          id: spec.id,
+          slug: spec.slug,
+          title: spec.title,
+          subtitle: spec.subtitle,
+          description: spec.description,
+          domainsCovered: spec.domainsCovered,
+          modesCovered: spec.modesCovered,
+          upstreamModules: spec.upstreamModules,
+          cleaningLayers: spec.cleaningLayers,
+          operatorCliCommands: spec.operatorCliCommands,
+          files: {
+            svgRepoPath: `docs/assets/${spec.slug}.svg`,
+            pngRepoPath: `docs/assets/${spec.slug}.png`,
+            webpRepoPath: `docs/assets/${spec.slug}.webp`,
+            svgPublicR2Url: `${publicR2Base}/assets/${spec.slug}.svg`,
+            pngPublicR2Url: `${publicR2Base}/assets/${spec.slug}.png`,
+            webpPublicR2Url: `${publicR2Base}/assets/${spec.slug}.webp`,
+            svgBytes: svgBuf.length,
+            pngBytes: richPngBuf.length,
+            webpBytes: webpBuf.length,
+            svgSha256: sha256Hex(svgBuf),
+            pngSha256: sha256Hex(richPngBuf),
+            webpSha256: sha256Hex(webpBuf),
+            pngMetadataBearing: true,
+            webpMetadataBearing: false,
+            pngMimeType: "image/png",
+            webpMimeType: "image/webp",
+          },
+          render: {
+            rasterizer: raster.backend,
+            width: raster.stats.width,
+            height: raster.stats.height,
+            uniqueColors: raster.stats.uniqueColors,
+            inkCoverage: Number(raster.stats.inkCoverage.toFixed(4)),
+            brightCoverage: Number(raster.stats.brightCoverage.toFixed(4)),
+          },
+          embeddedMetadataStandards: [
+            "W3C RDF / Dublin Core (dc:title, dc:description, dc:creator, dc:subject, dc:identifier)",
+            "Adobe XMP Packet (XML:com.adobe.xmp)",
+            "Schema.org ImageObject JSON-LD (SportsDesk:PipelineSpecJson)",
+            "PNG RFC-2083 tEXt & iTXt Chunks with CRC-32 Verification",
+            "Cloudflare R2 x-amz-meta-* Custom Object Metadata Headers",
+            "WebP sibling carries NO XMP/tEXt chunks (metadataBearing: false) — use the PNG for metadata",
+          ],
+        };
       },
-      keywords: [
-        ...spec.domainsCovered,
-        ...spec.upstreamModules,
-        ...spec.cleaningLayers,
-      ],
-      potentialAction: spec.operatorCliCommands,
-    };
-    const jsonLdString = JSON.stringify(jsonLdObj);
-
-    const svgContent = buildFullSvgDocument(spec, xmpXml, jsonLdObj);
-    const svgBuf = Buffer.from(svgContent, "utf8");
-    const svgDocsPath = path.join(docsAssetsDir, `${spec.slug}.svg`);
-    const svgDistPath = path.join(distAssetsDir, `${spec.slug}.svg`);
-    fs.writeFileSync(svgDocsPath, svgBuf);
-    fs.writeFileSync(svgDistPath, svgBuf);
-
-    // Real SVG rasterization, verified for ink. Throws instead of writing a blank banner.
-    const pngDocsPath = path.join(docsAssetsDir, `${spec.slug}.png`);
-    const pngDistPath = path.join(distAssetsDir, `${spec.slug}.png`);
-    const raster = rasterizeSvgToPng(svgDocsPath, pngDocsPath);
-
-    const richPngBuf = injectRichMetadataIntoPng(
-      raster.png,
-      spec,
-      xmpXml,
-      jsonLdString,
-    );
-    fs.writeFileSync(pngDocsPath, richPngBuf);
-    fs.writeFileSync(pngDistPath, richPngBuf);
-
-    // WebP sibling: Bun.Image re-encodes the raster and drops all ancillary PNG chunks.
-    const webpBuf = await encodeWebpFromPng(raster.png, spec.slug);
-    const webpDocsPath = path.join(docsAssetsDir, `${spec.slug}.webp`);
-    const webpDistPath = path.join(distAssetsDir, `${spec.slug}.webp`);
-    fs.writeFileSync(webpDocsPath, webpBuf);
-    fs.writeFileSync(webpDistPath, webpBuf);
-
-    catalogEntries.push({
-      id: spec.id,
-      slug: spec.slug,
-      title: spec.title,
-      subtitle: spec.subtitle,
-      description: spec.description,
-      domainsCovered: spec.domainsCovered,
-      modesCovered: spec.modesCovered,
-      upstreamModules: spec.upstreamModules,
-      cleaningLayers: spec.cleaningLayers,
-      operatorCliCommands: spec.operatorCliCommands,
-      files: {
-        svgRepoPath: `docs/assets/${spec.slug}.svg`,
-        pngRepoPath: `docs/assets/${spec.slug}.png`,
-        webpRepoPath: `docs/assets/${spec.slug}.webp`,
-        svgPublicR2Url: `${publicR2Base}/assets/${spec.slug}.svg`,
-        pngPublicR2Url: `${publicR2Base}/assets/${spec.slug}.png`,
-        webpPublicR2Url: `${publicR2Base}/assets/${spec.slug}.webp`,
-        svgBytes: svgBuf.length,
-        pngBytes: richPngBuf.length,
-        webpBytes: webpBuf.length,
-        svgSha256: sha256Hex(svgBuf),
-        pngSha256: sha256Hex(richPngBuf),
-        webpSha256: sha256Hex(webpBuf),
-        pngMetadataBearing: true,
-        webpMetadataBearing: false,
-        pngMimeType: "image/png",
-        webpMimeType: "image/webp",
-      },
-      render: {
-        rasterizer: raster.backend,
-        width: raster.stats.width,
-        height: raster.stats.height,
-        uniqueColors: raster.stats.uniqueColors,
-        inkCoverage: Number(raster.stats.inkCoverage.toFixed(4)),
-        brightCoverage: Number(raster.stats.brightCoverage.toFixed(4)),
-      },
-      embeddedMetadataStandards: [
-        "W3C RDF / Dublin Core (dc:title, dc:description, dc:creator, dc:subject, dc:identifier)",
-        "Adobe XMP Packet (XML:com.adobe.xmp)",
-        "Schema.org ImageObject JSON-LD (SportsDesk:PipelineSpecJson)",
-        "PNG RFC-2083 tEXt & iTXt Chunks with CRC-32 Verification",
-        "Cloudflare R2 x-amz-meta-* Custom Object Metadata Headers",
-        "WebP sibling carries NO XMP/tEXt chunks (metadataBearing: false) — use the PNG for metadata",
-      ],
-    });
-  }
+    ),
+  );
 
   const manifestPayload = {
     schemaVersion: "2026.10.31",
@@ -1601,16 +1615,16 @@ export async function generateAllPipelineReferenceImages(): Promise<
   };
 
   const manifestJson = JSON.stringify(manifestPayload, null, 2) + "\n";
-  fs.writeFileSync(
-    path.join(docsAssetsDir, "pipeline-artifacts-metadata.json"),
-    manifestJson,
-    "utf8",
-  );
-  fs.writeFileSync(
-    path.join(distAssetsDir, "pipeline-artifacts-metadata.json"),
-    manifestJson,
-    "utf8",
-  );
+  await Promise.all([
+    Bun.write(
+      path.join(docsAssetsDir, "pipeline-artifacts-metadata.json"),
+      manifestJson,
+    ),
+    Bun.write(
+      path.join(distAssetsDir, "pipeline-artifacts-metadata.json"),
+      manifestJson,
+    ),
+  ]);
 
   return catalogEntries;
 }

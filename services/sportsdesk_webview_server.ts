@@ -688,9 +688,10 @@ function logoBaseUrl(): string {
 async function fetchLogo(
   name: string,
   width: number | null,
+  targetFormat?: import("../lib/logo_image.ts").EncodableLogoFormat,
 ): Promise<LogoResult> {
   const base = logoBaseUrl();
-  const key = `${base}|${name}|${width ?? 0}`;
+  const key = `${base}|${name}|${width ?? 0}|${targetFormat ?? ""}`;
   const hit = logoCache.get(key);
   if (hit !== undefined && Date.now() - hit.at < LOGO_CACHE_TTL_MS) {
     return { kind: "ok", ...hit };
@@ -709,8 +710,7 @@ async function fetchLogo(
     return { kind: "too-large", bytes: raw.byteLength };
   }
 
-  // The upstream content-type is a claim; decoding is the proof, and it is also where the
-  // dimensions come from.
+  // Decoding proves the upstream image is valid and reads dimensions.
   let metadata: LogoMetadata;
   try {
     metadata = await inspectLogo(raw);
@@ -721,9 +721,9 @@ async function fetchLogo(
   }
 
   const processed =
-    width === null
+    width === null && targetFormat === undefined
       ? { bytes: raw, metadata, resized: false }
-      : await resizeLogo(raw, metadata, width);
+      : await resizeLogo(raw, metadata, width, targetFormat);
 
   const entry: CachedLogo = {
     at: Date.now(),
@@ -1474,9 +1474,7 @@ export function startServer(options?: ServerOptions) {
           readDb: () => deskLive.readLivePendingArtifact(),
           scoreboard,
         });
-        return Response.json(resolved, {
-          headers: { ...cors, "Cache-Control": "no-store" },
-        });
+        return respondLiveBetsV2(req, resolved, cors);
       }
 
       if (
@@ -1484,6 +1482,8 @@ export function startServer(options?: ServerOptions) {
         pathname === "/live-bets/summary" ||
         pathname === "/api/live-bets/summary"
       ) {
+        //
+        //
         const rejected = piiRejection(
           req,
           server.requestIP(req)?.address,
@@ -1619,8 +1619,7 @@ export function startServer(options?: ServerOptions) {
             headers: cors,
           });
         }
-        // `?w=N` asks for a downscale (16..1024); `?meta=1` asks for the measurement instead of
-        // the pixels, which is what a layout needs to reserve the box before the image lands.
+        // `?w=N` asks for a downscale (16..1024); `?format=webp|png|jpeg` transcodes; `?meta=1` measures.
         const requestedWidth = Number(url.searchParams.get("w") ?? "");
         const width =
           Number.isFinite(requestedWidth) &&
@@ -1628,12 +1627,15 @@ export function startServer(options?: ServerOptions) {
           requestedWidth <= 1024
             ? Math.trunc(requestedWidth)
             : null;
+        const targetFormat = parseRequestedLogoFormat(
+          url.searchParams.get("format"),
+        );
         const wantsMeta = /^(1|true|json)$/i.test(
           url.searchParams.get("meta") ?? "",
         );
 
         try {
-          const logo = await fetchLogo(name, width);
+          const logo = await fetchLogo(name, width, targetFormat);
           if (logo.kind === "upstream") {
             return new Response("not found", {
               status: logo.status,
@@ -1660,20 +1662,7 @@ export function startServer(options?: ServerOptions) {
           }
 
           if (wantsMeta) {
-            return Response.json(
-              {
-                name,
-                source: logoBaseUrl() + encodeURIComponent(name),
-                contentType: logo.metadata.contentType,
-                width: logo.metadata.width,
-                height: logo.metadata.height,
-                format: logo.metadata.format,
-                bytes: logo.metadata.bytes,
-                resized: logo.resized,
-                requestedWidth: width,
-              },
-              { headers: { ...cors, "Cache-Control": "no-store" } },
-            );
+            return buildLogoMetaResponse(name, logo, width, url, cors);
           }
 
           return new Response(logo.bytes, {
@@ -1692,6 +1681,17 @@ export function startServer(options?: ServerOptions) {
         }
       }
 
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
       // 5. Retired: /api/f402/get-pending answered the same dataset as /api/live-bets with a
       // different shape. Kept as an explicit tombstone so an old client fails loudly instead
       // of silently reading a fixture that looks live.
@@ -3394,25 +3394,25 @@ export function startServer(options?: ServerOptions) {
             },
           );
         }
-        const FONT_MIME = {
-          woff: "font/woff",
-          woff2: "font/woff2",
-          ttf: "font/ttf",
-          otf: "font/otf",
-          eot: "application/vnd.ms-fontobject",
-        } as const;
-        type FontExt = keyof typeof FONT_MIME;
-        const ext = contained.split(".").pop()?.toLowerCase() ?? "";
-        const headers: Record<string, string> = {
-          ...cors,
-          "Cache-Control": "public, max-age=3600",
-        };
-        if (ext in FONT_MIME)
-          headers["Content-Type"] = FONT_MIME[ext as FontExt];
-        return new Response(Bun.file(contained), { headers });
+        return serveContainedAsset(req, url, contained, cors);
       }
 
       // Telegram webhook: Telegram echoes the secret registered by setWebhook in this header
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
       if (pathname === "/telegram/webhook" && req.method === "POST") {
         if (
           !telegramService.isWebhookSecretValid(
@@ -4354,4 +4354,199 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
     }
   }
   return null;
+}
+
+const ASSET_TEXT_MIMES: Readonly<Record<string, string>> = {
+  svg: "image/svg+xml; charset=utf-8",
+  js: "application/javascript; charset=utf-8",
+  mjs: "application/javascript; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  html: "text/html; charset=utf-8",
+  md: "text/markdown; charset=utf-8",
+};
+
+const ASSET_FONT_MIMES: Readonly<Record<string, string>> = {
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  eot: "application/vnd.ms-fontobject",
+};
+
+const transcodedAssetCache = new Map<
+  string,
+  { readonly bytes: Uint8Array<ArrayBuffer>; readonly etag: string }
+>();
+
+async function serveContainedAsset(
+  req: Request,
+  url: URL,
+  contained: string,
+  cors: Record<string, string>,
+): Promise<Response> {
+  const file = Bun.file(contained);
+  const stat = await file.stat().catch(() => null);
+  if (stat === null) {
+    return new Response("not found", { status: 404, headers: cors });
+  }
+
+  const ext = contained.split(".").pop()?.toLowerCase() ?? "";
+  const requestedFormat = (url.searchParams.get("format") ?? "")
+    .trim()
+    .toLowerCase();
+
+  // Optional on-the-fly or sibling WebP transcoding via Bun.file().image().webp() when ?format=webp
+  if (
+    requestedFormat === "webp" &&
+    (ext === "png" || ext === "jpg" || ext === "jpeg")
+  ) {
+    const siblingPath = contained.replace(/\.(?:png|jpe?g)$/i, ".webp");
+    const siblingFile = Bun.file(siblingPath);
+    const siblingStat = await siblingFile.stat().catch(() => null);
+    if (siblingStat !== null) {
+      const sibEtag = `"${siblingStat.mtimeMs}-${siblingStat.size}"`;
+      const headers: Record<string, string> = {
+        ...cors,
+        "Content-Type": "image/webp",
+        "Cache-Control": "public, max-age=3600",
+        ETag: sibEtag,
+      };
+      if (req.headers.get("if-none-match") === sibEtag) {
+        return new Response(null, { status: 304, headers });
+      }
+      return new Response(siblingFile, { headers });
+    }
+
+    const cacheKey = `${contained}|${stat.mtimeMs}:${stat.size}|webp`;
+    let cached = transcodedAssetCache.get(cacheKey);
+    if (cached === undefined) {
+      const encoded = await file.image().webp({ quality: 82 }).bytes();
+      const out = new Uint8Array<ArrayBuffer>(
+        encoded.buffer as ArrayBuffer,
+        encoded.byteOffset,
+        encoded.byteLength,
+      );
+      const etag = `"${stat.mtimeMs}-${out.byteLength}-webp"`;
+      cached = { bytes: out, etag };
+      if (transcodedAssetCache.size >= 32) transcodedAssetCache.clear();
+      transcodedAssetCache.set(cacheKey, cached);
+    }
+    const headers: Record<string, string> = {
+      ...cors,
+      "Content-Type": "image/webp",
+      "Cache-Control": "public, max-age=3600",
+      ETag: cached.etag,
+    };
+    if (req.headers.get("if-none-match") === cached.etag) {
+      return new Response(null, { status: 304, headers });
+    }
+    return new Response(cached.bytes, { headers });
+  }
+
+  const etag = `"${stat.mtimeMs}-${stat.size}"`;
+  const headers: Record<string, string> = {
+    ...cors,
+    "Cache-Control": "public, max-age=3600",
+    ETag: etag,
+  };
+  const fontMime = ASSET_FONT_MIMES[ext];
+  if (fontMime !== undefined) headers["Content-Type"] = fontMime;
+
+  if (req.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  const textMime = ASSET_TEXT_MIMES[ext];
+  if (
+    textMime !== undefined &&
+    negotiateEncoding(req.headers.get("accept-encoding")) !== null
+  ) {
+    const raw = await readFileBytes(contained);
+    if (raw !== null) {
+      return encodedResponse(req, {
+        version: `asset|${contained}|${raw.version}`,
+        contentType: textMime,
+        produce: () => raw.value,
+        headers,
+      });
+    }
+  }
+
+  return new Response(file, { headers });
+}
+
+function parseRequestedLogoFormat(
+  raw: string | null,
+): import("../lib/logo_image.ts").EncodableLogoFormat | undefined {
+  if (raw === null) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "jpg") return "jpeg";
+  if (normalized === "png" || normalized === "jpeg" || normalized === "webp") {
+    return normalized;
+  }
+  return undefined;
+}
+
+async function buildLogoMetaResponse(
+  name: string,
+  logo: CachedLogo,
+  width: number | null,
+  url: URL,
+  cors: Record<string, string>,
+): Promise<Response> {
+  const wantsPlaceholder = /^(1|true)$/i.test(
+    url.searchParams.get("lqip") ?? url.searchParams.get("placeholder") ?? "",
+  );
+  let placeholder: string | undefined;
+  if (wantsPlaceholder) {
+    const { generateLogoPlaceholder } = await import("../lib/logo_image.ts");
+    placeholder = await generateLogoPlaceholder(logo.bytes);
+  }
+  return Response.json(
+    {
+      name,
+      source: logoBaseUrl() + encodeURIComponent(name),
+      contentType: logo.metadata.contentType,
+      width: logo.metadata.width,
+      height: logo.metadata.height,
+      format: logo.metadata.format,
+      bytes: logo.metadata.bytes,
+      resized: logo.resized,
+      requestedWidth: width,
+      ...(placeholder === undefined ? {} : { placeholder }),
+    },
+    { headers: { ...cors, "Cache-Control": "no-store" } },
+  );
+}
+
+function respondLiveBetsV2(
+  req: Request,
+  resolved: import("../src/contracts/live_bets.v2.ts").LiveBetsV2Response,
+  cors: Record<string, string>,
+): Response {
+  const headers: Record<string, string> = {
+    ...cors,
+    "Cache-Control": "no-store",
+  };
+  if (resolved.provenance.hash !== null) {
+    const etag = `"${resolved.provenance.hash.slice(0, 24)}"`;
+    headers["ETag"] = etag;
+    if (req.headers.get("if-none-match") === etag) {
+      return new Response(null, { status: 304, headers });
+    }
+  }
+  if (negotiateEncoding(req.headers.get("accept-encoding")) === null) {
+    return Response.json(resolved, { headers });
+  }
+  const versionKey =
+    resolved.provenance.hash !== null
+      ? `v2-live-bets|${resolved.dataSource}|${resolved.provenance.hash}`
+      : `v2-live-bets-dyn|${resolved.provenance.generatedAt}|${resolved.pendingCount}`;
+  return encodedResponse(req, {
+    version: versionKey,
+    contentType: "application/json; charset=utf-8",
+    produce: () => new TextEncoder().encode(JSON.stringify(resolved)),
+    headers,
+  });
 }

@@ -27,10 +27,25 @@ export interface RawBetRow {
   ShortDesc?: string;
 }
 
+interface CachedBatchedRanking {
+  readonly baseResult: Omit<BatchedRankingResult, "topRankedPlayers">;
+  readonly allRankedPlayers: readonly PlayerRankingRecord[];
+}
+
+const RANKING_CACHE_MAX = 4;
+const batchedRankingCache = new Map<string, CachedBatchedRanking>();
+const inflightRankings = new Map<string, Promise<CachedBatchedRanking>>();
+
+export function resetBatchedRankingCache(): void {
+  batchedRankingCache.clear();
+  inflightRankings.clear();
+}
+
 // Memory pressure notification listener (Bun 1.4 native)
 if (typeof process !== "undefined" && typeof process.on === "function") {
   try {
     process.on("memoryPressure", (level: string) => {
+      batchedRankingCache.clear();
       console.warn(
         `[SportsDesk Engine] Host memory pressure level: ${level}. Compacting temporary caches.`,
       );
@@ -223,6 +238,13 @@ export function calculateCompositeScore(acc: CustomerAccumulator): {
   }
 }
 
+async function fileStatStamp(path: string): Promise<string> {
+  const st = await Bun.file(path)
+    .stat()
+    .catch(() => null);
+  return st === null ? "missing" : `${st.mtimeMs}:${st.size}`;
+}
+
 export async function runBatchedRanking(
   options: {
     corpusPath?: string;
@@ -246,9 +268,57 @@ export async function runBatchedRanking(
       : "2026-10-10");
   const limitPlayers = options.limitPlayers ?? 100;
 
+  const [corpusStamp, treeStamp] = await Promise.all([
+    fileStatStamp(corpus),
+    fileStatStamp(treePath),
+  ]);
+  const cacheKey = `${corpus}|${corpusStamp}|${treePath}|${treeStamp}|${windowCutoff}`;
+
+  const hit = batchedRankingCache.get(cacheKey);
+  if (hit !== undefined) {
+    return {
+      ...hit.baseResult,
+      topRankedPlayers: hit.allRankedPlayers.slice(0, limitPlayers),
+    };
+  }
+
+  let pending = inflightRankings.get(cacheKey);
+  if (pending === undefined) {
+    pending = computeUncachedBatchedRanking(
+      corpus,
+      treePath,
+      windowCutoff,
+    ).finally(() => {
+      inflightRankings.delete(cacheKey);
+    });
+    inflightRankings.set(cacheKey, pending);
+  }
+
+  const computed = await pending;
+  if (corpusStamp !== "missing") {
+    if (batchedRankingCache.size >= RANKING_CACHE_MAX) {
+      batchedRankingCache.clear();
+    }
+    batchedRankingCache.set(cacheKey, computed);
+  }
+
+  return {
+    ...computed.baseResult,
+    topRankedPlayers: computed.allRankedPlayers.slice(0, limitPlayers),
+  };
+}
+
+async function computeUncachedBatchedRanking(
+  corpus: string,
+  treePath: string,
+  windowCutoff: string,
+): Promise<CachedBatchedRanking> {
   let treeNodes: Record<string, { p?: string | null; l?: number | null }> = {};
-  if (existsSync(treePath)) {
-    const treeRaw = JSON.parse(await Bun.file(treePath).text());
+  const treeFile = Bun.file(treePath);
+  if (await treeFile.exists()) {
+    const treeRaw = (await treeFile.json()) as {
+      nodes?: Record<string, { p?: string | null; l?: number | null }>;
+    };
     treeNodes = treeRaw.nodes ?? {};
   }
 
@@ -620,20 +690,22 @@ export async function runBatchedRanking(
       : "2026-11-09";
 
   return {
-    generatedAtIso: nowIso,
-    windowStart: windowCutoff,
-    windowEnd,
-    totalWagersScanned: totalLines,
-    inWindowWagers,
-    totalHandleUsd: totalHandleCents / 100,
-    totalToWinUsd: totalToWinCents / 100,
-    activeCustomerCount: customerMap.size,
-    activeSubAgentCount: subAgentMap.size,
-    activeMasterAgentCount: masterAgentMap.size,
-    conduitSubAgentCount,
-    topMasterAgents: topMasters.slice(0, 15),
-    topSubAgents: topSubAgents.slice(0, 25),
-    topRankedPlayers: rankedPlayers.slice(0, limitPlayers),
+    baseResult: {
+      generatedAtIso: nowIso,
+      windowStart: windowCutoff,
+      windowEnd,
+      totalWagersScanned: totalLines,
+      inWindowWagers,
+      totalHandleUsd: totalHandleCents / 100,
+      totalToWinUsd: totalToWinCents / 100,
+      activeCustomerCount: customerMap.size,
+      activeSubAgentCount: subAgentMap.size,
+      activeMasterAgentCount: masterAgentMap.size,
+      conduitSubAgentCount,
+      topMasterAgents: topMasters.slice(0, 15),
+      topSubAgents: topSubAgents.slice(0, 25),
+    },
+    allRankedPlayers: rankedPlayers,
   };
 }
 

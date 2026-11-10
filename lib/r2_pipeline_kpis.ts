@@ -138,33 +138,43 @@ function applyDataAge(
   };
 }
 
+const DEFAULT_R2_PROBE_TIMEOUT_MS = 5_000;
+
 export async function probeR2PipelineKpis(
   now: Date = new Date(),
-  fetchImpl: R2PipelineFetcher = (url, init) => fetch(url, init),
+  fetchImpl: R2PipelineFetcher = (url, init) =>
+    fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(DEFAULT_R2_PROBE_TIMEOUT_MS),
+    }),
 ): Promise<R2PipelineKpis> {
   const nowMs = now.getTime();
   const out: Record<string, R2PipelineSinkKpi> = {};
   await Promise.all(
     BRIDGE_STALENESS_TARGETS.map(async (target) => {
       const url = publicUrlFor(target);
-      let probe: StalenessProbe;
-      try {
-        const response = await fetchImpl(url, { method: "HEAD" as const });
-        probe = {
-          target,
-          status: response.status,
-          lastModifiedMs: parseLastModified(
-            response.headers.get("last-modified"),
-          ),
-        };
-      } catch (err) {
-        probe = {
-          target,
-          status: 0,
-          lastModifiedMs: null,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
+      const [probe, windowToMs] = await Promise.all([
+        (async (): Promise<StalenessProbe> => {
+          try {
+            const response = await fetchImpl(url, { method: "HEAD" as const });
+            return {
+              target,
+              status: response.status,
+              lastModifiedMs: parseLastModified(
+                response.headers.get("last-modified"),
+              ),
+            };
+          } catch (err) {
+            return {
+              target,
+              status: 0,
+              lastModifiedMs: null,
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        })(),
+        resolveDataWindowToMs(target, fetchImpl),
+      ]);
       const verdict = evaluateProbe(probe, nowMs);
       const base: R2PipelineSinkKpi = {
         lastModified:
@@ -183,7 +193,6 @@ export async function probeR2PipelineKpis(
         dataStale: false,
         dataWindowToMs: null,
       };
-      const windowToMs = await resolveDataWindowToMs(target, fetchImpl);
       out[SINK_ID(target.key)] = applyDataAge(base, windowToMs, nowMs);
     }),
   );

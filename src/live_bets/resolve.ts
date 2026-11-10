@@ -82,14 +82,40 @@ type FileLoadResult =
 
 const PARSED_CACHE_MAX = 32;
 const parsedFileCache = new Map<string, ParsedSnapshot>();
+const fileStatHashCache = new Map<
+  string,
+  { readonly stamp: string; readonly hash: string }
+>();
 const hierarchyCache = new Map<
   string,
-  { readonly hash: string; readonly index: HierarchyIndex }
+  {
+    readonly stamp: string;
+    readonly hash: string;
+    readonly index: HierarchyIndex;
+  }
 >();
 const scoreboardCache = new Map<
   string,
-  { readonly hash: string; readonly file: ScoreboardFile | null }
+  {
+    readonly stamp: string;
+    readonly hash: string;
+    readonly file: ScoreboardFile | null;
+  }
 >();
+
+async function statStamp(path: string): Promise<string | null> {
+  const st = await Bun.file(path)
+    .stat()
+    .catch(() => null);
+  return st === null ? null : `${st.mtimeMs}:${st.size}`;
+}
+
+export function resetLiveBetsResolverCache(): void {
+  parsedFileCache.clear();
+  fileStatHashCache.clear();
+  hierarchyCache.clear();
+  scoreboardCache.clear();
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -136,20 +162,30 @@ async function loadHierarchyIndex(
   repoRoot: string,
 ): Promise<{ readonly hash: string; readonly index: HierarchyIndex } | null> {
   const indexPath = resolve(repoRoot, DEFAULT_AGENT_INDEX_FILE);
-  const file = Bun.file(indexPath);
-  if (!(await file.exists())) return null;
+  const stamp = await statStamp(indexPath);
+  if (stamp === null) {
+    hierarchyCache.delete(indexPath);
+    return null;
+  }
+  const statHit = hierarchyCache.get(indexPath);
+  if (statHit !== undefined && statHit.stamp === stamp) {
+    return statHit;
+  }
   let bytes: Uint8Array;
   try {
-    bytes = await file.bytes();
+    bytes = await Bun.file(indexPath).bytes();
   } catch {
     return null;
   }
   const hash = sha256Hex(bytes);
-  const cached = hierarchyCache.get(indexPath);
-  if (cached !== undefined && cached.hash === hash) return cached;
+  if (statHit !== undefined && statHit.hash === hash) {
+    const refreshed = { stamp, hash, index: statHit.index };
+    hierarchyCache.set(indexPath, refreshed);
+    return refreshed;
+  }
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
-    const entry = { hash, index: hierarchyIndexFromAgentIndex(parsed) };
+    const entry = { stamp, hash, index: hierarchyIndexFromAgentIndex(parsed) };
     if (hierarchyCache.size >= PARSED_CACHE_MAX) hierarchyCache.clear();
     hierarchyCache.set(indexPath, entry);
     return entry;
@@ -164,22 +200,31 @@ async function resolveScoreboard(
 ): Promise<ScoreboardFile | null> {
   if (override !== undefined) return override;
   const path = resolve(repoRoot, DEFAULT_SCOREBOARD_FILE);
-  const file = Bun.file(path);
-  if (!(await file.exists())) return null;
+  const stamp = await statStamp(path);
+  if (stamp === null) {
+    scoreboardCache.delete(path);
+    return null;
+  }
+  const statHit = scoreboardCache.get(path);
+  if (statHit !== undefined && statHit.stamp === stamp) {
+    return statHit.file;
+  }
   let bytes: Uint8Array;
   try {
-    bytes = await file.bytes();
+    bytes = await Bun.file(path).bytes();
   } catch {
     return null;
   }
   const hash = sha256Hex(bytes);
-  const cached = scoreboardCache.get(path);
-  if (cached !== undefined && cached.hash === hash) return cached.file;
+  if (statHit !== undefined && statHit.hash === hash) {
+    scoreboardCache.set(path, { stamp, hash, file: statHit.file });
+    return statHit.file;
+  }
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
     const board = readScoreboardFile(parsed);
     if (scoreboardCache.size >= PARSED_CACHE_MAX) scoreboardCache.clear();
-    scoreboardCache.set(path, { hash, file: board });
+    scoreboardCache.set(path, { stamp, hash, file: board });
     return board;
   } catch {
     return null;
@@ -201,20 +246,33 @@ async function loadSnapshotFromFile(
   sourceKind: "file" | "fixture",
 ): Promise<FileLoadResult> {
   const shown = displayPathFor(absPath, repoRoot);
-  const file = Bun.file(absPath);
-  if (!(await file.exists())) {
+  const stamp = await statStamp(absPath);
+  if (stamp === null) {
+    fileStatHashCache.delete(absPath);
     return { ok: false, warning: `missing file: ${shown}` };
+  }
+
+  const hierarchy = await loadHierarchyIndex(repoRoot);
+  const statHashHit = fileStatHashCache.get(absPath);
+  if (statHashHit !== undefined && statHashHit.stamp === stamp) {
+    const cacheKey = `${absPath}|${sourceKind}|${statHashHit.hash}|${hierarchy?.hash ?? "none"}`;
+    const hit = parsedFileCache.get(cacheKey);
+    if (hit !== undefined) {
+      return { ok: true, path: shown, hash: statHashHit.hash, snapshot: hit };
+    }
   }
 
   let bytes: Uint8Array;
   try {
-    bytes = await file.bytes();
+    bytes = await Bun.file(absPath).bytes();
   } catch {
     return { ok: false, warning: `unreadable file: ${shown}` };
   }
 
   const hash = sha256Hex(bytes);
-  const hierarchy = await loadHierarchyIndex(repoRoot);
+  if (fileStatHashCache.size >= PARSED_CACHE_MAX) fileStatHashCache.clear();
+  fileStatHashCache.set(absPath, { stamp, hash });
+
   const cacheKey = `${absPath}|${sourceKind}|${hash}|${hierarchy?.hash ?? "none"}`;
   const hit = parsedFileCache.get(cacheKey);
   if (hit !== undefined) {

@@ -171,17 +171,29 @@ export async function renderDocsTree(options: {
   }
   rels.sort();
 
+  const RENDER_CONCURRENCY = 16;
   const rendered: RenderedDoc[] = [];
-  for (const rel of rels) {
-    rendered.push(
-      await renderOne(
+  let nextIdx = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIdx < rels.length) {
+      const idx = nextIdx++;
+      const rel = rels[idx];
+      if (rel === undefined) continue;
+      rendered[idx] = await renderOne(
         options.dir,
         options.cacheDir,
         rel,
         options.dryRun === true,
-      ),
-    );
+      );
+    }
   }
+
+  await Promise.all(
+    Array.from({ length: Math.min(RENDER_CONCURRENCY, rels.length) }, () =>
+      worker(),
+    ),
+  );
   return rendered;
 }
 

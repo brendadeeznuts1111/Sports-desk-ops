@@ -245,6 +245,16 @@ const filesToPublish = [
     type: "image/jpeg",
     meta: { artifact: "ARCH-GUIDE-BASELINE", modes: "1,2,3,4,5,6,7,8,9,10" },
   },
+  {
+    file: "dist/assets/ARCH-Guide.webp",
+    key: "assets/ARCH-Guide.webp",
+    type: "image/webp",
+    meta: {
+      artifact: "ARCH-GUIDE-BASELINE",
+      modes: "1,2,3,4,5,6,7,8,9,10",
+      metadata: "none (raster sibling)",
+    },
+  },
 ];
 
 if (checkCredentials) {
@@ -296,32 +306,60 @@ console.log(
   "================================================================================",
 );
 
-for (const item of filesToPublish) {
-  const file = Bun.file(path.join(repoRoot, item.file));
-  if (!(await file.exists())) continue;
-  const bytes = await file.bytes();
-  await client.writeWithMetadata(item.key, bytes, {
-    type: item.type,
-    metadata: item.meta ?? {},
-  });
-  const stored = await client.stat(item.key);
-  if (stored.size !== bytes.length) {
-    throw new Error(
-      `R2 stat mismatch for ${item.key}: wrote ${bytes.length}, stat ${stored.size}`,
-    );
+const UPLOAD_CONCURRENCY = 6;
+let nextUploadIndex = 0;
+const publishedLines = Array.from(
+  { length: filesToPublish.length },
+  () => null,
+);
+
+async function uploadWorker() {
+  while (nextUploadIndex < filesToPublish.length) {
+    const idx = nextUploadIndex++;
+    const item = filesToPublish[idx];
+    if (!item) continue;
+    const file = Bun.file(path.join(repoRoot, item.file));
+    if (!(await file.exists())) continue;
+    const bytes = await file.bytes();
+    await client.writeWithMetadata(item.key, bytes, {
+      type: item.type,
+      metadata: item.meta ?? {},
+    });
+    const stored = await client.stat(item.key);
+    if (stored.size !== bytes.length) {
+      throw new Error(
+        `R2 stat mismatch for ${item.key}: wrote ${bytes.length}, stat ${stored.size}`,
+      );
+    }
+    const digest = new Bun.CryptoHasher("sha256")
+      .update(bytes)
+      .digest("hex")
+      .slice(0, 12);
+    publishedLines[idx] =
+      `  ✓ Published ${item.key.padEnd(46)} (${String(bytes.length).padStart(7)} B | sha256 ${digest}…) -> ${publicBase}/${item.key}`;
   }
-  console.log(
-    `  ✓ Published ${item.key.padEnd(46)} (${String(bytes.length).padStart(7)} B | sha256 ${new Bun.CryptoHasher("sha256").update(bytes).digest("hex").slice(0, 12)}…) -> ${publicBase}/${item.key}`,
-  );
 }
 
-const verifyRes = await fetch(`${publicBase}/graph.html`);
-const verifyBytes = new Uint8Array(await verifyRes.arrayBuffer());
-const feedRes = await fetch(`${publicBase}/graph-live-feed.json`);
-const feedJson = await feedRes.json();
-const metaRes = await fetch(
-  `${publicBase}/assets/pipeline-artifacts-metadata.json`,
+await Promise.all(
+  Array.from(
+    { length: Math.min(UPLOAD_CONCURRENCY, filesToPublish.length) },
+    () => uploadWorker(),
+  ),
 );
+for (const line of publishedLines) {
+  if (line !== null) console.log(line);
+}
+
+const [verifyRes, feedRes, metaRes] = await Promise.all([
+  fetch(`${publicBase}/graph.html`),
+  fetch(`${publicBase}/graph-live-feed.json`),
+  fetch(`${publicBase}/assets/pipeline-artifacts-metadata.json`),
+]);
+const [verifyBuf, feedJson] = await Promise.all([
+  verifyRes.arrayBuffer(),
+  feedRes.json(),
+]);
+const verifyBytes = new Uint8Array(verifyBuf);
 console.log(
   "--------------------------------------------------------------------------------",
 );
