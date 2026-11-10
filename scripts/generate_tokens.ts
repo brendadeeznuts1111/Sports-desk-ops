@@ -164,6 +164,66 @@ function spliceOrExit(
 const houdiniCss = generateHoudiniPropertyCss();
 const rootVarsCss = generateRootVariablesCss();
 
+function generateStandaloneDashboardTokensCss(): string {
+  let css = `/**
+ * @file src/dashboard/tokens.generated.css
+ * @description Generated from design/tokens.toml (v${ssot.meta.version}) via \`bun run gen:tokens\`.
+ * DO NOT EDIT BY HAND — enforced by \`bun run gen:tokens:gate\`.
+ */
+
+/* ==========================================================================
+   1. CSS Houdini @property Declarations (Generated from tokens.toml)
+   Enforces specification-grade design tokens and prevents silent property drop.
+   ========================================================================== */
+`;
+  for (const t of allTokens) {
+    css += `@property ${t.token_name} {\n`;
+    css += `  syntax: "<color>";\n`;
+    css += `  inherits: true;\n`;
+    css += `  initial-value: ${t.hex};\n`;
+    css += `}\n\n`;
+  }
+
+  css += `/* ==========================================================================
+   2. Canonical :root Custom Properties & Semantic Surface Aliases
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+  /* Generated from tokens.toml (v${ssot.meta.version}) */
+`;
+  for (const t of allTokens) {
+    css += `  ${t.token_name}: ${t.hex};\n`;
+  }
+  css += `
+  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */
+  --bg: var(--sd-surface-bg);
+  --bg-cli: var(--sd-surface-cli);
+  --card: var(--sd-surface-card);
+  --card-hover: var(--sd-surface-hover);
+  --border: var(--sd-surface-border);
+  --text: var(--sd-text-primary);
+  --muted: var(--sd-text-muted);
+  --accent: var(--sd-tier-rec-bias);
+  --emerald: var(--sd-theme-emerald);
+  --amber: var(--sd-tier-steam);
+  --danger: var(--sd-tier-alert);
+  --purple: var(--sd-route-sharp);
+  --cyan: var(--sd-route-devig);
+}
+`;
+  return css;
+}
+
+const standaloneCssRelPath = "src/dashboard/tokens.generated.css";
+const standaloneCssAbsPath = resolve(rootDir, standaloneCssRelPath);
+mkdirSync(resolve(standaloneCssAbsPath, ".."), { recursive: true });
+emitRepoFile(
+  standaloneCssRelPath,
+  standaloneCssAbsPath,
+  generateStandaloneDashboardTokensCss(),
+);
+console.log(`[gen:tokens] Emitted updated ${standaloneCssRelPath}`);
+
 for (const template of DASHBOARD_TEMPLATES) {
   const dashboardPath = resolve(rootDir, template.repoPath);
   let html = readFileSync(dashboardPath, "utf-8");
