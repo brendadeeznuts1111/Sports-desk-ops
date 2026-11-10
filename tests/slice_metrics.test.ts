@@ -6,6 +6,7 @@ import {
 } from "../src/risk/hold_floor_config.ts";
 import {
   createStaticRouterOrderQuery,
+  deriveRouterBlockEnforcedPredicate,
   queryBlockEnforced,
 } from "../src/risk/router_block_audit.ts";
 import { SliceMetricsSoASpine } from "../src/risk/slice_data_table.ts";
@@ -30,7 +31,13 @@ import {
 import {
   assertValidSliceRegistry,
   buildSliceIndexLookup,
+  deriveSliceBitsetPredicate,
   getSliceSpec,
+  isAdvantageSlice,
+  isBlockedSlice,
+  isLeakSlice,
+  isLiveLockoutSlice,
+  isPreserveSlice,
   isRegisteredSliceId,
   SLICE_REGISTRY,
   type SliceSpec,
@@ -812,5 +819,117 @@ default_pct = 3.50
 "0" = 4.00
 `),
     ).toThrow(/by_slice/);
+  });
+
+  test("per-slice booleans use derived bitsets keyed by registry index and exposed strictly via predicates", async () => {
+    // 1. Derived registry predicates match AoS policy/mechanism fields and expose only functions
+    expect(typeof isBlockedSlice).toBe("function");
+    expect(typeof isAdvantageSlice).toBe("function");
+    expect(typeof isLeakSlice).toBe("function");
+    expect(typeof isPreserveSlice).toBe("function");
+    expect(typeof isLiveLockoutSlice).toBe("function");
+
+    for (const spec of SLICE_REGISTRY) {
+      expect(isBlockedSlice(spec.slice_id)).toBe(spec.policy === "BLOCKED");
+      expect(isAdvantageSlice(spec.slice_id)).toBe(spec.policy === "ADVANTAGE");
+      expect(isLeakSlice(spec.slice_id)).toBe(spec.policy === "LEAK");
+      expect(isPreserveSlice(spec.slice_id)).toBe(spec.policy === "PRESERVE");
+      expect(isLiveLockoutSlice(spec.slice_id)).toBe(
+        spec.policy_mechanism === "LIVE_LOCKOUT",
+      );
+    }
+    expect(isBlockedSlice("nonexistent:slice:p0:all")).toBe(false);
+    expect(isBlockedSlice("0")).toBe(false);
+
+    // 2. Custom >32-slice registry spans multiple 32-bit words cleanly and stays order-invariant
+    const multiWordRegistry: SliceSpec[] = [];
+    for (let k = 0; k < 40; k++) {
+      multiWordRegistry.push({
+        slice_id: `sport_${k}:league_${k}:p0:spread`,
+        sport: "Football",
+        league: `L${k}`,
+        period: "P0 Game",
+        market: "Spread",
+        selector: { sport: "Football" },
+        policy: k % 3 === 0 ? "BLOCKED" : "LEAK",
+        policy_mechanism: "VIG",
+        policy_qualifier: "",
+      });
+    }
+    const predForward = deriveSliceBitsetPredicate(
+      (s) => s.policy === "BLOCKED",
+      multiWordRegistry,
+    );
+    const predReversed = deriveSliceBitsetPredicate(
+      (s) => s.policy === "BLOCKED",
+      multiWordRegistry.toReversed(),
+    );
+    for (let k = 0; k < 40; k++) {
+      const id = `sport_${k}:league_${k}:p0:spread`;
+      expect(predForward(id)).toBe(k % 3 === 0);
+      expect(predReversed(id)).toBe(k % 3 === 0);
+    }
+
+    // 3. Router block_enforced snapshot derives a bitset predicate without exposing raw arrays
+    const router = createStaticRouterOrderQuery({
+      "hockey:nhl:periods:all": 27_816,
+      "baseball:mlb:f5:spread": 0,
+      "live:all:p0_inplay:all": 7_704,
+    });
+    const isEnforced = deriveRouterBlockEnforcedPredicate(
+      router,
+      SLICE_REGISTRY,
+    );
+    expect(typeof isEnforced).toBe("function");
+    expect(isEnforced("hockey:nhl:periods:all")).toBe(false);
+    expect(isEnforced("baseball:mlb:f5:spread")).toBe(true);
+    expect(isEnforced("live:all:p0_inplay:all")).toBe(false);
+    expect(isEnforced("football:nfl:p0_game:spread")).toBe(true);
+    expect(isEnforced("unregistered:slice:p0:all")).toBe(false);
+
+    // 4. DataTable SoA spine encapsulates block_enforced bitset behind predicates (not on columns)
+    const holdConfig = await loadHoldFloorConfig("config/wager_tiers.toml");
+    const spine = new SliceMetricsSoASpine(16);
+    spine.flush(
+      SLICE_REGISTRY.map((spec) => ({
+        slice_id: spec.slice_id,
+        sport: spec.sport,
+        league: spec.league,
+        period: spec.period,
+        market: spec.market,
+        legs: 1000,
+        buy_share_pct: 50,
+        handle_usd: 1_000_000,
+        hold_total_pct: 2.0,
+        hold_floor_pct: resolveHoldFloorPct(holdConfig, spec),
+        policy: spec.policy,
+        policy_mechanism: spec.policy_mechanism,
+        policy_qualifier: spec.policy_qualifier,
+        block_enforced: isEnforced(spec.slice_id),
+        balanced_overround_pct: STANDARD_MINUS_110_BALANCED_HOLD_PCT,
+      })),
+    );
+    expect("block_enforced_bits" in spine.columns).toBe(false);
+    expect("flags_mask" in spine.columns).toBe(false);
+    for (let i = 0; i < SLICE_REGISTRY.length; i++) {
+      const id = SLICE_REGISTRY[i]!.slice_id;
+      expect(spine.isBlockEnforcedAt(i)).toBe(isEnforced(id));
+      expect(spine.hasFlagAt(i, "HOLD_BELOW_FLOOR")).toBe(true);
+      expect(spine.hasFlagAt(i, "POLICY_DATA_CONFLICT")).toBe(
+        isBlockedSlice(id) && !isEnforced(id),
+      );
+    }
+
+    // 5. Static source check: zero `boolean[]` or `Array<boolean>` in src/risk/*.ts
+    const glob = new Bun.Glob("src/risk/*.ts");
+    for await (const relPath of glob.scan(".")) {
+      const src = await Bun.file(relPath).text();
+      // Strip comments so doc comments naming `boolean[]` as forbidden don't trip
+      const codeOnly = src
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      expect(codeOnly).not.toMatch(/\bboolean\s*\[\s*\]/);
+      expect(codeOnly).not.toMatch(/\bArray\s*<\s*boolean\s*>/);
+    }
   });
 });
