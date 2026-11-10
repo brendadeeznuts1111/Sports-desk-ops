@@ -68,7 +68,7 @@ import {
 } from "../src/risk/hold_floor_config.ts";
 import {
   createStaticRouterOrderQuery,
-  queryBlockEnforced,
+  deriveRouterBlockEnforcedPredicate,
 } from "../src/risk/router_block_audit.ts";
 import { diffSlicePolicyPairs } from "../src/risk/slice_diff_view.ts";
 import {
@@ -77,7 +77,11 @@ import {
   type SliceMetrics,
   type SlicePolicy,
 } from "../src/risk/slice_metrics.ts";
-import { SLICE_REGISTRY, type SliceSpec } from "../src/risk/slice_registry.ts";
+import {
+  isBlockedSlice,
+  SLICE_REGISTRY,
+  type SliceSpec,
+} from "../src/risk/slice_registry.ts";
 import type {
   ElasticityFrontierPoint,
   KeyNumberBucketRow,
@@ -2146,7 +2150,7 @@ export function evaluateArenaShadowPricing(
   const postBlockAcceptedBySlice: Record<string, number> = {};
   for (let k = 0; k < sliceRegCount; k++) {
     const spec = SLICE_REGISTRY[k]!;
-    if (spec.policy === "BLOCKED") {
+    if (isBlockedSlice(spec.slice_id)) {
       postBlockAcceptedBySlice[spec.slice_id] =
         routerAuditMode === "enforced_lockout" ? 0 : csLegs[k]!;
     } else {
@@ -2154,6 +2158,10 @@ export function evaluateArenaShadowPricing(
     }
   }
   const routerQuery = createStaticRouterOrderQuery(postBlockAcceptedBySlice);
+  const isSliceBlockEnforced = deriveRouterBlockEnforcedPredicate(
+    routerQuery,
+    SLICE_REGISTRY,
+  );
 
   const sliceMetricsRows: SliceMetrics[] = [];
   const preTradePolicyPairs: {
@@ -2185,7 +2193,7 @@ export function evaluateArenaShadowPricing(
       sport: spec.sport,
       market: spec.market,
     });
-    const blockEnforced = queryBlockEnforced(routerQuery, spec.slice_id);
+    const blockEnforced = isSliceBlockEnforced(spec.slice_id);
 
     sliceMetricsRows.push(
       deriveSliceMetrics({

@@ -829,7 +829,8 @@ default_pct = 3.50
     expect(typeof isPreserveSlice).toBe("function");
     expect(typeof isLiveLockoutSlice).toBe("function");
 
-    for (const spec of SLICE_REGISTRY) {
+    const registrySpecs: readonly SliceSpec[] = SLICE_REGISTRY;
+    for (const spec of registrySpecs) {
       expect(isBlockedSlice(spec.slice_id)).toBe(spec.policy === "BLOCKED");
       expect(isAdvantageSlice(spec.slice_id)).toBe(spec.policy === "ADVANTAGE");
       expect(isLeakSlice(spec.slice_id)).toBe(spec.policy === "LEAK");
@@ -845,7 +846,7 @@ default_pct = 3.50
     const multiWordRegistry: SliceSpec[] = [];
     for (let k = 0; k < 40; k++) {
       multiWordRegistry.push({
-        slice_id: `sport_${k}:league_${k}:p0:spread`,
+        slice_id: `football:league_${k}:p0:spread`,
         sport: "Football",
         league: `L${k}`,
         period: "P0 Game",
@@ -865,7 +866,7 @@ default_pct = 3.50
       multiWordRegistry.toReversed(),
     );
     for (let k = 0; k < 40; k++) {
-      const id = `sport_${k}:league_${k}:p0:spread`;
+      const id = `football:league_${k}:p0:spread`;
       expect(predForward(id)).toBe(k % 3 === 0);
       expect(predReversed(id)).toBe(k % 3 === 0);
     }

@@ -6,6 +6,8 @@
  * - `SLICE_REGISTRY` remains readable, diffable AoS policy data (`as const satisfies readonly SliceSpec[]`).
  * - Array indices are strictly internal derived handles (`buildSliceIndexLookup`), never bit-packed
  *   with upper-bit flags/axes, and never exposed as canonical join keys in TOML, docs, tests, or telemetry.
+ * - Per-slice booleans live in derived `Uint32Array` bitsets keyed by registry index — never a `boolean[]`,
+ *   never packed into the index — exposed only through predicates.
  */
 
 import type {
@@ -255,3 +257,53 @@ export function validateHoldFloorSliceOverrides(
   }
   return invalid;
 }
+
+export type SlicePredicate = (slice_id: string) => boolean;
+
+/**
+ * Derives an encapsulated `Uint32Array` bitset keyed by `SLICE_REGISTRY` index
+ * from `predicate(spec)` — never a `boolean[]`, never packed into the index —
+ * and exposes it strictly as a `(slice_id: string) => boolean` predicate.
+ */
+export function deriveSliceBitsetPredicate(
+  predicate: (spec: SliceSpec) => boolean,
+  registry: readonly SliceSpec[] = SLICE_REGISTRY,
+): SlicePredicate {
+  const lookup =
+    registry === SLICE_REGISTRY
+      ? DEFAULT_SLICE_LOOKUP
+      : buildSliceIndexLookup(registry);
+  const words = new Uint32Array((registry.length + 31) >>> 5);
+  for (let i = 0; i < registry.length; i++) {
+    if (predicate(registry[i]!)) {
+      words[i >>> 5] = ((words[i >>> 5] ?? 0) | (1 << (i & 31))) >>> 0;
+    }
+  }
+  return (slice_id: string): boolean => {
+    const idx = lookup.indexOf(slice_id);
+    if (idx < 0) {
+      return false;
+    }
+    return ((words[idx >>> 5]! >>> (idx & 31)) & 1) === 1;
+  };
+}
+
+export const isBlockedSlice: SlicePredicate = deriveSliceBitsetPredicate(
+  (spec) => spec.policy === "BLOCKED",
+);
+
+export const isAdvantageSlice: SlicePredicate = deriveSliceBitsetPredicate(
+  (spec) => spec.policy === "ADVANTAGE",
+);
+
+export const isLeakSlice: SlicePredicate = deriveSliceBitsetPredicate(
+  (spec) => spec.policy === "LEAK",
+);
+
+export const isPreserveSlice: SlicePredicate = deriveSliceBitsetPredicate(
+  (spec) => spec.policy === "PRESERVE",
+);
+
+export const isLiveLockoutSlice: SlicePredicate = deriveSliceBitsetPredicate(
+  (spec) => spec.policy_mechanism === "LIVE_LOCKOUT",
+);

@@ -64,26 +64,25 @@ function encodeMechanism(mechanism: SlicePolicyMechanism): number {
   }
 }
 
+function flagBitOf(flag: SliceFlag): number {
+  switch (flag) {
+    case "BUY_SHARE_EXTREME":
+      return FLAG_BIT_BUY_SHARE_EXTREME;
+    case "POLICY_DATA_CONFLICT":
+      return FLAG_BIT_POLICY_DATA_CONFLICT;
+    case "HOLD_BELOW_FLOOR":
+      return FLAG_BIT_HOLD_BELOW_FLOOR;
+    case "DIRECTIONAL_DOMINANT":
+      return FLAG_BIT_DIRECTIONAL_DOMINANT;
+    case "MISSING_VIG_SPLIT":
+      return FLAG_BIT_MISSING_VIG_SPLIT;
+  }
+}
+
 export function encodeSliceFlagsMask(flags: readonly SliceFlag[]): number {
   let mask = 0;
   for (let i = 0; i < flags.length; i++) {
-    switch (flags[i]!) {
-      case "BUY_SHARE_EXTREME":
-        mask |= FLAG_BIT_BUY_SHARE_EXTREME;
-        break;
-      case "POLICY_DATA_CONFLICT":
-        mask |= FLAG_BIT_POLICY_DATA_CONFLICT;
-        break;
-      case "HOLD_BELOW_FLOOR":
-        mask |= FLAG_BIT_HOLD_BELOW_FLOOR;
-        break;
-      case "DIRECTIONAL_DOMINANT":
-        mask |= FLAG_BIT_DIRECTIONAL_DOMINANT;
-        break;
-      case "MISSING_VIG_SPLIT":
-        mask |= FLAG_BIT_MISSING_VIG_SPLIT;
-        break;
-    }
+    mask |= flagBitOf(flags[i]!);
   }
   return mask >>> 0;
 }
@@ -123,14 +122,14 @@ export interface SliceMetricsSoAColumns {
   readonly floor_delta_usd: Float64Array;
   readonly policy_code: Uint8Array;
   readonly mechanism_code: Uint8Array;
-  readonly block_enforced_bits: Uint32Array;
-  readonly flags_mask: Uint32Array;
 }
 
 export class SliceMetricsSoASpine {
   readonly capacity: number;
   readonly columns: SliceMetricsSoAColumns;
 
+  private readonly blockEnforcedBits: Uint32Array;
+  private readonly flagsMask: Uint32Array;
   private readonly sliceIds: string[];
   private readonly sports: string[];
   private readonly leagues: string[];
@@ -150,7 +149,10 @@ export class SliceMetricsSoASpine {
       );
     }
     this.capacity = capacity;
-    const bitsetWords = Math.ceil(capacity / 32);
+    const bitsetWords = (capacity + 31) >>> 5;
+
+    this.blockEnforcedBits = new Uint32Array(bitsetWords);
+    this.flagsMask = new Uint32Array(capacity);
 
     this.columns = {
       legs: new Int32Array(capacity),
@@ -167,8 +169,6 @@ export class SliceMetricsSoASpine {
       floor_delta_usd: new Float64Array(capacity),
       policy_code: new Uint8Array(capacity),
       mechanism_code: new Uint8Array(capacity),
-      block_enforced_bits: new Uint32Array(bitsetWords),
-      flags_mask: new Uint32Array(capacity),
     };
 
     this.sliceIds = [];
@@ -204,6 +204,42 @@ export class SliceMetricsSoASpine {
   }
 
   /**
+   * Predicate read over the encapsulated `blockEnforcedBits` `Uint32Array` bitset.
+   */
+  isBlockEnforcedAt(index: number): boolean {
+    if (index < 0 || index >= this.activeRowCount) {
+      throw new RangeError(
+        `Row index ${index} out of bounds (0..${this.activeRowCount})`,
+      );
+    }
+    return ((this.blockEnforcedBits[index >>> 5]! >>> (index & 31)) & 1) === 1;
+  }
+
+  /**
+   * Predicate read of `block_enforced` by canonical `slice_id` over active rows.
+   */
+  isSliceBlockEnforced(slice_id: string): boolean {
+    for (let i = 0; i < this.activeRowCount; i++) {
+      if (this.sliceIds[i] === slice_id) {
+        return this.isBlockEnforcedAt(i);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Predicate read over the encapsulated `flagsMask` `Uint32Array` bitset.
+   */
+  hasFlagAt(index: number, flag: SliceFlag): boolean {
+    if (index < 0 || index >= this.activeRowCount) {
+      throw new RangeError(
+        `Row index ${index} out of bounds (0..${this.activeRowCount})`,
+      );
+    }
+    return (this.flagsMask[index]! & flagBitOf(flag)) !== 0;
+  }
+
+  /**
    * Ingests a stream flush batch, computing all derived columns and gate flags
    * once and writing them into the pre-allocated SoA TypedArray buffers.
    */
@@ -214,7 +250,7 @@ export class SliceMetricsSoASpine {
       );
     }
 
-    this.columns.block_enforced_bits.fill(0);
+    this.blockEnforcedBits.fill(0);
     const count = inputs.length;
 
     for (let i = 0; i < count; i++) {
@@ -248,13 +284,13 @@ export class SliceMetricsSoASpine {
       this.columns.mechanism_code[i] = encodeMechanism(
         derived.policy_mechanism,
       );
-      this.columns.flags_mask[i] = encodeSliceFlagsMask(derived.flags);
+      this.flagsMask[i] = encodeSliceFlagsMask(derived.flags);
 
       if (derived.block_enforced) {
         const wordIdx = i >>> 5;
         const bitMask = 1 << (i & 31);
-        this.columns.block_enforced_bits[wordIdx] =
-          (this.columns.block_enforced_bits[wordIdx]! | bitMask) >>> 0;
+        this.blockEnforcedBits[wordIdx] =
+          (this.blockEnforcedBits[wordIdx]! | bitMask) >>> 0;
       }
     }
 
@@ -275,10 +311,7 @@ export class SliceMetricsSoASpine {
     }
     const vigRaw = this.columns.vig_capture_pct[index]!;
     const dirRaw = this.columns.directional_pnl_usd[index]!;
-    const wordIdx = index >>> 5;
-    const bitMask = 1 << (index & 31);
-    const blockEnforced =
-      (this.columns.block_enforced_bits[wordIdx]! & bitMask) !== 0;
+    const blockEnforced = this.isBlockEnforcedAt(index);
 
     return {
       slice_id: this.sliceIds[index]!,
@@ -303,7 +336,7 @@ export class SliceMetricsSoASpine {
         MECHANISM_BY_CODE[this.columns.mechanism_code[index]!] ?? "VIG",
       policy_qualifier: this.qualifiers[index]!,
       block_enforced: blockEnforced,
-      flags: decodeSliceFlagsMask(this.columns.flags_mask[index]!),
+      flags: decodeSliceFlagsMask(this.flagsMask[index]!),
     };
   }
 
