@@ -25,6 +25,7 @@ import { SUBSPORT_TAXONOMY_CATALOG } from "../lib/market_taxonomy_catalog.ts";
 import {
   type MarketFilter,
   type PeriodFilter,
+  type RouterAuditMode,
   runShadowPricingDashboard,
   type ShadowRepriceMode,
   type SportFilter,
@@ -59,6 +60,13 @@ function parseRepriceMode(
   raw: string | null | undefined,
 ): ShadowRepriceMode | undefined {
   if (raw === "floor" || raw === "exact") return raw;
+  return undefined;
+}
+
+function parseRouterAuditMode(
+  raw: string | null | undefined,
+): RouterAuditMode | undefined {
+  if (raw === "observed_ledger" || raw === "enforced_lockout") return raw;
   return undefined;
 }
 
@@ -275,6 +283,9 @@ export function startDashboardServer(
                 SubSportFilter | undefined,
               period: (periodParam ?? undefined) as PeriodFilter | undefined,
               market: (marketParam ?? undefined) as MarketFilter | undefined,
+              routerAuditMode: parseRouterAuditMode(
+                url.searchParams.get("routerAudit"),
+              ),
             });
             return Response.json(payload);
           } catch (err) {
@@ -297,6 +308,7 @@ export function startDashboardServer(
               subSport?: SubSportFilter;
               period?: PeriodFilter;
               market?: MarketFilter;
+              routerAuditMode?: RouterAuditMode;
               source?: string;
             };
             const forceFixture =
@@ -314,6 +326,7 @@ export function startDashboardServer(
               subSport: body.subSport,
               period: body.period,
               market: body.market,
+              routerAuditMode: parseRouterAuditMode(body.routerAuditMode),
             });
             return Response.json(payload);
           } catch (err) {

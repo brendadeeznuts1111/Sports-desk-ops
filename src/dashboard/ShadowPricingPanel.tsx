@@ -15,6 +15,7 @@ import type {
   PeriodCode,
   PeriodFilter,
   PointBuyPolicy,
+  RouterAuditMode,
   ShadowPricingDashboardPayload,
   ShadowRepriceMode,
   SportCode,
@@ -24,7 +25,11 @@ import type {
   TaxonomyRiskStatus,
   TaxonomyRollupRow,
 } from "../../types/shadow_pricing.ts";
-import { debugDashboardTrace } from "./runtime_flags.ts";
+import {
+  debugDashboardTrace,
+  resolveSliceMetricsFeatureDefault,
+} from "./runtime_flags.ts";
+import { SliceMetricsViews } from "./SliceMetricsViews.tsx";
 
 export interface ShadowPricingPanelProps {
   readonly onInspectAccount?: (accountId: string) => void;
@@ -396,6 +401,11 @@ export function ShadowPricingPanel({
   const [minVolume, setMinVolume] = useState<number>(15);
   const [retailElasticity, setRetailElasticity] = useState<number>(0.15);
   const [repriceMode, setRepriceMode] = useState<ShadowRepriceMode>("floor");
+  const [routerAuditMode, setRouterAuditMode] =
+    useState<RouterAuditMode>("observed_ledger");
+  const [sliceMetricsEnabled, setSliceMetricsEnabled] = useState<boolean>(() =>
+    resolveSliceMetricsFeatureDefault(),
+  );
 
   const [payload, setPayload] = useState<ShadowPricingDashboardPayload | null>(
     null,
@@ -435,6 +445,7 @@ export function ShadowPricingPanel({
       minVolume: number;
       retailElasticity: number;
       repriceMode: ShadowRepriceMode;
+      routerAuditMode: RouterAuditMode;
     }) => {
       setLoading(true);
       setErrorMsg(null);
@@ -450,6 +461,7 @@ export function ShadowPricingPanel({
           minVolume: String(params.minVolume),
           elasticity: String(params.retailElasticity),
           mode: params.repriceMode,
+          routerAudit: params.routerAuditMode,
         });
         const res = await fetch(`/api/shadow-pricing?${qs.toString()}`);
         if (!res.ok) {
@@ -497,6 +509,7 @@ export function ShadowPricingPanel({
         minVolume,
         retailElasticity,
         repriceMode,
+        routerAuditMode,
       });
     }, 80);
     return () => clearTimeout(timer);
@@ -511,6 +524,7 @@ export function ShadowPricingPanel({
     minVolume,
     retailElasticity,
     repriceMode,
+    routerAuditMode,
     fetchSimulation,
   ]);
 
@@ -639,7 +653,25 @@ export function ShadowPricingPanel({
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            className="sd-preset-btn sd-mono"
+            data-active={sliceMetricsEnabled ? "true" : "false"}
+            onClick={() => setSliceMetricsEnabled((prev) => !prev)}
+            title="Feature flag gate for Typed SliceMetrics SoA DataTable + Blended Hold SLO + Pre/Post-Trade DiffView"
+          >
+            {sliceMetricsEnabled
+              ? "🧬 SliceMetrics V2: ON"
+              : "🧬 SliceMetrics V2: OFF"}
+          </button>
           <button
             type="button"
             className="sd-preset-btn sd-mono"
@@ -1086,6 +1118,15 @@ export function ShadowPricingPanel({
             </table>
           </div>
         </div>
+      ) : null}
+
+      {/* Feature-Gated Typed SliceMetrics SoA DataTable + Blended Hold SLO + Pre/Post-Trade DiffView */}
+      {sliceMetricsEnabled && payload?.sliceMetrics ? (
+        <SliceMetricsViews
+          bundle={payload.sliceMetrics}
+          routerAuditMode={routerAuditMode}
+          onChangeRouterAuditMode={setRouterAuditMode}
+        />
       ) : null}
 
       {/* Conditional Point-Buy Simulator vs Catalog Lockout Notice */}

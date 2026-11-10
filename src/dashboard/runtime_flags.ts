@@ -73,6 +73,35 @@ export function getDashboardRuntimeFlags(): DashboardRuntimeFlags {
 }
 
 /**
+ * Feature-flag gate for the typed `SliceMetrics` SoA DataTable + DiffView:
+ * enabled in `dev` (`EXPERIMENTAL`) and unbundled HMR by default, gated off in
+ * `prod` unless `?sliceMetrics=1` is explicitly supplied.
+ */
+export function resolveSliceMetricsFeatureDefault(
+  searchOverride?: string,
+): boolean {
+  let rawSearch = searchOverride;
+  if (rawSearch === undefined && "location" in globalThis) {
+    const loc = (globalThis as { location?: { search?: string } }).location;
+    if (loc !== undefined && typeof loc.search === "string") {
+      rawSearch = loc.search;
+    }
+  }
+  if (rawSearch !== undefined && rawSearch !== "") {
+    const param = new URLSearchParams(rawSearch).get("sliceMetrics");
+    if (param === "0" || param === "false") return false;
+    if (param === "1" || param === "true") return true;
+  }
+  if (feature("EXPERIMENTAL")) {
+    return true;
+  }
+  if (feature("PROD")) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Emits debug trace output in `dev`/`test` builds; completely dead-code eliminated in `prod`.
  */
 export function debugDashboardTrace(event: string, detail?: unknown): void {

@@ -271,3 +271,47 @@ blockquote {
 .sd-row-active td {
   background-color: rgba(56, 189, 248, 0.1) !important;
 }
+
+.sd-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.sd-kpi-box {
+  background-color: var(--sd-surface-cli);
+  border: 1px solid var(--sd-surface-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sd-kpi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sd-text-muted);
+}
+
+.sd-kpi-value {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--sd-text-primary);
+}
+
+.sd-kpi-sub {
+  font-size: 11px;
+  color: var(--sd-text-muted);
+}
+
+.sd-soa-table {
+  font-size: 11.5px;
+}
+
+.sd-soa-table th,
+.sd-soa-table td {
+  padding: 7px 8px;
+}

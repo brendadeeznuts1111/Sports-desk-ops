@@ -4,6 +4,33 @@
  * (Sport -> SubSport -> Period per SubSport -> Market) & Shadow-Pricing Elasticity (#135).
  */
 
+import type { SlicePolicyDiffReport } from "../src/risk/slice_diff_view.ts";
+import type {
+  BlendedHoldSloSummary,
+  SliceFlag,
+  SliceMetrics,
+  SlicePolicy,
+  SlicePolicyMechanism,
+} from "../src/risk/slice_metrics.ts";
+
+export type {
+  BlendedHoldSloSummary,
+  SliceFlag,
+  SliceMetrics,
+  SlicePolicy,
+  SlicePolicyDiffReport,
+  SlicePolicyMechanism,
+};
+
+export type RouterAuditMode = "observed_ledger" | "enforced_lockout";
+
+export interface SliceMetricsDashboardBundle {
+  readonly routerAuditMode: RouterAuditMode;
+  readonly rows: readonly SliceMetrics[];
+  readonly blendedHoldSlo: BlendedHoldSloSummary;
+  readonly policyDiff: SlicePolicyDiffReport;
+}
+
 export type ShadowProvenance = "live_db" | "fixture";
 
 /**
@@ -265,4 +292,5 @@ export interface ShadowPricingDashboardPayload {
   readonly breakevenElasticityPct: number | null;
   readonly presetComparison: readonly LadderPresetSummary[];
   readonly policyRecommendation: PolicyRecommendation;
+  readonly sliceMetrics: SliceMetricsDashboardBundle;
 }
