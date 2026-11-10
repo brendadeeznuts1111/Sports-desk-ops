@@ -6,22 +6,8 @@ const ROOT = join(import.meta.dir, "..");
 const BOOLEAN_ARRAY =
   /\b(?:readonly\s+)?boolean\s*\[\s*\]|\b(?:Readonly)?Array<\s*boolean\s*>/;
 
-// Pre-migration pin. Every entry is line-anchored AND stale-checked, so an
-// unrelated refactor that shifts a line fails loudly instead of silently
-// re-permitting a new `boolean[]` one line over. Commit 2 empties this list.
-const RATCHET: ReadonlyArray<{ file: string; line: number }> = [
-  { file: "lib/fraud_model.ts", line: 354 }, // FraudFeatureRow.missing
-  { file: "lib/fraud_model.ts", line: 477 }, // buildFeatureRow: local missing
-  { file: "lib/fraud_model.ts", line: 666 }, // labelVector return
-  { file: "lib/fraud_model.ts", line: 692 }, // aucRoc labels
-  { file: "lib/fraud_model.ts", line: 728 }, // averagePrecision labels
-  { file: "lib/fraud_model.ts", line: 769 }, // precisionAtFraction labels
-  { file: "lib/fraud_model.ts", line: 789 }, // rowPrecisionAtK labels
-  { file: "lib/fraud_model.ts", line: 833 }, // rowPrecisionAtKTable labels
-  { file: "lib/fraud_model.ts", line: 841 }, // brierScore labels
-  { file: "lib/fraud_model.ts", line: 856 }, // calibrationBins labels
-  { file: "lib/fraud_model.ts", line: 885 }, // classificationMetrics labels
-];
+// Zero-exception contract: every entry is line-anchored AND stale-checked.
+const RATCHET: ReadonlyArray<{ file: string; line: number }> = [];
 
 const SCAN_ROOTS = [
   "lib",

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
+import { Bits } from "../lib/bits.ts";
 import { stableJson } from "../lib/f402_bet_ticker_delta.ts";
 import { loadFraudConfig } from "../lib/fraud_logs.ts";
 import {
@@ -172,7 +173,7 @@ function valueOf(
 describe("rowPrecisionAtK", () => {
   test("reports precision, recall and lift at a staffed queue size", () => {
     const scores = [0.9, 0.8, 0.7, 0.6, 0.5];
-    const labels = [true, false, true, false, false];
+    const labels = Bits.from([true, false, true, false, false]);
     expect(rowPrecisionAtK(scores, labels, 2)).toEqual({
       k: 2,
       kSamples: 2,
@@ -185,7 +186,7 @@ describe("rowPrecisionAtK", () => {
   });
 
   test("caps k at the holdout size instead of inventing rows", () => {
-    const row = rowPrecisionAtK([0.9, 0.8], [true, false], 10);
+    const row = rowPrecisionAtK([0.9, 0.8], Bits.from([true, false]), 10);
     expect(row.k).toBe(10);
     expect(row.kSamples).toBe(2);
     expect(row.precision).toBe(0.5);
@@ -193,13 +194,13 @@ describe("rowPrecisionAtK", () => {
 
   test("ties keep input order, so the table is deterministic", () => {
     const scores = [0.5, 0.5, 0.5];
-    const labels = [false, true, false];
+    const labels = Bits.from([false, true, false]);
     expect(rowPrecisionAtK(scores, labels, 1).precision).toBe(0);
     expect(rowPrecisionAtK(scores, labels, 2).precision).toBe(0.5);
   });
 
   test("no positives reports zero precision and null recall/lift", () => {
-    const row = rowPrecisionAtK([0.9, 0.8], [false, false], 1);
+    const row = rowPrecisionAtK([0.9, 0.8], Bits.from([false, false]), 1);
     expect(row.precision).toBe(0);
     expect(row.recall).toBeNull();
     expect(row.lift).toBeNull();
@@ -208,7 +209,7 @@ describe("rowPrecisionAtK", () => {
   test("the table covers the operational queue sizes", () => {
     const rows = rowPrecisionAtKTable(
       [0.9, 0.8, 0.7],
-      [true, false, true],
+      Bits.from([true, false, true]),
       [1, 2, 10],
     );
     expect(rows.map((row) => row.k)).toEqual([1, 2, 10]);
@@ -1158,5 +1159,27 @@ describe("model artifact", () => {
     expect(score?.rows).toBeGreaterThan(0);
     expect(scoreAccountWithModel(artifact, matrix, "NOPE")).toBeNull();
     expect(fraudModelArtifactDigest(artifact)).toHaveLength(64);
+  });
+});
+
+describe("Bits", () => {
+  test("tracks predicates, multi-word popcount, slices, and structural JSON", () => {
+    const bits = new Bits(100);
+    for (const idx of [0, 31, 32, 63, 64, 99]) bits.set(idx);
+    expect(bits.length).toBe(100);
+    expect(bits.count()).toBe(6);
+    expect(bits.bit(31)).toBe(true);
+    expect(bits.bit(32)).toBe(true);
+    expect(bits.bit(33)).toBe(false);
+    expect(bits.bit(-1)).toBe(false);
+    expect(bits.bit(100)).toBe(false);
+
+    const mid = bits.slice(30, 65);
+    expect(mid.length).toBe(35);
+    expect(mid.count()).toBe(4);
+    expect(mid.toJSON()).toEqual({ length: 35, set: [1, 2, 33, 34] });
+
+    expect(() => bits.set(100)).toThrow(RangeError);
+    expect(() => new Bits(-1)).toThrow();
   });
 });
