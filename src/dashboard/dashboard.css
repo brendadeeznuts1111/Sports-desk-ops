@@ -1,0 +1,317 @@
+/**
+ * @file src/dashboard/dashboard.css
+ * @description Operational chrome and interactive component styles for the SportsDesk Enhanced Dashboard.
+ * Consumes specification-grade CSS Houdini custom properties emitted in `./tokens.generated.css`.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--sd-surface-bg);
+  color: var(--sd-text-primary);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 10px 14px;
+  border: 1px solid var(--sd-surface-border);
+  text-align: left;
+}
+
+th {
+  background-color: var(--sd-surface-card);
+  color: var(--sd-text-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+tr:nth-child(even) td {
+  background-color: rgba(30, 41, 59, 0.35);
+}
+
+tr:hover td {
+  background-color: var(--sd-surface-hover);
+}
+
+code {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  color: var(--sd-tier-steam);
+  background: rgba(30, 41, 59, 0.65);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+a {
+  color: var(--sd-tier-rec-bias);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+blockquote {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--sd-tier-rec-bias);
+  background: var(--sd-surface-card);
+  color: var(--sd-text-muted);
+}
+
+/* Enhanced Dashboard Token Utility Classes */
+.sd-card {
+  background-color: var(--sd-surface-card);
+  border: 1px solid var(--sd-surface-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.sd-card-cli {
+  background-color: var(--sd-surface-cli);
+  border: 1px solid var(--sd-surface-border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.sd-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.sd-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+.sd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--sd-surface-border);
+  background-color: var(--sd-surface-cli);
+  color: var(--sd-text-muted);
+}
+
+.sd-pill-live {
+  border-color: rgba(16, 185, 129, 0.45);
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--sd-theme-emerald);
+}
+
+.sd-pill-fixture {
+  border-color: rgba(245, 158, 11, 0.45);
+  background-color: rgba(245, 158, 11, 0.12);
+  color: var(--sd-tier-steam);
+}
+
+.sd-pill-alert {
+  border-color: rgba(239, 68, 68, 0.45);
+  background-color: rgba(239, 68, 68, 0.12);
+  color: var(--sd-tier-alert);
+}
+
+.sd-pill-sharp {
+  border-color: rgba(168, 85, 247, 0.45);
+  background-color: rgba(168, 85, 247, 0.12);
+  color: var(--sd-route-sharp);
+}
+
+.sd-preset-btn {
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--sd-surface-border);
+  background-color: var(--sd-surface-cli);
+  color: var(--sd-text-muted);
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.sd-preset-btn:hover {
+  background-color: var(--sd-surface-hover);
+  color: var(--sd-text-primary);
+}
+
+.sd-preset-btn[data-active="true"] {
+  background-color: rgba(56, 189, 248, 0.16);
+  border-color: var(--sd-tier-rec-bias);
+  color: var(--sd-tier-rec-bias);
+}
+
+.sd-slider {
+  width: 100%;
+  accent-color: var(--sd-tier-rec-bias);
+  cursor: pointer;
+}
+
+.sd-mono {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+}
+
+.sd-token-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sd-dim-row {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.65);
+}
+
+.sd-dim-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.sd-dim-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sd-text-muted);
+  padding-top: 5px;
+}
+
+.sd-chip-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sd-dim-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--sd-surface-border);
+  background-color: var(--sd-surface-cli);
+  color: var(--sd-text-muted);
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.sd-dim-chip:hover {
+  background-color: var(--sd-surface-hover);
+  color: var(--sd-text-primary);
+}
+
+.sd-dim-chip[data-active="true"] {
+  background-color: rgba(56, 189, 248, 0.16);
+  border-color: var(--sd-tier-rec-bias);
+  color: var(--sd-tier-rec-bias);
+}
+
+.sd-dim-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background-color: rgba(15, 23, 42, 0.8);
+  color: var(--sd-text-muted);
+}
+
+.sd-pill-blocked {
+  border-color: rgba(100, 116, 139, 0.5);
+  background-color: rgba(100, 116, 139, 0.14);
+  color: var(--sd-tier-blocked);
+}
+
+.sd-row-active td {
+  background-color: rgba(56, 189, 248, 0.1) !important;
+}
+
+.sd-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.sd-kpi-box {
+  background-color: var(--sd-surface-cli);
+  border: 1px solid var(--sd-surface-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sd-kpi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sd-text-muted);
+}
+
+.sd-kpi-value {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--sd-text-primary);
+}
+
+.sd-kpi-sub {
+  font-size: 11px;
+  color: var(--sd-text-muted);
+}
+
+.sd-soa-table {
+  font-size: 11.5px;
+}
+
+.sd-soa-table th,
+.sd-soa-table td {
+  padding: 7px 8px;
+}

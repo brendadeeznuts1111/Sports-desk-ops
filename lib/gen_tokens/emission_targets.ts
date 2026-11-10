@@ -21,6 +21,11 @@ export const GEN_TOKEN_EMISSION_TARGETS: readonly GenTokenEmissionTarget[] = [
     reset: "rm-before-gen",
   },
   {
+    repoPath: "src/dashboard/tokens.generated.css",
+    mode: "full-from-toml",
+    reset: "rm-before-gen",
+  },
+  {
     repoPath: "static/customer-churn-simulation-dashboard.html",
     mode: "splice-from-committed",
     reset: "git-checkout-head",

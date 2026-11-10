@@ -1,0 +1,158 @@
+/**
+ * @file src/dashboard/tokens.generated.css
+ * @description Generated from design/tokens.toml (v1.1.0) via `bun run gen:tokens`.
+ * DO NOT EDIT BY HAND — enforced by `bun run gen:tokens:gate`.
+ */
+
+/* ==========================================================================
+   1. CSS Houdini @property Declarations (Generated from tokens.toml)
+   Enforces specification-grade design tokens and prevents silent property drop.
+   ========================================================================== */
+@property --sd-surface-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #070b14;
+}
+
+@property --sd-surface-cli {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #04070e;
+}
+
+@property --sd-surface-card {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0d1527;
+}
+
+@property --sd-surface-hover {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #131f38;
+}
+
+@property --sd-surface-border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1e293b;
+}
+
+@property --sd-text-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f1f5f9;
+}
+
+@property --sd-text-muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #94a3b8;
+}
+
+@property --sd-tier-retail {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1d84b5;
+}
+
+@property --sd-tier-blocked {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #64748b;
+}
+
+@property --sd-theme-emerald {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #10b981;
+}
+
+@property --sd-tier-alert {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ef4444;
+}
+
+@property --sd-tier-steam {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f59e0b;
+}
+
+@property --sd-tier-whale {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #28a745;
+}
+
+@property --sd-tier-rec-bias {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #38bdf8;
+}
+
+@property --sd-route-devig {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #06b6d4;
+}
+
+@property --sd-route-sharp {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #a855f7;
+}
+
+@property --sd-route-pending {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #d97706;
+}
+
+@property --sd-route-manager {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f43f5e;
+}
+
+/* ==========================================================================
+   2. Canonical :root Custom Properties & Semantic Surface Aliases
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+  /* Generated from tokens.toml (v1.1.0) */
+  --sd-surface-bg: #070b14;
+  --sd-surface-cli: #04070e;
+  --sd-surface-card: #0d1527;
+  --sd-surface-hover: #131f38;
+  --sd-surface-border: #1e293b;
+  --sd-text-primary: #f1f5f9;
+  --sd-text-muted: #94a3b8;
+  --sd-tier-retail: #1d84b5;
+  --sd-tier-blocked: #64748b;
+  --sd-theme-emerald: #10b981;
+  --sd-tier-alert: #ef4444;
+  --sd-tier-steam: #f59e0b;
+  --sd-tier-whale: #28a745;
+  --sd-tier-rec-bias: #38bdf8;
+  --sd-route-devig: #06b6d4;
+  --sd-route-sharp: #a855f7;
+  --sd-route-pending: #d97706;
+  --sd-route-manager: #f43f5e;
+
+  /* Semantic dashboard aliases mapped to canonical tokens.toml variables */
+  --bg: var(--sd-surface-bg);
+  --bg-cli: var(--sd-surface-cli);
+  --card: var(--sd-surface-card);
+  --card-hover: var(--sd-surface-hover);
+  --border: var(--sd-surface-border);
+  --text: var(--sd-text-primary);
+  --muted: var(--sd-text-muted);
+  --accent: var(--sd-tier-rec-bias);
+  --emerald: var(--sd-theme-emerald);
+  --amber: var(--sd-tier-steam);
+  --danger: var(--sd-tier-alert);
+  --purple: var(--sd-route-sharp);
+  --cyan: var(--sd-route-devig);
+}
