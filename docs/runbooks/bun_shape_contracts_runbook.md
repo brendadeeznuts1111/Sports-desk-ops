@@ -124,7 +124,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/spawnSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/gdocs_template_instantiate.ts`, `lib/bun_cli_flags.ts`
+- **Here:** `scripts/gdocs_template_instantiate.ts`, `scripts/dx_workspaces.ts`
 - **Evidence:** `probe:proc.spawn`
 
 #### Bun.stdin
@@ -145,7 +145,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/which)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/agent_env_doctor.ts`, `scripts/dx_worktrees.ts`
+- **Here:** `scripts/agent_env_doctor.ts`, `scripts/dx_workspaces.ts`
 - **Evidence:** `surface:which`, `probe:proc.paths`
 
 #### Bun.write
@@ -344,7 +344,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Transpiler)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`, `scripts/nsh_desk_cli.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/pm_policy.ts`
 - **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`
 
 ## Storage and scheduling

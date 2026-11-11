@@ -11,13 +11,18 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import {
+  analyzeWorkspaceGraph,
+  auditRootWorkspaceHygiene,
+  auditWorkspaceSelfContainment,
   FOREIGN_LOCKFILES,
   globalBunfigPath,
+  inspectWorkspaceInstallLayout,
+  inspectWorkspaces,
+  lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
   patchState,
-  resolveWorkspaces,
 } from "../lib/pm_policy.ts";
 
 type Status = "ok" | "warn" | "fail";
@@ -199,7 +204,8 @@ async function projectChecks(): Promise<Check[]> {
       ),
     );
   }
-  const { nameless } = await resolveWorkspaces(ROOT);
+  const inspection = await inspectWorkspaces(ROOT);
+  const { nameless } = inspection;
   if (nameless.length > 0) {
     checks.push({
       name: "nameless workspace",
@@ -207,6 +213,51 @@ async function projectChecks(): Promise<Check[]> {
       detail: `${nameless.join(", ")}: no "name", so Bun skips it`,
     });
   }
+  const rootHygiene = await auditRootWorkspaceHygiene(ROOT);
+  checks.push(check("root private", rootHygiene.ok, rootHygiene.detail));
+  checks.push(
+    check(
+      "workspace dirs",
+      inspection.unregisteredDirs.length === 0,
+      inspection.unregisteredDirs.length === 0
+        ? `${inspection.packages.length - 1} package(s) under ${inspection.patterns.join(", ") || "<none>"}`
+        : `missing package.json in ${inspection.unregisteredDirs.join(", ")}`,
+    ),
+  );
+  const graph = analyzeWorkspaceGraph(inspection);
+  const depLockDrift = existsSync(path.join(ROOT, "bun.lock"))
+    ? (await lockWorkspaceDependencies(ROOT)).drift
+    : [];
+  const graphProblems = [...graph.issues.map((i) => i.detail), ...depLockDrift];
+  checks.push(
+    check(
+      "workspace graph",
+      graphProblems.length === 0,
+      graphProblems.length === 0
+        ? `${graph.edges.length} workspace:* link(s), ${graph.waves.length} wave(s), 0 cycles`
+        : graphProblems.join("; "),
+    ),
+  );
+  const selfContainment = await auditWorkspaceSelfContainment(ROOT);
+  const layout = await inspectWorkspaceInstallLayout(ROOT);
+  const containmentProblems = [
+    ...selfContainment.undeclaredImports.map(
+      (u) => `${u.file} imports undeclared "${u.packageName}"`,
+    ),
+    ...layout.nshVersionDrift,
+    ...layout.workspaceLinks.flatMap((w) =>
+      w.brokenLinks.map((b) => `${w.dir}/node_modules/${b} broken symlink`),
+    ),
+  ];
+  checks.push(
+    check(
+      "self-contained packages",
+      containmentProblems.length === 0,
+      containmentProblems.length === 0
+        ? `Bun.Transpiler scanned ${selfContainment.scannedFiles} workspace file(s) (${selfContainment.scannedImports} imports, 0 undeclared)`
+        : containmentProblems.join("; "),
+    ),
+  );
   const modules = path.join(ROOT, "node_modules");
   checks.push(
     !existsSync(modules)

@@ -13,9 +13,18 @@
 import { lstatSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { inspectWorkspaces } from "../lib/pm_policy.ts";
 
 export type ScriptMap = Readonly<Record<string, string>>;
 export type BinMap = Readonly<Record<string, string>>;
+
+export interface WorkspaceScriptCatalogRow {
+  readonly dir: string;
+  readonly workspace: string;
+  readonly script: string;
+  readonly command: string;
+  readonly filterInvoke: string;
+}
 
 export interface BinCatalogRow {
   readonly bin: string;
@@ -146,6 +155,58 @@ function renderBins(rows: readonly BinCatalogRow[]): string {
   ].join("\n");
 }
 
+export async function collectWorkspaceScriptCatalog(
+  root: string,
+  needle?: string,
+): Promise<WorkspaceScriptCatalogRow[]> {
+  const inspection = await inspectWorkspaces(root);
+  const lower = needle?.toLowerCase();
+  const rows: WorkspaceScriptCatalogRow[] = [];
+  for (const pkg of inspection.packages) {
+    if (pkg.dir === "") continue;
+    for (const [script, command] of Object.entries(pkg.scripts).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      const row: WorkspaceScriptCatalogRow = {
+        dir: pkg.dir,
+        workspace: pkg.name,
+        script,
+        command,
+        filterInvoke: `bun run --filter '${pkg.name === "sportsdesk-ops" ? `./${pkg.dir}` : pkg.name}' ${script}`,
+      };
+      if (
+        lower === undefined ||
+        row.dir.toLowerCase().includes(lower) ||
+        row.workspace.toLowerCase().includes(lower) ||
+        row.script.toLowerCase().includes(lower) ||
+        row.command.toLowerCase().includes(lower)
+      ) {
+        rows.push(row);
+      }
+    }
+  }
+  return rows;
+}
+
+function renderWorkspaceScripts(
+  rows: readonly WorkspaceScriptCatalogRow[],
+): string {
+  return [
+    Bun.inspect
+      .table(
+        rows.map((r) => ({
+          dir: r.dir,
+          workspace: r.workspace,
+          script: r.script,
+          invoke: r.filterInvoke,
+          command: r.command,
+        })),
+      )
+      .trimEnd(),
+    `${rows.length} workspace script(s).`,
+  ].join("\n");
+}
+
 function emitStructured(payload: unknown, asYaml: boolean): void {
   if (asYaml) {
     console.log(Bun.YAML.stringify(payload, null, 2).trimEnd());
@@ -159,6 +220,7 @@ async function main(): Promise<number> {
     args: Bun.argv.slice(2),
     options: {
       bins: { type: "boolean", default: false },
+      workspaces: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       yaml: { type: "boolean", default: false },
       help: { type: "boolean", short: "h" },
@@ -167,7 +229,7 @@ async function main(): Promise<number> {
   });
   if (values.help) {
     console.log(
-      "usage: ./bin/dx scripts [substring] [--bins] [--json | --yaml]",
+      "usage: ./bin/dx scripts [substring] [--bins | --workspaces] [--json | --yaml]",
     );
     return 0;
   }
@@ -183,6 +245,25 @@ async function main(): Promise<number> {
       : {};
   const needle = positionals[0];
   const structured = Boolean(values.json || values.yaml);
+
+  if (values.workspaces) {
+    const rows = await collectWorkspaceScriptCatalog(root, needle);
+    if (rows.length === 0) {
+      console.error(
+        `dx scripts --workspaces: no workspace script matches "${needle ?? ""}"`,
+      );
+      return 1;
+    }
+    if (structured) {
+      emitStructured(
+        { count: rows.length, scripts: rows },
+        Boolean(values.yaml),
+      );
+    } else {
+      console.log(renderWorkspaceScripts(rows));
+    }
+    return 0;
+  }
 
   if (values.bins) {
     const rows = collectBinCatalog(root, bins, scripts, needle);

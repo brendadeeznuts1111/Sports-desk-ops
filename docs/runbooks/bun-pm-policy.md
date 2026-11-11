@@ -157,6 +157,10 @@ Implementation: `scripts/pm_doctor.ts`. Exit **1** if any selected check has sta
 | `lock versions`            | fail        | Each `packages/*` **version** matches lock                            |
 | `patches`                  | fail        | `patchedDependencies` manifest = lock and patch files exist           |
 | `nameless workspace`       | warn        | Matched `package.json` without `"name"` (Bun skips)                   |
+| `root private`             | fail        | Root `package.json` sets `"private": true` (prevents npm publish)     |
+| `workspace dirs`           | fail        | Every non-empty directory under `packages/*` has a `package.json`     |
+| `workspace graph`          | fail        | Valid `workspace:*` / `catalog:` edges, acyclic waves, lock dep sync  |
+| `self-contained packages`  | fail        | `Bun.Transpiler` scan finds zero undeclared bare imports in packages  |
 | `installed tree`           | warn        | Missing `node_modules`, or hoisted layout without `node_modules/.bun` |
 | `bun-deps command`         | fail        | `bun-deps` on `PATH`                                                  |
 | `deps override`            | fail        | `unfrozen.bunfig.toml` exists; only `frozenLockfile = false`          |
@@ -297,9 +301,33 @@ flowchart TD
   test --> commit[Commit package.json + bun.lock + patches]
 ```
 
-### Workspaces
+### Workspaces & Monorepo Dev Control (`./bin/dx workspaces`)
 
-Root manifest: `"workspaces": ["packages/*"]`. Packages under `packages/` currently carry **no** workspace-local dependencies (root owns the graph). **`--catalog`** / `bun-deps add --catalog` is supported for future root catalogs; there is no catalog block in `package.json` yet.
+Root manifest: `"private": true` and `"workspaces": ["packages/*"]` ([workspaces](https://bun.com/docs/pm/workspaces)). Every subdirectory under `packages/` is enrolled as an explicit, self-contained workspace package:
+
+| Workspace directory       | Package `name`             | Role                                                                                    |
+| ------------------------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| `.` (root)                | `sportsdesk-ops`           | Private monorepo root & shared `cli/`/`lib/`/`services/` host (`"private": true`)       |
+| `packages/sportsdesk-ops` | `sportsdesk-ops`           | Zero-spawn CLI `bin` symlink package (`bun x sportsdesk`, `bun x dx`, `bun x nsh-desk`) |
+| `packages/nsh-desk`       | `@sportsdesk-ops/nsh-desk` | Native Shell (NSH) multi-plane terminal workspace (`version` locked to `nsh.json`)      |
+| `packages/ba-example`     | `ba-example`               | Doc-style reference workspace for `bun run --filter`                                    |
+
+**Workspace Dev Control CLI (`scripts/dx_workspaces.ts` / `./bin/dx workspaces`):**
+
+```sh
+./bin/dx workspaces                                     # List root + packages/*, waves & isolated links
+./bin/dx workspaces graph --mermaid                     # Emit Mermaid flowchart of workspace:* waves
+./bin/dx workspaces audit [--strict-root]               # Run 7 monorepo gates (exit 1 on any failure)
+./bin/dx workspaces run --topological test              # Execute waves dependency-first (--parallel per wave)
+./bin/dx workspaces run --filter '@sportsdesk-ops/*' check
+./bin/dx workspaces add ba-example zod                  # Runs unfrozen bun-deps in packages/ba-example + lock check
+./bin/dx workspaces link ba-example @sportsdesk-ops/nsh-desk --dry-run
+./bin/dx workspaces init telemetry-core --scoped        # Scaffold self-contained packages/telemetry-core + lock refresh
+./bin/dx scripts --workspaces                           # List scripts across all packages/* workspaces
+```
+
+- **Self-contained packages & isolated installs:** Under `linker = "isolated"`, Bun installs tarballs into the root `node_modules/.bun` store and symlinks each workspace's declared dependencies into `<workspace>/node_modules`. `auditWorkspaceSelfContainment()` (`Bun.Transpiler.scanImports`) statically proves no `packages/*` workspace imports an undeclared npm package from hoisted root `node_modules`. Pure greenfield monorepos (where root `package.json` carries zero `dependencies`/`devDependencies`) can enforce `--strict-root` via `./bin/dx workspaces audit --strict-root`.
+- **Inter-workspace `"workspace:*"` protocol:** Dependencies between workspaces use `"workspace:*"` (or `"workspace:<dir>"` when disambiguating a child package that shares root's `"name"`). `./bin/dx workspaces link <from> <to>` validates cycle-freedom via Kahn topological sorting before writing `package.json` and refreshing root `bun.lock`.
 
 **`resolveWorkspaces()` algorithm** (must match Bun’s lock keys):
 
@@ -343,17 +371,19 @@ GitHub Actions cannot start on this private repo; the local chain in `AGENTS.md`
 
 ### Code map (PM policy)
 
-| Artifact                             | Responsibility                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `lib/pm_policy.ts`                   | `MACHINE_OWNED_INSTALL_KEYS`, `FOREIGN_LOCKFILES`, `globalBunfigPath`, workspace + patch drift helpers |
-| `scripts/pm_doctor.ts`               | Machine + lock + tree + `bun-deps` checks; `--only` filter                                             |
-| `scripts/ci_local.ts`                | Replays CI `run:` steps; optional `--install`                                                          |
-| `bin/dx` `deps`                      | Forwards to `bun-deps`; `deps check` → doctor; `deps version` → lock refresh                           |
-| `tests/bun_config_policy.test.ts`    | Committed lock/manifest invariants (no global bunfig required)                                         |
-| `tests/pm_policy_workspaces.test.ts` | Workspace resolver ≡ Bun-generated lock                                                                |
-| `tests/dx_deps.test.ts`              | `dx deps` wiring and doctor passthrough                                                                |
-| `~/dotfiles/shell/bin/bun-deps`      | `bun --config=unfrozen.bunfig.toml` wrapper (external to repo)                                         |
-| `~/dotfiles/bun/bunfig.toml`         | Machine install SSOT (external; symlink to live global path)                                           |
+| Artifact                             | Responsibility                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/pm_policy.ts`                   | `MACHINE_OWNED_INSTALL_KEYS`, `FOREIGN_LOCKFILES`, `globalBunfigPath`, workspace graph + self-containment + patch drift helpers |
+| `scripts/pm_doctor.ts`               | Machine + lock + workspace hygiene + tree + `bun-deps` checks; `--only` filter                                                  |
+| `scripts/dx_workspaces.ts`           | `./bin/dx workspaces` (`list`, `graph`, `audit`, `run --topological`, `add`, `remove`, `link`, `init`)                          |
+| `scripts/ci_local.ts`                | Replays CI `run:` steps; optional `--install`                                                                                   |
+| `bin/dx` `deps` / `workspaces`       | `deps` → `bun-deps` / doctor / version; `workspaces` → monorepo workspace dev control                                           |
+| `tests/bun_config_policy.test.ts`    | Committed lock/manifest/workspace invariants (no global bunfig required)                                                        |
+| `tests/pm_policy_workspaces.test.ts` | Workspace resolver + `workspace:*` graph + self-containment ≡ Bun-generated lock                                                |
+| `tests/dx_workspaces.test.ts`        | End-to-end `dx workspaces` (`init`, `link`, topological `run`, `--strict-root` audit, Mermaid/DOT)                              |
+| `tests/dx_deps.test.ts`              | `dx deps` wiring and doctor passthrough                                                                                         |
+| `~/dotfiles/shell/bin/bun-deps`      | `bun --config=unfrozen.bunfig.toml` wrapper (external to repo)                                                                  |
+| `~/dotfiles/bun/bunfig.toml`         | Machine install SSOT (external; symlink to live global path)                                                                    |
 
 Cross-repo Bun baseline (`bbase` / `~/dotfiles/bun/baseline`) is **not** enrolled for this repository; in-repo tests + doctor are the gate.
 

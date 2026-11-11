@@ -3,6 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  analyzeWorkspaceGraph,
+  auditRootWorkspaceHygiene,
+  auditWorkspaceSelfContainment,
+  inspectWorkspaceInstallLayout,
+  inspectWorkspaces,
+  lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
   resolveWorkspaces,
@@ -113,5 +119,135 @@ describe("resolveWorkspaces agrees with the bun.lock Bun writes", () => {
     const { expected, locked } = await lockWorkspaceNames(root);
     expect(locked).toEqual(expected);
     expect(Object.keys(expected)).toHaveLength(3);
+  });
+
+  test("pure zero-root-dep monorepo with stuff-a and stuff-b (workspace:*) links cleanly", async () => {
+    const root = fixture("pure-monorepo", ["packages/*"], {
+      "package.json": {
+        name: "my-monorepo",
+        private: true,
+        workspaces: ["packages/*"],
+      },
+      "packages/stuff-a/package.json": {
+        name: "stuff-a",
+        version: "1.0.0",
+        private: true,
+        main: "./index.ts",
+      },
+      "packages/stuff-b/package.json": {
+        name: "stuff-b",
+        version: "1.0.0",
+        private: true,
+        dependencies: {
+          "stuff-a": "workspace:*",
+        },
+      },
+    });
+    writeFileSync(
+      path.join(root, "packages/stuff-a/index.ts"),
+      "export const STUFF_A = 42;\n",
+    );
+    writeFileSync(
+      path.join(root, "packages/stuff-b/index.ts"),
+      'import { STUFF_A } from "stuff-a";\nexport const STUFF_B = STUFF_A + 1;\n',
+    );
+
+    const hygiene = await auditRootWorkspaceHygiene(root, {
+      strictZeroRootDeps: true,
+    });
+    expect(hygiene.ok).toBe(true);
+    expect(hygiene.externalDeps).toEqual([]);
+    expect(hygiene.externalDevDeps).toEqual([]);
+
+    const inspection = await inspectWorkspaces(root);
+    expect(inspection.unregisteredDirs).toEqual([]);
+    const graph = analyzeWorkspaceGraph(inspection);
+    expect(graph.issues).toEqual([]);
+    expect(graph.waves).toEqual([["packages/stuff-a"], ["packages/stuff-b"]]);
+
+    const depSync = await lockWorkspaceDependencies(root);
+    expect(depSync.drift).toEqual([]);
+
+    const containment = await auditWorkspaceSelfContainment(root);
+    expect(containment.undeclaredImports).toEqual([]);
+
+    const layout = await inspectWorkspaceInstallLayout(root);
+    const stuffBLinks = layout.workspaceLinks.find(
+      (w) => w.dir === "packages/stuff-b",
+    );
+    expect(stuffBLinks?.presentLinks).toEqual(["stuff-a"]);
+    expect(stuffBLinks?.missingLinks).toEqual([]);
+    expect(stuffBLinks?.brokenLinks).toEqual([]);
+  });
+
+  test("workspace graph & self-containment gates catch unregistered dirs, cycles, unlinked local deps, and undeclared imports", async () => {
+    const root = path.join(scratch, "negative-cases");
+    mkdirSync(path.join(root, "packages/alpha"), { recursive: true });
+    mkdirSync(path.join(root, "packages/beta"), { recursive: true });
+    mkdirSync(path.join(root, "packages/orphan"), { recursive: true });
+
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "bad-monorepo",
+        private: false,
+        workspaces: ["packages/*"],
+        dependencies: { zod: "4.6.7" },
+      }),
+    );
+    writeFileSync(
+      path.join(root, "packages/alpha/package.json"),
+      JSON.stringify({
+        name: "alpha",
+        version: "1.0.0",
+        dependencies: {
+          beta: "workspace:*",
+          missing_ws: "workspace:*",
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(root, "packages/beta/package.json"),
+      JSON.stringify({
+        name: "beta",
+        version: "1.0.0",
+        dependencies: {
+          alpha: "workspace:*",
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(root, "packages/beta/index.ts"),
+      'import { z } from "zod";\nexport const schema = z.string();\n',
+    );
+    writeFileSync(
+      path.join(root, "packages/orphan/index.ts"),
+      "export const ORPHAN = true;\n",
+    );
+
+    const hygiene = await auditRootWorkspaceHygiene(root, {
+      strictZeroRootDeps: true,
+    });
+    expect(hygiene.rootPrivate).toBe(false);
+    expect(hygiene.ok).toBe(false);
+
+    const inspection = await inspectWorkspaces(root);
+    expect(inspection.unregisteredDirs).toEqual(["packages/orphan"]);
+
+    const graph = analyzeWorkspaceGraph(inspection);
+    const issueKinds = graph.issues.map((i) => i.kind);
+    expect(issueKinds).toContain("missing-target");
+    expect(issueKinds).toContain("cycle");
+    expect(graph.cycles).toEqual([["packages/alpha", "packages/beta"]]);
+
+    const containment = await auditWorkspaceSelfContainment(root);
+    expect(containment.undeclaredImports).toEqual([
+      {
+        dir: "packages/beta",
+        file: "packages/beta/index.ts",
+        specifier: "zod",
+        packageName: "zod",
+      },
+    ]);
   });
 });

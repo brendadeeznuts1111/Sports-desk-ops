@@ -1,0 +1,20 @@
+{
+  "name": "@sportsdesk-ops/nsh-desk",
+  "version": "0.2.0",
+  "private": true,
+  "description": "SportsDesk Native Shell (NSH) multi-plane terminal workspace package",
+  "type": "module",
+  "scripts": {
+    "doctor": "bun run --cwd ../.. nsh:doctor",
+    "check": "bun run --cwd ../.. nsh:check",
+    "build": "bun run --cwd ../.. nsh:build",
+    "test": "bun run --cwd ../.. nsh:test",
+    "verify": "bun run --cwd ../.. nsh:verify",
+    "package:web": "bun run --cwd ../.. nsh:package:web",
+    "sign:verify": "bun run --cwd ../.. nsh:sign:verify",
+    "schema": "bun run --cwd ../.. schema"
+  },
+  "engines": {
+    "bun": "1.4.4"
+  }
+}

@@ -2,8 +2,14 @@ import { describe, expect, test } from "bun:test";
 import bunfig from "../bunfig.toml" with { type: "toml" };
 import pkg from "../package.json";
 import {
+  analyzeWorkspaceGraph,
+  auditRootWorkspaceHygiene,
+  auditWorkspaceSelfContainment,
   FOREIGN_LOCKFILES,
   globalBunfigPath,
+  inspectWorkspaceInstallLayout,
+  inspectWorkspaces,
+  lockWorkspaceDependencies,
   lockWorkspaceNames,
   lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
@@ -78,5 +84,37 @@ describe("package manager policy", () => {
     const npmrc = await Bun.file(".npmrc").text();
     expect(npmrc).toContain("@tennis-hq:registry=");
     expect(npmrc).not.toContain("_authToken");
+  });
+
+  test("root manifest is private and every packages/* directory is a registered workspace", async () => {
+    const hygiene = await auditRootWorkspaceHygiene(".");
+    expect(hygiene.rootPrivate).toBe(true);
+    expect(hygiene.ok).toBe(true);
+
+    const inspection = await inspectWorkspaces(".");
+    expect(inspection.nameless).toEqual([]);
+    expect(inspection.unregisteredDirs).toEqual([]);
+    expect(inspection.packages.map((p) => p.dir)).toEqual([
+      "",
+      "packages/ba-example",
+      "packages/nsh-desk",
+      "packages/sportsdesk-ops",
+    ]);
+  });
+
+  test("workspace:* dependency graph is acyclic, lock-synced, and self-contained", async () => {
+    const inspection = await inspectWorkspaces(".");
+    const graph = analyzeWorkspaceGraph(inspection);
+    expect(graph.issues).toEqual([]);
+    expect(graph.cycles).toEqual([]);
+
+    const depSync = await lockWorkspaceDependencies(".");
+    expect(depSync.drift).toEqual([]);
+
+    const containment = await auditWorkspaceSelfContainment(".");
+    expect(containment.undeclaredImports).toEqual([]);
+
+    const layout = await inspectWorkspaceInstallLayout(".");
+    expect(layout.nshVersionDrift).toEqual([]);
   });
 });
