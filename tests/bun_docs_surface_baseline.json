@@ -255,6 +255,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/child-process#blocking-api-bun-spawnsync"
     },
+    "sql": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/sql"
+    },
     "SQL": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/sql#runtime-preconnection"
