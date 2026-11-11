@@ -96,7 +96,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/resolveSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/f402_agent_graph_layouts.ts`
+- **Here:** `lib/f402_agent_graph_layouts.ts`, `scripts/module_graph.ts`
 - **Evidence:** `probe:proc.paths`
 
 #### Bun.sleep
