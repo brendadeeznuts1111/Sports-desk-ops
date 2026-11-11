@@ -90,15 +90,15 @@ if [[ "${DRY_RUN}" == true ]]; then
   exit 0
 fi
 
-# Step 3: Deploy via keyless Wrangler
+# Step 3: Deploy via keyless Wrangler (`bun x wrangler` / `bin/wrangler`)
 echo ""
 echo "[3/3] Publishing to Cloudflare Pages (project: ${PROJECT_NAME})..."
-if [[ -f "./wrangler" ]]; then
-  ./wrangler pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
-elif command -v wrangler >/dev/null 2>&1; then
-  wrangler pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
+if [[ -x "${REPO_ROOT}/bin/wrangler" ]]; then
+  "${REPO_ROOT}/bin/wrangler" pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
+elif command -v bun >/dev/null 2>&1; then
+  bun x --bun wrangler pages deploy dist --project-name="${PROJECT_NAME}" --branch=main
 else
-  echo "Error: wrangler not found. Restore the repo wrapper (./wrangler) or install wrangler with Bun; npx is not supported." >&2
+  echo "Error: wrangler not found. Ensure bin/wrangler exists or run with Bun installed." >&2
   exit 1
 fi
 

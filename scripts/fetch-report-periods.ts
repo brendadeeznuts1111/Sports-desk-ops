@@ -8,14 +8,18 @@
  * so an HTML login page can never be persisted as JSON.
  *
  * Usage:
- *   ./bin/dx fetch-report-periods [--out report-periods.json]
+ *   bun run fetch-report-periods [--out report-periods.json]
+ *   bun x dx fetch-report-periods [--out report-periods.json]
  */
 
 import {
   fetchReportPeriods,
   GSLIVE_REPORT_PERIODS_URL,
-} from "./lib/gslive_manager_endpoints.ts";
-import { assertBunFloor, writeJsonFileIfChanged } from "./lib/manager_fetch.ts";
+} from "../lib/gslive_manager_endpoints.ts";
+import {
+  assertBunFloor,
+  writeJsonFileIfChanged,
+} from "../lib/manager_fetch.ts";
 
 export interface FetchReportPeriodsOptions {
   readonly outPath: string;
@@ -44,7 +48,7 @@ export async function fetchAndWriteReportPeriods(
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(`Usage: bun run fetch-report-periods.ts [--out <path>]
+    console.log(`Usage: bun run scripts/fetch-report-periods.ts [--out <path>]
 
 Fetch the Manager Tools report period vocabulary.
 

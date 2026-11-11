@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -eo pipefail
+resolve_dir() {
+  local src="$1" dir
+  while [[ -L "$src" ]]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")" && pwd
+}
+BIN_DIR="$(resolve_dir "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(cd -P "${BIN_DIR}/../../.." && pwd)"
+exec "${REPO_ROOT}/bin/dx" "$@"

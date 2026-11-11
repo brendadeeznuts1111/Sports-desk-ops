@@ -4,7 +4,20 @@
   "private": true,
   "bin": {
     "sportsdesk": "cli/sportsdesk_cli.ts",
-    "dx": "bin/dx"
+    "dx": "bin/dx",
+    "wrangler": "bin/wrangler",
+    "nsh-desk": "scripts/nsh_desk_cli.ts",
+    "sportsdesk-ticket": "cli/sportsdesk_ticket_cli.ts",
+    "sportsdesk-flags": "cli/flags.ts",
+    "sportsdesk-schema": "cli/sportsdesk_schema_cli.ts",
+    "sportsdesk-replay": "cli/sportsdesk_replay_cli.ts",
+    "sportsdesk-catalog": "cli/sportsdesk_catalog_cli.ts",
+    "sportsdesk-candidate": "cli/sportsdesk_candidate_cli.ts",
+    "sportsdesk-settlement": "cli/sportsdesk_settlement_cli.ts",
+    "sportsdesk-combo": "cli/sportsdesk_combo_cli.ts",
+    "sportsdesk-fraud": "cli/sportsdesk_fraud_cli.ts",
+    "sportsdesk-autobet": "cli/watchlist_autobet_cli.ts",
+    "image-meta": "bin/image-meta.ts"
   },
   "trustedDependencies": [],
   "publishConfig": {
@@ -206,7 +219,7 @@
     "tasks:render": "bun run scripts/render_tasks.ts",
     "docs:render": "bun run scripts/render_docs.ts",
     "docs:serve": "bun --no-orphans run scripts/serve_docs.ts",
-    "docs:deploy": "bun run test:docs && bun run verify:docs && bun run audit:release && bun run docs:stage && ./wrangler pages deploy dist --project-name=fantasy402-docs --branch=main",
+    "docs:deploy": "bun run test:docs && bun run verify:docs && bun run audit:release && bun run docs:stage && ./bin/wrangler pages deploy dist --project-name=fantasy402-docs --branch=main",
     "docs:verify:live": "bun run scripts/verify_docs.ts --live https://fantasy402-docs-4ay.pages.dev",
     "verify:docs": "bun run check:ledger-consistency && bun run check:spec-citations && bun run scripts/verify_docs.ts",
     "verify:docs-staleness": "bun run scripts/check_docs_staleness.ts --warn",
@@ -264,6 +277,7 @@
     "crawl:tiles": "bun run scripts/portal_tile_crawler.ts --offline",
     "test:capture": "bun test tests/capture_*.test.ts tests/portal_audit.test.ts",
     "deploy:docs": "./scripts/deploy/deploy_docs.sh",
+    "wrangler": "./bin/wrangler",
     "dx": "./bin/dx status",
     "dx:stage": "./bin/dx stage",
     "dx:deploy": "./bin/dx deploy",
@@ -277,7 +291,9 @@
     "image:meta": "bun run bin/image-meta.ts",
     "blob:formdata": "bun run bin/blob-formdata.ts",
     "xml:parse": "bun run bin/xml-parse.ts",
-    "fetch-config": "bun run fetch-config.ts",
+    "fetch-config": "bun run scripts/fetch-config.ts",
+    "fetch-live-data": "bun run scripts/fetch-live-data.ts",
+    "fetch-report-periods": "bun run scripts/fetch-report-periods.ts",
     "fetch-bet-tally": "bun run scripts/fetch-bet-tally.ts",
     "fetch-periods": "bun run scripts/fetch-periods.ts",
     "taxonomy": "bun run scripts/normalize.ts",
@@ -329,7 +345,8 @@
     "pele": "1.9.0",
     "typescript": "5.9.3",
     "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
-    "semver": "7.8.6"
+    "semver": "7.8.6",
+    "sportsdesk-ops": "workspace:packages/sportsdesk-ops"
   },
   "repository": {
     "type": "git",

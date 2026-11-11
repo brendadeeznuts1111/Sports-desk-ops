@@ -13,8 +13,8 @@ import {
   probeManagerEndpoint,
   probeManagerEndpoints,
 } from "../lib/gslive_manager_endpoints.ts";
-import { fetchAndWriteReportPeriods } from "../fetch-report-periods.ts";
-import { fetchLiveData } from "../fetch-live-data.ts";
+import { fetchAndWriteReportPeriods } from "../scripts/fetch-report-periods.ts";
+import { fetchLiveData } from "../scripts/fetch-live-data.ts";
 import { parseStatusArgs } from "../scripts/fetch-report-status.ts";
 
 const checkedAt = Date.parse("2026-11-08T20:00:00.000Z");

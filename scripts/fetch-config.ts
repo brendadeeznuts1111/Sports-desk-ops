@@ -14,7 +14,7 @@
  * Usage:
  *   echo 'GSID=...' > .env            # .env is gitignored
  *   bun run fetch-config              # writes partnerConfig.json (gitignored) and prints it
- *   ./bin/dx fetch-config
+ *   bun x dx fetch-config
  */
 
 import { z } from "zod";
@@ -24,7 +24,7 @@ import {
   getJsonWithRetry,
   requireGsid,
   writeJsonFileIfChanged,
-} from "./lib/manager_fetch.ts";
+} from "../lib/manager_fetch.ts";
 
 const PARTNER_CONFIG_URL =
   "https://plive.sportswidgets.pro/manager-tools/partnerConfig/";
@@ -107,7 +107,7 @@ export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
-      `Usage: bun run fetch-config.ts [--help|-h]
+      `Usage: bun run scripts/fetch-config.ts [--help|-h]
 
 Fetch the partner (white-label) config from the Manager Tools SPA and persist it.
 

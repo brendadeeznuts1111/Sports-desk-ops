@@ -1,6 +1,6 @@
 # Repository layout (root)
 
-The root holds **workspace metadata** and **operator entrypoints**. Code and SSOT live in subdirectories.
+The root holds **workspace metadata** only (`package.json`, `bun.lock`, `bunfig.toml`, `tsconfig.json`, `.npmrc`, `.oxlintrc*.json`, `dashboard.md`, and top-level docs). Executable CLIs, scripts, and SSOT live in subdirectories (`cli/`, `scripts/`, `bin/`, `packages/sportsdesk-ops/bin/`) and link into `node_modules/.bin/` for `bun x <cli>` execution.
 
 | Path            | Purpose                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------ |
@@ -12,16 +12,16 @@ The root holds **workspace metadata** and **operator entrypoints**. Code and SSO
 | `schema/`       | Migrations, local manifest, schema preload ([schema/README.md](schema/README.md))          |
 | `infra/`        | Pages `_headers` for docs deploy ([infra/README.md](infra/README.md))                      |
 | `types/`        | Ambient `env.d.ts` ([types/README.md](types/README.md))                                    |
-| `scripts/`      | Generators, capture, audits; `scripts/deploy/` for VPS/docs/reports                        |
+| `scripts/`      | Generators, Manager Tools fetchers, capture, audits; `scripts/deploy/` for VPS/docs        |
 | `reports/`      | Auditable surveillance outputs, Plane 3 ingestion JSONL, and docs-review artifacts         |
 | `static/`       | Token-compiled daemon HTML dashboards                                                      |
 | `docs/`         | Evidence portal; `docs/runbooks/`; `docs/provenance/`                                      |
 | `tests/`        | Bun test suites                                                                            |
 | `client/`       | Browser-side overlay seam preload (`security-seams.preload.js`)                            |
 | `config/`       | Wagers capture configuration (`wagers.json`, `wagers-capture.toml`)                        |
-| `packages/`     | Workspace packages (`sportsdesk-ops`, `ba-example`)                                        |
+| `packages/`     | Workspace packages (`sportsdesk-ops` CLI bin package, `nsh-desk`, `ba-example`)            |
 | `verification/` | TLA+/gate verification specs (e.g. the gen-tokens zero-drift gate)                         |
-| `bin/dx`        | Primary operator wrapper                                                                   |
+| `bin/`          | Operator wrappers (`bin/dx`, `bin/wrangler`), image/XML/blob CLIs, and CI AST gates        |
 
 **Harness plugins (`dsh-plugin*`).** Removable DeepSeek Harness bundles live at the root, each its own
 package with a `cordis.patch.yml` manifest and a dependency-free `verify-load.mjs` smoke harness so it

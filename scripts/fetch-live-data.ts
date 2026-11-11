@@ -1,98 +1,119 @@
 #!/usr/bin/env bun
 /**
- * Fetch Manager Tools live sports/reference data.
+ * Fetch the public Manager Tools `live/data` catalog (sports, leagues, countries).
  *
- * GET https://plive.sportswidgets.pro/live/data?countries=true&leagues=true&sports=true
+ *   GET https://plive.sportswidgets.pro/live/data?countries=true&leagues=true&sports=true
  *
- * Auth: GSID session cookie from Bun.env.GSLIVE_SESSION_ID (.env, gitignored; legacy GSID also read).
- * Bun's `fetch` auto-decodes gzip/br/deflate; we send accept + cookie + referer + user-agent only.
- *
- * Fail-closed: 302 = GSID expired, non-ok = error, non-JSON content-type = login HTML trap.
+ * This endpoint is public (no GSID required); if GSLIVE_SESSION_ID/GSID is set it is sent
+ * anyway so the request matches the signed-in browser. The response is validated once at the
+ * boundary and written atomically; an HTML login page can never be written as JSON.
  *
  * Usage:
- *   echo 'GSID=...' > .env
- *   bun run scripts/fetch-live-data.ts
- *   ./bin/dx fetch-live-data
+ *   bun run fetch-live-data
+ *   bun x dx fetch-live-data [--out live-data.json]
  */
 
-import { z } from "zod";
+import {
+  GSLIVE_LIVE_DATA_URL,
+  parseLiveDataCatalog,
+} from "../lib/gslive_manager_endpoints.ts";
 import {
   assertBunFloor,
-  getJsonWithRetry,
-  requireGsid,
+  MANAGER_REFERER,
+  MANAGER_USER_AGENT,
   writeJsonFileIfChanged,
 } from "../lib/manager_fetch.ts";
 
-const LIVE_DATA_URL = "https://plive.sportswidgets.pro/live/data";
-
-function buildLiveDataUrl(): string {
-  const url = new URL(LIVE_DATA_URL);
-  url.searchParams.set("countries", "true");
-  url.searchParams.set("leagues", "true");
-  url.searchParams.set("sports", "true");
-  return url.toString();
+export interface FetchLiveDataOptions {
+  readonly outPath: string;
+  readonly cookieHeader: string;
+  readonly fetchImpl?: typeof fetch;
 }
 
-async function main() {
+export async function fetchLiveData(options: FetchLiveDataOptions): Promise<{
+  summary: NonNullable<ReturnType<typeof parseLiveDataCatalog>>;
+  wrote: boolean;
+  outPath: string;
+}> {
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    referer: MANAGER_REFERER,
+    "user-agent": MANAGER_USER_AGENT,
+  };
+  if (options.cookieHeader.trim() !== "") headers.cookie = options.cookieHeader;
+  const response = await (options.fetchImpl ?? fetch)(GSLIVE_LIVE_DATA_URL, {
+    headers,
+    redirect: "manual",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      `fetch-live-data: redirected to ${response.headers.get("location") ?? "(unknown)"} — session expired`,
+    );
+  }
+  if (!response.ok) {
+    throw new Error(`fetch-live-data: HTTP ${response.status}`);
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("json")) {
+    throw new Error(
+      `fetch-live-data: not JSON (content-type: ${contentType || "<none>"}) — login HTML`,
+    );
+  }
+  const raw: unknown = await response.json();
+  const summary = parseLiveDataCatalog(raw);
+  if (summary === null) {
+    throw new Error(
+      "fetch-live-data: catalog JSON lacks sports/leagues/countries maps",
+    );
+  }
+  const { wrote } = await writeJsonFileIfChanged(options.outPath, raw);
+  return { summary, wrote, outPath: options.outPath };
+}
+
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(
-      `Usage: bun run scripts/fetch-live-data.ts [--help|-h]
+    console.log(`Usage: bun run scripts/fetch-live-data.ts [--out <path>]
 
-Fetch Manager Tools live sports/reference data.
+Fetch the public Manager Tools live-data catalog (sports, leagues, countries).
 
   GET https://plive.sportswidgets.pro/live/data?countries=true&leagues=true&sports=true
 
-Auth is cookie-based: the GSID session GUID (from Bun.env.GSLIVE_SESSION_ID / .env; legacy GSID also read).
-
-Output:
-  - live-data.json  (atomic write, gitignored)
-  - pretty-printed JSON to stdout
-
-Exit codes:
-  0  success
-  1  missing GSLIVE_SESSION_ID, non-ok HTTP, non-JSON body, or redirect-to-login
-
-Set GSLIVE_SESSION_ID in .env (gitignored) or export it before running (legacy GSID also read).`,
-    );
+Auth: none required; GSLIVE_SESSION_ID/GSID is sent when present.
+Output: live-data.json by default (atomic write, gitignored), summary on stdout.
+Exit: 0 success · 1 HTTP/non-JSON/shape failure.
+`);
     return;
   }
-
   assertBunFloor("fetch-live-data");
-
-  const cookie = requireGsid("fetch-live-data");
-
-  const response = await getJsonWithRetry(
-    buildLiveDataUrl(),
-    cookie,
-    "fetch-live-data",
-  );
-
-  const raw: unknown = await response.json();
-  const parsed = z.unknown().safeParse(raw); // shape varies; zod boundary once
-  if (!parsed.success) {
-    throw new Error("fetch-live-data: response is not valid JSON");
+  let outPath = "live-data.json";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--out" && args[i + 1] !== undefined) {
+      outPath = args[++i] as string;
+    }
   }
-
-  const data = parsed.data as Record<string, unknown>;
-  const topKeys = Object.keys(data);
-  const entryCount = topKeys.length;
-
-  const outPath = "live-data.json";
-  const { pretty, wrote } = await writeJsonFileIfChanged(outPath, data);
-
+  const cookieHeader =
+    (Bun.env.GSLIVE_SESSION_ID ?? "").trim() !== ""
+      ? `GSID=${(Bun.env.GSLIVE_SESSION_ID as string).trim()}`
+      : (Bun.env.GSID ?? "").trim() !== ""
+        ? `GSID=${(Bun.env.GSID as string).trim()}`
+        : "";
+  const result = await fetchLiveData({ outPath, cookieHeader });
   console.log(
-    `fetch-live-data → ${outPath} (top-level keys: ${entryCount}, ${topKeys.join(", ")})${wrote ? "" : " (unchanged)"}`,
+    `live-data → ${result.outPath} (sports: ${result.summary.sports}, leagues: ${result.summary.leagues}, countries: ${result.summary.countries})${result.wrote ? "" : " (unchanged)"}`,
   );
-  console.log(pretty);
 }
 
-void (async () => {
-  try {
-    await main();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`fetch-live-data: ${message}`);
-    process.exit(1);
-  }
-})();
+if (import.meta.main) {
+  void (async () => {
+    try {
+      await main();
+    } catch (error) {
+      console.error(
+        `fetch-live-data: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      process.exit(1);
+    }
+  })();
+}

@@ -3,7 +3,7 @@
  *  Sends `state:""` (the SPA's "All" option) and tallies states client-side, because the
  *  endpoint's `state` field is a filter: sending `"rejected"` narrows the result to it.
  *
- *  Session handling follows `fetch-config.ts`: the `GSID` session GUID comes from the
+ *  Session handling follows `scripts/fetch-config.ts`: the `GSID` session GUID comes from the
  *  environment (the SSOT `.env`, mounted from `.1password/environments.toml`). It is never a
  *  literal in this file, never printed, and never accepted from a chat prompt — a cookie that
  *  appeared in plaintext is a credential incident: revoke it and re-provision.

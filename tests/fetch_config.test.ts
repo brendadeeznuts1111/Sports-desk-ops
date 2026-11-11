@@ -3,7 +3,7 @@ import {
   assertOkJson,
   isJsonContentType,
   parsePartnerConfig,
-} from "../fetch-config.ts";
+} from "../scripts/fetch-config.ts";
 
 describe("isJsonContentType", () => {
   test("accepts application/json", () => {

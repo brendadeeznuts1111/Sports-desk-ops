@@ -69,7 +69,7 @@ declare module "bun" {
     readonly PRETEST_SKIP?: string;
     readonly DEBUG_TRACE?: string;
 
-    // Manager Tools partner config (white-label) — the GSID session cookie's value, see fetch-config.ts
+    // Manager Tools partner config (white-label) — the GSID session cookie's value, see scripts/fetch-config.ts
     readonly GSLIVE_SESSION_ID?: string;
     /** Pre-rename name of `GSLIVE_SESSION_ID`: still read, never written. */
     readonly GSID?: string;

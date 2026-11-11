@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Official Wrangler CLI wrapper located in `bin/wrangler` (linked into `node_modules/.bin/wrangler`
+# so `bun x wrangler ...`, `bun run wrangler ...`, and `./bin/wrangler ...` resolve identically
+# without polluting the repository root).
+set -eo pipefail
+
+resolve_script_dir() {
+  local src="$1" dir
+  while [[ -L "$src" ]]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")" && pwd
+}
+
+BIN_DIR="$(resolve_script_dir "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(cd -P "${BIN_DIR}/.." && pwd)"
+XDG_CFG="${XDG_CONFIG_HOME:-${HOME}/.config}"
+
+# 1. Load Pages-scoped credentials safely as data (never `source`d, matching bin/dx)
+load_pages_env() {
+  local file="$1" line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line#export }"
+    case "$line" in
+      CLOUDFLARE_API_TOKEN=* | CLOUDFLARE_ACCOUNT_ID=*)
+        key="${line%%=*}"
+        value="${line#*=}"
+        value="${value%[\"\']}"
+        value="${value#[\"\']}"
+        [[ -n "${!key:-}" ]] || export "$key=$value"
+        ;;
+    esac
+  done <"$file"
+}
+
+for cf_env in "${REPO_ROOT}/cloudflare.env" "${XDG_CFG}/cloudflare/pages.env" "${GEMINI_WORKSPACE_DIR:-}/cloudflare.env"; do
+  if [[ -n "$cf_env" && -r "$cf_env" ]]; then
+    load_pages_env "$cf_env"
+    break
+  fi
+done
+
+export PATH="${HOME}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
+
+# 2. Delegate to Bun (`bun <script>` or `bun x --bun --no-install wrangler` so #!/usr/bin/env node never requires Node.js)
+SELF_REAL="${BIN_DIR}/wrangler"
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "wrangler: bun not found on PATH; install Bun 1.4.4 to run wrangler" >&2
+  exit 1
+fi
+
+for candidate in \
+  "${REPO_ROOT}/node_modules/wrangler/bin/wrangler.js" \
+  "${HOME}/.bun/bin/wrangler"; do
+  if [[ -r "$candidate" && "$candidate" != "$SELF_REAL" ]]; then
+    exec bun "$candidate" "$@"
+  fi
+done
+
+CLEAN_PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "${REPO_ROOT}/node_modules/.bin" | grep -vxF "${BIN_DIR}" | paste -sd ':' -)"
+if PATH="$CLEAN_PATH" bun x --bun --no-install wrangler --version >/dev/null 2>&1; then
+  exec env PATH="$CLEAN_PATH" bun x --bun --no-install wrangler "$@"
+fi
+exec env PATH="$CLEAN_PATH" bun x --bun wrangler "$@"
