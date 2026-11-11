@@ -130,6 +130,18 @@ jobs:
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: bash scripts/ci/test-changed-plugins.sh
+      - name: Cache NSH v0.4.0 toolchain & TypeScript 7 cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .agents/tools/nsh
+            .agents/tools/nsh-cache
+          key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
+      - name: Changed NSH Desk package (pinned v0.4.0 check + build + headless test)
+        timeout-minutes: 4
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/ci/test-changed-nsh.sh
 
   verify:
     # Full ratchet on main (and unattended cadence), not on pull requests — PRs use verify-changed.
@@ -232,6 +244,16 @@ jobs:
       - name: "Signal Honesty Linter Gate"
         timeout-minutes: 3
         run: bun bin/check-signal-honesty.ts --verbose
+      - name: Cache NSH v0.4.0 toolchain & TypeScript 7 cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .agents/tools/nsh
+            .agents/tools/nsh-cache
+          key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
+      - name: "Native Shell Desk Gate (pinned nsh v0.4.0 e626a8d doctor + verify-loop)"
+        timeout-minutes: 4
+        run: bash scripts/ci/install-nsh.sh && bun run nsh:doctor && bun run nsh:verify
       - name: Schema gate (snapshot parity, fixture drift, gauntlet, EOD smoke)
         timeout-minutes: 5
         env:

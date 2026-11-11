@@ -188,7 +188,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
     ]);
   });
 
-  test("nsh.json enforces read-only loopback HTTP capabilities", async () => {
+  test("nsh.json enforces minRuntime 0.4.0 and read-only loopback HTTP capabilities", async () => {
     const nshJsonPath = path.join(
       import.meta.dir,
       "..",
@@ -198,6 +198,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
     );
     const manifest = (await Bun.file(nshJsonPath).json()) as {
       id: string;
+      minRuntime?: string;
       capabilities: {
         network: {
           hosts?: string[];
@@ -212,6 +213,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
     };
 
     expect(manifest.id).toBe("ops.sportsdesk.desk");
+    expect(manifest.minRuntime).toBe("0.4.0");
     expect(manifest.capabilities.network.hosts).toBeUndefined();
     expect(manifest.capabilities.network.http).toEqual([
       { host: "127.0.0.1", methods: ["GET"], schemes: ["http"] },
@@ -460,7 +462,32 @@ describe("packages/nsh-desk model and capability contracts", () => {
       InspectableNshArtifactsReport,
       parseNshCliOutput,
       parseNshVersionOutput,
+      PINNED_NSH_RELEASE,
+      summarizeNshManifest,
     } = await import("../scripts/nsh_desk_cli.ts");
+
+    expect(PINNED_NSH_RELEASE.version).toBe("0.4.0");
+    expect(PINNED_NSH_RELEASE.commit).toBe(
+      "e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3",
+    );
+    expect(PINNED_NSH_RELEASE.shortSha).toBe("e626a8d");
+
+    const installSh = await Bun.file(
+      path.join(import.meta.dir, "..", "scripts", "ci", "install-nsh.sh"),
+    ).text();
+    expect(installSh).toContain(`PINNED_TAG="${PINNED_NSH_RELEASE.tag}"`);
+    expect(installSh).toContain(
+      `PINNED_SHORT_SHA="${PINNED_NSH_RELEASE.shortSha}"`,
+    );
+    expect(installSh).toContain(PINNED_NSH_RELEASE.sha256["linux-x86_64"]);
+    expect(installSh).toContain(PINNED_NSH_RELEASE.sha256["macos-arm64"]);
+
+    const nshManifestSummary = summarizeNshManifest(
+      await Bun.file(
+        path.join(import.meta.dir, "..", "packages", "nsh-desk", "nsh.json"),
+      ).json(),
+    );
+    expect(nshManifestSummary.minRuntime).toBe(PINNED_NSH_RELEASE.version);
 
     const ver = parseNshVersionOutput(
       "\u001b[32mnsh 0.4.0 (e626a8d)\u001b[0m\n",

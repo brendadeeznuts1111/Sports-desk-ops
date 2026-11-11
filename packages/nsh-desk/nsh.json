@@ -3,6 +3,7 @@
   "id": "ops.sportsdesk.desk",
   "version": "0.1.0",
   "build": 1,
+  "minRuntime": "0.4.0",
   "theme": "theme.json",
   "appearance": "system",
   "statusBar": {

@@ -189,6 +189,23 @@ export function formatCliReportOutput(
 
 const MINIMUM_NSH_RUNTIME_RANGE = ">=0.4.0";
 
+/**
+ * Upstream `longbridge/nsh` release provenance pinned for `packages/nsh-desk` and CI
+ * (`https://github.com/longbridge/nsh/commit/e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3`).
+ */
+export const PINNED_NSH_RELEASE = {
+  version: "0.4.0",
+  tag: "v0.4.0",
+  commit: "e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3",
+  shortSha: "e626a8d",
+  sha256: {
+    "linux-x86_64":
+      "8806121aebf40bb51f8fb6aa703722fbb01253f9a435759c18d53beece1ec976",
+    "macos-arm64":
+      "f63c3d57c31b28c9b34227aac81f099d1e0e61f1db552a6ec5127d114eaf59cb",
+  },
+} as const;
+
 function stripAnsi(text: string): string {
   // eslint-disable-next-line no-control-regex
   return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
@@ -842,17 +859,25 @@ export async function runNshDoctor(
         detail: `id=${manifest.id ?? "unset"} mode=${manifest.mode} theme=${manifest.theme ?? "default"} caps=[${manifest.capabilityKeys.join(",")}]`,
       });
 
-      if (
-        manifest.minRuntime !== null &&
-        version !== null &&
-        version.semver !== null
-      ) {
+      if (manifest.minRuntime === null) {
+        checks.push({
+          check: "nsh.json minRuntime",
+          status: "fail",
+          detail: `missing minRuntime in nsh.json (expected >=${PINNED_NSH_RELEASE.version})`,
+        });
+      } else if (version !== null && version.semver !== null) {
         const minRange = `>=${manifest.minRuntime}`;
         const minOk = Bun.semver.satisfies(version.semver, minRange);
         checks.push({
           check: "nsh.json minRuntime",
           status: minOk ? "ok" : "fail",
           detail: `installed ${version.semver} vs required ${minRange}`,
+        });
+      } else {
+        checks.push({
+          check: "nsh.json minRuntime",
+          status: "ok",
+          detail: `declared minRuntime=${manifest.minRuntime}`,
         });
       }
 
