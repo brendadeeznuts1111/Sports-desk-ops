@@ -37,6 +37,7 @@ export function UiKitGalleryDialog(props: {
   const appearance = signal<AppearanceChoice>("system");
   const sampleSwitch = signal(true);
   const sampleTab = signal<"signals" | "kpis" | "sinks">("signals");
+  const splitPressDownCount = signal(0);
 
   const applyAppearance = (next: AppearanceChoice) => {
     appearance.set(next);
@@ -93,6 +94,14 @@ export function UiKitGalleryDialog(props: {
             symbol="↻"
             accessibilityLabel="Sample icon action"
             variant="outline"
+            onPress={() => {}}
+          />
+          <DeskButton
+            testID="ui-kit-split-probe"
+            label={`Split probe (${splitPressDownCount()})`}
+            variant="outline"
+            selected={splitPressDownCount() > 0}
+            onPressDown={() => splitPressDownCount.update((n) => n + 1)}
             onPress={() => {}}
           />
         </View>

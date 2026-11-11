@@ -1,15 +1,18 @@
 import { Scroll, Text, View, type JSX } from "nsh";
 import { formatAgeShort, formatUsd } from "../desk_model";
-import type { DeskStore } from "../store";
+import { useDeskStore, type DeskStore } from "../store";
 import { SectionHeader, Surface } from "../ui";
 
-export function DiagnosticsPanel(props: { store: DeskStore }): JSX.Element {
+export function DiagnosticsPanel(
+  props: { store?: DeskStore } = {},
+): JSX.Element {
+  const store = useDeskStore(props.store);
   const formatEndpointReady = (
     endpoint: string,
     httpStatus: number,
   ): string => {
     if (endpoint === "/api/live-bets/summary") {
-      const lb = props.store.liveBetsSnap();
+      const lb = store.liveBetsSnap();
       if (lb.status === "ready") {
         const wagers =
           lb.data.totalWagers !== null
@@ -33,7 +36,7 @@ export function DiagnosticsPanel(props: { store: DeskStore }): JSX.Element {
             title="Endpoints"
             trailing="read-only GET · no silent zeroes"
           />
-          <Each of={props.store.allEndpoints()} key={(ep) => ep.endpoint}>
+          <Each of={store.allEndpoints()} key={(ep) => ep.endpoint}>
             {(ep) => (
               <Surface
                 variant="inset"
@@ -84,12 +87,12 @@ export function DiagnosticsPanel(props: { store: DeskStore }): JSX.Element {
             trailing="publish age vs data window"
           />
           <If
-            when={props.store.r2Sinks().length > 0}
+            when={store.r2Sinks().length > 0}
             else={
               <Surface variant="inset" class="px-2.5 py-2">
                 <Text class="font-mono text-xs text-muted-foreground">
                   {(() => {
-                    const k = props.store.kpisSnap();
+                    const k = store.kpisSnap();
                     return k.status === "unavailable"
                       ? `pipeline unavailable (${k.code})`
                       : "no R2 sink telemetry reported";
@@ -98,7 +101,7 @@ export function DiagnosticsPanel(props: { store: DeskStore }): JSX.Element {
               </Surface>
             }
           >
-            <Each of={props.store.r2Sinks()} key={(s) => s.sink}>
+            <Each of={store.r2Sinks()} key={(s) => s.sink}>
               {(s) => (
                 <Surface
                   variant="inset"

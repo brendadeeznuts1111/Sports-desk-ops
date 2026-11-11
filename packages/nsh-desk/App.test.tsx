@@ -230,6 +230,12 @@ test("switches semantic tokens across light and dark appearances and opens/dismi
   await app.keyboard.press("mod+u");
   await app.waitFor("text:Sportsdesk UI kit");
   expect(app.texts().join("\n")).toContain("Buttons — variants & states");
+  expect(app.texts().join("\n")).toContain("Split probe (0)");
+
+  await app.press("id:ui-kit-split-probe");
+  await app.waitUntil(() =>
+    app.texts().some((t) => t.includes("Split probe (1)")),
+  );
 
   await app.keyboard.press("escape");
   await app.waitFor("text:Sportsdesk UI kit", { state: "gone" });
@@ -336,4 +342,27 @@ test("renders live-bets summary telemetry when HTTP 200 and recovers from root E
   const texts = app.texts().join("\n");
   expect(texts).toContain("Sportsdesk Desk");
   expect(texts).toContain("HTTP 200 · 14 wagers · $6250 [live]");
+});
+
+test("mounts SignalsPanel in isolation via DeskStoreContext.Provider without prop-drilling", async () => {
+  const app = await open("./App.tsx", {
+    platform: "macos",
+    width: 960,
+    height: 640,
+    reducedMotion: true,
+    host: {
+      params: {
+        __testIsolatedPanel: "signals",
+      },
+    },
+    network: defaultStubNetwork(),
+  });
+
+  await app.waitUntil(() =>
+    app.texts().some((t) => t.includes("MJ102 (MJ2026)")),
+  );
+  const texts = app.texts().join("\n");
+  expect(texts).toContain("1 signals");
+  expect(texts).toContain("KALSHI · OK");
+  expect(texts).not.toContain("Sportsdesk Desk");
 });

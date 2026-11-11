@@ -8,7 +8,7 @@ import {
   ScoreboardPanel,
   SignalsPanel,
 } from "./components";
-import { createDeskStore } from "./store";
+import { createDeskStore, DeskStoreContext } from "./store";
 import {
   animateUserLayoutChange,
   bindDesktopShellMenu,
@@ -113,56 +113,57 @@ function DeskRootBody(props: {
   });
 
   return (
-    <View class="min-h-0 flex-1">
-      <DeskHeader
-        store={store}
-        origin={resolvedOrigin}
-        onToggleLeftDock={toggleLeftDock}
-        onToggleBottomDock={toggleBottomDock}
-        onResetLayout={resetWorkspaceLayout}
-        onCopyDiagnostics={copyDiagnostics}
-      />
+    <DeskStoreContext.Provider value={store}>
+      <View class="min-h-0 flex-1">
+        <DeskHeader
+          origin={resolvedOrigin}
+          onToggleLeftDock={toggleLeftDock}
+          onToggleBottomDock={toggleBottomDock}
+          onResetLayout={resetWorkspaceLayout}
+          onCopyDiagnostics={copyDiagnostics}
+        />
 
-      <DeskWorkspace
-        onRef={(r) => {
-          dockRef = r;
-        }}
-        layout={store.layout()}
-        locked={store.locked()}
-        panelTitles={PANEL_TITLES}
-        onLayoutChange={(next) => store.setLayout(next)}
-        onDockOpenChange={(placement, open) =>
-          store.setDockOpenPlacement(placement, open)
-        }
-        renderPanel={(panelId) => {
-          switch (panelId) {
-            case "signals":
-              return <SignalsPanel store={store} />;
-            case "exposure":
-              return <ExposurePanel store={store} />;
-            case "scoreboard":
-              return <ScoreboardPanel store={store} />;
-            case "kpis":
-              return <KpisPanel store={store} />;
-            case "diagnostics":
-              return <DiagnosticsPanel store={store} />;
-            default:
-              return (
-                <StateNotice
-                  kind="empty"
-                  title="Unknown panel"
-                  detail={`Panel '${panelId}' is not registered.`}
-                />
-              );
+        <DeskWorkspace
+          onRef={(r) => {
+            dockRef = r;
+          }}
+          layout={store.layout()}
+          locked={store.locked()}
+          panelTitles={PANEL_TITLES}
+          onLayoutChange={(next) => store.setLayout(next)}
+          onDockOpenChange={(placement, open) =>
+            store.setDockOpenPlacement(placement, open)
           }
-        }}
-      />
+          renderPanel={(panelId) => {
+            switch (panelId) {
+              case "signals":
+                return <SignalsPanel />;
+              case "exposure":
+                return <ExposurePanel />;
+              case "scoreboard":
+                return <ScoreboardPanel />;
+              case "kpis":
+                return <KpisPanel />;
+              case "diagnostics":
+                return <DiagnosticsPanel />;
+              default:
+                return (
+                  <StateNotice
+                    kind="empty"
+                    title="Unknown panel"
+                    detail={`Panel '${panelId}' is not registered.`}
+                  />
+                );
+            }
+          }}
+        />
 
-      <UiKitGalleryDialog
-        open={store.uiKitOpen()}
-        onOpenChange={(open) => store.setUiKitOpen(open)}
-      />
-    </View>
+        <UiKitGalleryDialog
+          open={store.uiKitOpen()}
+          onOpenChange={(open) => store.setUiKitOpen(open)}
+        />
+      </View>
+    </DeskStoreContext.Provider>
   );
 }
 
@@ -177,6 +178,7 @@ export function App(): JSX.Element {
     }
     return null;
   };
+  const isolatedPanel = host.params["__testIsolatedPanel"];
 
   return (
     <View class="flex-1 bg-background pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
@@ -185,7 +187,19 @@ export function App(): JSX.Element {
           <RootErrorFallback error={error} onReset={reset} />
         )}
       >
-        <DeskRootBody consumeForcedError={consumeForcedError} />
+        <If
+          when={isolatedPanel === "signals"}
+          else={<DeskRootBody consumeForcedError={consumeForcedError} />}
+        >
+          {() => {
+            const isolatedStore = createDeskStore();
+            return (
+              <DeskStoreContext.Provider value={isolatedStore}>
+                <SignalsPanel />
+              </DeskStoreContext.Provider>
+            );
+          }}
+        </If>
       </ErrorBoundary>
     </View>
   );

@@ -1,5 +1,5 @@
 import { Text, View, type JSX } from "nsh";
-import { LEAGUE_FILTER_OPTIONS, type DeskStore } from "../store";
+import { LEAGUE_FILTER_OPTIONS, useDeskStore, type DeskStore } from "../store";
 import {
   createPanelReadyMotion,
   DeskDataTable,
@@ -17,9 +17,12 @@ export const SCOREBOARD_COLUMNS: DataTableColumn[] = [
   { key: "score", title: "Score", width: 72, align: "end" },
 ];
 
-export function ScoreboardPanel(props: { store: DeskStore }): JSX.Element {
+export function ScoreboardPanel(
+  props: { store?: DeskStore } = {},
+): JSX.Element {
+  const store = useDeskStore(props.store);
   const readyMotion = createPanelReadyMotion();
-  const snap = () => props.store.scoreboardSnap();
+  const snap = () => store.scoreboardSnap();
 
   return (
     <Surface variant="panel" class="min-h-0 flex-1">
@@ -37,8 +40,8 @@ export function ScoreboardPanel(props: { store: DeskStore }): JSX.Element {
                   <SegmentedTabs
                     accessibilityLabel="Filter scoreboard by league"
                     items={LEAGUE_FILTER_OPTIONS}
-                    value={props.store.leagueFilter()}
-                    onChange={(next) => props.store.setLeagueFilter(next)}
+                    value={store.leagueFilter()}
+                    onChange={(next) => store.setLeagueFilter(next)}
                   />
                   <Text class="shrink font-mono text-xs tabular-nums text-muted-foreground truncate">
                     {(() => {
@@ -51,21 +54,21 @@ export function ScoreboardPanel(props: { store: DeskStore }): JSX.Element {
                 </View>
 
                 <If
-                  when={props.store.scoreboardRows().length > 0}
+                  when={store.scoreboardRows().length > 0}
                   else={
                     <StateNotice
                       kind="empty"
                       title="No games in filter"
-                      detail={`No games matched league '${props.store.leagueFilter()}'.`}
+                      detail={`No games matched league '${store.leagueFilter()}'.`}
                       actionLabel="Show all leagues"
-                      onAction={() => props.store.setLeagueFilter("ALL")}
+                      onAction={() => store.setLeagueFilter("ALL")}
                     />
                   }
                 >
                   <DeskDataTable
                     accessibilityLabel="Scoreboard matchups"
                     columns={SCOREBOARD_COLUMNS}
-                    data={props.store.scoreboardRows()}
+                    data={store.scoreboardRows()}
                   />
                 </If>
               </View>
@@ -80,7 +83,7 @@ export function ScoreboardPanel(props: { store: DeskStore }): JSX.Element {
               })()}
               actionLabel="Refresh"
               onAction={() => {
-                void props.store.refreshAll();
+                void store.refreshAll();
               }}
             />
           </If>

@@ -1,6 +1,6 @@
 import { setColorScheme, Text, View, type JSX } from "nsh";
 import type { ResolvedDeskOrigin } from "../desk_model";
-import type { DeskStore } from "../store";
+import { useDeskStore, type DeskStore } from "../store";
 import {
   Badge,
   DeskButton,
@@ -14,7 +14,7 @@ import {
 } from "../ui";
 
 export interface DeskHeaderProps {
-  store: DeskStore;
+  store?: DeskStore;
   origin: ResolvedDeskOrigin;
   onToggleLeftDock: () => void;
   onToggleBottomDock: () => void;
@@ -23,6 +23,7 @@ export interface DeskHeaderProps {
 }
 
 export function DeskHeader(props: DeskHeaderProps): JSX.Element {
+  const store = useDeskStore(props.store);
   return (
     <View class="flex-row flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
       <View class="flex-row flex-wrap items-baseline gap-2">
@@ -33,14 +34,14 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
           {`${props.origin.origin} [${props.origin.source}]`}
         </Text>
         <Text class="font-mono text-xs tabular-nums text-muted-foreground">
-          {props.store.lastPollMs() === null
+          {store.lastPollMs() === null
             ? "polling…"
-            : `poll #${props.store.pollCount()} · ${props.store.lastPollMs()}ms`}
+            : `poll #${store.pollCount()} · ${store.lastPollMs()}ms`}
         </Text>
-        <If when={props.store.copiedDiagnosticsBytes() !== null}>
+        <If when={store.copiedDiagnosticsBytes() !== null}>
           <Badge
             testID="diagnostics-copied-badge"
-            label={`copied ${props.store.copiedDiagnosticsBytes() ?? 0}B`}
+            label={`copied ${store.copiedDiagnosticsBytes() ?? 0}B`}
             tone="positive"
           />
         </If>
@@ -49,18 +50,18 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
       <DeskToolbar accessibilityLabel="Workspace controls">
         <DeskToolbarGroup accessibilityLabel="Polling">
           <DeskButton
-            label={props.store.polling() ? "Refreshing…" : "Refresh"}
+            label={store.polling() ? "Refreshing…" : "Refresh"}
             variant="default"
-            loading={props.store.polling()}
+            loading={store.polling()}
             tooltip="Refresh all :4020 endpoints"
             onPress={() => {
-              void props.store.refreshAll();
+              void store.refreshAll();
             }}
           />
           <DeskSwitch
             label="Auto 10s"
-            checked={props.store.autoPoll()}
-            onChange={(next) => props.store.setAutoPoll(next)}
+            checked={store.autoPoll()}
+            onChange={(next) => store.setAutoPoll(next)}
           />
         </DeskToolbarGroup>
 
@@ -70,14 +71,14 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
           <DeskButton
             label="KPIs"
             variant="outline"
-            selected={props.store.dockOpen().left}
+            selected={store.dockOpen().left}
             accessibilityLabel="KPIs dock"
             onPress={props.onToggleLeftDock}
           />
           <DeskButton
             label="Pipeline"
             variant="outline"
-            selected={props.store.dockOpen().bottom}
+            selected={store.dockOpen().bottom}
             accessibilityLabel="Pipeline dock"
             onPress={props.onToggleBottomDock}
           />
@@ -89,8 +90,8 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
           <DeskMenuItem
             label="Lock layout"
             shortcut="mod+shift+l"
-            checked={props.store.locked()}
-            onSelect={() => props.store.toggleLocked()}
+            checked={store.locked()}
+            onSelect={() => store.toggleLocked()}
           />
           <DeskMenuItem label="Reset layout" onSelect={props.onResetLayout} />
           <DeskMenuItem
@@ -117,7 +118,7 @@ export function DeskHeader(props: DeskHeaderProps): JSX.Element {
             testID="menu-ui-kit"
             label="UI kit…"
             shortcut="mod+u"
-            onSelect={() => props.store.setUiKitOpen(true)}
+            onSelect={() => store.setUiKitOpen(true)}
           />
         </DeskMenu>
       </DeskToolbar>

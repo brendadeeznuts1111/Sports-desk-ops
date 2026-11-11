@@ -1,6 +1,6 @@
 import { Text, View, type JSX } from "nsh";
 import { formatUsd } from "../desk_model";
-import type { DeskStore } from "../store";
+import { useDeskStore, type DeskStore } from "../store";
 import {
   createPanelReadyMotion,
   DeskExposurePlot,
@@ -8,9 +8,10 @@ import {
   Surface,
 } from "../ui";
 
-export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
+export function ExposurePanel(props: { store?: DeskStore } = {}): JSX.Element {
+  const store = useDeskStore(props.store);
   const readyMotion = createPanelReadyMotion();
-  const snap = () => props.store.kalshiSnap();
+  const snap = () => store.kalshiSnap();
 
   return (
     <Surface variant="panel" class="min-h-0 flex-1">
@@ -21,7 +22,7 @@ export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
             when={snap().status === "unavailable"}
             else={
               <If
-                when={props.store.plotPoints().length > 0}
+                when={store.plotPoints().length > 0}
                 else={
                   <StateNotice
                     kind="empty"
@@ -29,7 +30,7 @@ export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
                     detail="0 Kalshi signals returned by /api/signals/kalshi."
                     actionLabel="Refresh"
                     onAction={() => {
-                      void props.store.refreshAll();
+                      void store.refreshAll();
                     }}
                   />
                 }
@@ -38,7 +39,7 @@ export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
                   style={readyMotion.style}
                   class="min-h-0 flex-1 gap-2.5 p-3"
                 >
-                  <If when={props.store.activePlotPoint()}>
+                  <If when={store.activePlotPoint()}>
                     {(hov) => (
                       <Surface variant="inset" class="gap-1">
                         <Text class="text-xs font-semibold text-foreground">
@@ -51,11 +52,9 @@ export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
                     )}
                   </If>
                   <DeskExposurePlot
-                    points={props.store.plotPoints()}
+                    points={store.plotPoints()}
                     formatUsd={formatUsd}
-                    onHoverIndexChange={(idx) =>
-                      props.store.setHoveredPlotIndex(idx)
-                    }
+                    onHoverIndexChange={(idx) => store.setHoveredPlotIndex(idx)}
                   />
                 </View>
               </If>
@@ -70,7 +69,7 @@ export function ExposurePanel(props: { store: DeskStore }): JSX.Element {
               })()}
               actionLabel="Refresh"
               onAction={() => {
-                void props.store.refreshAll();
+                void store.refreshAll();
               }}
             />
           </If>

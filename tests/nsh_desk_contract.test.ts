@@ -351,25 +351,41 @@ describe("packages/nsh-desk model and capability contracts", () => {
     ]);
   });
 
-  test("enforces root App.tsx mount(App) ownership and acyclic components/ boundary", async () => {
+  test("enforces root App.tsx mount(App) ownership, DeskStoreContext, split() ui wrappers, and acyclic components/ boundary", async () => {
     const pkgDir = path.join(import.meta.dir, "..", "packages", "nsh-desk");
     const appSrc = await Bun.file(path.join(pkgDir, "App.tsx")).text();
     const mountCalls = appSrc.match(/\bmount\s*\(/g) ?? [];
     expect(mountCalls.length).toBe(1);
     expect(appSrc).toContain("ErrorBoundary");
+    expect(appSrc).toContain("DeskStoreContext.Provider");
     expect(appSrc).toMatch(/from\s+["']\.\/components["']/);
+
+    const storeSrc = await Bun.file(path.join(pkgDir, "store.ts")).text();
+    expect(storeSrc).toContain("export const DeskStoreContext = context<");
+    expect(storeSrc).toContain("export function useDeskStore(");
+
+    for (const uiWrapper of ["Button.tsx", "Switch.tsx", "Surface.tsx"]) {
+      const uiSrc = await Bun.file(path.join(pkgDir, "ui", uiWrapper)).text();
+      expect(uiSrc).toMatch(/\bsplit\s*\(\s*props\b/);
+      expect(uiSrc).not.toMatch(/const\s*\{[^}]*\.\.\.rest[^}]*\}\s*=\s*props/);
+    }
 
     const compDir = path.join(pkgDir, "components");
     const compGlob = new Bun.Glob("**/*.{ts,tsx}");
     let compCount = 0;
+    let useDeskStoreCount = 0;
     for await (const rel of compGlob.scan({ cwd: compDir })) {
       compCount += 1;
       const src = await Bun.file(path.join(compDir, rel)).text();
       expect(src).not.toMatch(/from\s+["']nsh\/base/);
       expect(src).not.toMatch(/from\s+["']\.\.\/App/);
       expect(src).not.toMatch(/\bmount\s*\(/);
+      if (src.includes("useDeskStore(")) {
+        useDeskStoreCount += 1;
+      }
     }
     expect(compCount).toBeGreaterThanOrEqual(7);
+    expect(useDeskStoreCount).toBe(6);
   });
 
   test("round-trips workspace Storage preferences and builds signal-honest diagnostics JSON", () => {

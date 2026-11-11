@@ -42,8 +42,10 @@ export {
   Separator,
   StateNotice,
   Surface,
+  type BadgeProps,
   type BadgeTone,
   type NoticeKind,
+  type SurfaceProps,
   type SurfaceVariant,
 } from "./Surface";
 export { DeskSwitch, type DeskSwitchProps } from "./Switch";

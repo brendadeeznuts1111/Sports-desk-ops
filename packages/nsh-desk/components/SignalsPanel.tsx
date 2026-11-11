@@ -1,6 +1,6 @@
 import { Text, View, type JSX } from "nsh";
 import { formatProvenanceCompact, formatUsd } from "../desk_model";
-import type { DeskStore } from "../store";
+import { useDeskStore, type DeskStore } from "../store";
 import {
   Badge,
   createPanelReadyMotion,
@@ -37,9 +37,10 @@ export const SIGNAL_COLUMNS: DataTableColumn[] = [
   { key: "provenance", title: "Provenance", width: 170 },
 ];
 
-export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
+export function SignalsPanel(props: { store?: DeskStore } = {}): JSX.Element {
+  const store = useDeskStore(props.store);
   const readyMotion = createPanelReadyMotion();
-  const snap = () => props.store.kalshiSnap();
+  const snap = () => store.kalshiSnap();
 
   return (
     <Surface variant="panel" class="min-h-0 flex-1">
@@ -56,7 +57,7 @@ export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
                 <View class="min-w-0 flex-row flex-wrap items-center justify-between gap-2">
                   <View class="min-w-0 flex-1 flex-row flex-wrap items-center gap-2">
                     <Text class="font-mono text-xs tabular-nums text-foreground">
-                      {`${props.store.signalArena().rows.length} signals`}
+                      {`${store.signalArena().rows.length} signals`}
                     </Text>
                     <Badge
                       label={(() => {
@@ -101,7 +102,7 @@ export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
                 </View>
 
                 <If
-                  when={props.store.signalArena().rows.length > 0}
+                  when={store.signalArena().rows.length > 0}
                   else={
                     <StateNotice
                       kind="empty"
@@ -109,7 +110,7 @@ export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
                       detail="/api/signals/kalshi returned 0 active rows."
                       actionLabel="Refresh"
                       onAction={() => {
-                        void props.store.refreshAll();
+                        void store.refreshAll();
                       }}
                     />
                   }
@@ -117,16 +118,14 @@ export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
                   <DeskDataTable
                     accessibilityLabel="Kalshi market signals"
                     columns={SIGNAL_COLUMNS}
-                    data={props.store.signalArena().rows}
-                    sort={props.store.signalSort()}
-                    onSortChange={(next) => props.store.setSignalSort(next)}
-                    onRowSelect={(row) =>
-                      props.store.selectSignalByDisplayRow(row)
-                    }
+                    data={store.signalArena().rows}
+                    sort={store.signalSort()}
+                    onSortChange={(next) => store.setSignalSort(next)}
+                    onRowSelect={(row) => store.selectSignalByDisplayRow(row)}
                   />
                 </If>
 
-                <If when={props.store.selectedSignal()}>
+                <If when={store.selectedSignal()}>
                   {(active) => (
                     <Surface variant="inset" class="min-w-0 gap-1.5">
                       <View class="min-w-0 flex-row flex-wrap items-baseline justify-between gap-2">
@@ -164,7 +163,7 @@ export function SignalsPanel(props: { store: DeskStore }): JSX.Element {
               })()}
               actionLabel="Refresh"
               onAction={() => {
-                void props.store.refreshAll();
+                void store.refreshAll();
               }}
             />
           </If>

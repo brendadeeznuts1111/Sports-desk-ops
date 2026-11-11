@@ -1,5 +1,13 @@
 import process from "process";
-import { batch, cleanup, Clipboard, computed, signal, Storage } from "nsh";
+import {
+  batch,
+  cleanup,
+  Clipboard,
+  computed,
+  context,
+  signal,
+  Storage,
+} from "nsh";
 import {
   buildDiagnosticsSnapshotJson,
   buildExposurePlotData,
@@ -426,3 +434,23 @@ export function createDeskStore() {
 }
 
 export type DeskStore = ReturnType<typeof createDeskStore>;
+
+/**
+ * Reactive NSH `context<DeskStore | null>(null)` providing the active `DeskStore`
+ * across workspace headers and panels without prop-drilling, while allowing isolated
+ * headless panel mounts in `App.test.tsx` to inject synthetic stores via `<DeskStoreContext.Provider>`.
+ */
+export const DeskStoreContext = context<DeskStore | null>(null);
+
+export function useDeskStore(explicitStore?: DeskStore): DeskStore {
+  if (explicitStore !== undefined) {
+    return explicitStore;
+  }
+  const provided = DeskStoreContext();
+  if (provided === null) {
+    throw new Error(
+      "[nsh-desk] useDeskStore() requires an enclosing <DeskStoreContext.Provider> or explicit store prop",
+    );
+  }
+  return provided;
+}

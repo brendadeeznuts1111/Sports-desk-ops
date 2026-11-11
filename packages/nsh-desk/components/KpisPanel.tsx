@@ -1,12 +1,13 @@
 import { Scroll, Text, View, type JSX } from "nsh";
 import { formatProvenanceCompact } from "../desk_model";
-import type { DeskStore } from "../store";
+import { useDeskStore, type DeskStore } from "../store";
 import { Badge, createPanelReadyMotion, StateNotice, Surface } from "../ui";
 import { provenanceTone } from "./provenance";
 
-export function KpisPanel(props: { store: DeskStore }): JSX.Element {
+export function KpisPanel(props: { store?: DeskStore } = {}): JSX.Element {
+  const store = useDeskStore(props.store);
   const readyMotion = createPanelReadyMotion();
-  const snap = () => props.store.kpisSnap();
+  const snap = () => store.kpisSnap();
   const cards = () => {
     const s = snap();
     return s.status === "ready" ? s.data.cards : [];
@@ -59,7 +60,7 @@ export function KpisPanel(props: { store: DeskStore }): JSX.Element {
               })()}
               actionLabel="Refresh"
               onAction={() => {
-                void props.store.refreshAll();
+                void store.refreshAll();
               }}
             />
           </If>
