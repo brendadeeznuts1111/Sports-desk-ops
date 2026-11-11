@@ -1,9 +1,13 @@
 /** Single resolver for the retained F402 bet-ticker JSONL (Mode 6 / live positions). */
 import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { resolveFourcRoot } from "./fourc_root.ts";
 
 /** Operator machine default; override with `F402_BETS_JSONL` on VPS or CI. */
-export const F402_BETS_JSONL_OPERATOR_DEFAULT =
-  "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl";
+export const F402_BETS_JSONL_OPERATOR_DEFAULT = join(
+  resolveFourcRoot(),
+  "probes/out13/f402-bets.jsonl",
+);
 
 export interface ResolveF402BetsJsonlPathOptions {
   readonly cliValue?: string | undefined;

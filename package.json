@@ -24,7 +24,8 @@
     "blob-formdata": "bin/blob-formdata.ts",
     "xml-parse": "bin/xml-parse.ts",
     "bun-surface": "bin/bun_surface.ts",
-    "sql-query": "bin/sql-query.ts"
+    "sql-query": "bin/sql-query.ts",
+    "desk-provenance": "bin/desk-provenance.ts"
   },
   "trustedDependencies": [],
   "publishConfig": {
@@ -144,6 +145,7 @@
     "probe:bun": "bun scripts/probe_bun.ts --check tests/bun_baseline.json",
     "ci:local": "bun scripts/ci_local.ts",
     "agent:doctor": "bun run scripts/agent_env_doctor.ts",
+    "desk:provenance": "bun run bin/desk-provenance.ts --table --worktrees --check",
     "audit:tool-calls": "bun run scripts/audit_tool_calls.ts",
     "pm:doctor": "bun scripts/pm_doctor.ts",
     "deps": "bun-deps",

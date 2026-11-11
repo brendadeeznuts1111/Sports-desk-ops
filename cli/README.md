@@ -26,8 +26,9 @@ Bun CLIs invoked via `bun x <bin>` (linked from `packages/sportsdesk-ops` + root
 | `bun x xml-parse`                   | `bun run xml:parse`                | `../bin/xml-parse.ts`                                                   |
 | `bun x bun-surface`                 | `bun run bun:surface`              | `../bin/bun_surface.ts`                                                 |
 | `bun x sql-query`                   | `bun run sql:query`                | `../bin/sql-query.ts` — read-only `Bun.SQL` / `Bun.sql` inspector       |
+| `bun x desk-provenance`             | `bun run desk:provenance`          | `../bin/desk-provenance.ts` — Bun oracle pin & spine repo SHA snapshot  |
 
-Run `bun run cli:bins` (or `./bin/dx scripts --bins [--json | --yaml]`) to inspect all 22 workspace CLI mappings and verify `node_modules/.bin/` symlink status.
+Run `bun run cli:bins` (or `./bin/dx scripts --bins [--json | --yaml]`) to inspect all 23 workspace CLI mappings and verify `node_modules/.bin/` symlink status.
 
 Shared libraries live under `../lib/`; long-running daemons under `../services/`.
 

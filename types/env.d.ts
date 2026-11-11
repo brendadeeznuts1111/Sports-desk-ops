@@ -137,6 +137,10 @@ declare module "bun" {
     readonly DX_BUN_FLAGS?: string;
     /** Skip network probes in `./bin/dx status` and `./bin/dx monitor`. */
     readonly DX_STATUS_OFFLINE?: string;
+    /** Workspace root containing sibling desk checkouts (default: `$HOME/code`). */
+    readonly CODE_ROOT?: string;
+    /** Probe corpus checkout root override (default: `~/4c-odds-intergration` or `$CODE_ROOT/4c-odds-intergration`). */
+    readonly FOURC_ROOT?: string;
   }
 }
 

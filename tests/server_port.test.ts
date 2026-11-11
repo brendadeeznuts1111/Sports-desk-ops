@@ -99,6 +99,20 @@ describe("Server Port Cascade Resolution", () => {
     );
   });
 
+  test("Bun.serve return value exposes protocol (http: without tls)", () => {
+    const server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => new Response("ok"),
+    });
+    try {
+      expect(server.protocol).toBe("http");
+      expect(server.url?.protocol).toBe("http:");
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("development accepts the HMR-off object without breaking the daemon", async () => {
     const server = startServer({
       port: 0,

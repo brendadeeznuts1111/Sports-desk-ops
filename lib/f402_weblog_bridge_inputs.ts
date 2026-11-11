@@ -12,6 +12,7 @@ import {
 } from "./f402_weblog_fetch.ts";
 import type { ResolveF402BearerOptions } from "./f402_pending_fetch.ts";
 import { readF402Session } from "./f402_session.ts";
+import { resolveFourcRoot } from "./fourc_root.ts";
 
 export const WEBLOG_BRIDGE_USAGE_HINT = [
   "weblog: --from required (or --fetch-mode to capture first)",
@@ -67,8 +68,10 @@ export function defaultDeskDateYmd(now = new Date()): string {
 }
 
 /** Operator machine default; override with `F402_WEBLOG_FROM` on VPS or CI. */
-export const F402_WEBLOG_OPERATOR_DEFAULT =
-  "/Users/nolarose/4c-odds-intergration/probes/out/f402/weblog";
+export const F402_WEBLOG_OPERATOR_DEFAULT = join(
+  resolveFourcRoot(),
+  "probes/out/f402/weblog",
+);
 
 export interface ResolveBridgeWeblogCorpusFromOptions {
   readonly env?: NodeJS.ProcessEnv;

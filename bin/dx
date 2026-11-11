@@ -191,7 +191,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata xml-parse sql fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun provenance deps blob-formdata xml-parse sql fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -298,6 +298,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx setup [--replace]      Report home links (~/.zshrc etc.); --replace backs up and links
     ./bin/dx scripts [filter|--bins] Group package.json scripts by prefix, or list bun x CLI bins (--bins)
     ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
+    ./bin/dx provenance [flags]     Bun oracle pin + spine repo & worktree SHA provenance (--table|--json|--yaml)
     ./bin/dx run [flags] <target>   Controlled Bun runner (connects live `bun run --help` + presets)
     ./bin/dx monitor [flags]        Monitor Bun processes, daemon /health + /api/v2/live-bets, profiles
     ./bin/dx live-bets [flags]      Control & monitor v2 live-bets (--source/--fallback/--daemon/--watch)
@@ -574,6 +575,10 @@ EOF
   bun)
     cd "$REPO_ROOT"
     exec bun bin/bun_surface.ts "$@"
+    ;;
+  provenance)
+    cd "$REPO_ROOT"
+    exec bun bin/desk-provenance.ts "$@"
     ;;
   deps)
     # Deliberately no `cd "$REPO_ROOT"`: bun-deps acts on the directory you are

@@ -301,7 +301,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/YAML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
-- **Here:** `bin/bun_surface.ts`, `bin/sql-query.ts`
+- **Here:** `bin/bun_surface.ts`, `bin/desk-provenance.ts`
 - **Evidence:** `surface:YAML`, `probe:data.parse`
 
 #### Bun.deepEquals
@@ -637,19 +637,19 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/revision)
 - **Shape:** value: `string` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/f402_portal_runtime_pin.ts`
+- **Here:** `lib/bun_runtime.ts`, `bin/bun_surface.ts`
 - **Evidence:** `probe:proc.meta`
 
 #### Bun.version
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version)
 - **Shape:** value: `string` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/bun_cli_flags.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/bun_runtime.ts`
 - **Evidence:** `probe:proc.meta`
 
 #### Bun.version_with_sha
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version_with_sha)
 - **Shape:** value: `string` · writable false · enumerable false
-- **Here:** `scripts/probe_bun.ts`, `scripts/scrape_bun_globals_map.ts`
+- **Here:** `lib/bun_runtime.ts`, `scripts/probe_bun.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`
