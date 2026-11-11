@@ -59,6 +59,9 @@ const EXACT_FILES: Readonly<Record<string, string>> = {
   _headers: "Cloudflare Pages headers gate",
   "infra/pages/_headers": "Cloudflare Pages headers gate",
   "bin/dx": "bash -n",
+  "bin/wrangler": "bash -n",
+  "packages/sportsdesk-ops/bin/dx": "bash -n",
+  "packages/sportsdesk-ops/bin/wrangler": "bash -n",
 };
 
 function trackedFiles(): string[] {
@@ -117,7 +120,10 @@ describe("language coverage", () => {
   test("shell sources pass bash -n", () => {
     const failures: string[] = [];
     for (const path of FILES.filter(
-      (candidate) => candidate.endsWith(".sh") || candidate === "bin/dx",
+      (candidate) =>
+        candidate.endsWith(".sh") ||
+        candidate === "bin/dx" ||
+        candidate === "bin/wrangler",
     )) {
       const result = Bun.spawnSync({
         cmd: ["bash", "-n", join(ROOT, path)],

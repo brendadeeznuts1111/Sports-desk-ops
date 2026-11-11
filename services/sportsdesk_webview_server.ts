@@ -4530,7 +4530,7 @@ function respondLiveBetsV2(
     "Cache-Control": "no-store",
   };
   if (resolved.provenance.hash !== null) {
-    const etag = `"${resolved.provenance.hash.slice(0, 24)}"`;
+    const etag = `"${resolved.provenance.hash.slice(0, 24)}-${resolved.fallbackUsed ? 1 : 0}-${resolved.warnings.length}"`;
     headers["ETag"] = etag;
     if (req.headers.get("if-none-match") === etag) {
       return new Response(null, { status: 304, headers });
@@ -4541,7 +4541,7 @@ function respondLiveBetsV2(
   }
   const versionKey =
     resolved.provenance.hash !== null
-      ? `v2-live-bets|${resolved.dataSource}|${resolved.provenance.hash}`
+      ? `v2-live-bets|${resolved.dataSource}|${resolved.fallbackUsed ? 1 : 0}|${resolved.warnings.join("\n")}|${resolved.provenance.hash}`
       : `v2-live-bets-dyn|${resolved.provenance.generatedAt}|${resolved.pendingCount}`;
   return encodedResponse(req, {
     version: versionKey,
