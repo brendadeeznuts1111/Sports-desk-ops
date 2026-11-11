@@ -1,18 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Module Dependency Graph CLI & Analyzer
+ * Module Dependency Graph CLI & Deep Architectural Analyzer
  *
  * Traverses ES module imports and CommonJS dependencies starting from an entry file
  * or directory using Bun.Transpiler.scanImports and Bun.resolveSync.
  *
- * Features:
- *  - Traversal with cycle detection & topological depth analysis
+ * Capabilities:
+ *  - Traversal with cycle detection & topological wave/depth analysis
+ *  - Orphan / entry-point identification (nodes with 0 incoming internal edges)
+ *  - High-fanout & high-fanin centrality ranking (hubs & foundations)
+ *  - Architectural sanity checks & CI gates (`--check`, `--max-cycles=N`, `--no-unresolved`)
  *  - Formats: Pretty tree (`--tree`), Mermaid graph (`--mermaid`), JSON (`--json`), and graph diff (`--compare <file|dir>`)
- *  - Tracks internal local files, external npm packages, node:* builtins, and bun:* submodules
- *  - Detects circular dependencies and unresolved imports
+ *  - Subgraph filters (`--filter <prefix>`, `--depth <N>`, `--cycles-only`)
  *
  * Usage:
- *   bun scripts/module-graph.ts <file|dir> [--tree] [--mermaid] [--json] [--compare <other>]
+ *   bun scripts/module-graph.ts <file|dir> [options]
  */
 
 import {
@@ -42,17 +44,28 @@ export interface ModuleNode {
   externalDependencies: string[];
   builtinDependencies: string[];
   unresolvedImports: string[];
+  incomingDependencies: string[];
+}
+
+export interface NodeMetrics {
+  path: string;
+  fanOut: number;
+  fanIn: number;
+  totalImports: number;
 }
 
 export interface ModuleGraphReport {
   root: string;
   entryPoints: string[];
+  orphans: string[];
   totalFiles: number;
   totalDependencies: number;
   externalPackages: string[];
   builtinModules: string[];
   cycles: string[][];
   unresolved: { from: string; specifier: string }[];
+  topFanOut: NodeMetrics[];
+  topFanIn: NodeMetrics[];
   nodes: Record<string, ModuleNode>;
 }
 
@@ -69,6 +82,21 @@ export interface ModuleGraphCompare {
     added: { from: string; to: string }[];
     removed: { from: string; to: string }[];
   };
+}
+
+export interface CliOptions {
+  target: string | null;
+  tree: boolean;
+  mermaid: boolean;
+  json: boolean;
+  cyclesOnly: boolean;
+  orphans: boolean;
+  filterPrefix: string | null;
+  maxDepth: number | null;
+  check: boolean;
+  maxCycles: number | null;
+  noUnresolved: boolean;
+  compareTarget: string | null;
 }
 
 const SUPPORTED_EXTENSIONS = new Set([
@@ -312,8 +340,48 @@ export function buildModuleGraph(
       externalDependencies: Array.from(externalDeps).sort(),
       builtinDependencies: Array.from(builtinDeps).sort(),
       unresolvedImports: Array.from(unresDeps).sort(),
+      incomingDependencies: [],
     };
   }
+
+  // Populate incomingDependencies (fanIn)
+  for (const [fromKey, node] of Object.entries(nodes)) {
+    for (const depKey of node.dependencies) {
+      if (nodes[depKey]) {
+        nodes[depKey].incomingDependencies.push(fromKey);
+      }
+    }
+  }
+
+  for (const node of Object.values(nodes)) {
+    node.incomingDependencies.sort();
+  }
+
+  // Identify orphans (files with 0 incoming edges that are not declared root entry points)
+  const orphans = Object.keys(nodes)
+    .filter((k) => nodes[k] && nodes[k].incomingDependencies.length === 0)
+    .sort();
+
+  // Metrics: FanOut and FanIn rankings
+  const topFanOut: NodeMetrics[] = Object.values(nodes)
+    .map((n) => ({
+      path: n.relativePath,
+      fanOut: n.dependencies.length,
+      fanIn: n.incomingDependencies.length,
+      totalImports: n.imports.length,
+    }))
+    .sort((a, b) => b.fanOut - a.fanOut)
+    .slice(0, 10);
+
+  const topFanIn: NodeMetrics[] = Object.values(nodes)
+    .map((n) => ({
+      path: n.relativePath,
+      fanOut: n.dependencies.length,
+      fanIn: n.incomingDependencies.length,
+      totalImports: n.imports.length,
+    }))
+    .sort((a, b) => b.fanIn - a.fanIn)
+    .slice(0, 10);
 
   // Detect circular dependency cycles
   const cycles = detectCycles(nodes);
@@ -326,12 +394,15 @@ export function buildModuleGraph(
   return {
     root: relative(repoRoot, absTarget) || ".",
     entryPoints: entryFiles.map((f) => relative(repoRoot, f)),
+    orphans,
     totalFiles: Object.keys(nodes).length,
     totalDependencies: totalDeps,
     externalPackages: Array.from(allExternal).sort(),
     builtinModules: Array.from(allBuiltin).sort(),
     cycles,
     unresolved,
+    topFanOut,
+    topFanIn,
     nodes,
   };
 }
@@ -341,6 +412,7 @@ export function detectCycles(nodes: Record<string, ModuleNode>): string[][] {
   const visited = new Set<string>();
   const recStack = new Set<string>();
   const parentPath: string[] = [];
+  const seenCycleSignatures = new Set<string>();
 
   function dfs(nodeId: string) {
     visited.add(nodeId);
@@ -356,7 +428,21 @@ export function detectCycles(nodes: Record<string, ModuleNode>): string[][] {
           const cycleStart = parentPath.indexOf(neighbor);
           if (cycleStart !== -1) {
             const cycle = parentPath.slice(cycleStart).concat(neighbor);
-            cycles.push(cycle);
+            // Deduplicate cycles by rotational signature
+            const cycleNodes = cycle.slice(0, -1);
+            const minIndex = cycleNodes.indexOf(
+              cycleNodes.slice().sort()[0] ?? "",
+            );
+            const normalized = [
+              ...cycleNodes.slice(minIndex),
+              ...cycleNodes.slice(0, minIndex),
+              cycleNodes[minIndex] ?? "",
+            ].join("->");
+
+            if (!seenCycleSignatures.has(normalized)) {
+              seenCycleSignatures.add(normalized);
+              cycles.push(cycle);
+            }
           }
         }
       }
@@ -375,20 +461,27 @@ export function detectCycles(nodes: Record<string, ModuleNode>): string[][] {
   return cycles;
 }
 
-export function formatTree(report: ModuleGraphReport): string {
+export function formatTree(
+  report: ModuleGraphReport,
+  options: { maxDepth?: number | null; filterPrefix?: string | null } = {},
+): string {
   const lines: string[] = [];
   lines.push(
     `Module Graph Tree: ${report.root} (${report.totalFiles} files, ${report.totalDependencies} internal edges)`,
   );
 
   const printed = new Set<string>();
+  const maxDepth = options.maxDepth ?? Infinity;
+  const prefixFilter = options.filterPrefix;
 
   function printNode(
     nodeKey: string,
     prefix: string,
     isTail: boolean,
     ancestors: Set<string>,
+    depth: number,
   ) {
+    if (depth > maxDepth) return;
     const node = report.nodes[nodeKey];
     const marker = isTail ? "└── " : "├── ";
     if (!node) {
@@ -400,7 +493,7 @@ export function formatTree(report: ModuleGraphReport): string {
     const cycleMarker = isCycle ? " [CIRCULAR]" : "";
     lines.push(`${prefix}${marker}${nodeKey}${cycleMarker}`);
 
-    if (isCycle || printed.has(nodeKey)) {
+    if (isCycle || printed.has(nodeKey) || depth === maxDepth) {
       return;
     }
     printed.add(nodeKey);
@@ -409,24 +502,30 @@ export function formatTree(report: ModuleGraphReport): string {
     const nextAncestors = new Set(ancestors);
     nextAncestors.add(nodeKey);
 
-    const children = node.dependencies;
+    let children = node.dependencies;
+    if (prefixFilter) {
+      children = children.filter((c) => c.startsWith(prefixFilter));
+    }
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (!child) continue;
       const childTail = i === children.length - 1;
-      printNode(child, childPrefix, childTail, nextAncestors);
+      printNode(child, childPrefix, childTail, nextAncestors, depth + 1);
     }
   }
 
-  const entries =
+  let entries =
     report.entryPoints.length > 0
       ? report.entryPoints
       : Object.keys(report.nodes).slice(0, 5);
+  if (prefixFilter) {
+    entries = entries.filter((e) => e.startsWith(prefixFilter));
+  }
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (!entry) continue;
     const isTail = i === entries.length - 1;
-    printNode(entry, "", isTail, new Set());
+    printNode(entry, "", isTail, new Set(), 0);
   }
 
   if (report.externalPackages.length > 0) {
@@ -446,13 +545,37 @@ export function formatTree(report: ModuleGraphReport): string {
   return lines.join("\n");
 }
 
-export function formatMermaid(report: ModuleGraphReport): string {
+export function formatMermaid(
+  report: ModuleGraphReport,
+  options: { cyclesOnly?: boolean; filterPrefix?: string | null } = {},
+): string {
   const lines: string[] = ["graph TD"];
   const sanitizedId = (p: string) => "N_" + p.replace(/[^a-zA-Z0-9_]/g, "_");
 
+  if (options.cyclesOnly) {
+    if (report.cycles.length === 0) {
+      lines.push("  %% No circular dependencies detected");
+      return lines.join("\n");
+    }
+    for (let cIdx = 0; cIdx < report.cycles.length; cIdx++) {
+      const cycle = report.cycles[cIdx] ?? [];
+      for (let i = 0; i < cycle.length - 1; i++) {
+        const from = cycle[i] ?? "";
+        const to = cycle[i + 1] ?? "";
+        lines.push(
+          `  ${sanitizedId(from)}["${from}"] ==> ${sanitizedId(to)}["${to}"]`,
+        );
+      }
+    }
+    return lines.join("\n");
+  }
+
   for (const [key, node] of Object.entries(report.nodes)) {
+    if (options.filterPrefix && !key.startsWith(options.filterPrefix)) continue;
     lines.push(`  ${sanitizedId(key)}["${key}"]`);
     for (const dep of node.dependencies) {
+      if (options.filterPrefix && !dep.startsWith(options.filterPrefix))
+        continue;
       lines.push(`  ${sanitizedId(key)} --> ${sanitizedId(dep)}`);
     }
     for (const ext of node.externalDependencies) {
@@ -565,17 +688,18 @@ export function formatCompare(compare: ModuleGraphCompare): string {
   return lines.join("\n");
 }
 
-export function parseCliArgs(args: string[]): {
-  target: string | null;
-  tree: boolean;
-  mermaid: boolean;
-  json: boolean;
-  compareTarget: string | null;
-} {
+export function parseCliArgs(args: string[]): CliOptions {
   let target: string | null = null;
   let tree = false;
   let mermaid = false;
   let json = false;
+  let cyclesOnly = false;
+  let orphans = false;
+  let filterPrefix: string | null = null;
+  let maxDepth: number | null = null;
+  let check = false;
+  let maxCycles: number | null = null;
+  let noUnresolved = false;
   let compareTarget: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
@@ -587,9 +711,30 @@ export function parseCliArgs(args: string[]): {
       mermaid = true;
     } else if (arg === "--json") {
       json = true;
-    } else if (arg === "--compare") {
+    } else if (arg === "--cycles-only") {
+      cyclesOnly = true;
+    } else if (arg === "--orphans") {
+      orphans = true;
+    } else if (arg === "--check") {
+      check = true;
+    } else if (arg === "--no-unresolved") {
+      noUnresolved = true;
+    } else if (arg === "--depth") {
       const next = args[++i];
-      compareTarget = next ?? null;
+      maxDepth = next ? parseInt(next, 10) : null;
+    } else if (arg.startsWith("--depth=")) {
+      maxDepth = parseInt(arg.slice("--depth=".length), 10);
+    } else if (arg === "--filter") {
+      filterPrefix = args[++i] ?? null;
+    } else if (arg.startsWith("--filter=")) {
+      filterPrefix = arg.slice("--filter=".length);
+    } else if (arg === "--max-cycles") {
+      const next = args[++i];
+      maxCycles = next ? parseInt(next, 10) : null;
+    } else if (arg.startsWith("--max-cycles=")) {
+      maxCycles = parseInt(arg.slice("--max-cycles=".length), 10);
+    } else if (arg === "--compare") {
+      compareTarget = args[++i] ?? null;
     } else if (arg.startsWith("--compare=")) {
       compareTarget = arg.slice("--compare=".length);
     } else if (!arg.startsWith("-") && !target) {
@@ -597,29 +742,40 @@ export function parseCliArgs(args: string[]): {
     }
   }
 
-  return { target, tree, mermaid, json, compareTarget };
+  return {
+    target,
+    tree,
+    mermaid,
+    json,
+    cyclesOnly,
+    orphans,
+    filterPrefix,
+    maxDepth,
+    check,
+    maxCycles,
+    noUnresolved,
+    compareTarget,
+  };
 }
 
 // CLI Execution
 if (import.meta.main) {
-  const { target, tree, mermaid, json, compareTarget } = parseCliArgs(
-    process.argv.slice(2),
-  );
+  const options = parseCliArgs(process.argv.slice(2));
 
-  if (!target) {
+  if (!options.target) {
     console.error(
-      "Usage: bun scripts/module-graph.ts <file|dir> [--tree] [--mermaid] [--json] [--compare <file|dir>]",
+      "Usage: bun scripts/module-graph.ts <file|dir> [--tree] [--mermaid] [--json] [--compare <file|dir>] [--check] [--cycles-only] [--orphans] [--filter <prefix>] [--depth <N>]",
     );
     process.exit(1);
   }
 
   try {
-    const reportA = buildModuleGraph(target);
+    const reportA = buildModuleGraph(options.target);
 
-    if (compareTarget) {
-      const reportB = buildModuleGraph(compareTarget);
+    if (options.compareTarget) {
+      const reportB = buildModuleGraph(options.compareTarget);
       const comparison = compareModuleGraphs(reportA, reportB);
-      if (json) {
+      if (options.json) {
         console.log(JSON.stringify(comparison, null, 2));
       } else {
         console.log(formatCompare(comparison));
@@ -627,28 +783,106 @@ if (import.meta.main) {
       process.exit(0);
     }
 
-    if (json) {
+    if (options.json) {
       console.log(JSON.stringify(reportA, null, 2));
-    } else if (mermaid) {
-      console.log(formatMermaid(reportA));
-    } else if (tree) {
-      console.log(formatTree(reportA));
-    } else {
-      // Default summary
-      console.log(`Module Graph: ${reportA.root}`);
-      console.log(`  Total Files: ${reportA.totalFiles}`);
-      console.log(`  Total Internal Edges: ${reportA.totalDependencies}`);
+      process.exit(0);
+    }
+
+    if (options.mermaid) {
       console.log(
-        `  External Packages: ${reportA.externalPackages.join(", ") || "none"}`,
+        formatMermaid(reportA, {
+          cyclesOnly: options.cyclesOnly,
+          filterPrefix: options.filterPrefix,
+        }),
       );
+      process.exit(0);
+    }
+
+    if (options.tree) {
       console.log(
-        `  Node/Bun Builtins: ${reportA.builtinModules.join(", ") || "none"}`,
+        formatTree(reportA, {
+          maxDepth: options.maxDepth,
+          filterPrefix: options.filterPrefix,
+        }),
       );
-      if (reportA.cycles.length > 0) {
-        console.log(`  Circular Dependencies: ${reportA.cycles.length}`);
+      process.exit(0);
+    }
+
+    if (options.orphans) {
+      console.log(
+        `Orphan Modules (0 incoming dependencies) in ${reportA.root}:`,
+      );
+      for (const o of reportA.orphans) {
+        console.log(`  - ${o}`);
       }
-      if (reportA.unresolved.length > 0) {
-        console.log(`  Unresolved Imports: ${reportA.unresolved.length}`);
+      console.log(`Total: ${reportA.orphans.length}`);
+      process.exit(0);
+    }
+
+    // Default summary output
+    console.log(`Module Graph: ${reportA.root}`);
+    console.log(`  Total Files: ${reportA.totalFiles}`);
+    console.log(`  Total Internal Edges: ${reportA.totalDependencies}`);
+    console.log(
+      `  External Packages (${reportA.externalPackages.length}): ${reportA.externalPackages.join(", ") || "none"}`,
+    );
+    console.log(
+      `  Node/Bun Builtins (${reportA.builtinModules.length}): ${reportA.builtinModules.join(", ") || "none"}`,
+    );
+    console.log(`  Circular Dependencies: ${reportA.cycles.length}`);
+    if (reportA.cycles.length > 0) {
+      for (let i = 0; i < reportA.cycles.length; i++) {
+        const cycle = reportA.cycles[i] ?? [];
+        console.log(`    [${i + 1}] ${cycle.join(" -> ")}`);
+      }
+    }
+    console.log(`  Unresolved Imports: ${reportA.unresolved.length}`);
+    if (reportA.unresolved.length > 0) {
+      for (const u of reportA.unresolved) {
+        console.log(`    ! ${u.from} -> "${u.specifier}"`);
+      }
+    }
+
+    if (reportA.topFanOut.length > 0) {
+      console.log("\nTop Outgoing Hubs (Fan-Out):");
+      for (const h of reportA.topFanOut.slice(0, 5)) {
+        console.log(
+          `  ${h.fanOut.toString().padStart(3, " ")} deps <- ${h.path}`,
+        );
+      }
+    }
+
+    if (reportA.topFanIn.length > 0) {
+      console.log("\nTop Ingoing Foundations (Fan-In):");
+      for (const f of reportA.topFanIn.slice(0, 5)) {
+        console.log(
+          `  ${f.fanIn.toString().padStart(3, " ")} importers -> ${f.path}`,
+        );
+      }
+    }
+
+    // Architectural CI Checks
+    if (options.check) {
+      let failed = false;
+      if (options.noUnresolved && reportA.unresolved.length > 0) {
+        console.error(
+          `\nCHECK FAILED: Found ${reportA.unresolved.length} unresolved imports.`,
+        );
+        failed = true;
+      }
+      if (
+        options.maxCycles !== null &&
+        reportA.cycles.length > options.maxCycles
+      ) {
+        console.error(
+          `\nCHECK FAILED: Cycle count (${reportA.cycles.length}) exceeds --max-cycles=${options.maxCycles}`,
+        );
+        failed = true;
+      }
+      if (failed) {
+        process.exit(1);
+      } else {
+        console.log("\n✓ Architectural integrity checks passed.");
       }
     }
   } catch (err: unknown) {

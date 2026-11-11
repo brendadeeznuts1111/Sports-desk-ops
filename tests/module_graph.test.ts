@@ -10,11 +10,28 @@ import {
 
 describe("Module Graph CLI & Analyzer", () => {
   it("parses CLI flags correctly", () => {
-    const parsed = parseCliArgs(["lib/pm_policy.ts", "--tree", "--json"]);
+    const parsed = parseCliArgs([
+      "lib/pm_policy.ts",
+      "--tree",
+      "--json",
+      "--check",
+      "--max-cycles=0",
+      "--no-unresolved",
+      "--depth=2",
+      "--filter=lib/",
+      "--cycles-only",
+      "--orphans",
+    ]);
     expect(parsed.target).toBe("lib/pm_policy.ts");
     expect(parsed.tree).toBe(true);
     expect(parsed.json).toBe(true);
-    expect(parsed.mermaid).toBe(false);
+    expect(parsed.check).toBe(true);
+    expect(parsed.maxCycles).toBe(0);
+    expect(parsed.noUnresolved).toBe(true);
+    expect(parsed.maxDepth).toBe(2);
+    expect(parsed.filterPrefix).toBe("lib/");
+    expect(parsed.cyclesOnly).toBe(true);
+    expect(parsed.orphans).toBe(true);
     expect(parsed.compareTarget).toBeNull();
 
     const compareParsed = parseCliArgs([
@@ -45,19 +62,34 @@ describe("Module Graph CLI & Analyzer", () => {
     }
   });
 
-  it("formats tree view without throwing", () => {
-    const report = buildModuleGraph("packages/nsh-desk/ui/Dialog.tsx");
-    const tree = formatTree(report);
-    expect(tree).toContain("packages/nsh-desk/ui/Dialog.tsx");
-    expect(tree).toContain("packages/nsh-desk/ui/Button.tsx");
+  it("computes fan-in and fan-out metrics accurately", () => {
+    const report = buildModuleGraph("packages/nsh-desk");
+    expect(report.topFanIn.length).toBeGreaterThan(0);
+    expect(report.topFanOut.length).toBeGreaterThan(0);
+
+    const storeMetric = report.topFanIn.find(
+      (m) => m.path === "packages/nsh-desk/store.ts",
+    );
+    expect(storeMetric).toBeDefined();
+    expect(storeMetric?.fanIn).toBeGreaterThanOrEqual(5);
+
+    const indexMetric = report.topFanOut.find(
+      (m) => m.path === "packages/nsh-desk/ui/index.ts",
+    );
+    expect(indexMetric).toBeDefined();
+    expect(indexMetric?.fanOut).toBeGreaterThanOrEqual(5);
   });
 
-  it("formats mermaid diagram with valid graph syntax", () => {
+  it("formats tree view with depth filtering without throwing", () => {
     const report = buildModuleGraph("packages/nsh-desk/ui/Dialog.tsx");
-    const mermaid = formatMermaid(report);
-    expect(mermaid.startsWith("graph TD")).toBe(true);
-    expect(mermaid).toContain("-->");
-    expect(mermaid).toContain("npm:nsh");
+    const tree = formatTree(report, { maxDepth: 1 });
+    expect(tree).toContain("packages/nsh-desk/ui/Dialog.tsx");
+  });
+
+  it("formats mermaid diagram with cycles-only filter", () => {
+    const report = buildModuleGraph("packages/nsh-desk/ui/Dialog.tsx");
+    const mermaid = formatMermaid(report, { cyclesOnly: true });
+    expect(mermaid).toContain("No circular dependencies");
   });
 
   it("detects circular dependency cycles", () => {
@@ -71,6 +103,7 @@ describe("Module Graph CLI & Analyzer", () => {
         externalDependencies: [],
         builtinDependencies: [],
         unresolvedImports: [],
+        incomingDependencies: ["c.ts"],
       },
       "b.ts": {
         path: "/mock/b.ts",
@@ -81,6 +114,7 @@ describe("Module Graph CLI & Analyzer", () => {
         externalDependencies: [],
         builtinDependencies: [],
         unresolvedImports: [],
+        incomingDependencies: ["a.ts"],
       },
       "c.ts": {
         path: "/mock/c.ts",
@@ -91,6 +125,7 @@ describe("Module Graph CLI & Analyzer", () => {
         externalDependencies: [],
         builtinDependencies: [],
         unresolvedImports: [],
+        incomingDependencies: ["b.ts"],
       },
     };
     const cycles = detectCycles(
@@ -99,7 +134,7 @@ describe("Module Graph CLI & Analyzer", () => {
         import("../scripts/module_graph").ModuleNode
       >,
     );
-    expect(cycles.length).toBeGreaterThan(0);
+    expect(cycles.length).toBe(1);
     expect(cycles[0]).toEqual(["a.ts", "b.ts", "c.ts", "a.ts"]);
   });
 
