@@ -25,6 +25,7 @@ import {
   type InputFileSource,
 } from "../lib/market_edge_engine.ts";
 import { cliInspectOptions, inspectReport } from "../lib/cli_inspect.ts";
+import { F402_BETS_JSONL_OPERATOR_DEFAULT } from "../lib/f402_bets_corpus_path.ts";
 
 function printUsage(): void {
   console.log(`
@@ -151,10 +152,12 @@ export function parseCliArgs(args: string[]): CliOptions {
 
   // Auto-resolve candidate files if not provided
   if (!inputPath) {
+    const envBets = Bun.env.F402_BETS_JSONL?.trim();
     const candidates = [
+      ...(envBets ? [envBets] : []),
       "data/f402-bets.jsonl",
       "data/live-bets.json",
-      "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl",
+      F402_BETS_JSONL_OPERATOR_DEFAULT,
       "tests/fixtures/fraud/live-bets.json",
       "tests/fixtures/live-wagers.partial.json",
     ];

@@ -69,7 +69,7 @@ Instead of only scoping by customer logins, desk risk rules must be scoped by **
 
 ## 3. Cross-Sport Availability Matrix
 
-Across the **930,791 live tickets** in `probes/out13/f402-bets.jsonl`:
+Across the live intake corpus resolved via `resolveF402BetsJsonlPath()` (`$F402_BETS_JSONL` in `lib/f402_bets_corpus_path.ts`, sampled at **930,791 live tickets**):
 
 | Sport (`SportType`) | Sub Sport (`SportSubType`)     | Market Type                      | Point Buys Allowed? | Active Buy Legs | Desk Exposure                                         |
 | ------------------- | ------------------------------ | -------------------------------- | :-----------------: | --------------: | ----------------------------------------------------- |
@@ -183,7 +183,7 @@ Detection requires understanding how the three Fantasy402 tiers encode wagers:
 
 ### SubSport Classifier & Point Parser
 
-Use `classifySubSport` and `parseBuyPointsFromDesc` in [`lib/f402_figure_date_enricher.ts`](file:///Users/nolarose/.gemini/antigravity/worktrees/sportsdesk-ops/portal_period_taxonomy/lib/f402_figure_date_enricher.ts):
+Use `classifySubSport` and `parseBuyPointsFromDesc` in [`lib/f402_figure_date_enricher.ts`](../../../lib/f402_figure_date_enricher.ts):
 
 ```typescript
 export function isLiveSubSport(
@@ -306,4 +306,4 @@ bun run scripts/shadow_price.ts --ladder-3=-140 --ladder-7=-135 --elasticity=0.1
 ./bin/dx shadow-price --ladder-3=-140 --ladder-7=-135 --elasticity=0.15
 ```
 
-Evaluates counterfactual P&L across `hist-mine.db`, isolating sharp syndicate savings ($N \ge 15$, Key Rate $\ge 40\%$) from retail elasticity turnover attrition.
+Evaluates counterfactual P&L across `$SHADOW_PRICE_DB` (falling back to the synthetic fixture when external `hist-mine.db` is absent), isolating sharp syndicate savings ($N \ge 15$, Key Rate $\ge 40\%$) from retail elasticity turnover attrition.

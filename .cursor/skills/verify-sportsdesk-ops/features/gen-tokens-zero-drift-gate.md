@@ -1,6 +1,6 @@
 # gen:tokens zero-drift gate
 
-A maintainer or CI job runs the token SSOT gate so generated TypeScript and dashboard HTML match `tokens.toml` and committed HEAD bytes after regen.
+A maintainer or CI job runs the token SSOT gate so generated TypeScript, CSS, and dashboard HTML match `design/tokens.toml` and committed HEAD bytes after regen.
 
 ## Sub-features
 
@@ -17,14 +17,14 @@ A maintainer or CI job runs the token SSOT gate so generated TypeScript and dash
 Preconditions:
 
 - `doctor.sh` passes.
-- No uncommitted changes under `domain-branded-types.ts`, `customer-churn-simulation-dashboard.html`, `telegram-miniapp-dashboard.html`.
+- No uncommitted changes under `design/domain-branded-types.ts`, `src/dashboard/tokens.generated.css`, `static/customer-churn-simulation-dashboard.html`, `static/telegram-miniapp-dashboard.html`.
 - `SPORTSDESK_VERIFY_EVIDENCE` exists.
 
 - **Clean pass.** Run `bun run gen:tokens:gate` and tee to `$SPORTSDESK_VERIFY_EVIDENCE/gate-clean/log.txt`. Exit code `0`. Log contains `Generation completed successfully`.
-- **Proof.** Run `git diff --quiet -- domain-branded-types.ts customer-churn-simulation-dashboard.html telegram-miniapp-dashboard.html`. Exit code `0` after gate.
+- **Proof.** Run `git diff --quiet -- design/domain-branded-types.ts src/dashboard/tokens.generated.css static/customer-churn-simulation-dashboard.html static/telegram-miniapp-dashboard.html`. Exit code `0` after gate.
 
 ## Gotchas
 
 - Gate deletes `scratch/gen-tokens-emitted.json` before gen; do not rely on a stale manifest from a prior run.
-- `domain-branded-types.ts` uses `rm-before-gen`; a failed gen can leave the file missing until you regen or checkout.
+- `design/domain-branded-types.ts` and `src/dashboard/tokens.generated.css` use `rm-before-gen`; a failed gen can leave those files missing until you regen or checkout.
 - Formal TLC property lives in `verify-gen-tokens-zero-drift` skill, not this drive alone.

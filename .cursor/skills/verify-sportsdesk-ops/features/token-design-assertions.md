@@ -1,6 +1,6 @@
 # Token design assertions
 
-A maintainer runs the token verification suite to confirm `tokens.toml` matches generated types, color distance, and WCAG constraints the README advertises.
+A maintainer runs the token verification suite to confirm `design/tokens.toml` matches generated types, color distance, and WCAG constraints the README advertises.
 
 ## Sub-features
 
@@ -22,5 +22,4 @@ Preconditions:
 
 ## Gotchas
 
-- Large assertion count; failures often mean drift between TOML and committed `domain-branded-types.ts` — run `gen:tokens` then re-test.
-- Prototype HTML under `docs/prototypes/` is intentionally outside this suite.
+- Large assertion count; failures often mean drift between `design/tokens.toml` and committed `design/domain-branded-types.ts` — run `gen:tokens` then re-test.

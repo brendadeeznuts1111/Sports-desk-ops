@@ -26,6 +26,7 @@ import {
 } from "../lib/f402_figure_date_enricher.ts";
 import { parseAsCents } from "../design/domain-branded-types.ts";
 import { cliInspectOptions, inspectReport } from "../lib/cli_inspect.ts";
+import { F402_BETS_JSONL_OPERATOR_DEFAULT } from "../lib/f402_bets_corpus_path.ts";
 import { classifyPortalPeriod } from "../lib/portal_period_taxonomy.ts";
 
 function printUsage(): void {
@@ -60,7 +61,8 @@ export interface CliOptions {
 
 export function parseCliArgs(args: string[]): CliOptions {
   let figurePath = "";
-  let tickerPath = resolve(process.cwd(), "probes/out13/f402-bets.jsonl");
+  let tickerPath =
+    Bun.env.F402_BETS_JSONL?.trim() || F402_BETS_JSONL_OPERATOR_DEFAULT;
   let outputPath = resolve(process.cwd(), "scratch/f402-bets-enriched.jsonl");
   let stats = true;
   let format: "jsonl" | "inspect" | "summary" | "table" = "summary";

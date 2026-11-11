@@ -31,6 +31,7 @@ import {
   type ReportMode,
 } from "../lib/portal_period_taxonomy.ts";
 import { cliInspectOptions, inspectReport } from "../lib/cli_inspect.ts";
+import { F402_BETS_JSONL_OPERATOR_DEFAULT } from "../lib/f402_bets_corpus_path.ts";
 
 function printUsage(): void {
   console.log(`
@@ -181,8 +182,10 @@ export function parseCliArgs(args: string[]): CliOptions {
 
   // Resolve input path default
   if (!inputPath) {
+    const envBets = Bun.env.F402_BETS_JSONL?.trim();
     const candidates = [
-      "/Users/nolarose/4c-odds-intergration/probes/out13/f402-bets.jsonl",
+      ...(envBets ? [envBets] : []),
+      F402_BETS_JSONL_OPERATOR_DEFAULT,
       "data/f402-bets.jsonl",
       "data/live-bets.json",
       "tests/fixtures/live-wagers.partial.json",

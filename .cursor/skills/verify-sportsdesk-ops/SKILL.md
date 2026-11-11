@@ -31,7 +31,7 @@ Each **drive** uses a new shell or re-sources `launch-env.sh`. Teardown: remove 
 .cursor/skills/verify-sportsdesk-ops/bin/doctor.sh
 ```
 
-Run before the first drive and after any failed drive. Requires Bun **1.4.4**, `tokens.toml`, and `bun.lock`.
+Run before the first drive and after any failed drive. Requires Bun **1.4.4**, `design/tokens.toml`, and `bun.lock`.
 
 ## Drive
 
