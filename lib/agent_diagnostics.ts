@@ -495,7 +495,7 @@ export async function runAgentWithDiagnostics(
   );
 
   const env = {
-    ...process.env,
+    ...Bun.env,
     ...options.env,
   };
 
@@ -575,13 +575,10 @@ export async function runAgentWithDiagnostics(
   };
 
   // Attach sanitized report to CI summary if running under GitHub Actions
-  if (
-    process.env.GITHUB_ACTIONS === "true" &&
-    process.env.GITHUB_STEP_SUMMARY
-  ) {
+  if (Bun.env.GITHUB_ACTIONS === "true" && Bun.env.GITHUB_STEP_SUMMARY) {
     try {
       const report = renderAgentFailureReport(failure);
-      await Bun.write(process.env.GITHUB_STEP_SUMMARY, `\n\n${report}\n`, {
+      await Bun.write(Bun.env.GITHUB_STEP_SUMMARY, `\n\n${report}\n`, {
         createPath: true,
       });
     } catch {

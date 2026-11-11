@@ -435,7 +435,7 @@ export class TerminalSession implements AsyncDisposable {
     });
 
     const env = {
-      ...process.env,
+      ...Bun.env,
       TERM: "xterm-256color",
       ...this._options.env,
     };

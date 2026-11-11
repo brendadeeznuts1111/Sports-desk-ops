@@ -1,8 +1,8 @@
 import { copyFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const appDataDir = process.env.ANTIGRAVITY_APP_DATA_DIR;
-const convId = process.env.ANTIGRAVITY_CONVERSATION_ID;
+const appDataDir = Bun.env.ANTIGRAVITY_APP_DATA_DIR;
+const convId = Bun.env.ANTIGRAVITY_CONVERSATION_ID;
 
 if (appDataDir && convId) {
   const artifactDir = join(appDataDir, "brain", convId);

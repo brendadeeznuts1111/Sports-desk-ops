@@ -819,10 +819,7 @@ export function startServer(options?: ServerOptions) {
   );
 
   const isDevelopment =
-    options?.development ??
-    (typeof Bun !== "undefined"
-      ? Bun.env.NODE_ENV !== "production"
-      : process.env.NODE_ENV !== "production");
+    options?.development ?? Bun.env.NODE_ENV !== "production";
 
   /**
    * Cross-origin reads are off unless the operator names the origins that may make them.
@@ -837,9 +834,7 @@ export function startServer(options?: ServerOptions) {
     options?.development === false
       ? false
       : options?.development === undefined
-        ? typeof Bun !== "undefined"
-          ? Bun.env.NODE_ENV !== "production"
-          : process.env.NODE_ENV !== "production"
+        ? Bun.env.NODE_ENV !== "production"
         : true;
   const allowedOrigins = resolveAllowedOrigins(corsDevelopment);
 
@@ -871,9 +866,7 @@ export function startServer(options?: ServerOptions) {
     return headers;
   }
 
-  const unixSocket =
-    options?.unix ||
-    (typeof Bun !== "undefined" ? Bun.env.BUN_SOCKET : process.env.BUN_SOCKET);
+  const unixSocket = options?.unix || Bun.env.BUN_SOCKET;
 
   /** What a peer address means here; read once, so a restart is what changes it. */
   const ingress: Ingress = {
@@ -1708,10 +1701,7 @@ export function startServer(options?: ServerOptions) {
 
       // 6. Health & Telemetry Probe
       if (pathname === "/health") {
-        const nodeEnv =
-          (typeof Bun !== "undefined"
-            ? Bun.env.NODE_ENV
-            : process.env.NODE_ENV) || "development";
+        const nodeEnv = Bun.env.NODE_ENV || "development";
         const health = await buildDeskEnhancedHealth({
           port: server.port ?? Number(Bun.env.PORT ?? 4020),
           hostname: server.hostname ?? "127.0.0.1",

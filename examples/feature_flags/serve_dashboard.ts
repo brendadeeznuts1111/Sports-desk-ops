@@ -8,7 +8,7 @@ import {
 } from "../../types/features";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 4025;
+const PORT = Number(Bun.env.PORT) || 4025;
 const DASHBOARD_HTML_PATH = path.resolve(
   __dirname,
   "../../../antigravity/brain/a35513a7-2222-4a84-aeb3-8cf9929c068f/dashboard.html",

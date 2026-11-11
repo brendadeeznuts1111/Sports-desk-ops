@@ -94,7 +94,13 @@ async function main(): Promise<void> {
   let scannedCount = 0;
   let totalViolations = 0;
 
-  for (const file of await listSourceFiles(ROOT, ["ts", "tsx", "js", "mjs"])) {
+  for (const file of await listSourceFiles(ROOT, [
+    "ts",
+    "tsx",
+    "mts",
+    "js",
+    "mjs",
+  ])) {
     if (file.includes("/verification/manager-boot-oracle/pinned/")) continue;
     scannedCount++;
     const fullPath = path.join(ROOT, file);

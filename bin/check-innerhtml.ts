@@ -45,20 +45,79 @@ const EXTERNAL_ASSET_TAG_RE =
 // A backslash run escapes the next character: client JS emitted from a TS template literal
 // carries its quotes double-escaped (`\\"`). Any bare quote in the middle still fails the match.
 const SAFE_STATIC_LITERAL_RE = /^(['"])(?:\\+.|(?!\1)[^\\])*\1$/;
-const MARKDOWN_SINK_RE = /\bBun\.markdown\.(?:html|render)\s*\(/;
+const MARKDOWN_SINK_RE =
+  /\b(?:(?:globalThis\.)?Bun\.markdown)\.(?:html|render)\s*\(/;
+const BUN_NAMED_IMPORT_RE = /\bimport\s+\{([^}]+)\}\s+from\s+["']bun["']/g;
+const BUN_NS_IMPORT_RE =
+  /\bimport\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s+["']bun["']/g;
+const BUN_MARKDOWN_DESTRUCTURE_RE =
+  /\bconst\s+\{([^}]+)\}\s*=\s*(?:globalThis\.)?Bun\b/g;
+
+function escapeRegexIdent(ident: string): string {
+  return ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildMarkdownSinkRegexes(content: string): readonly RegExp[] {
+  const regexes: RegExp[] = [MARKDOWN_SINK_RE];
+  const markdownAliases = new Set<string>();
+  const bunNsAliases = new Set<string>();
+
+  for (const m of content.matchAll(BUN_NAMED_IMPORT_RE)) {
+    for (const raw of m[1]?.split(",") ?? []) {
+      const cleaned = raw.trim().replace(/^type\s+/, "");
+      const asMatch = /^markdown(?:\s+as\s+([A-Za-z_$][\w$]*))?$/.exec(cleaned);
+      if (asMatch !== null) {
+        markdownAliases.add(asMatch[1] ?? "markdown");
+      }
+    }
+  }
+  for (const m of content.matchAll(BUN_MARKDOWN_DESTRUCTURE_RE)) {
+    for (const raw of m[1]?.split(",") ?? []) {
+      const colonMatch = /^markdown(?:\s*:\s*([A-Za-z_$][\w$]*))?$/.exec(
+        raw.trim(),
+      );
+      if (colonMatch !== null) {
+        markdownAliases.add(colonMatch[1] ?? "markdown");
+      }
+    }
+  }
+  for (const m of content.matchAll(BUN_NS_IMPORT_RE)) {
+    if (m[1] !== undefined) bunNsAliases.add(m[1]);
+  }
+
+  for (const alias of markdownAliases) {
+    const esc = escapeRegexIdent(alias);
+    regexes.push(new RegExp(`(?<!\\.)\\b${esc}\\.(?:html|render)\\s*\\(`));
+  }
+  for (const ns of bunNsAliases) {
+    const esc = escapeRegexIdent(ns);
+    regexes.push(
+      new RegExp(`(?<!\\.)\\b${esc}\\.markdown\\.(?:html|render)\\s*\\(`),
+    );
+  }
+  return regexes;
+}
 
 /**
  * Help text can name the renderer (`--html   Bun.markdown.html() + options`), and only a call is a
  * sink. A call starts the statement, or follows `=`, `(`, `:` or `,`, or a `return`.
  */
-function isMarkdownSinkCall(line: string): boolean {
-  const match = MARKDOWN_SINK_RE.exec(line);
-  if (match === null) return false;
-  const before = line.slice(0, match.index).trimEnd();
-  if (before === "") return true;
-  const last = before.at(-1);
-  if (last === "=" || last === "(" || last === ":" || last === ",") return true;
-  return /\breturn$/.test(before);
+function isMarkdownSinkCall(
+  line: string,
+  sinkRegexes: readonly RegExp[],
+): boolean {
+  for (const re of sinkRegexes) {
+    const match = re.exec(line);
+    if (match === null) continue;
+    const before = line.slice(0, match.index).trimEnd();
+    if (before === "") return true;
+    const last = before.at(-1);
+    if (last === "=" || last === "(" || last === ":" || last === ",") {
+      return true;
+    }
+    if (/\breturn$/.test(before)) return true;
+  }
+  return false;
 }
 
 function isTestFile(relPath: string): boolean {
@@ -80,6 +139,7 @@ function auditFile(content: string, relPath: string): string[] {
 
   const violations: string[] = [];
   const lines = content.split("\n");
+  const sinkRegexes = buildMarkdownSinkRegexes(content);
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx]!;
@@ -96,7 +156,7 @@ function auditFile(content: string, relPath: string): string[] {
     }
 
     if (
-      isMarkdownSinkCall(stripped) &&
+      isMarkdownSinkCall(stripped, sinkRegexes) &&
       !stripped.includes("// trusted-markdown:") &&
       !(lines[idx - 1] ?? "").includes("// trusted-markdown:")
     ) {
@@ -133,6 +193,7 @@ async function main(): Promise<void> {
   for (const file of await listSourceFiles(ROOT, [
     "ts",
     "tsx",
+    "mts",
     "js",
     "mjs",
     "html",

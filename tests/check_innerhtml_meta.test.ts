@@ -165,4 +165,43 @@ describe("check-innerhtml Bun.markdown sink coverage", () => {
     );
     expect(res.exitCode).toBe(0);
   });
+
+  test('an unannotated MODULE "bun" named markdown.html() call fails the gate', async () => {
+    const res = await runSource(
+      `import { markdown } from "bun";\n${wrap("  return markdown.html(untrusted);")}`,
+    );
+    expect(res.exitCode).toBe(1);
+    expect(res.stdout).toContain("Unsafe Bun.markdown render sink");
+  });
+
+  test('an unannotated MODULE "bun" aliased markdown.render() call fails the gate', async () => {
+    const res = await runSource(
+      `import { markdown as md } from "bun";\n${wrap("  return md.render(untrusted, {});")}`,
+    );
+    expect(res.exitCode).toBe(1);
+    expect(res.stdout).toContain("Unsafe Bun.markdown render sink");
+  });
+
+  test('an unannotated MODULE "bun" namespace bunNs.markdown.html() call fails the gate', async () => {
+    const res = await runSource(
+      `import * as bunNs from "bun";\n${wrap("  return bunNs.markdown.html(untrusted);")}`,
+    );
+    expect(res.exitCode).toBe(1);
+    expect(res.stdout).toContain("Unsafe Bun.markdown render sink");
+  });
+
+  test("an unannotated globalThis.Bun.markdown.html() call fails the gate", async () => {
+    const res = await runSource(
+      wrap("  return globalThis.Bun.markdown.html(untrusted);"),
+    );
+    expect(res.exitCode).toBe(1);
+    expect(res.stdout).toContain("Unsafe Bun.markdown render sink");
+  });
+
+  test('a MODULE "bun" markdown.html() call with trusted-markdown annotation passes', async () => {
+    const res = await runSource(
+      `import { markdown } from "bun";\n${wrap("  return markdown.html(untrusted); // trusted-markdown: fixture")}`,
+    );
+    expect(res.exitCode).toBe(0);
+  });
 });

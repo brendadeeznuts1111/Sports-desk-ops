@@ -139,7 +139,13 @@ async function main(): Promise<void> {
   let filesWithFetch = 0;
   let totalViolations = 0;
 
-  for (const file of await listSourceFiles(ROOT, ["ts", "tsx", "js", "mjs"])) {
+  for (const file of await listSourceFiles(ROOT, [
+    "ts",
+    "tsx",
+    "mts",
+    "js",
+    "mjs",
+  ])) {
     scannedCount++;
     const fullPath = path.join(ROOT, file);
     const content = await Bun.file(fullPath).text();

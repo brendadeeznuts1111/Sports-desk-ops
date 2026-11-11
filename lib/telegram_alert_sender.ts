@@ -146,13 +146,13 @@ async function keychainSecret(name: string): Promise<string> {
  * `"none"` means at least one of the pair is still missing.
  */
 export async function resolveTelegramCredentials(
-  env?: NodeJS.ProcessEnv,
+  env?: Readonly<Record<string, string | undefined>>,
 ): Promise<{
   botToken: string;
   chatId: string;
   source: "env" | "keychain" | "none";
 }> {
-  const effectiveEnv = env ?? process.env;
+  const effectiveEnv = env ?? Bun.env;
   let botToken = cleanCredential(effectiveEnv.TELEGRAM_BOT_TOKEN);
   let chatId = cleanCredential(effectiveEnv.TELEGRAM_CHAT_ID);
   if (botToken !== "" && chatId !== "") {

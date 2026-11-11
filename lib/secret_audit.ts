@@ -3,9 +3,11 @@
  * which names look like credentials, and compare them with `lib/secret_manifest.ts`.
  *
  * Limits, stated so the gate is not mistaken for proof: it sees `process.env.NAME`,
- * `Bun.env.NAME`, `import.meta.env.NAME` and `env["NAME"]` reads. It does not see a name passed as
- * a string to a helper (`requireGsid` reads `GSLIVE_SESSION_ID` that way), and it cannot tell a
- * credential from a look-alike except by suffix.
+ * `Bun.env.NAME`, `globalThis.Bun.env.NAME`, `import.meta.env.NAME`, `env["NAME"]`, and
+ * module-imported `env.NAME` / `bunNs.env.NAME` (`import { env } from "bun"` /
+ * `import * as bunNs from "bun"`). It does not see a name passed as a string to a helper
+ * (`requireGsid` reads `GSLIVE_SESSION_ID` that way), and it cannot tell a credential from a
+ * look-alike except by suffix.
  */
 
 /** Always a credential: must be in the manifest, never allowlisted. */
@@ -39,19 +41,94 @@ export interface EnvRead {
 }
 
 const DOT_READ =
-  /\b(?:process\.env|Bun\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)\b/g;
+  /\b(?:process\.env|Bun\.env|globalThis\.Bun\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)\b/g;
 const BRACKET_READ =
-  /\b(?:process\.env|Bun\.env|import\.meta\.env)\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\]/g;
+  /\b(?:process\.env|Bun\.env|globalThis\.Bun\.env|import\.meta\.env)\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\]/g;
+const BUN_NAMED_IMPORT_RE = /\bimport\s+\{([^}]+)\}\s+from\s+["']bun["']/g;
+const BUN_NS_IMPORT_RE =
+  /\bimport\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s+["']bun["']/g;
+const BUN_ENV_DESTRUCTURE_RE =
+  /\bconst\s+\{([^}]+)\}\s*=\s*(?:globalThis\.)?Bun\b/g;
+
+function escapeRegexIdent(ident: string): string {
+  return ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectModuleEnvBindings(text: string): {
+  readonly envAliases: Set<string>;
+  readonly bunNsAliases: Set<string>;
+} {
+  const envAliases = new Set<string>();
+  const bunNsAliases = new Set<string>();
+
+  for (const m of text.matchAll(BUN_NAMED_IMPORT_RE)) {
+    const specifiers = m[1]?.split(",") ?? [];
+    for (const raw of specifiers) {
+      const cleaned = raw.trim().replace(/^type\s+/, "");
+      if (cleaned === "") continue;
+      const asMatch = /^env(?:\s+as\s+([A-Za-z_$][\w$]*))?$/.exec(cleaned);
+      if (asMatch !== null) {
+        envAliases.add(asMatch[1] ?? "env");
+      }
+    }
+  }
+  for (const m of text.matchAll(BUN_ENV_DESTRUCTURE_RE)) {
+    const bindings = m[1]?.split(",") ?? [];
+    for (const raw of bindings) {
+      const cleaned = raw.trim();
+      const colonMatch = /^env(?:\s*:\s*([A-Za-z_$][\w$]*))?$/.exec(cleaned);
+      if (colonMatch !== null) {
+        envAliases.add(colonMatch[1] ?? "env");
+      }
+    }
+  }
+  for (const m of text.matchAll(BUN_NS_IMPORT_RE)) {
+    if (m[1] !== undefined) bunNsAliases.add(m[1]);
+  }
+  return { envAliases, bunNsAliases };
+}
 
 /** Every `env.NAME` / `env["NAME"]` read in one file, with its 1-based line. */
 export function scanEnvReads(text: string): EnvRead[] {
   const reads: EnvRead[] = [];
+  const seen = new Set<string>();
+  const record = (name: string, line: number): void => {
+    const key = `${name}@${line}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    reads.push({ name, line });
+  };
+
+  const extraPatterns: RegExp[] = [];
+  const { envAliases, bunNsAliases } = collectModuleEnvBindings(text);
+  for (const alias of envAliases) {
+    const esc = escapeRegexIdent(alias);
+    extraPatterns.push(
+      new RegExp(`(?<!\\.)\\b${esc}\\.([A-Z][A-Z0-9_]*)\\b`, "g"),
+      new RegExp(
+        `(?<!\\.)\\b${esc}\\[\\s*["']([A-Z][A-Z0-9_]*)["']\\s*\\]`,
+        "g",
+      ),
+    );
+  }
+  for (const ns of bunNsAliases) {
+    const esc = escapeRegexIdent(ns);
+    extraPatterns.push(
+      new RegExp(`(?<!\\.)\\b${esc}\\.env\\.([A-Z][A-Z0-9_]*)\\b`, "g"),
+      new RegExp(
+        `(?<!\\.)\\b${esc}\\.env\\[\\s*["']([A-Z][A-Z0-9_]*)["']\\s*\\]`,
+        "g",
+      ),
+    );
+  }
+
+  const patterns = [DOT_READ, BRACKET_READ, ...extraPatterns];
   const lines = text.split("\n");
   for (const [index, line] of lines.entries()) {
-    for (const pattern of [DOT_READ, BRACKET_READ]) {
+    for (const pattern of patterns) {
       for (const match of line.matchAll(pattern)) {
         const name = match[1];
-        if (name !== undefined) reads.push({ name, line: index + 1 });
+        if (name !== undefined) record(name, index + 1);
       }
     }
   }

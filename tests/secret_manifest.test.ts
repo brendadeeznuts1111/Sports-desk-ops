@@ -137,6 +137,37 @@ describe("scanEnvReads", () => {
     expect(reads).toContain("THREE_ID@3");
     expect(reads).not.toContain("NOT_THIS_TOKEN@4");
   });
+
+  test('detects MODULE "bun", namespace, destructured, and globalThis.Bun env reads', () => {
+    const imported = [
+      'import { env, sql } from "bun";',
+      "const a = env.IMPORTED_PASSWORD;",
+      'const b = env["IMPORTED_TOKEN"];',
+      "const c = globalThis.Bun.env.GLOBAL_SECRET;",
+    ].join("\n");
+    expect(scanEnvReads(imported).map((r) => `${r.name}@${r.line}`)).toEqual([
+      "IMPORTED_PASSWORD@2",
+      "IMPORTED_TOKEN@3",
+      "GLOBAL_SECRET@4",
+    ]);
+
+    const aliasedAndNs = [
+      'import { env as bunEnv } from "bun";',
+      'import * as bunNs from "bun";',
+      "const { env: localEnv } = Bun;",
+      "const x = bunEnv.ALIASED_SECRET;",
+      'const y = bunNs.env["NS_COOKIE"];',
+      "const z = localEnv.DESTRUCTURED_KEY;",
+    ].join("\n");
+    expect(
+      scanEnvReads(aliasedAndNs).map((r) => `${r.name}@${r.line}`),
+    ).toEqual(["ALIASED_SECRET@4", "NS_COOKIE@5", "DESTRUCTURED_KEY@6"]);
+
+    // Unbound local `env` without importing from "bun" or destructuring Bun is ignored
+    const unbound =
+      "function f(env: Record<string, string>) { return env.UNBOUND_TOKEN; }";
+    expect(scanEnvReads(unbound)).toEqual([]);
+  });
 });
 
 describe("audit", () => {

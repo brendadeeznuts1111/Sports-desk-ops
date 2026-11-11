@@ -20,8 +20,8 @@ import {
 const rootDir = path.resolve(import.meta.dir, "..");
 
 const gitEnv = {
-  ...process.env,
-  GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+  ...Bun.env,
+  GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
   GIT_CONFIG_NOSYSTEM: "1",
 };
 
@@ -39,7 +39,7 @@ function run(cmd: string, args: string[]): number {
     cwd: rootDir,
     stdio: "inherit",
     encoding: "utf-8",
-    env: cmd === "git" ? gitEnv : process.env,
+    env: cmd === "git" ? gitEnv : Bun.env,
   });
   return r.status ?? 1;
 }

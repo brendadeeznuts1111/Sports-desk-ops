@@ -24,11 +24,11 @@ Options:
   process.exit(0);
 }
 
-const host = process.env.PGHOST ?? "localhost";
-const port = Number(process.env.PGPORT ?? 5432);
-const username = process.env.PGUSER ?? process.env.USER ?? "nolarose";
-const password = process.env.PGPASSWORD ?? "";
-const testDbName = process.env.PGDATABASE ?? "sportsdesk_test";
+const host = Bun.env.PGHOST ?? "localhost";
+const port = Number(Bun.env.PGPORT ?? 5432);
+const username = Bun.env.PGUSER ?? Bun.env.USER ?? "nolarose";
+const password = Bun.env.PGPASSWORD ?? "";
+const testDbName = Bun.env.PGDATABASE ?? "sportsdesk_test";
 
 console.log(
   `[test_db] preparing test database "${testDbName}" on ${host}:${port}...`,
@@ -56,14 +56,14 @@ try {
 }
 
 const env: Record<string, string> = {
-  ...(process.env as Record<string, string>),
+  ...(Bun.env as Record<string, string>),
   PGHOST: host,
   PGPORT: String(port),
   PGUSER: username,
   PGPASSWORD: password,
   PGDATABASE: testDbName,
   SPORTSDESK_CSRF_SECRET:
-    process.env.SPORTSDESK_CSRF_SECRET ??
+    Bun.env.SPORTSDESK_CSRF_SECRET ??
     "sportsdesk_test_csrf_secret_integration_key_32chars",
 };
 

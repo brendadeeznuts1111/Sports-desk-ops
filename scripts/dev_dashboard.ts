@@ -83,9 +83,9 @@ function parseRouterAuditMode(
 }
 
 function isAuthRequired(): boolean {
-  return process.env.NODE_ENV === "production"
-    ? process.env.SPORTSDESK_AUTH_DISABLED !== "1"
-    : process.env.SPORTSDESK_AUTH_REQUIRED === "1";
+  return Bun.env.NODE_ENV === "production"
+    ? Bun.env.SPORTSDESK_AUTH_DISABLED !== "1"
+    : Bun.env.SPORTSDESK_AUTH_REQUIRED === "1";
 }
 
 async function enforceOptionalAuth(req: Request): Promise<Response | null> {
@@ -592,7 +592,7 @@ export function startDashboardServer(
           const now = Date.now();
           let purgedSessions = 0;
 
-          if (process.env.PGUSER && process.env.PGPASSWORD) {
+          if (Bun.env.PGUSER && Bun.env.PGPASSWORD) {
             if (now - lastDbProbe > DB_PROBE_MS) {
               lastDbProbe = now;
               try {
