@@ -5,9 +5,19 @@
 import type { Database } from "bun:sqlite";
 import { openSportsdeskSqlite } from "./sportsdesk_sqlite.ts";
 import type { Sha256Hex } from "../design/domain-branded-types.ts";
+import { jsonText } from "./brand.ts";
+import type { Insert, Row } from "./sqlite_schema_derive.ts";
+import {
+  assertSqliteStoreMatchesRegistry,
+  CANDIDATE_TICKETS_SCHEMA,
+  renderCreateTableDdl,
+} from "./sqlite_schema_registry.ts";
+import { ms } from "./units.ts";
 import { sha256HexOfBytes } from "../services/sportsdesk_ingestion_feed_provenance.ts";
 
 export type MatchPolicyMode = "exact" | "candidate-review" | "reject";
+export type CandidateTicketsSsotRow = Row<"candidate_tickets">;
+export type CandidateTicketsSsotInsert = Insert<"candidate_tickets">;
 
 export type MatchPolicy = {
   ms: number;
@@ -40,7 +50,7 @@ export type EnrichedCandidateRow = {
   /** Set when mode is candidate-review and |timeDiff| > ms — still accepted downstream. */
   reviewFlag?: CandidateRejectReason;
   timeDiff: number;
-  policySha256: string;
+  policySha256: Sha256Hex;
   participant_1_code: string | null;
   participant_2_code: string | null;
   raw: CandidateTicketRaw;
@@ -120,18 +130,8 @@ export function enrich(
 export function createCandidateTicketStore(
   db: Database = openSportsdeskSqlite(":memory:"),
 ): CandidateTicketStore {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS candidate_tickets (
-      match_key TEXT NOT NULL,
-      candidate_status TEXT NOT NULL,
-      reject_reason TEXT,
-      time_diff REAL NOT NULL,
-      policy_sha256 TEXT NOT NULL,
-      participant_1_code TEXT,
-      participant_2_code TEXT,
-      raw_json TEXT NOT NULL
-    );
-  `);
+  db.exec(renderCreateTableDdl(CANDIDATE_TICKETS_SCHEMA));
+  assertSqliteStoreMatchesRegistry(db, CANDIDATE_TICKETS_SCHEMA);
   return new CandidateTicketStore(db);
 }
 
@@ -139,6 +139,16 @@ export class CandidateTicketStore {
   constructor(private readonly db: Database) {}
 
   write(row: EnrichedCandidateRow): void {
+    const insertRow: CandidateTicketsSsotInsert = {
+      match_key: row.matchKey,
+      candidate_status: row.candidateStatus,
+      reject_reason: row.rejectReason ?? null,
+      time_diff: ms(row.timeDiff),
+      policy_sha256: row.policySha256,
+      participant_1_code: row.participant_1_code,
+      participant_2_code: row.participant_2_code,
+      raw_json: jsonText(JSON.stringify(row.raw)),
+    };
     this.db
       .query(
         `INSERT INTO candidate_tickets (
@@ -147,14 +157,14 @@ export class CandidateTicketStore {
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
       )
       .run(
-        row.matchKey,
-        row.candidateStatus,
-        row.rejectReason ?? null,
-        row.timeDiff,
-        row.policySha256,
-        row.participant_1_code,
-        row.participant_2_code,
-        JSON.stringify(row.raw),
+        insertRow.match_key,
+        insertRow.candidate_status,
+        insertRow.reject_reason ?? null,
+        insertRow.time_diff,
+        insertRow.policy_sha256,
+        insertRow.participant_1_code ?? null,
+        insertRow.participant_2_code ?? null,
+        insertRow.raw_json,
       );
   }
 

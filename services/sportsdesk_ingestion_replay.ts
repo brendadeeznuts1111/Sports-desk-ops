@@ -13,14 +13,24 @@ import {
   truncateWalAndDisablePersist,
 } from "../lib/sportsdesk_sqlite.ts";
 import {
+  parseAsCents,
   parseAsColorHexInt,
   colorHexIntToHexString,
+  sha256HexFromDigest,
   type ColorHexInt,
+  type Sha256Hex,
   INGESTION_CHANNELS,
   SIGNAL_SLA_MS,
   type SignalChannelCode,
   type SignalChannelStatus,
 } from "../design/domain-branded-types.ts";
+import type { Insert, Row } from "../lib/sqlite_schema_derive.ts";
+import {
+  assertSqliteStoreMatchesRegistry,
+  INGESTION_TRADES_SCHEMA,
+  renderCreateTableDdl,
+} from "../lib/sqlite_schema_registry.ts";
+import { ms } from "../lib/units.ts";
 import {
   replayHistoricalJsonlFile,
   type HistoricalLogReplayResult,
@@ -421,32 +431,21 @@ export function closeOpenIngestionTransactionForId(
   }
 }
 
+export type IngestionTradesSsotRow = Row<"ingestion_trades">;
+export type IngestionTradesSsotInsert = Insert<"ingestion_trades">;
+
 function initReplayDatabase(db: Database): void {
   db.run("PRAGMA journal_mode=WAL");
-  db.run(`
-    CREATE TABLE IF NOT EXISTS ingestion_trades (
-      rowid INTEGER PRIMARY KEY AUTOINCREMENT,
-      id INTEGER NOT NULL,
-      channel_id TEXT NOT NULL,
-      channel_status TEXT NOT NULL,
-      valid_from INTEGER NOT NULL,
-      valid_to INTEGER,
-      tx_from INTEGER NOT NULL,
-      tx_to INTEGER,
-      price INTEGER NOT NULL,
-      link_id TEXT,
-      xml_hash TEXT NOT NULL,
-      latency_ms INTEGER,
-      CHECK (valid_to IS NULL OR valid_to > valid_from),
-      CHECK (tx_to IS NULL OR tx_to > tx_from)
-    )
-  `);
-  db.run(`DROP INDEX IF EXISTS one_open_tx_per_lane_id`);
-  db.run(`
-    CREATE UNIQUE INDEX one_open_tx_per_lane_id
-    ON ingestion_trades (channel_id, id)
-    WHERE tx_to IS NULL
-  `);
+  db.exec(
+    renderCreateTableDdl(INGESTION_TRADES_SCHEMA, {
+      extraChecks: [
+        "valid_to IS NULL OR valid_to > valid_from",
+        "tx_to IS NULL OR tx_to > tx_from",
+      ],
+      recreateUniqueIndexes: true,
+    }),
+  );
+  assertSqliteStoreMatchesRegistry(db, INGESTION_TRADES_SCHEMA);
   db.run("DROP TRIGGER IF EXISTS enforce_bitemporal_overlap");
   db.run(`
     CREATE TRIGGER enforce_bitemporal_overlap
@@ -586,7 +585,9 @@ async function runIngestionReplayOnDatabase(
         skippedInserts += 1;
         return;
       }
-      const xmlHash = Bun.hash(row.xml).toString(16);
+      const xmlHash: Sha256Hex = sha256HexFromDigest(
+        Bun.CryptoHasher.hash("sha256", row.xml, "hex"),
+      );
       const validTo = validTimeEnd(row);
       const requestedTxFrom =
         row.tx_from ??
@@ -628,18 +629,31 @@ async function runIngestionReplayOnDatabase(
         return;
       }
       if (closeResult.closed > 0) transactionSupersedes += closeResult.closed;
+      const insertRow: IngestionTradesSsotInsert = {
+        id: row.id,
+        channel_id: channel.channelCode,
+        channel_status: channel.channelStatus,
+        valid_from: row.v_t,
+        valid_to: validTo,
+        tx_from: txFrom,
+        tx_to: null,
+        price: parseAsCents(price),
+        link_id: row.link_id ?? null,
+        xml_hash: xmlHash,
+        latency_ms: latencyMs !== null ? ms(latencyMs) : null,
+      };
       try {
         insertTrade.run(
-          row.id,
-          channel.channelCode,
-          channel.channelStatus,
-          row.v_t,
-          validTo,
-          txFrom,
-          price,
-          row.link_id ?? null,
-          xmlHash,
-          latencyMs,
+          insertRow.id,
+          insertRow.channel_id,
+          insertRow.channel_status,
+          insertRow.valid_from,
+          insertRow.valid_to ?? null,
+          insertRow.tx_from,
+          insertRow.price,
+          insertRow.link_id ?? null,
+          insertRow.xml_hash,
+          insertRow.latency_ms ?? null,
         );
         if (slaViolation) latencyViolationsAccepted += 1;
       } catch (e) {

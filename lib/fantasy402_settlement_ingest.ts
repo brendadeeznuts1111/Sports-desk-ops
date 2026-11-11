@@ -531,6 +531,7 @@ export function createWagerSettlementStore(
       db.exec(`ALTER TABLE wager_settlement_observations ADD COLUMN ${column}`);
     }
   }
+  verifyWagerSettlementStoreSchema(db);
   return new WagerSettlementStore(db);
 }
 
@@ -538,12 +539,10 @@ export class WagerSettlementStore {
   constructor(private readonly db: Database) {}
 
   insertObservation(row: SettlementInsert): void {
-    const { observation, runId, runAt } = row;
-    const payloadJson = canonicalJsonString(observation.raw);
-    // Legacy composite column kept for older readers/indexes; the two axes are
-    // authoritative. Read `outcome` / `lifecycle` from here on.
-    const legacyStatus =
-      observation.lifecycle ?? observation.outcome ?? "unknown";
+    const { observation } = row;
+    const ssot = buildWagerSettlementSsotInsert(row);
+    // Legacy composite column; `outcome` and `lifecycle` axes are authoritative.
+    const legacyStatus = ssot.wager_status;
     this.db
       .query(
         `INSERT INTO wager_settlement_observations (
@@ -554,23 +553,23 @@ export class WagerSettlementStore {
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
       )
       .run(
-        runId,
-        runAt,
-        observation.validTime,
-        observation.ticketId,
+        ssot.run_id,
+        ssot.run_at,
+        ssot.valid_time,
+        ssot.ticket_id,
         legacyStatus,
         observation.outcome,
         observation.lifecycle,
         observation.source,
-        observation.sourceFeed,
-        observation.legNumber,
-        observation.result,
-        observation.amountCents,
+        ssot.source_feed,
+        ssot.leg_number ?? null,
+        ssot.result ?? null,
+        ssot.amount_cents ?? null,
         observation.riskCents,
         observation.toWinCents,
         observation.amountRefundedCents,
-        payloadJson,
-        observation.payloadSha256,
+        ssot.payload_json,
+        ssot.payload_sha256,
       );
   }
 
@@ -879,4 +878,43 @@ export async function pollManagerGetHistory(options?: {
     };
   }
   throw new Error("getHistory response is not an array or { data: [] }");
+}
+
+import { parseAsCents } from "../design/domain-branded-types.ts";
+import { isoTime, jsonText, sha256FromDigest } from "./brand.ts";
+import type { Insert, Row } from "./sqlite_schema_derive.ts";
+import {
+  assertSqliteStoreMatchesRegistry,
+  WAGER_SETTLEMENT_SCHEMA,
+} from "./sqlite_schema_registry.ts";
+
+export type WagerSettlementSsotRow = Row<"wager_settlement_observations">;
+export type WagerSettlementSsotInsert = Insert<"wager_settlement_observations">;
+
+export function verifyWagerSettlementStoreSchema(db: Database): void {
+  assertSqliteStoreMatchesRegistry(db, WAGER_SETTLEMENT_SCHEMA);
+}
+
+function buildWagerSettlementSsotInsert(
+  row: SettlementInsert,
+): WagerSettlementSsotInsert {
+  const { observation, runId, runAt } = row;
+  const legacyStatus =
+    observation.lifecycle ?? observation.outcome ?? "unknown";
+  return {
+    run_id: runId,
+    run_at: runAt,
+    valid_time: isoTime(observation.validTime),
+    ticket_id: observation.ticketId,
+    wager_status: legacyStatus,
+    source_feed: observation.sourceFeed,
+    leg_number: observation.legNumber,
+    result: observation.result,
+    amount_cents:
+      observation.amountCents !== null
+        ? parseAsCents(observation.amountCents)
+        : null,
+    payload_json: jsonText(canonicalJsonString(observation.raw)),
+    payload_sha256: sha256FromDigest(observation.payloadSha256),
+  };
 }

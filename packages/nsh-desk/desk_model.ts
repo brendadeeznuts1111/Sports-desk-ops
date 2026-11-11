@@ -72,8 +72,86 @@ export type EndpointSnapshot<T> =
       readonly fetchedAtIso: string;
     };
 
+/**
+ * Canonical Signal Honesty basis in NSH Desk (`docs/architecture/signal-honesty.md`).
+ * Maps `:4020` `db` -> `live`, `file` -> `capture`, `fixture`/`sample` -> `fixture`.
+ */
+export type DeskProvenanceBasis =
+  "live" | "capture" | "fixture" | "partial" | "none" | "unknown";
+
+/** Integer cents value (`Math.round(usd * 100)`) aligned with `Cents` in `design/domain-branded-types.ts`. */
+export type DeskCents = number;
+
+/** Integer basis points (`100 bps = 1.00%`) aligned with `BasisPoints` in `design/domain-branded-types.ts`. */
+export type DeskBasisPoints = number;
+
+export function toDeskCents(centsValue: number): DeskCents {
+  return Math.round(centsValue);
+}
+
+export function usdToDeskCents(usdValue: number): DeskCents {
+  return Math.round(usdValue * 100);
+}
+
+export function toDeskBasisPoints(bpsValue: number): DeskBasisPoints {
+  return Math.round(bpsValue);
+}
+
+export function normalizeDeskEntityId(
+  raw: string | null | undefined,
+  fallback: string,
+): string {
+  if (typeof raw !== "string") return fallback;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return fallback;
+  return /^[a-z0-9_\-.]{2,32}$/i.test(trimmed)
+    ? trimmed.toUpperCase()
+    : trimmed;
+}
+
+export function normalizeDeskIsoUtc(
+  raw: string | null | undefined,
+): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || Number.isNaN(Date.parse(trimmed))) return null;
+  return trimmed;
+}
+
+export function normalizeDeskBasis(
+  rawBasis: string | null | undefined,
+  fallback: DeskProvenanceBasis = "unknown",
+): DeskProvenanceBasis {
+  if (typeof rawBasis !== "string" || rawBasis.trim().length === 0) {
+    return fallback;
+  }
+  const lower = rawBasis.trim().toLowerCase();
+  if (lower === "live" || lower === "db" || lower.startsWith("live:")) {
+    return "live";
+  }
+  if (
+    lower === "capture" ||
+    lower === "file" ||
+    lower === "snapshot" ||
+    lower.startsWith("file:") ||
+    lower.startsWith("capture:")
+  ) {
+    return "capture";
+  }
+  if (
+    lower === "fixture" ||
+    lower === "sample" ||
+    lower.startsWith("fixture:")
+  ) {
+    return "fixture";
+  }
+  if (lower === "partial") return "partial";
+  if (lower === "none") return "none";
+  return fallback;
+}
+
 export interface ProvenanceTag {
-  readonly basis: string;
+  readonly basis: DeskProvenanceBasis;
   readonly source: string;
   readonly asOf: string | null;
   readonly ageSeconds: number | null;
@@ -111,6 +189,7 @@ export interface KalshiAccountExposure {
   readonly agentId: string;
   readonly archetype: string;
   readonly riskUsd: number;
+  readonly riskCents: DeskCents;
 }
 
 export interface KalshiSignalItem {
@@ -118,9 +197,10 @@ export interface KalshiSignalItem {
   readonly league: string;
   readonly marketLabel: string;
   readonly riskUsd: number;
+  readonly riskCents: DeskCents;
   readonly distinctAccounts: number;
   readonly fairProb: number | null;
-  readonly edgeBps: number | null;
+  readonly edgeBps: DeskBasisPoints | null;
   readonly confidence: number;
   readonly verdict: string;
   readonly reason: string;
@@ -159,6 +239,7 @@ export interface ParsedScoreboardPayload {
 export interface ParsedLiveBetsSummary {
   readonly totalWagers: number | null;
   readonly totalRiskUsd: number | null;
+  readonly totalRiskCents: DeskCents | null;
   readonly mode: string;
 }
 
@@ -214,7 +295,10 @@ export function formatProvenanceCompact(p: ProvenanceTag): string {
   return flags.join(" · ");
 }
 
-function parseProvenance(raw: unknown, fallbackBasis: string): ProvenanceTag {
+function parseProvenance(
+  raw: unknown,
+  fallbackBasis: DeskProvenanceBasis,
+): ProvenanceTag {
   if (!isRecord(raw)) {
     return {
       basis: fallbackBasis,
@@ -225,19 +309,27 @@ function parseProvenance(raw: unknown, fallbackBasis: string): ProvenanceTag {
       partial: false,
     };
   }
-  const basis =
+  const rawBasisToken =
     readStr(raw, "basis") ??
     (raw["fixture"] === true ? "fixture" : null) ??
-    readStr(raw, "dataMode")?.toLowerCase() ??
-    fallbackBasis;
+    readStr(raw, "dataMode");
+  const basis = normalizeDeskBasis(rawBasisToken, fallbackBasis);
   const sourcesArr = Array.isArray(raw["sources"]) ? raw["sources"] : null;
   const firstSource =
     sourcesArr && typeof sourcesArr[0] === "string" ? sourcesArr[0] : null;
-  const source = readStr(raw, "source") ?? firstSource ?? "unreported";
+  const source =
+    readStr(raw, "source") ??
+    firstSource ??
+    readStr(raw, "path") ??
+    "unreported";
   return {
     basis,
     source,
-    asOf: readStr(raw, "asOf"),
+    asOf: normalizeDeskIsoUtc(
+      readStr(raw, "asOf") ??
+        readStr(raw, "capturedAt") ??
+        readStr(raw, "generatedAt"),
+    ),
     ageSeconds: readNum(raw, "ageSeconds"),
     stale: readBool(raw, "stale"),
     partial: readBool(raw, "partial") || raw["dataMode"] === "PARTIAL",
@@ -433,22 +525,42 @@ export function parseKalshiPayload(raw: unknown): ParsedKalshiPayload {
     const accounts: KalshiAccountExposure[] = [];
     for (const acc of accountsRaw) {
       if (!isRecord(acc)) continue;
+      const accRiskCentsRaw = readNum(acc, "riskCents");
+      const accRiskUsd =
+        readNum(acc, "riskUsd") ??
+        (accRiskCentsRaw !== null ? accRiskCentsRaw / 100 : 0);
+      const accRiskCents =
+        accRiskCentsRaw !== null
+          ? toDeskCents(accRiskCentsRaw)
+          : usdToDeskCents(accRiskUsd);
       accounts.push({
-        login: readStr(acc, "login") ?? "unknown",
-        agentId: readStr(acc, "agentId") ?? "unknown",
+        login: normalizeDeskEntityId(readStr(acc, "login"), "unknown"),
+        agentId: normalizeDeskEntityId(readStr(acc, "agentId"), "unknown"),
         archetype: readStr(acc, "archetype") ?? "unclassified",
-        riskUsd: readNum(acc, "riskUsd") ?? 0,
+        riskUsd: accRiskUsd,
+        riskCents: accRiskCents,
       });
     }
+
+    const itemRiskCentsRaw = readNum(item, "riskCents");
+    const itemRiskUsd =
+      readNum(item, "riskUsd") ??
+      (itemRiskCentsRaw !== null ? itemRiskCentsRaw / 100 : 0);
+    const itemRiskCents =
+      itemRiskCentsRaw !== null
+        ? toDeskCents(itemRiskCentsRaw)
+        : usdToDeskCents(itemRiskUsd);
+    const rawEdge = readNum(kalshiObj, "edgeBps");
 
     signals.push({
       id,
       league,
       marketLabel,
-      riskUsd: readNum(item, "riskUsd") ?? 0,
+      riskUsd: itemRiskUsd,
+      riskCents: itemRiskCents,
       distinctAccounts: readNum(item, "distinctAccounts") ?? accounts.length,
       fairProb: readNum(item, "fairProb"),
-      edgeBps: readNum(kalshiObj, "edgeBps"),
+      edgeBps: rawEdge !== null ? toDeskBasisPoints(rawEdge) : null,
       confidence: readNum(item, "confidence") ?? 0,
       verdict: readStr(kalshiObj, "verdict") ?? "unmatched",
       reason: readStr(kalshiObj, "reason") ?? "no verdict detail",
@@ -458,7 +570,7 @@ export function parseKalshiPayload(raw: unknown): ParsedKalshiPayload {
   }
 
   return {
-    generatedAt: readStr(raw, "generatedAt"),
+    generatedAt: normalizeDeskIsoUtc(readStr(raw, "generatedAt")),
     provenance,
     kalshiOk: readBool(kalshiMeta, "ok"),
     kalshiDegraded: readBool(kalshiMeta, "degraded"),
@@ -511,11 +623,34 @@ export function parseLiveBetsSummaryPayload(
     );
   }
   const summary = isRecord(raw["summary"]) ? raw["summary"] : raw;
+  const explicitCents =
+    readNum(summary, "wageredCents") ??
+    readNum(summary, "totalWagered") ??
+    readNum(summary, "riskCents");
+  const explicitUsd =
+    readNum(summary, "totalRiskUsd") ?? readNum(summary, "riskUsd");
+  const totalRiskCents =
+    explicitCents !== null
+      ? toDeskCents(explicitCents)
+      : explicitUsd !== null
+        ? usdToDeskCents(explicitUsd)
+        : null;
+  const totalRiskUsd =
+    explicitUsd !== null
+      ? explicitUsd
+      : totalRiskCents !== null
+        ? totalRiskCents / 100
+        : null;
+  const rawDataSource =
+    readStr(raw, "mode") ?? readStr(summary, "dataSource") ?? "live";
   return {
-    totalWagers: readNum(summary, "totalWagers") ?? readNum(summary, "count"),
-    totalRiskUsd:
-      readNum(summary, "totalRiskUsd") ?? readNum(summary, "riskUsd"),
-    mode: readStr(raw, "mode") ?? "live",
+    totalWagers:
+      readNum(summary, "totalWagers") ??
+      readNum(summary, "totalPending") ??
+      readNum(summary, "count"),
+    totalRiskUsd,
+    totalRiskCents,
+    mode: rawDataSource,
   };
 }
 
@@ -2457,11 +2592,15 @@ export interface LiveBetGameExposureRow {
   readonly wagers: number;
   readonly riskUsd: number;
   readonly toWinUsd: number;
+  readonly riskCents: DeskCents;
+  readonly toWinCents: DeskCents;
 }
 
 export interface ParsedLiveBetsListPayload {
   readonly apiVersion: string;
   readonly dataSource: string;
+  readonly basis: DeskProvenanceBasis;
+  readonly provenance: ProvenanceTag;
   readonly fallbackUsed: boolean;
   readonly pendingCount: number;
   readonly warnings: readonly string[];
@@ -2474,29 +2613,74 @@ export function parseLiveBetsListPayload(
   if (!isRecord(raw)) {
     throw new TypeError("[nsh-desk] live-bets payload is not a JSON object");
   }
+  const apiVersion = readStr(raw, "apiVersion") ?? "1";
+  const dataSource =
+    readStr(raw, "dataSource") ?? readStr(raw, "mode") ?? "file";
+  const fallbackBasis = normalizeDeskBasis(dataSource, "capture");
+  const provenance = parseProvenance(raw["provenance"], fallbackBasis);
+
   const gamesRaw = Array.isArray(raw["games"]) ? raw["games"] : [];
   const games: LiveBetGameExposureRow[] = [];
   for (const g of gamesRaw) {
     if (!isRecord(g)) continue;
+    const t1 = isRecord(g["team1"]) ? readStr(g["team1"], "name") : null;
+    const t2 = isRecord(g["team2"]) ? readStr(g["team2"], "name") : null;
+    const derivedMatchup =
+      t1 !== null && t2 !== null ? `${t1} vs ${t2}` : (t1 ?? t2);
+
+    // In /api/v2/live-bets (`LiveBetGame`), `wagered` and `toWin` are integer Cents.
+    const explicitRiskUsd =
+      readNum(g, "riskUsd") ?? readNum(g, "wageredUsd") ?? readNum(g, "risk");
+    const explicitRiskCents =
+      readNum(g, "riskCents") ??
+      readNum(g, "wageredCents") ??
+      readNum(g, "wagered");
+    const riskCents =
+      explicitRiskCents !== null
+        ? toDeskCents(explicitRiskCents)
+        : explicitRiskUsd !== null
+          ? usdToDeskCents(explicitRiskUsd)
+          : 0;
+    const riskUsd =
+      explicitRiskUsd !== null ? explicitRiskUsd : riskCents / 100;
+
+    const explicitWinUsd = readNum(g, "toWinUsd");
+    const explicitWinCents =
+      readNum(g, "toWinCents") ??
+      (explicitWinUsd === null ? readNum(g, "toWin") : null);
+    const toWinCents =
+      explicitWinCents !== null
+        ? toDeskCents(explicitWinCents)
+        : explicitWinUsd !== null
+          ? usdToDeskCents(explicitWinUsd)
+          : 0;
+    const toWinUsd =
+      explicitWinUsd !== null ? explicitWinUsd : toWinCents / 100;
+
     games.push({
       matchup:
         readStr(g, "matchup") ??
+        derivedMatchup ??
         readStr(g, "game") ??
         readStr(g, "description") ??
         "Matchup",
-      league: readStr(g, "league") ?? readStr(g, "sport") ?? "UNK",
+      league:
+        readStr(g, "league") ??
+        readStr(g, "subSport") ??
+        readStr(g, "sport") ??
+        "UNK",
       wagers: readNum(g, "wagers") ?? readNum(g, "count") ?? 0,
-      riskUsd:
-        readNum(g, "riskUsd") ??
-        readNum(g, "wageredUsd") ??
-        readNum(g, "risk") ??
-        0,
-      toWinUsd: readNum(g, "toWinUsd") ?? readNum(g, "toWin") ?? 0,
+      riskUsd,
+      toWinUsd,
+      riskCents,
+      toWinCents,
     });
   }
   return {
-    apiVersion: readStr(raw, "apiVersion") ?? "1",
-    dataSource: readStr(raw, "dataSource") ?? readStr(raw, "mode") ?? "file",
+    apiVersion,
+    dataSource,
+    basis: provenance.basis,
+    provenance,
     fallbackUsed: readBool(raw, "fallbackUsed"),
     pendingCount: readNum(raw, "pendingCount") ?? games.length,
     warnings: Array.isArray(raw["warnings"])

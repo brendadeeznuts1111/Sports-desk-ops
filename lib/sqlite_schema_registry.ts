@@ -1,16 +1,24 @@
 /**
- * SSOT for audit SQLite tables — column/key types + Bun.inspect report.
+ * SSOT for audit SQLite tables — column/key types + DDL generator + Bun.inspect report.
  */
 
-import { sqlCol, sqlDomain, sqlTable, type Brand } from "./brand.ts";
+import {
+  sqlCol,
+  sqlDomain,
+  sqlIndex,
+  sqlTable,
+  type Brand,
+  type SqlDomain,
+} from "./brand.ts";
 import { count, type Count } from "./units.ts";
 import { isSsotTableName } from "./ssot_table_name.ts";
 
-export { sqlCol, sqlTable };
+export { sqlCol, sqlDomain, sqlIndex, sqlTable };
 export type SqlColumnName<T extends string = string> = Brand<
   T,
   "SqlColumnName"
 >;
+export type SqlIndexName<T extends string = string> = Brand<T, "SqlIndexName">;
 export type SqlTableName<T extends string = string> = Brand<T, "SqlTableName">;
 
 export type SqliteStorageKind =
@@ -39,30 +47,31 @@ export type SqliteKeyDef =
     }
   | {
       readonly kind: "unique";
-      readonly name: string;
+      readonly name: SqlIndexName<string>;
       readonly columns: readonly SqlColumnName<string>[];
       readonly where?: string;
     }
   | {
       readonly kind: "index";
-      readonly name: string;
+      readonly name: SqlIndexName<string>;
       readonly columns: readonly SqlColumnName<string>[];
     };
 
 export type SqliteTableDef = {
   readonly name: SqlTableName<string>;
-  readonly domain: string;
+  readonly domain: SqlDomain;
   readonly appendOnly?: boolean;
   readonly columns: readonly SqliteColumnDef[];
   readonly keys: readonly SqliteKeyDef[];
 };
 
 const c = sqlCol;
+const idx = sqlIndex;
 
 export const MATCH_EVALUATIONS_TABLE = sqlTable("match_evaluations");
 export const MATCH_EVALUATIONS_SCHEMA: SqliteTableDef = {
   name: MATCH_EVALUATIONS_TABLE,
-  domain: "candidate overlay audit",
+  domain: sqlDomain("candidate overlay audit"),
   appendOnly: true,
   columns: [
     { name: c("id"), sqlType: "INTEGER", kind: "integer_pk", nullable: false },
@@ -132,20 +141,24 @@ export const MATCH_EVALUATIONS_SCHEMA: SqliteTableDef = {
   ],
   keys: [
     { kind: "primary", columns: [c("id")], autoincrement: true },
-    { kind: "index", name: "idx_match_eval_run_at", columns: [c("run_at")] },
     {
       kind: "index",
-      name: "idx_match_eval_valid_time",
+      name: idx("idx_match_eval_run_at"),
+      columns: [c("run_at")],
+    },
+    {
+      kind: "index",
+      name: idx("idx_match_eval_valid_time"),
       columns: [c("valid_time")],
     },
     {
       kind: "index",
-      name: "idx_match_eval_policy",
+      name: idx("idx_match_eval_policy"),
       columns: [c("policy_sha256")],
     },
     {
       kind: "index",
-      name: "idx_match_eval_pair_policy",
+      name: idx("idx_match_eval_pair_policy"),
       columns: [
         c("ticker_sha256"),
         c("pending_sha256"),
@@ -161,7 +174,7 @@ export const WAGER_SETTLEMENT_OBSERVATIONS_TABLE = sqlTable(
 );
 export const WAGER_SETTLEMENT_SCHEMA: SqliteTableDef = {
   name: WAGER_SETTLEMENT_OBSERVATIONS_TABLE,
-  domain: "Manager/getHistory lifecycle",
+  domain: sqlDomain("Manager/getHistory lifecycle"),
   appendOnly: true,
   columns: [
     { name: c("id"), sqlType: "INTEGER", kind: "integer_pk", nullable: false },
@@ -219,20 +232,20 @@ export const WAGER_SETTLEMENT_SCHEMA: SqliteTableDef = {
   ],
   keys: [
     { kind: "primary", columns: [c("id")], autoincrement: true },
-    { kind: "index", name: "idx_wso_ticket", columns: [c("ticket_id")] },
+    { kind: "index", name: idx("idx_wso_ticket"), columns: [c("ticket_id")] },
     {
       kind: "index",
-      name: "idx_wso_valid_time",
+      name: idx("idx_wso_valid_time"),
       columns: [c("valid_time")],
     },
-    { kind: "index", name: "idx_wso_run_at", columns: [c("run_at")] },
+    { kind: "index", name: idx("idx_wso_run_at"), columns: [c("run_at")] },
   ],
 };
 
 export const COMBO_LEGS_TABLE = sqlTable("combo_legs");
 export const COMBO_LEGS_SCHEMA: SqliteTableDef = {
   name: COMBO_LEGS_TABLE,
-  domain: "cross-venue canonical combo index",
+  domain: sqlDomain("cross-venue canonical combo index"),
   appendOnly: true,
   columns: [
     { name: c("id"), sqlType: "INTEGER", kind: "integer_pk", nullable: false },
@@ -286,12 +299,12 @@ export const COMBO_LEGS_SCHEMA: SqliteTableDef = {
     { kind: "primary", columns: [c("id")], autoincrement: true },
     {
       kind: "index",
-      name: "idx_combo_legs_combo_venue",
+      name: idx("idx_combo_legs_combo_venue"),
       columns: [c("canonical_combo_id"), c("venue"), c("valid_time")],
     },
     {
       kind: "index",
-      name: "idx_combo_legs_valid_time",
+      name: idx("idx_combo_legs_valid_time"),
       columns: [c("valid_time")],
     },
   ],
@@ -300,7 +313,7 @@ export const COMBO_LEGS_SCHEMA: SqliteTableDef = {
 export const CANDIDATE_TICKETS_TABLE = sqlTable("candidate_tickets");
 export const CANDIDATE_TICKETS_SCHEMA: SqliteTableDef = {
   name: CANDIDATE_TICKETS_TABLE,
-  domain: "GATEWAY candidate enrich unit store",
+  domain: sqlDomain("GATEWAY candidate enrich unit store"),
   appendOnly: true,
   columns: [
     { name: c("match_key"), sqlType: "TEXT", kind: "text", nullable: false },
@@ -343,7 +356,7 @@ export const CANDIDATE_TICKETS_SCHEMA: SqliteTableDef = {
 export const INGESTION_TRADES_TABLE = sqlTable("ingestion_trades");
 export const INGESTION_TRADES_SCHEMA: SqliteTableDef = {
   name: INGESTION_TRADES_TABLE,
-  domain: "Plane 3 bitemporal replay WAL",
+  domain: sqlDomain("Plane 3 bitemporal replay WAL"),
   appendOnly: false,
   columns: [
     {
@@ -398,7 +411,7 @@ export const INGESTION_TRADES_SCHEMA: SqliteTableDef = {
     { kind: "primary", columns: [c("rowid")], autoincrement: true },
     {
       kind: "unique",
-      name: "one_open_tx_per_lane_id",
+      name: idx("one_open_tx_per_lane_id"),
       columns: [c("channel_id"), c("id")],
       where: "tx_to IS NULL",
     },
@@ -412,6 +425,140 @@ export const SPORTSDESK_SQLITE_TABLES: readonly SqliteTableDef[] = [
   CANDIDATE_TICKETS_SCHEMA,
   INGESTION_TRADES_SCHEMA,
 ];
+
+export type RenderCreateTableDdlOptions = {
+  readonly ifNotExists?: boolean;
+  readonly includeIndexes?: boolean;
+  readonly recreateUniqueIndexes?: boolean;
+  readonly extraChecks?: readonly string[];
+};
+
+/**
+ * Generates canonical SQLite `CREATE TABLE` (and index) DDL directly from a
+ * registered `SqliteTableDef` so runtime stores cannot drift from SSOT column
+ * names, types, nullability, or index definitions.
+ */
+export function renderCreateTableDdl(
+  table: SqliteTableDef,
+  options: RenderCreateTableDdlOptions = {},
+): string {
+  const ifNotExists = options.ifNotExists !== false;
+  const includeIndexes = options.includeIndexes !== false;
+  const recreateUnique = options.recreateUniqueIndexes === true;
+  const pkKey = table.keys.find((k) => k.kind === "primary");
+  const singlePkCol =
+    pkKey && pkKey.kind === "primary" && pkKey.columns.length === 1
+      ? pkKey.columns[0]
+      : undefined;
+  const pkAutoincrement =
+    pkKey && pkKey.kind === "primary" && pkKey.autoincrement === true;
+
+  const colLines: string[] = [];
+  for (const col of table.columns) {
+    if (col.kind === "integer_pk" && col.name === singlePkCol) {
+      colLines.push(
+        `  ${col.name} INTEGER PRIMARY KEY${pkAutoincrement ? " AUTOINCREMENT" : ""}`,
+      );
+      continue;
+    }
+    colLines.push(
+      `  ${col.name} ${col.sqlType}${col.nullable ? "" : " NOT NULL"}`,
+    );
+  }
+
+  for (const checkExpr of options.extraChecks ?? []) {
+    colLines.push(`  CHECK (${checkExpr})`);
+  }
+
+  const statements: string[] = [
+    `CREATE TABLE${ifNotExists ? " IF NOT EXISTS" : ""} ${table.name} (\n${colLines.join(",\n")}\n);`,
+  ];
+
+  if (includeIndexes) {
+    for (const key of table.keys) {
+      if (key.kind === "primary") continue;
+      const cols = key.columns.join(", ");
+      if (key.kind === "unique") {
+        if (recreateUnique) {
+          statements.push(`DROP INDEX IF EXISTS ${key.name};`);
+          statements.push(
+            `CREATE UNIQUE INDEX ${key.name} ON ${table.name} (${cols})${key.where ? ` WHERE ${key.where}` : ""};`,
+          );
+        } else {
+          statements.push(
+            `CREATE UNIQUE INDEX${ifNotExists ? " IF NOT EXISTS" : ""} ${key.name} ON ${table.name} (${cols})${key.where ? ` WHERE ${key.where}` : ""};`,
+          );
+        }
+      } else {
+        statements.push(
+          `CREATE INDEX${ifNotExists ? " IF NOT EXISTS" : ""} ${key.name} ON ${table.name}(${cols});`,
+        );
+      }
+    }
+  }
+
+  return statements.join("\n");
+}
+
+export type SqliteQueryableHandle = {
+  query(sql: string): { all(...params: unknown[]): unknown[] };
+};
+
+/**
+ * Verifies at store initialization time that every column in `table` exists on
+ * the live SQLite table with matching SQLite type affinity and `NOT NULL` state
+ * (while permitting additive runtime migration columns on evolving stores).
+ */
+export function assertSqliteStoreMatchesRegistry(
+  db: SqliteQueryableHandle,
+  table: SqliteTableDef,
+): void {
+  const tableIdent = String(table.name);
+  if (!/^[a-z][a-z0-9_]*$/.test(tableIdent)) {
+    throw new Error(`unsafe sqlite table identifier: ${tableIdent}`);
+  }
+  const pragmaRows = db
+    .query(`PRAGMA table_xinfo("${tableIdent}")`)
+    .all() as Array<{
+    name: string;
+    type: string;
+    notnull: number | bigint;
+    pk: number | bigint;
+  }>;
+
+  const byName = new Map(pragmaRows.map((r) => [r.name, r] as const));
+  const drifts: string[] = [];
+
+  for (const col of table.columns) {
+    const colName = String(col.name);
+    const live = byName.get(colName);
+    if (!live) {
+      drifts.push(`missing column "${colName}"`);
+      continue;
+    }
+    const liveType = live.type.trim().toUpperCase();
+    if (liveType !== col.sqlType) {
+      drifts.push(
+        `column "${colName}" type live=${liveType || "(empty)"} registry=${col.sqlType}`,
+      );
+    }
+    if (col.kind !== "integer_pk") {
+      const liveNotNull = Number(live.notnull) === 1;
+      const expectedNotNull = !col.nullable;
+      if (liveNotNull !== expectedNotNull) {
+        drifts.push(
+          `column "${colName}" notnull live=${liveNotNull} registry=${expectedNotNull}`,
+        );
+      }
+    }
+  }
+
+  if (drifts.length > 0) {
+    throw new Error(
+      `SQLite store "${tableIdent}" drifted from SPORTSDESK_SQLITE_TABLES:\n  ${drifts.join("\n  ")}`,
+    );
+  }
+}
 
 export type SchemaColumnRow = {
   table: string;
@@ -493,8 +640,6 @@ export function flattenSchemaKeys(
   return rows;
 }
 
-import type { SqlDomain } from "./brand.ts";
-
 export type SchemaSummaryRow = {
   table: SqlTableName;
   domain: SqlDomain;
@@ -517,7 +662,7 @@ export function flattenSchemaSummary(
 ): SchemaSummaryRow[] {
   return tables.map((t) => ({
     table: t.name as SqlTableName,
-    domain: sqlDomain(t.domain),
+    domain: t.domain,
     columns: count(t.columns.length),
     keys: count(t.keys.length),
     appendOnly: t.appendOnly ? ("yes" as const) : ("no" as const),

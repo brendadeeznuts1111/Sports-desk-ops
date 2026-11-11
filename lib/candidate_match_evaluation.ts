@@ -23,11 +23,19 @@ import {
   serializeMatchEvaluationResult,
 } from "./match_evaluation_canonical.ts";
 import type { Sha256Hex } from "./brand.ts";
+import { isoTime, jsonText } from "./brand.ts";
 import {
   auditRunAt,
   type AuditRunId,
   type IsoDateTimeUtc,
 } from "./audit_run_id.ts";
+import type { Insert, Row } from "./sqlite_schema_derive.ts";
+import {
+  assertSqliteStoreMatchesRegistry,
+  MATCH_EVALUATIONS_SCHEMA,
+  renderCreateTableDdl,
+} from "./sqlite_schema_registry.ts";
+import { ms } from "./units.ts";
 import { percentile } from "./match_evaluation_percentile.ts";
 
 export {
@@ -424,33 +432,14 @@ export type MatchEvaluationInsert = {
  *
  * replay_input_json: RAW ticker/pending payloads as captured at ingest (see MatchEvaluationReplayInput).
  */
+export type MatchEvaluationsSsotRow = Row<"match_evaluations">;
+export type MatchEvaluationsSsotInsert = Insert<"match_evaluations">;
+
 export function createMatchEvaluationStore(
   db: Database = openSportsdeskSqlite(":memory:"),
 ): MatchEvaluationStore {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS match_evaluations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_id TEXT NOT NULL,
-      run_at TEXT NOT NULL,
-      valid_time TEXT,
-      policy_sha256 TEXT NOT NULL,
-      ticker_sha256 TEXT NOT NULL,
-      pending_sha256 TEXT NOT NULL,
-      state TEXT NOT NULL,
-      reject_reason TEXT,
-      review_flag TEXT,
-      time_diff_ms REAL NOT NULL,
-      evaluation_json TEXT NOT NULL,
-      evaluation_json_sha256 TEXT NOT NULL,
-      replay_input_json TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_match_eval_run_at ON match_evaluations(run_at);
-    CREATE INDEX IF NOT EXISTS idx_match_eval_valid_time ON match_evaluations(valid_time);
-    CREATE INDEX IF NOT EXISTS idx_match_eval_policy ON match_evaluations(policy_sha256);
-    CREATE INDEX IF NOT EXISTS idx_match_eval_pair_policy ON match_evaluations(
-      ticker_sha256, pending_sha256, policy_sha256, run_at
-    );
-  `);
+  db.exec(renderCreateTableDdl(MATCH_EVALUATIONS_SCHEMA));
+  assertSqliteStoreMatchesRegistry(db, MATCH_EVALUATIONS_SCHEMA);
   return new MatchEvaluationStore(db);
 }
 
@@ -459,10 +448,28 @@ export class MatchEvaluationStore {
 
   insertEvaluation(row: MatchEvaluationInsert): void {
     const { result, replayInput, runId, runAt } = row;
-    const evaluationJson = serializeMatchEvaluationResult(result);
+    const evaluationJson = jsonText(serializeMatchEvaluationResult(result));
     const evaluationJsonSha256 = hashEvaluationResult(result);
     const state = evaluationStateFromResult(result);
     const rejectReason = result.rejectedCandidates[0]?.rejectReason ?? null;
+    const insertRow: MatchEvaluationsSsotInsert = {
+      run_id: runId,
+      run_at: runAt ?? auditRunAt(),
+      valid_time:
+        replayInput.validTime !== undefined
+          ? isoTime(replayInput.validTime)
+          : null,
+      policy_sha256: result.policySha256,
+      ticker_sha256: result.tickerSha256,
+      pending_sha256: result.pendingSha256,
+      state,
+      reject_reason: rejectReason,
+      review_flag: result.reviewFlag ?? null,
+      time_diff_ms: ms(result.timeDifferenceMs),
+      evaluation_json: evaluationJson,
+      evaluation_json_sha256: evaluationJsonSha256,
+      replay_input_json: jsonText(serializeReplayInput(replayInput)),
+    };
     this.db
       .query(
         `INSERT INTO match_evaluations (
@@ -472,19 +479,19 @@ export class MatchEvaluationStore {
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
       )
       .run(
-        runId,
-        runAt ?? auditRunAt(),
-        replayInput.validTime ?? null,
-        result.policySha256,
-        result.tickerSha256,
-        result.pendingSha256,
-        state,
-        rejectReason,
-        result.reviewFlag ?? null,
-        result.timeDifferenceMs,
-        evaluationJson,
-        evaluationJsonSha256,
-        serializeReplayInput(replayInput),
+        insertRow.run_id,
+        insertRow.run_at,
+        insertRow.valid_time ?? null,
+        insertRow.policy_sha256,
+        insertRow.ticker_sha256,
+        insertRow.pending_sha256,
+        insertRow.state,
+        insertRow.reject_reason ?? null,
+        insertRow.review_flag ?? null,
+        insertRow.time_diff_ms,
+        insertRow.evaluation_json,
+        insertRow.evaluation_json_sha256,
+        insertRow.replay_input_json,
       );
   }
 

@@ -1,5 +1,9 @@
 import type { SSOT, SsotTableName } from "./sqlite_schema_ssot.ts";
-import type { ColumnValueType, Nullable } from "./sqlite_schema_types.ts";
+import type {
+  ColumnUnitOverride,
+  ColumnValueType,
+  Nullable,
+} from "./sqlite_schema_types.ts";
 import type { SqliteStorageKind } from "./sqlite_schema_registry.ts";
 
 export type TableName = SsotTableName;
@@ -17,12 +21,18 @@ type ColumnDef<
   ? { kind: K; nullable: N }
   : never;
 
+type ApplyUnitOverride<Base, Override> = [Override] extends [never]
+  ? Base
+  : null extends Base
+    ? Override | null
+    : Override;
+
 type ColValueOf<T extends TableName, C extends ColumnName<T>> =
   ColumnDef<T, C> extends {
     kind: infer K extends SqliteStorageKind;
     nullable: infer N extends Nullable;
   }
-    ? ColumnValueType<K, N>
+    ? ApplyUnitOverride<ColumnValueType<K, N>, ColumnUnitOverride<T, C>>
     : never;
 
 export type Row<T extends TableName> = {

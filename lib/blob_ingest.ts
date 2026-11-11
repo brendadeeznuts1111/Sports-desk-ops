@@ -14,7 +14,12 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Sha256Hex } from "../design/domain-branded-types.ts";
+import {
+  isoDateTimeUtc,
+  sha256HexFromDigest,
+  type IsoDateTimeUtc,
+  type Sha256Hex,
+} from "../design/domain-branded-types.ts";
 import { auditRunId, type AuditRunId } from "./audit_run_id.ts";
 import {
   groupF402PendingRowsByTicket,
@@ -152,7 +157,7 @@ export async function inspectBlobSource(
   const blob = await toBlob(source, fallbackMimeType);
   const bytes = await blob.bytes();
   const mimeType = blob.type || fallbackMimeType;
-  const sha256 = sha256Hex(bytes) as Sha256Hex;
+  const sha256 = sha256HexFromDigest(sha256Hex(bytes));
   return {
     blob,
     bytes,
@@ -393,7 +398,7 @@ export async function ingestF402ReportBlob(
     settlementStore?: WagerSettlementStore;
     settlementFeed?: SettlementFeed;
     runId?: AuditRunId;
-    capturedAtUtc?: string;
+    capturedAtUtc?: IsoDateTimeUtc | string;
   } = {},
 ): Promise<F402ReportBlobIngestResult> {
   const inspected = await inspectBlobSource(source, "application/json");
@@ -500,7 +505,9 @@ export async function ingestF402ReportBlob(
 
   let settlementIngestedCount = 0;
   if (options.settlementStore && rows.length > 0) {
-    const capturedAtUtc = options.capturedAtUtc ?? new Date().toISOString();
+    const capturedAtUtc = isoDateTimeUtc(
+      options.capturedAtUtc ?? new Date().toISOString(),
+    );
     const feed: SettlementFeed =
       options.settlementFeed ??
       (operation === "getGrading" || envelopeKind === "grading-list"

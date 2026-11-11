@@ -1,3 +1,4 @@
+import type { Cents } from "../design/domain-branded-types.ts";
 import type { IsoTime, JsonText, Sha256Hex } from "./brand.ts";
 import type { Millis } from "./units.ts";
 import type { SqliteStorageKind } from "./sqlite_schema_registry.ts";
@@ -22,9 +23,13 @@ export type ColumnValueType<
           ? IsoTime | null
           : IsoTime
         : K extends "text_sha256"
-          ? Sha256Hex
+          ? N extends "YES"
+            ? Sha256Hex | null
+            : Sha256Hex
           : K extends "text_json"
-            ? JsonText
+            ? N extends "YES"
+              ? JsonText | null
+              : JsonText
             : K extends "text_enum" | "text"
               ? N extends "YES"
                 ? string | null
@@ -36,7 +41,7 @@ export type StorageKindToValue<K extends SqliteStorageKind> = ColumnValueType<
   "NO"
 >;
 
-/** Per-column unit overrides (phantom units on numeric columns). */
+/** Per-column domain and phantom unit overrides across SSOT SQLite tables. */
 export type ColumnUnitOverride<
   T extends string,
   C extends string,
@@ -44,4 +49,18 @@ export type ColumnUnitOverride<
   ? C extends "time_diff_ms"
     ? Millis
     : never
-  : never;
+  : T extends "wager_settlement_observations"
+    ? C extends "amount_cents"
+      ? Cents
+      : never
+    : T extends "candidate_tickets"
+      ? C extends "time_diff"
+        ? Millis
+        : never
+      : T extends "ingestion_trades"
+        ? C extends "price"
+          ? Cents
+          : C extends "latency_ms"
+            ? Millis
+            : never
+        : never;

@@ -5,6 +5,13 @@
  */
 
 import { isAbsolute, relative, resolve } from "node:path";
+import {
+  isIsoDateTimeUtc,
+  isoDateTimeUtc,
+  sha256HexFromDigest,
+  type IsoDateTimeUtc,
+  type Sha256Hex,
+} from "../../design/domain-branded-types.ts";
 import { REPORT_PENDING_OPERATION } from "../../lib/f402_live_pending.ts";
 import { wagerTypeLabel } from "../../lib/game_admin.ts";
 import {
@@ -32,6 +39,7 @@ import {
 import {
   isLiveBetsFallback,
   isLiveBetsSource,
+  liveBetsSourceToBasis,
   type LiveBetsSource,
   type LiveBetsV2Game,
   type LiveBetsV2Request,
@@ -72,7 +80,7 @@ type FileLoadResult =
   | {
       readonly ok: true;
       readonly path: string;
-      readonly hash: string;
+      readonly hash: Sha256Hex;
       readonly snapshot: ParsedSnapshot;
     }
   | {
@@ -84,13 +92,13 @@ const PARSED_CACHE_MAX = 32;
 const parsedFileCache = new Map<string, ParsedSnapshot>();
 const fileStatHashCache = new Map<
   string,
-  { readonly stamp: string; readonly hash: string }
+  { readonly stamp: string; readonly hash: Sha256Hex }
 >();
 const hierarchyCache = new Map<
   string,
   {
     readonly stamp: string;
-    readonly hash: string;
+    readonly hash: Sha256Hex;
     readonly index: HierarchyIndex;
   }
 >();
@@ -98,7 +106,7 @@ const scoreboardCache = new Map<
   string,
   {
     readonly stamp: string;
-    readonly hash: string;
+    readonly hash: Sha256Hex;
     readonly file: ScoreboardFile | null;
   }
 >();
@@ -121,10 +129,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function sha256Hex(input: Uint8Array | string): string {
+function sha256Hex(input: Uint8Array | string): Sha256Hex {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(input);
-  return hasher.digest("hex");
+  return sha256HexFromDigest(hasher.digest("hex"));
 }
 
 function displayPathFor(absPath: string, repoRoot: string): string {
@@ -158,9 +166,10 @@ function normalizeAgentScope(raw: unknown): AgentScope {
   };
 }
 
-async function loadHierarchyIndex(
-  repoRoot: string,
-): Promise<{ readonly hash: string; readonly index: HierarchyIndex } | null> {
+async function loadHierarchyIndex(repoRoot: string): Promise<{
+  readonly hash: Sha256Hex;
+  readonly index: HierarchyIndex;
+} | null> {
   const indexPath = resolve(repoRoot, DEFAULT_AGENT_INDEX_FILE);
   const stamp = await statStamp(indexPath);
   if (stamp === null) {
@@ -338,8 +347,8 @@ function buildResponse(input: {
   readonly dataSource: LiveBetsSource;
   readonly fallbackUsed: boolean;
   readonly path: string | null;
-  readonly hash: string | null;
-  readonly generatedAt: string;
+  readonly hash: Sha256Hex | null;
+  readonly generatedAt: IsoDateTimeUtc;
   readonly warnings: readonly string[];
   readonly snapshot: ParsedSnapshot;
   readonly scoreboard: ScoreboardFile | null;
@@ -378,14 +387,21 @@ function buildResponse(input: {
     snapshot.capturedAt,
   );
 
+  const capturedAtUtc =
+    snapshot.capturedAt !== null && isIsoDateTimeUtc(snapshot.capturedAt)
+      ? isoDateTimeUtc(snapshot.capturedAt)
+      : null;
+
   return {
     apiVersion: "2",
     dataSource: input.dataSource,
     fallbackUsed: input.fallbackUsed,
     provenance: {
+      basis: liveBetsSourceToBasis(input.dataSource),
       path: input.path,
       hash: input.hash,
       generatedAt: input.generatedAt,
+      capturedAt: capturedAtUtc,
     },
     games: withScores,
     warnings: [...input.warnings],
@@ -442,7 +458,9 @@ export async function resolveLiveBets(
     repoRoot,
     options?.sampleFixturePath ?? DEFAULT_LIVE_BETS_SAMPLE_FIXTURE,
   );
-  const generatedAt = (options?.now?.() ?? new Date()).toISOString();
+  const generatedAt = isoDateTimeUtc(
+    (options?.now?.() ?? new Date()).toISOString(),
+  );
   const scoreboard = await resolveScoreboard(repoRoot, options?.scoreboard);
 
   if (req.source === "none") {
