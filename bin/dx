@@ -191,7 +191,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata xml-parse fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata xml-parse sql fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -364,6 +364,7 @@ Usage: ./bin/dx <command> [args...]
                                     Audit & optimize repo image assets with Bun.file().image() & WebP siblings
     ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
     ./bin/dx xml-parse <file>       Parse XML via Bun.XML as JSON or round-trip XML (or '-' for stdin)
+    ./bin/dx sql [--url <u>] <sql>  Read-only SQL inspector via Bun.SQL / Bun.sql (--tables, --json, --yaml)
     ./bin/dx enrich --figure=<path> [--ticker=<path>] [--output=<path>] [--format=inspect|jsonl|summary] [--inspect]
                                     Stream and join live ticker wagers with settled getWagersByFigureDate
     ./bin/dx taxonomy [--mode=CP|CPS|CPV|G] [--period=-1..6] [--engine=native|full] [--sqlite=<path>] [--format=inspect|table|json] [--inspect]
@@ -621,6 +622,10 @@ VERSION_HELP
   xml-parse)
     cd "$REPO_ROOT"
     exec bun bin/xml-parse.ts "$@"
+    ;;
+  sql)
+    cd "$REPO_ROOT"
+    exec bun bin/sql-query.ts "$@"
     ;;
   fetch-config)
     cd "$REPO_ROOT"

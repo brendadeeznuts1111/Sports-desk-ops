@@ -25,7 +25,8 @@
     "image-meta": "./bin/image-meta.ts",
     "blob-formdata": "./bin/blob-formdata.ts",
     "xml-parse": "./bin/xml-parse.ts",
-    "bun-surface": "./bin/bun-surface.ts"
+    "bun-surface": "./bin/bun-surface.ts",
+    "sql-query": "./bin/sql-query.ts"
   },
   "scripts": {
     "sportsdesk": "bun ./bin/sportsdesk.ts",
@@ -48,6 +49,7 @@
     "blob:formdata": "bun ./bin/blob-formdata.ts",
     "xml:parse": "bun ./bin/xml-parse.ts",
     "bun:surface": "bun ./bin/bun-surface.ts",
+    "sql:query": "bun ./bin/sql-query.ts",
     "cli:bins": "bun run --cwd ../.. cli:bins",
     "test": "bun run --cwd ../.. test",
     "typecheck": "bun run --cwd ../.. typecheck",

@@ -1,0 +1,1 @@
+../../../bin/sql-query.ts

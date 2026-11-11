@@ -132,6 +132,7 @@ const CHECKS: readonly Check[] = [
 
   // Storage: settlement and evidence paths.
   { group: "storage", name: "SQL", read: () => Bun.SQL },
+  { group: "storage", name: "sql", read: () => Bun.sql },
   { group: "storage", name: "S3Client", read: () => Bun.S3Client },
   { group: "storage", name: "s3", read: () => Bun.s3 },
   { group: "storage", name: "RedisClient", read: () => Bun.RedisClient },

@@ -1,4 +1,4 @@
-# Bun shape contracts — the 79 shapes this repository calls
+# Bun shape contracts — the 81 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -32,14 +32,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Terminal)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `lib/bun_terminal.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:Terminal`, `probe:proc.terminal`
 
 #### Bun.argv
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/argv)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/build_agent_graph.ts`
+- **Here:** `scripts/audit_bun_surface.ts`, `scripts/probe/parse-tree-only.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.$
@@ -47,14 +47,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (9):** `Shell`, `ShellError`, `ShellPromise`, `braces`, `cwd`, `env`, `escape`, `nothrow`, `throws`
-- **Here:** `dsh-plugin/verify-load.mjs`
+- **Here:** `dsh-plugin/verify-load.mjs`, `bin/bun_surface.ts`
 - **Evidence:** `test:tests/bun_shapes_coverage.test.ts`
 
 #### Bun.file
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/file)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `lib/f402_agent_graph_view_http.ts`
+- **Here:** `dsh-plugin/verify-load.mjs`, `lib/fraud_logs.ts`
 - **Evidence:** `surface:file`
 
 #### Bun.fileURLToPath
@@ -68,7 +68,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/gc)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/probe/parse-tree-only.ts`
+- **Here:** `scripts/bench_bridge3a_workload.ts`, `scripts/bench_bridge3b_workload.ts`
 - **Evidence:** `probe:proc.spawn`
 
 #### Bun.main
@@ -103,7 +103,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/sleep)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/evidence_capture.ts`, `scripts/capture/batch_pending_delete_session.ts`
+- **Here:** `scripts/evidence_capture.ts`, `cli/sportsdesk_bet_flags_cli.ts`
 - **Evidence:** `surface:sleep`, `probe:proc.timing`
 
 #### Bun.sleepSync
@@ -117,21 +117,21 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/spawn)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_cli.ts`, `lib/bun_terminal.ts`
+- **Here:** `lib/bun_terminal.ts`, `cli/sportsdesk_cli.ts`
 - **Evidence:** `surface:spawn`
 
 #### Bun.spawnSync
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/spawnSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/bun_cli_flags.ts`, `scripts/artifacts_cron.ts`
+- **Here:** `scripts/gdocs_template_instantiate.ts`, `lib/bun_cli_flags.ts`
 - **Evidence:** `probe:proc.spawn`
 
 #### Bun.stdin
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/stdin)
 - **Shape:** value: `object` · writable true · enumerable true
-- **Here:** `bin/blob-formdata.ts`, `bin/image-meta.ts`
+- **Here:** `bin/image-meta.ts`, `scripts/gdocs_template_instantiate.ts`
 - **Evidence:** `probe:proc.stdio`
 
 #### Bun.stdout
@@ -145,14 +145,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/which)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/agent_env_doctor.ts`, `bin/bun_surface.ts`
+- **Here:** `scripts/agent_env_doctor.ts`, `scripts/dx_worktrees.ts`
 - **Evidence:** `surface:which`, `probe:proc.paths`
 
 #### Bun.write
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/write)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `scripts/capture/f402_probe.ts`
+- **Here:** `dsh-plugin/verify-load.mjs`, `scripts/generate_pipeline_reference_images.ts`
 - **Evidence:** `surface:write`
 
 #### Bun.isStandaloneExecutable
@@ -172,21 +172,21 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/color)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_cli.ts`, `services/sportsdesk_ingestion_replay.ts`
+- **Here:** `cli/sportsdesk_cli.ts`, `lib/wager_tokens.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.enableANSIColors
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/enableANSIColors)
 - **Shape:** value: `boolean` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `scripts/render_tasks.ts`
+- **Here:** `lib/market_edge_engine.ts`, `lib/gslive_manager_endpoints.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.escapeHTML
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/escapeHTML)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `services/sportsdesk_telegram_bot.ts`, `lib/r2_staleness.ts`
+- **Here:** `lib/telegram.ts`, `services/sportsdesk_telegram_bot.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.inspect
@@ -194,7 +194,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `custom`, `table`
-- **Here:** `lib/wagers_report.ts`, `lib/cli_inspect.ts`
+- **Here:** `lib/bitwise_pattern_inspect.ts`, `cli/sportsdesk_bet_flags_cli.ts`
 - **Evidence:** `surface:inspect.table`, `probe:text.inspect`
 
 #### Bun.markdown
@@ -209,7 +209,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/stringWidth)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/wagers_report.ts`, `scripts/render_tasks.ts`
+- **Here:** `lib/wagers_report.ts`, `lib/cli_inspect.ts`
 - **Evidence:** `probe:text.width`
 
 #### Bun.wrapAnsi
@@ -253,7 +253,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Glob)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/pm_policy.ts`, `dsh-plugin/verify-load.mjs`
+- **Here:** `lib/pm_policy.ts`, `scripts/audit_data_handling.ts`
 - **Evidence:** `probe:data.glob`
 
 #### Bun.JSON5
@@ -293,7 +293,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/XML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
-- **Here:** `lib/bun_xml_golden_ast.ts`, `lib/customer_profile.ts`
+- **Here:** `lib/customer_profile.ts`, `lib/bun_xml_golden_ast.ts`
 - **Evidence:** `surface:XML`, `probe:data.parse`, `test:tests/bun_xml_contract.test.ts`
 
 #### Bun.YAML
@@ -301,14 +301,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/YAML)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `parse`, `stringify`
-- **Here:** `bin/bun_surface.ts`, `lib/config_file.ts`
+- **Here:** `bin/bun_surface.ts`, `bin/sql-query.ts`
 - **Evidence:** `surface:YAML`, `probe:data.parse`
 
 #### Bun.deepEquals
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/deepEquals)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `dsh-plugin/verify-load.mjs`, `catalog/fantasy402_sport_catalog_diff.ts`
+- **Here:** `dsh-plugin/verify-load.mjs`, `lib/alerts.ts`
 - **Evidence:** `probe:data.compare`
 
 #### Bun.semver
@@ -316,7 +316,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/semver)
 - **Shape:** value: `object` · writable false · enumerable true
 - **Members (2):** `order`, `satisfies`
-- **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
+- **Here:** `scripts/nsh_desk_cli.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
 
 #### Bun.ImportKind (type, declared-only)
@@ -397,8 +397,16 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/SQL)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (13):** snapshot in tests/bun_shape_members.json
-- **Here:** `lib/customer_index.ts`, `lib/probe_index.ts`
+- **Here:** `lib/customer_index.ts`, `lib/db.ts`
 - **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`
+
+#### Bun.sql
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/sql)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Members (18):** snapshot in tests/bun_shape_members.json
+- **Here:** `bin/bun_surface.ts`, `bin/sql-query.ts`
+- **Evidence:** `surface:sql`, `test:tests/bun_capabilities.test.ts`
 
 #### Bun.cron
 
@@ -418,7 +426,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 ## Crypto, hashing and compression
 
-- `new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a number; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.
+- `new Bun.CryptoHasher("sha256").update("x").digest("hex")` is 64 hex chars; `Bun.hash("x")` returns a bigint while `Bun.hash.crc32`/`adler32` return numbers; `Bun.randomUUIDv7()` is 36 chars with version nibble `7` — `crypto.hash`.
 - zstd and gzip round-trip: compress → decompress returns the input; `new Bun.ArrayBufferSink()` and `Bun.concatArrayBuffers` exist — `crypto.compress`.
 
 #### Bun.CSRF
@@ -441,23 +449,22 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/CryptoHasher)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `algorithms`, `hash`
-- **Here:** `lib/r2_s3_client.ts`, `lib/bun_xml_golden_ast.ts`
+- **Here:** `lib/gslive_users_report.ts`, `lib/r2_s3_client.ts`
 - **Evidence:** `probe:crypto.hash`
 
 #### Bun.concatArrayBuffers
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/concatArrayBuffers)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/schema_binary.ts`, `lib/jsonl_stream_replay.ts`
+- **Here:** `lib/jsonl_stream_replay.ts`, `lib/schema_binary.ts`
 - **Evidence:** `probe:crypto.compress`
 
 #### Bun.readableStreamToArrayBuffer
 
-- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/readableStreamToArrayBuffer)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/jsonl_stream_replay.ts`
+- **Here:** `bin/bun_surface.ts`, `bin/image-meta.ts`
 - **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/jsonl_stream_replay.test.ts`
-- **Note:** Drains a byte stream to one `ArrayBuffer`; chunks must be TypedArrays or ArrayBuffers. Prefer incremental JSONL replay for multi‑MB ticker archives — see `docs/bun-upstream-reference.md` (TypedArray views → Draining ReadableStreams).
 
 #### Bun.allocUnsafe
 
@@ -470,7 +477,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/gunzipSync)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/schema_binary.ts`
+- **Here:** `lib/eod_archive.ts`, `lib/schema_binary.ts`
 - **Evidence:** `probe:crypto.compress`
 
 #### Bun.gzipSync
@@ -485,14 +492,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/hash)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (12):** `adler32`, `cityHash32`, `cityHash64`, `crc32`, `murmur32v2`, `murmur32v3`, `murmur64v2`, `rapidhash`, `wyhash`, `xxHash3`, `xxHash32`, `xxHash64`
-- **Here:** `lib/manager_fetch.ts`, `lib/f402_agent_graph_views.ts`
+- **Here:** `lib/manager_fetch.ts`, `lib/f402_figure_date_enricher.ts`
 - **Evidence:** `probe:crypto.hash`
 
 #### Bun.randomUUIDv7
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/randomUUIDv7)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/f402_hierarchy_trace.ts`, `scripts/capture/shot.ts`
+- **Here:** `cli/flags.ts`, `lib/audit_run_id.ts`
 - **Evidence:** `probe:crypto.hash`
 
 #### Bun.zstdCompress
@@ -596,7 +603,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Image)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (4):** `backend`, `clipboardChangeCount`, `fromClipboard`, `hasClipboardImage`
-- **Here:** `lib/screenshot_encode.ts`, `services/blob_and_live_bets_server.ts`
+- **Here:** `lib/screenshot_encode.ts`, `lib/logo_image.ts`
 - **Evidence:** `surface:Image`, `test:tests/bun_capabilities.test.ts`, `probe:image.metadata`
 
 #### Bun.WebView
@@ -616,14 +623,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Env)
 - **Shape:** type-only: declared, no runtime value
-- **Here:** `lib/secret_manifest.ts`, `types/env.d.ts`
+- **Here:** `lib/db.ts`, `lib/secret_manifest.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`
 
 #### Bun.env
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/env)
 - **Shape:** value: `object` · writable false · enumerable true
-- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/capture/reprobe_pending_500s.ts`
+- **Here:** `scripts/probe/parse-tree-only.ts`, `services/sportsdesk_webview_server.ts`
 - **Evidence:** `probe:proc.shell`
 
 #### Bun.revision
@@ -637,12 +644,12 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version)
 - **Shape:** value: `string` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/manager_fetch.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/bun_cli_flags.ts`
 - **Evidence:** `probe:proc.meta`
 
 #### Bun.version_with_sha
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/version_with_sha)
 - **Shape:** value: `string` · writable false · enumerable false
-- **Here:** `scripts/probe_bun.ts`
+- **Here:** `scripts/probe_bun.ts`, `scripts/scrape_bun_globals_map.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`

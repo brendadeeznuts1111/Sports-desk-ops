@@ -23,7 +23,8 @@
     "image-meta": "bin/image-meta.ts",
     "blob-formdata": "bin/blob-formdata.ts",
     "xml-parse": "bin/xml-parse.ts",
-    "bun-surface": "bin/bun_surface.ts"
+    "bun-surface": "bin/bun_surface.ts",
+    "sql-query": "bin/sql-query.ts"
   },
   "trustedDependencies": [],
   "publishConfig": {
@@ -288,7 +289,7 @@
     "test:capture": "bun test tests/capture_*.test.ts tests/portal_audit.test.ts",
     "deploy:docs": "./scripts/deploy/deploy_docs.sh",
     "wrangler": "./bin/wrangler",
-    "dx": "./bin/dx status",
+    "dx": "./bin/dx",
     "dx:stage": "./bin/dx stage",
     "dx:deploy": "./bin/dx deploy",
     "dx:ship": "./bin/dx ship",
@@ -302,6 +303,7 @@
     "blob:formdata": "bun run bin/blob-formdata.ts",
     "xml:parse": "bun run bin/xml-parse.ts",
     "bun:surface": "bun run bin/bun_surface.ts",
+    "sql:query": "bun run bin/sql-query.ts",
     "fetch-config": "bun run scripts/fetch-config.ts",
     "fetch-live-data": "bun run scripts/fetch-live-data.ts",
     "fetch-report-periods": "bun run scripts/fetch-report-periods.ts",

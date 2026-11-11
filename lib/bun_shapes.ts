@@ -518,6 +518,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["surface:SQL", "test:tests/bun_capabilities.test.ts"],
   },
   {
+    name: "sql",
+    kind: "value",
+    subsystem: "storage",
+    heading: "Bun.sql",
+    evidence: ["surface:sql", "test:tests/bun_capabilities.test.ts"],
+  },
+  {
     name: "cron",
     kind: "value",
     subsystem: "storage",

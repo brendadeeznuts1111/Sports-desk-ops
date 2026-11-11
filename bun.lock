@@ -55,6 +55,7 @@
         "blob-formdata": "./bin/blob-formdata.ts",
         "xml-parse": "./bin/xml-parse.ts",
         "bun-surface": "./bin/bun-surface.ts",
+        "sql-query": "./bin/sql-query.ts",
       },
     },
   },

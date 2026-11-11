@@ -1,62 +1,117 @@
 /**
  * @file lib/db.ts
- * @description Env-gated, TLS-aware PostgreSQL connection pool via Bun.SQL.
+ * @description Env-gated, TLS-aware PostgreSQL connection pool via `Bun.SQL` / `Bun.sql` (`import { env, sql as defaultBunSql, SQL } from "bun"`).
+ *
+ * Resolution order:
+ *  1. `Bun.env.DATABASE_URL` when set: parses host/password to enforce the non-local empty-password
+ *     and TLS guards, and reuses `Bun.sql` when TLS policy matches or constructs an explicit
+ *     `new Bun.SQL(url, { tls, idleTimeout, max })` pool.
+ *  2. `Bun.env.PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`: constructs `new Bun.SQL(...)`.
  */
-import { SQL } from "bun";
+import { env, type SQL } from "bun";
 
-const isLocal = (host: string): boolean =>
+export const isLocalDbHost = (host: string): boolean =>
   host === "localhost" || host === "127.0.0.1" || host === "::1";
 
-const required = (k: string): string => {
-  const v = process.env[k];
+const required = (k: keyof Bun.Env): string => {
+  const v = env[k];
   if (v === undefined || v === null)
-    throw new Error(`lib/db.ts: missing required env ${k}`);
+    throw new Error(`lib/db.ts: missing required env ${String(k)}`);
   return v;
 };
 
 let _sqlInstance: SQL | null = null;
+let _usingDefaultGlobal = false;
 
-function getSql(): SQL {
-  if (!_sqlInstance) {
-    const host = process.env.PGHOST ?? "localhost";
-    const local = isLocal(host);
-
-    const user = required("PGUSER");
-    const password = required("PGPASSWORD");
-
+export function createConfiguredSql(): {
+  readonly db: SQL;
+  readonly isDefaultGlobal: boolean;
+} {
+  const databaseUrl = env.DATABASE_URL?.trim();
+  if (databaseUrl !== undefined && databaseUrl !== "") {
+    let parsed: URL;
+    try {
+      parsed = new URL(databaseUrl);
+    } catch {
+      throw new Error("lib/db.ts: invalid DATABASE_URL");
+    }
+    const host = parsed.hostname || "localhost";
+    const local = isLocalDbHost(host);
+    const password = decodeURIComponent(parsed.password ?? "");
     if (!local && password === "") {
       throw new Error(
         `lib/db.ts: PGPASSWORD required for non-local host ${host}`,
       );
     }
+    const forceTls = env.SPORTSDESK_DB_TLS === "1";
+    // When connecting locally without forced TLS, Bun's built-in `Bun.sql` default client
+    // already points at `DATABASE_URL`.
+    if (local && !forceTls) {
+      return { db: Bun.sql, isDefaultGlobal: true };
+    }
+    const tls = local && !forceTls ? false : { rejectUnauthorized: true };
+    return {
+      db: new Bun.SQL(databaseUrl, {
+        tls,
+        idleTimeout: 30,
+        max: 20,
+        onconnect: (err) => {
+          if (err) console.error("[db] connect failed:", err.message);
+        },
+      }),
+      isDefaultGlobal: false,
+    };
+  }
 
-    // TLS: forced off for localhost (dev), required everywhere else.
-    // SPORTSDESK_DB_TLS=1 flips it on even for local (e.g. docker with certs).
-    const tls =
-      local && process.env.SPORTSDESK_DB_TLS !== "1"
-        ? false
-        : { rejectUnauthorized: true };
+  const host = env.PGHOST ?? "localhost";
+  const local = isLocalDbHost(host);
 
-    _sqlInstance = new SQL({
+  const user = required("PGUSER");
+  const password = required("PGPASSWORD");
+
+  if (!local && password === "") {
+    throw new Error(
+      `lib/db.ts: PGPASSWORD required for non-local host ${host}`,
+    );
+  }
+
+  // TLS: forced off for localhost (dev), required everywhere else.
+  // SPORTSDESK_DB_TLS=1 flips it on even for local (e.g. docker with certs).
+  const tls =
+    local && env.SPORTSDESK_DB_TLS !== "1"
+      ? false
+      : { rejectUnauthorized: true };
+
+  return {
+    db: new Bun.SQL({
       hostname: host,
-      port: Number(process.env.PGPORT ?? 5432),
+      port: Number(env.PGPORT ?? 5432),
       username: user,
       password,
-      database: process.env.PGDATABASE ?? "myapp",
+      database: env.PGDATABASE ?? "myapp",
       tls,
       idleTimeout: 30, // seconds
       max: 20,
       onconnect: (err) => {
         if (err) console.error("[db] connect failed:", err.message);
       },
-    });
+    }),
+    isDefaultGlobal: false,
+  };
+}
+
+function getSql(): SQL {
+  if (!_sqlInstance) {
+    const resolved = createConfiguredSql();
+    _sqlInstance = resolved.db;
+    _usingDefaultGlobal = resolved.isDefaultGlobal;
   }
   return _sqlInstance;
 }
 
 /**
- * Lazy proxy to PostgreSQL connection pool.
- * Defers reading required environment variables (PGUSER/PGPASSWORD) until first query.
+ * Lazy proxy to `Bun.SQL` / `Bun.sql` PostgreSQL connection pool.
+ * Defers reading required environment variables (`DATABASE_URL` or `PGUSER`/`PGPASSWORD`) until first query.
  */
 export const sql: SQL = new Proxy((() => {}) as unknown as SQL, {
   apply(_target, _thisArg, args) {
@@ -71,8 +126,13 @@ export const sql: SQL = new Proxy((() => {}) as unknown as SQL, {
     if (prop === "close") {
       return async () => {
         if (_sqlInstance) {
-          await _sqlInstance.close();
+          const inst = _sqlInstance;
+          const wasDefault = _usingDefaultGlobal;
           _sqlInstance = null;
+          _usingDefaultGlobal = false;
+          if (!wasDefault) {
+            await inst.close();
+          }
         }
       };
     }

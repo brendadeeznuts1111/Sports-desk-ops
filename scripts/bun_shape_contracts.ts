@@ -23,11 +23,27 @@ import {
 } from "../lib/bun_shapes.ts";
 
 const root = process.cwd();
+const trackedOut = Bun.spawnSync(
+  ["git", "-C", root, "ls-files", "-z", "--cached"],
+  { stdout: "pipe", stderr: "ignore" },
+);
+const trackedSet =
+  trackedOut.exitCode === 0
+    ? new Set(
+        trackedOut.stdout
+          .toString()
+          .split("\0")
+          .filter((f) => f !== ""),
+      )
+    : null;
 const files = (await listSourceFiles(root, ["ts", "mjs", "js"])).filter(
   (f) =>
+    (trackedSet === null || trackedSet.has(f)) &&
     !f.includes(".test.") &&
     !f.startsWith("tests/") &&
-    !f.startsWith("verification/"),
+    !f.startsWith("verification/") &&
+    !f.startsWith("scratch/") &&
+    !f.startsWith("packages/sportsdesk-ops/bin/"),
 );
 
 const perShape = new Map<string, Map<string, number>>();
