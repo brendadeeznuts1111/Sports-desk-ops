@@ -46,9 +46,9 @@ export type AlertSender = (alert: QueuedAlert) => Promise<AlertDeliveryResult>;
 
 export const DEFAULT_MAX_ALERT_ATTEMPTS = 5;
 export const MAX_ALERT_ATTEMPTS =
-  Number.isInteger(Number(process.env.SPORTSDESK_ALERT_MAX_ATTEMPTS)) &&
-  Number(process.env.SPORTSDESK_ALERT_MAX_ATTEMPTS) >= 1
-    ? Number(process.env.SPORTSDESK_ALERT_MAX_ATTEMPTS)
+  Number.isInteger(Number(Bun.env.SPORTSDESK_ALERT_MAX_ATTEMPTS)) &&
+  Number(Bun.env.SPORTSDESK_ALERT_MAX_ATTEMPTS) >= 1
+    ? Number(Bun.env.SPORTSDESK_ALERT_MAX_ATTEMPTS)
     : DEFAULT_MAX_ALERT_ATTEMPTS;
 
 export const MAX_RETRY_LIFECYCLE_SEC = MAX_ALERT_ATTEMPTS * 3600; // 5 x 1h cap = 18,000s (5h)
@@ -499,7 +499,7 @@ export class AlertDispatcher {
     setActiveDispatcher(this);
     this.timer = setInterval(() => {
       this.sweepOnce().catch((err) => {
-        if (process.env.DEBUG_TRACE === "1") {
+        if (Bun.env.DEBUG_TRACE === "1") {
           console.warn("[alert_dispatcher] sweep error:", err);
         }
       });

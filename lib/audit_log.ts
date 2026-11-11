@@ -72,16 +72,16 @@ export function parsePositiveInt(
  * Returns the configured audit log directory (default: "audit").
  */
 export function getAuditDirectory(): string {
-  return process.env.SPORTSDESK_AUDIT_DIR || "audit";
+  return Bun.env.SPORTSDESK_AUDIT_DIR || "audit";
 }
 
 /**
  * Returns the maximum file size before rotating (default: 50MB, floor: 1MB or 100B in test).
  */
 export function getMaxFileBytes(): number {
-  const minFloor = process.env.NODE_ENV === "test" ? 100 : 1024 * 1024;
+  const minFloor = Bun.env.NODE_ENV === "test" ? 100 : 1024 * 1024;
   return parsePositiveInt(
-    process.env.SPORTSDESK_AUDIT_MAX_BYTES,
+    Bun.env.SPORTSDESK_AUDIT_MAX_BYTES,
     DEFAULT_MAX_FILE_BYTES,
     minFloor,
   );
@@ -92,7 +92,7 @@ export function getMaxFileBytes(): number {
  */
 export function getRetentionDays(): number {
   return parsePositiveInt(
-    process.env.SPORTSDESK_AUDIT_RETENTION_DAYS,
+    Bun.env.SPORTSDESK_AUDIT_RETENTION_DAYS,
     DEFAULT_RETENTION_DAYS,
     1,
   );
@@ -110,7 +110,7 @@ export function ensureAuditDir(): string {
   try {
     chmodSync(dir, 0o700);
   } catch (err) {
-    if (process.env.DEBUG_TRACE === "1") {
+    if (Bun.env.DEBUG_TRACE === "1") {
       console.warn("[audit] chmod dir failed:", err);
     }
   }
@@ -264,7 +264,7 @@ export function writeAuditEntry(entry: AuditEntry): void {
     try {
       chmodSync(filePath, 0o600);
     } catch (err) {
-      if (process.env.DEBUG_TRACE === "1") {
+      if (Bun.env.DEBUG_TRACE === "1") {
         console.warn("[audit] chmod file failed:", err);
       }
     }

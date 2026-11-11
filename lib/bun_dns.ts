@@ -100,7 +100,7 @@ export function getDnsTelemetry(): DnsCacheTelemetry {
       : 0.0;
 
   const defaultTtlSeconds =
-    Number(process.env.BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS) || 30;
+    Number(Bun.env.BUN_CONFIG_DNS_TIME_TO_LIVE_SECONDS) || 30;
 
   return {
     cacheHitsCompleted: stats.cacheHitsCompleted,

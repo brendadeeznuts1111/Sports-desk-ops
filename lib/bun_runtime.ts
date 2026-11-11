@@ -5,7 +5,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /** Git executable name — constant argv segment (never interpolate a path here). */
 export const GIT = "git" as const;
@@ -62,6 +62,8 @@ export interface DeskProvenanceSnapshot {
   readonly worktrees?: readonly RepoGitIdentity[];
   readonly oracle?: BunOraclePinCheck;
 }
+
+const SELF_REPO_ROOT = resolve(import.meta.dir, "..");
 
 const DESK_REPO_NAMES = [
   "sportsdesk-ops",
@@ -161,19 +163,36 @@ export function bunRuntimeIdentity(): BunRuntimeIdentity {
   };
 }
 
-export function resolveCodeRoot(env: NodeJS.ProcessEnv = Bun.env): string {
-  const home = env.HOME ?? "";
-  return env.CODE_ROOT?.trim() || join(home, "code");
+export function resolveCodeRoot(
+  env: NodeJS.ProcessEnv = Bun.env,
+  selfRepoRoot = SELF_REPO_ROOT,
+): string {
+  const override = env.CODE_ROOT?.trim();
+  if (override) return override;
+  const homeCode = join(env.HOME ?? "", "code");
+  if (existsSync(homeCode)) return homeCode;
+  if (existsSync(join(selfRepoRoot, ".git"))) {
+    return dirname(selfRepoRoot);
+  }
+  return homeCode;
 }
 
 export function deskRepoIdentities(
   codeRoot = resolveCodeRoot(),
   repoNames: readonly string[] = DESK_REPO_NAMES,
+  selfRepoRoot = SELF_REPO_ROOT,
 ): RepoGitIdentity[] {
   requireBunRuntime();
   const out: RepoGitIdentity[] = [];
   for (const name of repoNames) {
-    const path = join(codeRoot, name);
+    const defaultPath = join(codeRoot, name);
+    const path =
+      name === "sportsdesk-ops" &&
+      !existsSync(join(defaultPath, ".git")) &&
+      codeRoot === dirname(selfRepoRoot) &&
+      existsSync(join(selfRepoRoot, ".git"))
+        ? selfRepoRoot
+        : defaultPath;
     if (!existsSync(join(path, ".git"))) {
       out.push({ name, path });
       continue;

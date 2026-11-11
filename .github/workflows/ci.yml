@@ -115,6 +115,15 @@ jobs:
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Type check
+        timeout-minutes: 3
+        run: bun run typecheck
+      - name: Lint
+        timeout-minutes: 3
+        run: bun run lint:check
+      - name: Bun docs & shape manifest baselines
+        timeout-minutes: 3
+        run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json && bun test tests/bun_shapes_manifest.test.ts tests/language_coverage.test.ts
       - name: Bun test changed files
         run: bun run test:changed
       - name: Changed dsh-plugin bundles (verify-load)

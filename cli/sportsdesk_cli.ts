@@ -1763,7 +1763,7 @@ export async function handleDashboardCli(args: string[] = []): Promise<void> {
   const start = performance.now();
   const content = await file.text();
   const rendered = renderAnsiMarkdown(content, {
-    colors: !process.env.NO_COLOR && process.env.TERM !== "dumb",
+    colors: !Bun.env.NO_COLOR && Bun.env.TERM !== "dumb",
     hyperlinks: true,
   });
   const elapsed = (performance.now() - start).toFixed(2);

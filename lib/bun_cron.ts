@@ -222,7 +222,7 @@ export async function removeOsCronJob(title: string): Promise<void> {
 
 /** macOS launchd plist path for an OS-level Bun.cron job (`title` = third arg to `Bun.cron`). */
 export function bunCronLaunchAgentPlistPath(title: string): string {
-  const home = (process.env.HOME ?? "").trim();
+  const home = (Bun.env.HOME ?? "").trim();
   if (home === "") {
     throw new Error("HOME is unset; cannot resolve LaunchAgents path");
   }

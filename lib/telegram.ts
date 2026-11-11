@@ -78,16 +78,12 @@ export async function sendTelegramAlert(
   alert: QueuedAlert,
   opts?: TelegramSenderOptions,
 ): Promise<AlertDeliveryResult> {
-  const botToken =
-    opts?.botToken ??
-    process.env.TELEGRAM_BOT_TOKEN ??
-    Bun.env.TELEGRAM_BOT_TOKEN;
-  const chatId =
-    opts?.chatId ?? process.env.TELEGRAM_CHAT_ID ?? Bun.env.TELEGRAM_CHAT_ID;
+  const botToken = opts?.botToken ?? Bun.env.TELEGRAM_BOT_TOKEN;
+  const chatId = opts?.chatId ?? Bun.env.TELEGRAM_CHAT_ID;
   const fetcher = opts?.fetchFn ?? fetch;
 
   if (!botToken || !chatId) {
-    if (process.env.NODE_ENV === "production") {
+    if (Bun.env.NODE_ENV === "production") {
       throw new Error(
         "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required in production for alert delivery",
       );

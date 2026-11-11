@@ -248,13 +248,20 @@ if (
   }
 }
 
-function resolveOxlintBin(): string | null {
+function resolveOxlintCmd(): string[] | null {
   const localBin = path.join(ROOT, "node_modules", ".bin", "oxlint");
-  if (existsSync(localBin)) return localBin;
-  return Bun.which("oxlint", { PATH: Bun.env.PATH ?? "" });
+  if (
+    existsSync(localBin) ||
+    Bun.which("oxlint", { PATH: Bun.env.PATH ?? "" }) !== null
+  ) {
+    // Use `bun --bun run oxlint` so Bun injects its `node` PATH shim for both
+    // the oxlint wrapper (`#!/usr/bin/env node`) and any child `tsgolint` process.
+    return [process.execPath, "--bun", "run", "oxlint"];
+  }
+  return null;
 }
 
-const oxlintBin = resolveOxlintBin();
+const oxlintCmd = resolveOxlintCmd();
 
 // Phase 2: Parallel typecheck + UI typecheck + scoped lint + targeted tests
 const tasks: Promise<TaskResult>[] = [
@@ -269,20 +276,20 @@ const tasks: Promise<TaskResult>[] = [
   runTask("ensure:tsconfig", ["bun", "run", "scripts/ensure_deep_tsconfig.ts"]),
 ];
 
-if (lintTargets.length > 0 && oxlintBin !== null) {
+if (lintTargets.length > 0 && oxlintCmd !== null) {
   tasks.push(
     runTask(`oxlint (${lintTargets.length})`, [
-      oxlintBin,
+      ...oxlintCmd,
       "--deny-warnings",
       ...lintTargets,
     ]),
   );
 }
 
-if (values.deep && oxlintBin !== null) {
+if (values.deep && oxlintCmd !== null) {
   tasks.push(
     runTask("oxlint:type-aware", [
-      oxlintBin,
+      ...oxlintCmd,
       "--type-aware",
       "-c",
       ".oxlintrc.type-aware.json",

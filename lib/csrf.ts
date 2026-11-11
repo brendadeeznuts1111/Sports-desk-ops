@@ -7,11 +7,11 @@
 import { CSRF } from "bun";
 import { SESSION_IDLE_MS } from "./session.ts";
 
-const SECRET = process.env.SPORTSDESK_CSRF_SECRET;
+const SECRET = Bun.env.SPORTSDESK_CSRF_SECRET;
 
 // Fail closed in prod: the random in-memory default is process-local
 // and silently breaks on HMR / multi-instance / rolling deploys.
-if (!SECRET && process.env.NODE_ENV === "production") {
+if (!SECRET && Bun.env.NODE_ENV === "production") {
   throw new Error(
     "SPORTSDESK_CSRF_SECRET required in production (see secret_manifest)",
   );

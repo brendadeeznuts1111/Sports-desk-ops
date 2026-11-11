@@ -62,7 +62,7 @@ export const clientIp = (
   req: Request,
   server?: { requestIP?: (req: Request) => { address: string } | null },
 ): string => {
-  if (process.env.TRUST_PROXY === "1") {
+  if (Bun.env.TRUST_PROXY === "1") {
     return (
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       req.headers.get("x-real-ip") ??
