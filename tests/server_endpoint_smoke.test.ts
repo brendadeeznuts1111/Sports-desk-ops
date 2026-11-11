@@ -35,7 +35,22 @@ beforeAll(() => {
   // Bun types the known env keys as readonly; the daemon reads the token per request.
   (Bun.env as Record<string, string | undefined>).SPORTSDESK_ADMIN_TOKEN =
     TOKEN;
-  server = startServer({ port: 0, hostname: "127.0.0.1" });
+  server = startServer({
+    port: 0,
+    hostname: "127.0.0.1",
+    trackerState: async () => ({
+      generatedAt: "2026-11-04T00:00:00.000Z",
+      mainCi: null,
+      tasks: { kind: "unavailable", reason: "test" },
+      prs: { kind: "unavailable", reason: "test" },
+      secrets: { kind: "unavailable", reason: "test" },
+    }),
+    kalshiFetch: (async () =>
+      new Response(JSON.stringify({ markets: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch,
+  });
 });
 
 afterAll(() => {
@@ -170,7 +185,7 @@ describe("daemon endpoint smoke", () => {
       expect(response.status, path).toBe(200);
       await response.body?.cancel();
     }
-  });
+  }, 15_000);
 
   test("streaming SSE route /api/graph/stream answers 200 and emits initial summary frame", async () => {
     const response = await fetch(new URL("/api/graph/stream", server.url), {

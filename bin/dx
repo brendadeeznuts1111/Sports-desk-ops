@@ -419,9 +419,9 @@ EOF
       fi
     ) &
     dx_bun_ver="$(bun -v 2>/dev/null || echo 'bun missing')"
-    dx_git_tip="$(git -C "$REPO_ROOT" log -n 1 --oneline)"
-    dx_staged_dist="$(ls -1 "$REPO_ROOT/dist" 2>/dev/null | tr '\n' ' ')"
-    wait
+    dx_git_tip="$(git -C "$REPO_ROOT" log -n 1 --oneline 2>/dev/null || echo 'unknown')"
+    dx_staged_dist="$(ls -1 "$REPO_ROOT/dist" 2>/dev/null | tr '\n' ' ' || true)"
+    wait || true
     IFS='|' read -r dx_git_rc dx_dirty_count <"$dx_probe_dir/git" || { dx_git_rc="1"; dx_dirty_count="0"; }
     dx_wrangler="$(cat "$dx_probe_dir/wrangler" 2>/dev/null || true)"
     dx_r2_state="$(cat "$dx_probe_dir/r2" 2>/dev/null || true)"

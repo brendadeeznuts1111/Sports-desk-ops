@@ -1,2 +1,3 @@
-.nsh/
+.nsh/*
+!.nsh/tsconfig.json
 target/

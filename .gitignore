@@ -75,7 +75,9 @@ betReport*.json
 audit/
 
 # Agent worktrees and scratch: DSH agents create these under .agents/.
-/.agents/
+/.agents/*
+!/.agents/skills/
+!/.agents/skills/**
 # Git worktrees checked out beside the main checkout.
 .worktrees/
 
@@ -99,5 +101,6 @@ lib/.tmp-*/
 cloudflare.env
 
 # Native Shell (nsh) generated types, bundles, and package outputs.
-.nsh/
+**/.nsh/*
+!packages/nsh-desk/.nsh/tsconfig.json
 pages.env

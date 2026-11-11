@@ -552,6 +552,7 @@ export function buildSignalArenaIndex(
 ): SignalArenaIndex {
   const count = items.length;
   const metrics = new Float64Array(count * SIGNAL_METRIC_STRIDE);
+  // eslint-disable-next-line unicorn/no-new-array -- dense preallocation filled by index
   const baseRows: string[][] = new Array(count);
   const indexById = new Map<string, number>();
 
@@ -637,6 +638,7 @@ export function sortSignalArenaIndex(
     });
   }
 
+  // eslint-disable-next-line unicorn/no-new-array -- dense preallocation filled by index
   const rows: string[][] = new Array(count);
   for (let pos = 0; pos < count; pos++) {
     rows[pos] = baseRows[order[pos]!]!;
@@ -673,6 +675,7 @@ export function buildExposurePlotData(
   limit = 12,
 ): ExposurePlotPoint[] {
   const count = Math.min(items.length, limit);
+  // eslint-disable-next-line unicorn/no-new-array -- dense preallocation filled by index
   const points: ExposurePlotPoint[] = new Array(count);
   for (let i = 0; i < count; i++) {
     const s = items[i]!;

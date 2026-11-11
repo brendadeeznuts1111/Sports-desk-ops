@@ -703,26 +703,52 @@ export async function runWorktreeHygiene(
         })
       : loadGithubState(repoCommonRoot),
     runCmd(["git", "worktree", "list", "--porcelain"], repoCommonRoot),
-    runCmd(
-      [
-        "git",
-        "for-each-ref",
-        "--sort=-committerdate",
-        `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(worktreepath)|%(ahead-behind:${baseRef})`,
-        "refs/heads/",
-      ],
-      repoCommonRoot,
-    ),
-    runCmd(
-      [
-        "git",
-        "for-each-ref",
-        "--sort=-committerdate",
-        `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(ahead-behind:${baseRef})`,
-        "refs/remotes/origin/",
-      ],
-      repoCommonRoot,
-    ),
+    (async () => {
+      const res = await runCmd(
+        [
+          "git",
+          "for-each-ref",
+          "--sort=-committerdate",
+          `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(worktreepath)|%(ahead-behind:${baseRef})`,
+          "refs/heads/",
+        ],
+        repoCommonRoot,
+      );
+      if (res.code === 0) return res;
+      return runCmd(
+        [
+          "git",
+          "for-each-ref",
+          "--sort=-committerdate",
+          "--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(worktreepath)|",
+          "refs/heads/",
+        ],
+        repoCommonRoot,
+      );
+    })(),
+    (async () => {
+      const res = await runCmd(
+        [
+          "git",
+          "for-each-ref",
+          "--sort=-committerdate",
+          `--format=%(refname:short)|%(objectname)|%(committerdate:short)|%(ahead-behind:${baseRef})`,
+          "refs/remotes/origin/",
+        ],
+        repoCommonRoot,
+      );
+      if (res.code === 0) return res;
+      return runCmd(
+        [
+          "git",
+          "for-each-ref",
+          "--sort=-committerdate",
+          "--format=%(refname:short)|%(objectname)|%(committerdate:short)|",
+          "refs/remotes/origin/",
+        ],
+        repoCommonRoot,
+      );
+    })(),
   ]);
 
   const parsedWorktrees = parseWorktreeListPorcelain(wtRaw.stdout);

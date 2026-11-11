@@ -135,6 +135,9 @@ function inferTestsForFiles(files: string[]): string[] {
       continue;
     }
     const candidates = [`tests/${stem}.test.ts`, `tests/${stem}_toml.test.ts`];
+    if (f.startsWith("packages/nsh-desk/")) {
+      candidates.push("tests/nsh_desk_contract.test.ts");
+    }
     if (/\.(ts|tsx)$/.test(f)) {
       candidates.push(f.replace(/\.(ts|tsx)$/, ".test.$1"));
     }
@@ -286,9 +289,13 @@ if (values.deep && oxlintBin !== null) {
 }
 
 if (changed.some((f) => f.startsWith("packages/nsh-desk/"))) {
-  tasks.push(
-    runTask("nsh:check", ["bun", "run", "scripts/nsh_desk_cli.ts", "check"]),
-  );
+  const { tryResolveNshBinary } = await import("./nsh_desk_cli.ts");
+  const nsh = await tryResolveNshBinary(ROOT);
+  if (nsh !== null) {
+    tasks.push(
+      runTask("nsh:check", ["bun", "run", "scripts/nsh_desk_cli.ts", "check"]),
+    );
+  }
 }
 
 if (

@@ -189,8 +189,13 @@ export function formatCliReportOutput(
 
 const MINIMUM_NSH_RUNTIME_RANGE = ">=0.4.0";
 
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
 export function parseNshVersionOutput(raw: string): ParsedNshVersion {
-  const clean = Bun.stripANSI(raw).trim();
+  const clean = stripAnsi(raw).trim();
   const match =
     /\bnsh\s+(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+\(([0-9a-fA-F]+)\))?/.exec(
       clean,
@@ -272,7 +277,7 @@ export function parseNshCliOutput(raw: string): ParsedNshCliOutput {
   const logs: string[] = [];
 
   for (const rawLine of raw.split(/\r?\n/)) {
-    const clean = Bun.stripANSI(rawLine).trim();
+    const clean = stripAnsi(rawLine).trim();
     if (clean.length === 0) continue;
 
     if (clean.startsWith("✓")) {
@@ -540,6 +545,17 @@ export async function resolveNshBinary(
   throw new Error(
     `[nsh-desk] Native Shell CLI ('nsh') not found. Tried: ${tried.join(", ")}. Install via https://nsh.dev/docs/installation.`,
   );
+}
+
+export async function tryResolveNshBinary(
+  repoRoot: string,
+  env: Record<string, string | undefined> = Bun.env,
+): Promise<ResolvedNshBinary | null> {
+  try {
+    return await resolveNshBinary(repoRoot, env);
+  } catch {
+    return null;
+  }
 }
 
 const APP_ENTRY_SUBCOMMANDS: ReadonlySet<string> = new Set([

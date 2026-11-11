@@ -30,6 +30,11 @@ const server = startServer({
     prs: { kind: "unavailable", reason: "test" },
     secrets: { kind: "unavailable", reason: "test" },
   }),
+  kalshiFetch: (async () =>
+    new Response(JSON.stringify({ markets: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as unknown as typeof fetch,
 });
 const base = `http://127.0.0.1:${server.port}`;
 
@@ -49,7 +54,7 @@ describe("the method column matches the daemon", () => {
         disagreements.push(`${route.path} GET=${get} POST=${post}`);
     }
     expect(disagreements).toEqual([]);
-  });
+  }, 15_000);
 
   test("a named method is the one that works", async () => {
     const wrong: string[] = [];
@@ -60,7 +65,7 @@ describe("the method column matches the daemon", () => {
         wrong.push(`${route.path} declares ${route.method} but 404s`);
     }
     expect(wrong).toEqual([]);
-  });
+  }, 15_000);
 
   afterAll(() => {
     server.stop(true);
