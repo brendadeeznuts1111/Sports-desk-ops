@@ -64,8 +64,8 @@ const rules = (problems: ReturnType<typeof analyzeBunShapes>) =>
   problems.map((p) => p.rule);
 
 describe("manifest", () => {
-  test("partition is 81 shapes across the eight subsystems", () => {
-    expect(BUN_SHAPES.length).toBe(81);
+  test("partition is 86 shapes across the eight subsystems", () => {
+    expect(BUN_SHAPES.length).toBe(86);
     const counts = Object.fromEntries(SHAPE_SUBSYSTEMS.map((s) => [s, 0]));
     for (const s of BUN_SHAPES)
       counts[s.subsystem] = (counts[s.subsystem] ?? 0) + 1;
@@ -73,16 +73,16 @@ describe("manifest", () => {
       process: 20,
       text: 8,
       data: 12,
-      storage: 12,
-      crypto: 13,
+      storage: 15,
+      crypto: 15,
       network: 9,
       image: 2,
       meta: 5,
     });
   });
 
-  test("72 runtime values and 9 type-only declarations (one declared-only)", () => {
-    expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(72);
+  test("73 runtime values and 13 type-only declarations (one declared-only)", () => {
+    expect(BUN_SHAPES.filter((s) => s.kind === "value").length).toBe(73);
     expect(
       BUN_SHAPES.filter((s) => s.kind === "type")
         .map((s) => s.name)
@@ -93,7 +93,11 @@ describe("manifest", () => {
       "FetchProxyOption",
       "FileSink",
       "ImportKind",
+      "Password",
       "S3File",
+      "S3FilePresignOptions",
+      "S3ListObjectsOptions",
+      "S3ListObjectsResponse",
       "S3Options",
       "S3Stats",
       "Server",
@@ -159,6 +163,38 @@ describe("collectBunShapeUsage", () => {
     );
     expect(usage.elementAccess).toHaveLength(1);
     expect(usage.used.size).toBe(0);
+  });
+
+  test("tracks named and namespace imports from module 'bun' alongside Bun.*", () => {
+    const sources = new Map([
+      [
+        "lib/auth_and_db.ts",
+        [
+          'import { password, sql as defaultSql, type Password, type S3FilePresignOptions } from "bun";',
+          'import * as bunNs from "bun";',
+          "export const h = password.hash;",
+          "export const v = bunNs.version;",
+          "export type Alg = Password.Argon2Algorithm;",
+          "export type Presign = S3FilePresignOptions;",
+        ].join("\n"),
+      ],
+      [
+        "lib/dyn.ts",
+        [
+          'import * as bunNs from "bun";',
+          'export const bad = bunNs["sql"];',
+        ].join("\n"),
+      ],
+    ]);
+    const usage = collectBunShapeUsage(sources);
+    expect([...usage.used.keys()].sort()).toEqual([
+      "Password",
+      "S3FilePresignOptions",
+      "password",
+      "sql",
+      "version",
+    ]);
+    expect(usage.elementAccess).toEqual(['lib/dyn.ts: bunNs["sql"]']);
   });
 });
 

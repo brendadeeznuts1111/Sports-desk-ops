@@ -1,14 +1,14 @@
 /**
  * @file lib/db.ts
- * @description Env-gated, TLS-aware PostgreSQL connection pool via `Bun.SQL` / `Bun.sql` (`import { env, sql as defaultBunSql, SQL } from "bun"`).
+ * @description Env-gated, TLS-aware PostgreSQL connection pool via `import { env, sql, SQL } from "bun"`.
  *
  * Resolution order:
- *  1. `Bun.env.DATABASE_URL` when set: parses host/password to enforce the non-local empty-password
- *     and TLS guards, and reuses `Bun.sql` when TLS policy matches or constructs an explicit
- *     `new Bun.SQL(url, { tls, idleTimeout, max })` pool.
- *  2. `Bun.env.PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`: constructs `new Bun.SQL(...)`.
+ *  1. `env.DATABASE_URL` when set: parses host/password to enforce the non-local empty-password
+ *     and TLS guards, and reuses `sql` (`Bun.sql`) when TLS policy matches or constructs an explicit
+ *     `new SQL(url, { tls, idleTimeout, max })` pool.
+ *  2. `env.PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE`: constructs `new SQL(...)`.
  */
-import { env, type SQL } from "bun";
+import { env, sql as defaultBunSql, SQL } from "bun";
 
 export const isLocalDbHost = (host: string): boolean =>
   host === "localhost" || host === "127.0.0.1" || host === "::1";
@@ -47,11 +47,11 @@ export function createConfiguredSql(): {
     // When connecting locally without forced TLS, Bun's built-in `Bun.sql` default client
     // already points at `DATABASE_URL`.
     if (local && !forceTls) {
-      return { db: Bun.sql, isDefaultGlobal: true };
+      return { db: defaultBunSql, isDefaultGlobal: true };
     }
     const tls = local && !forceTls ? false : { rejectUnauthorized: true };
     return {
-      db: new Bun.SQL(databaseUrl, {
+      db: new SQL(databaseUrl, {
         tls,
         idleTimeout: 30,
         max: 20,
@@ -83,7 +83,7 @@ export function createConfiguredSql(): {
       : { rejectUnauthorized: true };
 
   return {
-    db: new Bun.SQL({
+    db: new SQL({
       hostname: host,
       port: Number(env.PGPORT ?? 5432),
       username: user,

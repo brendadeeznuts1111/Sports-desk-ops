@@ -594,8 +594,12 @@ describe("Bun capabilities used by the ops tooling", () => {
 
   test("version_with_sha is the version plus the short commit", () => {
     // scripts/probe_bun.ts reads this for its drift message; nothing asserted it existed.
+    // Canary builds report `v1.4.4-canary.1 (<sha>)` while `Bun.version` stays `1.4.4`.
     expect(typeof Bun.version_with_sha).toBe("string");
-    expect(Bun.version_with_sha.startsWith(`v${Bun.version} (`)).toBe(true);
+    expect(Bun.version_with_sha.startsWith(`v${Bun.version}`)).toBe(true);
+    expect(Bun.version_with_sha).toMatch(
+      /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)? \([0-9a-f]+\)$/,
+    );
     const shortSha = /\(([0-9a-f]+)\)$/.exec(Bun.version_with_sha)?.[1];
     expect(shortSha).toBeDefined();
     expect(Bun.revision.startsWith(shortSha as string)).toBe(true);
@@ -656,5 +660,34 @@ describe("Bun capabilities used by the ops tooling", () => {
     buf.fill(0x61);
     expect(buf[0]).toBe(0x61);
     expect(buf[1023]).toBe(0x61);
+  });
+
+  test("module 'bun' named exports share 1:1 reference identity with globalThis.Bun", async () => {
+    const bunMod = (await import("bun")) as Record<string, unknown>;
+    const bunGlobal = Bun as unknown as Record<string, unknown>;
+
+    const modKeys = Reflect.ownKeys(bunMod)
+      .filter(
+        (k): k is string =>
+          typeof k === "string" && k !== "default" && k !== "__esModule",
+      )
+      .sort();
+    const globalKeys = Reflect.ownKeys(Bun)
+      .filter((k): k is string => typeof k === "string")
+      .sort();
+
+    expect(modKeys).toEqual(globalKeys);
+    for (const key of globalKeys) {
+      expect(bunMod[key]).toBe(bunGlobal[key]);
+    }
+
+    expect(typeof Bun.password).toBe("object");
+    expect(typeof Bun.password.hash).toBe("function");
+    expect(typeof Bun.password.hashSync).toBe("function");
+    expect(typeof Bun.password.verify).toBe("function");
+    expect(typeof Bun.password.verifySync).toBe("function");
+    expect(bunMod["password"]).toBe(Bun.password);
+    expect(bunMod["sql"]).toBe(Bun.sql);
+    expect(bunMod["SQL"]).toBe(Bun.SQL);
   });
 });

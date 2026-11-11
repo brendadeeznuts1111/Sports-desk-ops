@@ -12,13 +12,13 @@
  * The links file is the only network-derived input, refreshed deliberately, so the
  * catalog can be regenerated from a clean checkout without touching bun.com.
  */
-import * as ts from "typescript";
 import { listSourceFiles } from "../lib/source_files.ts";
 import {
   BUN_SHAPES,
   BUN_SHAPE_PINS,
   SHAPE_SECTIONS,
   VOLATILE_SHAPES,
+  scanBunShapeSource,
   surfaceMembers,
 } from "../lib/bun_shapes.ts";
 
@@ -49,33 +49,12 @@ const files = (await listSourceFiles(root, ["ts", "mjs", "js"])).filter(
 const perShape = new Map<string, Map<string, number>>();
 for (const file of files) {
   const text = await Bun.file(file).text();
-  const kind = file.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS;
-  const sf = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    false,
-    kind,
-  );
-  const visit = (node: ts.Node) => {
-    const hit =
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "Bun"
-        ? node.name.text
-        : ts.isQualifiedName(node) &&
-            ts.isIdentifier(node.left) &&
-            node.left.text === "Bun"
-          ? node.right.text
-          : undefined;
-    if (hit !== undefined) {
-      const m = perShape.get(hit) ?? new Map<string, number>();
-      m.set(file, (m.get(file) ?? 0) + 1);
-      perShape.set(hit, m);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
+  const { hits } = scanBunShapeSource(file, text);
+  for (const [hit, count] of hits) {
+    const m = perShape.get(hit) ?? new Map<string, number>();
+    m.set(file, (m.get(file) ?? 0) + count);
+    perShape.set(hit, m);
+  }
 }
 
 const b = Bun as unknown as Record<string, unknown>;

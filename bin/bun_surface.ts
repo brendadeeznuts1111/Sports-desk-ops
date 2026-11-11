@@ -92,6 +92,7 @@ const CHECKS: readonly Check[] = [
     read: () => Bun.readableStreamToArrayBuffer,
   },
   { group: "core", name: "CSRF", read: () => Bun.CSRF.generate },
+  { group: "core", name: "password", read: () => Bun.password.hash },
   {
     group: "core",
     name: "isStandaloneExecutable",

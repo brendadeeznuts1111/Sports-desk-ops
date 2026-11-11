@@ -175,6 +175,14 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-openineditor"
     },
+    "password": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/hashing#bun-password"
+    },
+    "Password": {
+      "documented": true,
+      "link": "https://bun.com/reference/globals/bun/Password"
+    },
     "randomUUIDv7": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-randomuuidv7"
@@ -191,10 +199,6 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-resolvesync"
     },
-    "readableStreamToArrayBuffer": {
-      "documented": true,
-      "link": "https://bun.com/reference/globals/bun/readableStreamToArrayBuffer"
-    },
     "revision": {
       "documented": true,
       "link": "https://bun.com/guides/util/version"
@@ -210,6 +214,18 @@
     "S3File": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/s3#s3file"
+    },
+    "S3FilePresignOptions": {
+      "documented": true,
+      "link": "https://bun.com/reference/globals/bun/S3FilePresignOptions"
+    },
+    "S3ListObjectsOptions": {
+      "documented": true,
+      "link": "https://bun.com/reference/globals/bun/S3ListObjectsOptions"
+    },
+    "S3ListObjectsResponse": {
+      "documented": true,
+      "link": "https://bun.com/reference/globals/bun/S3ListObjectsResponse"
     },
     "S3Options": {
       "documented": true,

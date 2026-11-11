@@ -497,6 +497,27 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["test:tests/bun_s3client_contract.test.ts"],
   },
   {
+    name: "S3FilePresignOptions",
+    kind: "type",
+    subsystem: "storage",
+    heading: "Bun.S3FilePresignOptions (type)",
+    evidence: ["test:tests/bun_s3client_contract.test.ts"],
+  },
+  {
+    name: "S3ListObjectsOptions",
+    kind: "type",
+    subsystem: "storage",
+    heading: "Bun.S3ListObjectsOptions (type)",
+    evidence: ["test:tests/bun_s3client_contract.test.ts"],
+  },
+  {
+    name: "S3ListObjectsResponse",
+    kind: "type",
+    subsystem: "storage",
+    heading: "Bun.S3ListObjectsResponse (type)",
+    evidence: ["test:tests/bun_s3client_contract.test.ts"],
+  },
+  {
     name: "S3Options",
     kind: "type",
     subsystem: "storage",
@@ -597,6 +618,20 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "crypto",
     heading: "Bun.hash",
     evidence: ["probe:crypto.hash"],
+  },
+  {
+    name: "password",
+    kind: "value",
+    subsystem: "crypto",
+    heading: "Bun.password",
+    evidence: ["surface:password", "test:tests/bun_capabilities.test.ts"],
+  },
+  {
+    name: "Password",
+    kind: "type",
+    subsystem: "crypto",
+    heading: "Bun.Password (type)",
+    evidence: ["test:tests/bun_capabilities.test.ts"],
   },
   {
     name: "randomUUIDv7",
@@ -763,52 +798,105 @@ export interface ShapeUsage {
 }
 
 /**
- * Parse each source and collect `Bun.<name>` property accesses and `Bun.<name>`
- * qualified names (type positions). Comments and string literals are ignored by
- * construction — a docs mention is not a call site.
+ * Parse a single TypeScript/JavaScript source file and return per-shape hit counts plus
+ * any dynamic element accesses (`Bun[...]` or `bunNs[...]`).
+ *
+ * Tracks both the `Bun` global namespace (`Bun.<name>`) and the `"bun"` module surface
+ * (`import { x, y as z, type T } from "bun"` and `import * as bunNs from "bun"`), since
+ * `declare module "bun" { export = Bun }` exposes the identical runtime and type surface.
+ * Comments and string literals are ignored by construction.
+ */
+export function scanBunShapeSource(
+  file: string,
+  text: string,
+): {
+  readonly hits: Map<string, number>;
+  readonly elementAccess: string[];
+} {
+  const hits = new Map<string, number>();
+  const elementAccess: string[] = [];
+  const bump = (name: string): void => {
+    if (name === "default" || name === "__esModule") return;
+    hits.set(name, (hits.get(name) ?? 0) + 1);
+  };
+
+  const kind = file.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+  const sf = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    false,
+    kind,
+  );
+
+  const bunNamespaces = new Set<string>(["Bun"]);
+  for (const stmt of sf.statements) {
+    if (
+      !ts.isImportDeclaration(stmt) ||
+      !ts.isStringLiteral(stmt.moduleSpecifier) ||
+      stmt.moduleSpecifier.text !== "bun"
+    ) {
+      continue;
+    }
+    const clause = stmt.importClause;
+    if (!clause) continue;
+    if (clause.name) {
+      bunNamespaces.add(clause.name.text);
+    }
+    const bindings = clause.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      bunNamespaces.add(bindings.name.text);
+    } else if (ts.isNamedImports(bindings)) {
+      for (const el of bindings.elements) {
+        bump((el.propertyName ?? el.name).text);
+      }
+    }
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(node)) {
+      if (
+        ts.isIdentifier(node.expression) &&
+        bunNamespaces.has(node.expression.text)
+      ) {
+        bump(node.name.text);
+      }
+    } else if (ts.isQualifiedName(node)) {
+      if (ts.isIdentifier(node.left) && bunNamespaces.has(node.left.text)) {
+        bump(node.right.text);
+      }
+    } else if (ts.isElementAccessExpression(node)) {
+      if (
+        ts.isIdentifier(node.expression) &&
+        bunNamespaces.has(node.expression.text)
+      ) {
+        elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return { hits, elementAccess };
+}
+
+/**
+ * Parse each source and collect `Bun.<name>` / `import { <name> } from "bun"` value and
+ * type positions. Comments and string literals are ignored by construction.
  */
 export function collectBunShapeUsage(
   sources: ReadonlyMap<string, string>,
 ): ShapeUsage {
   const used = new Map<string, Set<string>>();
   const elementAccess: string[] = [];
-  const note = (name: string, file: string) => {
-    const set = used.get(name) ?? new Set<string>();
-    set.add(file);
-    used.set(name, set);
-  };
   for (const [file, text] of sources) {
-    const kind = file.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS;
-    const sf = ts.createSourceFile(
-      file,
-      text,
-      ts.ScriptTarget.Latest,
-      false,
-      kind,
-    );
-    const visit = (node: ts.Node): void => {
-      if (ts.isPropertyAccessExpression(node)) {
-        if (
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === "Bun"
-        ) {
-          note(node.name.text, file);
-        }
-      } else if (ts.isQualifiedName(node)) {
-        if (ts.isIdentifier(node.left) && node.left.text === "Bun") {
-          note(node.right.text, file);
-        }
-      } else if (ts.isElementAccessExpression(node)) {
-        if (
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === "Bun"
-        ) {
-          elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(sf);
+    const scanned = scanBunShapeSource(file, text);
+    for (const name of scanned.hits.keys()) {
+      const set = used.get(name) ?? new Set<string>();
+      set.add(file);
+      used.set(name, set);
+    }
+    elementAccess.push(...scanned.elementAccess);
   }
   return { used, elementAccess };
 }

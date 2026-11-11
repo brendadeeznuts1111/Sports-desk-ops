@@ -1,4 +1,4 @@
-# Bun shape contracts — the 81 shapes this repository calls
+# Bun shape contracts — the 86 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -159,7 +159,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** value: `boolean` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `bin/bun_surface.ts`, `scripts/wagers_by_state_capture.ts`
 - **Evidence:** `surface:isStandaloneExecutable`
 
 ## Text and terminal rendering
@@ -216,7 +216,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/wrapAnsi)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/render_docs.ts`, `scripts/render_tasks.ts`
+- **Here:** `scripts/render_docs.ts`, `scripts/gslive_wagers_by_state.ts`
 - **Evidence:** `probe:text.width`
 
 #### Bun.sliceAnsi
@@ -375,7 +375,28 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** type-only: declared, no runtime value
-- **Here:** `types/bun-api.d.ts`
+- **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3FilePresignOptions (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3FilePresignOptions)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/r2_s3_client.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3ListObjectsOptions (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3ListObjectsOptions)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/r2_s3_client.ts`
+- **Evidence:** `test:tests/bun_s3client_contract.test.ts`
+
+#### Bun.S3ListObjectsResponse (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/S3ListObjectsResponse)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/r2_s3_client.ts`
 - **Evidence:** `test:tests/bun_s3client_contract.test.ts`
 
 #### Bun.S3Options (type)
@@ -389,7 +410,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** type-only: declared, no runtime value
-- **Here:** `types/bun-api.d.ts`
+- **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_s3client_contract.test.ts`
 
 #### Bun.SQL
@@ -397,7 +418,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/SQL)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (13):** snapshot in tests/bun_shape_members.json
-- **Here:** `lib/customer_index.ts`, `lib/db.ts`
+- **Here:** `lib/customer_index.ts`, `lib/probe_index.ts`
 - **Evidence:** `surface:SQL`, `test:tests/bun_capabilities.test.ts`
 
 #### Bun.sql
@@ -434,7 +455,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `generate`, `verify`
-- **Here:** `bin/bun_surface.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/csrf.ts`
 - **Evidence:** `surface:CSRF`
 
 #### Bun.ArrayBufferSink
@@ -494,6 +515,21 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Members (12):** `adler32`, `cityHash32`, `cityHash64`, `crc32`, `murmur32v2`, `murmur32v3`, `murmur64v2`, `rapidhash`, `wyhash`, `xxHash3`, `xxHash32`, `xxHash64`
 - **Here:** `lib/manager_fetch.ts`, `lib/f402_figure_date_enricher.ts`
 - **Evidence:** `probe:crypto.hash`
+
+#### Bun.password
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/password)
+- **Shape:** value: `object` · writable true · enumerable true
+- **Members (4):** `hash`, `hashSync`, `verify`, `verifySync`
+- **Here:** `bin/bun_surface.ts`, `lib/auth.ts`
+- **Evidence:** `surface:password`, `test:tests/bun_capabilities.test.ts`
+
+#### Bun.Password (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Password)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `lib/auth.ts`
+- **Evidence:** `test:tests/bun_capabilities.test.ts`
 
 #### Bun.randomUUIDv7
 
