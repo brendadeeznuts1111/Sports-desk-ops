@@ -1,0 +1,1 @@
+../../../cli/f402_manager_hierarchy_ingest_cli.ts

@@ -20,7 +20,7 @@
  *   bun run verify:fast --deep               # include type-aware oxlint pass
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, lstatSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -109,7 +109,10 @@ function collectChangedFiles(): string[] {
     const ref = values.base ?? "origin/main...HEAD";
     for (const f of gitQuery(["diff", "--name-only", ref]).lines) set.add(f);
   }
-  return [...set].filter((f) => existsSync(path.join(ROOT, f)));
+  return [...set].filter((f) => {
+    const full = path.join(ROOT, f);
+    return existsSync(full) && !lstatSync(full).isSymbolicLink();
+  });
 }
 
 function inferTestsForFiles(files: string[]): string[] {

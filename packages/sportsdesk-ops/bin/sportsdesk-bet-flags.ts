@@ -1,0 +1,1 @@
+../../../cli/sportsdesk_bet_flags_cli.ts

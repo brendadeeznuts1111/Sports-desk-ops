@@ -2,24 +2,31 @@
 
 Bun CLIs invoked via `bun x <bin>` (linked from `packages/sportsdesk-ops` + root `package.json` `bin` into `node_modules/.bin/`), `bun run <script>`, or `bun run cli/<name>.ts`.
 
-| `bun x` Bin                   | `package.json` Script | File                                                                    |
-| ----------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `bun x sportsdesk`            | `bun run cli`         | `sportsdesk_cli.ts` — primary surveillance / wire / R2 / replay surface |
-| `bun x dx`                    | `bun run dx`          | `../bin/dx` — sandbox-safe operator runner & Cloudflare deploy          |
-| `bun x wrangler`              | `bun run wrangler`    | `../bin/wrangler` — credential-isolated Bun Wrangler runner             |
-| `bun x nsh-desk`              | `bun run nsh`         | `../scripts/nsh_desk_cli.ts` — native shell desk CLI                    |
-| `bun x sportsdesk-ticket`     | `bun run ticket`      | `sportsdesk_ticket_cli.ts`                                              |
-| `bun x sportsdesk-flags`      | `bun run flags`       | `flags.ts`                                                              |
-| `bun x sportsdesk-schema`     | `bun run schema`      | `sportsdesk_schema_cli.ts`                                              |
-| `bun x sportsdesk-replay`     | `bun run replay`      | `sportsdesk_replay_cli.ts`                                              |
-| `bun x sportsdesk-catalog`    | `bun run catalog`     | `sportsdesk_catalog_cli.ts`                                             |
-| `bun x sportsdesk-candidate`  | `bun run candidate`   | `sportsdesk_candidate_cli.ts`                                           |
-| `bun x sportsdesk-settlement` | `bun run settlement`  | `sportsdesk_settlement_cli.ts`                                          |
-| `bun x sportsdesk-combo`      | `bun run combo`       | `sportsdesk_combo_cli.ts`                                               |
-| `bun x sportsdesk-fraud`      | `bun run dx queue`    | `sportsdesk_fraud_cli.ts`                                               |
-| `bun x sportsdesk-autobet`    | `bun run autobet`     | `watchlist_autobet_cli.ts`                                              |
-| `bun x image-meta`            | `bun run image:meta`  | `../bin/image-meta.ts`                                                  |
-| —                             | Layoff risk           | `sportsdesk_layoff_risk_cli.ts`                                         |
+| `bun x` Bin                         | `package.json` Script              | File                                                                    |
+| ----------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+| `bun x sportsdesk`                  | `bun run cli`                      | `sportsdesk_cli.ts` — primary surveillance / wire / R2 / replay surface |
+| `bun x dx`                          | `bun run dx`                       | `../bin/dx` — sandbox-safe operator runner & Cloudflare deploy          |
+| `bun x wrangler`                    | `bun run wrangler`                 | `../bin/wrangler` — credential-isolated Bun Wrangler runner             |
+| `bun x nsh-desk`                    | `bun run nsh`                      | `../scripts/nsh_desk_cli.ts` — native shell desk CLI                    |
+| `bun x sportsdesk-ticket`           | `bun run ticket`                   | `sportsdesk_ticket_cli.ts`                                              |
+| `bun x sportsdesk-flags`            | `bun run flags`                    | `flags.ts`                                                              |
+| `bun x sportsdesk-bet-flags`        | `bun run bet:flags`                | `sportsdesk_bet_flags_cli.ts`                                           |
+| `bun x sportsdesk-layoff-risk`      | `bun run layoff:risk`              | `sportsdesk_layoff_risk_cli.ts`                                         |
+| `bun x sportsdesk-hierarchy-ingest` | `bun run manager:ingest-hierarchy` | `f402_manager_hierarchy_ingest_cli.ts`                                  |
+| `bun x sportsdesk-schema`           | `bun run schema`                   | `sportsdesk_schema_cli.ts`                                              |
+| `bun x sportsdesk-replay`           | `bun run replay`                   | `sportsdesk_replay_cli.ts`                                              |
+| `bun x sportsdesk-catalog`          | `bun run catalog`                  | `sportsdesk_catalog_cli.ts`                                             |
+| `bun x sportsdesk-candidate`        | `bun run candidate`                | `sportsdesk_candidate_cli.ts`                                           |
+| `bun x sportsdesk-settlement`       | `bun run settlement`               | `sportsdesk_settlement_cli.ts`                                          |
+| `bun x sportsdesk-combo`            | `bun run combo`                    | `sportsdesk_combo_cli.ts`                                               |
+| `bun x sportsdesk-fraud`            | `bun run fraud`                    | `sportsdesk_fraud_cli.ts`                                               |
+| `bun x sportsdesk-autobet`          | `bun run autobet`                  | `watchlist_autobet_cli.ts`                                              |
+| `bun x image-meta`                  | `bun run image:meta`               | `../bin/image-meta.ts`                                                  |
+| `bun x blob-formdata`               | `bun run blob:formdata`            | `../bin/blob-formdata.ts`                                               |
+| `bun x xml-parse`                   | `bun run xml:parse`                | `../bin/xml-parse.ts`                                                   |
+| `bun x bun-surface`                 | `bun run bun:surface`              | `../bin/bun_surface.ts`                                                 |
+
+Run `bun run cli:bins` (or `./bin/dx scripts --bins [--json | --yaml]`) to inspect all 21 workspace CLI mappings and verify `node_modules/.bin/` symlink status.
 
 Shared libraries live under `../lib/`; long-running daemons under `../services/`.
 

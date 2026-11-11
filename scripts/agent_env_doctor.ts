@@ -176,6 +176,27 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
     });
   }
 
+  const requiredBins = ["dx", "sportsdesk", "wrangler", "nsh-desk", "oxlint"];
+  const binDir = path.join(nodeModules, ".bin");
+  const missingBins = requiredBins.filter(
+    (name) => !exists(path.join(binDir, name)),
+  );
+  checks.push({
+    id: "cli-bins",
+    status: missingBins.length === 0 ? "ok" : "warn",
+    title:
+      missingBins.length === 0
+        ? "workspace bun x CLI bins linked in node_modules/.bin"
+        : `node_modules/.bin missing ${missingBins.join(", ")}`,
+    ...(missingBins.length === 0
+      ? {}
+      : {
+          detail:
+            "bun x <cli> and oxlint gates expect packages/sportsdesk-ops linked",
+          fix: "./bin/dx exec bun-deps install   # or: bun install --frozen-lockfile",
+        }),
+  });
+
   const book = path.join(root, "enriched_customers_full.json");
   const mainBook =
     main === null ? null : path.join(main, "enriched_customers_full.json");

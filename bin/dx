@@ -191,7 +191,7 @@ done
 
 # Every command `dx` dispatches itself. Keep in step with the case below (`dx_commands_check`
 # in tests/dx_cli.test.ts fails when they drift) and with `help`.
-DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
+DX_COMMANDS="help status setup scripts run monitor live-bets iptracker modes gslive docs api-docs api stale profile combo bridge crossdomain shot session screenshot image-meta assets bun deps blob-formdata xml-parse fetch-config fetch-i18n fetch-common fetch-live-data fetch-report-status fetch-report-periods wagers-by-state wagers-by-state-live ticket flags bet-flags layoff-risk queue backtest poll watch pipeline stage deploy ship exec enrich taxonomy edge shadow-price nsh worktrees"
 
 # dx_bun_run <script_or_file> [args...]: fast `bun run` when DX_BUN_FLAGS is unset; otherwise
 # delegates through `dx_run_control.ts` so every flag in DX_BUN_FLAGS is validated against live
@@ -296,7 +296,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx status                 Measured environment: git, R2/Pages credentials, edge probe
                                     (DX_STATUS_OFFLINE=1 skips the network probe)
     ./bin/dx setup [--replace]      Report home links (~/.zshrc etc.); --replace backs up and links
-    ./bin/dx scripts [filter]       Group the package.json scripts by prefix; filter by substring
+    ./bin/dx scripts [filter|--bins] Group package.json scripts by prefix, or list bun x CLI bins (--bins)
     ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
     ./bin/dx run [flags] <target>   Controlled Bun runner (connects live `bun run --help` + presets)
     ./bin/dx monitor [flags]        Monitor Bun processes, daemon /health + /api/v2/live-bets, profiles
@@ -331,6 +331,8 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx flags --review-report   Sampled rule precision for a review run
     ./bin/dx flags --review-status   Reviewed vs remaining for a run
     ./bin/dx flags --review-export --format=csv   Reviewer tracker
+    ./bin/dx bet-flags <cmd>        Incoming-bet YAML rules, scan, explain, locate & alert ledger
+    ./bin/dx layoff-risk <cmd>      Cross-market parlay & layoff risk scanner (scan|seed|daemon)
     ./bin/dx queue [--limit N]      Ranked triage queue (flags, findings, model score, rule evidence, bets)
     ./bin/dx queue build --dry-run  Readiness gate: prints blockers and exits 1; no queue rows
 
@@ -361,6 +363,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx assets [--write] [--json|--yaml]
                                     Audit & optimize repo image assets with Bun.file().image() & WebP siblings
     ./bin/dx blob-formdata <file>   Parse a blob as FormData and print JSON (or '-' for stdin)
+    ./bin/dx xml-parse <file>       Parse XML via Bun.XML as JSON or round-trip XML (or '-' for stdin)
     ./bin/dx enrich --figure=<path> [--ticker=<path>] [--output=<path>] [--format=inspect|jsonl|summary] [--inspect]
                                     Stream and join live ticker wagers with settled getWagersByFigureDate
     ./bin/dx taxonomy [--mode=CP|CPS|CPV|G] [--period=-1..6] [--engine=native|full] [--sqlite=<path>] [--format=inspect|table|json] [--inspect]
@@ -615,6 +618,10 @@ VERSION_HELP
     cd "$REPO_ROOT"
     exec bun bin/blob-formdata.ts "$@"
     ;;
+  xml-parse)
+    cd "$REPO_ROOT"
+    exec bun bin/xml-parse.ts "$@"
+    ;;
   fetch-config)
     cd "$REPO_ROOT"
     dx_bun_run scripts/fetch-config.ts "$@"
@@ -654,6 +661,14 @@ VERSION_HELP
   flags)
     cd "$REPO_ROOT"
     dx_bun_run cli/flags.ts "$@"
+    ;;
+  bet-flags)
+    cd "$REPO_ROOT"
+    dx_bun_run cli/sportsdesk_bet_flags_cli.ts "$@"
+    ;;
+  layoff-risk)
+    cd "$REPO_ROOT"
+    dx_bun_run cli/sportsdesk_layoff_risk_cli.ts "$@"
     ;;
   queue)
     cd "$REPO_ROOT"

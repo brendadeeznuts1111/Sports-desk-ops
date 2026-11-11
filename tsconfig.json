@@ -27,6 +27,7 @@
     "node_modules",
     "reports",
     "Scratch",
+    "packages/sportsdesk-ops/bin",
     "packages/nsh-desk/.nsh",
     "packages/nsh-desk/components",
     "packages/nsh-desk/store.ts",

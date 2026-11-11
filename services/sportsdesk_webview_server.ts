@@ -1662,7 +1662,7 @@ export function startServer(options?: ServerOptions) {
           }
 
           if (wantsMeta) {
-            return buildLogoMetaResponse(name, logo, width, url, cors);
+            return await buildLogoMetaResponse(name, logo, width, url, cors);
           }
 
           return new Response(logo.bytes, {
