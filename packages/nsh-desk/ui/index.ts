@@ -25,6 +25,15 @@ export {
 } from "./DataView";
 export { DeskDialog, type DeskDialogProps } from "./Dialog";
 export {
+  DeskInput,
+  DeskSelect,
+  DeskSheet,
+  type DeskInputProps,
+  type DeskSelectProps,
+  type DeskSheetProps,
+  type SelectItem,
+} from "./Field";
+export {
   DeskMenu,
   DeskMenuItem,
   DeskMenuSeparator,
@@ -36,6 +45,32 @@ export {
   type SegmentedTabItem,
   type SegmentedTabsProps,
 } from "./SegmentedTabs";
+export {
+  createCalmRange,
+  DayRangeBar,
+  DepthChartCanvas,
+  LiveDot,
+  MarketChartCanvas,
+  OrderToastBanner,
+  RangesDumbbellCanvas,
+  SparklineCanvas,
+  SpringBar,
+  StatGrid,
+  type DayRangeBarProps,
+  type DepthChartCanvasProps,
+  type DepthLevelItem,
+  type LiveDotProps,
+  type MarketChartCanvasProps,
+  type MarketChartPoint,
+  type OrderToastBannerProps,
+  type RangeHorizonItem,
+  type RangesDumbbellCanvasProps,
+  type SparklineCanvasProps,
+  type SpringBarProps,
+  type SpringBarTone,
+  type StatCellItem,
+  type StatGridProps,
+} from "./StockPrimitives";
 export {
   Badge,
   SectionHeader,

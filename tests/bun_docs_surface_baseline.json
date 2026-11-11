@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-04T23:41:21.782Z",
+  "generatedAt": "2026-11-11T05:18:13.640Z",
   "runtime": "Bun 1.4.4",
   "shapes": {
     "$": {
@@ -131,6 +131,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/image"
     },
+    "Import": {
+      "documented": true,
+      "link": "https://bun.com/docs/lint/rules/bun/no-eager-dynamic-import"
+    },
     "ImportKind": {
       "documented": true,
       "link": "https://bun.com/docs/bundler#logs-and-errors"
@@ -177,23 +181,23 @@
     },
     "password": {
       "documented": true,
-      "link": "https://bun.com/docs/runtime/hashing#bun-password"
+      "link": "https://bun.com/guides/util/hash-a-password"
     },
     "Password": {
       "documented": true,
-      "link": "https://bun.com/reference/globals/bun/Password"
+      "link": "https://bun.com/guides/util/hash-a-password"
     },
     "randomUUIDv7": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-randomuuidv7"
     },
+    "readableStreamToArrayBuffer": {
+      "documented": true,
+      "link": "https://bun.com/guides/streams/to-arraybuffer"
+    },
     "RedisClient": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.2.13#bun-redisclient-getbuffer-method"
-    },
-    "readableStreamToArrayBuffer": {
-      "documented": true,
-      "link": "https://bun.com/reference/globals/bun/readableStreamToArrayBuffer"
     },
     "resolveSync": {
       "documented": true,
@@ -216,16 +220,16 @@
       "link": "https://bun.com/docs/runtime/s3#s3file"
     },
     "S3FilePresignOptions": {
-      "documented": true,
-      "link": "https://bun.com/reference/globals/bun/S3FilePresignOptions"
+      "documented": false,
+      "link": null
     },
     "S3ListObjectsOptions": {
-      "documented": true,
-      "link": "https://bun.com/reference/globals/bun/S3ListObjectsOptions"
+      "documented": false,
+      "link": null
     },
     "S3ListObjectsResponse": {
-      "documented": true,
-      "link": "https://bun.com/reference/globals/bun/S3ListObjectsResponse"
+      "documented": false,
+      "link": null
     },
     "S3Options": {
       "documented": true,
@@ -273,7 +277,7 @@
     },
     "sql": {
       "documented": true,
-      "link": "https://bun.com/docs/runtime/sql"
+      "link": "https://bun.com/docs/runtime/sql#runtime-preconnection"
     },
     "SQL": {
       "documented": true,
@@ -291,6 +295,10 @@
       "documented": true,
       "link": "https://bun.com/docs/runtime/utils#bun-stringwidth"
     },
+    "stripANSI": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/utils#bun-stripansi"
+    },
     "Terminal": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/child-process#reusable-terminal"
@@ -298,6 +306,10 @@
     "TOML": {
       "documented": true,
       "link": "https://bun.com/docs/runtime/toml"
+    },
+    "Transpiler": {
+      "documented": true,
+      "link": "https://bun.com/docs/runtime/transpiler"
     },
     "udpSocket": {
       "documented": true,

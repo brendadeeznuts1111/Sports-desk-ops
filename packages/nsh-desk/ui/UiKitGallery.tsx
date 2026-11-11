@@ -1,7 +1,15 @@
 import { colorScheme, setColorScheme, signal, Text, View, type JSX } from "nsh";
 import { DeskButton, DeskIconButton } from "./Button";
 import { DeskDialog } from "./Dialog";
+import { DeskInput, DeskSelect } from "./Field";
 import { SegmentedTabs, type SegmentedTabItem } from "./SegmentedTabs";
+import {
+  DayRangeBar,
+  LiveDot,
+  SparklineCanvas,
+  SpringBar,
+  StatGrid,
+} from "./StockPrimitives";
 import {
   Badge,
   SectionHeader,
@@ -25,6 +33,23 @@ const DEMO_TABS: readonly SegmentedTabItem<"signals" | "kpis" | "sinks">[] = [
   { id: "sinks", label: "Sinks" },
 ];
 
+const DEMO_SELECT_ITEMS = [
+  { value: "auto", title: "Source: auto" },
+  { value: "file", title: "Source: file" },
+  { value: "live", title: "Source: live" },
+];
+
+const DEMO_STATS = [
+  { label: "Open", value: "44.2¢" },
+  { label: "Prev close", value: "42.3¢" },
+  { label: "Avg price", value: "45.1¢" },
+  { label: "Amplitude", value: "9.9%" },
+  { label: "Volume", value: "2 accts" },
+  { label: "Turnover", value: "$27.7K", tone: "positive" as const },
+  { label: "Book high", value: "48.6¢" },
+  { label: "Book low", value: "41.8¢" },
+];
+
 /**
  * Interactive showcase of every `packages/nsh-desk/ui/` control across its
  * variants, sizes, and states in both Light and Dark appearances, per
@@ -37,6 +62,8 @@ export function UiKitGalleryDialog(props: {
   const appearance = signal<AppearanceChoice>("system");
   const sampleSwitch = signal(true);
   const sampleTab = signal<"signals" | "kpis" | "sinks">("signals");
+  const sampleInput = signal("BILLY666");
+  const sampleSource = signal<string>("auto");
   const splitPressDownCount = signal(0);
 
   const applyAppearance = (next: AppearanceChoice) => {
@@ -119,8 +146,24 @@ export function UiKitGalleryDialog(props: {
       <Separator />
 
       <View class="gap-2">
-        <SectionHeader title="Switch & sliding segmented tabs" />
-        <View class="flex-row flex-wrap items-center justify-between gap-3">
+        <SectionHeader title="Inputs, Select, Switch & sliding segmented tabs" />
+        <View class="flex-row flex-wrap items-center gap-2.5">
+          <DeskInput
+            accessibilityLabel="Sample agent search input"
+            value={sampleInput()}
+            placeholder="Agent ID…"
+            mono={true}
+            class="w-40"
+            onChangeText={(next) => sampleInput.set(next)}
+          />
+          <DeskSelect
+            accessibilityLabel="Sample source select"
+            items={DEMO_SELECT_ITEMS}
+            value={sampleSource()}
+            onValueChange={(next) => {
+              if (next !== null) sampleSource.set(next);
+            }}
+          />
           <DeskSwitch
             label={sampleSwitch() ? "Sample toggle: on" : "Sample toggle: off"}
             checked={sampleSwitch()}
@@ -133,6 +176,49 @@ export function UiKitGalleryDialog(props: {
             onChange={(next) => sampleTab.set(next)}
           />
         </View>
+      </View>
+
+      <Separator />
+
+      <View class="gap-2">
+        <SectionHeader title="Stocks terminal primitives (Canvas + Spring)" />
+        <Surface variant="card" class="gap-3">
+          <View class="flex-row items-center justify-between gap-3">
+            <View class="flex-row items-center gap-2">
+              <LiveDot live={sampleSwitch()} />
+              <Text class="font-mono text-xs font-semibold text-foreground">
+                NBA·LAL@BOS · 46.5¢ (+4.2¢)
+              </Text>
+            </View>
+            <SparklineCanvas
+              values={[42.3, 43.1, 42.8, 44.6, 45.2, 46.5]}
+              prevClose={42.3}
+              live={sampleSwitch()}
+            />
+          </View>
+          <DayRangeBar
+            low={41.8}
+            high={48.6}
+            prevClose={42.3}
+            last={46.5}
+            formatValue={(v) => `${v.toFixed(1)}¢`}
+          />
+          <View class="flex-row items-center gap-2">
+            <SpringBar
+              ratio={0.64}
+              from="right"
+              tone="positive"
+              class="flex-1"
+            />
+            <SpringBar
+              ratio={0.36}
+              from="left"
+              tone="negative"
+              class="flex-1"
+            />
+          </View>
+          <StatGrid items={DEMO_STATS} />
+        </Surface>
       </View>
 
       <Separator />

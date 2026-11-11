@@ -1,4 +1,4 @@
-# Bun shape contracts — the 86 shapes this repository calls
+# Bun shape contracts — the 89 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -226,6 +226,13 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:sliceAnsi`
 
+#### Bun.stripANSI
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/stripANSI)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Here:** `bin/bun_surface.ts`, `scripts/nsh_desk_cli.ts`
+- **Evidence:** `surface:stripANSI`, `test:tests/nsh_desk_contract.test.ts`
+
 ## Data formats and parsing
 
 - `Bun.JSON5` / `Bun.TOML` / `Bun.YAML` / `Bun.XML` / `Bun.JSONL` each parse a tiny document in-process — `data.parse`; `Bun.JSONC` also accepts comments — `data.json`.
@@ -319,13 +326,26 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/nsh_desk_cli.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:semver.satisfies`, `probe:data.semver`
 
-#### Bun.ImportKind (type, declared-only)
+#### Bun.Import (type)
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Import)
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `scripts/nsh_desk_cli.ts`
+- **Evidence:** `test:tests/bun_shapes_types.test-d.ts`, `test:tests/nsh_desk_contract.test.ts`
+
+#### Bun.ImportKind (type)
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/ImportKind)
 - **Shape:** type-only: declared, no runtime value
-- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used
-- **Here:** no call site
-- **Evidence:** `test:tests/bun_shapes_types.test-d.ts`
+- **Here:** `scripts/nsh_desk_cli.ts`
+- **Evidence:** `test:tests/bun_shapes_types.test-d.ts`, `test:tests/nsh_desk_contract.test.ts`
+
+#### Bun.Transpiler
+
+- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Transpiler)
+- **Shape:** value: `function` · writable true · enumerable true
+- **Here:** `bin/bun_surface.ts`, `scripts/nsh_desk_cli.ts`
+- **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`
 
 ## Storage and scheduling
 

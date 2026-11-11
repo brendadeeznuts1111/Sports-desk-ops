@@ -23,10 +23,11 @@ export function Surface(props: SurfaceProps): JSX.Element {
   );
 }
 
-export type BadgeTone = "neutral" | "positive" | "warning" | "danger";
+export type BadgeTone = "neutral" | "info" | "positive" | "warning" | "danger";
 
 const BADGE_CLASSES: Record<BadgeTone, string> = {
   neutral: "border-border bg-muted text-muted-foreground",
+  info: "border-primary/35 bg-primary/12 text-primary",
   positive: "border-positive/35 bg-positive/12 text-positive",
   warning: "border-warning/40 bg-warning/15 text-warning",
   danger: "border-destructive/40 bg-destructive/12 text-destructive",
@@ -34,6 +35,7 @@ const BADGE_CLASSES: Record<BadgeTone, string> = {
 
 const BADGE_TEXT_CLASSES: Record<BadgeTone, string> = {
   neutral: "font-mono text-xs font-medium text-muted-foreground",
+  info: "font-mono text-xs font-semibold text-primary",
   positive: "font-mono text-xs font-semibold text-positive",
   warning: "font-mono text-xs font-semibold text-warning",
   danger: "font-mono text-xs font-semibold text-destructive",
@@ -62,17 +64,30 @@ export function Badge(props: BadgeProps): JSX.Element {
 
 export function SectionHeader(props: {
   title: string;
-  trailing?: string;
+  subtitle?: string;
+  trailing?: string | JSX.Element;
 }): JSX.Element {
   return (
-    <View class="flex-row items-baseline justify-between gap-2">
-      <Text role="header" class="text-xs font-semibold text-muted-foreground">
-        {props.title}
-      </Text>
-      <If when={props.trailing}>
-        <Text class="font-mono text-xs tabular-nums text-muted-foreground">
-          {props.trailing}
+    <View class="flex-row flex-wrap items-center justify-between gap-2">
+      <View class="min-w-0 flex-1 gap-0.5">
+        <Text role="header" class="text-xs font-semibold text-muted-foreground">
+          {props.title}
         </Text>
+        <If when={props.subtitle}>
+          <Text class="text-xs text-muted-foreground">{props.subtitle}</Text>
+        </If>
+      </View>
+      <If when={typeof props.trailing === "string"}>
+        <Text class="font-mono text-xs tabular-nums text-muted-foreground">
+          {typeof props.trailing === "string" ? props.trailing : ""}
+        </Text>
+      </If>
+      <If
+        when={
+          props.trailing !== undefined && typeof props.trailing !== "string"
+        }
+      >
+        <View class="flex-row items-center">{props.trailing}</View>
       </If>
     </View>
   );

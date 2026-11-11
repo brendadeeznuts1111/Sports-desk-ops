@@ -101,6 +101,8 @@ const CHECKS: readonly Check[] = [
     read: () => Bun.isStandaloneExecutable,
   },
   { group: "core", name: "sliceAnsi", read: () => Bun.sliceAnsi },
+  { group: "core", name: "stripANSI", read: () => Bun.stripANSI },
+  { group: "core", name: "Transpiler", read: () => Bun.Transpiler },
   { group: "core", name: "TOML", read: () => Bun.TOML.parse },
   { group: "core", name: "XML", read: () => Bun.XML.parse },
   { group: "core", name: "YAML", read: () => Bun.YAML.parse },

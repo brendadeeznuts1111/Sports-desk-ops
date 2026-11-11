@@ -1,8 +1,8 @@
 {
   "name": "Sportsdesk Desk",
   "id": "ops.sportsdesk.desk",
-  "version": "0.1.0",
-  "build": 1,
+  "version": "0.2.0",
+  "build": 2,
   "minRuntime": "0.4.0",
   "theme": "theme.json",
   "appearance": "system",
@@ -12,12 +12,20 @@
   "capabilities": {
     "network": {
       "http": [
-        { "host": "127.0.0.1", "methods": ["GET"], "schemes": ["http"] },
-        { "host": "localhost", "methods": ["GET"], "schemes": ["http"] }
+        {
+          "host": "127.0.0.1",
+          "methods": ["GET", "HEAD", "POST"],
+          "schemes": ["http"]
+        },
+        {
+          "host": "localhost",
+          "methods": ["GET", "HEAD", "POST"],
+          "schemes": ["http"]
+        }
       ]
     },
     "process": {
-      "env": ["SPORTSDESK_ORIGIN"]
+      "env": ["SPORTSDESK_ORIGIN", "SPORTSDESK_ADMIN_TOKEN"]
     },
     "clipboard": true,
     "statusBar": true

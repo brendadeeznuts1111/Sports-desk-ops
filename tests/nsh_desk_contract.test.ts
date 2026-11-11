@@ -10,9 +10,23 @@ import {
   buildScoreboardRows,
   buildSignalArenaIndex,
   buildSignalArenaView,
+  computeMarketComposite,
+  DESK_ENDPOINT_CATALOG,
   DESK_PREFS_STORAGE_KEY,
   defaultWorkspacePrefs,
   extractApiFailureCause,
+  filterMarketInstruments,
+  PARSER_WORKBENCH_PRESETS,
+  parseAnalysisPayload,
+  parseCustomerProfilePayload,
+  parseCustomerRatingPayload,
+  parseDnsTelemetryPayload,
+  parseExecutionActionPayload,
+  parseExecutionPlanPayload,
+  parseGameAdminBoardPayload,
+  parseGovernancePayload,
+  parseGraphFeedPayload,
+  parseGraphStreamSample,
   parseKalshiPayload,
   parseKpisPayload,
   parseScoreboardPayload,
@@ -20,6 +34,7 @@ import {
   resolveDeskOrigin,
   serializeWorkspacePrefs,
   sortSignalArenaIndex,
+  synthesizeMarketInstruments,
 } from "../packages/nsh-desk/desk_model.ts";
 
 describe("packages/nsh-desk model and capability contracts", () => {
@@ -216,10 +231,21 @@ describe("packages/nsh-desk model and capability contracts", () => {
     expect(manifest.minRuntime).toBe("0.4.0");
     expect(manifest.capabilities.network.hosts).toBeUndefined();
     expect(manifest.capabilities.network.http).toEqual([
-      { host: "127.0.0.1", methods: ["GET"], schemes: ["http"] },
-      { host: "localhost", methods: ["GET"], schemes: ["http"] },
+      {
+        host: "127.0.0.1",
+        methods: ["GET", "HEAD", "POST"],
+        schemes: ["http"],
+      },
+      {
+        host: "localhost",
+        methods: ["GET", "HEAD", "POST"],
+        schemes: ["http"],
+      },
     ]);
-    expect(manifest.capabilities.process.env).toEqual(["SPORTSDESK_ORIGIN"]);
+    expect(manifest.capabilities.process.env).toEqual([
+      "SPORTSDESK_ORIGIN",
+      "SPORTSDESK_ADMIN_TOKEN",
+    ]);
   });
 
   test("enforces nsh-design-guides ui layer boundary, semantic tokens, and >=12pt type scale", async () => {
@@ -410,7 +436,12 @@ describe("packages/nsh-desk model and capability contracts", () => {
     expect(storeSrc).toContain("export const DeskStoreContext = context<");
     expect(storeSrc).toContain("export function useDeskStore(");
 
-    for (const uiWrapper of ["Button.tsx", "Switch.tsx", "Surface.tsx"]) {
+    for (const uiWrapper of [
+      "Button.tsx",
+      "Switch.tsx",
+      "Surface.tsx",
+      "Field.tsx",
+    ]) {
       const uiSrc = await Bun.file(path.join(pkgDir, "ui", uiWrapper)).text();
       expect(uiSrc).toMatch(/\bsplit\s*\(\s*props\b/);
       expect(uiSrc).not.toMatch(/const\s*\{[^}]*\.\.\.rest[^}]*\}\s*=\s*props/);
@@ -430,8 +461,8 @@ describe("packages/nsh-desk model and capability contracts", () => {
         useDeskStoreCount += 1;
       }
     }
-    expect(compCount).toBeGreaterThanOrEqual(7);
-    expect(useDeskStoreCount).toBe(6);
+    expect(compCount).toBeGreaterThanOrEqual(13);
+    expect(useDeskStoreCount).toBe(12);
   });
 
   test("round-trips workspace Storage preferences and builds signal-honest diagnostics JSON", () => {
@@ -723,5 +754,280 @@ describe("packages/nsh-desk model and capability contracts", () => {
       "yaml",
     );
     expect(YAML.parse(yamlText)).toEqual(sampleReport);
+  });
+
+  test("DESK_ENDPOINT_CATALOG achieves 100% route parity with services/sportsdesk_webview_server.ts", async () => {
+    expect(DESK_ENDPOINT_CATALOG.length).toBe(50);
+    expect(PARSER_WORKBENCH_PRESETS.length).toBe(9);
+
+    const registeredPaths = new Set<string>();
+    for (const entry of DESK_ENDPOINT_CATALOG) {
+      registeredPaths.add(entry.path);
+      for (const alias of entry.aliases) {
+        registeredPaths.add(alias);
+      }
+    }
+
+    const serverSrc = await Bun.file(
+      path.join(
+        import.meta.dir,
+        "..",
+        "services",
+        "sportsdesk_webview_server.ts",
+      ),
+    ).text();
+    const routeMatches = [
+      ...serverSrc.matchAll(
+        /pathname\s*===\s*"([^"]+)"|pathname\.startsWith\(\s*"([^"]+)"\s*\)/g,
+      ),
+    ]
+      .map((m) => m[1] ?? m[2])
+      .filter((r): r is string => typeof r === "string");
+
+    const dataRoutes = [...new Set(routeMatches)].filter(
+      (route) =>
+        route.startsWith("/api/") ||
+        route === "/health" ||
+        route === "/status.json" ||
+        route === "/governance" ||
+        route === "/governance.json" ||
+        route === "/graph-live-feed.json",
+    );
+
+    expect(dataRoutes.length).toBeGreaterThanOrEqual(40);
+    const missing = dataRoutes.filter((r) => !registeredPaths.has(r));
+    expect(missing).toEqual([]);
+  });
+
+  test("synthesizes Stocks market instruments, Prev close/Turnover quotes, 10-level ladders, and multi-plane parsers", () => {
+    const kalshi = parseKalshiPayload({
+      kalshi: { ok: true, degraded: false },
+      signals: [
+        {
+          id: "NBA-BOS_LAL-1q_total-55.5-over",
+          league: "NBA",
+          marketKind: "1q_total",
+          teams: ["LAL", "BOS"],
+          line: 55.5,
+          overUnder: "over",
+          distinctAccounts: 3,
+          riskUsd: 27700,
+          fairProb: 0.54,
+          confidence: 72,
+          kalshi: {
+            edgeBps: 380,
+            verdict: "actionable",
+            reason: "tight spread",
+          },
+          accounts: [
+            {
+              login: "MJ102",
+              agentId: "MJ2026",
+              archetype: "Whale",
+              riskUsd: 16200,
+            },
+          ],
+        },
+        {
+          id: "NHL-EDM_VAN-total-6.5-under",
+          league: "NHL",
+          marketKind: "total",
+          teams: ["EDM", "VAN"],
+          line: 6.5,
+          overUnder: "under",
+          distinctAccounts: 1,
+          riskUsd: 4200,
+          fairProb: 0.44,
+          confidence: 51,
+          kalshi: { edgeBps: -190, verdict: "pass", reason: "wide spread" },
+          accounts: [],
+        },
+      ],
+    });
+
+    const graphFeed = parseGraphFeedPayload({
+      schemaVersion: 3,
+      dataMode: "LIVE",
+      activeSyndicateWalletsCount: 2,
+      configuredWalletsCount: 4,
+      totalOpenLegsCount: 3,
+      totalOpenExposureUsd: 31900,
+      pendingBets: [
+        {
+          id: "p1",
+          login: "WHALE77",
+          league: "NBA",
+          selection: "BOS Over 55.5",
+          riskUsd: 12000,
+          sharpScore: 90,
+        },
+      ],
+      walletProfiles: [
+        { label: "WHALE77", archetype: "Syndicate", openExposureUsd: 20000 },
+      ],
+      perOfficeIpTrackerClusters: [
+        {
+          clusterId: "C1",
+          office: "BILLY666",
+          accountCount: 2,
+          ipPrefix: "10.0.0.0/24",
+        },
+      ],
+      backtest4Wk: {
+        weeks: [
+          { week: "W1", estimatedSavingsUsd: 8400, holdImprovementBps: 60 },
+        ],
+      },
+    });
+
+    const instruments = synthesizeMarketInstruments(kalshi.signals, graphFeed);
+    expect(instruments.length).toBe(2);
+    const first = instruments[0]!;
+    expect(first.quote.last).toBeCloseTo(54, 1);
+    expect(first.quote.prevClose).toBeLessThan(first.quote.last);
+    expect(first.quote.riskUsd).toBe(27700);
+    expect(first.book.bids.length).toBe(10);
+    expect(first.book.asks.length).toBe(10);
+    expect(first.periods["intraday"].length).toBeGreaterThanOrEqual(16);
+    expect(first.trades.some((t) => t.isBlock)).toBe(true);
+
+    expect(
+      filterMarketInstruments(instruments, "gainers").map((m) => m.id),
+    ).toEqual(["NBA-BOS_LAL-1q_total-55.5-over"]);
+    expect(
+      filterMarketInstruments(instruments, "losers").map((m) => m.id),
+    ).toEqual(["NHL-EDM_VAN-total-6.5-under"]);
+
+    const composite = computeMarketComposite(instruments);
+    expect(composite.advancers).toBe(1);
+    expect(composite.decliners).toBe(1);
+    expect(composite.totalRiskUsd).toBe(31900);
+    expect(composite.leagues.length).toBe(2);
+
+    const plan = parseExecutionPlanPayload({
+      mode: "paper",
+      style: "maker",
+      killSwitch: { active: false },
+      policy: { maxOrderNotionalUsd: 2500, maxDailyNotionalUsd: 10000 },
+      risk: { remainingDailyNotionalUsd: 7500 },
+      decisions: [
+        { signalId: "s1", side: "yes", contracts: 100, notionalUsd: 54 },
+      ],
+      paper: { totalFills: 2 },
+    });
+    expect(plan.mode).toBe("paper");
+    expect(plan.decisions.length).toBe(1);
+
+    const execRes = parseExecutionActionPayload({
+      success: true,
+      mode: "paper",
+      style: "auto",
+      filledCount: 1,
+    });
+    expect(execRes.filledCount).toBe(1);
+
+    const board = parseGameAdminBoardPayload({
+      source: "live",
+      window: 24,
+      games: [
+        {
+          gameNum: 540,
+          league: "NBA",
+          teams: ["LAL", "BOS"],
+          spread: ["-3.5"],
+        },
+      ],
+    });
+    expect(board.games[0]?.gameNum).toBe("540");
+
+    const sse = parseGraphStreamSample(
+      'event: graph.tick\ndata: {"legs":3}\n\n',
+    );
+    expect(sse).toEqual({
+      eventCount: 1,
+      firstEventType: "graph.tick",
+      dataPreview: '{"legs":3}',
+    });
+
+    const analysis = parseAnalysisPayload({
+      available: true,
+      rows: [
+        {
+          customerId: "DK121",
+          agentId: "BILLY666",
+          wagers: 4,
+          riskCents: 150000,
+          netCents: 45000,
+        },
+      ],
+    });
+    expect(analysis.rows[0]?.riskUsd).toBe("$1500");
+    expect(analysis.rows[0]?.netUsd).toBe("$450");
+
+    expect(
+      parseCustomerProfilePayload({
+        profile: {
+          customerId: "DK121",
+          agentId: "BILLY666",
+          lifetime: { netUsd: 1200 },
+        },
+      }).id,
+    ).toBe("DK121");
+    expect(
+      parseCustomerRatingPayload({
+        rating: {
+          customerId: "DK121",
+          tier: "sharp",
+          kellyMetrics: { recommendedFraction: 0.2 },
+        },
+      }).kellyFraction,
+    ).toBe(0.2);
+    expect(
+      parseDnsTelemetryPayload({ telemetry: { size: 8, hitRatePercent: 91 } })
+        .hitRatePercent,
+    ).toBe(91);
+    expect(
+      parseGovernancePayload({
+        referenceDate: "2026-11-10",
+        summary: { readyGates: 5, totalGates: 6 },
+        oracleGates: [{ id: "G1", name: "Boot", status: "ready" }],
+      }).readyGates,
+    ).toBe(5);
+  });
+
+  test("Bun.Transpiler & Bun.stripANSI auditNshModuleGraph enforces desk_model purity, ui/ boundary, and QuickJS isolation", async () => {
+    expect(Bun.stripANSI("\u001b[31merror:\u001b[0m bad")).toBe("error: bad");
+
+    const { auditNshModuleGraph } = await import("../scripts/nsh_desk_cli.ts");
+    const realAppDir = path.join(import.meta.dir, "..", "packages", "nsh-desk");
+    const cleanAudit = await auditNshModuleGraph(realAppDir);
+    expect(cleanAudit.violations).toEqual([]);
+    expect(cleanAudit.scannedFiles).toBeGreaterThanOrEqual(25);
+    expect(cleanAudit.importKinds["import-statement"]).toBeGreaterThan(20);
+
+    const badDir = await mkdtemp(path.join(tmpdir(), "nsh-bad-graph-"));
+    try {
+      await Bun.write(
+        path.join(badDir, "desk_model.ts"),
+        'import { View } from "nsh";\nexport const x = View;\n',
+      );
+      await Bun.write(
+        path.join(badDir, "components", "Bad.tsx"),
+        'import { Button } from "nsh/base";\nimport { YAML } from "bun";\nexport const B = () => [Button, YAML];\n',
+      );
+      const badAudit = await auditNshModuleGraph(badDir);
+      expect(badAudit.violations.length).toBe(3);
+      expect(badAudit.violations.join("\n")).toContain(
+        "desk_model.ts must have 0 runtime imports",
+      );
+      expect(badAudit.violations.join("\n")).toContain(
+        "imports 'nsh/base' directly outside ui/ layer",
+      );
+      expect(badAudit.violations.join("\n")).toContain(
+        "imports host-only module 'bun'",
+      );
+    } finally {
+      await rm(badDir, { recursive: true, force: true });
+    }
   });
 });

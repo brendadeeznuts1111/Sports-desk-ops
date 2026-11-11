@@ -8,11 +8,12 @@
  *   - `Bun.semver.satisfies(...)` / `Bun.semver.order(...)` runtime version checks
  *   - `Bun.CryptoHasher("sha256")` + `Bun.Glob` build/package artifact digests
  *   - `Bun.stripANSI(...)` output stream parser (`✓`, `→`, `•`, `warn`, `error`, logs)
+ *   - `Bun.Transpiler` (`scanImports`) static NSH guest/UI module-graph boundary audit
  *   - `[Bun.inspect.custom]` + `Bun.inspect.table(...)` + `Bun.stringWidth` (`padDisplay`)
  *   - `import { YAML } from "bun"` (`YAML.parse` skill frontmatter & `YAML.stringify` `--yaml` reports)
  */
 
-import { YAML } from "bun";
+import { Transpiler, YAML, type Import, type ImportKind } from "bun";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -234,8 +235,106 @@ export const PINNED_NSH_RELEASE = {
 } as const;
 
 function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  return Bun.stripANSI(text);
+}
+
+export interface NshModuleGraphAudit {
+  readonly scannedFiles: number;
+  readonly totalImports: number;
+  readonly importKinds: Readonly<Record<string, number>>;
+  readonly violations: readonly string[];
+}
+
+const FORBIDDEN_GUEST_SPECIFIERS = new Set(["bun", "node:fs", "fs"]);
+const UI_ONLY_NSH_SPECIFIERS = new Set([
+  "nsh/base",
+  "nsh/base/plot",
+  "nsh/desktop",
+]);
+
+/**
+ * Scans every non-test `.ts`/`.tsx` source file in `packages/nsh-desk` using
+ * `Bun.Transpiler` (`scanImports`, typed with `Bun.Import` & `Bun.ImportKind`) to
+ * verify zero-runtime-import purity in `desk_model.ts`, the `ui/` boundary over
+ * `nsh/base` & `nsh/desktop`, acyclic `components/`, and QuickJS guest isolation.
+ */
+export async function auditNshModuleGraph(
+  appDir: string,
+): Promise<NshModuleGraphAudit> {
+  const tsTranspiler = new Transpiler({ loader: "ts" });
+  const tsxTranspiler = new Transpiler({ loader: "tsx" });
+  const glob = new Bun.Glob("**/*.{ts,tsx}");
+  const violations: string[] = [];
+  const kindCounts: Record<string, number> = {};
+  let scannedFiles = 0;
+  let totalImports = 0;
+
+  for await (const rawRel of glob.scan({
+    cwd: appDir,
+    onlyFiles: true,
+    dot: false,
+  })) {
+    const rel = rawRel.replaceAll("\\", "/");
+    if (
+      rel.startsWith(".nsh/") ||
+      rel.endsWith(".test.ts") ||
+      rel.endsWith(".test.tsx") ||
+      rel.endsWith(".d.ts")
+    ) {
+      continue;
+    }
+
+    scannedFiles += 1;
+    const bytes = await Bun.file(path.join(appDir, rel)).bytes();
+    const scanner = rel.endsWith(".tsx") ? tsxTranspiler : tsTranspiler;
+    const imports: readonly Import[] = scanner.scanImports(bytes);
+    totalImports += imports.length;
+
+    if (rel === "desk_model.ts" && imports.length > 0) {
+      violations.push(
+        `desk_model.ts must have 0 runtime imports (found ${imports.map((i) => i.path).join(", ")})`,
+      );
+    }
+
+    const inUiLayer = rel.startsWith("ui/");
+    const inComponentsLayer = rel.startsWith("components/");
+
+    for (const imp of imports) {
+      const kind: ImportKind = imp.kind;
+      kindCounts[kind] = (kindCounts[kind] ?? 0) + 1;
+
+      if (
+        FORBIDDEN_GUEST_SPECIFIERS.has(imp.path) ||
+        imp.path.startsWith("bun:")
+      ) {
+        violations.push(
+          `${rel} imports host-only module '${imp.path}' (${kind}) inside QuickJS guest`,
+        );
+      }
+
+      if (!inUiLayer && UI_ONLY_NSH_SPECIFIERS.has(imp.path)) {
+        violations.push(
+          `${rel} imports '${imp.path}' directly outside ui/ layer`,
+        );
+      }
+
+      if (
+        inComponentsLayer &&
+        (imp.path === "../App" || imp.path === "../App.tsx")
+      ) {
+        violations.push(
+          `${rel} imports root '../App' (breaks acyclic boundary)`,
+        );
+      }
+    }
+  }
+
+  return {
+    scannedFiles,
+    totalImports,
+    importKinds: kindCounts,
+    violations,
+  };
 }
 
 export function parseNshVersionOutput(raw: string): ParsedNshVersion {
@@ -1116,6 +1215,18 @@ export async function runNshDoctor(
         ? `verified YAML frontmatter [${parsedSkillNames.join(", ")}]`
         : skillFailure,
   });
+
+  if (manifest?.mode !== "rust") {
+    const graphAudit = await auditNshModuleGraph(appDir);
+    checks.push({
+      check: "NSH module graph",
+      status: graphAudit.violations.length === 0 ? "ok" : "fail",
+      detail:
+        graphAudit.violations.length === 0
+          ? `Bun.Transpiler scanned ${graphAudit.scannedFiles} files (${graphAudit.totalImports} runtime imports, 0 boundary violations)`
+          : graphAudit.violations.join("; "),
+    });
+  }
 
   let originResult: NshDoctorReportData["origin"];
   try {

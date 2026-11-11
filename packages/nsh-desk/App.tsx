@@ -1,12 +1,18 @@
 import { ErrorBoundary, host, keymap, mount, View, type JSX } from "nsh";
 import {
+  BoardWorkspace,
   DeskHeader,
   DiagnosticsPanel,
+  ExecutionTicketModal,
   ExposurePanel,
+  ForensicsWorkspace,
   KpisPanel,
+  MarketsPanel,
+  OpsWorkspace,
   PANEL_TITLES,
   ScoreboardPanel,
   SignalsPanel,
+  SurveillanceWorkspace,
 } from "./components";
 import { createDeskStore, DeskStoreContext } from "./store";
 import {
@@ -91,6 +97,7 @@ function DeskRootBody(props: {
     "mod+2": toggleBottomDock,
     "mod+shift+l": () => store.toggleLocked(),
     "mod+shift+c": copyDiagnostics,
+    "mod+t": () => store.openTicketForSelected(),
     "mod+u": () => store.setUiKitOpen(true),
   });
 
@@ -123,40 +130,70 @@ function DeskRootBody(props: {
           onCopyDiagnostics={copyDiagnostics}
         />
 
-        <DeskWorkspace
-          onRef={(r) => {
-            dockRef = r;
-          }}
-          layout={store.layout()}
-          locked={store.locked()}
-          panelTitles={PANEL_TITLES}
-          onLayoutChange={(next) => store.setLayout(next)}
-          onDockOpenChange={(placement, open) =>
-            store.setDockOpenPlacement(placement, open)
+        <If
+          when={store.activePlane() === "markets"}
+          else={
+            <If
+              when={store.activePlane() === "board"}
+              else={
+                <If
+                  when={store.activePlane() === "surveillance"}
+                  else={
+                    <If
+                      when={store.activePlane() === "forensics"}
+                      else={<OpsWorkspace />}
+                    >
+                      <ForensicsWorkspace />
+                    </If>
+                  }
+                >
+                  <SurveillanceWorkspace />
+                </If>
+              }
+            >
+              <BoardWorkspace />
+            </If>
           }
-          renderPanel={(panelId) => {
-            switch (panelId) {
-              case "signals":
-                return <SignalsPanel />;
-              case "exposure":
-                return <ExposurePanel />;
-              case "scoreboard":
-                return <ScoreboardPanel />;
-              case "kpis":
-                return <KpisPanel />;
-              case "diagnostics":
-                return <DiagnosticsPanel />;
-              default:
-                return (
-                  <StateNotice
-                    kind="empty"
-                    title="Unknown panel"
-                    detail={`Panel '${panelId}' is not registered.`}
-                  />
-                );
+        >
+          <DeskWorkspace
+            onRef={(r) => {
+              dockRef = r;
+            }}
+            layout={store.layout()}
+            locked={store.locked()}
+            panelTitles={PANEL_TITLES}
+            onLayoutChange={(next) => store.setLayout(next)}
+            onDockOpenChange={(placement, open) =>
+              store.setDockOpenPlacement(placement, open)
             }
-          }}
-        />
+            renderPanel={(panelId) => {
+              switch (panelId) {
+                case "markets":
+                  return <MarketsPanel />;
+                case "signals":
+                  return <SignalsPanel />;
+                case "exposure":
+                  return <ExposurePanel />;
+                case "scoreboard":
+                  return <ScoreboardPanel />;
+                case "kpis":
+                  return <KpisPanel />;
+                case "diagnostics":
+                  return <DiagnosticsPanel />;
+                default:
+                  return (
+                    <StateNotice
+                      kind="empty"
+                      title="Unknown panel"
+                      detail={`Panel '${panelId}' is not registered.`}
+                    />
+                  );
+              }
+            }}
+          />
+        </If>
+
+        <ExecutionTicketModal />
 
         <UiKitGalleryDialog
           open={store.uiKitOpen()}

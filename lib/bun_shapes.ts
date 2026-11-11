@@ -464,12 +464,31 @@ export const BUN_SHAPES: readonly BunShape[] = [
   },
   // data formats & parsing
   {
+    name: "Import",
+    kind: "type",
+    subsystem: "data",
+    heading: "Bun.Import (type)",
+    evidence: [
+      "test:tests/bun_shapes_types.test-d.ts",
+      "test:tests/nsh_desk_contract.test.ts",
+    ],
+  },
+  {
     name: "ImportKind",
     kind: "type",
     subsystem: "data",
-    heading: "Bun.ImportKind (type, declared-only)",
-    evidence: ["test:tests/bun_shapes_types.test-d.ts"],
-    status: "declared-only",
+    heading: "Bun.ImportKind (type)",
+    evidence: [
+      "test:tests/bun_shapes_types.test-d.ts",
+      "test:tests/nsh_desk_contract.test.ts",
+    ],
+  },
+  {
+    name: "Transpiler",
+    kind: "value",
+    subsystem: "data",
+    heading: "Bun.Transpiler",
+    evidence: ["surface:Transpiler", "test:tests/nsh_desk_contract.test.ts"],
   },
   // storage & scheduling
   {
@@ -492,6 +511,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     subsystem: "text",
     heading: "Bun.sliceAnsi",
     evidence: ["surface:sliceAnsi"],
+  },
+  {
+    name: "stripANSI",
+    kind: "value",
+    subsystem: "text",
+    heading: "Bun.stripANSI",
+    evidence: ["surface:stripANSI", "test:tests/nsh_desk_contract.test.ts"],
   },
   {
     name: "Archive",

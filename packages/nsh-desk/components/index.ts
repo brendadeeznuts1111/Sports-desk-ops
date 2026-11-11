@@ -1,7 +1,13 @@
+export { BoardWorkspace } from "./BoardWorkspace";
 export { DeskHeader, type DeskHeaderProps } from "./DeskHeader";
 export { DiagnosticsPanel } from "./DiagnosticsPanel";
+export { ExecutionTicketModal } from "./ExecutionTicketModal";
 export { ExposurePanel } from "./ExposurePanel";
+export { ForensicsWorkspace } from "./ForensicsWorkspace";
 export { KpisPanel } from "./KpisPanel";
+export { MarketsPanel } from "./MarketsPanel";
+export { OpsWorkspace } from "./OpsWorkspace";
 export { PANEL_TITLES, provenanceTone } from "./provenance";
 export { SCOREBOARD_COLUMNS, ScoreboardPanel } from "./ScoreboardPanel";
 export { SIGNAL_COLUMNS, SignalsPanel } from "./SignalsPanel";
+export { SurveillanceWorkspace } from "./SurveillanceWorkspace";

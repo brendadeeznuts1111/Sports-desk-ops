@@ -2,15 +2,16 @@ import type { ProvenanceTag } from "../desk_model";
 import type { BadgeTone } from "../ui";
 
 export const PANEL_TITLES: Readonly<Record<string, string>> = {
-  signals: "Kalshi signals",
-  exposure: "Exposure plot",
+  markets: "Markets Terminal",
+  signals: "Kalshi Signals",
+  exposure: "Risk Exposure",
   scoreboard: "Scoreboard",
-  kpis: "KPIs",
-  diagnostics: "Pipeline",
+  kpis: "KPIs & Provenance",
+  diagnostics: "Pipeline & Honesty",
 };
 
-export function provenanceTone(prov: ProvenanceTag): BadgeTone {
-  if (prov.stale || prov.partial) return "warning";
-  if (prov.basis === "live") return "positive";
+export function provenanceTone(p: ProvenanceTag): BadgeTone {
+  if (p.stale || p.partial) return "warning";
+  if (p.basis === "live") return "positive";
   return "neutral";
 }

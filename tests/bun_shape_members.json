@@ -44,8 +44,10 @@
     "YAML": ["parse", "stringify"],
     "deepEquals": [],
     "semver": ["order", "satisfies"],
+    "Transpiler": [],
     "CSRF": ["generate", "verify"],
     "sliceAnsi": [],
+    "stripANSI": [],
     "Archive": ["write"],
     "RedisClient": [],
     "S3Client": [
