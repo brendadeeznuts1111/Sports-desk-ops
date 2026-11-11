@@ -13,6 +13,7 @@
  */
 
 import { YAML } from "bun";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   type BunInspectOptions,
@@ -104,13 +105,39 @@ export interface NshDoctorReportData {
 }
 
 export interface NshVerifyStepResult {
-  readonly step: "check" | "build" | "test";
+  readonly step: "check" | "build" | "test" | "package-web" | "sign-verify";
   readonly exitCode: number;
   readonly durationMs: number;
   readonly stepCount: number;
   readonly warningCount: number;
   readonly errorCount: number;
   readonly warnings: readonly string[];
+  readonly errors: readonly string[];
+  readonly detail?: string;
+}
+
+export interface ParsedNshVerifyOutput {
+  readonly valid: boolean;
+  readonly appId: string | null;
+  readonly version: string | null;
+  readonly build: number | null;
+  readonly releaseKeyId: string | null;
+  readonly sha256: string | null;
+  readonly raw: string;
+}
+
+export interface NshSignVerifyReportData {
+  readonly ok: boolean;
+  readonly durationMs: number;
+  readonly appId: string | null;
+  readonly version: string | null;
+  readonly build: number | null;
+  readonly rootKeyId: string | null;
+  readonly releaseKeyId: string | null;
+  readonly packageBytes: number;
+  readonly packageSha256: string | null;
+  readonly verifiedValid: boolean;
+  readonly revocationRejected: boolean;
   readonly errors: readonly string[];
 }
 
@@ -225,6 +252,44 @@ export function parseNshVersionOutput(raw: string): ParsedNshVersion {
     semver: match[1] ?? null,
     gitSha: match[2] ?? null,
   };
+}
+
+/**
+ * Parses `nsh verify --root <root.pub> <pkg.nshpkg>` output:
+ * `valid: ops.sportsdesk.desk 0.1.0 (build 1), release key 1fc87b89f4b58e40, sha256 <64hex>, ...`
+ */
+export function parseNshVerifyOutput(raw: string): ParsedNshVerifyOutput {
+  const clean = stripAnsi(raw).trim();
+  const match =
+    /^valid:\s+(\S+)\s+(\S+)\s+\(build\s+(\d+)\),\s+release key\s+([0-9a-fA-F]+),\s+sha256\s+([0-9a-fA-F]{64})\b/m.exec(
+      clean,
+    );
+  if (!match) {
+    return {
+      valid: false,
+      appId: null,
+      version: null,
+      build: null,
+      releaseKeyId: null,
+      sha256: null,
+      raw: clean,
+    };
+  }
+  return {
+    valid: true,
+    appId: match[1] ?? null,
+    version: match[2] ?? null,
+    build: match[3] !== undefined ? Number.parseInt(match[3], 10) : null,
+    releaseKeyId: match[4] ? match[4].toLowerCase() : null,
+    sha256: match[5] ? match[5].toLowerCase() : null,
+    raw: clean,
+  };
+}
+
+export function parseNshKeygenId(raw: string): string | null {
+  const clean = stripAnsi(raw).trim();
+  const match = /\bkey\s+([0-9a-fA-F]{8,64}):/.exec(clean);
+  return match?.[1] ? match[1].toLowerCase() : null;
 }
 
 /**
@@ -468,6 +533,40 @@ export class InspectableNshArtifactsReport {
   }
 }
 
+export class InspectableNshSignVerifyReport {
+  readonly data: NshSignVerifyReportData;
+
+  constructor(data: NshSignVerifyReportData) {
+    this.data = data;
+  }
+
+  [Bun.inspect.custom](_depth?: number, options?: BunInspectOptions): string {
+    const colors = options?.colors === true;
+    const verdict = this.data.ok ? "PASS" : "FAIL";
+    const header = [
+      `${padDisplay("NSH Sign & Verify", 20)}: ${verdict} (${this.data.durationMs.toFixed(1)} ms)`,
+      `${padDisplay("Package App ID", 20)}: ${this.data.appId ?? "unknown"} ${this.data.version ?? ""} (build ${this.data.build ?? "?"})`,
+      `${padDisplay("Root / Release Key", 20)}: ${this.data.rootKeyId ?? "n/a"} -> ${this.data.releaseKeyId ?? "n/a"}`,
+      `${padDisplay("Package Digest", 20)}: ${this.data.packageSha256 ?? "n/a"} (${this.data.packageBytes.toLocaleString("en-US")} B)`,
+    ].join("\n");
+    const table = Bun.inspect.table(
+      [
+        {
+          gate: "verify --root <root.pub>",
+          status: this.data.verifiedValid ? "PASS" : "FAIL",
+        },
+        {
+          gate: "verify --revocations <revoked>",
+          status: this.data.revocationRejected ? "PASS" : "FAIL",
+        },
+      ],
+      ["gate", "status"],
+      { colors },
+    );
+    return `${header}\n\n${table.trimEnd()}`;
+  }
+}
+
 export class InspectableNshVerifyReport {
   readonly data: NshVerifyLoopReportData;
 
@@ -487,8 +586,9 @@ export class InspectableNshVerifyReport {
         steps: s.stepCount,
         warnings: s.warningCount,
         errors: s.errorCount,
+        detail: s.detail ?? "",
       })),
-      ["step", "exit", "durationMs", "steps", "warnings", "errors"],
+      ["step", "exit", "durationMs", "steps", "warnings", "errors", "detail"],
       { colors },
     );
     return `${header}\n\n${table.trimEnd()}`;
@@ -611,6 +711,13 @@ const FLAGS_WITH_VALUE: ReadonlySet<string> = new Set([
   "--abi",
   "--key",
   "--cert",
+  "--root",
+  "--apps",
+  "--days",
+  "--extend",
+  "--sequence",
+  "--package",
+  "--revocations",
   "--source-map",
   "--min-runtime",
   "--template",
@@ -1047,17 +1154,256 @@ export async function runNshDoctor(
   };
 }
 
+/**
+ * Ephemerally runs the full NSH 0.4.0 signed runtime delivery & revocation pipeline
+ * (`keygen` root & release -> `certify` -> `publish` `.nshpkg` -> `verify --root` -> `revoke` -> `verify --revocations` must reject)
+ * inside an OS temporary scratch directory that is cleaned up unconditionally on exit.
+ */
+export async function runNshSignVerify(
+  repoRoot: string,
+  appDir: string,
+  options: { readonly quiet?: boolean } = {},
+): Promise<NshSignVerifyReportData> {
+  const startNs = Bun.nanoseconds();
+  const resolved = await resolveNshBinary(repoRoot);
+  const commonRoot = await resolveGitCommonRoot(repoRoot);
+  const defaultCache = path.join(commonRoot, ".agents", "tools", "nsh-cache");
+
+  const manifestRaw: unknown = await Bun.file(
+    path.join(appDir, "nsh.json"),
+  ).json();
+  const manifest = summarizeNshManifest(manifestRaw);
+  const expectedAppId = manifest.id ?? "ops.sportsdesk.desk";
+
+  const scratchToken = `nsh-desk-sign-${process.pid}-${Bun.nanoseconds().toString(36)}`;
+  const scratchDir = path.join(tmpdir(), scratchToken);
+  await Bun.write(path.join(scratchDir, ".keep"), "");
+
+  const errors: string[] = [];
+  let rootKeyId: string | null = null;
+  let releaseKeyId: string | null = null;
+  let packageBytes = 0;
+  let parsedVerify: ParsedNshVerifyOutput | null = null;
+  let verifiedValid = false;
+  let revocationRejected = false;
+
+  try {
+    const rootBase = path.join(scratchDir, "root");
+    const releaseBase = path.join(scratchDir, "release");
+    const certPath = path.join(scratchDir, "release.cert");
+    const pkgPath = path.join(scratchDir, `${expectedAppId}.nshpkg`);
+    const revocationsPath = path.join(scratchDir, "revocations.bin");
+
+    const rootKeygen = await runCapturedNsh(
+      resolved.bin,
+      ["keygen", rootBase],
+      repoRoot,
+      defaultCache,
+    );
+    if (rootKeygen.exitCode !== 0) {
+      errors.push(
+        `keygen root failed (${rootKeygen.exitCode}): ${rootKeygen.stderr || rootKeygen.stdout}`,
+      );
+    } else {
+      rootKeyId = parseNshKeygenId(
+        `${rootKeygen.stdout}\n${rootKeygen.stderr}`,
+      );
+    }
+
+    const releaseKeygen = await runCapturedNsh(
+      resolved.bin,
+      ["keygen", releaseBase],
+      repoRoot,
+      defaultCache,
+    );
+    if (releaseKeygen.exitCode !== 0) {
+      errors.push(
+        `keygen release failed (${releaseKeygen.exitCode}): ${releaseKeygen.stderr || releaseKeygen.stdout}`,
+      );
+    } else {
+      releaseKeyId = parseNshKeygenId(
+        `${releaseKeygen.stdout}\n${releaseKeygen.stderr}`,
+      );
+    }
+
+    if (errors.length === 0) {
+      const certifyRes = await runCapturedNsh(
+        resolved.bin,
+        [
+          "certify",
+          "--root",
+          `${rootBase}.secret`,
+          "--key",
+          `${releaseBase}.pub`,
+          "--apps",
+          expectedAppId,
+          "--days",
+          "7",
+          "-o",
+          certPath,
+        ],
+        repoRoot,
+        defaultCache,
+      );
+      if (certifyRes.exitCode !== 0) {
+        errors.push(
+          `certify failed (${certifyRes.exitCode}): ${certifyRes.stderr || certifyRes.stdout}`,
+        );
+      }
+    }
+
+    if (errors.length === 0) {
+      const publishRes = await runCapturedNsh(
+        resolved.bin,
+        [
+          "publish",
+          appDir,
+          "--key",
+          `${releaseBase}.secret`,
+          "--cert",
+          certPath,
+          "-o",
+          pkgPath,
+        ],
+        repoRoot,
+        defaultCache,
+      );
+      if (publishRes.exitCode !== 0) {
+        errors.push(
+          `publish failed (${publishRes.exitCode}): ${publishRes.stderr || publishRes.stdout}`,
+        );
+      } else {
+        const pkgFile = Bun.file(pkgPath);
+        if (await pkgFile.exists()) {
+          packageBytes = (await pkgFile.bytes()).byteLength;
+        } else {
+          errors.push(`publish exited 0 but missing output ${pkgPath}`);
+        }
+      }
+    }
+
+    if (errors.length === 0) {
+      const verifyRes = await runCapturedNsh(
+        resolved.bin,
+        ["verify", "--root", `${rootBase}.pub`, pkgPath],
+        repoRoot,
+        defaultCache,
+      );
+      parsedVerify = parseNshVerifyOutput(
+        `${verifyRes.stdout}\n${verifyRes.stderr}`,
+      );
+      if (verifyRes.exitCode !== 0 || !parsedVerify.valid) {
+        errors.push(
+          `verify failed (${verifyRes.exitCode}): ${parsedVerify.raw}`,
+        );
+      } else if (parsedVerify.appId !== expectedAppId) {
+        errors.push(
+          `verify appId mismatch: expected '${expectedAppId}', got '${parsedVerify.appId}'`,
+        );
+      } else {
+        verifiedValid = true;
+      }
+    }
+
+    if (errors.length === 0 && parsedVerify?.sha256) {
+      const revokeRes = await runCapturedNsh(
+        resolved.bin,
+        [
+          "revoke",
+          "--root",
+          `${rootBase}.secret`,
+          "--sequence",
+          "1",
+          "--package",
+          parsedVerify.sha256,
+          "-o",
+          revocationsPath,
+        ],
+        repoRoot,
+        defaultCache,
+      );
+      if (revokeRes.exitCode !== 0) {
+        errors.push(
+          `revoke failed (${revokeRes.exitCode}): ${revokeRes.stderr || revokeRes.stdout}`,
+        );
+      } else {
+        const verifyRevoked = await runCapturedNsh(
+          resolved.bin,
+          [
+            "verify",
+            "--root",
+            `${rootBase}.pub`,
+            "--revocations",
+            revocationsPath,
+            pkgPath,
+          ],
+          repoRoot,
+          defaultCache,
+        );
+        const combinedRevoked = stripAnsi(
+          `${verifyRevoked.stdout}\n${verifyRevoked.stderr}`,
+        );
+        if (verifyRevoked.exitCode !== 0 && /revoked/i.test(combinedRevoked)) {
+          revocationRejected = true;
+        } else {
+          errors.push(
+            `expected revoked package to be rejected, got exit=${verifyRevoked.exitCode}: ${combinedRevoked.trim()}`,
+          );
+        }
+      }
+    }
+  } finally {
+    const cleanupProc = Bun.spawn(["rm", "-rf", scratchDir], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await cleanupProc.exited;
+  }
+
+  const durationMs = (Bun.nanoseconds() - startNs) / 1_000_000;
+  const ok =
+    errors.length === 0 &&
+    verifiedValid &&
+    revocationRejected &&
+    packageBytes > 0;
+
+  if (!options.quiet) {
+    console.error(
+      `[nsh-desk] sign-verify -> ${ok ? "✓" : "✗"} ${expectedAppId} (${packageBytes.toLocaleString("en-US")} B, sha256=${parsedVerify?.sha256?.slice(0, 12) ?? "n/a"}, revocation=${revocationRejected ? "rejected" : "failed"}, ${durationMs.toFixed(1)}ms)`,
+    );
+  }
+
+  return {
+    ok,
+    durationMs,
+    appId: parsedVerify?.appId ?? null,
+    version: parsedVerify?.version ?? null,
+    build: parsedVerify?.build ?? null,
+    rootKeyId,
+    releaseKeyId: parsedVerify?.releaseKeyId ?? releaseKeyId,
+    packageBytes,
+    packageSha256: parsedVerify?.sha256 ?? null,
+    verifiedValid,
+    revocationRejected,
+    errors,
+  };
+}
+
 export async function runNshVerifyLoop(
   repoRoot: string,
   appDir: string,
-  options: { readonly allowWarnings: boolean; readonly quiet: boolean },
+  options: {
+    readonly allowWarnings: boolean;
+    readonly quiet: boolean;
+    readonly skipWeb?: boolean;
+  },
 ): Promise<NshVerifyLoopReportData> {
   const resolved = await resolveNshBinary(repoRoot);
   const commonRoot = await resolveGitCommonRoot(repoRoot);
   const defaultCache = path.join(commonRoot, ".agents", "tools", "nsh-cache");
 
   const runStep = async (
-    step: "check" | "build" | "test",
+    step: "check" | "build" | "test" | "package-web",
   ): Promise<{
     readonly stepResult: NshVerifyStepResult;
     readonly stdout: string;
@@ -1076,22 +1422,48 @@ export async function runNshVerifyLoop(
       repoRoot,
       defaultCache,
     );
+    let detail: string | undefined;
+    let extraErrors: string[] = [];
+
+    if (step === "package-web" && res.exitCode === 0) {
+      const webOutDir = path.join(appDir, ".nsh", "out", "web");
+      const webInv = await collectNshBuildArtifacts(webOutDir);
+      const hasIndexHtml = webInv.artifacts.some(
+        (a) =>
+          a.relativePath.endsWith("/index.html") ||
+          a.relativePath === "index.html",
+      );
+      const hasWasm = webInv.artifacts.some((a) =>
+        a.relativePath.endsWith(".wasm"),
+      );
+      if (!hasIndexHtml || !hasWasm) {
+        extraErrors = [
+          `package-web missing index.html (${hasIndexHtml}) or .wasm (${hasWasm}) in ${webOutDir}`,
+        ];
+      } else {
+        detail = `${webInv.totalFiles} files (${(webInv.totalBytes / (1024 * 1024)).toFixed(1)} MB)`;
+      }
+    }
+
+    const allErrors = [...res.parsed.errors, ...extraErrors];
     const failedWarningGate =
       !options.allowWarnings && res.parsed.warnings.length > 0;
     return {
       stepResult: {
         step,
-        exitCode: res.exitCode,
+        exitCode:
+          res.exitCode === 0 && extraErrors.length > 0 ? 1 : res.exitCode,
         durationMs: res.durationMs,
         stepCount: res.parsed.steps.length,
         warningCount: res.parsed.warnings.length,
-        errorCount: res.parsed.errors.length,
+        errorCount: allErrors.length,
         warnings: res.parsed.warnings,
-        errors: res.parsed.errors,
+        errors: allErrors,
+        ...(detail !== undefined ? { detail } : {}),
       },
       stdout: res.stdout,
       stderr: res.stderr,
-      ok: res.exitCode === 0 && !failedWarningGate,
+      ok: res.exitCode === 0 && extraErrors.length === 0 && !failedWarningGate,
     };
   };
 
@@ -1113,18 +1485,49 @@ export async function runNshVerifyLoop(
 
   let allOk = checkOut.ok && buildOut.ok;
   if (allOk) {
-    const testOut = await runStep("test");
+    const testPromise = runStep("test");
+    const signPromise = runNshSignVerify(repoRoot, appDir, {
+      quiet: options.quiet,
+    });
+    const webPromise = options.skipWeb ? null : runStep("package-web");
+
+    const [testOut, signReport, webOut] = await Promise.all([
+      testPromise,
+      signPromise,
+      webPromise,
+    ]);
+
     if (!options.quiet) {
       if (testOut.stdout.length > 0) process.stderr.write(testOut.stdout);
       if (testOut.stderr.length > 0) process.stderr.write(testOut.stderr);
     }
     results.push(testOut.stepResult);
-    allOk = testOut.ok;
+
+    if (webOut !== null) {
+      results.push(webOut.stepResult);
+    }
+
+    results.push({
+      step: "sign-verify",
+      exitCode: signReport.ok ? 0 : 1,
+      durationMs: signReport.durationMs,
+      stepCount: signReport.ok ? 6 : 0,
+      warningCount: 0,
+      errorCount: signReport.errors.length,
+      warnings: [],
+      errors: signReport.errors,
+      detail: signReport.ok
+        ? `.nshpkg ${(signReport.packageBytes / 1024).toFixed(0)} KB · sha256:${signReport.packageSha256?.slice(0, 12) ?? "n/a"} · revoke✓`
+        : signReport.errors.join("; "),
+    });
+
+    allOk = testOut.ok && signReport.ok && (webOut === null ? true : webOut.ok);
   }
 
+  const expectedSteps = options.skipWeb ? 4 : 5;
   const totalDurationMs = (Bun.nanoseconds() - loopStartNs) / 1_000_000;
   return {
-    ok: allOk && results.length === 3,
+    ok: allOk && results.length === expectedSteps,
     allowWarnings: options.allowWarnings,
     totalDurationMs,
     steps: results,
@@ -1141,8 +1544,9 @@ Usage:
 Wrapper commands (Bun-native diagnostics & verification):
   doctor [--json|--yaml]               Inspect nsh binary, semver, nsh.json mode/caps, skills YAML & origin
   artifacts [--json|--yaml]            Inventory .nsh/out bytecode/JS/web artifacts with SHA-256 digests
-  verify-loop [--allow-warnings] [--json|--yaml]
-                                       Run 'nsh check' -> 'nsh build' (0 warnings) -> 'nsh test' with timings
+  sign-verify [--json|--yaml]          Ephemeral keygen -> certify -> publish (.nshpkg) -> verify -> revoke check
+  verify-loop [--allow-warnings] [--skip-web] [--json|--yaml]
+                                       Run 'nsh check' + 'nsh build' (0 warnings) -> 'nsh test' + 'package-web' + 'sign-verify'
   package-web [-o <dir>] [flags...]    Package standalone web bundle (defaults to packages/nsh-desk/.nsh/out/web)
 
 Forwarded NSH CLI commands (https://nsh.dev/docs/cli/):
@@ -1199,6 +1603,26 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (first === "sign-verify") {
+    const rest = args.slice(1);
+    if (rest.includes("-h") || rest.includes("--help")) {
+      printWrapperHelp();
+      return;
+    }
+    const format = resolveCliReportFormat(rest);
+    const report = await runNshSignVerify(repoRoot, appDir, {
+      quiet: format !== "inspect",
+    });
+    console.log(
+      formatCliReportOutput(
+        report,
+        new InspectableNshSignVerifyReport(report),
+        format,
+      ),
+    );
+    process.exit(report.ok ? 0 : 1);
+  }
+
   if (first === "verify-loop") {
     const rest = args.slice(1);
     if (rest.includes("-h") || rest.includes("--help")) {
@@ -1207,8 +1631,10 @@ async function main(): Promise<void> {
     }
     const format = resolveCliReportFormat(rest);
     const allowWarnings = rest.includes("--allow-warnings");
+    const skipWeb = rest.includes("--skip-web");
     const report = await runNshVerifyLoop(repoRoot, appDir, {
       allowWarnings,
+      skipWeb,
       quiet: format !== "inspect",
     });
     console.log(

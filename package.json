@@ -338,7 +338,8 @@
     "nsh:test": "bun run scripts/nsh_desk_cli.ts test",
     "nsh:build": "bun run scripts/nsh_desk_cli.ts build",
     "nsh:run": "bun run scripts/nsh_desk_cli.ts run",
-    "nsh:package:web": "bun run scripts/nsh_desk_cli.ts package-web"
+    "nsh:package:web": "bun run scripts/nsh_desk_cli.ts package-web",
+    "nsh:sign:verify": "bun run scripts/nsh_desk_cli.ts sign-verify"
   },
   "keywords": [
     "sportsdesk",

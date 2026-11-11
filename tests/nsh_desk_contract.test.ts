@@ -349,6 +349,52 @@ describe("packages/nsh-desk model and capability contracts", () => {
       "verify",
       "dist/desk.nshpkg",
     ]);
+    expect(
+      buildNshArgv(appDir, [
+        "certify",
+        "--root",
+        "keys/root.secret",
+        "--key",
+        "keys/release.pub",
+        "--apps",
+        "ops.sportsdesk.desk",
+        "-o",
+        "keys/release.cert",
+      ]),
+    ).toEqual([
+      "certify",
+      "--root",
+      "keys/root.secret",
+      "--key",
+      "keys/release.pub",
+      "--apps",
+      "ops.sportsdesk.desk",
+      "-o",
+      "keys/release.cert",
+    ]);
+    expect(
+      buildNshArgv(appDir, [
+        "revoke",
+        "--root",
+        "keys/root.secret",
+        "--sequence",
+        "1",
+        "--package",
+        "819f351e8ba9f04c86d575fc0dac49912a2e87f1f9e52ff12d2dd211c66bc778",
+        "-o",
+        "keys/revocations.bin",
+      ]),
+    ).toEqual([
+      "revoke",
+      "--root",
+      "keys/root.secret",
+      "--sequence",
+      "1",
+      "--package",
+      "819f351e8ba9f04c86d575fc0dac49912a2e87f1f9e52ff12d2dd211c66bc778",
+      "-o",
+      "keys/revocations.bin",
+    ]);
   });
 
   test("enforces root App.tsx mount(App) ownership, DeskStoreContext, split() ui wrappers, and acyclic components/ boundary", async () => {
@@ -476,11 +522,58 @@ describe("packages/nsh-desk model and capability contracts", () => {
       collectNshBuildArtifacts,
       detectNshProjectMode,
       InspectableNshArtifactsReport,
+      InspectableNshSignVerifyReport,
       parseNshCliOutput,
+      parseNshKeygenId,
+      parseNshVerifyOutput,
       parseNshVersionOutput,
       PINNED_NSH_RELEASE,
+      runNshSignVerify,
       summarizeNshManifest,
+      tryResolveNshBinary,
     } = await import("../scripts/nsh_desk_cli.ts");
+
+    expect(
+      parseNshKeygenId(
+        "key 6cc10d57ae61ddcb: /tmp/root.secret (keep it secret), /tmp/root.pub\n",
+      ),
+    ).toBe("6cc10d57ae61ddcb");
+    expect(
+      parseNshVerifyOutput(
+        "valid: ops.sportsdesk.desk 0.1.0 (build 1), release key 1FC87B89F4B58E40, sha256 562e8b31deb05abc0906f38da491212996546665a4e719cfb1fb5e021694ac2f, 0 assets, bytecode for this runtime\n",
+      ),
+    ).toEqual({
+      valid: true,
+      appId: "ops.sportsdesk.desk",
+      version: "0.1.0",
+      build: 1,
+      releaseKeyId: "1fc87b89f4b58e40",
+      sha256:
+        "562e8b31deb05abc0906f38da491212996546665a4e719cfb1fb5e021694ac2f",
+      raw: "valid: ops.sportsdesk.desk 0.1.0 (build 1), release key 1FC87B89F4B58E40, sha256 562e8b31deb05abc0906f38da491212996546665a4e719cfb1fb5e021694ac2f, 0 assets, bytecode for this runtime",
+    });
+
+    const repoRoot = path.join(import.meta.dir, "..");
+    const maybeNsh = await tryResolveNshBinary(repoRoot);
+    if (maybeNsh !== null) {
+      const signReport = await runNshSignVerify(
+        repoRoot,
+        path.join(repoRoot, "packages", "nsh-desk"),
+        { quiet: true },
+      );
+      expect(signReport.ok).toBe(true);
+      expect(signReport.appId).toBe("ops.sportsdesk.desk");
+      expect(signReport.verifiedValid).toBe(true);
+      expect(signReport.revocationRejected).toBe(true);
+      expect(signReport.packageBytes).toBeGreaterThan(10_000);
+      expect(signReport.packageSha256).toMatch(/^[0-9a-f]{64}$/);
+      const signInspect = inspectReport(
+        new InspectableNshSignVerifyReport(signReport),
+        { colors: false, depth: 4, sorted: false, compact: false },
+      );
+      expect(signInspect).toContain("NSH Sign & Verify");
+      expect(signInspect).toContain("ops.sportsdesk.desk");
+    }
 
     expect(PINNED_NSH_RELEASE.version).toBe("0.4.0");
     expect(PINNED_NSH_RELEASE.commit).toBe(

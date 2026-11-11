@@ -137,8 +137,8 @@ jobs:
             .agents/tools/nsh
             .agents/tools/nsh-cache
           key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
-      - name: Changed NSH Desk package (pinned v0.4.0 check + build + headless test)
-        timeout-minutes: 4
+      - name: Changed NSH Desk package (pinned v0.4.0 check + build + headless test + web + signed .nshpkg)
+        timeout-minutes: 5
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: bash scripts/ci/test-changed-nsh.sh
@@ -251,8 +251,8 @@ jobs:
             .agents/tools/nsh
             .agents/tools/nsh-cache
           key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
-      - name: "Native Shell Desk Gate (pinned nsh v0.4.0 e626a8d doctor + verify-loop)"
-        timeout-minutes: 4
+      - name: "Native Shell Desk Gate (pinned nsh v0.4.0 e626a8d doctor + verify-loop + web + signed .nshpkg)"
+        timeout-minutes: 5
         run: bash scripts/ci/install-nsh.sh && bun run nsh:doctor && bun run nsh:verify
       - name: Schema gate (snapshot parity, fixture drift, gauntlet, EOD smoke)
         timeout-minutes: 5

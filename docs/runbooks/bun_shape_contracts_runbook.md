@@ -82,7 +82,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/nanoseconds)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/bench_capture.ts`
+- **Here:** `scripts/probe/parse-tree-only.ts`, `scripts/nsh_desk_cli.ts`
 - **Evidence:** `probe:proc.timing`
 
 #### Bun.openInEditor
@@ -194,7 +194,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/inspect)
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (2):** `custom`, `table`
-- **Here:** `lib/bitwise_pattern_inspect.ts`, `cli/sportsdesk_bet_flags_cli.ts`
+- **Here:** `lib/bitwise_pattern_inspect.ts`, `scripts/nsh_desk_cli.ts`
 - **Evidence:** `surface:inspect.table`, `probe:text.inspect`
 
 #### Bun.markdown
