@@ -13,10 +13,11 @@ async function run(args: readonly string[]): Promise<{
   stdout: string;
   stderr: string;
 }> {
+  const { FORCE_COLOR: _ignoredForceColor, ...baseEnv } = Bun.env;
   const child = Bun.spawn([process.execPath, SCRIPT, ...args], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...Bun.env, NO_COLOR: "1" },
+    env: { ...baseEnv, NO_COLOR: "1" },
   });
   const [stdout, stderr, code] = await Promise.all([
     child.stdout.text(),
@@ -49,6 +50,8 @@ interface Report {
   } | null;
   types: {
     declared: number;
+    declaredTypes: string[];
+    moduleParity: boolean;
     runtime: number;
     absent: string[];
     undeclared: string[];
@@ -214,6 +217,8 @@ describe("dx bun", () => {
 
     expect(report.types?.error).toBeNull();
     expect(report.types?.declared).toBeGreaterThan(100);
+    expect(report.types?.declaredTypes.length).toBeGreaterThan(200);
+    expect(report.types?.moduleParity).toBe(true);
     expect(report.types?.runtime).toBeGreaterThan(100);
 
     // Declared but never defined: the class bun-types documents as type-only.

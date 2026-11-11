@@ -2,17 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { dirname, join, resolve } from "node:path";
 import {
   BUN_SHAPES,
+  BUN_SUBMODULE_SHAPES,
   VOLATILE_SHAPES,
   analyzeBunShapes,
   catalogHeadings,
   collectBunShapeUsage,
+  listBunShapeScannedFiles,
   surfaceMembers,
 } from "../lib/bun_shapes.ts";
 import { declarationDrift } from "../bin/bun_types.ts";
-import { listSourceFiles } from "../lib/source_files.ts";
+import {
+  SHAPE_CATALOG_PATH,
+  renderBunShapeContractsCatalog,
+} from "../scripts/bun_shape_contracts.ts";
 
 const root = resolve(import.meta.dir, "..");
-const CATALOG = "docs/runbooks/bun_shape_contracts_runbook.md";
 
 /** `## Section` → `#### Shape` headings listed under it. */
 function catalogSections(markdown: string): Map<string, Set<string>> {
@@ -30,15 +34,6 @@ function catalogSections(markdown: string): Map<string, Set<string>> {
   }
   return sections;
 }
-
-/** Same scope the inventory was taken from: source, not tests, not the pinned vendor tree. */
-const isScanned = (file: string): boolean =>
-  !file.includes(".test.") &&
-  !file.startsWith("tests/") &&
-  !file.startsWith("verification/") &&
-  !file.startsWith("examples/") &&
-  !file.startsWith("scripts/build") &&
-  !file.startsWith("scripts/dev_dashboard");
 
 async function bunTypesDir(): Promise<string> {
   const types = Bun.resolveSync("@types/bun/package.json", root);
@@ -58,15 +53,17 @@ async function bunTypesSource(): Promise<string> {
 }
 
 describe("Bun shape coverage", () => {
-  test("every used shape is documented, evidenced and declared", async () => {
-    const files = (await listSourceFiles(root, ["ts", "mjs", "js"])).filter(
-      isScanned,
-    );
+  test("every used shape and bun:* submodule symbol is documented, evidenced, declared, and fresh", async () => {
+    const files = await listBunShapeScannedFiles(root);
     const sources = new Map<string, string>();
-    for (const file of files) sources.set(file, await Bun.file(file).text());
+    for (const file of files) {
+      sources.set(file, await Bun.file(join(root, file)).text());
+    }
     const usage = collectBunShapeUsage(sources);
 
-    const catalog = await Bun.file(join(root, CATALOG)).text();
+    const catalog = await Bun.file(join(root, SHAPE_CATALOG_PATH)).text();
+    const rendered = await renderBunShapeContractsCatalog(root);
+    expect(catalog).toBe(rendered.markdown);
     const headings = catalogHeadings(catalog);
 
     const baseline = (await Bun.file(
@@ -84,8 +81,8 @@ describe("Bun shape coverage", () => {
     );
 
     const tests = new Set<string>();
-    for (const shape of BUN_SHAPES) {
-      for (const ref of shape.evidence) {
+    for (const entry of [...BUN_SHAPES, ...BUN_SUBMODULE_SHAPES]) {
+      for (const ref of entry.evidence) {
         if (!ref.startsWith("test:")) continue;
         const path = ref.slice("test:".length);
         if (await Bun.file(join(root, path)).exists()) tests.add(path);
@@ -102,6 +99,7 @@ describe("Bun shape coverage", () => {
 
     const drift = await declarationDrift([], root);
     expect(drift.error).toBeNull();
+    expect(drift.moduleParity).toBe(true);
     const undeclared = new Set(drift.undeclared);
     const declaredValues = new Set(
       BUN_SHAPES.filter(
@@ -127,6 +125,7 @@ describe("Bun shape coverage", () => {
     const problems = analyzeBunShapes({
       usage,
       shapes: BUN_SHAPES,
+      submoduleShapes: BUN_SUBMODULE_SHAPES,
       members,
       memberBaseline,
       headings,
@@ -136,6 +135,7 @@ describe("Bun shape coverage", () => {
       surfaces,
       runtimeTypeof,
       declaredValues,
+      declaredTypes: new Set(drift.declaredTypes),
       typesSource: await bunTypesSource(),
     });
 
@@ -143,7 +143,15 @@ describe("Bun shape coverage", () => {
     expect(usage.used.size).toBe(
       BUN_SHAPES.filter((s) => s.status !== "declared-only").length,
     );
+    expect(usage.submodules?.size).toBe(BUN_SUBMODULE_SHAPES.length);
     expect(headings).toHaveLength(BUN_SHAPES.length);
+
+    // Runtime verification for value-backed bun:* submodule exports
+    for (const sub of BUN_SUBMODULE_SHAPES) {
+      if (sub.kind !== "value") continue;
+      const mod = (await import(sub.module)) as Record<string, unknown>;
+      expect(typeof mod[sub.name]).not.toBe("undefined");
+    }
   }, 30_000); // scans every source file plus bun-types' .d.ts set: I/O-bound, not a unit test.
 
   test("the manifest is written against this binary", async () => {

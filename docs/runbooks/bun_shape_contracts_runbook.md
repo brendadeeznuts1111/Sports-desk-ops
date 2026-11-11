@@ -4,7 +4,7 @@ The single source of truth is layered, and nothing here restates upstream text: 
 
 Each entry names its declaration, what the binary says about the member (kind and descriptor), the files that call it, the local evidence, and — where one exists — the deep dive that already owns the detail. Call sites are bare paths, never line numbers: `check:spec-citations` does not audit runbooks, so a line number here would rot silently.
 
-Adding a `Bun.*` call without an entry in `lib/bun_shapes.ts` fails `tests/bun_shapes_coverage.test.ts`; the same test fails when an entry goes stale, loses its heading, or cites evidence that no longer exists.
+Adding a `Bun.*` call, `import { ... } from "bun"` binding, or `bun:*` submodule import without an entry in `lib/bun_shapes.ts` fails `tests/bun_shapes_coverage.test.ts`; the same test fails when an entry goes stale, loses its heading, cites evidence that no longer exists, or drifts from `bun scripts/bun_shape_contracts.ts --check`.
 
 ## Upgrading
 
@@ -689,3 +689,13 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Shape:** value: `string` · writable false · enumerable false
 - **Here:** `lib/bun_runtime.ts`, `scripts/probe_bun.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts`
+
+## Built-in `bun:*` submodules
+
+Non-test production imports from `bun:sqlite`, `bun:jsc`, and `bun:bundle` are inventoried alongside `MODULE "bun"` / `globalThis.Bun` (`BUN_SUBMODULE_SHAPES` in `lib/bun_shapes.ts`).
+
+- **`bun:bundle` → `feature`** (bundler macro) — here: `src/dashboard/runtime_flags.ts` · evidence: `test:tests/wager_tiers_toml.test.ts`
+- **`bun:jsc` → `estimateShallowMemoryUsageOf`** (runtime export) — here: `bin/bun_surface.ts`, `lib/f402_hierarchy_memory.ts` · evidence: `surface:bun:jsc.estimateShallowMemoryUsageOf`
+- **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`
+- **`bun:sqlite` → `Database`** (runtime export) — here: `bin/bun_surface.ts`, `cli/review.ts` · evidence: `surface:bun:sqlite.Database`
+- **`bun:sqlite` → `constants`** (runtime export) — here: `bin/bun_surface.ts`, `lib/sportsdesk_sqlite.ts` · evidence: `surface:bun:sqlite.constants`

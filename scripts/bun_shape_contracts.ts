@@ -1,104 +1,34 @@
 #!/usr/bin/env bun
 /**
  * @file scripts/bun_shape_contracts.ts
- * @description Render docs/runbooks/bun_shape_contracts_runbook.md from the committed
- * shape data: the manifest (`lib/bun_shapes.ts`), the member snapshot
- * (`tests/bun_shape_members.json`) and the permalink statuses
+ * @description Render or verify docs/runbooks/bun_shape_contracts_runbook.md from the
+ * committed shape data: the manifest (`lib/bun_shapes.ts`), the member snapshot
+ * (`tests/bun_shape_members.json`), and the permalink statuses
  * (`tests/bun_shape_links.json`).
  *
  *   bun scripts/bun_shape_contracts.ts --write          # rewrite the catalog (offline)
+ *   bun scripts/bun_shape_contracts.ts --check          # verify committed catalog is fresh (offline)
  *   bun scripts/bun_shape_contracts.ts --refresh-links  # re-check permalinks (network)
  *
  * The links file is the only network-derived input, refreshed deliberately, so the
- * catalog can be regenerated from a clean checkout without touching bun.com.
+ * catalog can be regenerated or verified from a clean checkout without touching bun.com.
  */
-import { listSourceFiles } from "../lib/source_files.ts";
+import path from "node:path";
 import {
   BUN_SHAPES,
   BUN_SHAPE_PINS,
+  BUN_SUBMODULE_SHAPES,
+  RUNTIME_ONLY_SHAPES,
   SHAPE_SECTIONS,
   VOLATILE_SHAPES,
+  listBunShapeScannedFiles,
   scanBunShapeSource,
   surfaceMembers,
 } from "../lib/bun_shapes.ts";
 
-const root = process.cwd();
-const trackedOut = Bun.spawnSync(
-  ["git", "-C", root, "ls-files", "-z", "--cached"],
-  { stdout: "pipe", stderr: "ignore" },
-);
-const trackedSet =
-  trackedOut.exitCode === 0
-    ? new Set(
-        trackedOut.stdout
-          .toString()
-          .split("\0")
-          .filter((f) => f !== ""),
-      )
-    : null;
-const files = (await listSourceFiles(root, ["ts", "mjs", "js"])).filter(
-  (f) =>
-    (trackedSet === null || trackedSet.has(f)) &&
-    !f.includes(".test.") &&
-    !f.startsWith("tests/") &&
-    !f.startsWith("verification/") &&
-    !f.startsWith("scratch/") &&
-    !f.startsWith("packages/sportsdesk-ops/bin/"),
-);
-
-const perShape = new Map<string, Map<string, number>>();
-for (const file of files) {
-  const text = await Bun.file(file).text();
-  const { hits } = scanBunShapeSource(file, text);
-  for (const [hit, count] of hits) {
-    const m = perShape.get(hit) ?? new Map<string, number>();
-    m.set(file, (m.get(file) ?? 0) + count);
-    perShape.set(hit, m);
-  }
-}
-
-const b = Bun as unknown as Record<string, unknown>;
-const descriptor = (name: string) => {
-  const d = Object.getOwnPropertyDescriptor(b, name);
-  if (d === undefined)
-    return { label: "type-only", writable: "n/a", enumerable: "n/a" };
-  return {
-    label: typeof d.value,
-    writable: String(d.writable),
-    enumerable: String(d.enumerable),
-  };
-};
-
+export const SHAPE_CATALOG_PATH =
+  "docs/runbooks/bun_shape_contracts_runbook.md";
 const LINKS_PATH = "tests/bun_shape_links.json";
-const args = new Set(process.argv.slice(2));
-const unknown = [...args].filter(
-  (a) => a !== "--write" && a !== "--refresh-links",
-);
-if (unknown.length > 0) {
-  console.error(`unknown option(s): ${unknown.join(", ")}`);
-  process.exit(2);
-}
-
-if (args.has("--refresh-links")) {
-  const refreshed: Record<string, number> = {};
-  for (const shape of BUN_SHAPES) {
-    const url = `https://bun.com/reference/globals/bun/${shape.name}`;
-    try {
-      const res = await fetch(url, { redirect: "follow" });
-      refreshed[shape.name] = res.status;
-      await res.body?.cancel();
-    } catch {
-      refreshed[shape.name] = 0;
-    }
-  }
-  await Bun.write(LINKS_PATH, `${JSON.stringify(refreshed, null, 2)}\n`);
-  console.log(`refreshed ${Object.keys(refreshed).length} permalink statuses`);
-  process.exit(0);
-}
-
-const permalinks = new Map(
-  Object.entries((await Bun.file(LINKS_PATH).json()) as Record<string, number>),
-);
 
 const deepDive: Record<string, string> = {
   JSONL: "§8.4",
@@ -157,89 +87,209 @@ const sectionInvariants: Record<string, string[]> = {
   ],
 };
 
-const link = (shape: string, status: number | undefined) =>
-  status === 200
-    ? `[reference](https://bun.com/reference/globals/bun/${shape})`
-    : "no reference page (declaration only)";
-
-const out: string[] = [];
-out.push(
-  `# Bun shape contracts — the ${BUN_SHAPES.length} shapes this repository calls`,
-);
-out.push("");
-out.push(
-  `The single source of truth is layered, and nothing here restates upstream text: **declarations** come from \`bun-types@${BUN_SHAPE_PINS.typesVersion}\` (the surface the reference site renders), **behaviour** from probes against the local \`Bun ${BUN_SHAPE_PINS.bunVersion}\` binary (\`tests/bun_baseline.json\`), **property attributes** from the pinned Bun commit \`${BUN_SHAPE_PINS.bunCommit.slice(0, 10)}\`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.`,
-);
-out.push("");
-out.push(
-  `Each entry names its declaration, what the binary says about the member (kind and descriptor), the files that call it, the local evidence, and — where one exists — the deep dive that already owns the detail. Call sites are bare paths, never line numbers: \`check:spec-citations\` does not audit runbooks, so a line number here would rot silently.`,
-);
-out.push("");
-out.push(
-  `Adding a \`Bun.*\` call without an entry in \`lib/bun_shapes.ts\` fails \`tests/bun_shapes_coverage.test.ts\`; the same test fails when an entry goes stale, loses its heading, or cites evidence that no longer exists.`,
-);
-out.push("");
-out.push(`## Upgrading`);
-
-out.push("");
-out.push(
-  `When upstream moves: bump \`packageManager\`, \`engines.bun\`, \`.bun-version\` and \`@types/bun\` together, run \`bun run probe:bun\` (baseline drift is the behaviour diff), then re-derive the declared surface with \`./bin/dx bun --types\`. Regenerate the member snapshot with \`bun scripts/bun_shape_members.ts --baseline tests/bun_shape_members.json\` and the catalog with \`bun scripts/bun_shape_contracts.ts --write\` (\`--refresh-links\` re-checks the permalinks), then review the diff. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.`,
-);
-out.push("");
-out.push(`---`);
-out.push("");
-
-for (const [sub, title] of Object.entries(SHAPE_SECTIONS)) {
-  // The block above (or the previous section's shape) already left one blank line.
-  out.push(`## ${title}`);
-  out.push("");
-  for (const line of sectionInvariants[sub] ?? []) out.push(`- ${line}`);
-  out.push("");
-  for (const shape of BUN_SHAPES.filter((s) => s.subsystem === sub)) {
-    const filesForShape = [...(perShape.get(shape.name) ?? new Map())].sort(
-      (a, c) => c[1] - a[1],
-    );
-    const top = filesForShape.slice(0, 2).map(([f]) => `\`${f}\``);
-    const d = descriptor(shape.name);
-    const kindLine =
-      shape.kind === "type"
-        ? "type-only: declared, no runtime value"
-        : `value: \`${d.label}\` · writable ${d.writable} · enumerable ${d.enumerable}`;
-    out.push(`#### ${shape.heading}`);
-    // Markdown formatter keeps a blank line after a heading; emit it so --write and bun fmt agree.
-    out.push("");
-    out.push(
-      `- **Source:** declared in \`bun-types@${BUN_SHAPE_PINS.typesVersion}\` · ${link(shape.name, permalinks.get(shape.name))}`,
-    );
-    out.push(`- **Shape:** ${kindLine}`);
-    if (shape.status === "declared-only") {
-      out.push(
-        `- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used`,
-      );
-    }
-    if (shape.kind === "value" && !VOLATILE_SHAPES.has(shape.name)) {
-      const value = (Bun as unknown as Record<string, unknown>)[shape.name];
-      if (typeof value === "object" || typeof value === "function") {
-        const members = surfaceMembers(value);
-        if (members.length > 0) {
-          out.push(
-            `- **Members (${members.length}):** ${members.length <= 12 ? members.map((m) => `\`${m}\``).join(", ") : "snapshot in tests/bun_shape_members.json"}`,
-          );
-        }
-      }
-    }
-    out.push(
-      `- **Here:** ${top.length === 0 ? "no call site" : top.join(", ")}`,
-    );
-    out.push(
-      `- **Evidence:** ${shape.evidence.map((e) => `\`${e}\``).join(", ")}${deepDive[shape.name] ? ` · deep dive: [${deepDive[shape.name]}](./bun_server_runtime_shapes_runbook.md)` : ""}`,
-    );
-    out.push("");
+function descriptor(name: string) {
+  const b = Bun as unknown as Record<string, unknown>;
+  const d = Object.getOwnPropertyDescriptor(b, name);
+  if (d === undefined) {
+    return { label: "type-only", writable: "n/a", enumerable: "n/a" };
   }
+  return {
+    label: typeof d.value,
+    writable: String(d.writable),
+    enumerable: String(d.enumerable),
+  };
 }
 
-await Bun.write("docs/runbooks/bun_shape_contracts_runbook.md", out.join("\n"));
-const okLinks = [...permalinks.values()].filter((s) => s === 200).length;
-console.log(
-  `wrote catalog: ${BUN_SHAPES.length} shapes, ${okLinks} live permalinks`,
-);
+function link(shape: string, status: number | undefined): string {
+  return status === 200
+    ? `[reference](https://bun.com/reference/globals/bun/${shape})`
+    : "no reference page (declaration only)";
+}
+
+export async function renderBunShapeContractsCatalog(
+  root: string = process.cwd(),
+): Promise<{ readonly markdown: string; readonly okLinks: number }> {
+  const files = await listBunShapeScannedFiles(root);
+  const perShape = new Map<string, Map<string, number>>();
+  const perSubmodule = new Map<string, Map<string, number>>();
+  for (const file of files) {
+    const text = await Bun.file(path.join(root, file)).text();
+    const { hits, submodules } = scanBunShapeSource(file, text);
+    for (const [hit, count] of hits) {
+      const m = perShape.get(hit) ?? new Map<string, number>();
+      m.set(file, (m.get(file) ?? 0) + count);
+      perShape.set(hit, m);
+    }
+    for (const [subKey, count] of submodules) {
+      const m = perSubmodule.get(subKey) ?? new Map<string, number>();
+      m.set(file, (m.get(file) ?? 0) + count);
+      perSubmodule.set(subKey, m);
+    }
+  }
+
+  const permalinks = new Map(
+    Object.entries(
+      (await Bun.file(path.join(root, LINKS_PATH)).json()) as Record<
+        string,
+        number
+      >,
+    ),
+  );
+
+  const out: string[] = [];
+  out.push(
+    `# Bun shape contracts — the ${BUN_SHAPES.length} shapes this repository calls`,
+  );
+  out.push("");
+  out.push(
+    `The single source of truth is layered, and nothing here restates upstream text: **declarations** come from \`bun-types@${BUN_SHAPE_PINS.typesVersion}\` (the surface the reference site renders), **behaviour** from probes against the local \`Bun ${BUN_SHAPE_PINS.bunVersion}\` binary (\`tests/bun_baseline.json\`), **property attributes** from the pinned Bun commit \`${BUN_SHAPE_PINS.bunCommit.slice(0, 10)}\`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.`,
+  );
+  out.push("");
+  out.push(
+    `Each entry names its declaration, what the binary says about the member (kind and descriptor), the files that call it, the local evidence, and — where one exists — the deep dive that already owns the detail. Call sites are bare paths, never line numbers: \`check:spec-citations\` does not audit runbooks, so a line number here would rot silently.`,
+  );
+  out.push("");
+  out.push(
+    `Adding a \`Bun.*\` call, \`import { ... } from "bun"\` binding, or \`bun:*\` submodule import without an entry in \`lib/bun_shapes.ts\` fails \`tests/bun_shapes_coverage.test.ts\`; the same test fails when an entry goes stale, loses its heading, cites evidence that no longer exists, or drifts from \`bun scripts/bun_shape_contracts.ts --check\`.`,
+  );
+  out.push("");
+  out.push(`## Upgrading`);
+  out.push("");
+  out.push(
+    `When upstream moves: bump \`packageManager\`, \`engines.bun\`, \`.bun-version\` and \`@types/bun\` together, run \`bun run probe:bun\` (baseline drift is the behaviour diff), then re-derive the declared surface with \`./bin/dx bun --types\`. Regenerate the member snapshot with \`bun scripts/bun_shape_members.ts --baseline tests/bun_shape_members.json\` and the catalog with \`bun scripts/bun_shape_contracts.ts --write\` (\`--refresh-links\` re-checks the permalinks), then review the diff. The coverage test reports the name diff before any prose is touched. Canary builds are out of scope.`,
+  );
+  out.push("");
+  out.push(`---`);
+  out.push("");
+
+  for (const [sub, title] of Object.entries(SHAPE_SECTIONS)) {
+    out.push(`## ${title}`);
+    out.push("");
+    for (const line of sectionInvariants[sub] ?? []) out.push(`- ${line}`);
+    out.push("");
+    for (const shape of BUN_SHAPES.filter((s) => s.subsystem === sub)) {
+      const filesForShape = [...(perShape.get(shape.name) ?? new Map())].sort(
+        (a, c) => c[1] - a[1] || a[0].localeCompare(c[0]),
+      );
+      const top = filesForShape.slice(0, 2).map(([f]) => `\`${f}\``);
+      const d = descriptor(shape.name);
+      const kindLine =
+        shape.kind === "type"
+          ? "type-only: declared, no runtime value"
+          : `value: \`${d.label}\` · writable ${d.writable} · enumerable ${d.enumerable}`;
+      const runtimeOnlyAnchor = RUNTIME_ONLY_SHAPES.get(shape.name);
+      const sourceDecl =
+        runtimeOnlyAnchor !== undefined
+          ? `runtime-only (${runtimeOnlyAnchor})`
+          : `declared in \`bun-types@${BUN_SHAPE_PINS.typesVersion}\``;
+      out.push(`#### ${shape.heading}`);
+      out.push("");
+      out.push(
+        `- **Source:** ${sourceDecl} · ${link(shape.name, permalinks.get(shape.name))}`,
+      );
+      out.push(`- **Shape:** ${kindLine}`);
+      if (shape.status === "declared-only") {
+        out.push(
+          `- **Status:** declared-only — in the declaration surface, called nowhere; the gate flips this entry the moment it is used`,
+        );
+      }
+      if (shape.kind === "value" && !VOLATILE_SHAPES.has(shape.name)) {
+        const value = (Bun as unknown as Record<string, unknown>)[shape.name];
+        if (typeof value === "object" || typeof value === "function") {
+          const members = surfaceMembers(value);
+          if (members.length > 0) {
+            out.push(
+              `- **Members (${members.length}):** ${members.length <= 12 ? members.map((m) => `\`${m}\``).join(", ") : "snapshot in tests/bun_shape_members.json"}`,
+            );
+          }
+        }
+      }
+      out.push(
+        `- **Here:** ${top.length === 0 ? "no call site" : top.join(", ")}`,
+      );
+      out.push(
+        `- **Evidence:** ${shape.evidence.map((e) => `\`${e}\``).join(", ")}${deepDive[shape.name] ? ` · deep dive: [${deepDive[shape.name]}](./bun_server_runtime_shapes_runbook.md)` : ""}`,
+      );
+      out.push("");
+    }
+  }
+
+  out.push(`## Built-in \`bun:*\` submodules`);
+  out.push("");
+  out.push(
+    `Non-test production imports from \`bun:sqlite\`, \`bun:jsc\`, and \`bun:bundle\` are inventoried alongside \`MODULE "bun"\` / \`globalThis.Bun\` (\`BUN_SUBMODULE_SHAPES\` in \`lib/bun_shapes.ts\`).`,
+  );
+  out.push("");
+  for (const sub of BUN_SUBMODULE_SHAPES) {
+    const key = `${sub.module}/${sub.name}`;
+    const filesForSub = [...(perSubmodule.get(key) ?? new Map())].sort(
+      (a, c) => c[1] - a[1] || a[0].localeCompare(c[0]),
+    );
+    const top = filesForSub.slice(0, 2).map(([f]) => `\`${f}\``);
+    const kindLabel = sub.kind === "macro" ? "bundler macro" : "runtime export";
+    out.push(
+      `- **\`${sub.module}\` → \`${sub.name}\`** (${kindLabel}) — here: ${top.length === 0 ? "no call site" : top.join(", ")} · evidence: ${sub.evidence.map((e) => `\`${e}\``).join(", ")}`,
+    );
+  }
+
+  const okLinks = [...permalinks.values()].filter((s) => s === 200).length;
+  return { markdown: `${out.join("\n")}\n`, okLinks };
+}
+
+if (import.meta.main) {
+  const root = process.cwd();
+  const args = new Set(process.argv.slice(2));
+  const unknown = [...args].filter(
+    (a) => a !== "--write" && a !== "--check" && a !== "--refresh-links",
+  );
+  if (unknown.length > 0) {
+    console.error(`unknown option(s): ${unknown.join(", ")}`);
+    process.exit(2);
+  }
+
+  if (args.has("--refresh-links")) {
+    const refreshed: Record<string, number> = {};
+    for (const shape of BUN_SHAPES) {
+      const url = `https://bun.com/reference/globals/bun/${shape.name}`;
+      try {
+        const res = await fetch(url, { redirect: "follow" });
+        refreshed[shape.name] = res.status;
+        await res.body?.cancel();
+      } catch {
+        refreshed[shape.name] = 0;
+      }
+    }
+    await Bun.write(
+      path.join(root, LINKS_PATH),
+      `${JSON.stringify(refreshed, null, 2)}\n`,
+    );
+    console.log(
+      `refreshed ${Object.keys(refreshed).length} permalink statuses`,
+    );
+    process.exit(0);
+  }
+
+  const { markdown, okLinks } = await renderBunShapeContractsCatalog(root);
+  const catalogFile = Bun.file(path.join(root, SHAPE_CATALOG_PATH));
+
+  if (args.has("--check")) {
+    const existing = (await catalogFile.exists())
+      ? await catalogFile.text()
+      : "";
+    if (existing !== markdown) {
+      console.error(
+        `${SHAPE_CATALOG_PATH} is out of date; run \`bun scripts/bun_shape_contracts.ts --write\``,
+      );
+      process.exit(1);
+    }
+    console.log(
+      `catalog fresh: ${BUN_SHAPES.length} shapes, ${BUN_SUBMODULE_SHAPES.length} bun:* submodule symbols, ${okLinks} live permalinks`,
+    );
+    process.exit(0);
+  }
+
+  await Bun.write(path.join(root, SHAPE_CATALOG_PATH), markdown);
+  console.log(
+    `wrote catalog: ${BUN_SHAPES.length} shapes, ${BUN_SUBMODULE_SHAPES.length} bun:* submodule symbols, ${okLinks} live permalinks`,
+  );
+}

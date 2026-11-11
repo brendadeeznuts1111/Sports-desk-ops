@@ -14,6 +14,7 @@
  */
 
 import * as ts from "typescript";
+import { listSourceFiles } from "./source_files.ts";
 
 /** The exact upstream artifacts this table is written against. */
 export const BUN_SHAPE_PINS = {
@@ -72,24 +73,62 @@ export interface BunShape {
 }
 
 /**
- * Shapes the binary exposes but bun-types does not declare. Empty today: every shape
- * below is declared. An entry here must name the source anchor that justifies it, or
- * `analyzeBunShapes` reports `runtime-only-without-source`.
+ * Shapes the binary exposes that `bun-types` does not declare. Empty today: `bun-types@1.4.4`
+ * declares all 86 shapes in `BUN_SHAPES` (including `CSRF`, `isStandaloneExecutable`, and
+ * `sliceAnsi`). An entry here must name the source anchor that justifies it, or
+ * `analyzeBunShapes` reports `runtime-only-without-source`; once `bun-types` adds a
+ * declaration, `analyzeBunShapes` reports `stale-runtime-only` so stale claims cannot linger.
  */
-export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map([
-  [
-    "CSRF",
-    "bun-types@1.4.4 has no Bun.CSRF declaration; probed by bin/bun_surface.ts",
-  ],
-  [
-    "isStandaloneExecutable",
-    "bun-types@1.4.4 has no Bun.isStandaloneExecutable declaration; probed by bin/bun_surface.ts",
-  ],
-  [
-    "sliceAnsi",
-    "bun-types@1.4.4 has no Bun.sliceAnsi declaration; probed by bin/bun_surface.ts",
-  ],
-]);
+export const RUNTIME_ONLY_SHAPES: ReadonlyMap<string, string> = new Map();
+
+export interface BunSubmoduleSymbol {
+  readonly module: `bun:${string}`;
+  readonly name: string;
+  /**
+   * `value` — runtime property of `await import(module)`;
+   * `macro` — bundler-transformed intrinsic (e.g. `feature` from `bun:bundle`) that
+   * throws or cannot be evaluated outside a transpiled condition.
+   */
+  readonly kind: "value" | "macro";
+  readonly evidence: readonly string[];
+}
+
+/**
+ * Built-in `bun:*` submodule symbols imported by non-test source files (`bun:sqlite`,
+ * `bun:jsc`, `bun:bundle`). Tracked alongside `BUN_SHAPES` so no `bun:*` surface goes dark.
+ */
+export const BUN_SUBMODULE_SHAPES: readonly BunSubmoduleSymbol[] = [
+  {
+    module: "bun:bundle",
+    name: "feature",
+    kind: "macro",
+    evidence: ["test:tests/wager_tiers_toml.test.ts"],
+  },
+  {
+    module: "bun:jsc",
+    name: "estimateShallowMemoryUsageOf",
+    kind: "value",
+    evidence: ["surface:bun:jsc.estimateShallowMemoryUsageOf"],
+  },
+  {
+    module: "bun:jsc",
+    name: "heapStats",
+    kind: "value",
+    evidence: ["surface:bun:jsc.heapStats"],
+  },
+  {
+    module: "bun:sqlite",
+    name: "Database",
+    kind: "value",
+    evidence: ["surface:bun:sqlite.Database"],
+  },
+  {
+    module: "bun:sqlite",
+    name: "constants",
+    kind: "value",
+    evidence: ["surface:bun:sqlite.constants"],
+  },
+];
 
 /**
  * Shapes whose members depend on the caller, so they are not snapshotted: the
@@ -795,15 +834,116 @@ export interface ShapeUsage {
   readonly used: Map<string, Set<string>>;
   /** `Bun[` accesses, which this scanner cannot resolve and which must fail the gate. */
   readonly elementAccess: string[];
+  /** Built-in `bun:*` submodule symbol (`"bun:sqlite/Database"`) → files that import it. */
+  readonly submodules?: ReadonlyMap<string, Set<string>>;
+}
+
+const SCANNED_EXTENSIONS = ["ts", "tsx", "mts", "mjs", "js"] as const;
+
+export function isBunShapeScannedPath(file: string): boolean {
+  return (
+    !file.includes(".test.") &&
+    !file.startsWith("tests/") &&
+    !file.startsWith("verification/") &&
+    !file.startsWith("examples/") &&
+    !file.startsWith("scratch/") &&
+    !file.startsWith("Scratch/") &&
+    !file.startsWith("packages/sportsdesk-ops/bin/") &&
+    !file.startsWith("scripts/build") &&
+    !file.startsWith("scripts/dev_dashboard")
+  );
 }
 
 /**
- * Parse a single TypeScript/JavaScript source file and return per-shape hit counts plus
- * any dynamic element accesses (`Bun[...]` or `bunNs[...]`).
+ * Single shared production file list for `scripts/bun_shape_contracts.ts` and
+ * `tests/bun_shapes_coverage.test.ts` so the catalog generator and the CI gate
+ * always inspect the exact same tracked source files (including `.tsx` and `.mts`).
+ */
+export async function listBunShapeScannedFiles(
+  root: string,
+): Promise<string[]> {
+  const proc = Bun.spawn(["git", "-C", root, "ls-files", "-z", "--cached"], {
+    stdout: "pipe",
+    stderr: "ignore",
+    env: {
+      ...Bun.env,
+      GIT_CONFIG_GLOBAL: Bun.env.GIT_CONFIG_GLOBAL ?? "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    },
+  });
+  const [trackedText, exitCode] = await Promise.all([
+    proc.stdout.text(),
+    proc.exited,
+  ]);
+  const trackedSet =
+    exitCode === 0
+      ? new Set(trackedText.split("\0").filter((f) => f !== ""))
+      : null;
+
+  const all = await listSourceFiles(root, SCANNED_EXTENSIONS);
+  return all.filter(
+    (file) =>
+      (trackedSet === null || trackedSet.has(file)) &&
+      isBunShapeScannedPath(file),
+  );
+}
+
+function scriptKindForFile(file: string): ts.ScriptKind {
+  if (file.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (file.endsWith(".jsx")) return ts.ScriptKind.JSX;
+  if (file.endsWith(".ts") || file.endsWith(".mts") || file.endsWith(".cts")) {
+    return ts.ScriptKind.TS;
+  }
+  return ts.ScriptKind.JS;
+}
+
+function isBunNamespaceExpression(
+  expr: ts.Expression,
+  bunNamespaces: ReadonlySet<string>,
+): boolean {
+  if (ts.isIdentifier(expr) && bunNamespaces.has(expr.text)) return true;
+  if (
+    ts.isPropertyAccessExpression(expr) &&
+    ts.isIdentifier(expr.expression) &&
+    expr.expression.text === "globalThis" &&
+    expr.name.text === "Bun"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isBunEntityPrefix(
+  entity: ts.EntityName,
+  bunNamespaces: ReadonlySet<string>,
+): boolean {
+  if (ts.isIdentifier(entity) && bunNamespaces.has(entity.text)) return true;
+  if (
+    ts.isQualifiedName(entity) &&
+    ts.isIdentifier(entity.left) &&
+    entity.left.text === "globalThis" &&
+    entity.right.text === "Bun"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function leftmostIdentifier(entity: ts.EntityName): string {
+  let cur: ts.EntityName = entity;
+  while (ts.isQualifiedName(cur)) cur = cur.left;
+  return cur.text;
+}
+
+/**
+ * Parse a single TypeScript/JavaScript source file and return per-shape hit counts,
+ * `bun:*` built-in submodule symbol hits, and any dynamic element accesses (`Bun[...]`
+ * or `bunNs[...]`).
  *
- * Tracks both the `Bun` global namespace (`Bun.<name>`) and the `"bun"` module surface
- * (`import { x, y as z, type T } from "bun"` and `import * as bunNs from "bun"`), since
- * `declare module "bun" { export = Bun }` exposes the identical runtime and type surface.
+ * Tracks both `globalThis.Bun` (`Bun.<name>`, `globalThis.Bun.<name>`, `const { x } = Bun`)
+ * and the `"bun"` module surface (`import { x, type T } from "bun"`, `import * as bunNs from "bun"`,
+ * `export { x } from "bun"`, `import("bun").<Member>`), plus built-in `bun:*` submodules
+ * (`bun:sqlite`, `bun:jsc`, `bun:bundle`, `bun:ffi`, excluding `bun:test`).
  * Comments and string literals are ignored by construction.
  */
 export function scanBunShapeSource(
@@ -811,83 +951,179 @@ export function scanBunShapeSource(
   text: string,
 ): {
   readonly hits: Map<string, number>;
+  readonly submodules: Map<string, number>;
   readonly elementAccess: string[];
 } {
   const hits = new Map<string, number>();
+  const submodules = new Map<string, number>();
   const elementAccess: string[] = [];
   const bump = (name: string): void => {
     if (name === "default" || name === "__esModule") return;
     hits.set(name, (hits.get(name) ?? 0) + 1);
   };
+  const bumpSubmodule = (mod: string, name: string): void => {
+    if (mod === "bun:test" || name === "default" || name === "__esModule") {
+      return;
+    }
+    const key = `${mod}/${name}`;
+    submodules.set(key, (submodules.get(key) ?? 0) + 1);
+  };
 
-  const kind = file.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS;
   const sf = ts.createSourceFile(
     file,
     text,
     ts.ScriptTarget.Latest,
     false,
-    kind,
+    scriptKindForFile(file),
   );
 
   const bunNamespaces = new Set<string>(["Bun"]);
+  const submoduleNamespaces = new Map<string, string>();
+
   for (const stmt of sf.statements) {
     if (
-      !ts.isImportDeclaration(stmt) ||
-      !ts.isStringLiteral(stmt.moduleSpecifier) ||
-      stmt.moduleSpecifier.text !== "bun"
+      ts.isImportDeclaration(stmt) &&
+      ts.isStringLiteral(stmt.moduleSpecifier)
     ) {
-      continue;
-    }
-    const clause = stmt.importClause;
-    if (!clause) continue;
-    if (clause.name) {
-      bunNamespaces.add(clause.name.text);
-    }
-    const bindings = clause.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      bunNamespaces.add(bindings.name.text);
-    } else if (ts.isNamedImports(bindings)) {
-      for (const el of bindings.elements) {
-        bump((el.propertyName ?? el.name).text);
+      const spec = stmt.moduleSpecifier.text;
+      const clause = stmt.importClause;
+      if (spec === "bun" && clause) {
+        if (clause.name) bunNamespaces.add(clause.name.text);
+        const bindings = clause.namedBindings;
+        if (bindings) {
+          if (ts.isNamespaceImport(bindings)) {
+            bunNamespaces.add(bindings.name.text);
+          } else if (ts.isNamedImports(bindings)) {
+            for (const el of bindings.elements) {
+              bump((el.propertyName ?? el.name).text);
+            }
+          }
+        }
+      } else if (spec.startsWith("bun:") && spec !== "bun:test" && clause) {
+        if (clause.name) submoduleNamespaces.set(clause.name.text, spec);
+        const bindings = clause.namedBindings;
+        if (bindings) {
+          if (ts.isNamespaceImport(bindings)) {
+            submoduleNamespaces.set(bindings.name.text, spec);
+          } else if (ts.isNamedImports(bindings)) {
+            for (const el of bindings.elements) {
+              bumpSubmodule(spec, (el.propertyName ?? el.name).text);
+            }
+          }
+        }
+      }
+    } else if (
+      ts.isExportDeclaration(stmt) &&
+      stmt.moduleSpecifier &&
+      ts.isStringLiteral(stmt.moduleSpecifier)
+    ) {
+      const spec = stmt.moduleSpecifier.text;
+      if (spec === "bun") {
+        if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+          for (const el of stmt.exportClause.elements) {
+            bump((el.propertyName ?? el.name).text);
+          }
+        } else if (!stmt.exportClause) {
+          elementAccess.push(`${file}: ${stmt.getText(sf).slice(0, 60)}`);
+        }
+      } else if (spec.startsWith("bun:") && spec !== "bun:test") {
+        if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+          for (const el of stmt.exportClause.elements) {
+            bumpSubmodule(spec, (el.propertyName ?? el.name).text);
+          }
+        } else if (!stmt.exportClause) {
+          elementAccess.push(`${file}: ${stmt.getText(sf).slice(0, 60)}`);
+        }
       }
     }
   }
 
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAccessExpression(node)) {
-      if (
-        ts.isIdentifier(node.expression) &&
-        bunNamespaces.has(node.expression.text)
-      ) {
+      if (isBunNamespaceExpression(node.expression, bunNamespaces)) {
         bump(node.name.text);
+      } else if (ts.isIdentifier(node.expression)) {
+        const submod = submoduleNamespaces.get(node.expression.text);
+        if (submod !== undefined) bumpSubmodule(submod, node.name.text);
       }
     } else if (ts.isQualifiedName(node)) {
-      if (ts.isIdentifier(node.left) && bunNamespaces.has(node.left.text)) {
+      if (isBunEntityPrefix(node.left, bunNamespaces)) {
         bump(node.right.text);
+      } else if (ts.isIdentifier(node.left)) {
+        const submod = submoduleNamespaces.get(node.left.text);
+        if (submod !== undefined) bumpSubmodule(submod, node.right.text);
       }
     } else if (ts.isElementAccessExpression(node)) {
       if (
-        ts.isIdentifier(node.expression) &&
-        bunNamespaces.has(node.expression.text)
+        isBunNamespaceExpression(node.expression, bunNamespaces) ||
+        (ts.isIdentifier(node.expression) &&
+          submoduleNamespaces.has(node.expression.text))
       ) {
         elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+      }
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer !== undefined
+    ) {
+      if (isBunNamespaceExpression(node.initializer, bunNamespaces)) {
+        for (const el of node.name.elements) {
+          if (el.dotDotDotToken) {
+            elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+          } else if (el.propertyName && ts.isIdentifier(el.propertyName)) {
+            bump(el.propertyName.text);
+          } else if (!el.propertyName && ts.isIdentifier(el.name)) {
+            bump(el.name.text);
+          } else {
+            elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+          }
+        }
+      } else if (ts.isIdentifier(node.initializer)) {
+        const submod = submoduleNamespaces.get(node.initializer.text);
+        if (submod !== undefined) {
+          for (const el of node.name.elements) {
+            if (el.dotDotDotToken) {
+              elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+            } else if (el.propertyName && ts.isIdentifier(el.propertyName)) {
+              bumpSubmodule(submod, el.propertyName.text);
+            } else if (!el.propertyName && ts.isIdentifier(el.name)) {
+              bumpSubmodule(submod, el.name.text);
+            } else {
+              elementAccess.push(`${file}: ${node.getText(sf).slice(0, 60)}`);
+            }
+          }
+        }
+      }
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal) &&
+      node.qualifier !== undefined
+    ) {
+      const spec = node.argument.literal.text;
+      const member = leftmostIdentifier(node.qualifier);
+      if (spec === "bun") {
+        bump(member);
+      } else if (spec.startsWith("bun:") && spec !== "bun:test") {
+        bumpSubmodule(spec, member);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return { hits, elementAccess };
+  return { hits, submodules, elementAccess };
 }
 
 /**
  * Parse each source and collect `Bun.<name>` / `import { <name> } from "bun"` value and
- * type positions. Comments and string literals are ignored by construction.
+ * type positions plus `bun:*` built-in submodule imports. Comments and string literals
+ * are ignored by construction.
  */
 export function collectBunShapeUsage(
   sources: ReadonlyMap<string, string>,
 ): ShapeUsage {
   const used = new Map<string, Set<string>>();
+  const submodules = new Map<string, Set<string>>();
   const elementAccess: string[] = [];
   for (const [file, text] of sources) {
     const scanned = scanBunShapeSource(file, text);
@@ -896,9 +1132,14 @@ export function collectBunShapeUsage(
       set.add(file);
       used.set(name, set);
     }
+    for (const subKey of scanned.submodules.keys()) {
+      const set = submodules.get(subKey) ?? new Set<string>();
+      set.add(file);
+      submodules.set(subKey, set);
+    }
     elementAccess.push(...scanned.elementAccess);
   }
-  return { used, elementAccess };
+  return { used, submodules, elementAccess };
 }
 
 export type ShapeRule =
@@ -912,11 +1153,15 @@ export type ShapeRule =
   | "no-evidence"
   | "undeclared-shape"
   | "runtime-only-without-source"
+  | "stale-runtime-only"
   | "section-mismatch"
   | "member-drift"
   | "member-unbaselined"
   | "declared-only-in-use"
-  | "element-access";
+  | "element-access"
+  | "unknown-submodule-symbol"
+  | "unused-submodule-symbol"
+  | "submodule-evidence-unresolved";
 
 export interface ShapeProblem {
   readonly rule: ShapeRule;
@@ -946,7 +1191,11 @@ export interface ShapeWorld {
   readonly declaredValues: ReadonlySet<string>;
   /** Raw bun-types source text, used to confirm type-only declarations. */
   readonly typesSource: string;
+  /** Optional compiler-derived type-only exports of module `"bun"`, superseding regex scan when supplied. */
+  readonly declaredTypes?: ReadonlySet<string>;
   readonly runtimeOnly?: ReadonlyMap<string, string>;
+  /** Optional `BUN_SUBMODULE_SHAPES` check when `usage.submodules` is populated. */
+  readonly submoduleShapes?: readonly BunSubmoduleSymbol[];
 }
 
 const TYPE_DECLARATION =
@@ -987,7 +1236,8 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
   }
 
   const runtimeOnly = world.runtimeOnly ?? RUNTIME_ONLY_SHAPES;
-  const declaredTypes = typeDeclarations(world.typesSource);
+  const declaredTypes =
+    world.declaredTypes ?? typeDeclarations(world.typesSource);
 
   for (const shape of world.shapes) {
     const declaredOnly = shape.status === "declared-only";
@@ -1069,7 +1319,9 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
       });
     }
     for (const ref of shape.evidence) {
-      const [kind, id] = ref.split(":", 2) as [string, string];
+      const colon = ref.indexOf(":");
+      const kind = colon >= 0 ? ref.slice(0, colon) : ref;
+      const id = colon >= 0 ? ref.slice(colon + 1) : "";
       const ok =
         kind === "probe"
           ? world.probes.has(id)
@@ -1091,6 +1343,15 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
           detail: shape.name,
         });
       }
+    } else if (
+      shape.kind === "value" &&
+      world.declaredValues.has(shape.name) &&
+      runtimeOnlyAnchor !== undefined
+    ) {
+      problems.push({
+        rule: "stale-runtime-only",
+        detail: `${shape.name} is now declared in bun-types`,
+      });
     }
     if (shape.kind === "type" && !declaredTypes.has(shape.name)) {
       problems.push({
@@ -1108,6 +1369,51 @@ export function analyzeBunShapes(world: ShapeWorld): ShapeProblem[] {
       });
     if (anchor.trim() === "")
       problems.push({ rule: "runtime-only-without-source", detail: name });
+  }
+
+  if (
+    world.submoduleShapes !== undefined &&
+    world.usage.submodules !== undefined
+  ) {
+    const subByKey = new Map<string, BunSubmoduleSymbol>();
+    for (const sub of world.submoduleShapes) {
+      subByKey.set(`${sub.module}/${sub.name}`, sub);
+    }
+    for (const [key, files] of world.usage.submodules) {
+      if (!subByKey.has(key)) {
+        problems.push({
+          rule: "unknown-submodule-symbol",
+          detail: `${key} (${[...files].sort().join(", ")})`,
+        });
+      }
+    }
+    for (const [key, sub] of subByKey) {
+      if (!world.usage.submodules.has(key)) {
+        problems.push({
+          rule: "unused-submodule-symbol",
+          detail: key,
+        });
+      }
+      for (const ref of sub.evidence) {
+        const colon = ref.indexOf(":");
+        const kind = colon >= 0 ? ref.slice(0, colon) : ref;
+        const id = colon >= 0 ? ref.slice(colon + 1) : "";
+        const ok =
+          kind === "probe"
+            ? world.probes.has(id)
+            : kind === "test"
+              ? world.tests.has(id)
+              : kind === "surface"
+                ? world.surfaces.has(id)
+                : false;
+        if (!ok) {
+          problems.push({
+            rule: "submodule-evidence-unresolved",
+            detail: `${key} -> ${ref}`,
+          });
+        }
+      }
+    }
   }
 
   return problems;

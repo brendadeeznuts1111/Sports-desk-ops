@@ -9,7 +9,7 @@ Evidence ledger and OpenAPI citations use **filename only** (for example `operat
 | [../architecture/signal-honesty.md](../architecture/signal-honesty.md)                             | Signal honesty ADR, cron audit, operator triage matrix                |
 | [operational_guardrails_runbook.md](./operational_guardrails_runbook.md)                           | Fantasy402 Manager wire evidence, capture guardrails, getWebLog modes |
 | [bun_server_runtime_shapes_runbook.md](./bun_server_runtime_shapes_runbook.md)                     | Bun `Server`, WebSocket handlers, TLS, replay shapes                  |
-| [bun_shape_contracts_runbook.md](./bun_shape_contracts_runbook.md)                                 | The 70 `Bun.*` shapes this repo calls: source, evidence, gate         |
+| [bun_shape_contracts_runbook.md](./bun_shape_contracts_runbook.md)                                 | The 86 `Bun.*` / `"bun"` shapes + `bun:*` submodules this repo calls  |
 | [bun-pm-policy.md](./bun-pm-policy.md)                                                             | `bun install`, `bun.lock`, machine bunfig, `bun-deps`, `pm:doctor`    |
 | [token_architecture_and_verification_runbook.md](./token_architecture_and_verification_runbook.md) | Design tokens, CIEDE2000, WCAG, `gen:tokens`                          |
 | [cloudflare_r2_and_api_runbook.md](./cloudflare_r2_and_api_runbook.md)                             | R2 sync, API tokens, reporting pipeline archive                       |

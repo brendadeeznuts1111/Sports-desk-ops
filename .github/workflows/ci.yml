@@ -123,7 +123,7 @@ jobs:
         run: bun run lint:check
       - name: Bun docs & shape manifest baselines
         timeout-minutes: 3
-        run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json && bun test tests/bun_shapes_manifest.test.ts tests/language_coverage.test.ts
+        run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json && bun scripts/bun_shape_contracts.ts --check && bun test tests/bun_shapes_manifest.test.ts tests/bun_shapes_coverage.test.ts tests/language_coverage.test.ts
       - name: Bun test changed files
         run: bun run test:changed
       - name: Changed dsh-plugin bundles (verify-load)

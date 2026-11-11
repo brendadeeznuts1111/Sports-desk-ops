@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   BUN_SHAPES,
+  BUN_SUBMODULE_SHAPES,
+  RUNTIME_ONLY_SHAPES,
   SHAPE_SECTIONS,
   SHAPE_SUBSYSTEMS,
   analyzeBunShapes,
@@ -123,6 +125,19 @@ describe("manifest", () => {
       );
     }
   });
+
+  test("RUNTIME_ONLY_SHAPES is empty on bun-types@1.4.4 and BUN_SUBMODULE_SHAPES are unique", () => {
+    expect([...RUNTIME_ONLY_SHAPES.keys()]).toEqual([]);
+    const subKeys = BUN_SUBMODULE_SHAPES.map((s) => `${s.module}/${s.name}`);
+    expect(new Set(subKeys).size).toBe(BUN_SUBMODULE_SHAPES.length);
+    expect(subKeys.sort()).toEqual([
+      "bun:bundle/feature",
+      "bun:jsc/estimateShallowMemoryUsageOf",
+      "bun:jsc/heapStats",
+      "bun:sqlite/Database",
+      "bun:sqlite/constants",
+    ]);
+  });
 });
 
 describe("catalogHeadings", () => {
@@ -195,6 +210,48 @@ describe("collectBunShapeUsage", () => {
       "version",
     ]);
     expect(usage.elementAccess).toEqual(['lib/dyn.ts: bunNs["sql"]']);
+  });
+
+  test("tracks globalThis.Bun, destructuring, re-exports, import('bun').T, TSX, and bun:* submodules", () => {
+    const sources = new Map([
+      [
+        "src/dashboard/view.tsx",
+        [
+          'import { feature } from "bun:bundle";',
+          'import * as sqliteNs from "bun:sqlite";',
+          'export { YAML, type Env as BunEnv } from "bun";',
+          "const { env, revision: rev } = Bun;",
+          "const ver = globalThis.Bun.version;",
+          'type SqlPool = import("bun").SQL;',
+          'type JscStats = ReturnType<typeof import("bun:jsc").heapStats>;',
+          "type GlobalSrv = globalThis.Bun.Server<unknown>;",
+          "export const View = () => <div>{feature('PROD') ? rev : String(Boolean(sqliteNs.Database))}</div>;",
+          "export type Keep = [SqlPool, JscStats, GlobalSrv, typeof env, typeof ver];",
+        ].join("\n"),
+      ],
+      [
+        "lib/rest_bad.ts",
+        "const { ...all } = globalThis.Bun;\nexport { all };",
+      ],
+    ]);
+    const usage = collectBunShapeUsage(sources);
+    expect([...usage.used.keys()].sort()).toEqual([
+      "Env",
+      "SQL",
+      "Server",
+      "YAML",
+      "env",
+      "revision",
+      "version",
+    ]);
+    expect([...(usage.submodules?.keys() ?? [])].sort()).toEqual([
+      "bun:bundle/feature",
+      "bun:jsc/heapStats",
+      "bun:sqlite/Database",
+    ]);
+    expect(usage.elementAccess).toEqual([
+      "lib/rest_bad.ts: { ...all } = globalThis.Bun",
+    ]);
   });
 });
 
@@ -298,6 +355,62 @@ describe("analyzeBunShapes", () => {
       }),
     );
     expect(rules(emptyAnchor)).toContain("runtime-only-without-source");
+    const staleAnchor = analyzeBunShapes(
+      world({
+        declaredValues: new Set(["file"]),
+        runtimeOnly: new Map([["file", "no longer undeclared"]]),
+      }),
+    );
+    expect(staleAnchor).toEqual([
+      {
+        rule: "stale-runtime-only",
+        detail: "file is now declared in bun-types",
+      },
+    ]);
+  });
+
+  test("validates bun:* submodule inventory against usage and evidence", () => {
+    const unknownSub = analyzeBunShapes(
+      world({
+        usage: {
+          used: new Map([["file", new Set(["lib/x.ts"])]]),
+          submodules: new Map([["bun:ffi/dlopen", new Set(["lib/ffi.ts"])]]),
+          elementAccess: [],
+        },
+        submoduleShapes: [],
+      }),
+    );
+    expect(unknownSub).toEqual([
+      {
+        rule: "unknown-submodule-symbol",
+        detail: "bun:ffi/dlopen (lib/ffi.ts)",
+      },
+    ]);
+
+    const unusedAndBadEvidence = analyzeBunShapes(
+      world({
+        usage: {
+          used: new Map([["file", new Set(["lib/x.ts"])]]),
+          submodules: new Map(),
+          elementAccess: [],
+        },
+        submoduleShapes: [
+          {
+            module: "bun:jsc",
+            name: "heapStats",
+            kind: "value",
+            evidence: ["surface:missing.check"],
+          },
+        ],
+      }),
+    );
+    expect(unusedAndBadEvidence).toEqual([
+      { rule: "unused-submodule-symbol", detail: "bun:jsc/heapStats" },
+      {
+        rule: "submodule-evidence-unresolved",
+        detail: "bun:jsc/heapStats -> surface:missing.check",
+      },
+    ]);
   });
 
   test("type shapes must exist in the declaration source", () => {

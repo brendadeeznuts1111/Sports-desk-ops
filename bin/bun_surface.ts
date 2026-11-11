@@ -11,6 +11,8 @@
  * decision. Nothing here opens a socket or reads a credential.
  */
 
+import * as bunJsc from "bun:jsc";
+import * as bunSqlite from "bun:sqlite";
 import * as nodeCrypto from "node:crypto";
 
 import {
@@ -103,6 +105,16 @@ const CHECKS: readonly Check[] = [
   { group: "core", name: "XML", read: () => Bun.XML.parse },
   { group: "core", name: "YAML", read: () => Bun.YAML.parse },
   { group: "core", name: "markdown", read: () => Bun.markdown.html },
+  {
+    group: "core",
+    name: "bun:jsc.estimateShallowMemoryUsageOf",
+    read: () => bunJsc.estimateShallowMemoryUsageOf,
+  },
+  {
+    group: "core",
+    name: "bun:jsc.heapStats",
+    read: () => bunJsc.heapStats,
+  },
 
   // Capture: the F402 / screenshot / catalog path.
   { group: "capture", name: "WebView", read: () => Bun.WebView },
@@ -134,6 +146,16 @@ const CHECKS: readonly Check[] = [
   // Storage: settlement and evidence paths.
   { group: "storage", name: "SQL", read: () => Bun.SQL },
   { group: "storage", name: "sql", read: () => Bun.sql },
+  {
+    group: "storage",
+    name: "bun:sqlite.Database",
+    read: () => bunSqlite.Database,
+  },
+  {
+    group: "storage",
+    name: "bun:sqlite.constants",
+    read: () => bunSqlite.constants,
+  },
   { group: "storage", name: "S3Client", read: () => Bun.S3Client },
   { group: "storage", name: "s3", read: () => Bun.s3 },
   { group: "storage", name: "RedisClient", read: () => Bun.RedisClient },

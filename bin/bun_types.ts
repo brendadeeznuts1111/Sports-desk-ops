@@ -24,6 +24,10 @@ export interface NamespaceGap {
 
 export interface TypesReport {
   readonly declared: number;
+  /** Type-only symbols exported by `declare module "bun"` (and `Bun.<Type>`). */
+  readonly declaredTypes: string[];
+  /** Whether `import * as m from "bun"` exposes the exact same value declarations as `globalThis.Bun`. */
+  readonly moduleParity: boolean;
   readonly runtime: number;
   readonly absent: string[];
   readonly undeclared: string[];
@@ -33,7 +37,7 @@ export interface TypesReport {
 }
 
 const VIRTUAL = "/__bun_surface_probe__.ts";
-const VIRTUAL_TEXT = "export const b = Bun;\n";
+const VIRTUAL_TEXT = `import * as bunMod from "bun";\nexport const b = Bun;\nexport const m = bunMod;\n`;
 
 /** Properties every function inherits that say nothing about the API surface. */
 const FUNCTION_INTERNALS = new Set([
@@ -84,6 +88,8 @@ export async function declarationDrift(
 ): Promise<TypesReport> {
   const empty: TypesReport = {
     declared: 0,
+    declaredTypes: [],
+    moduleParity: false,
     runtime: 0,
     absent: [],
     undeclared: [],
@@ -135,11 +141,32 @@ export async function declarationDrift(
     return { ...empty, error: "virtual source missing" };
 
   let bunSymbol: ts.Symbol | undefined;
+  let modType: ts.Type | undefined;
+  let modNamespaceSymbol: ts.Symbol | undefined;
   ts.forEachChild(source, (node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.namedBindings !== undefined &&
+      ts.isNamespaceImport(node.importClause.namedBindings)
+    ) {
+      const sym = checker.getSymbolAtLocation(
+        node.importClause.namedBindings.name,
+      );
+      if (sym !== undefined) {
+        modNamespaceSymbol = checker.getAliasedSymbol(sym);
+      }
+      return;
+    }
     if (!ts.isVariableStatement(node)) return;
     const declaration = node.declarationList.declarations[0];
-    if (declaration?.initializer !== undefined) {
+    if (declaration?.initializer === undefined) return;
+    const varName = ts.isIdentifier(declaration.name)
+      ? declaration.name.text
+      : "";
+    if (varName === "b") {
       bunSymbol = checker.getSymbolAtLocation(declaration.initializer);
+    } else if (varName === "m") {
+      modType = checker.getTypeAtLocation(declaration);
     }
   });
   if (bunSymbol === undefined)
@@ -150,7 +177,35 @@ export async function declarationDrift(
   const declared = checker
     .getPropertiesOfType(bunType)
     .map((symbol) => symbol.name)
-    .filter((name) => !name.startsWith("__"));
+    .filter((name) => !name.startsWith("__"))
+    .sort();
+  const modDeclared =
+    modType === undefined
+      ? []
+      : checker
+          .getPropertiesOfType(modType)
+          .map((symbol) => symbol.name)
+          .filter((name) => !name.startsWith("__"))
+          .sort();
+  const moduleParity =
+    declared.length === modDeclared.length &&
+    declared.every((name, idx) => name === modDeclared[idx]);
+  const declaredSet = new Set(declared);
+  const declaredTypes =
+    modNamespaceSymbol === undefined
+      ? []
+      : checker
+          .getExportsOfModule(modNamespaceSymbol)
+          .filter(
+            (symbol) =>
+              !declaredSet.has(symbol.name) &&
+              (symbol.flags &
+                (ts.SymbolFlags.Type | ts.SymbolFlags.Namespace)) !==
+                0 &&
+              !symbol.name.startsWith("__"),
+          )
+          .map((symbol) => symbol.name)
+          .sort();
   const runtime = surfaceNames(Bun);
 
   const namespaceGaps: NamespaceGap[] = [];
@@ -178,6 +233,8 @@ export async function declarationDrift(
 
   return {
     declared: declared.length,
+    declaredTypes,
+    moduleParity,
     runtime: runtime.length,
     absent: declared.filter((name) => !runtime.includes(name)),
     undeclared: runtime.filter((name) => !declared.includes(name)),
