@@ -159,8 +159,16 @@ if [[ -d "$DOTFILES_DIR" ]]; then
   link_managed "$DOTFILES_DIR/bin/dsh" "$HOME/.bun/bin/dsh"
 fi
 
-# 4. Normalize PATH (Repo bin + User local bin + Dotfiles bin + Bun + Homebrew)
-export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:$HOME/.bun/bin:$HOST_HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+# 4. Normalize PATH (Repo bin + User local bin + Dotfiles bin + Bun + Homebrew).
+# Prefer $HOME/.bun/bin, then the bun already on the caller's PATH. That bun
+# would otherwise be shadowed by /usr/local/bin when HOME is a scratch
+# directory (tests, sandboxes) whose ~/.bun/bin exists but is empty.
+dx_caller_bun="$(command -v bun 2>/dev/null || true)"
+dx_caller_bun_dir=""
+if [[ -n "$dx_caller_bun" && -x "$dx_caller_bun" ]]; then
+  dx_caller_bun_dir="$(cd -P "$(dirname "$dx_caller_bun")" && pwd)"
+fi
+export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:$HOME/.bun/bin:$HOST_HOME/.bun/bin${dx_caller_bun_dir:+:$dx_caller_bun_dir}:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # 5. Load Cloudflare Pages credentials if present in repo or workspace.
 # Only the two Pages names are read, as data: the file is never `source`d, so a stray `R2_*` /
