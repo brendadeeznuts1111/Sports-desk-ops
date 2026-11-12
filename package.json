@@ -249,6 +249,7 @@
     "verify:docs": "bun run check:ledger-consistency && bun run check:spec-citations && bun run scripts/verify_docs.ts",
     "check:ledger-consistency": "bun run scripts/check_ledger_consistency.ts",
     "check:spec-citations": "bun run scripts/check_spec_citations.ts",
+    "check:derived-contracts": "bun run scripts/check_derived_contracts.ts",
     "check:route-surface": "bun run scripts/check_route_surface.ts",
     "audit:release": "bun run scripts/audit_release.ts",
     "audit:archives": "bun run scripts/audit_archives.ts",

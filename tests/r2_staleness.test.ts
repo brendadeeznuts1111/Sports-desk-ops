@@ -10,6 +10,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  R2_SLA_DOC_CODES,
+  R2_SLA_RUNBOOK_PATH,
+  R2SlaDocError,
+  checkR2SlaRunbook,
+} from "../lib/derived_r2_sla_docs.ts";
 
 import {
   ALERTER_EXIT,
@@ -317,5 +325,29 @@ describe("ALERTER_EXIT", () => {
     ]);
     expect(codes.size).toBe(3);
     expect(ALERTER_EXIT.allFresh).toBe(0);
+  });
+});
+
+describe("R2 SLA runbook is derived from BRIDGE_STALENESS_TARGETS", () => {
+  const root = join(import.meta.dir, "..");
+
+  test("the committed runbook table matches the registry", () => {
+    const text = readFileSync(join(root, R2_SLA_RUNBOOK_PATH), "utf8");
+    expect(() => checkR2SlaRunbook(text)).not.toThrow();
+  });
+
+  test("a drifted SLA fails with E_R2_SLA_DOC_SLA_DRIFT", () => {
+    const text = readFileSync(join(root, R2_SLA_RUNBOOK_PATH), "utf8");
+    const drifted = text.replace("| 1h30m |", "| 15m   |");
+    try {
+      checkR2SlaRunbook(drifted);
+      throw new Error("expected SLA drift");
+    } catch (error) {
+      expect(error).toBeInstanceOf(R2SlaDocError);
+      expect((error as R2SlaDocError).code).toBe(R2_SLA_DOC_CODES.slaDrift);
+      expect((error as R2SlaDocError).message).toContain(
+        "E_R2_SLA_DOC_SLA_DRIFT",
+      );
+    }
   });
 });

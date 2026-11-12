@@ -121,6 +121,9 @@ jobs:
       - name: Lint
         timeout-minutes: 3
         run: bun run lint:check
+      - name: Derived contract pins
+        timeout-minutes: 2
+        run: bun run check:derived-contracts
       - name: Bun docs & shape manifest baselines
         timeout-minutes: 3
         run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json && bun scripts/bun_shape_contracts.ts --check && bun test tests/bun_shapes_manifest.test.ts tests/bun_shapes_coverage.test.ts tests/language_coverage.test.ts
@@ -205,6 +208,9 @@ jobs:
       - name: Lint
         timeout-minutes: 3
         run: bun run lint:check
+      - name: Derived contract pins
+        timeout-minutes: 2
+        run: bun run check:derived-contracts
       - name: Docs invariants (spec honesty, evidence parity, portal, negative coverage)
         timeout-minutes: 3
         run: bun run test:docs
