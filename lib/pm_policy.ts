@@ -38,6 +38,97 @@ export const FOREIGN_LOCKFILES = [
   "bun.lockb",
 ] as const;
 
+/**
+ * Lifecycle trust policy: root `trustedDependencies` must be exactly `[]`, matching `bun.lock`.
+ * Defining the field *replaces* Bun's default allow list; the lock is what frozen installs read.
+ * @see https://bun.com/docs/pm/lifecycle#trusteddependencies
+ */
+export const TRUSTED_DEPENDENCIES_POLICY: readonly string[] = [];
+
+export type TrustedDependenciesSources = {
+  readonly manifest: readonly string[];
+  readonly lock: readonly string[];
+};
+
+export type TrustedDependenciesPolicyResult = {
+  readonly ok: boolean;
+  readonly detail: string;
+  readonly issues: readonly string[];
+  readonly sources: TrustedDependenciesSources;
+};
+
+function trustedListEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
+}
+
+/** Parse `trustedDependencies`; `undefined` / non-array → `null` (policy requires an explicit array). */
+export function normalizeTrustedDependencies(raw: unknown): string[] | null {
+  if (raw === undefined) return null;
+  if (!Array.isArray(raw)) return null;
+  if (!raw.every((entry) => typeof entry === "string")) return null;
+  return [...raw];
+}
+
+export function evaluateTrustedDependenciesPolicy(input: {
+  manifestRaw: unknown;
+  lockRaw: unknown;
+}): TrustedDependenciesPolicyResult {
+  const manifestNorm = normalizeTrustedDependencies(input.manifestRaw);
+  const lockNorm = normalizeTrustedDependencies(input.lockRaw);
+  const manifest = manifestNorm ?? [];
+  const lock = lockNorm ?? [];
+  const sources: TrustedDependenciesSources = { manifest, lock };
+  const issues: string[] = [];
+
+  if (manifestNorm === null) {
+    issues.push("manifest must declare trustedDependencies as a string array");
+  } else if (!trustedListEqual(manifest, [...TRUSTED_DEPENDENCIES_POLICY])) {
+    issues.push(
+      `manifest must opt out with [] (got ${JSON.stringify(manifest)})`,
+    );
+  }
+
+  if (lockNorm === null) {
+    issues.push("lock must record trustedDependencies as a string array");
+  } else if (!trustedListEqual(lock, [...TRUSTED_DEPENDENCIES_POLICY])) {
+    issues.push(
+      `lock must match policy [] (got ${JSON.stringify(lock)}); frozen install reads the lock`,
+    );
+  }
+
+  if (
+    manifestNorm !== null &&
+    lockNorm !== null &&
+    !trustedListEqual(manifest, lock)
+  ) {
+    issues.push(
+      `manifest/lock drift: ${JSON.stringify(manifest)} vs ${JSON.stringify(lock)}`,
+    );
+  }
+
+  const ok = issues.length === 0;
+  const detail = ok
+    ? `trustedDependencies ${JSON.stringify(manifest)} (manifest + lock)`
+    : issues.join("; ");
+  return { ok, detail, issues, sources };
+}
+
+export async function auditTrustedDependencies(
+  root: string,
+): Promise<TrustedDependenciesPolicyResult> {
+  const pkg = (await Bun.file(path.join(root, "package.json")).json()) as {
+    trustedDependencies?: unknown;
+  };
+  const lock = await readLock(root);
+  return evaluateTrustedDependenciesPolicy({
+    manifestRaw: pkg.trustedDependencies,
+    lockRaw: lock.trustedDependencies,
+  });
+}
+
 export const WORKSPACE_DEP_GROUPS = [
   "dependencies",
   "devDependencies",
@@ -46,6 +137,67 @@ export const WORKSPACE_DEP_GROUPS = [
 ] as const;
 
 export type WorkspaceDependencyGroup = (typeof WORKSPACE_DEP_GROUPS)[number];
+
+export interface OverrideCatalogRef {
+  /** JSON path inside `overrides`, e.g. `overrides.webpack`. */
+  readonly path: string;
+  /** Package the entry overrides — the nearest ancestor key that is not `.`. */
+  readonly depName: string;
+  readonly spec: string;
+}
+
+/** A `link:` target is either a directory or a package registered with `bun link`. */
+export type LinkSpecifier =
+  | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "name"; readonly name: string };
+
+/**
+ * Classify a `link:` specifier per bun.sh/docs/pm/cli/link. A bare `link:dir` and a scoped
+ * `link:@scope/dir` name a package registered with `bun link`; every other form — `./dir`,
+ * `../dir`, `vendor/dir`, an absolute path — is a directory relative to the declaring
+ * package.json. Getting this backwards is the common mistake: `link:vendor/dir` is a path.
+ */
+export function classifyLinkSpecifier(specifier: string): LinkSpecifier | null {
+  if (!specifier.startsWith("link:")) return null;
+  const target = specifier.slice("link:".length).trim();
+  if (target === "") return null;
+  const scopedName = /^@[^/]+\/[^/]+$/.test(target);
+  const bareName = !target.includes("/");
+  if (scopedName || bareName) return { kind: "name", name: target };
+  return { kind: "path", path: target };
+}
+
+/**
+ * `catalog:` references inside root `overrides`. Bun lists `overrides` as a valid catalog
+ * location (bun.sh/docs/pm/catalogs) and a missing entry fails `bun install` with exit 1, so a
+ * reference here needs the same validation as one in a dependency group.
+ */
+export function collectOverrideCatalogRefs(
+  overrides: Readonly<Record<string, unknown>>,
+  prefix = "overrides",
+  inheritedName: string | null = null,
+  out: OverrideCatalogRef[] = [],
+): OverrideCatalogRef[] {
+  for (const [key, value] of Object.entries(overrides)) {
+    const label = `${prefix}.${key}`;
+    const depName = key === "." ? inheritedName : key;
+    if (typeof value === "string") {
+      if (depName !== null && value.startsWith("catalog:")) {
+        out.push({ path: label, depName, spec: value });
+      }
+      continue;
+    }
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      collectOverrideCatalogRefs(
+        value as Record<string, unknown>,
+        label,
+        depName,
+        out,
+      );
+    }
+  }
+  return out;
+}
 
 /**
  * Bun reads exactly one global bunfig: `$XDG_CONFIG_HOME/.bunfig.toml` when XDG_CONFIG_HOME is an
@@ -84,6 +236,7 @@ type RawManifest = {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
+  overrides?: Record<string, unknown>;
   scripts?: Record<string, string>;
   bin?: string | Record<string, string>;
 };
@@ -100,6 +253,7 @@ type LockWorkspaceEntry = {
 type LockFile = {
   workspaces?: Record<string, LockWorkspaceEntry>;
   patchedDependencies?: Record<string, string>;
+  trustedDependencies?: unknown;
 };
 
 export interface WorkspacePackageInfo {
@@ -119,6 +273,8 @@ export interface WorkspacePackageInfo {
 }
 
 export interface WorkspaceInspection {
+  /** Absolute checkout root; `link:` paths resolve against it. */
+  readonly root: string;
   readonly rootPrivate: boolean;
   readonly patterns: readonly string[];
   readonly packages: readonly WorkspacePackageInfo[];
@@ -126,6 +282,8 @@ export interface WorkspaceInspection {
   readonly unregisteredDirs: readonly string[];
   readonly catalog: Readonly<Record<string, string>>;
   readonly catalogs: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Root `overrides`, where Bun also accepts `catalog:` references. */
+  readonly rootOverrides: Readonly<Record<string, unknown>>;
 }
 
 export interface WorkspaceEdge {
@@ -144,6 +302,7 @@ export type WorkspaceGraphIssueKind =
   | "duplicate-workspace-name"
   | "ambiguous-root-name"
   | "missing-catalog-entry"
+  | "missing-link-target"
   | "cycle";
 
 export interface WorkspaceGraphIssue {
@@ -338,6 +497,14 @@ export async function inspectWorkspaces(
     catalogs[groupName] = normalizeStringMap(entries);
   }
 
+  const rawOverrides: unknown = rootRaw.overrides;
+  const rootOverrides =
+    typeof rawOverrides === "object" &&
+    rawOverrides !== null &&
+    !Array.isArray(rawOverrides)
+      ? (rawOverrides as Record<string, unknown>)
+      : {};
+
   const byDir = new Map<string, WorkspacePackageInfo>();
   byDir.set("", toPackageInfo("", rootRaw));
   const namelessSet = new Set<string>();
@@ -373,6 +540,7 @@ export async function inspectWorkspaces(
   );
 
   return {
+    root,
     rootPrivate: rootRaw.private === true,
     patterns,
     packages,
@@ -380,6 +548,7 @@ export async function inspectWorkspaces(
     unregisteredDirs,
     catalog,
     catalogs,
+    rootOverrides,
   };
 }
 
@@ -608,6 +777,24 @@ export function analyzeWorkspaceGraph(
           continue;
         }
 
+        const link = classifyLinkSpecifier(spec);
+        if (link !== null) {
+          if (link.kind === "path") {
+            const base =
+              pkg.dir === ""
+                ? inspection.root
+                : path.join(inspection.root, pkg.dir);
+            if (!existsSync(path.resolve(base, link.path))) {
+              issues.push({
+                kind: "missing-link-target",
+                dir: pkg.dir,
+                detail: `${label} ${group}.${depName} -> "${spec}" names a directory that does not exist (a link: path is relative to the declaring package.json; write link:<name> only for a registered package)`,
+              });
+            }
+          }
+          continue;
+        }
+
         if (spec.startsWith("workspace:")) {
           const rawTarget = spec.slice("workspace:".length).trim();
           const normalizedTarget = normalizePosixDir(rawTarget);
@@ -712,6 +899,23 @@ export function analyzeWorkspaceGraph(
       dir: cycle[0] ?? "",
       detail: `workspace dependency cycle across [${cycle.map((d) => d || "<root>").join(" <-> ")}]`,
     });
+  }
+
+  for (const ref of collectOverrideCatalogRefs(inspection.rootOverrides)) {
+    const catalogKey = ref.spec.slice("catalog:".length).trim();
+    const usesDefault = catalogKey === "" || catalogKey === "default";
+    const missing = usesDefault
+      ? inspection.catalog[ref.depName] === undefined
+      : inspection.catalogs[catalogKey]?.[ref.depName] === undefined;
+    if (missing) {
+      issues.push({
+        kind: "missing-catalog-entry",
+        dir: "",
+        detail: `<root> ${ref.path} uses "${ref.spec}" but ${
+          usesDefault ? "root catalog" : `root catalogs["${catalogKey}"]`
+        } has no "${ref.depName}" entry`,
+      });
+    }
   }
 
   return {

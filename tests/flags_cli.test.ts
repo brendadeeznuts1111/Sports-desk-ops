@@ -293,10 +293,13 @@ describe("flags CLI", () => {
       "OLDCUST",
       "Lakers vs Kings",
     );
+    const recentDate = new Date(Date.now() - 2 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     write(
       "capture-2026.json",
       820000001,
-      "2026-11-04",
+      recentDate,
       "NEWCUST",
       "Celtics vs Heat",
     );

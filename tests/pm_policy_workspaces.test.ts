@@ -5,6 +5,8 @@ import path from "node:path";
 import {
   analyzeWorkspaceGraph,
   auditRootWorkspaceHygiene,
+  classifyLinkSpecifier,
+  collectOverrideCatalogRefs,
   auditWorkspaceSelfContainment,
   inspectWorkspaceInstallLayout,
   inspectWorkspaces,
@@ -249,5 +251,138 @@ describe("resolveWorkspaces agrees with the bun.lock Bun writes", () => {
         packageName: "zod",
       },
     ]);
+  });
+});
+
+describe("catalog: references in root overrides", () => {
+  /** Built without `bun install`: a missing catalog entry is an install failure, which is the point. */
+  const rootFor = (
+    overrides: unknown,
+    catalog: unknown,
+    catalogs?: unknown,
+  ): string => {
+    const root = mkdtempSync(path.join(scratch, "override-"));
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "override-root",
+        private: true,
+        workspaces: {
+          packages: ["packages/*"],
+          catalog,
+          ...(catalogs === undefined ? {} : { catalogs }),
+        },
+        overrides,
+      }),
+    );
+    return root;
+  };
+
+  test("a named catalog ref without an entry is reported at its JSON path", async () => {
+    const root = rootFor(
+      { webpack: "catalog:build" },
+      {},
+      { build: { babel: "7.0.0" } },
+    );
+    const inspection = await inspectWorkspaces(root);
+    const issues = analyzeWorkspaceGraph(inspection).issues.filter(
+      (issue) => issue.kind === "missing-catalog-entry",
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.detail).toContain("overrides.webpack");
+    expect(issues[0]!.detail).toContain('catalogs["build"]');
+  });
+
+  test("a satisfied default-catalog ref produces no issue", async () => {
+    const root = rootFor({ react: "catalog:" }, { react: "^19.0.0" });
+    const issues = analyzeWorkspaceGraph(
+      await inspectWorkspaces(root),
+    ).issues.filter((issue) => issue.kind === "missing-catalog-entry");
+    expect(issues).toEqual([]);
+  });
+
+  test("nested entries keep the overridden package name, not '.'", async () => {
+    const root = rootFor(
+      { left: { ".": "1.0.0", right: "catalog:" } },
+      { right: "2.0.0" },
+    );
+    const refs = collectOverrideCatalogRefs(
+      (await inspectWorkspaces(root)).rootOverrides,
+    );
+    expect(refs).toEqual([
+      {
+        path: "overrides.left.right",
+        depName: "right",
+        spec: "catalog:",
+      },
+    ]);
+  });
+});
+
+describe("link: specifiers", () => {
+  test("a bare name and a scoped name are registrations; anything else is a path", () => {
+    expect(classifyLinkSpecifier("link:cool-pkg")).toEqual({
+      kind: "name",
+      name: "cool-pkg",
+    });
+    expect(classifyLinkSpecifier("link:@scope/pkg")).toEqual({
+      kind: "name",
+      name: "@scope/pkg",
+    });
+    for (const target of [
+      "./vendor/design-tokens",
+      "../shared",
+      "vendor/design-tokens",
+      "/abs/dir",
+    ]) {
+      expect(classifyLinkSpecifier(`link:${target}`)).toEqual({
+        kind: "path",
+        path: target,
+      });
+    }
+    expect(classifyLinkSpecifier("workspace:*")).toBeNull();
+    expect(classifyLinkSpecifier("link:")).toBeNull();
+  });
+
+  const rootWithLink = (create: boolean): string => {
+    const root = mkdtempSync(path.join(scratch, "link-"));
+    const pkgDir = path.join(root, "packages", "a");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "link-root",
+        private: true,
+        workspaces: ["packages/*"],
+      }),
+    );
+    writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({
+        name: "a",
+        version: "1.0.0",
+        dependencies: { "design-tokens": "link:./vendor/design-tokens" },
+      }),
+    );
+    if (create)
+      mkdirSync(path.join(pkgDir, "vendor", "design-tokens"), {
+        recursive: true,
+      });
+    return root;
+  };
+
+  test("a link: path that does not exist is reported", async () => {
+    const issues = analyzeWorkspaceGraph(
+      await inspectWorkspaces(rootWithLink(false)),
+    ).issues.filter((issue) => issue.kind === "missing-link-target");
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.detail).toContain("link:./vendor/design-tokens");
+  });
+
+  test("an existing link: directory is accepted", async () => {
+    const issues = analyzeWorkspaceGraph(
+      await inspectWorkspaces(rootWithLink(true)),
+    ).issues.filter((issue) => issue.kind === "missing-link-target");
+    expect(issues).toEqual([]);
   });
 });

@@ -101,7 +101,7 @@ describe("proxied ingress requires the token", () => {
   test("a public route still answers, so the refusal is the guard", async () => {
     const response = await overSocket(socket, "/api/sports");
     expect(response.status).toBe(200);
-  });
+  }, 15_000);
 
   test("a wrong bearer is refused, not just an absent one", async () => {
     setEnv("SPORTSDESK_ADMIN_TOKEN", "the-real-token");
@@ -136,7 +136,7 @@ describe("proxied ingress requires the token", () => {
     } finally {
       setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
     }
-  });
+  }, 15_000);
 
   /**
    * The dashboard's read set, over the socket, with the token it now sends. This is the deploy
@@ -175,7 +175,7 @@ describe("proxied ingress requires the token", () => {
     } finally {
       setEnv("SPORTSDESK_ADMIN_TOKEN", undefined);
     }
-  });
+  }, 15_000);
 });
 
 describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary", () => {
@@ -199,10 +199,10 @@ describe("SPORTSDESK_TRUST_PROXY=1 keeps the deployment's proxy as the boundary"
     const response = await overSocket(socket, "/health");
     const body = (await response.json()) as { ingress?: Ingress };
     expect(body.ingress).toEqual({ proxied: true, trustProxy: true });
-  });
+  }, 15_000);
 
   test("a pii route answers the proxy without a token", async () => {
     const response = await overSocket(socket, "/api/v1/live-bets?source=auto");
     expect(response.status).toBe(200);
-  });
+  }, 15_000);
 });

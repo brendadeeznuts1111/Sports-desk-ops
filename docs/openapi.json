@@ -1453,7 +1453,10 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:98", "docs/openapi.json"],
+          "sources": [
+            "scripts/author_openapi_spec.mjs:98",
+            "docs/openapi.json"
+          ],
           "capturedResponse": false,
           "requiredCapture": "Capture a verifySession call on a live and an expired token; confirm the response shape and the 401 re-mint behaviour. Upgrades C->A."
         }
@@ -1473,7 +1476,7 @@
         "x-evidence": {
           "tier": "C",
           "sources": [
-            "scripts/enhance_docs.mjs:130",
+            "scripts/author_openapi_spec.mjs:130",
             "docs/evidence/captures/2026-10-31/getCustomerNotes.post.json"
           ],
           "capturedResponse": false,
@@ -1494,7 +1497,7 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:153", "none"],
+          "sources": ["scripts/author_openapi_spec.mjs:153", "none"],
           "capturedResponse": false,
           "requiredCapture": "Capture an append + read-back; confirm the mutation Result envelope and whether notes are immutable. Upgrades C->A."
         }
@@ -1513,7 +1516,7 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:173", "none"],
+          "sources": ["scripts/author_openapi_spec.mjs:173", "none"],
           "capturedResponse": false,
           "requiredCapture": "Capture a delete + getSportsVigSetup read-back; confirm the required fields and Result envelope. Upgrades C->A."
         }
@@ -1532,7 +1535,7 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:193", "none"],
+          "sources": ["scripts/author_openapi_spec.mjs:193", "none"],
           "capturedResponse": false,
           "requiredCapture": "Capture a void/cancel mutation; confirm the request fields (only wagerNumber/reason are documented) and the result envelope. Upgrades C->A."
         }
@@ -1551,7 +1554,7 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:213", "none"],
+          "sources": ["scripts/author_openapi_spec.mjs:213", "none"],
           "capturedResponse": false,
           "requiredCapture": "In the Manager deleted-wagers report bundle (Blob 96EA5CDA), the wire call is POST /cloud/api/Manager/getReportDeletedTransactions. Capture getReportDeletedTransactions and reconcile with /cloud/api/Report/delete-wager."
         }
@@ -1570,7 +1573,7 @@
         },
         "x-evidence": {
           "tier": "C",
-          "sources": ["scripts/enhance_docs.mjs:225", "none"],
+          "sources": ["scripts/author_openapi_spec.mjs:225", "none"],
           "capturedResponse": false,
           "requiredCapture": "Capture a daily figure read; confirm the request (none is documented) and the row fields. Upgrades C->A."
         }

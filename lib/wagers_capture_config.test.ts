@@ -206,17 +206,23 @@ describe("CLI precedence: flag > TOML > built-in", () => {
     extra: string[] = [],
     cwd: string = repoRoot,
   ) {
+    const env: Record<string, string | undefined> = {
+      ...Bun.env,
+      NO_COLOR: "1",
+    };
+    delete env.FORCE_COLOR;
     const result = Bun.spawnSync(
       [
-        "bun",
+        process.execPath,
+        "--no-env-file",
         script,
         "--dry-run",
         ...(configPath === null ? [] : ["--config", configPath]),
         ...extra,
       ],
-      { cwd, stdout: "pipe", stderr: "pipe" },
+      { cwd, env, stdout: "pipe", stderr: "pipe" },
     );
-    const stderr = result.stderr.toString();
+    const stderr = Bun.stripANSI(result.stderr.toString());
     const start = stderr.indexOf("{");
     if (start === -1) throw new Error(`no dry-run JSON in stderr: ${stderr}`);
     return JSON.parse(stderr.slice(start)) as {

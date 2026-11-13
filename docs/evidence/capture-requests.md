@@ -208,7 +208,7 @@ unknown in the release. Until this exists, no markdown may present `getBetReport
 ## P5 — the unbacked cloud operations
 
 **12 operations are fully unbacked:** no capture, no observed request, and no repo TypeScript wire type —
-their spec bodies exist only because the spec or `scripts/enhance_docs.mjs` authored them. Capture each
+their spec bodies exist only because the spec or `scripts/author_openapi_spec.mjs` authored them. Capture each
 once read-only where possible; the mutations need a controlled test account.
 
 Expected auth: the Manager portal session cookie observed in the 2026-10-28 HAR (no `Authorization` header;

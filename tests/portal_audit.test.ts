@@ -30,7 +30,7 @@ import {
   validateOpenApiSpec,
   type AuditRuntime,
   type WebViewHandle,
-} from "../scripts/audit_docs_webview_cron.ts";
+} from "../scripts/audit_docs_portal.ts";
 import {
   buildSelectorPresenceExpression,
   cssSelectorForTile,

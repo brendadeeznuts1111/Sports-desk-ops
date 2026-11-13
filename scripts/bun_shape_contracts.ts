@@ -29,12 +29,14 @@ import {
 export const SHAPE_CATALOG_PATH =
   "docs/runbooks/bun_shape_contracts_runbook.md";
 const LINKS_PATH = "tests/bun_shape_links.json";
+const BASELINE_PATH = "tests/bun_docs_surface_baseline.json";
 
 const deepDive: Record<string, string> = {
   JSONL: "§8.4",
   WebView: "§9",
   markdown: "§12",
   FetchSession: "§7.3",
+  FetchSessionInit: "§7.3",
   connect: "§8.2",
   listen: "§8.1",
   udpSocket: "§8.3",
@@ -76,7 +78,7 @@ const sectionInvariants: Record<string, string[]> = {
   network: [
     "`Bun.fetch`, `Bun.serve`, `Bun.connect`, `Bun.listen`, `Bun.udpSocket`, `Bun.FetchSession` are functions (surface checks + capabilities test).",
     "`Bun.dns` is an object; the reference documents only `lookup`/`prefetch`/`getCacheStats` while the binary also has 15 resolver methods — see the drift section in ../bun-upstream-reference.md.",
-    "`Bun.Server` and `Bun.FetchProxyOption` are types (`Server<WebSocketData>` takes a type argument).",
+    "`Bun.Server`, `Bun.FetchProxyOption`, and `Bun.FetchSessionInit` are types (`Server<WebSocketData>` takes a type argument).",
   ],
   image: [
     '`Bun.Image` and `Bun.WebView` are constructors; `metadata()` on a 1×1 PNG reads `{width:1, height:1, format:"png"}` — `image.metadata`. Both have deep contracts in the server shapes runbook.',
@@ -100,9 +102,69 @@ function descriptor(name: string) {
   };
 }
 
-function link(shape: string, status: number | undefined): string {
-  return status === 200
-    ? `[reference](https://bun.com/reference/globals/bun/${shape})`
+const SOFT_404_PATTERNS: readonly RegExp[] = [
+  /don['’]t include a reference page/i,
+  /<title>\s*404\b/i,
+  /page not found/i,
+];
+
+/**
+ * Verifies an HTTP 200 HTML response from bun.com/reference actually documents `symbolName`
+ * rather than serving a soft-404 page shell.
+ */
+export function assertUrlReturnsSymbolContent(
+  html: string,
+  symbolName: string,
+): { readonly ok: true } | { readonly ok: false; readonly reason: string } {
+  for (const pattern of SOFT_404_PATTERNS) {
+    if (pattern.test(html)) {
+      return { ok: false, reason: `soft-404 sentinel matched: ${pattern}` };
+    }
+  }
+  const headingMatches = [
+    ...html.matchAll(/<(?:title|h1)\b[^>]*>([\s\S]*?)<\/(?:title|h1)>/gi),
+  ].map((m) => m[1]!.replace(/<[^>]+>/g, "").toLowerCase());
+  const needle = symbolName.toLowerCase();
+  if (!headingMatches.some((text) => text.includes(needle))) {
+    return {
+      ok: false,
+      reason: `symbol "${symbolName}" missing from <title> and <h1>`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Probes a Bun reference URL and downgrades soft-404 HTTP 200 shells to 404.
+ */
+export async function probeShapeReferenceUrl(
+  url: string,
+  symbolName: string,
+  fetcher: (input: string, init?: RequestInit) => Promise<Response> = fetch,
+): Promise<number> {
+  try {
+    const res = await fetcher(url, { redirect: "follow" });
+    if (res.status !== 200) {
+      await res.body?.cancel();
+      return res.status;
+    }
+    const html = await res.text();
+    return assertUrlReturnsSymbolContent(html, symbolName).ok ? 200 : 404;
+  } catch {
+    return 0;
+  }
+}
+
+function link(
+  shape: string,
+  status: number | undefined,
+  fallbackLink?: string | null,
+): string {
+  if (status === 200) {
+    return `[reference](https://bun.com/reference/globals/bun/${shape})`;
+  }
+  return fallbackLink
+    ? `no reference page (see [docs](${fallbackLink}))`
     : "no reference page (declaration only)";
 }
 
@@ -135,6 +197,10 @@ export async function renderBunShapeContractsCatalog(
       >,
     ),
   );
+  const baseline = (await Bun.file(path.join(root, BASELINE_PATH)).json()) as {
+    readonly shapes?: Record<string, { readonly link?: string | null }>;
+  };
+  const baselineShapes = baseline.shapes ?? {};
 
   const out: string[] = [];
   out.push(
@@ -185,7 +251,7 @@ export async function renderBunShapeContractsCatalog(
       out.push(`#### ${shape.heading}`);
       out.push("");
       out.push(
-        `- **Source:** ${sourceDecl} · ${link(shape.name, permalinks.get(shape.name))}`,
+        `- **Source:** ${sourceDecl} · ${link(shape.name, permalinks.get(shape.name), baselineShapes[shape.name]?.link)}`,
       );
       out.push(`- **Shape:** ${kindLine}`);
       if (shape.status === "declared-only") {
@@ -251,13 +317,7 @@ if (import.meta.main) {
     const refreshed: Record<string, number> = {};
     for (const shape of BUN_SHAPES) {
       const url = `https://bun.com/reference/globals/bun/${shape.name}`;
-      try {
-        const res = await fetch(url, { redirect: "follow" });
-        refreshed[shape.name] = res.status;
-        await res.body?.cancel();
-      } catch {
-        refreshed[shape.name] = 0;
-      }
+      refreshed[shape.name] = await probeShapeReferenceUrl(url, shape.name);
     }
     await Bun.write(
       path.join(root, LINKS_PATH),

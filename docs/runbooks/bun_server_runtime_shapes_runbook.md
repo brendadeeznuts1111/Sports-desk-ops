@@ -396,7 +396,7 @@ A critical design decision in SportsDesk is **where** TLS termination occurs:
 | **In-Memory Testing**          | `tests/server_error.test.ts`, `tests/bench_server.test.ts` | Evaluates routes via `server.fetch(req)` to eliminate port contention in sandboxes and CI.                                                                           |
 | **Loopback Proxy Isolation**   | `.env`, `.env.example`, `deploy_to_vps.sh`                 | Sets `NO_PROXY=127.0.0.1,localhost,::1` to prevent corporate/CI proxy interception of loopback calls.                                                                |
 | **Outbound Timeouts**          | `sportsdesk_telegram_bot.ts`, `sportsdesk_r2_sync.ts`      | Enforces `signal: AbortSignal.timeout(...)` across all outbound calls to prevent hanging event loops.                                                                |
-| **FetchSession & Preconnect**  | `sportsdesk_telegram_bot.ts`                               | Uses `Bun.FetchSession` with `rejectUnauthorized: true` and boot-time `fetch.preconnect("https://api.telegram.org")`.                                                |
+| **FetchSession & Warm-Up**     | `sportsdesk_telegram_bot.ts`                               | Uses `Bun.FetchSession` (`rejectUnauthorized: true`) and warms the session pool at startup via bounded `this.fetchSession.fetch(base + "/", { method: "HEAD" })`.    |
 | **Connection Pool Bounds**     | `.env`, `deploy_to_vps.sh`                                 | Sets `BUN_CONFIG_MAX_HTTP_REQUESTS=256` to size the shared connection pool to SportsDesk throughput.                                                                 |
 | **WebSocket Ticker (Roadmap)** | `fantasy402-ticker-watch`                                  | Implements `WebSocketHandler<TickerSessionContext>` with `perMessageDeflate: true`, `backpressureLimit: 16MB`, and topic pub/sub (`ticker:steam`, `ticker:whale`).   |
 | **TLS Policy**                 | `deploy_to_vps.sh`                                         | Nginx terminates TLS 1.3 at port 443; Bun listens on Unix socket or plaintext loopback.                                                                              |
@@ -440,9 +440,9 @@ Bun provides built-in HTTP/HTTPS proxy capabilities with per-request dynamic eva
 - **Unix Domain Socket Isolation**: Requests using Bun's `unix` socket option (`{ unix: "/path/to.sock" }`) strictly bypass all proxy environment variables by design.
 - **Tunnel Error Classification (`ERR_PROXY_TUNNEL`)**: When an upstream proxy answers a `CONNECT` request with a non-2xx status, Bun rejects with `error.code === "ERR_PROXY_TUNNEL"`, attaching `error.status`, `error.statusText`, and `error.headers` for diagnostic inspection. Verified continuously via `tests/fetch_proxy_isolation.test.ts`.
 
-### 7.3 Dedicated `Bun.FetchSession` & Pre-Warming
+### 7.3 Dedicated `Bun.FetchSession` & Pool Warm-Up
 
-Rather than using global unpooled `fetch`, `SportsDeskTelegramService` initializes an isolated `Bun.FetchSession`:
+Rather than using global unpooled `fetch`, `SportsDeskTelegramService` initializes an isolated `Bun.FetchSession` (its connection pool is separate from global `fetch`, and `FetchSession` has no `.preconnect()` method):
 
 ```typescript
 this.fetchSession = new Bun.FetchSession({
@@ -451,16 +451,14 @@ this.fetchSession = new Bun.FetchSession({
   },
 });
 
-// Boot-time pre-warming
-if (
-  typeof fetch !== "undefined" &&
-  typeof (fetch as any).preconnect === "function"
-) {
-  (fetch as any).preconnect("https://api.telegram.org");
-}
+// Boot-time warm-up through the session's own connection pool
+await this.fetchSession.fetch(`${this.apiBaseUrl.replace(/\/+$/, "")}/`, {
+  method: "HEAD",
+  signal: AbortSignal.timeout(2_000),
+});
 ```
 
-Pre-warming establishes the TCP connection and TLS 1.3 handshake at service startup, ensuring that the first high-urgency syndicate alert dispatches with zero handshake delay.
+Warming through `this.fetchSession.fetch()` establishes the TCP connection and TLS 1.3 handshake inside the session's own pool at service startup (unlike global `fetch.preconnect()`, which only warms the global pool), ensuring the first high-urgency syndicate alert dispatches with minimal handshake delay.
 
 ### 7.4 Zero Embedded Credentials & Strict TLS Policy
 
@@ -641,7 +639,7 @@ await Bun.write("reports/audit_viewport.jpg", jpeg);
 > `TypeError` with code `ERR_INVALID_ARG_TYPE` (measured on Bun 1.4.4). Pass
 > `globalThis.console` to mirror page output to Bun's console, or a
 > `(type, ...args) => void` callback to receive each call yourself (this is what
-> `scripts/capture/webview.ts` and `scripts/audit_docs_webview_cron.ts` do).
+> `scripts/capture/webview.ts` and `scripts/audit_docs_portal.ts` do).
 
 > **WebP.** Raw `view.screenshot({ format: "webp" })` is Chrome-only — the WebKit backend
 > throws. The repo wrapper re-encodes: `scripts/capture/webview.ts`

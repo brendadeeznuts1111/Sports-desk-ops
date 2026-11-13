@@ -166,8 +166,8 @@ Package scripts (owned by the capture branch):
 | `bun run capture:evidence:live`     | `scripts/evidence_capture.ts --mode live`                     | Live gated capture (see below); writes into the capture store.              |
 | `bun run apply:captures`            | `scripts/apply_captures.ts`                                   | Validate the store and print the B/C→A plan (dry-run default).              |
 | `bun run apply:captures -- --write` | same, `--write`                                               | Apply upgrades, regenerate spec + markdown, run the docs gate, write audit. |
-| `bun run docs:audit:portal`         | `scripts/audit_docs_webview_cron.ts --once`                   | One docs-portal console/DOM audit of the deployed Scalar page.              |
-| `bun run docs:audit:portal:watch`   | `scripts/audit_docs_webview_cron.ts --watch`                  | In-process `Bun.cron` watcher for the docs portal.                          |
+| `bun run docs:audit:portal`         | `scripts/audit_docs_portal.ts --once`                         | One docs-portal console/DOM audit of the deployed Scalar page.              |
+| `bun run docs:audit:portal:watch`   | `scripts/audit_docs_portal.ts --watch`                        | In-process `Bun.cron` watcher for the docs portal.                          |
 | `bun run crawl:tiles`               | `scripts/portal_tile_crawler.ts --offline`                    | Offline launcher-tile discovery/audit; candidates only, no wire claims.     |
 | `bun run test:capture`              | `bun test tests/capture_*.test.ts tests/portal_audit.test.ts` | Hermetic capture/apply tests (no network, no WebView).                      |
 

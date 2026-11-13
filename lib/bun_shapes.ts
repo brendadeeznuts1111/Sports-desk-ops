@@ -735,6 +735,13 @@ export const BUN_SHAPES: readonly BunShape[] = [
     evidence: ["test:tests/bun_capabilities.test.ts"],
   },
   {
+    name: "FetchSessionInit",
+    kind: "type",
+    subsystem: "network",
+    heading: "Bun.FetchSessionInit (type)",
+    evidence: ["test:tests/fetch_session_contract.test.ts"],
+  },
+  {
     name: "FetchSession",
     kind: "value",
     subsystem: "network",

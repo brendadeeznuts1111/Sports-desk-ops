@@ -34,6 +34,10 @@ function trackedSourceFiles(): string[] {
     );
 }
 
+const VITE_ENV_KEYS = ["MODE", "DEV", "PROD", "SSR", "BASE_URL"] as const;
+const HAS_VITE_ENV =
+  (import.meta.env as Record<string, unknown>).MODE === "test";
+
 describe("import.meta contract", () => {
   test("dir, file, filename, path and dirname agree with the file URL", () => {
     expect(import.meta.url.startsWith("file:")).toBe(true);
@@ -42,7 +46,12 @@ describe("import.meta contract", () => {
     expect(import.meta.path).toBe(FILE);
     expect(import.meta.dir).toBe(dirname(FILE));
     expect(import.meta.dirname).toBe(import.meta.dir);
-    expect(import.meta.env).toBe(process.env);
+    if (HAS_VITE_ENV) {
+      expect((import.meta.env as Record<string, unknown>).MODE).toBe("test");
+      expect(import.meta.env.PATH).toBe(process.env.PATH);
+    } else {
+      expect(import.meta.env).toBe(process.env);
+    }
     expect(typeof import.meta.require).toBe("function");
     expect(typeof import.meta.resolve).toBe("function");
     expect(import.meta.resolve("./import_meta_contract.test.ts")).toBe(
@@ -103,11 +112,20 @@ describe("import.meta contract", () => {
     );
   });
 
-  test("bun test exposes the env view without Vite keys on 1.4.4", () => {
-    // The current docs say bun test adds MODE/DEV/PROD/SSR/BASE_URL. Bun 1.4.4 does not;
-    // pin the observed shape so a runtime change surfaces here.
-    for (const key of ["MODE", "DEV", "PROD", "SSR", "BASE_URL"] as const) {
-      expect((import.meta.env as Record<string, unknown>)[key]).toBeUndefined();
+  test("bun test exposes the env view (Vite keys on canary, plain process.env on 1.4.4)", () => {
+    // Stable Bun 1.4.4 exposes plain `process.env` without MODE/DEV/PROD/SSR/BASE_URL;
+    // 1.4.4-canary populates the documented Vite env keys instead.
+    const envRecord = import.meta.env as Record<string, unknown>;
+    if (HAS_VITE_ENV) {
+      expect(envRecord.MODE).toBe("test");
+      expect(envRecord.DEV).toBe(true);
+      expect(envRecord.PROD).toBe(false);
+      expect(envRecord.SSR).toBe(true);
+      expect(envRecord.BASE_URL).toBe("/");
+    } else {
+      for (const key of VITE_ENV_KEYS) {
+        expect(envRecord[key]).toBeUndefined();
+      }
     }
   });
 

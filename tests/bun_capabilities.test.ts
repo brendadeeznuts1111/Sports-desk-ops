@@ -400,6 +400,83 @@ describe("Bun capabilities used by the ops tooling", () => {
     }
   });
 
+  // bun.sh/docs/runtime/glob#supported-glob-patterns — every case is a documented example,
+  // measured against 1.4.4. Pattern *syntax* is pinned here because a Bun upgrade that changes
+  // glob parsing fails loudly instead of silently matching nothing in a capture scan; the
+  // option defaults are pinned by the test above.
+  test("Glob pattern syntax covers the documented wildcard set", () => {
+    const matches = (pattern: string, path: string): boolean =>
+      new Bun.Glob(pattern).match(path);
+
+    // ? * ** and bracket classes, including ranges and negation
+    expect(matches("???.ts", "foo.ts")).toBe(true);
+    expect(matches("???.ts", "foobar.ts")).toBe(false);
+    expect(matches("*.ts", "src/index.ts")).toBe(false);
+    expect(matches("**/*.ts", "index.ts")).toBe(true);
+    expect(matches("**/*.ts", "src/index.ts")).toBe(true);
+    expect(matches("ba[rz].ts", "baz.ts")).toBe(true);
+    expect(matches("ba[rz].ts", "bat.ts")).toBe(false);
+    expect(matches("ba[!a-z].ts", "ba1.ts")).toBe(true);
+    expect(matches("ba[!a-z].ts", "bax.ts")).toBe(false);
+    // `[^…]` and `[!…]` are the same negation.
+    expect(matches("a[^bc].ts", "ad.ts")).toBe(true);
+    expect(matches("a[^bc].ts", "ab.ts")).toBe(false);
+
+    // Parentheses are literal without an extended-glob prefix: this is a directory
+    // named `(marketing)`, not an alternation.
+    expect(matches("app/(marketing)/**", "app/(marketing)/x.ts")).toBe(true);
+    expect(matches("app/(marketing)/**", "app/marketing/x.ts")).toBe(false);
+
+    // braces: alternatives, nesting, numeric ranges, zero padding, step, letter range
+    expect(matches("{a,b,c}.ts", "c.ts")).toBe(true);
+    expect(matches("{a,b,c}.ts", "d.ts")).toBe(false);
+    expect(matches("{a,{b,c}}.ts", "c.ts")).toBe(true);
+    expect(matches("v{1..3}.ts", "v2.ts")).toBe(true);
+    expect(matches("v{1..9..2}.ts", "v5.ts")).toBe(true);
+    expect(matches("v{1..9..2}.ts", "v6.ts")).toBe(false);
+    expect(matches("v{01..10}.ts", "v07.ts")).toBe(true);
+    expect(matches("v{a..e}.ts", "vc.ts")).toBe(true);
+
+    // extended globs: one-or-more, zero-or-more, exactly-one, negation
+    expect(matches("+(a|b).ts", "ab.ts")).toBe(true);
+    expect(matches("*(a|b).ts", "abba.ts")).toBe(true);
+    expect(matches("@(a|b).ts", "c.ts")).toBe(false);
+    expect(matches("!(a|b).ts", "c.ts")).toBe(true);
+    expect(matches("!(a|b).ts", "a.ts")).toBe(false);
+
+    // A leading `!` negates the whole pattern: it matches what the inner pattern does not.
+    // Both inputs must be tested, or a `.ts`-vs-`.ts` pair looks like "matches nothing".
+    expect(matches("!*.ts", "a.ts")).toBe(false);
+    expect(matches("!*.ts", "b.js")).toBe(true);
+
+    // `\` escapes a glob metacharacter, so this matches a literal `*` in the name.
+    expect(matches("a\\*b.ts", "a*b.ts")).toBe(true);
+    expect(matches("a\\*b.ts", "axb.ts")).toBe(false);
+
+    // `match()` is a pure string test — it takes no scan options, so no `dot` policy.
+    // These match even though `scan({ dot: false })` never returns them.
+    expect(matches("**/*", ".env")).toBe(true);
+    expect(matches("**/*", ".github/ci.yml")).toBe(true);
+  });
+
+  // The `**/` segment matching zero directories is the case tooling assumes and rarely asserts:
+  // a scan rooted at a directory with files but no subdirectories must still find them.
+  test("** matches root-level files during scan", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bun-glob-root-"));
+    try {
+      await Bun.write(join(dir, "top.txt"), "x");
+      mkdirSync(join(dir, "nested"), { recursive: true });
+      await Bun.write(join(dir, "nested", "inner.txt"), "x");
+      const found: string[] = [];
+      for await (const rel of new Bun.Glob("**/*.txt").scan({ cwd: dir })) {
+        found.push(rel);
+      }
+      expect(found.sort()).toEqual(["nested/inner.txt", "top.txt"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("FileSink accepts highWaterMark and end() flushes the write", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bun-filesink-"));
     try {

@@ -21,6 +21,34 @@ describe("markdown mode divergence", () => {
     expect(ansi).not.toContain("x-wikilink");
   });
 
+  // Measured 2026-11-11 on Bun 1.4.4: `hyperlinks` emits an OSC 8 sequence only while colors
+  // are enabled — `colors: false` drops the link wrapper along with the styling, so a caller that
+  // disables color for a non-TTY also loses the hyperlink.
+  test("hyperlinks emits OSC 8 only while colors are on", () => {
+    const link = "[docs](https://bun.sh)";
+    expect(Bun.markdown.ansi(link)).not.toContain("\u001b]8;;");
+    expect(Bun.markdown.ansi(link, { hyperlinks: true })).toContain(
+      "\u001b]8;;https://bun.sh",
+    );
+    expect(
+      Bun.markdown.ansi(link, { hyperlinks: true, colors: false }),
+    ).not.toContain("\u001b]8;;");
+  });
+
+  test("columns wraps to the given width; 0 disables wrapping", () => {
+    const words = "word ".repeat(30).trim();
+    const widths = Bun.markdown
+      .ansi(words, { columns: 40, colors: false })
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.length);
+    expect(widths.length).toBeGreaterThan(1);
+    expect(widths.every((width) => width <= 40)).toBe(true);
+    expect(
+      Bun.markdown.ansi(words, { columns: 0 }).split("\n").filter(Boolean),
+    ).toHaveLength(1);
+  });
+
   test("html only diverges when wikiLinks is enabled", () => {
     expect(Bun.markdown.html(SAMPLE).trim()).toContain("[[page]]");
     const linked = Bun.markdown.html(SAMPLE, { wikiLinks: true });

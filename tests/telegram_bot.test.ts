@@ -311,3 +311,69 @@ describe("Webview server Telegram endpoints", () => {
     expect((await fetch(`${base}/miniapp/?tab=forensics`)).status).toBe(200);
   });
 });
+
+describe("Telegram FetchSession warm-up", () => {
+  test("warmOnInit warms through fetchSession.fetch HEAD without global fetch.preconnect", async () => {
+    const fetchCalls: Array<{
+      url: string | URL | Request;
+      init?: BunFetchRequestInit | undefined;
+    }> = [];
+
+    const bot = new SportsDeskTelegramService({
+      botToken: "123:test-token",
+      chatId: "456",
+      apiBaseUrl: "http://127.0.0.1:49999/",
+      activityLogPath: null,
+      warmOnInit: true,
+      fetchSession: {
+        fetch: async (input, init) => {
+          fetchCalls.push({ url: input, init });
+          return new Response(null, { status: 200 });
+        },
+        close: () => {},
+      },
+    });
+
+    // Allow the fire-and-forget microtask in constructor to settle
+    await Bun.sleep(10);
+
+    const botSource = await Bun.file(
+      new URL("../services/sportsdesk_telegram_bot.ts", import.meta.url),
+    ).text();
+    const botCode = botSource
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(botCode).not.toContain("fetch.preconnect(");
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]!.url).toBe("http://127.0.0.1:49999/");
+    expect(fetchCalls[0]!.init?.method).toBe("HEAD");
+    expect(fetchCalls[0]!.init?.signal).toBeInstanceOf(AbortSignal);
+    expect(await bot.warmSession()).toBe(true);
+  });
+
+  test("warmSession returns false cleanly on fetch rejection and in non-live mode", async () => {
+    const failingBot = new SportsDeskTelegramService({
+      botToken: "123:test-token",
+      chatId: "456",
+      apiBaseUrl: "http://127.0.0.1:49999",
+      activityLogPath: null,
+      warmOnInit: false,
+      fetchSession: {
+        fetch: async () => {
+          throw new Error("ECONNREFUSED");
+        },
+        close: () => {},
+      },
+    });
+    expect(await failingBot.warmSession(50)).toBe(false);
+
+    const dryRunBot = new SportsDeskTelegramService({
+      botToken: "",
+      chatId: "",
+      apiBaseUrl: "http://127.0.0.1:49999",
+      activityLogPath: null,
+      warmOnInit: false,
+    });
+    expect(await dryRunBot.warmSession(50)).toBe(false);
+  });
+});

@@ -22,6 +22,7 @@ import {
   lockWorkspaceNames,
   lockWorkspaceVersions,
   MACHINE_OWNED_INSTALL_KEYS,
+  auditTrustedDependencies,
   patchState,
 } from "../lib/pm_policy.ts";
 
@@ -77,21 +78,16 @@ async function runtimeChecks(): Promise<Check[]> {
   const pkg = (await Bun.file(path.join(ROOT, "package.json")).json()) as {
     packageManager?: string;
     engines?: { bun?: string };
-    trustedDependencies?: unknown;
   };
   const pin = pkg.engines?.bun ?? "<unset>";
+  const trust = await auditTrustedDependencies(ROOT);
   return [
     check(
       "runtime pin",
       Bun.version === pin && pkg.packageManager === `bun@${pin}`,
       `bun ${Bun.version}; engines ${pin}; packageManager ${pkg.packageManager}`,
     ),
-    check(
-      "lifecycle scripts",
-      Array.isArray(pkg.trustedDependencies) &&
-        pkg.trustedDependencies.length === 0,
-      `trustedDependencies ${JSON.stringify(pkg.trustedDependencies)}`,
-    ),
+    check("lifecycle scripts", trust.ok, trust.detail),
   ];
 }
 

@@ -179,7 +179,7 @@ describe.skipIf(!hasPty)(
         authorize: (cmd: readonly string[]) => !cmd.includes("danger"),
       };
 
-      expect(
+      await expect(
         TerminalSession.start(["bash", "-c", "danger"], options),
       ).rejects.toThrow(TerminalUnauthorizedError);
     });
@@ -199,7 +199,7 @@ describe.skipIf(!hasPty)(
 
     test("TerminalSession wait times out and stops process", async () => {
       await using session = await TerminalSession.start(["sleep", "10"]);
-      expect(session.wait(100)).rejects.toThrow(TerminalTimeoutError);
+      await expect(session.wait(100)).rejects.toThrow(TerminalTimeoutError);
     });
 
     test("TerminalSession.startBun runs with compile-time feature flags under PTY", async () => {

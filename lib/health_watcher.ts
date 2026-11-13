@@ -264,6 +264,7 @@ export async function runHealthWatcherTick(
         botToken: creds.botToken,
         chatId: creds.chatId,
         activityLogPath: null,
+        warmOnInit: false,
       });
       return bot.sendMessage(chatId, messageHtml, { parse_mode: "HTML" });
     });

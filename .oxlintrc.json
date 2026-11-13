@@ -4,6 +4,7 @@
     "correctness": "warn"
   },
   "rules": {
+    "eqeqeq": ["error", "smart"],
     "typescript/no-explicit-any": "error",
     "typescript/no-require-imports": "error",
     "preserve-caught-error": "warn"

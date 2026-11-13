@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * @file audit_docs_webview_cron.ts
+ * @file audit_docs_portal.ts
  * @description Deployed-portal audit for the evidence-labelled SportsDesk docs.
  *
  * Rewritten against the real Bun 1.4.4 API (reports/docs-review/BUN_CAPTURE_CONTRACT.md):
@@ -1358,7 +1358,7 @@ export interface AuditCliOptions {
 }
 
 const AUDIT_USAGE =
-  'usage: bun run scripts/audit_docs_webview_cron.ts [--once|--watch [--schedule "<cron>"]] [--offline] [--portal <url>] [--skip-live] [--json]';
+  'usage: bun run scripts/audit_docs_portal.ts [--once|--watch [--schedule "<cron>"]] [--offline] [--portal <url>] [--skip-live] [--json]';
 
 /** Parse audit CLI args; returns a human-readable error string on bad input. */
 export function parseAuditCliArgs(

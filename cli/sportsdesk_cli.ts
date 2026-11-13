@@ -2765,22 +2765,19 @@ export async function main(): Promise<void> {
   if (cmd === "docs" || cmd === "doc" || rawArgs.includes("--docs")) {
     // Automated Documentation Error Finder via Bun.cron & Bun.WebView
     if (rawArgs.includes("--audit")) {
-      const proc = Bun.spawn(
-        ["bun", "run", "scripts/audit_docs_webview_cron.ts"],
-        {
-          cwd: repoRoot,
-          stdout: "inherit",
-          stderr: "inherit",
-          stdin: "inherit",
-        },
-      );
+      const proc = Bun.spawn(["bun", "run", "scripts/audit_docs_portal.ts"], {
+        cwd: repoRoot,
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "inherit",
+      });
       process.exitCode = await proc.exited;
       return;
     }
 
     if (rawArgs.includes("--watch") || rawArgs.includes("-w")) {
       const proc = Bun.spawn(
-        ["bun", "run", "scripts/audit_docs_webview_cron.ts", "--watch"],
+        ["bun", "run", "scripts/audit_docs_portal.ts", "--watch"],
         {
           cwd: repoRoot,
           stdout: "inherit",

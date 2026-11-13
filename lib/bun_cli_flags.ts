@@ -91,7 +91,7 @@ export interface BunRunCliSurface {
  */
 export function parseBunHelpFlags(helpText: string): ReadonlySet<string> {
   const flags = new Set<string>();
-  for (const line of helpText.split("\n")) {
+  for (const line of Bun.stripANSI(helpText).split("\n")) {
     const match = line.match(
       /^\s{2,}(?:-\w,\s*)?(--[a-z0-9][a-z0-9.-]*)(?:=\S+)?\s{2,}\S/i,
     );
@@ -211,7 +211,7 @@ export function parseBunRunHelpEntries(
   helpText: string,
 ): readonly BunRunHelpEntry[] {
   const entries: BunRunHelpEntry[] = [];
-  for (const line of helpText.split("\n")) {
+  for (const line of Bun.stripANSI(helpText).split("\n")) {
     const longMatch = line.match(
       /^\s{2,}(?:(-\w),\s*)?(--[a-z0-9][a-z0-9.-]*)(?:=(\S+))?\s{2,}(.+)$/i,
     );
@@ -241,12 +241,20 @@ export function parseBunRunHelpEntries(
   return entries;
 }
 
+function cleanSpawnEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...Bun.env };
+  delete env.FORCE_COLOR;
+  env.NO_COLOR = "1";
+  return env;
+}
+
 /** Flags declared by one Bun help invocation, e.g. `readBunHelpFlags(["test", "--help"])`. */
 export function readBunHelpFlags(
   args: readonly string[],
   bunPath = "bun",
 ): ReadonlySet<string> {
   const result = Bun.spawnSync([bunPath, ...args], {
+    env: cleanSpawnEnv(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -255,12 +263,13 @@ export function readBunHelpFlags(
       `${bunPath} ${args.join(" ")} exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  return parseBunHelpFlags(result.stdout.toString());
+  return parseBunHelpFlags(Bun.stripANSI(result.stdout.toString()));
 }
 
 /** Read the runtime's own help once; never hand-maintain the flag list. */
 export function readBunCliSurface(bunPath = "bun"): BunCliSurface {
   const result = Bun.spawnSync([bunPath, "--help"], {
+    env: cleanSpawnEnv(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -269,7 +278,7 @@ export function readBunCliSurface(bunPath = "bun"): BunCliSurface {
       `${bunPath} --help exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  const helpText = result.stdout.toString();
+  const helpText = Bun.stripANSI(result.stdout.toString());
   return { version: Bun.version, helpText, flags: parseBunHelpFlags(helpText) };
 }
 
@@ -305,6 +314,7 @@ export function bunFlagsInScripts(
 /** Read the runtime's own `bun run --help` surface once; never hand-maintain the flag list. */
 export function readBunRunCliSurface(bunPath = "bun"): BunRunCliSurface {
   const result = Bun.spawnSync([bunPath, "run", "--help"], {
+    env: cleanSpawnEnv(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -313,7 +323,7 @@ export function readBunRunCliSurface(bunPath = "bun"): BunRunCliSurface {
       `${bunPath} run --help exited ${result.exitCode}: ${result.stderr.toString().slice(0, 200)}`,
     );
   }
-  const helpText = result.stdout.toString();
+  const helpText = Bun.stripANSI(result.stdout.toString());
   const usageLine =
     helpText
       .split("\n")

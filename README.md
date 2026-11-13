@@ -225,7 +225,7 @@ Self-healing replay for **`reports/ingestion-audit.jsonl`** (and any ASCII-field
 
 ```bash
 bun run replay -- --path /tmp/e.jsonl --markdown
-bun sportsdesk_cli.ts replay --path reports/ingestion-audit.jsonl --json
+bun cli/sportsdesk_cli.ts replay --path reports/ingestion-audit.jsonl --json
 ```
 
 **Bun.XML golden AST (Plane 1 pin / Plane 3 verify):** each row with `xml` may carry `xml_golden_ast_sha256` and `bun_version` (`sha256` of `Bun.JSON5.stringify(Bun.XML.parse(xml.trim(), { compact: false }))`). Replay verifies pins unless `--no-verify-xml-golden`; `--strict-xml-golden` requires a pin on every `xml` row. Exit precedence: corrupt **1** → tx **2** → SLA **3** → golden drift **4**. Backfill pins: `bun run ingestion:enrich-xml-golden -- in.jsonl [out.jsonl]`.

@@ -154,22 +154,57 @@ async function probeSecretsWrite(): Promise<
       reason: "Bun.secrets keychain probe is darwin-only",
     };
   }
-  const service = "dx-probe";
-  const name = Bun.randomUUIDv7();
-  try {
-    await Bun.secrets.set({ service, name, value: "v" });
-    const got = await Bun.secrets.get({ service, name });
-    return got === "v"
-      ? { available: true, reason: "Bun.secrets set/get round-trip succeeded" }
-      : { available: false, reason: "Bun.secrets get returned no value" };
-  } catch (error) {
+  if (Bun.env.CI) {
     return {
       available: false,
-      reason: `Bun.secrets write denied: ${String(error).slice(0, 120)}`,
+      reason: "Bun.secrets keychain probe skipped under CI",
     };
-  } finally {
-    await Bun.secrets.delete({ service, name }).catch(() => undefined);
   }
+  const service = "dx-probe";
+  const name = Bun.randomUUIDv7();
+  const script = [
+    `const service = process.env.DX_PROBE_SERVICE!;`,
+    `const name = process.env.DX_PROBE_NAME!;`,
+    `try {`,
+    `  await Bun.secrets.set({ service, name, value: "v" });`,
+    `  const got = await Bun.secrets.get({ service, name });`,
+    `  console.log(got === "v" ? "OK" : "EMPTY");`,
+    `} finally {`,
+    `  await Bun.secrets.delete({ service, name }).catch(() => undefined);`,
+    `}`,
+  ].join("\n");
+  const proc = Bun.spawnSync(
+    [process.execPath, "--no-env-file", "-e", script],
+    {
+      env: {
+        ...Bun.env,
+        NO_COLOR: "1",
+        DX_PROBE_SERVICE: service,
+        DX_PROBE_NAME: name,
+      },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 1_500,
+    },
+  );
+  if (proc.exitedDueToTimeout) {
+    return {
+      available: false,
+      reason: "Bun.secrets keychain probe timed out after 1500ms",
+    };
+  }
+  if (proc.exitCode === 0 && proc.stdout.toString().trim() === "OK") {
+    return {
+      available: true,
+      reason: "Bun.secrets set/get round-trip succeeded",
+    };
+  }
+  const detail = proc.stderr.toString().trim() || `exit ${proc.exitCode}`;
+  return {
+    available: false,
+    reason: `Bun.secrets write denied: ${detail.slice(0, 120)}`,
+  };
 }
 
 function chromeProfileDirs(): string[] {

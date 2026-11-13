@@ -186,7 +186,7 @@ Evidence of absence:
   404 JSON fallback at `services/sportsdesk_webview_server.ts:3766-3774`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
   (`tests/capture_apply.test.ts:84,96`; re-measured 2026-11-02 — `tests/api_reference.test.ts`, cited here before, no longer mentions `/api/desk`) and the generator that wrote the spec
-  (`scripts/enhance_docs.mjs:115,237,249,269,289,301,321`).
+  (`scripts/author_openapi_spec.mjs:115,237,249,269,289,301,321`).
 - There is no HMAC verifier, no `DESK-*` token codec, no `CookieMap` session store and no HITL queue store
   in either tree.
 

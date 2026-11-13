@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
@@ -7,25 +7,82 @@ import {
   type FourWeekParlayBacktestReport,
 } from "../lib/parlay_combo_backtest_engine.ts";
 
+const enrichedCustomers: Array<{ recent_tickets?: unknown[] }> = existsSync(
+  "enriched_customers_full.json",
+)
+  ? (JSON.parse(readFileSync("enriched_customers_full.json", "utf8")) as Array<{
+      recent_tickets?: unknown[];
+    }>)
+  : [];
+const expectedSampledTickets = enrichedCustomers.reduce(
+  (sum, customer) => sum + (customer.recent_tickets?.length ?? 0),
+  0,
+);
+const hasFullCustomerBook = enrichedCustomers.length >= 220;
+const downlineCounts: {
+  provisionedCustomers: number;
+  activeSportsBettors: number;
+  provisionedSource: "downline-meta" | "snapshot";
+} = (() => {
+  const defaults = {
+    provisionedCustomers: 9_435,
+    activeSportsBettors: 2_236,
+    provisionedSource: "snapshot" as const,
+  };
+  if (!existsSync("sportsdesk_downline_data.json")) return defaults;
+  try {
+    const downline = JSON.parse(
+      readFileSync("sportsdesk_downline_data.json", "utf8"),
+    ) as {
+      meta?: {
+        total_provisioned_accounts?: unknown;
+        active_sports_bettors?: unknown;
+      };
+    };
+    const provisioned = Number(downline.meta?.total_provisioned_accounts);
+    const active = Number(downline.meta?.active_sports_bettors);
+    return {
+      provisionedCustomers:
+        Number.isFinite(provisioned) && provisioned > 0
+          ? provisioned
+          : defaults.provisionedCustomers,
+      activeSportsBettors:
+        Number.isFinite(active) && active >= 0
+          ? active
+          : defaults.activeSportsBettors,
+      provisionedSource:
+        Number.isFinite(provisioned) && provisioned > 0
+          ? "downline-meta"
+          : "snapshot",
+    };
+  } catch {
+    return defaults;
+  }
+})();
+
 describe("4-Week Full-Customer CFB & NBA Parlay & Combo Backtest Engine", () => {
   const report = runFourWeekParlayComboBacktest();
 
   test("scans the 9,435-account downline, 220 enriched profiles, and 22 valid Polymarket wallets across 4 weeks", () => {
     expect(report.schemaVersion).toBe(1);
-    expect(report.totalProvisionedCustomers).toBe(9435);
-    expect(report.totalActiveSportsBettors).toBe(2236);
-    expect(report.totalEnrichedProfilesScanned).toBeGreaterThanOrEqual(220);
+    expect(report.totalProvisionedCustomers).toBe(
+      downlineCounts.provisionedCustomers,
+    );
+    expect(report.totalActiveSportsBettors).toBe(
+      downlineCounts.activeSportsBettors,
+    );
+    const expectedMinProfiles =
+      enrichedCustomers.length > 0 ? enrichedCustomers.length : 220;
+    expect(report.totalEnrichedProfilesScanned).toBeGreaterThanOrEqual(
+      expectedMinProfiles,
+    );
     expect(report.totalBridgedPolymarketWallets).toBe(22);
     expect(report.weeklyBreakdown.length).toBe(4);
     expect(report.dataBasis.scenarioTicketTotals).toBe(true);
     expect(report.dataBasis.provisionedSource).toBe(
-      existsSync("sportsdesk_downline_data.json")
-        ? "downline-meta"
-        : "snapshot",
+      downlineCounts.provisionedSource,
     );
-    expect(report.dataBasis.sampledTickets).toBe(
-      existsSync("enriched_customers_full.json") ? 1100 : 0,
-    );
+    expect(report.dataBasis.sampledTickets).toBe(expectedSampledTickets);
   });
 
   test("reconciles CFB and NBA 4-week ticket, leg, handle, and counterfactual P&L totals", () => {
@@ -41,11 +98,10 @@ describe("4-Week Full-Customer CFB & NBA Parlay & Combo Backtest Engine", () => 
   });
 
   test("populates customer leaderboard with direct Polymarket profile, positions API, and Fantasy402 profile links", () => {
-    // enriched_customers_full.json is gitignored (customer data). CI falls back to the
-    // featured rows (23); a developer checkout with the book gets 30+.
-    const hasCustomerBook = existsSync("enriched_customers_full.json");
+    // enriched_customers_full.json is gitignored (customer data). CI and the 6-customer
+    // tracked fixture fall back to featured rows (23); a full 220+ customer book gets 30+.
     expect(report.customerLeaderboard.length).toBeGreaterThanOrEqual(
-      hasCustomerBook ? 30 : 23,
+      hasFullCustomerBook ? 30 : 23,
     );
     const bgd = report.customerLeaderboard.find(
       (c) => c.customerId === "BGD101",
@@ -69,7 +125,7 @@ describe("4-Week Full-Customer CFB & NBA Parlay & Combo Backtest Engine", () => 
     expect(rf?.deskSavingsUsd).toBe(0);
   });
 
-  test.if(existsSync("enriched_customers_full.json"))(
+  test.if(hasFullCustomerBook)(
     "committed backtest artifact matches the engine output",
     async () => {
       const artifact = (await Bun.file(

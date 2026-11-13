@@ -29,6 +29,15 @@ export const GIT_WORKTREE_LIST_PORCELAIN = [
   "--porcelain",
 ] as const;
 
+/** Prefix for `git remote get-url <name>` — remote name is appended at runtime. */
+export const GIT_REMOTE_GET_URL = [GIT, "remote", "get-url"] as const;
+
+export type GitHubRepoRef = {
+  readonly owner: string;
+  readonly repository: string;
+  readonly httpsBrowse: string;
+};
+
 export interface BunRuntimeIdentity {
   readonly version: string;
   readonly revision: string;
@@ -65,7 +74,7 @@ export interface DeskProvenanceSnapshot {
 
 const SELF_REPO_ROOT = resolve(import.meta.dir, "..");
 
-const DESK_REPO_NAMES = [
+export const DESK_REPO_NAMES = [
   "sportsdesk-ops",
   "scratch",
   "dsh-ops",
@@ -139,6 +148,41 @@ function gitPorcelainLineCount(cwd: string): number {
 
 export function gitShortSha(sha: string, length = 9): string {
   return sha.slice(0, length);
+}
+
+/** Parse `github.com` owner/repository from HTTPS or `git@` clone URL. */
+export function parseGitHubRepoRef(url: string): GitHubRepoRef | null {
+  const ssh = url.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
+  if (ssh) {
+    const owner = ssh[1]!;
+    const repository = ssh[2]!.replace(/\.git$/, "");
+    return {
+      owner,
+      repository,
+      httpsBrowse: `https://github.com/${owner}/${repository}`,
+    };
+  }
+  const https = url.match(
+    /^https?:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?\/?$/,
+  );
+  if (https) {
+    const owner = https[1]!;
+    const repository = https[2]!.replace(/\.git$/, "");
+    return {
+      owner,
+      repository,
+      httpsBrowse: `https://github.com/${owner}/${repository}`,
+    };
+  }
+  return null;
+}
+
+export function gitRemoteGetUrl(
+  cwd: string,
+  remote = "origin",
+): string | undefined {
+  if (!existsSync(join(cwd, ".git"))) return undefined;
+  return gitStdout([...GIT_REMOTE_GET_URL, remote], cwd);
 }
 
 export function gitRepoHead(cwd = process.cwd()): string | undefined {

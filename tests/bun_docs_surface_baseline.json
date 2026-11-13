@@ -91,6 +91,10 @@
       "documented": false,
       "link": null
     },
+    "FetchSessionInit": {
+      "documented": false,
+      "link": "https://bun.com/docs/runtime/networking/fetch#connection-pooling-http-keep-alive"
+    },
     "FetchSession": {
       "documented": true,
       "link": "https://bun.com/blog/bun-v1.4.3#bun-fetchsession"

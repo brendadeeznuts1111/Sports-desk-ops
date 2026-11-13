@@ -2337,7 +2337,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Manager/deleteSportsVigSetup`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:173` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:173` · response not captured
 
 **Delete sport vig setup**
 
@@ -2352,7 +2352,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/deleteWager`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:193` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:193` · response not captured
 
 **Delete a wager**
 
@@ -2458,7 +2458,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/getCustomerNotes`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:130`, `docs/evidence/captures/2026-10-31/getCustomerNotes.post.json` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:130`, `docs/evidence/captures/2026-10-31/getCustomerNotes.post.json` · response not captured
 
 **Read customer notes**
 
@@ -2553,7 +2553,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Manager/updateCustomerNotes`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:153` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:153` · response not captured
 
 **Update customer notes**
 
@@ -2617,7 +2617,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/Report/getDailyFigure`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:225` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:225` · response not captured
 
 **Daily figure report**
 
@@ -2632,7 +2632,7 @@ UNVERIFIED — no capture exists. The path, method and any previously published 
 
 ### `POST /cloud/api/Report/getDeletedWagerReport`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:213` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:213` · response not captured
 
 **Deleted wager report**
 
@@ -2760,7 +2760,7 @@ UNVERIFIED — no capture exists. The path and method are candidate values infer
 
 ### `POST /cloud/api/System/verifySession`
 
-> **Evidence — tier C** · sources: `scripts/enhance_docs.mjs:98` · response not captured
+> **Evidence — tier C** · sources: `scripts/author_openapi_spec.mjs:98` · response not captured
 
 **Verify an existing session**
 

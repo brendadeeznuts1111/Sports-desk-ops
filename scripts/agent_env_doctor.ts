@@ -44,6 +44,25 @@ function exists(target: string): boolean {
   }
 }
 
+/**
+ * State of a `node_modules/.bin` entry. `dangling` is the workspace case: the bin is a symlink
+ * into `node_modules/<workspace>`, so the link exists while its target does not, which a plain
+ * `exists()` reports as "missing" and sends the reader looking for the wrong fix.
+ */
+export function binLinkState(target: string): "ok" | "missing" | "dangling" {
+  try {
+    fs.lstatSync(target);
+  } catch {
+    return "missing";
+  }
+  try {
+    fs.accessSync(target);
+    return "ok";
+  } catch {
+    return "dangling";
+  }
+}
+
 function readJson(target: string): unknown {
   try {
     return JSON.parse(fs.readFileSync(target, "utf8"));
@@ -69,6 +88,53 @@ function spawnText(command: readonly string[], cwd: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** One dependency whose `preinstall`/`install`/`postinstall` Bun refused to run. */
+export interface BlockedInstallScript {
+  readonly packageName: string;
+  readonly phase: string;
+}
+
+/** Package name from a `bun pm untrusted` module path (`…/node_modules/@scope/name`). */
+function packageNameFromModulePath(target: string): string | null {
+  const clean = target.trim();
+  if (clean === "") return null;
+  const marker = clean.lastIndexOf("node_modules/");
+  const tail =
+    marker === -1 ? clean : clean.slice(marker + "node_modules/".length);
+  const parts = tail.split("/");
+  const scope = parts[0];
+  if (scope !== undefined && scope.startsWith("@")) {
+    const name = parts[1];
+    return name === undefined || name === "" ? null : `${scope}/${name}`;
+  }
+  return scope === undefined || scope === "" ? null : scope;
+}
+
+/**
+ * Parse `bun pm untrusted`. Bun exits 0 whether or not scripts were blocked, so the
+ * text is the only signal: a clean run prints "Found 0 untrusted dependencies", while
+ * a blocked package prints a module path and its `» [phase]:` command lines.
+ */
+export function parseBlockedInstallScripts(
+  stdout: string,
+): BlockedInstallScript[] {
+  if (/Found 0 untrusted dependencies/.test(stdout)) return [];
+  const blocked: BlockedInstallScript[] = [];
+  const lines = stdout.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const phase = /»\s*\[([a-z]+)\]/.exec(lines[index] ?? "");
+    if (phase === null) continue;
+    const header = lines[index - 1] ?? "";
+    const packageName = packageNameFromModulePath(
+      header.split(/\s+@/)[0] ?? "",
+    );
+    if (packageName !== null) {
+      blocked.push({ packageName, phase: phase[1] ?? "install" });
+    }
+  }
+  return blocked;
 }
 
 /** The main checkout when `root` is a linked worktree; null for a normal checkout. */
@@ -176,11 +242,46 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
     });
   }
 
+  const untrustedStdout = exists(nodeModules)
+    ? spawnText([process.execPath, "pm", "untrusted"], root)
+    : null;
+  if (untrustedStdout !== null) {
+    const blocked = parseBlockedInstallScripts(untrustedStdout);
+    checks.push({
+      id: "install-scripts",
+      status: blocked.length === 0 ? "ok" : "warn",
+      title:
+        blocked.length === 0
+          ? "no dependency lifecycle scripts blocked"
+          : `${blocked.length} dependency lifecycle script(s) blocked`,
+      ...(blocked.length === 0
+        ? {}
+        : {
+            detail: `${blocked
+              .slice(0, 5)
+              .map((entry) => `${entry.packageName} [${entry.phase}]`)
+              .join(" · ")}${
+              blocked.length > 5 ? ` · +${blocked.length - 5} more` : ""
+            }`,
+            fix: `bun pm trust ${blocked
+              .slice(0, 3)
+              .map((entry) => entry.packageName)
+              .join(" ")}   # or: bun install --ignore-scripts`,
+          }),
+    });
+  }
+
   const requiredBins = ["dx", "sportsdesk", "wrangler", "nsh-desk", "oxlint"];
   const binDir = path.join(nodeModules, ".bin");
-  const missingBins = requiredBins.filter(
-    (name) => !exists(path.join(binDir, name)),
+  const binStates = requiredBins.map(
+    (name) => [name, binLinkState(path.join(binDir, name))] as const,
   );
+  const missingBins = binStates
+    .filter(([, state]) => state !== "ok")
+    .map(([name]) => name);
+  const danglingBins = binStates
+    .filter(([, state]) => state === "dangling")
+    .map(([name]) => name);
   checks.push({
     id: "cli-bins",
     status: missingBins.length === 0 ? "ok" : "warn",
@@ -192,7 +293,9 @@ export async function runDoctor(root = ROOT): Promise<Check[]> {
       ? {}
       : {
           detail:
-            "bun x <cli> and oxlint gates expect packages/sportsdesk-ops linked",
+            danglingBins.length === 0
+              ? "bun x <cli> and oxlint gates expect packages/sportsdesk-ops linked"
+              : `${danglingBins.join(", ")} exist as links whose target is gone — the workspace package is not linked, so the install is stale or incomplete`,
           fix: "./bin/dx exec bun-deps install   # or: bun install --frozen-lockfile",
         }),
   });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { rm } from "node:fs/promises";
 
 /**
  * `Bun.FetchSession` owns a connection pool and a bound `fetch`; the Telegram bot uses exactly
@@ -31,6 +32,34 @@ describe("Bun.FetchSession", () => {
     } finally {
       session.close();
       server.stop(true);
+    }
+  });
+
+  test("exposes close and Symbol.dispose and omits preconnect", () => {
+    using session = new Bun.FetchSession({
+      keepAlive: { idleTimeout: 1, maxIdleSockets: 1 },
+    });
+    expect(typeof session.close).toBe("function");
+    expect(typeof session[Symbol.dispose]).toBe("function");
+    expect("preconnect" in session).toBe(false);
+    expect("preconnect" in Bun.FetchSession.prototype).toBe(false);
+  });
+
+  test("supports FetchSessionInit unix domain socket connections", async () => {
+    const sockPath = `/tmp/sd-fs-${process.pid}-${Date.now()}.sock`;
+    const server = Bun.serve({
+      unix: sockPath,
+      fetch: () => new Response("unix-ok"),
+    });
+    try {
+      const init: Bun.FetchSessionInit = { unix: sockPath };
+      using session = new Bun.FetchSession(init);
+      const res = await session.fetch("http://localhost/ping");
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe("unix-ok");
+    } finally {
+      server.stop(true);
+      await rm(sockPath, { force: true });
     }
   });
 });

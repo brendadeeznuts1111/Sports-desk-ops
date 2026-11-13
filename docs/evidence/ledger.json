@@ -871,7 +871,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:98",
+          "source": "scripts/author_openapi_spec.mjs:98",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -904,7 +904,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:115",
+          "source": "scripts/author_openapi_spec.mjs:115",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -922,7 +922,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:130",
+          "source": "scripts/author_openapi_spec.mjs:130",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -945,7 +945,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:153",
+          "source": "scripts/author_openapi_spec.mjs:153",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -968,7 +968,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:173",
+          "source": "scripts/author_openapi_spec.mjs:173",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -991,7 +991,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:193",
+          "source": "scripts/author_openapi_spec.mjs:193",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -1014,7 +1014,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:213",
+          "source": "scripts/author_openapi_spec.mjs:213",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -1037,7 +1037,7 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "scripts/enhance_docs.mjs:225",
+          "source": "scripts/author_openapi_spec.mjs:225",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         },
@@ -1070,7 +1070,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:237",
+          "source": "scripts/author_openapi_spec.mjs:237",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -1098,7 +1098,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:249",
+          "source": "scripts/author_openapi_spec.mjs:249",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -1126,7 +1126,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:269",
+          "source": "scripts/author_openapi_spec.mjs:269",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -1154,7 +1154,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:289",
+          "source": "scripts/author_openapi_spec.mjs:289",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -1182,7 +1182,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:301",
+          "source": "scripts/author_openapi_spec.mjs:301",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -1210,7 +1210,7 @@
           "note": "The only other '/api/desk' hits in the main tree are the documentation tests themselves; repo-wide grep found no handler, no HMAC verifier and no CookieMap session code. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:321",
+          "source": "scripts/author_openapi_spec.mjs:321",
           "kind": "generator",
           "note": "Operation + schemas were registered by the docs generator script; that is authorship, not wire evidence."
         }
@@ -2206,10 +2206,10 @@
         {
           "source": "tests/capture_apply.test.ts:84,96",
           "kind": "absence",
-          "note": "The only /api/desk references outside the docs are the documentation tests asserting the spec contains them. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts, and the other code hits are scripts/enhance_docs.mjs (the generator that authored these routes) and a comment in scripts/generate_openapi.ts."
+          "note": "The only /api/desk references outside the docs are the documentation tests asserting the spec contains them. Re-measured 2026-11-02: tests/api_reference.test.ts no longer mentions /api/desk; the test hits are the tier-E fixture rows in tests/capture_apply.test.ts, and the other code hits are scripts/author_openapi_spec.mjs (the generator that authored these routes) and a comment in scripts/generate_openapi.ts."
         },
         {
-          "source": "scripts/enhance_docs.mjs:115,237,249,269,289,301,321",
+          "source": "scripts/author_openapi_spec.mjs:115,237,249,269,289,301,321",
           "kind": "generator",
           "note": "The routes were authored directly into docs/openapi.json by the generator; nothing implements them."
         }

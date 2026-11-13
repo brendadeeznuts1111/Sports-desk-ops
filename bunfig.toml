@@ -53,7 +53,19 @@ ignorePatterns = [
 [lint.categories]
 correctness = "warn"
 
+# [[lint.overrides]] — measured 2026-11-11 (Bun 1.4.4-canary.1), before any override exists here.
+# Add the first one only after re-checking these rows; the dialect differs from minimatch.
+#   files         union of independent matchers, Bun.Glob syntax (braces, [ab], @(a|b) all work),
+#                 anchored to this file's directory rather than the invocation cwd.
+#   `!p` in files matches paths that do NOT match p, and the list is a union — so a negation can
+#                 only broaden: ["src/**", "!src/a.ts"] still applies to src/a.ts. It is not
+#                 subtraction; with a single entry ["!src/a.ts"] it means "every other file".
+#   excludeFiles  the only subtractive operator; same syntax, applied after files.
+#   dot           no gate: lint matches an already-enumerated list, so `**/*` reaches .config/.
+# Re-probe when bumping Bun: a dialect change is invisible to config hashing.
+
 [lint.rules]
+"eqeqeq" = ["error", "smart"] # same policy as .oxlintrc.json; "smart" keeps the `x == null` guards
 "@typescript-eslint/no-explicit-any" = "error"
 "@typescript-eslint/no-require-imports" = "error"
 "preserve-caught-error" = "warn"

@@ -217,6 +217,20 @@ const DEV_CHECKS = Object.assign(Object.create(null), {
     json: true,
     description: "Bun package-manager policy (runtime pin, lock drift).",
   },
+  doctor: {
+    kind: "check",
+    argv: ["run", "agent:doctor", "--json"],
+    json: true,
+    description:
+      "Environment gaps: worktree deps, blocked install scripts, dangling workspace links, browser/CDP, ports, credentials.",
+  },
+  workspaces: {
+    kind: "check",
+    argv: ["run", "workspaces:audit", "--json"],
+    json: true,
+    description:
+      "Monorepo workspace gates: root privacy, globs, lock sync, workspace:* graph, self-containment.",
+  },
   "customer-book": {
     kind: "check",
     argv: ["run", "audit:customer-book", "--json"],
@@ -7057,7 +7071,8 @@ export function apply(ctx, config) {
         "modified/untracked counts, ahead/behind and diverged, plus the repo's verification " +
         "gates. Every gate is reported as not_run unless `run` names it — an unexecuted gate is " +
         "never green, and ok is null when nothing was executed. Closed set: " +
-        "secrets, release, archives, ledger, citations, routes, pm, customer-book, " +
+        "secrets, release, archives, ledger, citations, routes, pm, doctor, workspaces, " +
+        "customer-book, " +
         "artifacts (cheap reads) and format, typecheck, lint, unit, docs, ci, ci-all (CI steps; " +
         "unit and the ci gates take minutes; docs and the ci gates re-render generated docs " +
         "then restore identical " +

@@ -12,7 +12,7 @@ Demonstrates compile-time dead-code elimination, TypeScript `Registry` augmentat
      - `test`: `["TEST", "DEBUG"]`
 2. **`types/bundle.d.ts`**:
    - Augments Bun's `Registry` interface using `Feature` so `feature()` rejects unknown flags at compile time.
-3. **`scripts/gen_docs.ts` & `scripts/gen_type_tests.ts`**:
+3. **`scripts/gen_feature_flags.ts` & `scripts/gen_type_tests.ts`**:
    - Generates `types/README.md` documentation table and `tests/bundle_types.test-d.ts`.
    - `DESCRIPTIONS` map ensures adding a flag to `FEATURES` fails to compile until a description is provided.
 4. **`examples/feature_flags/risk_engine.ts`**:

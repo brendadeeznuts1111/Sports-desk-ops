@@ -3,11 +3,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  applyAnchorSync,
   auditCitations,
   citationKey,
   collectDocCitations,
   extractCitations,
   parseCitationAnchors,
+  planAnchorSync,
+  rewriteCitationKey,
+  rewriteFileCitations,
   unusedAnchors,
   type Citation,
 } from "../scripts/check_spec_citations.ts";
@@ -266,5 +270,79 @@ describe("the committed docs", () => {
         expect(auditCitations([shifted], ROOT, moved)).not.toEqual([]);
       }
     }
+  });
+});
+
+describe("--sync-anchors", () => {
+  const MOVED_KEY = `${FIXTURE}:6-8`;
+
+  test("a unique anchor yields one move with the span preserved", () => {
+    const anchors = new Map([[MOVED_KEY, 'pathname === "/health"']]);
+    expect(
+      planAnchorSync([citation(FIXTURE, 6, 8)], FIXTURE_ROOT, anchors),
+    ).toEqual([
+      { file: FIXTURE, from: MOVED_KEY, to: `${FIXTURE}:3-5`, line: 3 },
+    ]);
+  });
+
+  test("an ambiguous anchor is left for a human", async () => {
+    const ambiguous = "ambiguous.ts";
+    await Bun.write(
+      join(FIXTURE_ROOT, ambiguous),
+      [
+        'const first = "shared-literal";', // 1
+        "// filler", // 2
+        "// filler", // 3
+        "// filler", // 4
+        'const second = "shared-literal";', // 5
+      ].join("\n"),
+    );
+    const anchors = new Map([[`${ambiguous}:3`, "shared-literal"]]);
+    expect(
+      planAnchorSync([citation(ambiguous, 3)], FIXTURE_ROOT, anchors),
+    ).toEqual([]);
+  });
+
+  test("a vanished anchor yields no move", () => {
+    const anchors = new Map([[MOVED_KEY, "literal that is gone"]]);
+    expect(
+      planAnchorSync([citation(FIXTURE, 6, 8)], FIXTURE_ROOT, anchors),
+    ).toEqual([]);
+  });
+
+  test("a comma-list member is rewritten without its own file prefix", () => {
+    expect(
+      rewriteFileCitations(
+        "sources: `handler.ts:1141-1143,1131-1135`",
+        FIXTURE,
+        new Map([["1131-1135", "1134-1138"]]),
+      ),
+    ).toBe("sources: `handler.ts:1141-1143,1134-1138`");
+  });
+
+  test("the single-key rewrite is boundary-guarded", () => {
+    expect(
+      rewriteCitationKey("x.ts:18 and x.ts:180", "x.ts:18", "x.ts:9"),
+    ).toBe("x.ts:9 and x.ts:180");
+    expect(
+      rewriteCitationKey("a/lib/x.ts:18", "lib/x.ts:18", "lib/x.ts:9"),
+    ).toBe("a/lib/x.ts:18");
+  });
+
+  test("applyAnchorSync rewrites the citing doc and reports it", async () => {
+    const doc = "doc.md";
+    await Bun.write(
+      join(FIXTURE_ROOT, doc),
+      "see `handler.ts:6-8` for details\n",
+    );
+    const changed = applyAnchorSync(
+      [{ file: FIXTURE, from: MOVED_KEY, to: `${FIXTURE}:3-5`, line: 3 }],
+      FIXTURE_ROOT,
+      [doc],
+    );
+    expect(changed).toEqual([doc]);
+    expect(await Bun.file(join(FIXTURE_ROOT, doc)).text()).toBe(
+      "see `handler.ts:3-5` for details\n",
+    );
   });
 });

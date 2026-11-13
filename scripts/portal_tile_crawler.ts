@@ -24,7 +24,7 @@ import {
   type AuditIssue,
   type WebViewHandle,
   type WebViewOptions,
-} from "./audit_docs_webview_cron.ts";
+} from "./audit_docs_portal.ts";
 
 const SCRIPT_DIR = import.meta.dir;
 const DEFAULT_ROOT_DIR = resolve(SCRIPT_DIR, "..");

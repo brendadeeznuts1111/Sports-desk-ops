@@ -10,6 +10,17 @@
 export type FileSinkShape = Bun.FileSink;
 export type EnvShape = Bun.Env;
 export type FetchProxyOptionShape = Bun.FetchProxyOption;
+export type FetchSessionInitShape = Bun.FetchSessionInit;
+export type FetchSessionCloseShape = Bun.FetchSession["close"];
+export type FetchSessionDisposeShape = Bun.FetchSession[typeof Symbol.dispose];
+export type FetchSessionPreconnectForbidden =
+  "preconnect" extends keyof Bun.FetchSession ? never : true;
+export const verifyNoFetchSessionPreconnect: FetchSessionPreconnectForbidden = true;
+export const verifyFetchSessionInitShape: Bun.FetchSessionInit = {
+  unix: "/tmp/example.sock",
+  tls: { rejectUnauthorized: true },
+  keepAlive: { idleTimeout: 30, maxIdleSockets: 8 },
+};
 export type CronControllerShape = Bun.CronController;
 export type ServerShape = Bun.Server<undefined>;
 

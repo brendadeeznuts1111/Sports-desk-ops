@@ -664,8 +664,12 @@ describe("--fail-on-alert exit semantics (end to end)", () => {
           paths.status,
         ];
         if (withFlag) args.push("--fail-on-alert");
-        const proc = Bun.spawn(args, {
-          env: { ...Bun.env, GSID: "fixture-session" },
+        const proc = Bun.spawn([args[0]!, "--no-env-file", ...args.slice(1)], {
+          env: {
+            ...Bun.env,
+            GSID_COOKIE: "fixture-session",
+            GS_SESSION: "fixture-gate",
+          },
           stdout: "pipe",
           stderr: "pipe",
         });

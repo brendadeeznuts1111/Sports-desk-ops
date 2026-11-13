@@ -12,7 +12,9 @@ import {
   gitRepoHead,
   gitShortSha,
   GIT,
+  GIT_REMOTE_GET_URL,
   GIT_REV_PARSE_HEAD,
+  parseGitHubRepoRef,
   resolveCodeRoot,
 } from "../lib/bun_runtime.ts";
 import { resolveFourcRoot } from "../lib/fourc_root.ts";
@@ -23,6 +25,16 @@ describe("bun_runtime", () => {
   test("git argv constants", () => {
     expect(GIT).toBe("git");
     expect(GIT_REV_PARSE_HEAD).toEqual(["git", "rev-parse", "HEAD"]);
+    expect(GIT_REMOTE_GET_URL).toEqual(["git", "remote", "get-url"]);
+  });
+
+  test("parseGitHubRepoRef", () => {
+    const https = parseGitHubRepoRef("https://github.com/oven-sh/bun.git");
+    expect(https?.owner).toBe("oven-sh");
+    expect(https?.repository).toBe("bun");
+    expect(https?.httpsBrowse).toBe("https://github.com/oven-sh/bun");
+    const ssh = parseGitHubRepoRef("git@github.com:oven-sh/bun.git");
+    expect(ssh?.repository).toBe("bun");
   });
 
   test("Bun.revision is 40-char hex", () => {

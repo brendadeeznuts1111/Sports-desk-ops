@@ -1,4 +1,4 @@
-# Bun shape contracts — the 89 shapes this repository calls
+# Bun shape contracts — the 90 shapes this repository calls
 
 The single source of truth is layered, and nothing here restates upstream text: **declarations** come from `bun-types@1.4.4` (the surface the reference site renders), **behaviour** from probes against the local `Bun 1.4.4` binary (`tests/bun_baseline.json`), **property attributes** from the pinned Bun commit `38afee6c84`. When they disagree: declarations win on names and signatures, the Bun source wins on attributes, and the measured binary wins on behaviour.
 
@@ -44,7 +44,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.$
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v1.2.11#typescript-improvements-for-bun))
 - **Shape:** value: `function` · writable true · enumerable true
 - **Members (9):** `Shell`, `ShellError`, `ShellPromise`, `braces`, `cwd`, `env`, `escape`, `nothrow`, `throws`
 - **Here:** `dsh-plugin/verify-load.mjs`, `bin/bun_surface.ts`
@@ -157,7 +157,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.isStandaloneExecutable
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/compiler/executables#detecting-standalone-mode-at-runtime))
 - **Shape:** value: `boolean` · writable false · enumerable true
 - **Here:** `bin/bun_surface.ts`, `scripts/wagers_by_state_capture.ts`
 - **Evidence:** `surface:isStandaloneExecutable`
@@ -221,7 +221,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.sliceAnsi
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v1.3.11#bun-sliceansi-ansi-grapheme-aware-string-slicing))
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`
 - **Evidence:** `surface:sliceAnsi`
@@ -230,7 +230,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/stripANSI)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`, `scripts/nsh_desk_cli.ts`
+- **Here:** `lib/bun_cli_flags.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:stripANSI`, `test:tests/nsh_desk_contract.test.ts`
 
 ## Data formats and parsing
@@ -385,7 +385,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.s3
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#bun-s3client-bun-s3))
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (9):** `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`, `unlink`, `write`
 - **Here:** `bin/bun_surface.ts`
@@ -393,7 +393,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.S3File (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#s3file))
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_s3client_contract.test.ts`
@@ -421,7 +421,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.S3Options (type)
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/s3#s3file))
 - **Shape:** type-only: declared, no runtime value
 - **Here:** `lib/r2_s3_client.ts`, `types/bun-api.d.ts`
 - **Evidence:** `test:tests/bun_s3client_contract.test.ts`
@@ -472,7 +472,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.CSRF
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/csrf))
 - **Shape:** value: `object` · writable true · enumerable true
 - **Members (2):** `generate`, `verify`
 - **Here:** `bin/bun_surface.ts`, `lib/csrf.ts`
@@ -502,14 +502,14 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 #### Bun.readableStreamToArrayBuffer
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/guides/streams/to-arraybuffer))
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `bin/image-meta.ts`
 - **Evidence:** `surface:readableStreamToArrayBuffer`, `test:tests/jsonl_stream_replay.test.ts`
 
 #### Bun.allocUnsafe
 
-- **Source:** declared in `bun-types@1.4.4` · no reference page (declaration only)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/lint/rules/eslint/no-buffer-constructor))
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `bin/bun_surface.ts`, `lib/f402_bet_ticker_jsonl.ts`
 - **Evidence:** `surface:allocUnsafe`, `test:tests/bun_capabilities.test.ts`
@@ -583,7 +583,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - `Bun.fetch`, `Bun.serve`, `Bun.connect`, `Bun.listen`, `Bun.udpSocket`, `Bun.FetchSession` are functions (surface checks + capabilities test).
 - `Bun.dns` is an object; the reference documents only `lookup`/`prefetch`/`getCacheStats` while the binary also has 15 resolver methods — see the drift section in ../bun-upstream-reference.md.
-- `Bun.Server` and `Bun.FetchProxyOption` are types (`Server<WebSocketData>` takes a type argument).
+- `Bun.Server`, `Bun.FetchProxyOption`, and `Bun.FetchSessionInit` are types (`Server<WebSocketData>` takes a type argument).
 
 #### Bun.FetchProxyOption (type)
 
@@ -592,9 +592,16 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 - **Here:** `scripts/capture/session.ts`, `scripts/catalog_probe.ts`
 - **Evidence:** `test:tests/bun_capabilities.test.ts` · deep dive: [§7.2](./bun_server_runtime_shapes_runbook.md)
 
+#### Bun.FetchSessionInit (type)
+
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/runtime/networking/fetch#connection-pooling-http-keep-alive))
+- **Shape:** type-only: declared, no runtime value
+- **Here:** `services/sportsdesk_telegram_bot.ts`
+- **Evidence:** `test:tests/fetch_session_contract.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)
+
 #### Bun.FetchSession
 
-- **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/FetchSession)
+- **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/blog/bun-v1.4.3#bun-fetchsession))
 - **Shape:** value: `function` · writable true · enumerable true
 - **Here:** `services/sportsdesk_telegram_bot.ts`, `bin/bun_surface.ts`
 - **Evidence:** `surface:FetchSession`, `test:tests/bun_capabilities.test.ts` · deep dive: [§7.3](./bun_server_runtime_shapes_runbook.md)

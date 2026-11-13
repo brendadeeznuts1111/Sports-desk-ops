@@ -71,7 +71,7 @@ Fleet scripts should not call raw `Bun.cron` except inside this module. Wrappers
 | `isBunOsCronInvocation` / `osCronWorkerPath`       | Detect `--cron-title=` argv; absolute worker path                                |
 | `CronScheduledWorker`                              | `export default { scheduled(controller) }` for Tier 2 workers                    |
 
-Canonical consumers: `scripts/artifacts_cron.ts`, `scripts/f402_portal_drift_cron.ts`, `scripts/graph_feed_poller_daemon.ts`, `scripts/audit_docs_webview_cron.ts`, `services/reporting_scheduler_service.ts`.
+Canonical consumers: `scripts/artifacts_cron.ts`, `scripts/f402_portal_drift_cron.ts`, `scripts/graph_feed_poller_daemon.ts`, `scripts/audit_docs_portal.ts`, `services/reporting_scheduler_service.ts`.
 
 ### 2.3 OS-level registration & `scheduled()` worker (Bun docs)
 
@@ -229,13 +229,13 @@ steamJob.ref();
 
 ### 4.3 Automated Documentation Error Audit Daemon (`Bun.cron` + `Bun.WebView` + `Bun.FetchSession`)
 
-The documentation error finding daemon (`scripts/audit_docs_webview_cron.ts`) combines an in-process `Bun.cron` schedule (default `0 * * * *` in **local time**; pass `{ tz }` via `lib/bun_cron.ts` when you need an explicit IANA zone) with native `Bun.WebView` DOM navigation and `Bun.FetchSession` connection pooling to continuously audit the live documentation portal (`https://fantasy402-docs-4ay.pages.dev`):
+The documentation error finding daemon (`scripts/audit_docs_portal.ts`) combines an in-process `Bun.cron` schedule (default `0 * * * *` in **local time**; pass `{ tz }` via `lib/bun_cron.ts` when you need an explicit IANA zone) with native `Bun.WebView` DOM navigation and `Bun.FetchSession` connection pooling to continuously audit the live documentation portal (`https://fantasy402-docs-4ay.pages.dev`):
 
 ```typescript
 import {
   startDocsAuditCronDaemon,
   runDocumentationWebviewAudit,
-} from "./scripts/audit_docs_webview_cron.ts";
+} from "./scripts/audit_docs_portal.ts";
 
 // Launch continuous hourly in-process documentation auditor (0 * * * * UTC)
 // Uses Explicit Resource Management to unregister cleanly on teardown

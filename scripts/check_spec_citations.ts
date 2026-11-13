@@ -19,10 +19,15 @@
  * `zip:` citations name the GS extract under the git-ignored scratch/ tree, which a fresh checkout
  * does not have; they are counted and reported as unchecked, never passed silently.
  *
+ * `--sync-anchors` applies the moves whose anchor occurs exactly once in the file (span
+ * preserved) and rewrites the key in every citing doc. Ambiguous anchors — the literal appears
+ * twice — and vanished ones still fail: neither identifies one site, so a rewrite would guess.
+ *
  *   bun run scripts/check_spec_citations.ts
+ *   bun run scripts/check_spec_citations.ts --sync-anchors
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -256,6 +261,147 @@ export function unusedAnchors(
   return [...anchors.keys()].filter((key) => !cited.has(key)).sort();
 }
 
+/** One citation whose anchor occurs exactly once, so its new range is not a guess. */
+export type AnchorMove = {
+  /** The cited file, needed because a comma list writes the prefix only once. */
+  readonly file: string;
+  /** The key as written today, e.g. `lib/x.ts:841-851`. */
+  readonly from: string;
+  /** The key after the move, span preserved. */
+  readonly to: string;
+  /** New first cited line. */
+  readonly line: number;
+};
+
+/** Reasons where a unique anchor identifies the new site even though the old line is not code. */
+const RESOLVABLE: ReadonlySet<string> = new Set([
+  "anchor-drift",
+  "blank-anchor",
+  "punctuation-anchor",
+]);
+
+/**
+ * The moves `--sync-anchors` may apply. Only drift where the anchor occurs exactly once in the
+ * file is eligible: two hits mean the literal does not identify one site, and no hit means the
+ * code is gone. Both are left for a human — the check stays fail-closed for them.
+ *
+ * Inserting lines above a cited block usually lands the old range on the *previous* block's
+ * closing brace, which reaches the audit as `punctuation-anchor` rather than `anchor-drift`; the
+ * move is the same one either way, so both are resolvable.
+ */
+export function planAnchorSync(
+  citations: readonly Citation[],
+  root: string,
+  anchors: CitationAnchors,
+): AnchorMove[] {
+  const moves: AnchorMove[] = [];
+  const seen = new Set<string>();
+  const lineCache = new Map<string, string[]>();
+  for (const problem of auditCitations(citations, root, anchors)) {
+    if (!RESOLVABLE.has(problem.reason)) continue;
+    const { citation } = problem;
+    const key = citationKey(citation);
+    if (seen.has(key)) continue;
+    const anchor = anchors.get(key);
+    if (anchor === undefined) continue;
+    const path = resolveCitedFile(citation.file, root);
+    if (path === undefined) continue;
+    let lines = lineCache.get(path);
+    if (lines === undefined) {
+      lines = readFileSync(path, "utf8").split("\n");
+      lineCache.set(path, lines);
+    }
+    const hits = linesContaining(lines, anchor, citation.file);
+    if (hits.length !== 1) continue;
+    const line = hits[0]!;
+    seen.add(key);
+    moves.push({
+      file: citation.file,
+      from: key,
+      to: citationKey({
+        ...citation,
+        start: line,
+        end: line + (citation.end - citation.start),
+      }),
+      line,
+    });
+  }
+  return moves.sort((a, b) => a.from.localeCompare(b.from));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The `start` or `start-end` part of a citation key. */
+function rangeOf(key: string): string {
+  const colon = key.lastIndexOf(":");
+  return colon === -1 ? key : key.slice(colon + 1);
+}
+
+/**
+ * Rewrite moved ranges for one file. The whole citation list is matched — `file:1141-1143,1131-1135`
+ * writes the prefix once, so a bare range after a comma would never match a full-key replace.
+ */
+export function rewriteFileCitations(
+  text: string,
+  file: string,
+  ranges: ReadonlyMap<string, string>,
+): string {
+  if (ranges.size === 0) return text;
+  const pattern = new RegExp(
+    `(?<![\\w./-])${escapeRegExp(file)}:(\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*)`,
+    "g",
+  );
+  return text.replace(pattern, (whole, list: string) => {
+    const parts = list.split(",").map((part) => ranges.get(part) ?? part);
+    return parts.join(",") === list ? whole : `${file}:${parts.join(",")}`;
+  });
+}
+
+/** Boundary-guarded single-key rewrite; a comma-list member needs `rewriteFileCitations`. */
+export function rewriteCitationKey(
+  text: string,
+  from: string,
+  to: string,
+): string {
+  const colon = from.lastIndexOf(":");
+  if (colon === -1) return text;
+  return rewriteFileCitations(
+    text,
+    from.slice(0, colon),
+    new Map([[from.slice(colon + 1), rangeOf(to)]]),
+  );
+}
+
+/** Applies the moves in place; returns the docs whose bytes changed. */
+export function applyAnchorSync(
+  moves: readonly AnchorMove[],
+  root: string,
+  docs: readonly string[] = CITING_DOCS,
+): string[] {
+  const byFile = new Map<string, Map<string, string>>();
+  for (const move of moves) {
+    const ranges = byFile.get(move.file) ?? new Map<string, string>();
+    ranges.set(rangeOf(move.from), rangeOf(move.to));
+    byFile.set(move.file, ranges);
+  }
+  const changed: string[] = [];
+  for (const doc of docs) {
+    const path = join(root, doc);
+    const original = readFileSync(path, "utf8");
+    let text = original;
+    for (const [file, ranges] of byFile) {
+      text = rewriteFileCitations(text, file, ranges);
+    }
+    if (text !== original) {
+      writeFileSync(path, text);
+      changed.push(doc);
+    }
+  }
+  return changed;
+}
+
 /** The docs' citations, reading the ledger without its own anchor registry. */
 export function collectDocCitations(root: string): {
   readonly citations: Citation[];
@@ -285,8 +431,24 @@ function label(citation: Citation): string {
 }
 
 if (import.meta.main) {
-  const { citations, anchors } = collectDocCitations(ROOT);
-  const problems = auditCitations(citations, ROOT, anchors);
+  let { citations, anchors } = collectDocCitations(ROOT);
+  let problems = auditCitations(citations, ROOT, anchors);
+
+  if (process.argv.includes("--sync-anchors")) {
+    const moves = planAnchorSync(citations, ROOT, anchors);
+    if (moves.length > 0) {
+      const changed = applyAnchorSync(moves, ROOT);
+      console.error(
+        `check:spec-citations: --sync-anchors moved ${moves.length} citation(s) across ${changed.length} doc(s)`,
+      );
+      for (const move of moves) {
+        console.error(`  ${move.from} -> ${move.to}`);
+      }
+      ({ citations, anchors } = collectDocCitations(ROOT));
+      problems = auditCitations(citations, ROOT, anchors);
+    }
+  }
+
   const unused = unusedAnchors(citations, anchors);
   const external = new Set(
     citations.filter((c) => c.external).map(citationKey),

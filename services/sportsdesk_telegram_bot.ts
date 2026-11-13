@@ -172,7 +172,7 @@ export class SportsDeskTelegramService {
   private readonly webhookSecret: string;
   private readonly watchListMap: Map<string, WatchListAccount> = new Map();
   private readonly scheduledReports: ScheduledReportTask[] = [];
-  private readonly fetchSession: Bun.FetchSession;
+  private readonly fetchSession: Pick<Bun.FetchSession, "fetch" | "close">;
   private reportGenerator: ReportGenerator | null = null;
   private pollingAbort: AbortController | null = null;
   private readonly activityLogPath: string | null;
@@ -187,6 +187,9 @@ export class SportsDeskTelegramService {
     miniappUrl?: string;
     apiBaseUrl?: string;
     activityLogPath?: string | null;
+    sessionInit?: Bun.FetchSessionInit;
+    fetchSession?: Pick<Bun.FetchSession, "fetch" | "close">;
+    warmOnInit?: boolean;
   }) {
     this.activityLogPath =
       options?.activityLogPath !== undefined
@@ -219,22 +222,44 @@ export class SportsDeskTelegramService {
     this.webhookUrl = Bun.env.TELEGRAM_WEBHOOK_URL ?? "";
     this.webhookSecret = Bun.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 
-    this.fetchSession = new Bun.FetchSession({
-      tls: {
-        rejectUnauthorized: true,
-      },
-    });
+    this.fetchSession =
+      options?.fetchSession ??
+      new Bun.FetchSession({
+        ...options?.sessionInit,
+        tls: {
+          rejectUnauthorized: true,
+          ...options?.sessionInit?.tls,
+        },
+      });
 
-    if (this.isLiveMode && typeof fetch.preconnect === "function") {
-      try {
-        fetch.preconnect(this.apiBaseUrl);
-      } catch {
-        // Non-blocking preconnect failure
-      }
+    const shouldWarm =
+      options?.warmOnInit ?? (this.isLiveMode && Bun.env.NODE_ENV !== "test");
+    if (shouldWarm) {
+      void this.warmSession();
     }
 
     this.initWatchListRegistry();
     this.initScheduleDefinitions();
+  }
+
+  /**
+   * Pre-warms the dedicated `Bun.FetchSession` TCP/TLS connection pool.
+   * `FetchSession` keeps its own pool separate from global `fetch`, so warming
+   * must go through `this.fetchSession.fetch()` rather than `fetch.preconnect()`.
+   */
+  public async warmSession(timeoutMs = 2_000): Promise<boolean> {
+    if (!this.isLiveMode) return false;
+    const base = this.apiBaseUrl.replace(/\/+$/, "");
+    try {
+      const res = await this.fetchSession.fetch(`${base}/`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      await res.body?.cancel();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private initWatchListRegistry(): void {

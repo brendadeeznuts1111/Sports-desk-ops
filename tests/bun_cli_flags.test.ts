@@ -111,7 +111,7 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
         { cwd: dir, stdout: "pipe", stderr: "pipe" },
       );
       expect(runParallel.exitCode).toBe(0);
-      const outParallel = runParallel.stdout.toString();
+      const outParallel = Bun.stripANSI(runParallel.stdout.toString());
       expect(outParallel).toContain("task:a |");
       expect(outParallel).toContain("task:b |");
       expect(outParallel).toContain("Hello from A");
@@ -122,7 +122,7 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
         [process.execPath, "run", "--parallel", "--no-exit-on-error", "task:*"],
         { cwd: dir, stdout: "pipe", stderr: "pipe" },
       );
-      const outGlob = runGlob.stdout.toString();
+      const outGlob = Bun.stripANSI(runGlob.stdout.toString());
       expect(outGlob).toMatch(/task:a\s+\|/);
       expect(outGlob).toMatch(/task:b\s+\|/);
       expect(outGlob).toMatch(/task:c\s+\|/);
@@ -132,10 +132,14 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
       // 3. Lifecycle hook preservation: pretask/posttask grouped with main task
       const runHooks = Bun.spawnSync(
         [process.execPath, "run", "--parallel", "task:c"],
-        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+        {
+          cwd: dir,
+          stdout: "pipe",
+          stderr: "pipe",
+        },
       );
       expect(runHooks.exitCode).toBe(0);
-      const outHooks = runHooks.stdout.toString();
+      const outHooks = Bun.stripANSI(runHooks.stdout.toString());
       expect(outHooks).toContain("Pre-hook");
       expect(outHooks).toContain("Main task");
       expect(outHooks).toContain("Post-hook");
@@ -146,7 +150,7 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
         { cwd: dir, stdout: "pipe", stderr: "pipe" },
       );
       expect(runSequential.exitCode).toBe(0);
-      const outSequential = runSequential.stdout.toString();
+      const outSequential = Bun.stripANSI(runSequential.stdout.toString());
       expect(outSequential).toContain("task:a |");
       expect(outSequential).toContain("task:b |");
       const idxA = outSequential.indexOf("Hello from A");
@@ -203,6 +207,19 @@ describe("pinned Bun CLI surface (1.4.4)", () => {
     expect(parsedSample).toHaveLength(3);
     expect(parsedSample[1]?.short).toBe("-F");
     expect(parsedSample[1]?.valueHint).toBe("<val>");
+
+    const ansiHelp = [
+      "\x1b[1mUsage:\x1b[0m bun run [flags] <file or script>",
+      "      \x1b[36m--no-orphans\x1b[0m                   Exit when the parent process dies",
+      "  \x1b[32m-F\x1b[0m, \x1b[36m--filter\x1b[0m=<val>                 Run a script in matching workspace packages",
+    ].join("\n");
+    expect(parseBunHelpFlags(ansiHelp)).toEqual(
+      new Set(["--no-orphans", "--filter"]),
+    );
+    expect(parseBunRunHelpEntries(ansiHelp).map((e) => e.name)).toEqual([
+      "--no-orphans",
+      "--filter",
+    ]);
 
     const summary = formatConnectedBunRunHelp(RUN_SURFACE);
     expect(summary).toContain("Bun Runtime Control & Monitoring");

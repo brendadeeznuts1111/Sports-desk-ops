@@ -37,14 +37,19 @@ function probe(
   opts: ProbeOptions = {},
 ): ProbeResult {
   const env: Record<string, string | undefined> = { ...Bun.env };
+  delete env.FORCE_COLOR;
+  delete env.NO_COLOR;
   for (const key of opts.unsetEnv ?? []) delete env[key];
   Object.assign(env, opts.env);
-  const p = Bun.spawnSync([process.execPath, flag, src, ...(opts.args ?? [])], {
-    env,
-    cwd: opts.cwd ?? scratch,
-    stdin: opts.stdin === undefined ? "ignore" : Buffer.from(opts.stdin),
-    timeout: opts.timeoutMs ?? 10_000,
-  });
+  const p = Bun.spawnSync(
+    [process.execPath, "--no-env-file", flag, src, ...(opts.args ?? [])],
+    {
+      env,
+      cwd: opts.cwd ?? scratch,
+      stdin: opts.stdin === undefined ? "ignore" : Buffer.from(opts.stdin),
+      timeout: opts.timeoutMs ?? 10_000,
+    },
+  );
   return {
     out: p.stdout.toString(),
     err: p.stderr.toString(),
@@ -65,14 +70,19 @@ function probeRepl(
   opts: ProbeOptions = {},
 ): ProbeResult {
   const env: Record<string, string | undefined> = { ...Bun.env };
+  delete env.FORCE_COLOR;
+  delete env.NO_COLOR;
   for (const key of opts.unsetEnv ?? []) delete env[key];
   Object.assign(env, { HOME: scratch }, opts.env);
-  const p = Bun.spawnSync([process.execPath, "repl", flag, src], {
-    env,
-    cwd: opts.cwd ?? scratch,
-    stdin: opts.stdin === undefined ? "ignore" : Buffer.from(opts.stdin),
-    timeout: opts.timeoutMs ?? 10_000,
-  });
+  const p = Bun.spawnSync(
+    [process.execPath, "--no-env-file", "repl", flag, src],
+    {
+      env,
+      cwd: opts.cwd ?? scratch,
+      stdin: opts.stdin === undefined ? "ignore" : Buffer.from(opts.stdin),
+      timeout: opts.timeoutMs ?? 10_000,
+    },
+  );
   return {
     out: p.stdout.toString(),
     err: p.stderr.toString(),

@@ -89,6 +89,32 @@ plugin.apply(
 );
 const byName = new Map(registered.map((tool) => [tool.name, tool]));
 
+/**
+ * The book the tool actually read.
+ *
+ * `enriched_customers_full.json` is gitignored and its location is the tool's own resolution:
+ * `repoPath` decides it and `sportsdesk_customer` reports `source.path` (relative). Deriving the
+ * expected rows from that path makes this a conformance check — a second hardcoded copy would
+ * drift from the tool's configuration and prove nothing about what it reads.
+ */
+async function expectedBookRows() {
+  const probe = await byName
+    .get("sportsdesk_customer")
+    .execute({ report: "summary" });
+  const rel = probe?.source?.path;
+  if (typeof rel !== "string" || rel === "") {
+    throw new Error("sportsdesk_customer reported no source.path");
+  }
+  const absolute = resolve(CONFIG.repoPath, rel);
+  if (probe.available !== true) {
+    throw new Error(
+      `sportsdesk_customer reports its book unavailable (${probe.reason ?? "unknown"}): ${absolute}`,
+    );
+  }
+  // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
+  return JSON.parse(readFileSync(absolute, "utf8"));
+}
+
 /** Apply the plugin again with config overrides, for fixture-path checks. */
 function applyWith(overrides) {
   const tools = [];
@@ -300,10 +326,7 @@ await check(
 );
 
 await check("sportsdesk_customer executes (derived book counts)", async () => {
-  const book = JSON.parse(
-    // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
-    readFileSync(`${REPO}/enriched_customers_full.json`, "utf8"),
-  );
+  const book = await expectedBookRows();
   const result = await byName
     .get("sportsdesk_customer")
     .execute({ report: "summary" });
@@ -318,10 +341,7 @@ await check("sportsdesk_customer executes (derived book counts)", async () => {
 await check(
   "sportsdesk_customer profile executes (derived ranks)",
   async () => {
-    const book = JSON.parse(
-      // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
-      readFileSync(`${REPO}/enriched_customers_full.json`, "utf8"),
-    );
+    const book = await expectedBookRows();
     const top = book
       .slice()
       .sort(
@@ -352,10 +372,7 @@ await check(
 await check(
   "sportsdesk_customer integrity executes (derived provenance)",
   async () => {
-    const book = JSON.parse(
-      // ast-grep-ignore: node-fs-read-async -- same runtime split: this script must run under Node.
-      readFileSync(`${REPO}/enriched_customers_full.json`, "utf8"),
-    );
+    const book = await expectedBookRows();
     const result = await byName
       .get("sportsdesk_customer")
       .execute({ report: "integrity" });
@@ -365,8 +382,11 @@ await check(
       "integrity returned no character verdict",
     );
     const tickets = book.flatMap((row) => row.recent_tickets ?? []);
+    // Same rule as the tool: an absent timestamp is not a timestamp.
     const stamps = new Set(
-      tickets.map((ticket) => String(ticket.placed_at ?? "")),
+      tickets
+        .map((ticket) => String(ticket.placed_at ?? ""))
+        .filter((placed) => placed !== ""),
     ).size;
     assert(
       result.integrity.timestamps.distinct === stamps,
