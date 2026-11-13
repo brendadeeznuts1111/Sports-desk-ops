@@ -1,0 +1,31 @@
+{
+  "name": "@sportsdesk-ops/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./wager-tokens": "./src/wager_tokens.ts",
+    "./slice-metrics": "./src/slice_metrics.ts",
+    "./slice-registry": "./src/slice_registry.ts",
+    "./slice-data-table": "./src/slice_data_table.ts",
+    "./slice-diff-view": "./src/slice_diff_view.ts",
+    "./shadow-pricing": "./src/shadow_pricing.ts",
+    "./features": "./src/features.ts",
+    "./dashboard-hydration": "./src/dashboard_hydration.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "bun check --no-script -p tsconfig.json",
+    "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/contracts/src",
+    "test": "bun test --no-script --cwd ../.. tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts tests/dashboard_ui_hydration.test.tsx tests/workspace_packs.test.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:"
+  }
+}

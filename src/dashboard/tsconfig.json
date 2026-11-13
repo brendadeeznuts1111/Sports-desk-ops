@@ -6,13 +6,8 @@
   "include": [
     "./**/*.ts",
     "./**/*.tsx",
-    "../risk/slice_metrics.ts",
-    "../risk/slice_registry.ts",
-    "../risk/slice_data_table.ts",
-    "../risk/slice_diff_view.ts",
-    "../../types/features.ts",
-    "../../types/shadow_pricing.ts",
     "../../types/bundle.d.ts",
     "../../types/assets.d.ts"
-  ]
+  ],
+  "exclude": ["node_modules", "dist"]
 }

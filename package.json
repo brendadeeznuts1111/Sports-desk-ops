@@ -36,6 +36,14 @@
   "workspaces": [
     "packages/*"
   ],
+  "catalog": {
+    "@types/bun": "1.4.4",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3"
+  },
   "main": "cli/sportsdesk_cli.ts",
   "type": "module",
   "scripts": {
@@ -127,8 +135,8 @@
     "format": "bun fmt",
     "format:check": "bun fmt --check",
     "ensure:deep-tsconfig": "bun run scripts/ensure_deep_tsconfig.ts",
-    "typecheck:ui": "bun check --no-script -p src/dashboard/tsconfig.json",
-    "typecheck": "bun run ensure:deep-tsconfig && bun check --no-script -p tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
+    "typecheck:ui": "bun check --no-script -p packages/ui/tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
+    "typecheck": "bun run ensure:deep-tsconfig && bun run typecheck:ws && bun check --no-script -p tsconfig.json && bun check --no-script -p src/dashboard/tsconfig.json",
     "lint": "bun --bun run oxlint --fix",
     "lint:check": "bun --bun run oxlint --deny-warnings && bun --bun run oxlint --type-aware -c .oxlintrc.type-aware.json --deny-warnings",
     "gen:tokens": "bun run scripts/generate_tokens.ts",
@@ -343,7 +351,13 @@
     "nsh:build": "bun run scripts/nsh_desk_cli.ts build",
     "nsh:run": "bun run scripts/nsh_desk_cli.ts run",
     "nsh:package:web": "bun run scripts/nsh_desk_cli.ts package-web",
-    "nsh:sign:verify": "bun run scripts/nsh_desk_cli.ts sign-verify"
+    "nsh:sign:verify": "bun run scripts/nsh_desk_cli.ts sign-verify",
+    "typecheck:ws": "bun check --no-script -p packages/contracts/tsconfig.json && bun check --no-script -p packages/ui/tsconfig.json && bun check --no-script -p packages/backend/tsconfig.json && bun check --no-script -p packages/api/tsconfig.json",
+    "dev:ui": "bun run scripts/dev_dashboard.ts",
+    "dev:api": "bun run scripts/dev_dashboard.ts --api-only",
+    "test:ws": "PRETEST_SKIP=1 bun test --parallel tests/workspace_packs.test.ts tests/dx_workspaces.test.ts tests/verify_fast_scope.test.ts tests/dashboard_backend_workspace.test.ts tests/dashboard_api_inmemory.test.ts tests/dashboard_ui_panels.test.tsx tests/dashboard_build_and_markdown.test.ts tests/enhanced_dashboard_builder.test.ts tests/slice_metrics.test.ts tests/wager_tiers_toml.test.ts",
+    "build:ws": "bun run scripts/build_dashboard.ts",
+    "pack:check": "bun run scripts/check_workspace_packs.ts"
   },
   "keywords": [
     "sportsdesk",
@@ -366,7 +380,11 @@
     "typescript": "5.9.3",
     "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
     "semver": "7.8.6",
-    "sportsdesk-ops": "workspace:packages/sportsdesk-ops"
+    "sportsdesk-ops": "workspace:packages/sportsdesk-ops",
+    "@sportsdesk-ops/api": "workspace:*",
+    "@sportsdesk-ops/backend": "workspace:*",
+    "@sportsdesk-ops/contracts": "workspace:*",
+    "@sportsdesk-ops/ui": "workspace:*"
   },
   "repository": {
     "type": "git",

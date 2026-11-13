@@ -172,7 +172,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/color)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `cli/sportsdesk_cli.ts`, `lib/wager_tokens.ts`
+- **Here:** `cli/sportsdesk_cli.ts`, `packages/contracts/src/wager_tokens.ts`
 - **Evidence:** `probe:text.ansi`
 
 #### Bun.enableANSIColors
@@ -260,7 +260,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/globals/bun/Glob)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `lib/pm_policy.ts`, `scripts/audit_data_handling.ts`
+- **Here:** `lib/pm_policy.ts`, `scripts/dx_workspaces.ts`
 - **Evidence:** `probe:data.glob`
 
 #### Bun.JSON5
@@ -721,7 +721,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 Non-test production imports from `bun:sqlite`, `bun:jsc`, and `bun:bundle` are inventoried alongside `MODULE "bun"` / `globalThis.Bun` (`BUN_SUBMODULE_SHAPES` in `lib/bun_shapes.ts`).
 
-- **`bun:bundle` → `feature`** (bundler macro) — here: `src/dashboard/runtime_flags.ts` · evidence: `test:tests/wager_tiers_toml.test.ts`
+- **`bun:bundle` → `feature`** (bundler macro) — here: `packages/ui/src/runtime_flags.ts` · evidence: `test:tests/wager_tiers_toml.test.ts`
 - **`bun:jsc` → `estimateShallowMemoryUsageOf`** (runtime export) — here: `bin/bun_surface.ts`, `lib/f402_hierarchy_memory.ts` · evidence: `surface:bun:jsc.estimateShallowMemoryUsageOf`
 - **`bun:jsc` → `heapStats`** (runtime export) — here: `bin/bun_surface.ts`, `scripts/bench_bridge3a_workload.ts` · evidence: `surface:bun:jsc.heapStats`
 - **`bun:sqlite` → `Database`** (runtime export) — here: `bin/bun_surface.ts`, `cli/review.ts` · evidence: `surface:bun:sqlite.Database`

@@ -15,6 +15,10 @@
       },
       "devDependencies": {
         "@deepseek-ai/dsh-plugin-market-index": "0.2.2-rc.1",
+        "@sportsdesk-ops/api": "workspace:*",
+        "@sportsdesk-ops/backend": "workspace:*",
+        "@sportsdesk-ops/contracts": "workspace:*",
+        "@sportsdesk-ops/ui": "workspace:*",
         "@types/bun": "1.4.4",
         "@types/react": "18.3.31",
         "@types/react-dom": "18.3.7",
@@ -26,9 +30,38 @@
         "typescript": "5.9.3",
       },
     },
+    "packages/api": {
+      "name": "@sportsdesk-ops/api",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sportsdesk-ops/backend": "workspace:*",
+        "@sportsdesk-ops/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/ba-example": {
       "name": "ba-example",
       "version": "1.0.0",
+    },
+    "packages/backend": {
+      "name": "@sportsdesk-ops/backend",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sportsdesk-ops/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+      },
+    },
+    "packages/contracts": {
+      "name": "@sportsdesk-ops/contracts",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+      },
     },
     "packages/nsh-desk": {
       "name": "@sportsdesk-ops/nsh-desk",
@@ -63,8 +96,30 @@
         "desk-provenance": "./bin/desk-provenance.ts",
       },
     },
+    "packages/ui": {
+      "name": "@sportsdesk-ops/ui",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sportsdesk-ops/contracts": "workspace:*",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+      },
+    },
   },
   "trustedDependencies": [],
+  "catalog": {
+    "@types/bun": "1.4.4",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3",
+  },
   "packages": {
     "@deepseek-ai/cordis": ["@deepseek-ai/cordis@4.1.0", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.9.0", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis-plugin-include": "~1.1.0", "@deepseek-ai/cordis-plugin-loader": "~1.1.0" }, "optionalPeers": ["@deepseek-ai/cordis-plugin-include", "@deepseek-ai/cordis-plugin-loader"], "bin": { "cordis": "bin.js" } }, "sha512-CJrjNyBkKn1SfvBQUcgFYKFnLjS+uKrhdMsbHU60xabvi12d+xQ+IQSNlME5Z+B+4Zi6n4BDknKY94tEPeo47w=="],
 
@@ -128,7 +183,15 @@
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.90.0", "", { "os": "win32", "cpu": "x64" }, "sha512-30JiaFEBUB9peEOcvVM8ggo88SoN/IdSr9DW505JdBji/R6dM66gKEiG65hw6qcaF2f4mO0cEJ+RwRZprmun9g=="],
 
+    "@sportsdesk-ops/api": ["@sportsdesk-ops/api@workspace:packages/api"],
+
+    "@sportsdesk-ops/backend": ["@sportsdesk-ops/backend@workspace:packages/backend"],
+
+    "@sportsdesk-ops/contracts": ["@sportsdesk-ops/contracts@workspace:packages/contracts"],
+
     "@sportsdesk-ops/nsh-desk": ["@sportsdesk-ops/nsh-desk@workspace:packages/nsh-desk"],
+
+    "@sportsdesk-ops/ui": ["@sportsdesk-ops/ui@workspace:packages/ui"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

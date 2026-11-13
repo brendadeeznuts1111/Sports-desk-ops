@@ -1,0 +1,44 @@
+{
+  "name": "@sportsdesk-ops/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./App": "./src/App.tsx",
+    "./ShadowPricingPanel": "./src/ShadowPricingPanel.tsx",
+    "./SliceMetricsViews": "./src/SliceMetricsViews.tsx",
+    "./ansi": "./src/ansi.tsx",
+    "./panels": "./src/panels/index.tsx",
+    "./shadow-pricing": "./src/shadow_pricing/index.tsx",
+    "./runtime-flags": "./src/runtime_flags.ts",
+    "./showcase-data": "./src/showcase_data.ts",
+    "./styles": "./src/dashboard_styles.ts",
+    "./types": "./src/types.ts",
+    "./desk.css": "./src/desk.css",
+    "./styles/tokens.css": "./src/styles/tokens.css",
+    "./styles/reset.css": "./src/styles/reset.css"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "bun check --no-script -p tsconfig.json",
+    "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/ui/src",
+    "test": "bun test --no-script --cwd ../.. tests/dashboard_ui_panels.test.tsx tests/dashboard_ui_hydration.test.tsx tests/dashboard_shadow_panel.test.tsx tests/dashboard_build_and_markdown.test.ts tests/workspace_packs.test.ts",
+    "build": "bun --cwd ../.. scripts/build_dashboard.ts"
+  },
+  "dependencies": {
+    "@sportsdesk-ops/contracts": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"]
+  },
+  "include": [
+    "./src/**/*.ts",
+    "./src/**/*.tsx",
+    "../../types/bundle.d.ts",
+    "../../types/assets.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

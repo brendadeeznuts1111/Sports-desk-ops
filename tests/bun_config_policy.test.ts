@@ -142,9 +142,13 @@ describe("package manager policy", () => {
     expect(inspection.unregisteredDirs).toEqual([]);
     expect(inspection.packages.map((p) => p.dir)).toEqual([
       "",
+      "packages/api",
       "packages/ba-example",
+      "packages/backend",
+      "packages/contracts",
       "packages/nsh-desk",
       "packages/sportsdesk-ops",
+      "packages/ui",
     ]);
   });
 

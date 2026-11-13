@@ -519,6 +519,10 @@ function matchesWorkspaceFilter(
   const trimmed = pattern.trim();
   if (trimmed === "") return true;
   if (trimmed === "." || trimmed === "root") return pkg.dir === "";
+  if (trimmed.startsWith("@")) {
+    const nameGlob = new Bun.Glob(trimmed);
+    return pkg.name === trimmed || nameGlob.match(pkg.name);
+  }
   if (trimmed.startsWith("./") || trimmed.includes("/")) {
     const norm = trimmed.replace(/^\.\//, "").replace(/\/+$/, "");
     const dirGlob = new Bun.Glob(norm);

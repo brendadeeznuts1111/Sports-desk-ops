@@ -1,0 +1,29 @@
+{
+  "name": "@sportsdesk-ops/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./ws": "./src/ws.ts",
+    "./router": "./src/router.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "bun check --no-script -p tsconfig.json",
+    "lint": "bun x --cwd ../.. oxlint -c .oxlintrc.json --deny-warnings packages/api/src",
+    "test": "bun test --no-script --cwd ../.. tests/dashboard_api_inmemory.test.ts tests/dashboard_ui_hydration.test.tsx tests/workspace_packs.test.ts"
+  },
+  "dependencies": {
+    "@sportsdesk-ops/backend": "workspace:*",
+    "@sportsdesk-ops/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:"
+  }
+}

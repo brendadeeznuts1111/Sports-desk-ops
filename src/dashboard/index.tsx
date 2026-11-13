@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "./styles/tokens.css";
-import "./styles/reset.css";
+import "@sportsdesk-ops/ui/styles/tokens.css";
+import "@sportsdesk-ops/ui/styles/reset.css";
 import { App } from "./App.tsx";
 
 const container = document.getElementById("root");
