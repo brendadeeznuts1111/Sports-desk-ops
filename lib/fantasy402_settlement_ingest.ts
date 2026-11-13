@@ -882,7 +882,7 @@ export async function pollManagerGetHistory(options?: {
 }
 
 import { parseAsCents } from "../design/domain-branded-types.ts";
-import { isSha256Hex, isoTime, jsonText, sha256FromDigest } from "./brand.ts";
+import { isoTime, jsonText, sha256FromDigest } from "./brand.ts";
 import type { Insert, Row } from "./sqlite_schema_derive.ts";
 import {
   assertSqliteStoreMatchesRegistry,
@@ -902,11 +902,6 @@ function buildWagerSettlementSsotInsert(
   const { observation, runId, runAt } = row;
   const legacyStatus =
     observation.lifecycle ?? observation.outcome ?? "unknown";
-  const digest = isSha256Hex(observation.payloadSha256)
-    ? sha256FromDigest(observation.payloadSha256)
-    : sha256FromDigest(
-        Bun.CryptoHasher.hash("sha256", observation.payloadSha256, "hex"),
-      );
   return {
     run_id: runId,
     run_at: runAt,
@@ -921,6 +916,6 @@ function buildWagerSettlementSsotInsert(
         ? parseAsCents(observation.amountCents)
         : null,
     payload_json: jsonText(canonicalJsonString(observation.raw)),
-    payload_sha256: digest,
+    payload_sha256: sha256FromDigest(observation.payloadSha256),
   };
 }

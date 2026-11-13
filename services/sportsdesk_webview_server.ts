@@ -3803,9 +3803,7 @@ export function startServer(options?: ServerOptions) {
       ? { unix: unixSocket }
       : {
           ...(options?.port !== undefined && { port: options.port }),
-          ...(options?.hostname !== undefined && {
-            hostname: options.hostname,
-          }),
+          hostname: options?.hostname ?? (Bun.env.HOST?.trim() || "127.0.0.1"),
         }),
   });
   attachBridgeHub(server);

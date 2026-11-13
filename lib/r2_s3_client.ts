@@ -14,6 +14,7 @@ import type {
   S3Stats,
 } from "bun";
 import type { BunSecretSetOptions } from "../types/bun-api.ts";
+import { getSecretBounded, KeychainTimeoutError } from "./secrets.ts";
 
 export type R2S3Env = Readonly<Record<string, string | undefined>>;
 
@@ -123,7 +124,7 @@ export async function resolveSecretBackedEnv(
   for (const name of R2_SECRET_NAMES) {
     if (merged[name] !== undefined && merged[name] !== "") continue;
     try {
-      const canonical = await secrets.get({
+      const canonical = await getSecretBounded(secrets, {
         service: R2_SECRETS_SERVICE,
         name,
       });
@@ -131,13 +132,14 @@ export async function resolveSecretBackedEnv(
         merged[name] = canonical;
         continue;
       }
-      const legacy = await secrets.get({
+      const legacy = await getSecretBounded(secrets, {
         service: R2_SECRETS_LEGACY_SERVICE,
         name,
       });
       if (legacy !== null && legacy !== "") merged[name] = legacy;
-    } catch {
-      // Keychain unavailable/locked: keep the env-only contract.
+    } catch (err) {
+      // Keychain unavailable/locked/timed-out: keep the env-only contract.
+      if (err instanceof KeychainTimeoutError) break;
     }
   }
   return merged;

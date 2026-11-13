@@ -8,6 +8,7 @@ import {
   resolveManagerSessionGate,
   writeManagerSessionGate,
 } from "./manager_session.ts";
+import { getSecretBounded, setSecretBounded } from "./secrets.ts";
 import {
   bootstrapGanchrowSession,
   GSID_SECRET,
@@ -102,20 +103,22 @@ function writeSessionFile(value: string): void {
 }
 async function secret(name: string): Promise<string | null> {
   try {
-    return await Bun.secrets.get({
+    return await getSecretBounded(Bun.secrets, {
       service: "com.bookdeskops.sportsdesk",
       name,
     });
   } catch {
+    // Locked or timed-out keychain is treated as absent so session-file/env fallbacks apply.
     return null;
   }
 }
 export async function getGsid(): Promise<string | null> {
   if (cachedGsid !== null) return cachedGsid;
+  const fromFile = readSessionFile();
+  if (fromFile !== null && fromFile !== "") return fromFile;
   const fromKeychain =
     (await secret(GSID_SECRET.name)) ?? (await secret("GSID"));
-  if (fromKeychain !== null && fromKeychain !== "") return fromKeychain;
-  return readSessionFile();
+  return fromKeychain !== null && fromKeychain !== "" ? fromKeychain : null;
 }
 /** Injectable credential reader so tests never touch the real keychain. */
 export interface GsliveCredentialReader {
@@ -357,7 +360,7 @@ export async function mintGsid(
   // Persist only after verification, so a failed login never overwrites a usable session.
   cachedGsid = gsid;
   try {
-    await Bun.secrets.set({
+    await setSecretBounded(Bun.secrets, {
       service: "com.bookdeskops.sportsdesk",
       name: GSID_SECRET.name,
       value: gsid,

@@ -6,35 +6,40 @@ type PkColumns<C extends ColumnKindMap> = {
   [K in keyof C as C[K]["kind"] extends "integer_pk" ? K : never]: K;
 };
 
-export type AssertExactlyOnePk<C extends ColumnKindMap> = [
-  keyof PkColumns<C>,
-] extends [never]
+type PkKeys<C extends ColumnKindMap> = keyof PkColumns<C>;
+
+/** `true` when `T` is a union of two or more members; `false` for a single key. */
+type IsUnion<T, C = T> = T extends unknown
+  ? [C] extends [T]
+    ? false
+    : true
+  : never;
+
+export type AssertExactlyOnePk<C extends ColumnKindMap> = [PkKeys<C>] extends [
+  never,
+]
   ? {
       readonly __error: "table must have exactly one integer_pk column";
       got: 0;
     }
-  : [keyof PkColumns<C>] extends [infer _Only extends keyof PkColumns<C>]
-    ? [keyof PkColumns<C>] extends [_Only]
-      ? unknown
-      : {
-          readonly __error: "table must have exactly one integer_pk column";
-          readonly cols: keyof PkColumns<C>;
-        }
-    : { readonly __error: "table must have exactly one integer_pk column" };
+  : true extends IsUnion<PkKeys<C>>
+    ? {
+        readonly __error: "table must have exactly one integer_pk column";
+        readonly cols: PkKeys<C>;
+      }
+    : unknown;
 
 /** Zero or one `integer_pk` (enrich caches without surrogate keys). */
-export type AssertAtMostOnePk<C extends ColumnKindMap> = [
-  keyof PkColumns<C>,
-] extends [never]
+export type AssertAtMostOnePk<C extends ColumnKindMap> = [PkKeys<C>] extends [
+  never,
+]
   ? unknown
-  : [keyof PkColumns<C>] extends [infer _Only extends keyof PkColumns<C>]
-    ? [keyof PkColumns<C>] extends [_Only]
-      ? unknown
-      : {
-          readonly __error: "at most one integer_pk column";
-          readonly cols: keyof PkColumns<C>;
-        }
-    : { readonly __error: "at most one integer_pk column" };
+  : true extends IsUnion<PkKeys<C>>
+    ? {
+        readonly __error: "at most one integer_pk column";
+        readonly cols: PkKeys<C>;
+      }
+    : unknown;
 
 export type AssertIndexColsExist<
   C extends ColumnKindMap,

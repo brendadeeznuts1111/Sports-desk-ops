@@ -36,7 +36,8 @@
       "displayName": "Akron",
       "f402Names": ["AKRON"],
       "kalshiCodes": ["AKR"],
-      "polymarketHints": ["Akron"]
+      "polymarketHints": ["Akron"],
+      "portalLogoFile": "Akron Zips.png"
     },
     {
       "id": "cfb:ala",
@@ -45,7 +46,8 @@
       "displayName": "Alabama",
       "f402Names": ["ALABAMA"],
       "kalshiCodes": ["ALA"],
-      "polymarketHints": ["Alabama"]
+      "polymarketHints": ["Alabama"],
+      "portalLogoFile": "Alabama Crimson Tide.png"
     },
     {
       "id": "cfb:alby",
@@ -153,7 +155,8 @@
       "displayName": "Ball St.",
       "f402Names": ["BALL ST."],
       "kalshiCodes": ["BALL"],
-      "polymarketHints": ["Ball St."]
+      "polymarketHints": ["Ball St."],
+      "portalLogoFile": "Ball State Cardinals.png"
     },
     {
       "id": "cfb:bay",
@@ -162,7 +165,8 @@
       "displayName": "Baylor",
       "f402Names": ["BAYLOR"],
       "kalshiCodes": ["BAY"],
-      "polymarketHints": ["Baylor"]
+      "polymarketHints": ["Baylor"],
+      "portalLogoFile": "Baylor Bears.png"
     },
     {
       "id": "cfb:bc",
@@ -180,7 +184,8 @@
       "displayName": "Bowling Green",
       "f402Names": ["BOWLING GREEN"],
       "kalshiCodes": ["BGSU"],
-      "polymarketHints": ["Bowling Green"]
+      "polymarketHints": ["Bowling Green"],
+      "portalLogoFile": "Bowling Green Falcons.png"
     },
     {
       "id": "cfb:brwn",
@@ -207,7 +212,8 @@
       "displayName": "Boise St.",
       "f402Names": ["BOISE ST."],
       "kalshiCodes": ["BSU"],
-      "polymarketHints": ["Boise St."]
+      "polymarketHints": ["Boise St."],
+      "portalLogoFile": "Boise State Broncos.png"
     },
     {
       "id": "cfb:buck",
@@ -225,7 +231,8 @@
       "displayName": "Buffalo",
       "f402Names": ["BUFFALO"],
       "kalshiCodes": ["BUFF"],
-      "polymarketHints": ["Buffalo"]
+      "polymarketHints": ["Buffalo"],
+      "portalLogoFile": "Buffalo Bulls.png"
     },
     {
       "id": "cfb:but",
@@ -252,7 +259,8 @@
       "displayName": "California",
       "f402Names": ["CALIFORNIA"],
       "kalshiCodes": ["CAL"],
-      "polymarketHints": ["California"]
+      "polymarketHints": ["California"],
+      "portalLogoFile": "California Golden Bears.png"
     },
     {
       "id": "cfb:camp",
@@ -360,7 +368,8 @@
       "displayName": "Central Michigan",
       "f402Names": ["CENTRAL MICHIGAN"],
       "kalshiCodes": ["CMU"],
-      "polymarketHints": ["Central Michigan"]
+      "polymarketHints": ["Central Michigan"],
+      "portalLogoFile": "Central Michigan Chippewas.png"
     },
     {
       "id": "cfb:colg",
@@ -378,7 +387,8 @@
       "displayName": "Colorado",
       "f402Names": ["COLORADO"],
       "kalshiCodes": ["COLO"],
-      "polymarketHints": ["Colorado"]
+      "polymarketHints": ["Colorado"],
+      "portalLogoFile": "Colorado Buffaloes.png"
     },
     {
       "id": "cfb:conn",
@@ -630,7 +640,8 @@
       "displayName": "Florida St.",
       "f402Names": ["FLORIDA ST."],
       "kalshiCodes": ["FSU"],
-      "polymarketHints": ["Florida St."]
+      "polymarketHints": ["Florida St."],
+      "portalLogoFile": "Florida State Seminoles.png"
     },
     {
       "id": "cfb:fur",
@@ -738,7 +749,8 @@
       "displayName": "Houston",
       "f402Names": ["HOUSTON"],
       "kalshiCodes": ["HOU"],
-      "polymarketHints": ["Houston"]
+      "polymarketHints": ["Houston"],
+      "portalLogoFile": "Houston Cougars.png"
     },
     {
       "id": "cfb:how",
@@ -774,7 +786,8 @@
       "displayName": "Illinois",
       "f402Names": ["ILLINOIS"],
       "kalshiCodes": ["ILL"],
-      "polymarketHints": ["Illinois"]
+      "polymarketHints": ["Illinois"],
+      "portalLogoFile": "Illinois Fighting Illini.png"
     },
     {
       "id": "cfb:ilst",
@@ -792,7 +805,8 @@
       "displayName": "Indiana",
       "f402Names": ["INDIANA"],
       "kalshiCodes": ["IND"],
-      "polymarketHints": ["Indiana"]
+      "polymarketHints": ["Indiana"],
+      "portalLogoFile": "Indiana Hoosiers.png"
     },
     {
       "id": "cfb:inst",
@@ -873,7 +887,8 @@
       "displayName": "Kent St.",
       "f402Names": ["KENT ST."],
       "kalshiCodes": ["KENT"],
-      "polymarketHints": ["Kent St."]
+      "polymarketHints": ["Kent St."],
+      "portalLogoFile": "Kent State Golden Flashes.png"
     },
     {
       "id": "cfb:ksu",
@@ -882,7 +897,8 @@
       "displayName": "Kansas St.",
       "f402Names": ["KANSAS ST."],
       "kalshiCodes": ["KSU"],
-      "polymarketHints": ["Kansas St."]
+      "polymarketHints": ["Kansas St."],
+      "portalLogoFile": "Kansas State Wildcats.png"
     },
     {
       "id": "cfb:ku",
@@ -891,7 +907,8 @@
       "displayName": "Kansas",
       "f402Names": ["KANSAS"],
       "kalshiCodes": ["KU"],
-      "polymarketHints": ["Kansas"]
+      "polymarketHints": ["Kansas"],
+      "portalLogoFile": "Kansas Jayhawks.png"
     },
     {
       "id": "cfb:laf",
@@ -963,7 +980,8 @@
       "displayName": "LSU",
       "f402Names": ["LSU"],
       "kalshiCodes": ["LSU"],
-      "polymarketHints": ["LSU"]
+      "polymarketHints": ["LSU"],
+      "portalLogoFile": "LSU Tigers.png"
     },
     {
       "id": "cfb:lt",
@@ -1017,7 +1035,8 @@
       "displayName": "Memphis",
       "f402Names": ["MEMPHIS"],
       "kalshiCodes": ["MEM"],
-      "polymarketHints": ["Memphis"]
+      "polymarketHints": ["Memphis"],
+      "portalLogoFile": "Memphis Tigers.png"
     },
     {
       "id": "cfb:mer",
@@ -1062,7 +1081,8 @@
       "displayName": "Minnesota",
       "f402Names": ["MINNESOTA"],
       "kalshiCodes": ["MINN"],
-      "polymarketHints": ["Minnesota"]
+      "polymarketHints": ["Minnesota"],
+      "portalLogoFile": "Minnesota Golden Gophers.png"
     },
     {
       "id": "cfb:miss",
@@ -1287,7 +1307,8 @@
       "displayName": "Nebraska",
       "f402Names": ["NEBRASKA"],
       "kalshiCodes": ["NEB"],
-      "polymarketHints": ["Nebraska"]
+      "polymarketHints": ["Nebraska"],
+      "portalLogoFile": "Nebraska Cornhuskers.png"
     },
     {
       "id": "cfb:nev",
@@ -1377,7 +1398,8 @@
       "displayName": "Ohio",
       "f402Names": ["OHIO"],
       "kalshiCodes": ["OHIO"],
-      "polymarketHints": ["Ohio"]
+      "polymarketHints": ["Ohio"],
+      "portalLogoFile": "Ohio Bobcats.png"
     },
     {
       "id": "cfb:okla",
@@ -1386,7 +1408,8 @@
       "displayName": "Oklahoma",
       "f402Names": ["OKLAHOMA"],
       "kalshiCodes": ["OKLA"],
-      "polymarketHints": ["Oklahoma"]
+      "polymarketHints": ["Oklahoma"],
+      "portalLogoFile": "Oklahoma Sooners.png"
     },
     {
       "id": "cfb:okst",
@@ -1422,7 +1445,8 @@
       "displayName": "Ohio St.",
       "f402Names": ["OHIO ST."],
       "kalshiCodes": ["OSU"],
-      "polymarketHints": ["Ohio St."]
+      "polymarketHints": ["Ohio St."],
+      "portalLogoFile": "Ohio State Buckeyes.png"
     },
     {
       "id": "cfb:peay",
@@ -1449,7 +1473,8 @@
       "displayName": "Pittsburgh",
       "f402Names": ["PITTSBURGH"],
       "kalshiCodes": ["PITT"],
-      "polymarketHints": ["Pittsburgh"]
+      "polymarketHints": ["Pittsburgh"],
+      "portalLogoFile": "Pittsburgh Panthers.png"
     },
     {
       "id": "cfb:pre",
@@ -1485,7 +1510,8 @@
       "displayName": "Penn St.",
       "f402Names": ["PENN ST."],
       "kalshiCodes": ["PSU"],
-      "polymarketHints": ["Penn St."]
+      "polymarketHints": ["Penn St."],
+      "portalLogoFile": "Penn State Nittany Lions.png"
     },
     {
       "id": "cfb:pur",
@@ -1755,7 +1781,8 @@
       "displayName": "TCU",
       "f402Names": ["TCU"],
       "kalshiCodes": ["TCU"],
-      "polymarketHints": ["TCU"]
+      "polymarketHints": ["TCU"],
+      "portalLogoFile": "TCU Horned Frogs.png"
     },
     {
       "id": "cfb:tem",
@@ -1782,7 +1809,8 @@
       "displayName": "Texas",
       "f402Names": ["TEXAS"],
       "kalshiCodes": ["TEX"],
-      "polymarketHints": ["Texas"]
+      "polymarketHints": ["Texas"],
+      "portalLogoFile": "Texas Longhorns.png"
     },
     {
       "id": "cfb:tlsa",
@@ -1908,7 +1936,8 @@
       "displayName": "UCF",
       "f402Names": ["UCF"],
       "kalshiCodes": ["UCF"],
-      "polymarketHints": ["UCF"]
+      "polymarketHints": ["UCF"],
+      "portalLogoFile": "UCF Knights.png"
     },
     {
       "id": "cfb:ucla",
@@ -1917,7 +1946,8 @@
       "displayName": "UCLA",
       "f402Names": ["UCLA"],
       "kalshiCodes": ["UCLA"],
-      "polymarketHints": ["UCLA"]
+      "polymarketHints": ["UCLA"],
+      "portalLogoFile": "UCLA Bruins.png"
     },
     {
       "id": "cfb:uga",
@@ -1935,7 +1965,8 @@
       "displayName": "Kentucky",
       "f402Names": ["KENTUCKY"],
       "kalshiCodes": ["UK"],
-      "polymarketHints": ["Kentucky"]
+      "polymarketHints": ["Kentucky"],
+      "portalLogoFile": "Kentucky Wildcats.png"
     },
     {
       "id": "cfb:ull",
@@ -2061,7 +2092,8 @@
       "displayName": "USC",
       "f402Names": ["USC"],
       "kalshiCodes": ["USC"],
-      "polymarketHints": ["USC"]
+      "polymarketHints": ["USC"],
+      "portalLogoFile": "USC Trojans.png"
     },
     {
       "id": "cfb:usd",
@@ -2079,7 +2111,8 @@
       "displayName": "South Florida",
       "f402Names": ["SOUTH FLORIDA"],
       "kalshiCodes": ["USF"],
-      "polymarketHints": ["South Florida"]
+      "polymarketHints": ["South Florida"],
+      "portalLogoFile": "South Florida Bulls.png"
     },
     {
       "id": "cfb:usm",
@@ -2205,7 +2238,8 @@
       "displayName": "Vanderbilt",
       "f402Names": ["VANDERBILT"],
       "kalshiCodes": ["VAN"],
-      "polymarketHints": ["Vanderbilt"]
+      "polymarketHints": ["Vanderbilt"],
+      "portalLogoFile": "Vanderbilt Commodores.png"
     },
     {
       "id": "cfb:vill",
@@ -2331,7 +2365,8 @@
       "displayName": "Western Michigan",
       "f402Names": ["WESTERN MICHIGAN"],
       "kalshiCodes": ["WMU"],
-      "polymarketHints": ["Western Michigan"]
+      "polymarketHints": ["Western Michigan"],
+      "portalLogoFile": "Western Michigan Broncos.png"
     },
     {
       "id": "cfb:wof",
@@ -2358,7 +2393,8 @@
       "displayName": "West Virginia",
       "f402Names": ["WEST VIRGINIA"],
       "kalshiCodes": ["WVU"],
-      "polymarketHints": ["West Virginia"]
+      "polymarketHints": ["West Virginia"],
+      "portalLogoFile": "West Virginia Mountaineers.png"
     },
     {
       "id": "cfb:wyo",
@@ -2700,7 +2736,8 @@
       "displayName": "Indiana",
       "f402Names": ["INDIANA"],
       "kalshiCodes": ["IND"],
-      "polymarketHints": ["Indiana"]
+      "polymarketHints": ["Indiana"],
+      "portalLogoFile": "Indiana-Pacers.png"
     },
     {
       "id": "nba:lac",
@@ -2709,7 +2746,8 @@
       "displayName": "Los Angeles C",
       "f402Names": ["LOS ANGELES C"],
       "kalshiCodes": ["LAC"],
-      "polymarketHints": ["Los Angeles C"]
+      "polymarketHints": ["Los Angeles C"],
+      "portalLogoFile": "Los-Angeles-Clippers.png"
     },
     {
       "id": "nba:lal",
@@ -2802,7 +2840,8 @@
       "displayName": "Orlando",
       "f402Names": ["ORLANDO"],
       "kalshiCodes": ["ORL"],
-      "polymarketHints": ["Orlando"]
+      "polymarketHints": ["Orlando"],
+      "portalLogoFile": "Orlando-Magic.png"
     },
     {
       "id": "nba:pacers",
@@ -2876,7 +2915,8 @@
       "displayName": "Toronto",
       "f402Names": ["TORONTO"],
       "kalshiCodes": ["TOR"],
-      "polymarketHints": ["Toronto"]
+      "polymarketHints": ["Toronto"],
+      "portalLogoFile": "toronto.png"
     },
     {
       "id": "nba:uta",
@@ -2904,7 +2944,8 @@
       "displayName": "Arizona",
       "f402Names": ["ARIZONA"],
       "kalshiCodes": ["ARI"],
-      "polymarketHints": ["Arizona"]
+      "polymarketHints": ["Arizona"],
+      "portalLogoFile": "Arizona-Cardinals.png"
     },
     {
       "id": "nfl:atl",
@@ -2913,7 +2954,8 @@
       "displayName": "Atlanta",
       "f402Names": ["ATLANTA"],
       "kalshiCodes": ["ATL"],
-      "polymarketHints": ["Atlanta"]
+      "polymarketHints": ["Atlanta"],
+      "portalLogoFile": "Atlanta-Falcons.png"
     },
     {
       "id": "nfl:bal",
@@ -2922,7 +2964,8 @@
       "displayName": "Baltimore",
       "f402Names": ["BALTIMORE"],
       "kalshiCodes": ["BAL"],
-      "polymarketHints": ["Baltimore"]
+      "polymarketHints": ["Baltimore"],
+      "portalLogoFile": "Baltimore-Ravens.png"
     },
     {
       "id": "nfl:bengals",
@@ -3005,7 +3048,8 @@
       "displayName": "Cincinnati",
       "f402Names": ["CINCINNATI"],
       "kalshiCodes": ["CIN"],
-      "polymarketHints": ["Cincinnati"]
+      "polymarketHints": ["Cincinnati"],
+      "portalLogoFile": "Cincinnati-Bengals.png"
     },
     {
       "id": "nfl:cle",
@@ -3014,7 +3058,8 @@
       "displayName": "Cleveland",
       "f402Names": ["CLEVELAND"],
       "kalshiCodes": ["CLE"],
-      "polymarketHints": ["Cleveland"]
+      "polymarketHints": ["Cleveland"],
+      "portalLogoFile": "Cleveland-Browns.png"
     },
     {
       "id": "nfl:colts",
@@ -3041,7 +3086,8 @@
       "displayName": "Dallas",
       "f402Names": ["DALLAS"],
       "kalshiCodes": ["DAL"],
-      "polymarketHints": ["Dallas"]
+      "polymarketHints": ["Dallas"],
+      "portalLogoFile": "Dallas-Cowboys.png"
     },
     {
       "id": "nfl:den",
@@ -3050,7 +3096,8 @@
       "displayName": "Denver",
       "f402Names": ["DENVER"],
       "kalshiCodes": ["DEN"],
-      "polymarketHints": ["Denver"]
+      "polymarketHints": ["Denver"],
+      "portalLogoFile": "Denver-Broncos.png"
     },
     {
       "id": "nfl:det",
@@ -3059,7 +3106,8 @@
       "displayName": "Detroit",
       "f402Names": ["DETROIT"],
       "kalshiCodes": ["DET"],
-      "polymarketHints": ["Detroit"]
+      "polymarketHints": ["Detroit"],
+      "portalLogoFile": "Detroit-Lions.png"
     },
     {
       "id": "nfl:dolphins",
@@ -3104,7 +3152,8 @@
       "displayName": "Indianapolis",
       "f402Names": ["INDIANAPOLIS"],
       "kalshiCodes": ["IND"],
-      "polymarketHints": ["Indianapolis"]
+      "polymarketHints": ["Indianapolis"],
+      "portalLogoFile": "Indianapolis-Colts.png"
     },
     {
       "id": "nfl:jac",
@@ -3186,7 +3235,8 @@
       "displayName": "Las Vegas",
       "f402Names": ["LAS VEGAS", "LAS VEGAS RAIDERS"],
       "kalshiCodes": ["LV"],
-      "polymarketHints": ["Las Vegas"]
+      "polymarketHints": ["Las Vegas"],
+      "portalLogoFile": "Oakland-Raiders.png"
     },
     {
       "id": "nfl:mia",
@@ -3195,7 +3245,8 @@
       "displayName": "Miami",
       "f402Names": ["MIAMI"],
       "kalshiCodes": ["MIA"],
-      "polymarketHints": ["Miami"]
+      "polymarketHints": ["Miami"],
+      "portalLogoFile": "miami_dolphins_logo.png"
     },
     {
       "id": "nfl:min",
@@ -3204,7 +3255,8 @@
       "displayName": "Minnesota",
       "f402Names": ["MINNESOTA"],
       "kalshiCodes": ["MIN"],
-      "polymarketHints": ["Minnesota"]
+      "polymarketHints": ["Minnesota"],
+      "portalLogoFile": "Minnesota-Vikings.png"
     },
     {
       "id": "nfl:ne",
@@ -3213,7 +3265,8 @@
       "displayName": "New England",
       "f402Names": ["NEW ENGLAND"],
       "kalshiCodes": ["NE"],
-      "polymarketHints": ["New England"]
+      "polymarketHints": ["New England"],
+      "portalLogoFile": "New-England-Patriots.png"
     },
     {
       "id": "nfl:no",
@@ -3240,7 +3293,8 @@
       "displayName": "New York J",
       "f402Names": ["NEW YORK J"],
       "kalshiCodes": ["NYJ"],
-      "polymarketHints": ["New York J"]
+      "polymarketHints": ["New York J"],
+      "portalLogoFile": "New-York-Jets.png"
     },
     {
       "id": "nfl:patriots",
@@ -3269,7 +3323,8 @@
       "displayName": "Pittsburgh",
       "f402Names": ["PITTSBURGH"],
       "kalshiCodes": ["PIT"],
-      "polymarketHints": ["Pittsburgh"]
+      "polymarketHints": ["Pittsburgh"],
+      "portalLogoFile": "Pittsburgh-Steelers.png"
     },
     {
       "id": "nfl:raiders",
@@ -3323,7 +3378,8 @@
       "displayName": "Tampa Bay",
       "f402Names": ["TAMPA BAY"],
       "kalshiCodes": ["TB"],
-      "polymarketHints": ["Tampa Bay"]
+      "polymarketHints": ["Tampa Bay"],
+      "portalLogoFile": "Tampa-Bay-Buccaneers.png"
     },
     {
       "id": "nfl:ten",
@@ -3332,7 +3388,8 @@
       "displayName": "Tennessee",
       "f402Names": ["TENNESSEE"],
       "kalshiCodes": ["TEN"],
-      "polymarketHints": ["Tennessee"]
+      "polymarketHints": ["Tennessee"],
+      "portalLogoFile": "Tennessee-Titans.png"
     },
     {
       "id": "nfl:titans",
@@ -3371,7 +3428,8 @@
       "displayName": "Anaheim",
       "f402Names": ["ANAHEIM"],
       "kalshiCodes": ["ANA"],
-      "polymarketHints": ["Anaheim"]
+      "polymarketHints": ["Anaheim"],
+      "portalLogoFile": "Anaheim-Ducks.png"
     },
     {
       "id": "nhl:bos",
@@ -3407,7 +3465,8 @@
       "displayName": "Carolina",
       "f402Names": ["CAROLINA"],
       "kalshiCodes": ["CAR"],
-      "polymarketHints": ["Carolina"]
+      "polymarketHints": ["Carolina"],
+      "portalLogoFile": "Carolina-Hurricanes.png"
     },
     {
       "id": "nhl:cbj",
@@ -3479,7 +3538,8 @@
       "displayName": "Edmonton",
       "f402Names": ["EDMONTON"],
       "kalshiCodes": ["EDM"],
-      "polymarketHints": ["Edmonton"]
+      "polymarketHints": ["Edmonton"],
+      "portalLogoFile": "Edmonton-Oilers.png"
     },
     {
       "id": "nhl:fla",
@@ -3524,7 +3584,8 @@
       "displayName": "Minnesota",
       "f402Names": ["MINNESOTA"],
       "kalshiCodes": ["MIN"],
-      "polymarketHints": ["Minnesota"]
+      "polymarketHints": ["Minnesota"],
+      "portalLogoFile": "Minnesota-Wild.png"
     },
     {
       "id": "nhl:mtl",
@@ -3569,7 +3630,8 @@
       "displayName": "New York R",
       "f402Names": ["NEW YORK R"],
       "kalshiCodes": ["NYR"],
-      "polymarketHints": ["New York R"]
+      "polymarketHints": ["New York R"],
+      "portalLogoFile": "New-York-Rangers.png"
     },
     {
       "id": "nhl:oilers",
@@ -3587,7 +3649,8 @@
       "displayName": "Ottawa",
       "f402Names": ["OTTAWA"],
       "kalshiCodes": ["OTT"],
-      "polymarketHints": ["Ottawa"]
+      "polymarketHints": ["Ottawa"],
+      "portalLogoFile": "Ottawa-Senators.png"
     },
     {
       "id": "nhl:phi",
@@ -3713,7 +3776,8 @@
       "displayName": "Winnipeg",
       "f402Names": ["WINNIPEG"],
       "kalshiCodes": ["WPG"],
-      "polymarketHints": ["Winnipeg"]
+      "polymarketHints": ["Winnipeg"],
+      "portalLogoFile": "Winnipeg-Jets.png"
     },
     {
       "id": "nhl:wsh",
@@ -3722,7 +3786,8 @@
       "displayName": "Washington",
       "f402Names": ["WASHINGTON"],
       "kalshiCodes": ["WSH"],
-      "polymarketHints": ["Washington"]
+      "polymarketHints": ["Washington"],
+      "portalLogoFile": "Washington-Capitals.png"
     }
   ]
 }

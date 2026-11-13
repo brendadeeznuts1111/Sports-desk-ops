@@ -17,7 +17,11 @@
 import { z } from "zod";
 
 import type { BunSecretSetOptions } from "../types/bun-api.ts";
-import { CANONICAL_SECRETS_SERVICE } from "./secrets.ts";
+import {
+  CANONICAL_SECRETS_SERVICE,
+  getSecretBounded,
+  setSecretBounded,
+} from "./secrets.ts";
 import { secretSetOptions } from "./r2_s3_client.ts";
 
 /** Where the token lives: the repo's canonical keychain service, not the docs' placeholder. */
@@ -44,9 +48,9 @@ export type GithubFetch = (
 
 export function bunGithubTokenStore(): GithubTokenStore {
   return {
-    get: (options) => Bun.secrets.get(options),
+    get: (options) => getSecretBounded(Bun.secrets, options),
     set: async (options) => {
-      await Bun.secrets.set(options);
+      await setSecretBounded(Bun.secrets, options);
     },
     delete: (options) => Bun.secrets.delete(options),
   };

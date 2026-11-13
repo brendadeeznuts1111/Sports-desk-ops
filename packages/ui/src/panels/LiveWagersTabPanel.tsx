@@ -1,9 +1,22 @@
 import type React from "react";
 import { styles } from "../dashboard_styles.ts";
+import {
+  formatProvenanceBadge,
+  SHOWCASE_WAGERS_PROVENANCE,
+} from "../hydration.ts";
 import { SAMPLE_LIVE_WAGERS } from "../showcase_data.ts";
-import type { LiveWager, TierStyleConfig, WagerSortField } from "../types.ts";
+import type {
+  DashboardSourceProvenance,
+  LiveWager,
+  TierStyleConfig,
+  WagerSortField,
+} from "../types.ts";
 
 export interface LiveWagersTabPanelProps {
+  readonly wagers?: readonly LiveWager[] | undefined;
+  readonly provenance?: DashboardSourceProvenance | undefined;
+  readonly wagersError?: string | null | undefined;
+  readonly onRefreshWagers?: (() => void) | undefined;
   readonly wagerSearch: string;
   readonly onWagerSearchChange: (value: string) => void;
   readonly wagerSportFilter: string;
@@ -56,6 +69,10 @@ const TIER_ORDER: Record<string, number> = {
 };
 
 export function LiveWagersTabPanel({
+  wagers = SAMPLE_LIVE_WAGERS,
+  provenance = SHOWCASE_WAGERS_PROVENANCE,
+  wagersError = null,
+  onRefreshWagers,
   wagerSearch,
   onWagerSearchChange,
   wagerSportFilter,
@@ -75,42 +92,96 @@ export function LiveWagersTabPanel({
   onSelectCustomerById,
   onInspectPty,
 }: LiveWagersTabPanelProps): React.ReactElement {
+  const activeWagers = wagers;
+  const activeProvenance: DashboardSourceProvenance = wagersError
+    ? {
+        kind: "unavailable",
+        label: wagersError,
+        sourcePath: provenance.sourcePath,
+        observedAt: provenance.observedAt,
+      }
+    : provenance;
+  const provenanceBadge = formatProvenanceBadge(activeProvenance);
+
+  const criticalSteamCount = activeWagers.filter(
+    (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
+  ).length;
+  const totalRiskUsd = activeWagers.reduce((acc, w) => acc + w.riskUsd, 0);
+  const totalToWinUsd = activeWagers.reduce((acc, w) => acc + w.toWinUsd, 0);
+
+  const baseSportIds = new Set(SPORT_PILLS.map((p) => p.id.toUpperCase()));
+  const extraSportPills: Array<{ id: string; label: string }> = [];
+  for (const w of activeWagers) {
+    const up = w.sport.toUpperCase();
+    if (up && !baseSportIds.has(up)) {
+      baseSportIds.add(up);
+      extraSportPills.push({ id: up, label: up });
+    }
+  }
+  const sportPills = [...SPORT_PILLS, ...extraSportPills];
+
+  const baseTypeIds = new Set(BET_TYPE_PILLS.map((p) => p.id.toUpperCase()));
+  const extraTypePills: Array<{ id: string; label: string }> = [];
+  for (const w of activeWagers) {
+    const up = w.betType.toUpperCase();
+    if (up && !baseTypeIds.has(up)) {
+      baseTypeIds.add(up);
+      extraTypePills.push({ id: w.betType, label: w.betType });
+    }
+  }
+  const betTypePills = [...BET_TYPE_PILLS, ...extraTypePills];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {wagersError ? (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            backgroundColor: "rgba(239, 68, 68, 0.14)",
+            border: "1px solid rgba(239, 68, 68, 0.4)",
+            color: "#fca5a5",
+            fontSize: "12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <span>
+            <b>Live Wagers Feed Error:</b> {wagersError}
+          </span>
+          {onRefreshWagers ? (
+            <button
+              type="button"
+              style={styles.actionBtn}
+              onClick={onRefreshWagers}
+            >
+              ↻ Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Live Wagers KPI Grid */}
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Live Streaming Feed</div>
-          <div style={styles.kpiVal}>{SAMPLE_LIVE_WAGERS.length} Wagers</div>
-          <div style={styles.kpiSub}>Real-Time Ingestion (Sub-second)</div>
+          <div style={styles.kpiVal}>{activeWagers.length} Wagers</div>
+          <div style={styles.kpiSub}>{provenanceBadge.detail}</div>
         </div>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Flagged Steam / Originator</div>
           <div style={{ ...styles.kpiVal, color: "#f87171" }}>
-            {
-              SAMPLE_LIVE_WAGERS.filter(
-                (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
-              ).length
-            }{" "}
-            Alerts
+            {criticalSteamCount} Alerts
           </div>
           <div style={styles.kpiSub}>Key Numbers 3 & 7 / Syndicate Hooks</div>
         </div>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Live Exposure at Risk</div>
-          <div style={styles.kpiVal}>
-            $
-            {SAMPLE_LIVE_WAGERS.reduce(
-              (acc, w) => acc + w.riskUsd,
-              0,
-            ).toLocaleString()}
-          </div>
+          <div style={styles.kpiVal}>${totalRiskUsd.toLocaleString()}</div>
           <div style={styles.kpiSub}>
-            To Win: $
-            {SAMPLE_LIVE_WAGERS.reduce(
-              (acc, w) => acc + w.toWinUsd,
-              0,
-            ).toLocaleString()}
+            To Win: ${totalToWinUsd.toLocaleString()}
           </div>
         </div>
         <div style={styles.kpiCard}>
@@ -135,11 +206,13 @@ export function LiveWagersTabPanel({
         </div>
 
         <div style={styles.tierFilterGroup}>
-          {SPORT_PILLS.map((pill) => (
+          {sportPills.map((pill) => (
             <button
               key={pill.id}
               type="button"
-              style={styles.filterPill(wagerSportFilter === pill.id)}
+              style={styles.filterPill(
+                wagerSportFilter.toUpperCase() === pill.id.toUpperCase(),
+              )}
               onClick={() => onWagerSportFilterChange(pill.id)}
             >
               {pill.label}
@@ -161,11 +234,13 @@ export function LiveWagersTabPanel({
         </div>
 
         <div style={styles.tierFilterGroup}>
-          {BET_TYPE_PILLS.map((pill) => (
+          {betTypePills.map((pill) => (
             <button
               key={pill.id}
               type="button"
-              style={styles.filterPill(wagerTypeFilter === pill.id)}
+              style={styles.filterPill(
+                wagerTypeFilter.toUpperCase() === pill.id.toUpperCase(),
+              )}
               onClick={() => onWagerTypeFilterChange(pill.id)}
             >
               {pill.label}
@@ -177,12 +252,43 @@ export function LiveWagersTabPanel({
       {/* Live Wagers Table Card */}
       <div style={styles.tableCard}>
         <div style={styles.tableHeader}>
-          <h3 style={styles.tableTitle}>
-            ⚡ Live Incoming Wagers & Real-Time Action Directives
-          </h3>
-          <span style={{ fontSize: "11px", color: "#64748b" }}>
-            Real-time wager feed · autoExecute: false invariant active
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <h3 style={styles.tableTitle}>
+              ⚡ Live Incoming Wagers & Real-Time Action Directives
+            </h3>
+            <span
+              title={provenanceBadge.detail}
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: "999px",
+                color: provenanceBadge.fg,
+                backgroundColor: provenanceBadge.bg,
+                border: `1px solid ${provenanceBadge.border}`,
+              }}
+            >
+              {provenanceBadge.badgeText}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "11px", color: "#64748b" }}>
+              {provenanceBadge.detail} · autoExecute: false invariant active
+            </span>
+            {onRefreshWagers ? (
+              <button
+                type="button"
+                style={{
+                  ...styles.actionBtn,
+                  padding: "4px 8px",
+                  fontSize: "11px",
+                }}
+                onClick={onRefreshWagers}
+              >
+                ↻ Refresh
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div style={styles.tableScroll}>
@@ -262,27 +368,34 @@ export function LiveWagersTabPanel({
               </tr>
             </thead>
             <tbody>
-              {SAMPLE_LIVE_WAGERS.filter((w) => {
-                const q = wagerSearch.toLowerCase();
-                const matchesSearch =
-                  !q ||
-                  w.ticketId.toLowerCase().includes(q) ||
-                  w.customerId.toLowerCase().includes(q) ||
-                  w.agentId.toLowerCase().includes(q) ||
-                  w.event.toLowerCase().includes(q) ||
-                  w.selection.toLowerCase().includes(q);
-                if (!matchesSearch) return false;
-                if (wagerSportFilter !== "ALL" && w.sport !== wagerSportFilter)
-                  return false;
-                if (
-                  wagerAlertFilter !== "ALL" &&
-                  w.alertTier !== wagerAlertFilter
-                )
-                  return false;
-                if (wagerTypeFilter !== "ALL" && w.betType !== wagerTypeFilter)
-                  return false;
-                return true;
-              })
+              {activeWagers
+                .filter((w) => {
+                  const q = wagerSearch.toLowerCase();
+                  const matchesSearch =
+                    !q ||
+                    w.ticketId.toLowerCase().includes(q) ||
+                    w.customerId.toLowerCase().includes(q) ||
+                    w.agentId.toLowerCase().includes(q) ||
+                    w.event.toLowerCase().includes(q) ||
+                    w.selection.toLowerCase().includes(q);
+                  if (!matchesSearch) return false;
+                  if (
+                    wagerSportFilter !== "ALL" &&
+                    w.sport.toUpperCase() !== wagerSportFilter.toUpperCase()
+                  )
+                    return false;
+                  if (
+                    wagerAlertFilter !== "ALL" &&
+                    w.alertTier !== wagerAlertFilter
+                  )
+                    return false;
+                  if (
+                    wagerTypeFilter !== "ALL" &&
+                    w.betType.toUpperCase() !== wagerTypeFilter.toUpperCase()
+                  )
+                    return false;
+                  return true;
+                })
                 .sort((a, b) => {
                   let cmp = 0;
                   if (wagerSortField === "timestamp") {

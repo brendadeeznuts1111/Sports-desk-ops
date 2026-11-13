@@ -94,7 +94,7 @@ export type MarketSide =
 
 /** Standardizes team/subject tokens across CFB, NFL, and NBA */
 export function normalizeCanonicalSubject(raw: string | undefined): string {
-  if (!raw) return "UNKNOWN";
+  if (!raw || raw.trim() === "") return "UNKNOWN";
   const s = raw.trim().toUpperCase();
   if (s.includes("BAYLOR")) return "BAYLOR";
   if (s.includes("PATRIOTS") || s.includes("NEW ENGLAND") || s === "NE")

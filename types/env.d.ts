@@ -77,6 +77,12 @@ declare module "bun" {
     readonly GSID_COOKIE?: string;
     /** Optional second gate for GSLive `ajax.php`; sent as `x-gs-session`, see fetch-bet-tally.ts */
     readonly GS_SESSION?: string;
+    /** Ganchrow Scientific Diffusion feed URL for `@ganchrowsci/gs-sdk` (vendor-supplied). */
+    readonly GS_DIFFUSION_URL?: string;
+    /** Diffusion feed username paired with `GS_DIFFUSION_PASSWORD`. */
+    readonly GS_DIFFUSION_USERNAME?: string;
+    /** Diffusion feed password; read only by the team-name probe. */
+    readonly GS_DIFFUSION_PASSWORD?: string;
     /** Chrome `--user-data-dir` signed in to Manager Tools; preferred over stored secrets */
     readonly GSLIVE_WEBVIEW_PROFILE?: string;
     /** Optional Google Analytics cookie fragment appended to the GSID cookie header */

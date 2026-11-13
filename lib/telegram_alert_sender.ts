@@ -28,6 +28,7 @@ import { dirname } from "node:path";
 import { SportsDeskTelegramService } from "../services/sportsdesk_telegram_bot.ts";
 import { FLAG_SEVERITIES } from "./bet_flags.ts";
 import type { BetFlagFinding, FlagSeverity } from "./bet_flags.ts";
+import { getSecretBounded, KeychainTimeoutError } from "./secrets.ts";
 import {
   appendAlertAuditRows,
   messageDigest,
@@ -130,11 +131,12 @@ function cleanCredential(value: string | undefined): string {
 async function keychainSecret(name: string): Promise<string> {
   for (const service of TELEGRAM_SECRET_SERVICES) {
     try {
-      const raw = await Bun.secrets.get({ service, name });
+      const raw = await getSecretBounded(Bun.secrets, { service, name });
       const cleaned = cleanCredential(raw ?? undefined);
       if (cleaned !== "") return cleaned;
-    } catch {
-      // A missing/locked keychain entry is "not configured here", not a crash at the CLI edge.
+    } catch (err) {
+      // A missing/locked/timed-out keychain entry is "not configured here", not a crash at the CLI edge.
+      if (err instanceof KeychainTimeoutError) return "";
     }
   }
   return "";

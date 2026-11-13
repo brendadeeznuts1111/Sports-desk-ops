@@ -13,10 +13,12 @@ import { readFileSync } from "node:fs";
 import { env, secrets } from "bun";
 
 import {
+  getSecretBounded,
   GSID_LEGACY_NAME,
   GSLIVE_GANCHROW_SESSION_NAME,
   GSLIVE_SESSION_ID_NAME,
   gsliveSessionIdFromEnv,
+  setSecretBounded,
 } from "./secrets.ts";
 
 /** One `Cookie` header from a session id; `_ga` is appended only when present. */
@@ -93,7 +95,7 @@ export type ManagerSession = ActiveManagerSession | NoManagerSession;
 function defaultSecretReader(): SecretReader | null {
   try {
     if (secrets !== undefined && typeof secrets.get === "function") {
-      return { get: (options) => secrets.get(options) };
+      return { get: (options) => getSecretBounded(secrets, options) };
     }
   } catch {
     // Bun.secrets is unavailable in some runtimes; the env fallback still works.
@@ -139,15 +141,21 @@ export async function resolveManagerSession(
   secretReader: SecretReader | null = defaultSecretReader(),
 ): Promise<ManagerSession> {
   const envCookie = cookieHeaderFromGsidCookie(environment);
-  const sessionGate = await resolveManagerSessionGate(
-    environment,
-    secretReader,
-  );
-  if (envCookie !== "")
+  if (envCookie !== "") {
+    const sessionGate = await resolveManagerSessionGate(
+      environment,
+      secretReader,
+    );
     return { source: "env-cookie", cookieHeader: envCookie, sessionGate };
+  }
   const fileCookie = cookieHeaderFromSessionFile(environment);
-  if (fileCookie !== "")
+  if (fileCookie !== "") {
+    const sessionGate = await resolveManagerSessionGate(
+      environment,
+      secretReader,
+    );
     return { source: "session-file", cookieHeader: fileCookie, sessionGate };
+  }
   if (secretReader !== null) {
     try {
       const gsid =
@@ -156,6 +164,10 @@ export async function resolveManagerSession(
         (await secretReader.get(GSID_SECRET_LEGACY))?.trim() ??
         "";
       if (gsid !== "") {
+        const sessionGate = await resolveManagerSessionGate(
+          environment,
+          secretReader,
+        );
         return {
           cookieHeader: cookieHeaderFromValue(gsid, environment.GA),
           source: "keychain",
@@ -168,6 +180,10 @@ export async function resolveManagerSession(
   }
   const cookieHeader = cookieHeaderFromEnv(environment);
   if (cookieHeader === "") return { source: "none", cookieHeader: "" };
+  const sessionGate = await resolveManagerSessionGate(
+    environment,
+    secretReader,
+  );
   return { source: "env", cookieHeader, sessionGate };
 }
 
@@ -216,7 +232,7 @@ export async function writeManagerSessionGate(value: string): Promise<void> {
   const trimmed = value.trim();
   if (trimmed === "") return;
   try {
-    await Bun.secrets.set({
+    await setSecretBounded(Bun.secrets, {
       service: GANCHROW_SESSION_SECRET.service,
       name: GANCHROW_SESSION_SECRET.name,
       value: trimmed,

@@ -31,7 +31,9 @@ import {
   DEFAULT_REFRESH_GRACE_MS,
   DEFAULT_REFRESH_TTL_MINUTES,
   REFRESH_EXIT,
+  buildMintCommand,
   decideRefresh,
+  hasEnvLoginCredentials,
   journalLine,
   type RefreshErrorKind,
   type RefreshExit,
@@ -84,14 +86,13 @@ async function spawnMint(ttlMinutes: number): Promise<{
   const startedNs = Bun.nanoseconds();
   try {
     const proc = Bun.spawn({
-      cmd: [
-        "bun",
-        "run",
-        "session:login",
-        "--from-keychain",
-        "--ttl-min",
-        String(ttlMinutes),
-      ],
+      cmd: buildMintCommand(ttlMinutes, {
+        execPath: process.execPath,
+        loginScriptPath: resolve(import.meta.dir, "session_login.ts"),
+        fromKeychain: !hasEnvLoginCredentials(
+          Bun.env as Record<string, string | undefined>,
+        ),
+      }),
       env: { ...Bun.env, F402_LIVE_LOGIN: "1" },
       // Child stdio is discarded on purpose: `session:login` prints the cookie-name list and the
       // expiry to stdout, and while that is not itself the cookie, the policy is to never let the

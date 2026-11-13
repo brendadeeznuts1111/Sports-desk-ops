@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SportsDesk WebView & Reporting Daemon LaunchAgent (template, Option A: `op run`).
+
+  Supervises `services/sportsdesk_webview_server.ts` on 127.0.0.1:4020 using `op run` with a
+  1Password Service Account token so unattended boots never block on the `.env` 1Password Desktop
+  FIFO. `--no-env-file` is passed to Bun after `op run` injects the `.env.op` references.
+
+  Substitute these placeholders before loading (see `scripts/install_session_refresh_agent.sh`):
+    __OPERATOR_HOME__             absolute path to $HOME on the target machine
+    __REPO_PATH__                 absolute path to the sportsdesk-ops working copy
+    __OP_BIN__                    absolute path to `op` (`/opt/homebrew/bin/op`)
+    __BUN_BIN__                   absolute path to `bun` (`$(which bun)`)
+    __BUN_BIN_DIR__               directory containing `__BUN_BIN__` (`$(dirname "$(which bun)")`)
+    __OP_SERVICE_ACCOUNT_TOKEN__  1Password service-account token (`chmod 0600` on installed plist)
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.bookdeskops.sportsdesk.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>__OP_BIN__</string>
+      <string>run</string>
+      <string>--env-file=__REPO_PATH__/.env.op</string>
+      <string>--</string>
+      <string>__BUN_BIN__</string>
+      <string>--no-env-file</string>
+      <string>run</string>
+      <string>services/sportsdesk_webview_server.ts</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>HOME</key>
+      <string>__OPERATOR_HOME__</string>
+      <key>PATH</key>
+      <string>__BUN_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      <key>HOST</key>
+      <string>127.0.0.1</string>
+      <key>PORT</key>
+      <string>4020</string>
+      <key>NO_PROXY</key>
+      <string>127.0.0.1,localhost,::1</string>
+      <key>OP_SERVICE_ACCOUNT_TOKEN</key>
+      <string>__OP_SERVICE_ACCOUNT_TOKEN__</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>__REPO_PATH__/scratch/sportsdesk-daemon.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_PATH__/scratch/sportsdesk-daemon.stderr.log</string>
+  </dict>
+</plist>

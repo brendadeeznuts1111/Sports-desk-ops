@@ -55,6 +55,8 @@ describe("Server Port Cascade Resolution", () => {
     await withPortRaceRetry(async () => {
       const [targetPort] = reserveDistinctEphemeralPorts(1);
 
+      const { HOST: _ignoredHost, ...restEnv } = Bun.env;
+
       // Spawn Bun process with BUN_PORT=<ephemeral> and no explicit port in code options
       const proc = Bun.spawn({
         cmd: [
@@ -69,7 +71,7 @@ describe("Server Port Cascade Resolution", () => {
         ],
         cwd: projectRoot,
         env: {
-          ...Bun.env,
+          ...restEnv,
           BUN_PORT: String(targetPort),
         },
         stdout: "pipe",
@@ -86,6 +88,7 @@ describe("Server Port Cascade Resolution", () => {
 
       const result = JSON.parse(stdout.trim());
       expect(result.port).toBe(targetPort);
+      expect(result.hostname).toBe("127.0.0.1");
     });
   });
 

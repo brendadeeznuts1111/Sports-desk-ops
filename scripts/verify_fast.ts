@@ -252,9 +252,13 @@ export function inferTestsForFiles(
       candidates.push(
         "tests/dashboard_backend_workspace.test.ts",
         "tests/dashboard_api_inmemory.test.ts",
+        "tests/dashboard_ui_hydration.test.tsx",
       );
     } else if (f.startsWith("packages/api/")) {
-      candidates.push("tests/dashboard_api_inmemory.test.ts");
+      candidates.push(
+        "tests/dashboard_api_inmemory.test.ts",
+        "tests/dashboard_ui_hydration.test.tsx",
+      );
     }
 
     if (
@@ -264,7 +268,12 @@ export function inferTestsForFiles(
       f.startsWith("src/risk/")
     ) {
       if (f.startsWith("packages/ui/src/")) {
-        candidates.push("tests/dashboard_ui_panels.test.tsx");
+        candidates.push(
+          "tests/dashboard_ui_panels.test.tsx",
+          "tests/dashboard_ui_hydration.test.tsx",
+        );
+      } else if (f.startsWith("packages/contracts/src/")) {
+        candidates.push("tests/dashboard_ui_hydration.test.tsx");
       }
       if (stem === "ansi") {
         candidates.push("tests/dashboard_build_and_markdown.test.ts");

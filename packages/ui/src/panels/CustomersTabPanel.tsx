@@ -1,12 +1,24 @@
 import type React from "react";
 import { styles } from "../dashboard_styles.ts";
-import type { CustomerSortKey, ShowcaseCustomer } from "../types.ts";
+import {
+  deriveCustomerCohortKpiCards,
+  formatProvenanceBadge,
+  PENDING_COHORTS_PROVENANCE,
+} from "../hydration.ts";
+import type {
+  CustomersApiResponse,
+  CustomerSortKey,
+  ShowcaseCustomer,
+} from "../types.ts";
 
 export interface CustomersTabPanelProps {
   readonly bannerDismissed: boolean;
   readonly onDismissBanner: () => void;
   readonly kpisCollapsed: boolean;
   readonly onToggleKpis: () => void;
+  readonly cohortsReport?: CustomersApiResponse | null | undefined;
+  readonly cohortsStatus?: "pending" | "ready" | "unavailable" | undefined;
+  readonly cohortsError?: string | null | undefined;
   readonly searchQuery: string;
   readonly onSearchQueryChange: (value: string) => void;
   readonly filterTier: string;
@@ -32,6 +44,9 @@ export function CustomersTabPanel({
   onDismissBanner,
   kpisCollapsed,
   onToggleKpis,
+  cohortsReport = null,
+  cohortsStatus,
+  cohortsError = null,
   searchQuery,
   onSearchQueryChange,
   filterTier,
@@ -48,6 +63,24 @@ export function CustomersTabPanel({
   onRunReverseLookup,
   onOpenTerminalProfile,
 }: CustomersTabPanelProps): React.ReactElement {
+  const effectiveStatus: "pending" | "ready" | "unavailable" =
+    cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
+  const kpiCards = deriveCustomerCohortKpiCards({
+    report: cohortsReport,
+    status: effectiveStatus,
+    error: cohortsError,
+  });
+  const provenanceBadge = formatProvenanceBadge(
+    effectiveStatus === "unavailable"
+      ? {
+          kind: "unavailable",
+          label: cohortsError || "GET /api/customers failed",
+          sourcePath: "/api/customers",
+          observedAt: "",
+        }
+      : (cohortsReport?.provenance ?? PENDING_COHORTS_PROVENANCE),
+  );
+
   return (
     <div>
       {/* Session Notice Banner (Dismissible) */}
@@ -112,17 +145,38 @@ export function CustomersTabPanel({
           marginBottom: "8px",
         }}
       >
-        <span
-          style={{
-            fontSize: "11px",
-            color: "#64748b",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            fontWeight: 600,
-          }}
-        >
-          Corpora & Surveillance Cohorts
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span
+            style={{
+              fontSize: "11px",
+              color: "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              fontWeight: 600,
+            }}
+          >
+            Corpora & Surveillance Cohorts
+          </span>
+          <span
+            title={provenanceBadge.detail}
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              padding: "2px 7px",
+              borderRadius: "999px",
+              color: provenanceBadge.fg,
+              backgroundColor: provenanceBadge.bg,
+              border: `1px solid ${provenanceBadge.border}`,
+            }}
+          >
+            {provenanceBadge.badgeText}
+          </span>
+          {cohortsReport?.provenance.sourcePath ? (
+            <span style={{ fontSize: "10px", color: "#64748b" }}>
+              {cohortsReport.provenance.sourcePath}
+            </span>
+          ) : null}
+        </div>
         <button
           type="button"
           style={{
@@ -142,39 +196,16 @@ export function CustomersTabPanel({
         </button>
       </div>
 
-      {/* KPI Summary Cards (Collapsible) */}
+      {/* KPI Summary Cards (Collapsible, hydrated dynamically from /api/customers) */}
       {!kpisCollapsed && (
         <div className="kpi-strip" style={styles.kpiGrid}>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>Backtest Cohort</div>
-            <div style={styles.kpiVal}>49 Accounts</div>
-            <div style={styles.kpiSub}>4-Wk CFB/NBA Backtest (docs/)</div>
-          </div>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>Key Number Sharps</div>
-            <div style={styles.kpiVal}>5 Elite Accounts</div>
-            <div style={styles.kpiSub}>Football 3, 7, 10, 14, 21 Watchlist</div>
-          </div>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>Hook Syndicates</div>
-            <div style={styles.kpiVal}>5 Downlines</div>
-            <div style={styles.kpiSub}>Half-Point Syndicate Clusters</div>
-          </div>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>CI Synthetic Fixtures</div>
-            <div style={styles.kpiVal}>6 Accounts</div>
-            <div style={styles.kpiSub}>Regression Testing Fixtures</div>
-          </div>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>Local Customer Book</div>
-            <div style={styles.kpiVal}>220 Accounts</div>
-            <div style={styles.kpiSub}>1,100 Sampled Tickets (29 Agents)</div>
-          </div>
-          <div style={styles.kpiCard}>
-            <div style={styles.kpiLabel}>Broad Surveillance</div>
-            <div style={styles.kpiVal}>4,914 IDs</div>
-            <div style={styles.kpiSub}>Captures & Weblog Streams</div>
-          </div>
+          {kpiCards.map((card) => (
+            <div key={card.label} style={styles.kpiCard}>
+              <div style={styles.kpiLabel}>{card.label}</div>
+              <div style={styles.kpiVal}>{card.value}</div>
+              <div style={styles.kpiSub}>{card.sub}</div>
+            </div>
+          ))}
         </div>
       )}
 

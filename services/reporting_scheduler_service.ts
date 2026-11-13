@@ -335,11 +335,16 @@ export class ReportingSchedulerService {
         scheduleTime: "11 * * * *",
         reportType: "SHELL_CAPTURE",
         description:
-          "Runs `bun run build:agent-tree` once per hour so data/agent-tree.json tracks the F402 downline. Skipped when F402_BEARER_TOKEN is unset (cron cannot re-authenticate).",
+          "Runs `scripts/build_agent_tree.ts` once per hour so data/agent-tree.json tracks the F402 downline. Skipped when F402_BEARER_TOKEN is unset (cron cannot re-authenticate).",
         tz: "America/Chicago",
         shellJob: {
           bin: "bun",
-          args: ["run", "build:agent-tree"],
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/build_agent_tree.ts",
+          ],
           requires: ["F402_BEARER_TOKEN"],
         },
         enabled: true,
@@ -350,11 +355,16 @@ export class ReportingSchedulerService {
         scheduleTime: "27 */6 * * *",
         reportType: "SHELL_CAPTURE",
         description:
-          "Runs `bun run customers:profiles` four times a day so data/customer-profiles.json is fresh. Skipped when the gitignored enriched_customers_full.json fixture is absent.",
+          "Runs `scripts/build_customer_profiles.ts` four times a day so data/customer-profiles.json is fresh. Skipped when the gitignored enriched_customers_full.json fixture is absent.",
         tz: "America/Chicago",
         shellJob: {
           bin: "bun",
-          args: ["run", "customers:profiles"],
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/build_customer_profiles.ts",
+          ],
           requires: ["file:enriched_customers_full.json"],
         },
         enabled: true,
@@ -369,7 +379,12 @@ export class ReportingSchedulerService {
         tz: "America/Chicago",
         shellJob: {
           bin: "bun",
-          args: ["run", "scripts/f402_session_refresh.ts"],
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "scripts/f402_session_refresh.ts",
+          ],
           requires: ["F402_SESSION_REFRESH_SCHEDULER", "F402_LIVE_LOGIN"],
         },
         enabled: true,
@@ -380,11 +395,17 @@ export class ReportingSchedulerService {
         scheduleTime: "0 8 * * *",
         reportType: "SHELL_CAPTURE",
         description:
-          "Daily 08:00 America/Chicago check that today's manual F402 Mode A activity JSONL is staged (`weblog:sentinel --once`), sending a deduplicated Telegram nudge when missing (#91).",
+          "Daily 08:00 America/Chicago check that today's manual F402 Mode A activity JSONL is staged (`workers/weblog_sentinel.ts --once`), sending a deduplicated Telegram nudge when missing (#91).",
         tz: "America/Chicago",
         shellJob: {
           bin: "bun",
-          args: ["run", "weblog:sentinel", "--once"],
+          args: [
+            "--no-orphans",
+            "--no-env-file",
+            "run",
+            "workers/weblog_sentinel.ts",
+            "--once",
+          ],
           requires: ["TELEGRAM_BOT_TOKEN"],
         },
         enabled: true,
@@ -686,7 +707,12 @@ export async function runShellCaptureDefault(
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutSeconds * 1_000);
   try {
-    const child = Bun.spawn([spec.bin, ...spec.args], {
+    const resolvedBin = spec.bin === "bun" ? process.execPath : spec.bin;
+    const resolvedArgs =
+      spec.bin === "bun" && !spec.args.includes("--no-env-file")
+        ? ["--no-env-file", ...spec.args]
+        : spec.args;
+    const child = Bun.spawn([resolvedBin, ...resolvedArgs], {
       cwd: REPO_ROOT,
       stdin: "ignore",
       stdout: "inherit",

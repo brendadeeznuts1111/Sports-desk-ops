@@ -23,6 +23,99 @@ export const LEGACY_SECRETS_SERVICE = "sportsdesk-ops";
  */
 export type SecretsProvider = Pick<typeof Bun.secrets, "get">;
 
+export const DEFAULT_KEYCHAIN_TIMEOUT_MS = 500;
+export const KEYCHAIN_HANG_COOLDOWN_MS = 30_000;
+
+/** Thrown when an OS keychain operation blocks past the configured deadline. */
+export class KeychainTimeoutError extends Error {
+  constructor(
+    options: { readonly service: string; readonly name: string },
+    timeoutMs: number,
+    op: "get" | "set" = "get",
+  ) {
+    super(
+      `Bun.secrets.${op}(${options.service}/${options.name}) timed out after ${timeoutMs}ms`,
+    );
+    this.name = "KeychainTimeoutError";
+  }
+}
+
+let realKeychainBlockedUntilMs = 0;
+
+/** Reset the real-keychain hang cooldown (tests). */
+export function resetKeychainTimeoutCooldownForTests(): void {
+  realKeychainBlockedUntilMs = 0;
+}
+
+function runBoundedKeychainCall<TResult>(
+  target: object,
+  options: { readonly service: string; readonly name: string },
+  timeoutMs: number,
+  invoke: () => Promise<TResult>,
+  op: "get" | "set",
+): Promise<TResult> {
+  const isRealKeychain = target === Bun.secrets;
+  if (isRealKeychain && Date.now() < realKeychainBlockedUntilMs) {
+    return Promise.reject(new KeychainTimeoutError(options, timeoutMs, op));
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      if (isRealKeychain) {
+        realKeychainBlockedUntilMs = Date.now() + KEYCHAIN_HANG_COOLDOWN_MS;
+      }
+      reject(new KeychainTimeoutError(options, timeoutMs, op));
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([Promise.resolve().then(invoke), timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+/**
+ * Bound an OS keychain lookup with a strict deadline and cache real-keychain hangs for
+ * {@link KEYCHAIN_HANG_COOLDOWN_MS} so locked/ACL-prompting entries fail fast.
+ */
+export function getSecretBounded(
+  reader: {
+    get(options: {
+      readonly service: string;
+      readonly name: string;
+    }): Promise<string | null>;
+  },
+  options: { readonly service: string; readonly name: string },
+  timeoutMs: number = DEFAULT_KEYCHAIN_TIMEOUT_MS,
+): Promise<string | null> {
+  return runBoundedKeychainCall(
+    reader,
+    options,
+    timeoutMs,
+    () => reader.get(options),
+    "get",
+  );
+}
+
+/**
+ * Bound an OS keychain write along the same cooldown as {@link getSecretBounded} so
+ * background/test runs never stall indefinitely on a blocked SecurityAgent daemon.
+ */
+export function setSecretBounded<
+  TOptions extends { readonly service: string; readonly name: string },
+>(
+  writer: { set(options: TOptions): Promise<void> },
+  options: TOptions,
+  timeoutMs: number = DEFAULT_KEYCHAIN_TIMEOUT_MS,
+): Promise<void> {
+  return runBoundedKeychainCall(
+    writer,
+    options,
+    timeoutMs,
+    () => writer.set(options),
+    "set",
+  );
+}
+
 let provider: SecretsProvider = Bun.secrets;
 
 /** Swap the provider (tests) or restore the real keychain (`null`). */
@@ -36,10 +129,11 @@ export async function readSecretOrNull(
   name: string,
 ): Promise<string | null> {
   try {
-    const value = await provider.get({ service, name });
+    const value = await getSecretBounded(provider, { service, name });
     const trimmed = value?.trim() ?? "";
     return trimmed === "" ? null : trimmed;
   } catch {
+    // Locked, missing, or timed-out keychain entry is treated as unset.
     return null;
   }
 }

@@ -17,6 +17,14 @@ import {
   type R2PipelineKpis,
   type R2PipelineSinkKpi,
 } from "./r2_pipeline_kpis.ts";
+import {
+  F402_KEYCHAIN_NAMES,
+  getSecretBounded,
+  KeychainTimeoutError,
+  LEGACY_SECRETS_SERVICE,
+} from "./secrets.ts";
+
+export const GSLIVE_HEALTH_PROBE_TIMEOUT_MS = 2_000;
 
 export type DeskOperationalStatus = "ok" | "degraded" | "down";
 
@@ -91,6 +99,7 @@ export interface DeskEnhancedHealthInput {
   readonly resolveGitSha?: () => string | null;
   readonly readF402?: typeof readF402Session;
   readonly readGsliveHealth?: () => Promise<GsliveSessionHealth>;
+  readonly gsliveHealthTimeoutMs?: number;
   readonly probeR2?: typeof probeR2PipelineKpis;
   /** @deprecated GSLive never auto-mints from Bun; kept for test injection only. */
   readonly hasGsliveMintCredentials?: () => Promise<boolean>;
@@ -332,13 +341,26 @@ function httpStatusFor(operational: DeskOperationalStatus): number {
 
 const SECRETS_SERVICE = "com.bookdeskops.sportsdesk";
 
-async function secretPresent(name: string): Promise<boolean> {
-  try {
-    const value = await Bun.secrets.get({ service: SECRETS_SERVICE, name });
-    return typeof value === "string" && value.trim() !== "";
-  } catch {
-    return false;
+async function secretPresent(
+  name: string,
+  legacyAlias?: string,
+): Promise<boolean> {
+  const names = legacyAlias === undefined ? [name] : [name, legacyAlias];
+  for (const service of [SECRETS_SERVICE, LEGACY_SECRETS_SERVICE]) {
+    for (const candidate of names) {
+      try {
+        const value = await getSecretBounded(Bun.secrets, {
+          service,
+          name: candidate,
+        });
+        if (typeof value === "string" && value.trim() !== "") return true;
+      } catch (err) {
+        // Keychain timed out or is locked: fail closed without stalling /health.
+        if (err instanceof KeychainTimeoutError) return false;
+      }
+    }
   }
+  return false;
 }
 
 const F402_MINT_CACHE_TTL_MS = 30_000;
@@ -381,8 +403,12 @@ async function defaultHasF402MintCredentials(): Promise<boolean> {
 
   inflightF402Mint = (async () => {
     const [agentOk, passOk] = await Promise.all([
-      envAgent ? Promise.resolve(true) : secretPresent("F402_AGENT_ID"),
-      envPass ? Promise.resolve(true) : secretPresent("F402_PASSWORD"),
+      envAgent
+        ? Promise.resolve(true)
+        : secretPresent(F402_KEYCHAIN_NAMES.agentId, "F402_AGENT_ID"),
+      envPass
+        ? Promise.resolve(true)
+        : secretPresent(F402_KEYCHAIN_NAMES.password, "F402_PASSWORD"),
     ]);
     const value = agentOk && passOk;
     cachedF402MintState = { envKey, checkedAtMs: Date.now(), value };
@@ -476,6 +502,36 @@ function withGsliveMintFields(
   };
 }
 
+async function probeGsliveBounded(
+  readGsliveHealth: (() => Promise<GsliveSessionHealth>) | undefined,
+  timeoutMs: number,
+): Promise<{
+  readonly health: GsliveSessionHealth | null;
+  readonly timedOut: boolean;
+}> {
+  if (readGsliveHealth === undefined) {
+    return { health: null, timedOut: false };
+  }
+  const TIMEOUT = Symbol("gslive-probe-timeout");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof TIMEOUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMEOUT), timeoutMs);
+    timer.unref?.();
+  });
+  try {
+    const settled = await Promise.race([
+      readGsliveHealth().catch(() => null),
+      deadline,
+    ]);
+    if (settled === TIMEOUT) {
+      return { health: null, timedOut: true };
+    }
+    return { health: settled, timedOut: false };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function buildDeskEnhancedHealth(
   input: DeskEnhancedHealthInput,
 ): Promise<DeskEnhancedHealthPayload> {
@@ -484,12 +540,12 @@ export async function buildDeskEnhancedHealth(
   const readSession = input.readF402 ?? readF402Session;
   const probeR2 = input.probeR2 ?? probeR2PipelineKpis;
   const resolveGitSha = input.resolveGitSha ?? defaultGitSha;
+  const probeTimeoutMs =
+    input.gsliveHealthTimeoutMs ?? GSLIVE_HEALTH_PROBE_TIMEOUT_MS;
 
   const f402Core = probeF402Auth(nowMs, readSession);
-  const [gsliveHealth, hasF402Mint, kpis] = await Promise.all([
-    input.readGsliveHealth === undefined
-      ? Promise.resolve(null)
-      : input.readGsliveHealth().catch(() => null),
+  const [gsliveProbe, hasF402Mint, kpis] = await Promise.all([
+    probeGsliveBounded(input.readGsliveHealth, probeTimeoutMs),
     input.hasF402MintCredentials === undefined
       ? defaultHasF402MintCredentials()
       : input.hasF402MintCredentials(),
@@ -498,8 +554,14 @@ export async function buildDeskEnhancedHealth(
       : readDefaultR2PipelineKpis(now)
     ).catch(() => ({}) as R2PipelineKpis),
   ]);
-  const gsliveCore: GsliveAuthCore =
-    gsliveHealth === null
+  const gsliveHealth = gsliveProbe.health;
+  const gsliveCore: GsliveAuthCore = gsliveProbe.timedOut
+    ? {
+        status: "degraded",
+        source: "timeout",
+        probeStatus: null,
+      }
+    : gsliveHealth === null
       ? {
           status: "unconfigured",
           source: "none",
@@ -565,7 +627,9 @@ export async function buildDeskEnhancedHealth(
   } else if (gslive.status === "degraded") {
     pushDegradedReason(
       degradedReasons,
-      `GSLive session probe: ${gsliveHealth?.probe.status ?? "degraded"} (Cloudflare blocks auto-mint)`,
+      gsliveProbe.timedOut
+        ? `GSLive session probe timed out after ${probeTimeoutMs}ms (Keychain or upstream blocked)`
+        : `GSLive session probe: ${gsliveHealth?.probe.status ?? "degraded"} (Cloudflare blocks auto-mint)`,
       "auth",
       { action: gslive.remediation ?? GSLIVE_MANUAL_DUAL_AUTH_ACTION },
     );

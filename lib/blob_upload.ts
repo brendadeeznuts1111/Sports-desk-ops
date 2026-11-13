@@ -8,6 +8,7 @@
 import { z } from "zod";
 
 import { R2_SECRETS_SERVICE } from "./r2_s3_client.ts";
+import { getSecretBounded } from "./secrets.ts";
 
 export const DEFAULT_BLOB_GATEWAY_URL = "http://127.0.0.1:4021";
 const IMAGE_CONTENT_TYPES = [
@@ -55,12 +56,13 @@ export async function resolveBlobApiToken(
   const configured = env.BLOB_API_TOKEN?.trim();
   if (configured !== undefined && configured !== "") return configured;
   try {
-    const stored = await Bun.secrets.get({
+    const stored = await getSecretBounded(Bun.secrets, {
       service: R2_SECRETS_SERVICE,
       name: "BLOB_API_TOKEN",
     });
     return stored?.trim() ?? "";
   } catch {
+    // Locked or timed-out keychain falls back to empty token.
     return "";
   }
 }

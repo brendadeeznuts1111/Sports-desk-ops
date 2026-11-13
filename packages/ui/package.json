@@ -11,6 +11,7 @@
     "./ShadowPricingPanel": "./src/ShadowPricingPanel.tsx",
     "./SliceMetricsViews": "./src/SliceMetricsViews.tsx",
     "./ansi": "./src/ansi.tsx",
+    "./hydration": "./src/hydration.ts",
     "./panels": "./src/panels/index.tsx",
     "./shadow-pricing": "./src/shadow_pricing/index.tsx",
     "./runtime-flags": "./src/runtime_flags.ts",

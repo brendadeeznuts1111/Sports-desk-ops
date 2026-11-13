@@ -24,6 +24,8 @@ import {
 } from "../scripts/capture/f402_login.ts";
 import {
   CANONICAL_SECRETS_SERVICE,
+  getSecretBounded,
+  KeychainTimeoutError,
   LEGACY_SECRETS_SERVICE,
 } from "./secrets.ts";
 
@@ -117,10 +119,12 @@ async function readKeychain(
   if (!secrets) return "";
   for (const service of KEYCHAIN_SERVICES) {
     try {
-      const value = (await secrets.get({ service, name }))?.trim() ?? "";
+      const value =
+        (await getSecretBounded(secrets, { service, name }))?.trim() ?? "";
       if (value !== "") return value;
-    } catch {
-      // Locked/unavailable keychain: fall through to the next service.
+    } catch (err) {
+      // Locked/unavailable/timed-out keychain: fail closed or fall through to the next service.
+      if (err instanceof KeychainTimeoutError) return "";
     }
   }
   return "";

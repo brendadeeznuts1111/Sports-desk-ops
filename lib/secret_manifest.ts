@@ -103,6 +103,30 @@ export const SECRET_MANIFEST: readonly SecretDefinition[] = [
     description: "Manager Tools session id; sent as the `GSID` cookie",
   },
   {
+    envName: "GS_DIFFUSION_URL",
+    keychainName: "GS_DIFFUSION_URL",
+    groups: ["gslive"],
+    inject: true,
+    description:
+      "Ganchrow Diffusion feed URL for @ganchrowsci/gs-sdk (vendor-supplied)",
+  },
+  {
+    envName: "GS_DIFFUSION_USERNAME",
+    keychainName: "GS_DIFFUSION_USERNAME",
+    groups: ["gslive"],
+    inject: true,
+    description:
+      "Ganchrow Diffusion feed username (paired with GS_DIFFUSION_PASSWORD)",
+  },
+  {
+    envName: "GS_DIFFUSION_PASSWORD",
+    keychainName: "GS_DIFFUSION_PASSWORD",
+    groups: ["gslive"],
+    inject: true,
+    description:
+      "Ganchrow Diffusion feed password; the team-name probe fails closed without it",
+  },
+  {
     envName: "SPORTSDESK_ADMIN_TOKEN",
     keychainName: "SPORTSDESK_ADMIN_TOKEN",
     groups: ["daemon"],

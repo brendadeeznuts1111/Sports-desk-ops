@@ -1,8 +1,14 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
 import "./desk.css";
 import { ShadowPricingPanel } from "./ShadowPricingPanel.tsx";
 import { styles } from "./dashboard_styles.ts";
+import {
+  normalizeCustomersCohortResponse,
+  normalizeLiveWagersResponse,
+  SHOWCASE_WAGERS_PROVENANCE,
+} from "./hydration.ts";
 import {
   AlertsTabPanel,
   BuildMatrixDrawer,
@@ -31,9 +37,11 @@ import type {
   AlertFilter,
   AlertToastState,
   BuildMatrixRow,
+  CustomersApiResponse,
   CustomerSortKey,
   DashboardAlertRecord,
   DashboardData,
+  DashboardSourceProvenance,
   DashboardTabId,
   DnsData,
   HealthData,
@@ -142,23 +150,102 @@ export function App(): React.ReactElement {
     string | null
   >(null);
 
-  // Runtime Declarative Wager Tiers (fetched dynamically from /api/config/tiers)
+  // Runtime Declarative Wager Tiers + Live API Hydration state
   const [tiersConfig, setTiersConfig] = useState<TierStyleConfig | null>(null);
+  const [liveWagers, setLiveWagers] =
+    useState<readonly LiveWager[]>(SAMPLE_LIVE_WAGERS);
+  const [wagersProvenance, setWagersProvenance] =
+    useState<DashboardSourceProvenance>(SHOWCASE_WAGERS_PROVENANCE);
+  const [wagersError, setWagersError] = useState<string | null>(null);
+  const [cohortsReport, setCohortsReport] =
+    useState<CustomersApiResponse | null>(null);
+  const [cohortsStatus, setCohortsStatus] = useState<
+    "pending" | "ready" | "unavailable"
+  >("pending");
+  const [cohortsError, setCohortsError] = useState<string | null>(null);
+
+  const fetchTiersConfig = async () => {
+    try {
+      const res = await fetch("/api/config/tiers");
+      if (!res.ok) return;
+      const cfg = (await res.json()) as { tiers?: TierStyleConfig } | null;
+      if (cfg?.tiers) {
+        setTiersConfig(cfg.tiers);
+      }
+    } catch (err) {
+      console.warn(
+        "[dashboard] failed to load /api/config/tiers, keeping defaults:",
+        err,
+      );
+    }
+  };
+
+  const fetchLiveWagers = async () => {
+    try {
+      const res = await fetch("/api/wagers");
+      if (!res.ok) {
+        setWagersError(
+          `GET /api/wagers returned HTTP ${res.status} (${res.statusText || "error"})`,
+        );
+        return;
+      }
+      const normalized = normalizeLiveWagersResponse(await res.json());
+      if (!normalized) {
+        setWagersError(
+          "GET /api/wagers returned unexpected LiveWagersApiResponse payload",
+        );
+        return;
+      }
+      setLiveWagers(normalized.wagers);
+      setWagersProvenance(normalized.provenance);
+      setWagersError(null);
+      if (normalized.wagers.length > 0) {
+        setSelectedWager((prev) =>
+          prev && normalized.wagers.some((w) => w.ticketId === prev.ticketId)
+            ? prev
+            : (normalized.wagers[0] ?? null),
+        );
+      }
+    } catch (err) {
+      setWagersError(
+        `GET /api/wagers failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
+  const fetchCustomersCohorts = async () => {
+    try {
+      const res = await fetch("/api/customers");
+      if (!res.ok) {
+        setCohortsStatus("unavailable");
+        setCohortsError(
+          `GET /api/customers returned HTTP ${res.status} (${res.statusText || "error"})`,
+        );
+        return;
+      }
+      const normalized = normalizeCustomersCohortResponse(await res.json());
+      if (!normalized) {
+        setCohortsStatus("unavailable");
+        setCohortsError(
+          "GET /api/customers returned unexpected CustomersApiResponse payload",
+        );
+        return;
+      }
+      setCohortsReport(normalized);
+      setCohortsStatus("ready");
+      setCohortsError(null);
+    } catch (err) {
+      setCohortsStatus("unavailable");
+      setCohortsError(
+        `GET /api/customers failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/config/tiers")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((cfg: { tiers?: TierStyleConfig } | null) => {
-        if (cfg?.tiers) {
-          setTiersConfig(cfg.tiers);
-        }
-      })
-      .catch((err) => {
-        console.warn(
-          "[dashboard] failed to load /api/config/tiers, keeping defaults:",
-          err,
-        );
-      });
+    void fetchTiersConfig();
+    void fetchLiveWagers();
+    void fetchCustomersCohorts();
   }, []);
 
   // UI enhancement states: banner dismissal & collapsible KPI cards
@@ -634,6 +721,21 @@ export function App(): React.ReactElement {
     ws.onopen = () => {
       if (isMounted) {
         setConnected(true);
+        try {
+          ws.send(
+            JSON.stringify({
+              action: "subscribe",
+              topics: [
+                "dashboard",
+                "live-bets",
+                "syndicate-alerts",
+                "tiers-updated",
+              ],
+            }),
+          );
+        } catch {
+          // signal-honesty: intentional-ignore-ws-subscribe-on-closing
+        }
       } else {
         ws.close();
       }
@@ -642,11 +744,35 @@ export function App(): React.ReactElement {
       if (isMounted) setConnected(false);
     };
     ws.onmessage = (event) => {
-      if (
-        isMounted &&
-        (event.data === "reload" || event.data === "dashboard-updated")
-      ) {
-        void fetchDashboard();
+      if (!isMounted || typeof event.data !== "string") return;
+      const action = parseDashboardWsSignal(event.data);
+      switch (action.kind) {
+        case "reload":
+          void fetchDashboard();
+          void fetchLiveWagers();
+          void fetchCustomersCohorts();
+          void fetchTiersConfig();
+          break;
+        case "dashboard-updated":
+          void fetchDashboard();
+          break;
+        case "wagers-updated":
+          void fetchLiveWagers();
+          break;
+        case "tiers-updated":
+          if (action.tiers) {
+            setTiersConfig(action.tiers as unknown as TierStyleConfig);
+          } else {
+            void fetchTiersConfig();
+          }
+          break;
+        case "alerts-updated":
+          fetchAlerts();
+          fetchHealth();
+          break;
+        case "ack":
+        case "ignore":
+          break;
       }
     };
 
@@ -914,7 +1040,7 @@ export function App(): React.ReactElement {
             onClick={() => setActiveTab("wagers")}
             title="Real-time incoming wager tape with CLV alerts (Ctrl+5)"
           >
-            ⚡ Live Wagers ({SAMPLE_LIVE_WAGERS.length})
+            ⚡ Live Wagers ({liveWagers.length})
             <span
               className="live-alert-pulse"
               style={{
@@ -929,7 +1055,7 @@ export function App(): React.ReactElement {
             >
               🚨{" "}
               {
-                SAMPLE_LIVE_WAGERS.filter(
+                liveWagers.filter(
                   (w) => w.alertTier === "CRITICAL" || w.alertTier === "STEAM",
                 ).length
               }
@@ -996,6 +1122,9 @@ export function App(): React.ReactElement {
                 localStorage.setItem("kpisCollapsed", next ? "1" : "0");
               } catch {}
             }}
+            cohortsReport={cohortsReport}
+            cohortsStatus={cohortsStatus}
+            cohortsError={cohortsError}
             searchQuery={searchQuery}
             onSearchQueryChange={setSearchQuery}
             filterTier={filterTier}
@@ -1129,6 +1258,12 @@ export function App(): React.ReactElement {
           />
         ) : (
           <LiveWagersTabPanel
+            wagers={liveWagers}
+            provenance={wagersProvenance}
+            wagersError={wagersError}
+            onRefreshWagers={() => {
+              void fetchLiveWagers();
+            }}
             wagerSearch={wagerSearch}
             onWagerSearchChange={setWagerSearch}
             wagerSportFilter={wagerSportFilter}

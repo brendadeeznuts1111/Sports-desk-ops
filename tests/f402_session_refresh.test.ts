@@ -14,7 +14,9 @@ import {
   DEFAULT_REFRESH_GRACE_MS,
   DEFAULT_REFRESH_TTL_MINUTES,
   REFRESH_EXIT,
+  buildMintCommand,
   decideRefresh,
+  hasEnvLoginCredentials,
   journalLine,
   type RefreshOutcome,
 } from "../lib/f402_session_refresh.ts";
@@ -194,5 +196,57 @@ describe("constants", () => {
     ]);
     expect(codes.size).toBe(3);
     expect(REFRESH_EXIT.ok).toBe(0);
+  });
+});
+
+describe("buildMintCommand", () => {
+  test("uses execPath, --no-orphans, --no-env-file, and direct session_login.ts path", () => {
+    const cmd = buildMintCommand(1440, {
+      execPath: "/Users/operator/.bun/bin/bun",
+      loginScriptPath: "/repo/scripts/session_login.ts",
+    });
+    expect(cmd).toEqual([
+      "/Users/operator/.bun/bin/bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "/repo/scripts/session_login.ts",
+      "--from-keychain",
+      "--ttl-min",
+      "1440",
+    ]);
+  });
+
+  test("omits --from-keychain when fromKeychain is false (op run env credentials present)", () => {
+    const cmd = buildMintCommand(1440, {
+      execPath: "/Users/operator/.bun/bin/bun",
+      loginScriptPath: "/repo/scripts/session_login.ts",
+      fromKeychain: false,
+    });
+    expect(cmd).toEqual([
+      "/Users/operator/.bun/bin/bun",
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "/repo/scripts/session_login.ts",
+      "--ttl-min",
+      "1440",
+    ]);
+  });
+});
+
+describe("hasEnvLoginCredentials", () => {
+  test("returns true only when both F402_AGENT_ID and F402_PASSWORD are non-blank", () => {
+    expect(
+      hasEnvLoginCredentials({
+        F402_AGENT_ID: "AGENT1",
+        F402_PASSWORD: "secret",
+      }),
+    ).toBe(true);
+    expect(
+      hasEnvLoginCredentials({ F402_AGENT_ID: "AGENT1", F402_PASSWORD: "   " }),
+    ).toBe(false);
+    expect(hasEnvLoginCredentials({ F402_AGENT_ID: "AGENT1" })).toBe(false);
+    expect(hasEnvLoginCredentials({})).toBe(false);
   });
 });

@@ -1,4 +1,21 @@
-import type { WagerTier } from "@sportsdesk-ops/contracts/wager-tokens";
+import type {
+  CustomersApiResponse,
+  CustomersCohortsSummary,
+  DashboardFeedProvenanceKind,
+  DashboardSourceProvenance,
+  DashboardWsTopic,
+  LiveWagersApiResponse,
+  WagerTier,
+} from "@sportsdesk-ops/contracts";
+
+export type {
+  CustomersApiResponse,
+  CustomersCohortsSummary,
+  DashboardFeedProvenanceKind,
+  DashboardSourceProvenance,
+  DashboardWsTopic,
+  LiveWagersApiResponse,
+};
 
 export interface DashboardData {
   readonly markdown: string;
@@ -98,8 +115,8 @@ export interface LiveWager {
   readonly customerId: string;
   readonly agentId: string;
   readonly masterAgent: string;
-  readonly sport: "NFL" | "CFB" | "NBA" | "NCAAB" | "SOCCER";
-  readonly betType: "Spread" | "Total" | "Moneyline" | "Parlay";
+  readonly sport: string;
+  readonly betType: string;
   readonly event: string;
   readonly selection: string;
   readonly lineDisplay: string;

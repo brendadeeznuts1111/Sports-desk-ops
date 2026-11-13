@@ -73,6 +73,7 @@ export async function readRebetLedger(root: string): Promise<{
         parsed.schemaVersion === 1 &&
         typeof parsed.dedupeKey === "string" &&
         ((parsed.kind !== "decision" &&
+          parsed.opportunity !== null &&
           typeof parsed.opportunity === "object") ||
           (parsed.kind === "decision" &&
             typeof parsed.opportunityId === "string" &&

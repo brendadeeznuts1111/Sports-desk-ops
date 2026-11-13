@@ -77,6 +77,8 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(refresh?.scheduleTime).toBe("*/5 * * * *");
     expect(refresh?.tz).toBe("America/Chicago");
     expect(refresh?.shellJob?.args).toEqual([
+      "--no-orphans",
+      "--no-env-file",
       "run",
       "scripts/f402_session_refresh.ts",
     ]);
@@ -92,8 +94,10 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(sentinel?.scheduleTime).toBe("0 8 * * *");
     expect(sentinel?.tz).toBe("America/Chicago");
     expect(sentinel?.shellJob?.args).toEqual([
+      "--no-orphans",
+      "--no-env-file",
       "run",
-      "weblog:sentinel",
+      "workers/weblog_sentinel.ts",
       "--once",
     ]);
     expect(sentinel?.shellJob?.requires).toEqual(["TELEGRAM_BOT_TOKEN"]);
@@ -108,7 +112,12 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(def?.scheduleTime).toBe("11 * * * *");
     expect(def?.tz).toBe("America/Chicago");
     expect(def?.shellJob?.bin).toBe("bun");
-    expect(def?.shellJob?.args).toEqual(["run", "build:agent-tree"]);
+    expect(def?.shellJob?.args).toEqual([
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/build_agent_tree.ts",
+    ]);
     expect(def?.shellJob?.requires).toEqual(["F402_BEARER_TOKEN"]);
     expect(def?.enabled).toBe(true);
   });
@@ -121,7 +130,12 @@ describe("SHELL_CAPTURE schedule definitions", () => {
     expect(def?.reportType).toBe("SHELL_CAPTURE");
     expect(def?.scheduleTime).toBe("27 */6 * * *");
     expect(def?.tz).toBe("America/Chicago");
-    expect(def?.shellJob?.args).toEqual(["run", "customers:profiles"]);
+    expect(def?.shellJob?.args).toEqual([
+      "--no-orphans",
+      "--no-env-file",
+      "run",
+      "scripts/build_customer_profiles.ts",
+    ]);
     expect(def?.shellJob?.requires).toEqual([
       "file:enriched_customers_full.json",
     ]);
@@ -159,8 +173,13 @@ describe("shell capture dispatch", () => {
     await fireSchedule(scheduler, "sched_agent_tree_hourly", injected);
     await fireSchedule(scheduler, "sched_customer_profiles_6h", injected);
     expect(calls.map((c) => c.args)).toEqual([
-      ["run", "build:agent-tree"],
-      ["run", "customers:profiles"],
+      ["--no-orphans", "--no-env-file", "run", "scripts/build_agent_tree.ts"],
+      [
+        "--no-orphans",
+        "--no-env-file",
+        "run",
+        "scripts/build_customer_profiles.ts",
+      ],
     ]);
   });
 
@@ -232,6 +251,21 @@ describe("shell capture dispatch", () => {
   test("a satisfied gate spawns the CLI and the ok exit is reported", async () => {
     const outcome = await runShellCaptureDefault(
       { bin: "bun", args: ["-e", "process.exit(0)"] },
+      quietLogger(),
+    );
+    expect(outcome.status).toBe("ok");
+    if (outcome.status === "ok") expect(outcome.exitCode).toBe(0);
+  });
+
+  test("bun specs receive --no-env-file automatically before child args", async () => {
+    const outcome = await runShellCaptureDefault(
+      {
+        bin: "bun",
+        args: [
+          "-e",
+          "if (!process.execArgv.includes('--no-env-file')) process.exit(9); process.exit(0);",
+        ],
+      },
       quietLogger(),
     );
     expect(outcome.status).toBe("ok");

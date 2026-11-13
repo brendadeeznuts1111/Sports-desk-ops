@@ -16,6 +16,7 @@ import {
   patternProvability,
 } from "../lib/fantasy402_wager_universe_scope.ts";
 import { auditRunAt, auditRunId } from "../lib/audit_run_id.ts";
+import { sha256CanonicalJson } from "../lib/schema_binary.ts";
 
 describe("fantasy402_settlement_ingest", () => {
   test("future-game settled row uses SettlementDateTime as valid_time", () => {
@@ -109,11 +110,17 @@ describe("fantasy402_settlement_ingest", () => {
       runId: auditRunId("a"),
       runAt: auditRunAt("2026-10-21T08:00:00.000Z"),
     });
+    // `payload_sha256` is a projection of `raw`, so a conflicting capture must carry the
+    // digest of its own bytes. A fabricated hex value would exercise the brand boundary
+    // instead of the drift invariant — and inviting production to launder it.
+    const mutatedRaw = { ...base.raw, Amount: 2 };
+    const mutatedDigest = sha256CanonicalJson(mutatedRaw);
+    expect(mutatedDigest).not.toBe(base.payloadSha256);
     store.insertObservation({
       observation: {
         ...base,
-        raw: { ...base.raw, Amount: 2 },
-        payloadSha256: "deadbeef",
+        raw: mutatedRaw,
+        payloadSha256: mutatedDigest,
       },
       runId: auditRunId("b"),
       runAt: auditRunAt("2026-10-21T09:00:00.000Z"),

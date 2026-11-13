@@ -82,6 +82,9 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
       }),
     );
     expect(html).toContain(`Profiled Bettors (${SAMPLE_PROFILE_DATA.length})`);
+    expect(html).toContain("Pending…");
+    expect(html).not.toContain("49 Accounts");
+    expect(html).not.toContain("4,914 IDs");
     expect(html).toContain("Decomposed Sharpness Radars");
     expect(html).toContain("Golden Punter Syndicate Seat 1");
     expect(html).toContain("Datacenter check clean");

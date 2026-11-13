@@ -194,4 +194,31 @@ describe("buildDeskEnhancedHealth", () => {
       ),
     ).toBe(true);
   });
+
+  test("bounds a hanging GSLive health probe and marks auth degraded with timeout", async () => {
+    const payload = await buildDeskEnhancedHealth({
+      port: 4020,
+      hostname: "127.0.0.1",
+      url: "http://127.0.0.1:4020/",
+      runtime: "Bun",
+      ingress: {},
+      nodeEnv: "test",
+      uptimeSeconds: 1,
+      gsliveHealthTimeoutMs: 25,
+      readF402: () => ({
+        cookieHeader: "x",
+        cookieNames: ["a"],
+        obtainedAtIso: "2026-11-09T00:00:00.000Z",
+        expiresAtIso: "2026-11-10T00:00:00.000Z",
+      }),
+      readGsliveHealth: () => new Promise(() => {}),
+      hasF402MintCredentials: async () => false,
+      probeR2: async () => ({}),
+    });
+    expect(payload.checks.auth.gslive.status).toBe("degraded");
+    expect(payload.checks.auth.gslive.source).toBe("timeout");
+    expect(
+      payload.degradedReasons.some((r) => r.message.includes("timed out")),
+    ).toBe(true);
+  });
 });
