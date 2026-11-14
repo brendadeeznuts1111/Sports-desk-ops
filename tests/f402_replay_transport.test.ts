@@ -99,4 +99,110 @@ describe("createF402ReplayTransport", () => {
     expect(cookieReads).toBe(3);
     await transport.close();
   });
+
+  test("attaches the Bearer token when the caller omitted Authorization", async () => {
+    let authorization: string | null = null;
+    const transport = await createF402ReplayTransport({
+      env: { ...baseEnv },
+      readSession: () => ({
+        cookieHeader: "session=test",
+        cookieNames: ["session"],
+        authorizationHeader: "Bearer jwt-value",
+        agentId: "BILLY666",
+        agentOwner: "BILLY666",
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+      fetchImpl: async (_url, init) => {
+        authorization = new Headers(init.headers).get("authorization");
+        return new Response("ok", { status: 200 });
+      },
+    });
+    await transport.fetch("https://f402.example/x", {});
+    expect(authorization).toBe("Bearer jwt-value");
+    await transport.close();
+  });
+
+  test("does not overwrite a caller-supplied Authorization header", async () => {
+    let authorization: string | null = null;
+    const transport = await createF402ReplayTransport({
+      env: { ...baseEnv },
+      readSession: () => ({
+        cookieHeader: "session=test",
+        cookieNames: ["session"],
+        authorizationHeader: "Bearer from-session",
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+      fetchImpl: async (_url, init) => {
+        authorization = new Headers(init.headers).get("authorization");
+        return new Response("ok", { status: 200 });
+      },
+    });
+    await transport.fetch("https://f402.example/x", {
+      headers: { authorization: "Bearer from-caller" },
+    });
+    expect(authorization).toBe("Bearer from-caller");
+    await transport.close();
+  });
+
+  test("injects agentID and agentOwner into a form body when missing", async () => {
+    let body = "";
+    const transport = await createF402ReplayTransport({
+      env: { ...baseEnv },
+      readSession: () => ({
+        cookieHeader: "session=test",
+        cookieNames: ["session"],
+        authorizationHeader: "Bearer jwt-value",
+        agentId: "BILLY666",
+        agentOwner: "BILLY666",
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+      fetchImpl: async (_url, init) => {
+        body = String(init.body ?? "");
+        return new Response("ok", { status: 200 });
+      },
+    });
+    await transport.fetch(
+      "https://f402.example/cloud/api/Manager/getBetTicker",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        },
+        body: "RRO=0&operation=getBetTicker&wagerNumber=0",
+      },
+    );
+    expect(body).toContain("agentID=BILLY666");
+    expect(body).toContain("agentOwner=BILLY666");
+    expect(body).toContain("operation=getBetTicker");
+    await transport.close();
+  });
+
+  test("leaves existing agentID/agentOwner values in place", async () => {
+    let body = "";
+    const transport = await createF402ReplayTransport({
+      env: { ...baseEnv },
+      readSession: () => ({
+        cookieHeader: "session=test",
+        cookieNames: ["session"],
+        agentId: "FROMSESSION",
+        obtainedAtIso: new Date().toISOString(),
+        expiresAtIso: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+      fetchImpl: async (_url, init) => {
+        body = String(init.body ?? "");
+        return new Response("ok", { status: 200 });
+      },
+    });
+    await transport.fetch("https://f402.example/x", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "operation=getBetTicker&agentID=FROMCALLER&agentOwner=FROMCALLER",
+    });
+    expect(body).toContain("agentID=FROMCALLER");
+    expect(body).not.toContain("FROMSESSION");
+    await transport.close();
+  });
 });

@@ -11,6 +11,7 @@ import {
   readF402Session,
   refreshF402Session,
   writeF402Session,
+  type F402Session,
 } from "./f402_session.ts";
 
 export const DEPRECATED_F402_COOKIE_ENV = "F402_COOKIE";
@@ -48,6 +49,97 @@ export interface F402ReplayTransportOptions {
   /** Test seam: replace 401 re-mint (default: `refreshF402Session` + `writeF402Session`). */
   readonly refreshSession?: () => Promise<void>;
   readonly readSession?: () => ReturnType<typeof readF402Session>;
+}
+
+function injectAgentFields(
+  body: RequestInit["body"],
+  headers: Headers,
+  session: F402Session,
+): RequestInit["body"] {
+  const agentId = session.agentId?.trim();
+  if (
+    agentId === undefined ||
+    agentId === "" ||
+    body === undefined ||
+    body === null
+  ) {
+    return body;
+  }
+  const agentOwner = session.agentOwner?.trim() || agentId;
+  const contentType = headers.get("content-type") ?? "";
+
+  if (body instanceof URLSearchParams) {
+    const params = new URLSearchParams(body);
+    if (!params.has("agentID")) params.set("agentID", agentId);
+    if (!params.has("agentOwner")) params.set("agentOwner", agentOwner);
+    return params;
+  }
+
+  if (typeof body === "string") {
+    if (
+      contentType.includes("application/json") ||
+      body.trimStart().startsWith("{")
+    ) {
+      try {
+        const parsed: unknown = JSON.parse(body);
+        if (
+          parsed !== null &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed)
+        ) {
+          const record = parsed as Record<string, unknown>;
+          if (record["agentID"] === undefined) record["agentID"] = agentId;
+          if (record["agentOwner"] === undefined)
+            record["agentOwner"] = agentOwner;
+          return JSON.stringify(record);
+        }
+      } catch {
+        return body;
+      }
+      return body;
+    }
+    if (
+      contentType.includes("application/x-www-form-urlencoded") ||
+      contentType === "" ||
+      body.includes("=")
+    ) {
+      const params = new URLSearchParams(body);
+      if (!params.has("agentID")) params.set("agentID", agentId);
+      if (!params.has("agentOwner")) params.set("agentOwner", agentOwner);
+      return params.toString();
+    }
+  }
+
+  return body;
+}
+
+/**
+ * Attach the session Bearer token and inject agentID/agentOwner into the
+ * request body when the caller omitted them. Never logs header or body values.
+ */
+export function applyF402ReplaySession(
+  init: RequestInit,
+  session: F402Session | null,
+  deprecatedCookie = "",
+): RequestInit {
+  const headers = new Headers(init.headers);
+  let body = init.body;
+  if (session !== null) {
+    if (!headers.has("cookie") && session.cookieHeader.trim() !== "") {
+      headers.set("cookie", session.cookieHeader);
+    }
+    if (
+      !headers.has("authorization") &&
+      session.authorizationHeader !== undefined &&
+      session.authorizationHeader.length > 0
+    ) {
+      headers.set("authorization", session.authorizationHeader);
+    }
+    body = injectAgentFields(body, headers, session);
+  } else if (!headers.has("cookie") && deprecatedCookie !== "") {
+    headers.set("cookie", deprecatedCookie);
+  }
+  return { ...init, headers, body };
 }
 
 export async function createF402ReplayTransport(
@@ -92,16 +184,10 @@ export async function createF402ReplayTransport(
     ((url: string, init: RequestInit) => bunSession.fetch(url, init));
 
   async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
-    const headers = new Headers(init.headers);
-    if (!headers.has("cookie")) {
-      const session = readSession();
-      if (session !== null) {
-        headers.set("cookie", session.cookieHeader);
-      } else if (deprecatedCookie !== "") {
-        headers.set("cookie", deprecatedCookie);
-      }
-    }
-    return wireFetch(url, { ...init, headers });
+    return wireFetch(
+      url,
+      applyF402ReplaySession(init, readSession(), deprecatedCookie),
+    );
   }
 
   async function remintAfterUnauthorized(): Promise<void> {

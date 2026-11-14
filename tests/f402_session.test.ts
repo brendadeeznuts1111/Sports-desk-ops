@@ -104,6 +104,25 @@ describe("F402 session cache", () => {
     expect(described).not.toContain("SECRET");
   });
 
+  test("describeF402Session never prints the bearer token or agent id", () => {
+    const session = sessionFromAuth(
+      {
+        cookieHeader: "session=SECRET",
+        cookieNames: ["session"],
+        authorizationHeader: "Bearer super-secret-jwt",
+        agentId: "HIDDENAGENT",
+        agentOwner: "HIDDENAGENT",
+      },
+      { now: Date.parse("2026-10-31T18:00:00.000Z"), ttlMinutes: 15 },
+    );
+    const described = describeF402Session(session);
+    expect(described).toContain("bearer=yes");
+    expect(described).toContain("agentId=yes");
+    expect(described).not.toContain("super-secret-jwt");
+    expect(described).not.toContain("HIDDENAGENT");
+    expect(described).not.toContain("SECRET");
+  });
+
   test("live login stays disabled without F402_LIVE_LOGIN=1", async () => {
     await expect(refreshF402Session({ env: {} })).rejects.toThrow(
       /F402_LIVE_LOGIN=1/,

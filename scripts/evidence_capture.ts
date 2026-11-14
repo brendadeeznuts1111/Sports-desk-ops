@@ -30,6 +30,14 @@ import {
 } from "./capture/allowlist.ts";
 import { cookieHandoffForHost } from "./capture/cookies.ts";
 import { submitLoginForm } from "./capture/f402_login.ts";
+import {
+  F402LoginError,
+  F402_PORTAL_SESSION_EXPRESSION,
+  classifyF402LoginSnapshot,
+  isLoginApiUrl,
+  portalAuthFromStorageEvaluate,
+  type F402LoginPageSnapshot,
+} from "../lib/f402_login_outcome.ts";
 import { isPlainObject, sha256Hex } from "./capture/json.ts";
 import {
   assertFixtureOperations,
@@ -266,14 +274,18 @@ export interface LiveAuthConfig {
 }
 
 export interface LiveAuthSession {
-  /** Raw Cookie header value — memory only, never logged or persisted. */
+  /** Raw Cookie header value — memory only, never logged. */
   cookieHeader: string;
   cookieNames: readonly string[];
   /**
-   * Portal-issued `Authorization: Bearer <jwt>` value (fantasy402 manager API).
-   * Memory only: never logged, persisted, or written to a capture record.
+   * Portal-issued `Authorization: Bearer <token>` value (fantasy402 manager API).
+   * Never logged or written to a capture record. The 0600 session cache may
+   * persist it outside the worktree.
    */
   authorizationHeader?: string;
+  /** From sessionStorage.MASTER_ID or customerID. Never log. */
+  agentId?: string;
+  agentOwner?: string;
   close(): Promise<void>;
 }
 
@@ -347,8 +359,10 @@ export function evaluateLiveGate(env: Env): LiveGate {
 // ---------------------------------------------------------------------------
 
 /**
- * Authenticate in a headless Chrome WebView and hand back the session Cookie
- * header. The view is always closed; only the cookie header survives in memory.
+ * Authenticate in a headless Chrome WebView and hand back the Bearer token
+ * (sessionStorage) plus any Cloudflare cookies. Dialogs are dismissed so a
+ * failed login cannot hang `evaluate` on `alert()`. Failures throw
+ * {@link F402LoginError} with a named reason.
  */
 export async function authenticateWithWebView(
   config: LiveAuthConfig,
@@ -368,6 +382,7 @@ export async function authenticateWithWebView(
     backend: "chrome",
     navigateTimeoutMs: config.timeoutMs,
   });
+  const unsubs: Array<() => void> = [];
   try {
     // fantasy402 keeps the native view URL at `about:blank` while serving its
     // SPA; allow that bootstrap state, then wait for the login form to exist
@@ -387,9 +402,39 @@ export async function authenticateWithWebView(
       `(() => document.querySelector(${escapeForExpression(config.login.submitSelector)}) !== null)()`,
     );
 
-    let probe: unknown = null;
+    let dialogMessage: string | undefined;
+    let loginHttpStatus: number | undefined;
+    try {
+      await view.cdp("Page.enable");
+      await view.cdp("Network.enable");
+      unsubs.push(
+        view.onCdpEvent(
+          "Page.javascriptDialogOpening",
+          (params: { message?: string }) => {
+            dialogMessage = String(params.message ?? "");
+            void view.cdp("Page.handleJavaScriptDialog", { accept: true });
+          },
+        ),
+      );
+      unsubs.push(
+        view.onCdpEvent(
+          "Network.responseReceived",
+          (params: { response?: { url?: string; status?: number } }) => {
+            const url = String(params.response?.url ?? "");
+            if (isLoginApiUrl(url) && params.response?.status !== undefined) {
+              loginHttpStatus = params.response.status;
+            }
+          },
+        ),
+      );
+    } catch {
+      // CDP hooks are best-effort; storage polling still fail-fasts.
+    }
+
     const attemptDeadline = Date.now() + config.timeoutMs;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    let storage: unknown = null;
+    let succeeded = false;
+    for (let attempt = 1; attempt <= 3 && !succeeded; attempt++) {
       await view.fill(config.login.userSelector, agentID);
       await view.fill(config.login.passSelector, password);
       // Submit button when the markup has one; otherwise requestSubmit() before
@@ -398,22 +443,25 @@ export async function authenticateWithWebView(
       await submitLoginForm(view, config.login, submitExists === true);
       const attemptEnd = Math.min(Date.now() + 8_000, attemptDeadline);
       for (;;) {
-        probe = await view.evaluate(config.login.authenticatedExpression);
-        const authed =
-          isPlainObject(probe) &&
-          probe["hasPasswordField"] !== true &&
-          String(probe["url"] ?? "").length > 0;
-        if (authed) break;
+        storage = await evaluateBounded(
+          view,
+          F402_PORTAL_SESSION_EXPRESSION,
+          3_000,
+        );
+        const verdict = classifyF402LoginSnapshot(
+          snapshotFromStorage(storage, dialogMessage, loginHttpStatus),
+        );
+        if (verdict.status === "failure") {
+          throw new F402LoginError(verdict.reason);
+        }
+        if (verdict.status === "success") {
+          succeeded = true;
+          break;
+        }
         if (Date.now() >= attemptEnd || Date.now() >= attemptDeadline) break;
         await Bun.sleep(250);
       }
-      if (
-        isPlainObject(probe) &&
-        probe["hasPasswordField"] !== true &&
-        String(probe["url"] ?? "").length > 0
-      ) {
-        break;
-      }
+      if (succeeded) break;
       if (Date.now() >= attemptDeadline) break;
       // The page may have reloaded to the login form; give it a moment to
       // re-render before the next fill + submit.
@@ -422,29 +470,79 @@ export async function authenticateWithWebView(
       });
       await Bun.sleep(1_000);
     }
-    if (isPlainObject(probe) && probe["hasPasswordField"] === true) {
-      throw new Error(
-        "login did not complete: password field is still present after submit",
+    if (!succeeded) {
+      throw new F402LoginError(
+        "timeout",
+        "sessionStorage token was not set after submit",
       );
     }
-    const cookies = await view.getAllCookies();
-    const handoff = cookieHandoffForHost(
-      cookies,
-      hostOf(config.baseUrl),
-      undefined,
-      undefined,
-      {
-        requestSecure: config.baseUrl.startsWith("https:"),
-      },
-    );
-    const authorizationHeader = await extractPortalAuthorization(view);
+
+    // Agent MASTER_ID is often filled after the post-login manager.html redirect.
+    const masterWaitEnd = Date.now() + 5_000;
+    while (Date.now() < masterWaitEnd) {
+      const auth = portalAuthFromStorageEvaluate(storage);
+      if (auth.agentId !== undefined && auth.agentId.length > 0) break;
+      await Bun.sleep(250);
+      storage = await evaluateBounded(
+        view,
+        F402_PORTAL_SESSION_EXPRESSION,
+        3_000,
+      );
+    }
+
+    const portalAuth = portalAuthFromStorageEvaluate(storage);
+    let authorizationHeader = portalAuth.authorizationHeader;
+    if (authorizationHeader === undefined) {
+      authorizationHeader = await extractPortalAuthorization(view);
+    }
+    const sessionAgentId = portalAuth.agentId ?? agentID;
+
+    let cookieHeader = "";
+    let cookieNames: readonly string[] = [];
+    try {
+      const cookies = await Promise.race([
+        view.getAllCookies(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("getAllCookies exceeded 8s")),
+            8_000,
+          ),
+        ),
+      ]);
+      const handoff = cookieHandoffForHost(
+        cookies,
+        hostOf(config.baseUrl),
+        undefined,
+        undefined,
+        {
+          requestSecure: config.baseUrl.startsWith("https:"),
+        },
+      );
+      cookieHeader = handoff.header;
+      cookieNames = handoff.summary.names;
+    } catch {
+      // Cookies are optional when a Bearer token is present (sessionStorage auth).
+      if (authorizationHeader === undefined) {
+        throw new F402LoginError(
+          "timeout",
+          "no bearer token in sessionStorage and no session cookies",
+        );
+      }
+    }
+    if (authorizationHeader === undefined && cookieHeader.trim() === "") {
+      throw new F402LoginError(
+        "timeout",
+        "login produced neither a bearer token nor session cookies",
+      );
+    }
     return {
-      cookieHeader: handoff.header,
-      cookieNames: handoff.summary.names,
+      cookieHeader,
+      cookieNames,
       ...(authorizationHeader === undefined ? {} : { authorizationHeader }),
+      agentId: sessionAgentId,
+      agentOwner: portalAuth.agentOwner ?? sessionAgentId,
       close: async () => {
-        // The WebView is already closed in the finally block below; cookies were
-        // extracted into memory. Nothing to release.
+        // The WebView is already closed in the finally block below.
       },
     };
   } catch (error) {
@@ -465,6 +563,7 @@ export async function authenticateWithWebView(
     }
     throw error;
   } finally {
+    for (const unsubscribe of unsubs) unsubscribe();
     await view.close();
   }
 }
@@ -475,6 +574,55 @@ export async function authenticateWithWebView(
  * The JWT lives in page storage and is attached by the page's XHR layer; read it
  * into memory only. Never logged or persisted.
  */
+
+function snapshotFromStorage(
+  storage: unknown,
+  dialogMessage: string | undefined,
+  loginHttpStatus: number | undefined,
+): F402LoginPageSnapshot {
+  const record =
+    storage !== null && typeof storage === "object" && !Array.isArray(storage)
+      ? (storage as Record<string, unknown>)
+      : {};
+  return {
+    hasPassword: record["hasPassword"] === true,
+    hasToken: record["hasToken"] === true,
+    hasCredentials: record["hasCredentials"] === true,
+    hasMasterId: record["hasMasterId"] === true,
+    hasCaptcha: record["hasCaptcha"] === true,
+    hasOtp: record["hasOtp"] === true,
+    ...(dialogMessage === undefined ? {} : { dialogMessage }),
+    ...(loginHttpStatus === undefined ? {} : { loginHttpStatus }),
+  };
+}
+
+async function evaluateBounded(
+  view: ManagedWebView,
+  expression: string,
+  timeoutMs: number,
+): Promise<unknown> {
+  try {
+    return await Promise.race([
+      view.evaluate(expression),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new F402LoginError(
+                "timeout",
+                `page evaluate exceeded ${timeoutMs}ms (possible blocking dialog)`,
+              ),
+            ),
+          timeoutMs,
+        ),
+      ),
+    ]);
+  } catch (error) {
+    if (error instanceof F402LoginError) throw error;
+    throw error;
+  }
+}
+
 async function extractPortalAuthorization(
   view: ManagedWebView,
 ): Promise<string | undefined> {

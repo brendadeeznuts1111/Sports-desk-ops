@@ -21,12 +21,20 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export interface F402Session {
-  /** Raw Cookie header value. Never log this field. */
+  /**
+   * Raw Cookie header value (Cloudflare clearance, when present). Never log.
+   * May be empty when the session is Bearer-only (portal auth lives in
+   * sessionStorage, not cookies).
+   */
   readonly cookieHeader: string;
   /** Cookie names only, safe to log. */
   readonly cookieNames: readonly string[];
   /** Portal-issued bearer token, when the login exposes one. Never log. */
   readonly authorizationHeader?: string;
+  /** From sessionStorage.MASTER_ID or customerID. Never log. */
+  readonly agentId?: string;
+  /** Usually the same as agentId; never log. */
+  readonly agentOwner?: string;
   readonly obtainedAtIso: string;
   readonly expiresAtIso: string;
 }
@@ -82,6 +90,17 @@ const AUTHORIZATION_HEADER = /^Bearer\s+\S+$/;
  * Validates one parsed session object. JSON has no typed schema, so this is the boundary: any
  * shape a fresh login could not produce is rejected instead of being repaired into a half-session.
  */
+
+function parseOptionalAgentField(
+  value: unknown,
+): string | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") return "invalid";
+  if (/[\r\n\0]/.test(value)) return "invalid";
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
 function parseF402SessionValue(
   value: unknown,
   now: number,
@@ -89,12 +108,6 @@ function parseF402SessionValue(
   if (value === null || typeof value !== "object" || Array.isArray(value))
     return null;
   const record = value as Record<string, unknown>;
-  const cookieHeader = record["cookieHeader"];
-  if (typeof cookieHeader !== "string") return null;
-  if (cookieHeader.trim() === "") return null;
-  if (!cookieHeader.includes("=")) return null;
-  // A cookie header is one header line; CR/LF here would be header injection.
-  if (/[\r\n\0]/.test(cookieHeader)) return null;
 
   const authorizationHeader = record["authorizationHeader"];
   let authorization: string | undefined;
@@ -106,8 +119,29 @@ function parseF402SessionValue(
     authorization = authorizationHeader;
   }
 
+  const cookieHeader = record["cookieHeader"];
+  if (cookieHeader === undefined) {
+    if (authorization === undefined) return null;
+  } else if (typeof cookieHeader !== "string") {
+    return null;
+  }
+  const cookie = typeof cookieHeader === "string" ? cookieHeader : "";
+  if (cookie.trim() === "") {
+    // Bearer-only sessions are valid: portal API auth is the JWT, not cookies.
+    if (authorization === undefined) return null;
+  } else {
+    if (!cookie.includes("=")) return null;
+    // A cookie header is one header line; CR/LF here would be header injection.
+    if (/[\r\n\0]/.test(cookie)) return null;
+  }
+
+  const agentId = parseOptionalAgentField(record["agentId"]);
+  if (agentId === "invalid") return null;
+  const agentOwner = parseOptionalAgentField(record["agentOwner"]);
+  if (agentOwner === "invalid") return null;
+
   const session: F402Session = {
-    cookieHeader,
+    cookieHeader: cookie,
     cookieNames: Array.isArray(record["cookieNames"])
       ? record["cookieNames"].filter(
           (name): name is string => typeof name === "string",
@@ -116,6 +150,8 @@ function parseF402SessionValue(
     ...(authorization === undefined
       ? {}
       : { authorizationHeader: authorization }),
+    ...(agentId === undefined ? {} : { agentId }),
+    ...(agentOwner === undefined ? {} : { agentOwner }),
     obtainedAtIso:
       typeof record["obtainedAtIso"] === "string"
         ? record["obtainedAtIso"]
@@ -178,17 +214,23 @@ export function sessionFromAuth(
     readonly cookieHeader: string;
     readonly cookieNames: readonly string[];
     readonly authorizationHeader?: string;
+    readonly agentId?: string;
+    readonly agentOwner?: string;
   },
   options?: { readonly ttlMinutes?: number; readonly now?: number },
 ): F402Session {
   const now = options?.now ?? Date.now();
   const ttl = (options?.ttlMinutes ?? DEFAULT_TTL_MINUTES) * 60_000;
+  const agentId = auth.agentId?.trim();
+  const agentOwner = auth.agentOwner?.trim() || agentId;
   return {
     cookieHeader: auth.cookieHeader,
     cookieNames: auth.cookieNames,
     ...(auth.authorizationHeader === undefined
       ? {}
       : { authorizationHeader: auth.authorizationHeader }),
+    ...(agentId === undefined || agentId === "" ? {} : { agentId }),
+    ...(agentOwner === undefined || agentOwner === "" ? {} : { agentOwner }),
     obtainedAtIso: new Date(now).toISOString(),
     expiresAtIso: new Date(now + ttl).toISOString(),
   };
@@ -271,8 +313,11 @@ export async function ensureF402Session(
   writeF402Session(session, { now });
 }
 
-/** One-line, secret-free description for logs. */
+/** One-line, secret-free description for logs. Never includes token or agent id values. */
 export function describeF402Session(session: F402Session | null): string {
   if (session === null) return "no cached session";
-  return `session cookies=[${session.cookieNames.join(",")}] expires=${session.expiresAtIso}`;
+  const bearer = session.authorizationHeader !== undefined ? "yes" : "no";
+  const agent =
+    session.agentId !== undefined && session.agentId.length > 0 ? "yes" : "no";
+  return `session cookies=[${session.cookieNames.join(",")}] bearer=${bearer} agentId=${agent} expires=${session.expiresAtIso}`;
 }

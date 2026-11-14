@@ -42,6 +42,7 @@ import {
   LEGACY_SECRETS_SERVICE,
   readSecretCanonicalThenLegacy,
 } from "../lib/secrets.ts";
+import { F402LoginError } from "../lib/f402_login_outcome.ts";
 import {
   describeF402Session,
   f402SessionTtlMinutesFromEnv,
@@ -314,9 +315,12 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`session:login failed: ${message}`);
-    // The capture layer already appends the remediation to a Chrome failure; only add the
-    // structured diagnosis when it did not (other failure modes have no chrome advice to give).
-    if (!message.includes("outside the agent/harness sandbox")) {
+    // Named login outcomes (bad credentials, captcha, OTP, timeout) already
+    // identify the cause; do not attribute them to a missing Chrome binary.
+    if (
+      !(error instanceof F402LoginError) &&
+      !message.includes("outside the agent/harness sandbox")
+    ) {
       const diagnosis = await diagnoseChromeBackend({ env });
       if (!diagnosis.available) {
         console.error(`  chrome: ${diagnosis.reason}`);

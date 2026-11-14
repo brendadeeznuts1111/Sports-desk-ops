@@ -190,3 +190,50 @@ describe("writeF402Session atomicity", () => {
     expect(existsSync(`${path}.tmp`)).toBe(false);
   });
 });
+
+describe("Bearer-only and agent fields", () => {
+  test("accepts an empty cookieHeader when a Bearer token is present", () => {
+    const path = writeRaw(
+      JSON.stringify({
+        cookieHeader: "",
+        cookieNames: [],
+        authorizationHeader: "Bearer portal-jwt",
+        agentId: "MASTER1",
+        agentOwner: "MASTER1",
+        obtainedAtIso: VALID.obtainedAtIso,
+        expiresAtIso: VALID.expiresAtIso,
+      }),
+    );
+    const session = readF402Session({ path, now: NOW });
+    expect(session).not.toBeNull();
+    expect(session?.cookieHeader).toBe("");
+    expect(session?.authorizationHeader).toBe("Bearer portal-jwt");
+    expect(session?.agentId).toBe("MASTER1");
+    expect(session?.agentOwner).toBe("MASTER1");
+  });
+
+  test("still rejects an empty cookieHeader without a Bearer token", () => {
+    expect(
+      readRaw(
+        JSON.stringify({
+          cookieHeader: "",
+          cookieNames: [],
+          obtainedAtIso: VALID.obtainedAtIso,
+          expiresAtIso: VALID.expiresAtIso,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  test("rejects agent fields that are not safe header/body tokens", () => {
+    expect(
+      readRaw(
+        JSON.stringify({
+          ...VALID,
+          authorizationHeader: "Bearer portal-jwt",
+          agentId: "MASTER\r\nX",
+        }),
+      ),
+    ).toBeNull();
+  });
+});
