@@ -18,14 +18,19 @@ The control is account-level, and it is a setting, not a rewrite:
 
 With it on, web and squash-merge commits use the `…@users.noreply.github.com` address instead of the primary mailbox.
 
+**Enabled 2026-11-15.** The primary address now reports `visibility: private`, and GitHub added `342268653+bw496915-cmyk@users.noreply.github.com` to the account as a verified email. Two claims in the setting's own description, checked against this machine:
+
+- _"If you want command line Git operations to use your private email you must set your email in Git."_ Already done — `~/.gitconfig` sets exactly that noreply address, so local and web commits now resolve to the same identity.
+- _"Previously authored commits associated with a public email will remain public."_ That is the deferral argument in this document, stated by GitHub itself. Every commit written before the cutoff keeps its address; the setting is forward-only.
+
 ### Do not read the profile email as a proxy
 
-`gh api user --jq .email` returns `null` on this account, which looks like privacy and is not. It only reports the _profile_ public-email dropdown, which does not govern commit authorship — all 195 gmail web commits were written while that field was `null`. The setting has its own state, exposed per address:
+`gh api user --jq .email` returns `null` on this account — before and after enabling the setting — which reads like privacy and is not. It only reports the _profile_ public-email dropdown, which does not govern commit authorship. All 195 gmail web commits were written while that field was `null`, so it was never the signal. The setting has its own state, exposed per address:
 
 ```bash
 gh api user/emails --jq '.[] | select(.primary) | {email, visibility}'
-# {"email":"bw496915@gmail.com","visibility":"public"}  <- leak is open
-# visibility: private                                    <- setting is on
+# {"email":"bw496915@gmail.com","visibility":"public"}   <- state before 2026-11-15
+# {"email":"bw496915@gmail.com","visibility":"private"}  <- current state
 ```
 
 The authoritative check is the artifact, not the toggle: confirm the author of the next squash merge, or of any commit GitHub writes for you:
