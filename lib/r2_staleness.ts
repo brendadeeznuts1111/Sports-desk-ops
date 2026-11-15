@@ -250,6 +250,60 @@ export function formatReport(report: StalenessReport): string {
   return sections.join("\n");
 }
 
+/** Delivery outcome for the alert channel, rendered into the run summary. */
+export interface AlertDelivery {
+  readonly state: "sent" | "failed" | "not-attempted";
+  readonly detail?: string;
+}
+
+/** Table cells must not break the Markdown table. */
+function markdownCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+/** Escaped delivery line; separate so the table can be written before the POST. */
+export function formatDeliveryLine(delivery: AlertDelivery): string {
+  const suffix =
+    delivery.detail === undefined ? "" : ` — ${markdownCell(delivery.detail)}`;
+  return `**Telegram:** ${delivery.state}${suffix}\n`;
+}
+
+/**
+ * The run-page table (plain Markdown, not Telegram HTML).
+ *
+ * Written before any Telegram attempt, so a hung or failed POST cannot erase the
+ * evidence that the probe ran and what it found.
+ */
+export function formatStepSummaryTable(report: StalenessReport): string {
+  const observed = new Date(report.observedAtMs).toISOString();
+  const lines = [
+    `## R2 freshness — ${report.degradedCount} of ${report.verdicts.length} key(s) degraded`,
+    "",
+    `Observed ${observed}.`,
+    "",
+    "| Key | State | Age | SLA | Reason |",
+    "| --- | --- | --- | --- | --- |",
+  ];
+  for (const verdict of report.verdicts) {
+    const age = verdict.ageMs === null ? "—" : formatAge(verdict.ageMs);
+    lines.push(
+      `| \`${markdownCell(verdict.target.key)}\` | ${verdict.state} | ${age} | ${formatAge(verdict.target.slaMs)} | ${markdownCell(verdict.reason)} |`,
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/** Table plus delivery outcome, as one block. */
+export function formatStepSummary(
+  report: StalenessReport,
+  delivery?: AlertDelivery,
+): string {
+  const table = formatStepSummaryTable(report);
+  return delivery === undefined
+    ? table
+    : `${table}\n${formatDeliveryLine(delivery)}`;
+}
+
 /** Exit codes for the runner. 0 = all fresh, 2 = degraded, 1 = alerter itself failed. */
 export const ALERTER_EXIT = {
   allFresh: 0,
