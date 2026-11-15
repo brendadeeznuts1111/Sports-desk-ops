@@ -111,3 +111,15 @@ pages.env
 
 # Local real projection of the operator book (never commit: customer data).
 data/profile-snapshot.real.json
+
+# Supply-chain work products stay out of git: downloaded runtimes, release zips, demo signing
+# keys and signatures live under /workspace/supply-chain (or $TMPDIR). Only manifests, scripts,
+# schemas, envelopes and docs are committed. See docs/supply-chain.md.
+/toolchain/**/*.zip
+/toolchain/**/bun-*/
+/toolchain/**/*.key
+/toolchain/**/*.password
+/toolchain/**/*.sigstore.json
+/toolchain/.cache/
+/result
+/result-*

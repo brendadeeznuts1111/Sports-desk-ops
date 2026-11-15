@@ -26,6 +26,18 @@ dx_resolve_script_dir() {
 
 REPO_ROOT="$(cd -P "$(dx_resolve_script_dir "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# 0. Opt-in runtime pin (DX_VERIFY_RUNTIME=1): re-verify the bun binary's sha256 against
+# toolchain/bun.pin.json BEFORE dx links dotfiles, loads env, or runs anything. Fails closed
+# (exit 70) on mismatch or when the binary cannot be resolved. It checks the bun that `command -v`
+# resolves (what dx will exec), never a caller-supplied DX_BUN_BIN. See docs/supply-chain.md.
+dx_verified_bun=""
+if [[ "${DX_VERIFY_RUNTIME:-}" == "1" ]]; then
+  dx_verified_bun="$(DX_BUN_BIN="$(command -v bun 2>/dev/null || true)" sh "$REPO_ROOT/toolchain/verify-bun.sh" --print-path)" || {
+    echo "dx: DX_VERIFY_RUNTIME=1 and the bun runtime does not match toolchain/bun.pin.json" >&2
+    exit 70
+  }
+fi
+
 # Host home: inside the sandbox $HOME is <host home>/.gemini/users/<id>; elsewhere it is $HOME.
 HOST_HOME="${HOME%%/.gemini/users/*}"
 ORIG_XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-}"
@@ -169,6 +181,16 @@ if [[ -n "$dx_caller_bun" && -x "$dx_caller_bun" ]]; then
   dx_caller_bun_dir="$(cd -P "$(dirname "$dx_caller_bun")" && pwd)"
 fi
 export PATH="$REPO_ROOT/bin:$HOME/.local/bin:$DOTFILES_DIR/shell/bin:$HOME/.bun/bin:$HOST_HOME/.bun/bin${dx_caller_bun_dir:+:$dx_caller_bun_dir}:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+# Re-check after PATH normalization: if the bun dx will now exec resolves to a different
+# binary than the one verified in step 0, verify that one too.
+if [[ "${DX_VERIFY_RUNTIME:-}" == "1" ]]; then
+  dx_bun_now="$(DX_BUN_BIN="$(command -v bun 2>/dev/null || true)" sh "$REPO_ROOT/toolchain/verify-bun.sh" --print-path --quiet)" || {
+    echo "dx: DX_VERIFY_RUNTIME=1 and the bun on the normalized PATH does not match toolchain/bun.pin.json" >&2
+    exit 70
+  }
+  [[ "$dx_bun_now" == "$dx_verified_bun" ]] || echo "dx: runtime re-verified after PATH change: $dx_bun_now" >&2
+fi
 
 # 5. Load Cloudflare Pages credentials if present in repo or workspace.
 # Only the two Pages names are read, as data: the file is never `source`d, so a stray `R2_*` /

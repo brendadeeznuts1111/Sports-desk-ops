@@ -1,0 +1,70 @@
+{
+  "$schema": "./bun.pin.schema.json",
+  "name": "bun",
+  "version": "1.4.4",
+  "revision": "38afee6c8",
+  "tag": "bun-v1.4.4",
+  "signedChecksums": {
+    "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/SHASUMS256.txt.asc",
+    "sha256": "e7247485e1d1271ba1975983742b26c34323ffbe1de6847f2205625f91c61e99",
+    "format": "OpenPGP clearsigned (SHA512, EdDSA)",
+    "signatureCreated": "2026-10-22T21:44:49Z"
+  },
+  "signer": {
+    "fingerprint": "F3DCC08A8572C0749B3E18888EAB4D40A7B22B59",
+    "uid": "Robobun <robobun@oven.sh>",
+    "keySources": [
+      "https://keys.openpgp.org/vks/v1/by-fingerprint/F3DCC08A8572C0749B3E18888EAB4D40A7B22B59",
+      "https://github.com/oven-sh/bun/blob/main/dockerhub/debian/Dockerfile (inlined key block)"
+    ],
+    "keyFile": "toolchain/keys/bun-release-signing.asc"
+  },
+  "platforms": {
+    "linux-x64": {
+      "asset": "bun-linux-x64.zip",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip",
+      "zipSha256": "bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c",
+      "binaryPath": "bun-linux-x64/bun",
+      "binarySha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "linux-x64-baseline": {
+      "asset": "bun-linux-x64-baseline.zip",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64-baseline.zip",
+      "zipSha256": "e0446eb55995772eb9894bebae9a6be368d985a8b9271ee124486f9946eedd76",
+      "binaryPath": "bun-linux-x64-baseline/bun",
+      "binarySha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "linux-aarch64": {
+      "asset": "bun-linux-aarch64.zip",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-aarch64.zip",
+      "zipSha256": "baa6bb36f51d6e58561e02bbea825038a9df454f673d6d776e8bbf86f8c7850e",
+      "binaryPath": "bun-linux-aarch64/bun",
+      "binarySha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "darwin-aarch64": {
+      "asset": "bun-darwin-aarch64.zip",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-aarch64.zip",
+      "zipSha256": "c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510",
+      "binaryPath": "bun-darwin-aarch64/bun",
+      "binarySha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "darwin-x64": {
+      "asset": "bun-darwin-x64.zip",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-x64.zip",
+      "zipSha256": "50a3491f73abc2fe81673171a85762d3bc2cc1680ccecadd983de99adf77977e",
+      "binaryPath": "bun-darwin-x64/bun",
+      "binarySha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "npmMirror": {
+    "linux-x64": {
+      "package": "@oven/bun-linux-x64@1.4.4",
+      "tarball": "https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-1.4.4.tgz",
+      "integrity": "sha512-CHbbkmHVM28T1GFq+6GL4Ao4ujwwYwj1CxFFwEFzLanPfNsId9AhbIP0Q4reWuWBkGimUkoQygrK7Rgjtj3vog==",
+      "binaryPath": "package/bin/bun",
+      "binarySha256": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+    }
+  },
+  "verifiedAt": "2026-11-15",
+  "verifiedBy": "toolchain/fetch-and-verify-bun.sh"
+}
