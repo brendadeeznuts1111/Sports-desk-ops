@@ -1,0 +1,5 @@
+# Bun lockfiles. The text rule is declared first by policy; the binary rule must keep the
+# `binary` attribute and name `diff=lockb` after it. Order is enforced by
+# scripts/verify_ci_gates.ts (`gitattributes/order`).
+bun.lock text eol=lf linguist-generated=true
+*.lockb binary diff=lockb linguist-generated=true

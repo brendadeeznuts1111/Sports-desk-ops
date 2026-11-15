@@ -626,13 +626,17 @@ export {
 // ============================================================================
 
 export type SignalChannelCode =
+  | "NON_SPORTS"
   | "Internet"
   | "BLOCKED"
   | "GATEWAY"
   | "ALERT"
   | "GSBUILDER"
   | "GSLIVE"
-  | "CSLEVEL2";
+  | "CSLEVEL2"
+  | "LIVEBETTINGCWS"
+  | "PHONE"
+  | "HOUSE";
 
 export type SignalChannelStatus =
   "ACTIVE" | "DROPPED" | "ALERT" | "STEERABLE" | "CRITICAL" | "SUPPRESSED";
@@ -655,6 +659,23 @@ export type MitigationActionKind =
   | "CIRCUIT_BREAKER_HALT"
   | "MANAGER_LIMIT_CLAMP";
 
+export const TOKEN_GATES = {
+  minBodyContrastRatioMilli: 4500,
+  minAaaSlateContrastMilli: 7000,
+  minUiComponentContrastMilli: 3000,
+  minCrossStateDeltaE00Milli: 7000,
+  minFreshVsStaleDeltaE00Milli: 40000,
+} as const;
+
+export const SOURCE_BRIDGE_IDS = {
+  INGEST_STAGE1_DROP: 0,
+  FANTASY_402_BRIDGE_3AB: 1,
+  PARTNER_118_BRIDGE_3C: 2,
+} as const;
+
+export type SourceBridgeId2 =
+  (typeof SOURCE_BRIDGE_IDS)[keyof typeof SOURCE_BRIDGE_IDS];
+
 /**
  * Axis 1 Transport SLA Discriminated Union.
  * Eliminates synthetic "0 ms" latency sentinels: sentinel drops represent an un-executed filtering policy.
@@ -665,13 +686,13 @@ export type TransportSla =
 
 /**
  * Axis 2 Algorithmic Threshold Discriminated Union.
- * Completely eliminates polymorphic string typing across consensus lag, shrinkage, depth, and risk gates.
+ * Zero unbranded IEEE-754 floats: shrinkage thresholds use branded integer BasisPoints.
  */
 export type RouteThreshold =
   | { readonly kind: "consensus_lag"; readonly maxLagMs: number }
   | {
       readonly kind: "bayes_shrinkage";
-      readonly tauStar: number;
+      readonly tauStarBasisPoints: BasisPoints;
       readonly minTickets: number;
     }
   | { readonly kind: "liquidity_depth"; readonly minDepthCents: Cents }
@@ -683,25 +704,33 @@ export type RouteThreshold =
     };
 
 /**
- * Axis 1: Ingestion Signal Channels (Layers 18–24).
+ * Axis 1: Ingestion Signal Channels (Layers 17-24D).
  */
 export interface IngestionChannelDefinition {
-  readonly layerId: `L${number}.N${string}`;
+  readonly channelId: number;
+  readonly sourceBridgeId: SourceBridgeId2;
+  readonly canonicalProvenance: string;
+  readonly layerId: `L${string}.N${string}`;
   readonly tokenName: string;
+  readonly legacyTokenName?: `--sd-${string}`;
   readonly hex: string;
+  readonly legacyWireHex?: string;
   readonly channelCode: SignalChannelCode;
+  readonly wireAliases: readonly string[];
   readonly signalTier: string;
   readonly transportUri: string;
   readonly sla: TransportSla;
+  readonly slaTensOfMs: number;
   readonly channelStatus: SignalChannelStatus;
   readonly volumeRule: string;
   readonly operationalRole: string;
 }
 
 /**
- * Axis 2: Risk Decision & Route Continuum (Layers 25–28).
+ * Axis 2: Risk Decision & Route Continuum (Layers 25-28).
  */
 export interface RouteCircuitDefinition {
+  readonly routeId: number;
   readonly layerId: `L${number}.N${string}`;
   readonly tokenName: string;
   readonly hex: string;
@@ -731,96 +760,207 @@ export type AnyQwenNeuronDefinition =
   IngestionChannelDefinition | RouteCircuitDefinition | SurfaceDefinition;
 
 /**
- * Ingestion Signal Channels (Layers 18-24).
+ * Ingestion Signal Channels (Layers 17-24D).
  * Generated directly from tokens.toml.
  */
 export const INGESTION_CHANNELS: readonly IngestionChannelDefinition[] = [
   {
+    channelId: 0,
+    sourceBridgeId: 0,
+    canonicalProvenance: "INGEST_NON_SPORTS_DROP",
+    layerId: "L17.N0000",
+    tokenName: "--sd-tier-drop",
+    hex: "#94a3b8",
+    channelCode: "NON_SPORTS",
+    wireAliases: ["CASINO", "VIRTUAL", "WAGER_TYPE_C", "WAGER_TYPE_A"],
+    signalTier: "SIGNAL_STAGE1_DROP",
+    transportUri: "portal://ingest/non-sports-drop",
+    sla: { kind: "sentinel_drop" },
+    slaTensOfMs: 0,
+    channelStatus: "DROPPED",
+    volumeRule: "STAGE1_DROP (canonicalVolumeCents = 0)",
+    operationalRole: "Non-Sports Casino & Virtual Stage 1 Drop",
+  },
+  {
+    channelId: 1,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_INTERNET_L18",
     layerId: "L18.N0204",
     tokenName: "--sd-tier-retail",
-    hex: "#1d84b5",
+    hex: "#29b6f6",
+    legacyWireHex: "#1d84b5",
     channelCode: "Internet",
+    wireAliases: ["Internet", "INTERNET", "MOBILE", "WAP"],
     signalTier: "SIGNAL_INTERNET",
     transportUri: "portal://ticker/live-stream",
     sla: { kind: "latency", latencySlaMs: 1500 },
+    slaTensOfMs: 150,
     channelStatus: "ACTIVE",
     volumeRule: "TARGET_TWIN (gapDurationSeconds = Internet - ALERT)",
     operationalRole: "Retail Pregame Baseline Gate",
   },
   {
+    channelId: 2,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_BLOCKED_L19",
     layerId: "L19.N0518",
     tokenName: "--sd-tier-blocked",
-    hex: "#64748b",
+    hex: "#8fa3bf",
+    legacyWireHex: "#64748b",
     channelCode: "BLOCKED",
+    wireAliases: ["BLOCKED"],
     signalTier: "SIGNAL_SENTINEL_DROP",
     transportUri: "portal://pending/noise-filter",
     sla: { kind: "sentinel_drop" },
+    slaTensOfMs: 0,
     channelStatus: "DROPPED",
-    volumeRule: "DROP_BEFORE_GROUPING (unconditionally dropped on getPending)",
+    volumeRule:
+      "DROP_BEFORE_GROUPING (index sharp intent; drop before exposure sum)",
     operationalRole: "Blocked Sentinel & Zero-Stake Filter",
   },
   {
+    channelId: 3,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_GATEWAY_L20",
     layerId: "L20.N1105",
-    tokenName: "--sd-theme-emerald",
-    hex: "#10b981",
+    tokenName: "--sd-tier-gateway",
+    legacyTokenName: "--sd-theme-emerald",
+    hex: "#22d39a",
+    legacyWireHex: "#10b981",
     channelCode: "GATEWAY",
+    wireAliases: ["GATEWAY"],
     signalTier: "SIGNAL_EQUILIBRIUM_GATE",
     transportUri: "portal://gateway/equilibrium-gate",
     sla: { kind: "latency", latencySlaMs: 1000 },
+    slaTensOfMs: 100,
     channelStatus: "ACTIVE",
     volumeRule: "EQUILIBRIUM_SWEEP (+15c/+20c vig persist read-backs)",
     operationalRole: "Equilibrium Confirm & Vig Gate",
   },
   {
+    channelId: 4,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_ALERT_L21",
     layerId: "L21.N0884",
     tokenName: "--sd-tier-alert",
-    hex: "#ef4444",
+    hex: "#ff7878",
+    legacyWireHex: "#ef4444",
     channelCode: "ALERT",
+    wireAliases: ["ALERT"],
     signalTier: "SIGNAL_ALERT_TWIN",
     transportUri: "portal://ticker/alert-twins",
     sla: { kind: "latency", latencySlaMs: 250 },
+    slaTensOfMs: 25,
     channelStatus: "ALERT",
     volumeRule: "SOURCE_ALERT (canonicalVolumeCents = 0; skip Bayes scoring)",
     operationalRole: "Syndicate Sub-acct Syntax & Twin Buffer",
   },
   {
+    channelId: 5,
+    sourceBridgeId: 2,
+    canonicalProvenance: "PARTNER_118_GSBUILDER_L22",
     layerId: "L22.N1402",
     tokenName: "--sd-tier-steam",
     hex: "#f59e0b",
     channelCode: "GSBUILDER",
+    wireAliases: ["GSBUILDER"],
     signalTier: "SIGNAL_SGP_BUILDER",
     transportUri: "portal://ticker/sgp-builder",
     sla: { kind: "latency", latencySlaMs: 1000 },
+    slaTensOfMs: 100,
     channelStatus: "STEERABLE",
     volumeRule:
-      "GS118_JOIN (joined via M.G<betGroupId>; steerable via --steer)",
+      "GS118_JOIN (joined via G<id> / M.G<betGroupId>; steerable via --steer)",
     operationalRole: "Steam / Line Chase Phrasing & SGP Builder",
   },
   {
+    channelId: 6,
+    sourceBridgeId: 2,
+    canonicalProvenance: "PARTNER_118_GSLIVE_L23",
     layerId: "L23.N0412",
     tokenName: "--sd-tier-whale",
-    hex: "#28a745",
+    hex: "#4ade80",
+    legacyWireHex: "#28a745",
     channelCode: "GSLIVE",
+    wireAliases: ["GSLIVE"],
     signalTier: "SIGNAL_GS_INPLAY",
     transportUri: "portal://ticker/gs-partner-118",
     sla: { kind: "latency", latencySlaMs: 500 },
+    slaTensOfMs: 50,
     channelStatus: "CRITICAL",
     volumeRule:
-      "GS118_JOIN (forces rotationGrade='LIVE'; extracts M.G<id>; +20c tax)",
+      "GS118_JOIN (forces rotationGrade='LIVE'; extracts G<id> / M.G<id>; +20c tax)",
     operationalRole: "Whale Sizing Anomaly & In-Play Live Move",
   },
   {
+    channelId: 7,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_CSLEVEL2_L24",
     layerId: "L24.N2019",
     tokenName: "--sd-tier-rec-bias",
-    hex: "#38bdf8",
+    hex: "#7dd3fc",
+    legacyWireHex: "#38bdf8",
     channelCode: "CSLEVEL2",
+    wireAliases: ["CSLEVEL2"],
     signalTier: "SIGNAL_SYNDICATE_L2",
     transportUri: "portal://ticker/cslevel2-feed",
     sla: { kind: "latency", latencySlaMs: 2000 },
+    slaTensOfMs: 200,
     channelStatus: "SUPPRESSED",
     volumeRule:
       "NONE (secondary syndicate/tennis/prop feed; steerable via --steer)",
     operationalRole: "Recreational Longshot Bias Ingestion",
+  },
+  {
+    channelId: 8,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_LIVE_CWS",
+    layerId: "L24B.N2110",
+    tokenName: "--sd-tier-live-cws",
+    hex: "#67e8f9",
+    channelCode: "LIVEBETTINGCWS",
+    wireAliases: ["LIVEBETTINGCWS", "EZLIVE"],
+    signalTier: "SIGNAL_F402_INPLAY",
+    transportUri: "portal://ticker/f402-live-cws",
+    sla: { kind: "latency", latencySlaMs: 750 },
+    slaTensOfMs: 75,
+    channelStatus: "ACTIVE",
+    volumeRule: "F402_INPLAY (promotes WagerType='G' and rotationGrade='LIVE')",
+    operationalRole: "Fantasy402 Native In-Play Feed",
+  },
+  {
+    channelId: 9,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_PHONE",
+    layerId: "L24C.N2204",
+    tokenName: "--sd-tier-phone",
+    hex: "#a5b4fc",
+    channelCode: "PHONE",
+    wireAliases: ["PHONE", "CLERK"],
+    signalTier: "SIGNAL_CLERK_ASSISTED",
+    transportUri: "portal://ticker/clerk-phone",
+    sla: { kind: "latency", latencySlaMs: 1500 },
+    slaTensOfMs: 150,
+    channelStatus: "ACTIVE",
+    volumeRule: "AUDIT_MODE_2_10 (preserves clerkOperatorIdentifier)",
+    operationalRole: "Clerk-Assisted Phone Ticket Ingestion",
+  },
+  {
+    channelId: 10,
+    sourceBridgeId: 1,
+    canonicalProvenance: "FANTASY_402_HOUSE_BOOK",
+    layerId: "L24D.N2308",
+    tokenName: "--sd-tier-house",
+    hex: "#e2e8f0",
+    channelCode: "HOUSE",
+    wireAliases: ["AGENT", "ADMIN", "HOUSE"],
+    signalTier: "SIGNAL_HOUSE_LEDGER",
+    transportUri: "portal://ticker/house-ledger",
+    sla: { kind: "latency", latencySlaMs: 1500 },
+    slaTensOfMs: 150,
+    channelStatus: "ACTIVE",
+    volumeRule: "AUDIT_MODE_2_10 (routes to Mode 2 & Mode 10 audit ledgers)",
+    operationalRole: "Agent / Admin / House Transfer & Offset Ledger",
   },
 ];
 
@@ -835,14 +975,63 @@ export const SIGNAL_SLA_MS: Readonly<
 ) as Record<SignalChannelCode, number | undefined>;
 
 /**
+ * Packed channel-handle word: [4b channelId | 8b slaTensOfMs | 20b rowIndex].
+ * Generated, dependency-free writer. `lib/nsh_frame_schema.ts` keeps the validating
+ * codec wrapper for frame I/O; the bit layout here is the single generated copy.
+ */
+export type ChannelPackedHandle32 = Brand<number, "ChannelPackedHandle32">;
+
+export function packChannelHandle32(
+  channelId4: number,
+  slaTensOfMs8: number,
+  rowIndex20: number,
+): ChannelPackedHandle32 {
+  if (!Number.isInteger(channelId4) || channelId4 < 0 || channelId4 > 0xf) {
+    throw new RangeError(
+      `channelId4 must be an integer in [0, 15] (got ${String(channelId4)})`,
+    );
+  }
+  if (
+    !Number.isInteger(slaTensOfMs8) ||
+    slaTensOfMs8 < 0 ||
+    slaTensOfMs8 > 0xff
+  ) {
+    throw new RangeError(
+      `slaTensOfMs8 must be an integer in [0, 255] (got ${String(slaTensOfMs8)})`,
+    );
+  }
+  if (!Number.isInteger(rowIndex20) || rowIndex20 < 0 || rowIndex20 > 0xfffff) {
+    throw new RangeError(
+      `rowIndex20 must be an integer in [0, 1048575] (got ${String(rowIndex20)})`,
+    );
+  }
+  const packedWord32 =
+    ((channelId4 & 0xf) << 28) |
+    ((slaTensOfMs8 & 0xff) << 20) |
+    (rowIndex20 & 0xfffff);
+  return (packedWord32 >>> 0) as ChannelPackedHandle32;
+}
+
+/**
+ * One metadata word per ingestion channel, in `INGESTION_CHANNELS` order. The row index is 0:
+ * this column carries channel provenance + SLA, not a customer row.
+ */
+export const CHANNEL_META_PACKED32_COL: Uint32Array = Uint32Array.from(
+  INGESTION_CHANNELS.map((channel) =>
+    packChannelHandle32(channel.channelId, channel.slaTensOfMs, 0),
+  ),
+);
+
+/**
  * Decision & Route Continuum (Layers 25-28).
  * Generated directly from tokens.toml.
  */
 export const ROUTE_CIRCUITS: readonly RouteCircuitDefinition[] = [
   {
+    routeId: 0,
     layerId: "L25.N1882",
     tokenName: "--sd-route-devig",
-    hex: "#06b6d4",
+    hex: "#22d3ee",
     routeName: "Route 04 Devig Consensus",
     moveFlag: "STEAM_CONVERGENCE",
     triggerKind: "ADVERSE_SELECTION",
@@ -851,20 +1040,26 @@ export const ROUTE_CIRCUITS: readonly RouteCircuitDefinition[] = [
     operationalRole: "Steam Convergence & Consensus Price Arbitration",
   },
   {
+    routeId: 1,
     layerId: "L26.N3104",
     tokenName: "--sd-route-sharp",
-    hex: "#a855f7",
+    hex: "#c892ff",
     routeName: "Route 02 Sharp Shrinkage",
     moveFlag: "SHRINKAGE_SHARP",
     triggerKind: "CLV_MARGIN_DECAY",
-    threshold: { kind: "bayes_shrinkage", tauStar: 0.68, minTickets: 8 },
+    threshold: {
+      kind: "bayes_shrinkage",
+      tauStarBasisPoints: parseAsBasisPoints(6800, true),
+      minTickets: 8,
+    },
     mitigationKind: "SHRINKAGE_RECALIBRATE",
     operationalRole: "Bayesian Sharp Detection & Margin Decay Guard",
   },
   {
+    routeId: 2,
     layerId: "L27.N0912",
     tokenName: "--sd-route-pending",
-    hex: "#d97706",
+    hex: "#fb923c",
     routeName: "Route 01 Liquidity Breaker",
     moveFlag: "LIQUIDITY_HALT",
     triggerKind: "ORDER_BOOK_EXHAUSTION",
@@ -873,9 +1068,10 @@ export const ROUTE_CIRCUITS: readonly RouteCircuitDefinition[] = [
     operationalRole: "Liquidity Exhaustion Protection & Breaker Trip",
   },
   {
+    routeId: 3,
     layerId: "L28.N2501",
     tokenName: "--sd-route-manager",
-    hex: "#f43f5e",
+    hex: "#ff758f",
     routeName: "Route 03 Manager Terminal",
     moveFlag: "TERMINAL_ENFORCE",
     triggerKind: "TERMINAL_DEFICIT_ESCALATION",
@@ -911,41 +1107,91 @@ export const TELEMETRY_SURFACES: readonly SurfaceDefinition[] = [
     hex: "#04070e",
     surfaceName: "Deterministic Dark ANSI",
     targetViewport: "DirectColor VT (Ghostty / xterm-direct)",
-    protocol: "ANSI 24-bit TrueColor (\x1b[38;2;R;G;Bm)",
+    protocol: "ANSI 24-bit TrueColor (\\x1b[38;2;R;G;Bm)",
     colorDepth: "24-bit TrueColor RGB",
     operationalRole: "CLI Terminal Telemetry Surface Background",
   },
 ];
 
 /**
- * Dashboard UI chrome tokens (cards, borders, text). Not neurons: excluded from the
- * pairwise ΔE00 floor, gated by role-specific WCAG contrast instead.
+ * Dashboard UI chrome tokens (cards, borders, focus rings, text). Not neurons:
+ * excluded from the pairwise ΔE00 floor, gated by role-specific WCAG contrast instead.
  */
 export interface UiTokenDefinition {
   readonly tokenName: string;
   readonly hex: string;
-  readonly role: "surface" | "border" | "text";
+  readonly role:
+    | "surface"
+    | "border"
+    | "border_hairline"
+    | "border_interactive"
+    | "focus"
+    | "text";
+  readonly stateSlot?: string;
   readonly description: string;
 }
 
 export const UI_TOKENS: readonly UiTokenDefinition[] = [
   {
     tokenName: "--sd-surface-card",
-    hex: "#0d1527",
+    hex: "#0b1120",
     role: "surface",
+    stateSlot: "rest",
     description: "Cards, panels, table bodies",
   },
   {
-    tokenName: "--sd-surface-hover",
-    hex: "#131f38",
+    tokenName: "--sd-surface-elevated",
+    hex: "#121c31",
     role: "surface",
-    description: "Hovered cards and table rows",
+    stateSlot: "elevated",
+    description: "Elevated drawers, modals, and floating popovers",
+  },
+  {
+    tokenName: "--sd-surface-hover",
+    hex: "#19263d",
+    role: "surface",
+    stateSlot: "hover",
+    description: "Hovered cards, interactive controls, and table rows",
+  },
+  {
+    tokenName: "--sd-surface-raised",
+    hex: "#202f4a",
+    role: "surface",
+    stateSlot: "raised",
+    description: "Raised headers, toolbar strips, and inspector sub-cards",
+  },
+  {
+    tokenName: "--sd-surface-selected",
+    hex: "#0f3a5d",
+    role: "surface",
+    stateSlot: "selected",
+    description: "Active BitSet32 roving tab slot and selected DataTable row",
   },
   {
     tokenName: "--sd-surface-border",
-    hex: "#1e293b",
-    role: "border",
-    description: "Hairlines and dividers",
+    hex: "#243247",
+    role: "border_hairline",
+    description: "Decorative hairlines and non-interactive structural dividers",
+  },
+  {
+    tokenName: "--sd-border-strong",
+    hex: "#7085a1",
+    role: "border_interactive",
+    description:
+      "Emphasized panel borders, active control outlines, and keycaps",
+  },
+  {
+    tokenName: "--sd-focus-ring",
+    hex: "#38bdf8",
+    role: "focus",
+    description: "Keyboard roving tabindex and modal restore focus ring",
+  },
+  {
+    tokenName: "--sd-focus-ring-offset",
+    hex: "#070b14",
+    role: "border_hairline",
+    description:
+      "2px inner separation ring isolating focus_ring from active fills",
   },
   {
     tokenName: "--sd-text-primary",
@@ -954,15 +1200,285 @@ export const UI_TOKENS: readonly UiTokenDefinition[] = [
     description: "Body copy and headings",
   },
   {
+    tokenName: "--sd-text-secondary",
+    hex: "#cbd5e1",
+    role: "text",
+    description: "Subheadings, metric values, and active controls",
+  },
+  {
     tokenName: "--sd-text-muted",
     hex: "#94a3b8",
     role: "text",
-    description: "Secondary copy, labels, table headers",
+    description: "Secondary copy, labels, disabled hints, and table headers",
+  },
+];
+
+export interface SlaStateDefinition {
+  readonly stateId: string;
+  readonly tokenName: string;
+  readonly fgHex: string;
+  readonly bgHex: string;
+  readonly borderHex: string;
+  readonly description: string;
+}
+
+export interface SlaCssTokenDefinition {
+  readonly stateId: string;
+  readonly tokenName: string;
+  readonly hex: string;
+  readonly role: "fg" | "bg" | "border";
+}
+
+export const SLA_STATES: readonly SlaStateDefinition[] = [
+  {
+    stateId: "SLA_FRESH",
+    tokenName: "--sd-sla-fresh",
+    fgHex: "#34d399",
+    bgHex: "#0a2922",
+    borderHex: "#10b981",
+    description: "Publish age and upstream data_window_max_epoch_ms within SLA",
+  },
+  {
+    stateId: "SLA_WARN",
+    tokenName: "--sd-sla-warn",
+    fgHex: "#38bdf8",
+    bgHex: "#0c2438",
+    borderHex: "#29b6f6",
+    description: "Half-window aging advisory; polling active",
+  },
+  {
+    stateId: "SLA_STALE",
+    tokenName: "--sd-sla-stale",
+    fgHex: "#fbbf24",
+    bgHex: "#2b200c",
+    borderHex: "#f59e0b",
+    description: "BLK_R2_PUBLISH_STALE or BLK_R2_WINDOW_LAG_STALE breached",
+  },
+  {
+    stateId: "SLA_POISON",
+    tokenName: "--sd-sla-poison",
+    fgHex: "#fca5a5",
+    bgHex: "#2d161d",
+    borderHex: "#ff7878",
+    description:
+      "STALE_SNAPSHOT_POISON_BIT set or Class A HTML-on-200 quarantine",
+  },
+];
+
+export const SLA_CSS_TOKENS: readonly SlaCssTokenDefinition[] = [
+  {
+    stateId: "SLA_FRESH",
+    tokenName: "--sd-sla-fresh",
+    hex: "#34d399",
+    role: "fg",
+  },
+  {
+    stateId: "SLA_FRESH",
+    tokenName: "--sd-sla-fresh-bg",
+    hex: "#0a2922",
+    role: "bg",
+  },
+  {
+    stateId: "SLA_FRESH",
+    tokenName: "--sd-sla-fresh-border",
+    hex: "#10b981",
+    role: "border",
+  },
+  {
+    stateId: "SLA_WARN",
+    tokenName: "--sd-sla-warn",
+    hex: "#38bdf8",
+    role: "fg",
+  },
+  {
+    stateId: "SLA_WARN",
+    tokenName: "--sd-sla-warn-bg",
+    hex: "#0c2438",
+    role: "bg",
+  },
+  {
+    stateId: "SLA_WARN",
+    tokenName: "--sd-sla-warn-border",
+    hex: "#29b6f6",
+    role: "border",
+  },
+  {
+    stateId: "SLA_STALE",
+    tokenName: "--sd-sla-stale",
+    hex: "#fbbf24",
+    role: "fg",
+  },
+  {
+    stateId: "SLA_STALE",
+    tokenName: "--sd-sla-stale-bg",
+    hex: "#2b200c",
+    role: "bg",
+  },
+  {
+    stateId: "SLA_STALE",
+    tokenName: "--sd-sla-stale-border",
+    hex: "#f59e0b",
+    role: "border",
+  },
+  {
+    stateId: "SLA_POISON",
+    tokenName: "--sd-sla-poison",
+    hex: "#fca5a5",
+    role: "fg",
+  },
+  {
+    stateId: "SLA_POISON",
+    tokenName: "--sd-sla-poison-bg",
+    hex: "#2d161d",
+    role: "bg",
+  },
+  {
+    stateId: "SLA_POISON",
+    tokenName: "--sd-sla-poison-border",
+    hex: "#ff7878",
+    role: "border",
+  },
+];
+
+export const BET_LEG_BIT_POSITIONS = {
+  IS_LIVE_LEG: 0,
+  IS_ALT_SPREAD_PLUS_5000: 1,
+  IS_SPLIT_MARKET_EXEMPT: 2,
+  IS_SIGNAL_DONOR_EXEMPT: 3,
+  IS_PARTNER_118_SKIN: 4,
+  IS_SAME_GAME_CORRELATED: 5,
+} as const;
+
+export const BET_LEG_BITMASKS = {
+  IS_LIVE_LEG: 0x00000001 as BitSet32,
+  IS_ALT_SPREAD_PLUS_5000: 0x00000002 as BitSet32,
+  IS_SPLIT_MARKET_EXEMPT: 0x00000004 as BitSet32,
+  IS_SIGNAL_DONOR_EXEMPT: 0x00000008 as BitSet32,
+  IS_PARTNER_118_SKIN: 0x00000010 as BitSet32,
+  IS_SAME_GAME_CORRELATED: 0x00000020 as BitSet32,
+} as const;
+
+export const UI_STATE_BIT_POSITIONS = {
+  MODAL_OPEN_BIT: 0,
+  INSPECTOR_DRAWER_BIT: 1,
+  FILTER_LOCK_BIT: 2,
+  ARIA_LIVE_COALESCE_BIT: 3,
+  FOCUS_RING_VISIBLE_BIT: 4,
+  STALE_SNAPSHOT_POISON_BIT: 30,
+} as const;
+
+export const UI_STATE_BITMASKS = {
+  MODAL_OPEN_BIT: 0x00000001 as BitSet32,
+  INSPECTOR_DRAWER_BIT: 0x00000002 as BitSet32,
+  FILTER_LOCK_BIT: 0x00000004 as BitSet32,
+  ARIA_LIVE_COALESCE_BIT: 0x00000008 as BitSet32,
+  FOCUS_RING_VISIBLE_BIT: 0x00000010 as BitSet32,
+  STALE_SNAPSHOT_POISON_BIT: 0x40000000 as BitSet32,
+} as const;
+
+export interface OperatorKeymapSlot {
+  readonly slotIndex: number;
+  readonly bitMask: BitSet32;
+  readonly keyCode: string;
+  readonly keycap: string;
+  readonly forensicMode: number;
+  readonly label: string;
+}
+
+export const OPERATOR_KEYMAP: readonly OperatorKeymapSlot[] = [
+  {
+    slotIndex: 0,
+    bitMask: 0x0001 as BitSet32,
+    keyCode: "Digit1",
+    keycap: "1",
+    forensicMode: 1,
+    label: "Live Ticker",
+  },
+  {
+    slotIndex: 1,
+    bitMask: 0x0002 as BitSet32,
+    keyCode: "Digit2",
+    keycap: "2",
+    forensicMode: 2,
+    label: "Clerk & House Audit",
+  },
+  {
+    slotIndex: 2,
+    bitMask: 0x0004 as BitSet32,
+    keyCode: "Digit3",
+    keycap: "3",
+    forensicMode: 3,
+    label: "Pending Exposure",
+  },
+  {
+    slotIndex: 3,
+    bitMask: 0x0008 as BitSet32,
+    keyCode: "Digit4",
+    keycap: "4",
+    forensicMode: 4,
+    label: "Parlay & Combo Ladder",
+  },
+  {
+    slotIndex: 4,
+    bitMask: 0x0010 as BitSet32,
+    keyCode: "Digit5",
+    keycap: "5",
+    forensicMode: 5,
+    label: "Partner 118 GSLive",
+  },
+  {
+    slotIndex: 5,
+    bitMask: 0x0020 as BitSet32,
+    keyCode: "Digit6",
+    keycap: "6",
+    forensicMode: 6,
+    label: "WebLog & IP Tracker",
+  },
+  {
+    slotIndex: 6,
+    bitMask: 0x0040 as BitSet32,
+    keyCode: "Digit7",
+    keycap: "7",
+    forensicMode: 7,
+    label: "Sharp Shrinkage",
+  },
+  {
+    slotIndex: 7,
+    bitMask: 0x0080 as BitSet32,
+    keyCode: "Digit8",
+    keycap: "8",
+    forensicMode: 8,
+    label: "Delay Bitsets (10-12s)",
+  },
+  {
+    slotIndex: 8,
+    bitMask: 0x0100 as BitSet32,
+    keyCode: "Digit9",
+    keycap: "9",
+    forensicMode: 9,
+    label: "Cross-Market Hedge",
+  },
+  {
+    slotIndex: 9,
+    bitMask: 0x0200 as BitSet32,
+    keyCode: "Digit0",
+    keycap: "0",
+    forensicMode: 10,
+    label: "Reconciliation & Ledger",
   },
 ];
 
 /**
- * Complete 13-entity registry across all 3 decoupled axes.
+ * Slot-indexed bit column for the 10-key operator keymap:
+ * `KEYMAP_SLOTS[slotIndex] === OPERATOR_KEYMAP[slotIndex].bitMask` (1 << slotIndex).
+ * The array order is the bijection itself; do not sort or compact it.
+ */
+export const KEYMAP_SLOTS: Uint32Array = Uint32Array.from([
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512,
+]);
+
+/**
+ * Complete registry across all decoupled axes (Ingestion + Routes + Surfaces).
  */
 export const ALL_QWEN_TOKENS: readonly AnyQwenNeuronDefinition[] = [
   ...INGESTION_CHANNELS,

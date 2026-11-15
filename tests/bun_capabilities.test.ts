@@ -106,7 +106,7 @@ describe("Bun capabilities used by the ops tooling", () => {
   });
 
   test("primitives bun.com files under Bun.* are globals", () => {
-    // /reference/globals/bun lists "class Bun.WebSocket", "Bun.Worker" and "Bun.EventSource".
+    // /reference/bun lists "class Bun.WebSocket", "Bun.Worker" and "Bun.EventSource".
     // None of them is a property of `Bun` at runtime; the first two are globals. Assert both
     // directions so a future release that does hang them off `Bun` fails here, not in webview.ts.
     const bun = Bun as unknown as Record<string, unknown>;
@@ -683,7 +683,7 @@ describe("Bun capabilities used by the ops tooling", () => {
   });
 
   test("Bun.$ exposes the shell-tag with escape/braces helpers and the fluent API", async () => {
-    // bun.com/reference/globals/bun#bun.$: `Bun.$` is the shell-tag used by dev scripts.
+    // bun.com/reference/bun#bun.$: `Bun.$` is the shell-tag used by dev scripts.
     // The repo-wide rule, codified in lib/f402_credentials_policy.ts and in
     // docs/bun-upstream-reference.md "Bun.$ — argv-only for credentials", is:
     //
@@ -723,7 +723,7 @@ describe("Bun capabilities used by the ops tooling", () => {
   });
 
   test("Bun.allocUnsafe returns a Uint8Array of the requested length (unzeroed)", () => {
-    // bun.com/reference/globals/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
+    // bun.com/reference/bun#bun.allocUnsafe: up to 3.5x faster than `new Uint8Array(n)`
     // because the bytes are not zeroed. The two production call sites
     // (lib/f402_bet_ticker_jsonl.ts, scripts/live_positions_cron.ts) are safe because each one
     // immediately reads exactly `read` bytes from the file and then uses `subarray(0, read)` to

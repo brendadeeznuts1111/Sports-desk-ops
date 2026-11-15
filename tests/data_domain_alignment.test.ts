@@ -83,7 +83,7 @@ describe("cross-layer data-domain alignment", () => {
     expect(isSha256Hex(wireDigest)).toBe(true);
     comboStore.insertObservation({
       canonicalComboId: "combo-1",
-      venue: "internal",
+      venue: "desk",
       venueRef: "T-100",
       validTime: "2026-11-11T18:00:00.000Z",
       legs: [],
@@ -93,7 +93,7 @@ describe("cross-layer data-domain alignment", () => {
     expect(() =>
       comboStore.insertObservation({
         canonicalComboId: "combo-bad",
-        venue: "internal",
+        venue: "desk",
         venueRef: "T-101",
         validTime: "not-an-iso-timestamp",
         legs: [],

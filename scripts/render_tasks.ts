@@ -145,13 +145,11 @@ const rendered =
             console.error("tasks: Bun.markdown.ansi is unavailable");
             process.exit(2);
           }
-          const light = Bun.env.COLORFGBG?.endsWith(";15");
           return Bun.markdown.ansi(buffer, {
             colors: !noColor && color,
             columns,
             hyperlinks: outIsTTY,
             kittyGraphics: false,
-            ...(light === undefined ? {} : { light }),
           });
         })();
 

@@ -1,0 +1,85 @@
+# packages/ui/src/config/dashboard.toml
+# ==============================================================================
+# SportsDesk Enhanced Dashboard — Dispatch Thresholds, Feeds, Polling & Panels
+# Format:       TOML 1.0 (inlined & tree-shaken at bundle time by Bun)
+# Schema:       sportsdesk-dashboard/v2
+# Validated by: scripts/validate_dashboard_config.ts (bun run validate:dashboard)
+#
+# Date contract: quoted ISO-8601 strings ONLY. Unquoted TOML datetimes parse to
+# Temporal.* objects and crash browser bundles at module load.
+# ==============================================================================
+
+[meta]
+schema = "sportsdesk-dashboard/v2"
+version = "2.0.0"
+generated_at = "2026-11-14T00:00:00Z" # quoted — unquoted fails the Temporal guard
+auto_execute = false # Signal Honesty invariant: directives require human review
+
+# ------------------------------------------------------------------------------
+# Surveillance & Dispatch Thresholds
+# `sharp` is REQUIRED_PROBE in scripts/validate_dashboard_config.ts.
+# ------------------------------------------------------------------------------
+[thresholds]
+sharp = 70 # composite percentile gate for sharp-action alert dispatch
+elite_sharp_score = 8.9 # 10-point composite floor for ELITE_SHARP badge
+sharp_score = 7.5 # 10-point composite floor for SHARP badge
+steam = 0.05 # 5.0% implied-probability / consensus move delta
+clv_alert_bps = 100 # 100 bps (10¢) CLV anomaly alert floor
+conduit_concentration_pct = 60.0 # sub-agent top-customer concentration warning (%)
+high_risk_wager_usd = 5000 # single-ticket high-risk highlight threshold ($)
+
+# ------------------------------------------------------------------------------
+# Monitored Sports & League Priority
+# ------------------------------------------------------------------------------
+[leagues]
+names = ["NFL", "CFB", "NBA", "NCAAB", "NHL", "MLB", "SOCCER"]
+primary = ["NFL", "CFB", "NBA", "NCAAB"]
+inplay_priority = ["NBA", "NCAAB", "NFL"]
+
+# ------------------------------------------------------------------------------
+# Same-Origin Data Feeds & Loopback Dev Override
+# `base` is empty for same-origin or an origin without path/query/hash.
+# Runtime loopback override: `?apiBase=http://127.0.0.1:4021` (loopback only).
+# ------------------------------------------------------------------------------
+[api]
+base = ""
+dashboard = "/api/dashboard"
+tiers = "/api/config/tiers"
+customers = "/api/customers"
+wagers = "/api/wagers"
+bet_ticker = "/api/bet-ticker"
+r2_pipeline = "/api/r2/pipeline"
+dns = "/api/dns"
+health = "/api/health"
+build_matrix = "/api/build-matrix"
+
+# ------------------------------------------------------------------------------
+# Feed Freshness Budgets & Polling Cadences
+# ------------------------------------------------------------------------------
+[freshness]
+stale_after_minutes = 30
+critical_after_minutes = 120
+poll_dashboard_seconds = 15
+poll_wagers_seconds = 5
+poll_ticker_seconds = 5
+poll_dns_seconds = 30
+
+# ------------------------------------------------------------------------------
+# Panel Defaults & Telemetry Bounds
+# ------------------------------------------------------------------------------
+[panels]
+default_tab = "customers"
+customers_page_size = 50
+live_wagers_limit = 100
+ticker_max_rows = 200
+dns_cache_capacity = 256
+dns_warm_hit_rate_pct = 80
+dns_active_hit_rate_pct = 50
+
+# ------------------------------------------------------------------------------
+# Tree-Shake Sentinel
+# Defined here, NEVER imported by any module. If "churn" appears anywhere in
+# dist/dashboard/*.js, static TOML tree-shaking regressed and leaked the root table.
+# ------------------------------------------------------------------------------
+[churn]
+window_days = 30

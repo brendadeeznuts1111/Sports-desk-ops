@@ -76,6 +76,10 @@ async function writeOne(
   client: R2S3Client,
   artifact: R2Artifact,
   source: string,
+  retryOptions: {
+    readonly retry?: number;
+    readonly retryDelayMs?: number;
+  } = {},
 ): Promise<R2ArtifactWriteOutcome> {
   const bytes = new TextEncoder().encode(artifact.text).byteLength;
   const baseMetadata: Record<string, string> = {
@@ -88,6 +92,12 @@ async function writeOne(
     await client.writeWithMetadata(artifact.key, artifact.text, {
       type: LIVE_POSITIONS_R2_CONTENT_TYPE,
       metadata,
+      ...(retryOptions.retry === undefined
+        ? {}
+        : { retry: retryOptions.retry }),
+      ...(retryOptions.retryDelayMs === undefined
+        ? {}
+        : { retryDelayMs: retryOptions.retryDelayMs }),
     });
     return { key: artifact.key, bytes, ok: true };
   } catch (error) {
@@ -108,12 +118,23 @@ async function writeOne(
 export async function publishArtifactsToR2(
   client: R2S3Client,
   artifacts: readonly R2Artifact[],
-  options: { readonly source?: string } = {},
+  options: {
+    readonly source?: string;
+    readonly retry?: number;
+    readonly retryDelayMs?: number;
+  } = {},
 ): Promise<R2PublishResult> {
   const source = options.source ?? LIVE_POSITIONS_R2_SOURCE;
   const writes: R2ArtifactWriteOutcome[] = [];
   for (const artifact of artifacts) {
-    writes.push(await writeOne(client, artifact, source));
+    writes.push(
+      await writeOne(client, artifact, source, {
+        ...(options.retry === undefined ? {} : { retry: options.retry }),
+        ...(options.retryDelayMs === undefined
+          ? {}
+          : { retryDelayMs: options.retryDelayMs }),
+      }),
+    );
   }
   const ok = writes.every((write) => write.ok);
   const totalBytes = writes.reduce((sum, write) => sum + write.bytes, 0);
@@ -134,27 +155,35 @@ export async function publishArtifactsToR2(
 export async function publishLivePositionsToR2(
   client: R2S3Client,
   payload: LivePositionsR2Payload,
+  options: {
+    readonly retry?: number;
+    readonly retryDelayMs?: number;
+  } = {},
 ): Promise<R2PublishResult> {
-  return publishArtifactsToR2(client, [
-    {
-      key: LIVE_POSITIONS_R2_KEYS.liveWagers,
-      text: payload.liveWagersText,
-      schemaVersion: payload.schemaVersions.liveWagers,
-      observedAtIso: payload.observedAtIso,
-    },
-    {
-      key: LIVE_POSITIONS_R2_KEYS.liveBets,
-      text: payload.liveBetsText,
-      schemaVersion: payload.schemaVersions.liveBets,
-      observedAtIso: payload.observedAtIso,
-    },
-    {
-      key: LIVE_POSITIONS_R2_KEYS.captureHealth,
-      text: payload.captureHealthText,
-      schemaVersion: payload.schemaVersions.captureHealth,
-      observedAtIso: payload.observedAtIso,
-    },
-  ]);
+  return publishArtifactsToR2(
+    client,
+    [
+      {
+        key: LIVE_POSITIONS_R2_KEYS.liveWagers,
+        text: payload.liveWagersText,
+        schemaVersion: payload.schemaVersions.liveWagers,
+        observedAtIso: payload.observedAtIso,
+      },
+      {
+        key: LIVE_POSITIONS_R2_KEYS.liveBets,
+        text: payload.liveBetsText,
+        schemaVersion: payload.schemaVersions.liveBets,
+        observedAtIso: payload.observedAtIso,
+      },
+      {
+        key: LIVE_POSITIONS_R2_KEYS.captureHealth,
+        text: payload.captureHealthText,
+        schemaVersion: payload.schemaVersions.captureHealth,
+        observedAtIso: payload.observedAtIso,
+      },
+    ],
+    options,
+  );
 }
 
 export interface LocalArtifactSpec {

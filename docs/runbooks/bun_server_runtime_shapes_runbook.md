@@ -813,8 +813,72 @@ When routing outbound traffic through enterprise HTTP/HTTPS proxies, Bun's HTTP 
 
 ## 12. Terminal Markdown Rendering (`Bun.markdown.ansi`) & OSC 8 Integration
 
-Bun provides zero-startup native Markdown rendering directly to the terminal:
+Source: <https://bun.com/reference/bun/markdown/ansi> — fetched 2026-11-14, measured on Bun 1.4.4
+(arm64-darwin). Runnable form of the five official examples: `examples/bun_markdown_ansi.ts`
+(`bun examples/bun_markdown_ansi.ts --check` asserts the output shapes below;
+`tests/bun_markdown_ansi_example.test.ts` runs it). The snippets are the page's own; the only
+hand-written part is the `longText` binding the page leaves undefined.
 
-- **CLI Rendering**: Executing `bun ./file.md` renders formatted ANSI output directly to `stdout`.
-- **Programmatic API**: `Bun.markdown.ansi(markdownString, options)` generates styled ANSI strings with support for OSC 8 clickable terminal hyperlinks (`{ hyperlinks: true }`), terminal column wrapping (`{ columns: 80 }`), and inline Kitty Graphics Protocol imagery (`{ kittyGraphics: true }`).
-- SportsDesk standardizes on `Bun.markdown.ansi` in `lib/canonical_osc8_links.ts` and `sportsdesk_cli.ts` for rendering interactive operational briefs directly inside developer and operator terminals.
+Execution modes:
+
+- **CLI**: `bun ./file.md` renders formatted ANSI to `stdout`.
+- **Programmatic**: `Bun.markdown.ansi(input, theme?: AnsiTheme): string` (see `bun.d.ts:1961`).
+
+```js
+const out = Bun.markdown.ansi("# Hello\n\n**bold** and *italic*\n");
+process.stdout.write(out);
+
+// Plain text, no escape codes
+const plain = Bun.markdown.ansi("# Hello", { colors: false });
+
+// Enable clickable OSC 8 hyperlinks
+const linked = Bun.markdown.ansi("[docs](https://bun.com)", {
+  hyperlinks: true,
+});
+
+// Inline images via Kitty Graphics Protocol
+const withImg = Bun.markdown.ansi("![alt](./logo.png)", {
+  kittyGraphics: true,
+});
+
+// Custom width
+const wrapped = Bun.markdown.ansi(longText, { columns: 60 });
+```
+
+Measured on this build (escapes shown as `ESC`):
+
+| Example                          | Output                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------- |
+| default                          | `ESC[1mESC[35mHelloESC[0m`, rule `ESC[2m═════ESC[0m`, bold/italic via SGR 1/22 and 3/23 |
+| `colors:false`                   | `"Hello\n====="` — no escapes **and** the rule drops box drawing for ASCII              |
+| `hyperlinks:true`                | OSC 8 `ESC]8;;https://bun.comESC\` around `ESC[34mESC[4m…`                              |
+| `kittyGraphics:true`, local file | `ESC_Ga=T,t=f,f=100,q=2;<base64 absolute path>ESC\`; a remote URL renders `📷 alt`      |
+| `columns:60`                     | word-boundary wrap (53/59 visible columns); `columns:0` produces one 113-column line    |
+
+The page's summary also claims _“By default, enables all GFM extensions plus wikilinks, underline,
+and LaTeX math.”_ Measured on 1.4.4 that sentence does not hold for `ansi()`:
+
+- `[[Desk Policy]]` keeps its brackets — blue, but no target and no OSC 8 even with `hyperlinks: true`.
+- `$E = mc^2$` and `$$…$$` stay literal.
+- `__x__` renders as GFM **strong**, not underline; `++x++` and `<u>x</u>` stay literal.
+
+Only `html({ wikiLinks: true })` changes anything (`<x-wikilink data-target="Desk">`); `underline`
+and `latexMath` had no effect on either renderer. `examples/bun_markdown_ansi.ts --check` pins these
+so a release that implements the claim fails loudly.
+
+Three corrections this section previously obscured:
+
+- The second parameter is an `AnsiTheme` (overrides), not parser `Options`. `wikiLinks`, `underline` and `latexMath` belong to `html()`/`render()`; see `docs/REMAINING_TASKS.md` §Renderer parity.
+- `columns` defaults to **80**. The desk's terminal dashboard passes 100 (`lib/dashboard_render.ts:132`), so output compared against library defaults will differ.
+- `kittyGraphics` transmits the **base64 absolute path** of a local image (`t=f`, file mode), not pixels. Enabling it in anything logged or published leaks host layout, which is why the desk never sets it. Remote URLs fall back to alt text.
+
+`light` defaults to detecting from `COLORFGBG` (`fg;bg`; the **last** field is the background index).
+Measured on 1.4.4: background `7` or `15` selects the light palette (inline code `48;5;254`), every
+other value — including malformed input — selects dark (`48;5;236`), and a bare `15` is treated as the
+background. The variable is read at process start, so mutating `process.env.COLORFGBG` in a running
+process changes nothing: long-lived servers and CI must pass `{ light: true | false }`, which overrides
+the environment either way. `examples/bun_markdown_ansi.ts --check` probes both through a child process.
+
+Call sites: `lib/canonical_osc8_links.ts:237` (OSC 8 briefs), `lib/dashboard_render.ts:132`
+(terminal dashboard, `hyperlinks: colors`), `cli/sportsdesk_cli.ts:1773` (dashboard.md render).
+`packages/ui/src/ansi.tsx` parses the result back into React nodes and strips SGR/OSC 8.

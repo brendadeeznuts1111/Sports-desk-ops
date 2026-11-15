@@ -4,7 +4,12 @@
  * Signal-Honesty provenance badges, and zero-DOM feed loader for `@sportsdesk-ops/ui`.
  */
 
-import type { WagerTier } from "@sportsdesk-ops/contracts";
+import type {
+  SlabPolicySummary,
+  WagerTier,
+  WagersWireContractSummary,
+  WagersWireViolation,
+} from "@sportsdesk-ops/contracts";
 import type {
   CustomersApiResponse,
   CustomersCohortsSummary,
@@ -43,12 +48,36 @@ export interface NormalizedLiveWagersResult {
   readonly totalToWinUsd: number;
   readonly criticalSteamCount: number;
   readonly provenance: DashboardSourceProvenance;
+  /** Vendor wire-contract summary when the feed host checks it; null otherwise. */
+  readonly wireContract: WagersWireContractSummary | null;
+  /** Slab policy when the host exposes it; null otherwise. */
+  readonly slabPolicy: SlabPolicySummary | null;
 }
 
+export type CustomerCohortKpiId =
+  | "backtest"
+  | "key-number-sharps"
+  | "hook-syndicates"
+  | "fixtures"
+  | "enriched-book"
+  | "unique-surveillance";
+
+export type CustomerCohortKpiTone =
+  "sky" | "red" | "amber" | "slate" | "emerald" | "violet";
+
 export interface CustomerCohortKpiCard {
+  readonly id: CustomerCohortKpiId;
   readonly label: string;
   readonly value: string;
   readonly sub: string;
+  readonly status: "pending" | "ready" | "unavailable";
+  readonly tone: CustomerCohortKpiTone;
+  /** Exact raw count when ready; null when pending or unavailable (never faked as 0). */
+  readonly count: number | null;
+  /** Percentage share of uniqueSurveillanceCount when ready and denominator > 0; null otherwise. */
+  readonly sharePct: number | null;
+  /** Optional profile tier filter activated when clicking this card in CustomersTabPanel. */
+  readonly filterTier: "ALL" | "ELITE" | "SYNDICATE" | null;
 }
 
 const KNOWN_PROVENANCE_KINDS = new Set<DashboardFeedProvenanceKind>([
@@ -108,25 +137,44 @@ function normalizeProvenance(
 /** Format a Signal-Honesty provenance badge (explicitly distinguishing `[not live]` & failures). */
 export function formatProvenanceBadge(
   provenance: DashboardSourceProvenance,
+  options: {
+    readonly staleAfterMinutes?: number | undefined;
+    readonly nowMs?: number | undefined;
+  } = {},
 ): ProvenanceBadgePresentation {
   const detail = provenance.sourcePath
     ? `${provenance.label} (${provenance.sourcePath})`
     : provenance.label;
+  const observedMs = Date.parse(provenance.observedAt);
+  const stale =
+    options.staleAfterMinutes !== undefined &&
+    Number.isFinite(observedMs) &&
+    (options.nowMs ?? Date.now()) - observedMs >
+      options.staleAfterMinutes * 60_000;
+  const suffix = stale ? " · STALE" : "";
 
   switch (provenance.kind) {
     case "live":
-    case "capture":
       return {
-        badgeText: "● LIVE CAPTURE",
+        badgeText: `● LIVE CAPTURE${suffix}`,
         fg: "#4ade80",
         bg: "rgba(34, 197, 94, 0.14)",
         border: "rgba(34, 197, 94, 0.4)",
         isLive: true,
         detail,
       };
+    case "capture":
+      return {
+        badgeText: `● LOCAL CAPTURE${suffix}`,
+        fg: "#4ade80",
+        bg: "rgba(34, 197, 94, 0.14)",
+        border: "rgba(34, 197, 94, 0.4)",
+        isLive: false,
+        detail,
+      };
     case "fixture":
       return {
-        badgeText: "◐ FIXTURE [not live]",
+        badgeText: `◐ FIXTURE [not live]${suffix}`,
         fg: "#fbbf24",
         bg: "rgba(245, 158, 11, 0.14)",
         border: "rgba(245, 158, 11, 0.4)",
@@ -136,7 +184,7 @@ export function formatProvenanceBadge(
     case "fallback":
     case "showcase":
       return {
-        badgeText: "◌ SHOWCASE [not live]",
+        badgeText: `◌ SHOWCASE [not live]${suffix}`,
         fg: "#fb923c",
         bg: "rgba(251, 146, 60, 0.14)",
         border: "rgba(251, 146, 60, 0.4)",
@@ -171,7 +219,10 @@ export function normalizeHydratedWagerRow(
 ): LiveWager {
   const riskUsd = Number(raw.riskUsd ?? 0);
   const toWinUsd = Number(raw.toWinUsd ?? 0);
-  const clvCents = Number(raw.clvCents ?? 0);
+  const clvCents =
+    typeof raw.clvCents === "number" && Number.isFinite(raw.clvCents)
+      ? raw.clvCents
+      : null;
   const maxRecommendedStake = Number(raw.maxRecommendedStake ?? 0);
   const alertTier = normalizeAlertTier(raw.alertTier);
   return {
@@ -188,7 +239,7 @@ export function normalizeHydratedWagerRow(
     oddsAmerican: String(raw.oddsAmerican ?? "-110"),
     riskUsd: Number.isFinite(riskUsd) ? riskUsd : 0,
     toWinUsd: Number.isFinite(toWinUsd) ? toWinUsd : 0,
-    clvCents: Number.isFinite(clvCents) ? clvCents : 0,
+    clvCents,
     alertTier,
     alertBadge: String(raw.alertBadge ?? alertTier),
     operatorDirective: String(
@@ -237,6 +288,89 @@ export function normalizeLiveWagersResponse(
       "capture",
       "API Wagers Feed",
     ),
+    wireContract: normalizeWireContract(rec.wire_contract),
+    slabPolicy: normalizeSlabPolicy(rec.slab_policy),
+  };
+}
+
+/** Structural parse of `slab_policy`; a malformed block is dropped, not guessed. */
+function normalizeSlabPolicy(raw: unknown): SlabPolicySummary | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return null;
+  const rec = raw as Record<string, unknown>;
+  const sentinels = rec["sentinels"];
+  if (typeof rec["schema"] !== "string" || typeof rec["version"] !== "string") {
+    return null;
+  }
+  if (typeof rec["window_bytes"] !== "number" || rec["window_bytes"] <= 0) {
+    return null;
+  }
+  if (typeof rec["unsafe_allowed"] !== "boolean") return null;
+  if (typeof sentinels !== "object" || sentinels === null) return null;
+  const s = sentinels as Record<string, unknown>;
+  for (const key of [
+    "null_clv",
+    "null_customer_handle32",
+    "null_bridge_channel_word32",
+  ]) {
+    if (typeof s[key] !== "number") return null;
+  }
+  return {
+    schema: rec["schema"],
+    version: rec["version"],
+    window_bytes: rec["window_bytes"],
+    unsafe_allowed: rec["unsafe_allowed"],
+    sentinels: {
+      null_clv: s["null_clv"] as number,
+      null_customer_handle32: s["null_customer_handle32"] as number,
+      null_bridge_channel_word32: s["null_bridge_channel_word32"] as number,
+    },
+  };
+}
+
+/** Structural parse of `wire_contract`; a malformed block is dropped, not guessed. */
+function normalizeWireContract(raw: unknown): WagersWireContractSummary | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return null;
+  const rec = raw as Record<string, unknown>;
+  if (typeof rec.ok !== "boolean") return null;
+  const violations: WagersWireViolation[] = [];
+  if (Array.isArray(rec.violations)) {
+    for (const entry of rec.violations) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const v = entry as Record<string, unknown>;
+      if (
+        typeof v.field !== "string" ||
+        (v.kind !== "type" && v.kind !== "nullable") ||
+        typeof v.count !== "number"
+      ) {
+        continue;
+      }
+      violations.push({
+        field: v.field,
+        kind: v.kind,
+        count: v.count,
+        examples: Array.isArray(v.examples)
+          ? v.examples.filter((e): e is string => typeof e === "string")
+          : [],
+      });
+    }
+  }
+  return {
+    ok: rec.ok,
+    registry: typeof rec.registry === "string" ? rec.registry : "",
+    capture: typeof rec.capture === "string" ? rec.capture : "",
+    capture_sha256:
+      typeof rec.capture_sha256 === "string" ? rec.capture_sha256 : "",
+    enum_source:
+      typeof rec.enum_source === "string" ? rec.enum_source : "unknown",
+    fields_checked: Array.isArray(rec.fields_checked)
+      ? rec.fields_checked.filter((f): f is string => typeof f === "string")
+      : [],
+    rows: typeof rec.rows === "number" ? rec.rows : 0,
+    skipped_rows: typeof rec.skipped_rows === "number" ? rec.skipped_rows : 0,
+    violations,
+    ...(typeof rec.error === "string" ? { error: rec.error } : {}),
   };
 }
 
@@ -279,6 +413,57 @@ export function normalizeCustomersCohortResponse(
   };
 }
 
+interface CustomerCohortKpiSpec {
+  readonly id: CustomerCohortKpiId;
+  readonly label: string;
+  readonly tone: CustomerCohortKpiTone;
+  readonly filterTier: "ALL" | "ELITE" | "SYNDICATE" | null;
+}
+
+const CUSTOMER_COHORT_KPI_SPECS: readonly CustomerCohortKpiSpec[] = [
+  {
+    id: "backtest",
+    label: "Backtest Cohort",
+    tone: "sky",
+    filterTier: "ALL",
+  },
+  {
+    id: "key-number-sharps",
+    label: "Key Number Sharps",
+    tone: "red",
+    filterTier: "ELITE",
+  },
+  {
+    id: "hook-syndicates",
+    label: "Hook Syndicates",
+    tone: "amber",
+    filterTier: "SYNDICATE",
+  },
+  {
+    id: "fixtures",
+    label: "CI Synthetic Fixtures",
+    tone: "slate",
+    filterTier: null,
+  },
+  {
+    id: "enriched-book",
+    label: "Enriched Book Spec",
+    tone: "emerald",
+    filterTier: null,
+  },
+  {
+    id: "unique-surveillance",
+    label: "Unique Surveillance",
+    tone: "violet",
+    filterTier: "ALL",
+  },
+];
+
+function computeSharePct(count: number, total: number): number | null {
+  if (total <= 0) return null;
+  return Math.round((count / total) * 1000) / 10;
+}
+
 /** Derive the 6 customer cohort KPI cards dynamically (missing is never hardcoded as non-zero or zero). */
 export function deriveCustomerCohortKpiCards(options: {
   readonly report: CustomersApiResponse | null;
@@ -290,88 +475,89 @@ export function deriveCustomerCohortKpiCards(options: {
       options.error && options.error.trim().length > 0
         ? options.error
         : "GET /api/customers unreachable";
-    return [
-      { label: "Backtest Cohort", value: "Unavailable", sub: reason },
-      { label: "Key Number Sharps", value: "Unavailable", sub: reason },
-      { label: "Hook Syndicates", value: "Unavailable", sub: reason },
-      { label: "CI Synthetic Fixtures", value: "Unavailable", sub: reason },
-      { label: "Enriched Book Spec", value: "Unavailable", sub: reason },
-      { label: "Unique Surveillance", value: "Unavailable", sub: reason },
-    ];
+    return CUSTOMER_COHORT_KPI_SPECS.map((spec) => ({
+      id: spec.id,
+      label: spec.label,
+      value: "Unavailable",
+      sub: reason,
+      status: "unavailable",
+      tone: spec.tone,
+      count: null,
+      sharePct: null,
+      filterTier: spec.filterTier,
+    }));
   }
 
   if (options.status === "pending" || options.report === null) {
-    return [
-      {
-        label: "Backtest Cohort",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-      {
-        label: "Key Number Sharps",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-      {
-        label: "Hook Syndicates",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-      {
-        label: "CI Synthetic Fixtures",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-      {
-        label: "Enriched Book Spec",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-      {
-        label: "Unique Surveillance",
-        value: "Pending…",
-        sub: "Awaiting GET /api/customers",
-      },
-    ];
+    return CUSTOMER_COHORT_KPI_SPECS.map((spec) => ({
+      id: spec.id,
+      label: spec.label,
+      value: "Pending…",
+      sub: "Awaiting GET /api/customers",
+      status: "pending",
+      tone: spec.tone,
+      count: null,
+      sharePct: null,
+      filterTier: spec.filterTier,
+    }));
   }
 
   const { cohorts, provenance } = options.report;
   const sourceSuffix = provenance.sourcePath
     ? `Source: ${provenance.sourcePath}`
     : provenance.label;
+  const totalUnique = cohorts.uniqueSurveillanceCount;
 
-  return [
-    {
-      label: "Backtest Cohort",
+  const readyRows: Record<
+    CustomerCohortKpiId,
+    { readonly count: number; readonly value: string; readonly sub: string }
+  > = {
+    backtest: {
+      count: cohorts.backtestCount,
       value: `${cohorts.backtestCount.toLocaleString()} Accounts`,
       sub: "4-Wk CFB/NBA Leaderboard (/api/customers)",
     },
-    {
-      label: "Key Number Sharps",
+    "key-number-sharps": {
+      count: cohorts.keyNumberSharpsCount,
       value: `${cohorts.keyNumberSharpsCount.toLocaleString()} Elite Accounts`,
       sub: "Football Key Numbers Watchlist",
     },
-    {
-      label: "Hook Syndicates",
+    "hook-syndicates": {
+      count: cohorts.hookSyndicateCount,
       value: `${cohorts.hookSyndicateCount.toLocaleString()} Downlines`,
       sub: "Half-Point Syndicate Clusters",
     },
-    {
-      label: "CI Synthetic Fixtures",
+    fixtures: {
+      count: cohorts.fixtureCount,
       value: `${cohorts.fixtureCount.toLocaleString()} Accounts`,
       sub: "Deterministic Fixture Corpus",
     },
-    {
-      label: "Enriched Book Spec",
+    "enriched-book": {
+      count: cohorts.fullBookSpecCount,
       value: `${cohorts.fullBookSpecCount.toLocaleString()} Accounts`,
       sub: sourceSuffix,
     },
-    {
-      label: "Unique Surveillance",
-      value: `${cohorts.uniqueSurveillanceCount.toLocaleString()} IDs`,
+    "unique-surveillance": {
+      count: totalUnique,
+      value: `${totalUnique.toLocaleString()} IDs`,
       sub: `Deduplicated Across Cohorts (${provenance.kind})`,
     },
-  ];
+  };
+
+  return CUSTOMER_COHORT_KPI_SPECS.map((spec) => {
+    const row = readyRows[spec.id];
+    return {
+      id: spec.id,
+      label: spec.label,
+      value: row.value,
+      sub: row.sub,
+      status: "ready",
+      tone: spec.tone,
+      count: row.count,
+      sharePct: computeSharePct(row.count, totalUnique),
+      filterTier: spec.filterTier,
+    };
+  });
 }
 
 export type HydratedSliceResult<T> =

@@ -3,19 +3,30 @@ import { formatRouteThreshold } from "./route_threshold.ts";
 import type { TokensSsot } from "./tokens_ssot.ts";
 
 export function renderDomainBrandedSection7(ssot: TokensSsot): string {
-  const { surfaces, ingestion, routes, ui } = ssot;
+  const {
+    gates,
+    surfaces,
+    ui,
+    sla,
+    bridges,
+    ingestion,
+    routes,
+    bitmasks,
+    keymap,
+  } = ssot;
 
   let out = `${DOMAIN_BRANDED_SECTION7_MARKER}
 
 export type SignalChannelCode =
-  | "Internet"
-  | "BLOCKED"
-  | "GATEWAY"
-  | "ALERT"
-  | "GSBUILDER"
-  | "GSLIVE"
-  | "CSLEVEL2";
+`;
 
+  for (const c of ingestion) {
+    out += `  | "${c.channel_code}"\n`;
+  }
+
+  out = out.trimEnd() + `;\n`;
+
+  out += `
 export type SignalChannelStatus =
   | "ACTIVE"
   | "DROPPED"
@@ -42,6 +53,26 @@ export type MitigationActionKind =
   | "CIRCUIT_BREAKER_HALT"
   | "MANAGER_LIMIT_CLAMP";
 
+export const TOKEN_GATES = {
+  minBodyContrastRatioMilli: ${gates.min_body_contrast_ratio_milli},
+  minAaaSlateContrastMilli: ${gates.min_aaa_slate_contrast_milli},
+  minUiComponentContrastMilli: ${gates.min_ui_component_contrast_milli},
+  minCrossStateDeltaE00Milli: ${gates.min_cross_state_delta_e00_milli},
+  minFreshVsStaleDeltaE00Milli: ${gates.min_fresh_vs_stale_delta_e00_milli},
+} as const;
+
+export const SOURCE_BRIDGE_IDS = {
+`;
+
+  for (const [k, v] of Object.entries(bridges)) {
+    out += `  ${k}: ${v},\n`;
+  }
+
+  out += `} as const;
+
+export type SourceBridgeId2 =
+  (typeof SOURCE_BRIDGE_IDS)[keyof typeof SOURCE_BRIDGE_IDS];
+
 /**
  * Axis 1 Transport SLA Discriminated Union.
  * Eliminates synthetic "0 ms" latency sentinels: sentinel drops represent an un-executed filtering policy.
@@ -52,11 +83,15 @@ export type TransportSla =
 
 /**
  * Axis 2 Algorithmic Threshold Discriminated Union.
- * Completely eliminates polymorphic string typing across consensus lag, shrinkage, depth, and risk gates.
+ * Zero unbranded IEEE-754 floats: shrinkage thresholds use branded integer BasisPoints.
  */
 export type RouteThreshold =
   | { readonly kind: "consensus_lag"; readonly maxLagMs: number }
-  | { readonly kind: "bayes_shrinkage"; readonly tauStar: number; readonly minTickets: number }
+  | {
+      readonly kind: "bayes_shrinkage";
+      readonly tauStarBasisPoints: BasisPoints;
+      readonly minTickets: number;
+    }
   | { readonly kind: "liquidity_depth"; readonly minDepthCents: Cents }
   | {
       readonly kind: "composite_risk_gate";
@@ -66,25 +101,33 @@ export type RouteThreshold =
     };
 
 /**
- * Axis 1: Ingestion Signal Channels (Layers 18–24).
+ * Axis 1: Ingestion Signal Channels (Layers 17-24D).
  */
 export interface IngestionChannelDefinition {
-  readonly layerId: \`L\${number}.N\${string}\`;
+  readonly channelId: number;
+  readonly sourceBridgeId: SourceBridgeId2;
+  readonly canonicalProvenance: string;
+  readonly layerId: \`L\${string}.N\${string}\`;
   readonly tokenName: string;
+  readonly legacyTokenName?: \`--sd-\${string}\`;
   readonly hex: string;
+  readonly legacyWireHex?: string;
   readonly channelCode: SignalChannelCode;
+  readonly wireAliases: readonly string[];
   readonly signalTier: string;
   readonly transportUri: string;
   readonly sla: TransportSla;
+  readonly slaTensOfMs: number;
   readonly channelStatus: SignalChannelStatus;
   readonly volumeRule: string;
   readonly operationalRole: string;
 }
 
 /**
- * Axis 2: Risk Decision & Route Continuum (Layers 25–28).
+ * Axis 2: Risk Decision & Route Continuum (Layers 25-28).
  */
 export interface RouteCircuitDefinition {
+  readonly routeId: number;
   readonly layerId: \`L\${number}.N\${string}\`;
   readonly tokenName: string;
   readonly hex: string;
@@ -116,7 +159,7 @@ export type AnyQwenNeuronDefinition =
   | SurfaceDefinition;
 
 /**
- * Ingestion Signal Channels (Layers 18-24).
+ * Ingestion Signal Channels (Layers 17-24D).
  * Generated directly from tokens.toml.
  */
 export const INGESTION_CHANNELS: readonly IngestionChannelDefinition[] = [
@@ -127,18 +170,26 @@ export const INGESTION_CHANNELS: readonly IngestionChannelDefinition[] = [
       c.sla_kind === "latency"
         ? `{ kind: "latency", latencySlaMs: ${c.sla_ms} }`
         : `{ kind: "sentinel_drop" }`;
+    const aliasesLiteral = c.wire_aliases
+      .map((a) => JSON.stringify(a))
+      .join(", ");
 
     out += `  {
-    layerId: "${c.layer_id}",
-    tokenName: "${c.token_name}",
-    hex: "${c.hex}",
-    channelCode: "${c.channel_code}",
-    signalTier: "${c.signal_tier}",
-    transportUri: "${c.transport_uri}",
+    channelId: ${c.channel_id},
+    sourceBridgeId: ${c.source_bridge_id},
+    canonicalProvenance: ${JSON.stringify(c.canonical_provenance)},
+    layerId: ${JSON.stringify(c.layer_id)},
+    tokenName: ${JSON.stringify(c.token_name)},
+${c.legacy_token_name !== undefined ? `    legacyTokenName: ${JSON.stringify(c.legacy_token_name)},\n` : ""}    hex: ${JSON.stringify(c.hex)},
+${c.legacy_wire_hex !== undefined ? `    legacyWireHex: ${JSON.stringify(c.legacy_wire_hex)},\n` : ""}    channelCode: ${JSON.stringify(c.channel_code)},
+    wireAliases: [${aliasesLiteral}],
+    signalTier: ${JSON.stringify(c.signal_tier)},
+    transportUri: ${JSON.stringify(c.transport_uri)},
     sla: ${slaCode},
-    channelStatus: "${c.channel_status}",
-    volumeRule: "${c.volume_rule}",
-    operationalRole: "${c.operational_role}",
+    slaTensOfMs: ${c.sla_tens_of_ms},
+    channelStatus: ${JSON.stringify(c.channel_status)},
+    volumeRule: ${JSON.stringify(c.volume_rule)},
+    operationalRole: ${JSON.stringify(c.operational_role)},
   },
 `;
   }
@@ -156,6 +207,58 @@ export const SIGNAL_SLA_MS: Readonly<
 ) as Record<SignalChannelCode, number | undefined>;
 
 /**
+ * Packed channel-handle word: [4b channelId | 8b slaTensOfMs | 20b rowIndex].
+ * Generated, dependency-free writer. \`lib/nsh_frame_schema.ts\` keeps the validating
+ * codec wrapper for frame I/O; the bit layout here is the single generated copy.
+ */
+export type ChannelPackedHandle32 = Brand<number, "ChannelPackedHandle32">;
+
+export function packChannelHandle32(
+  channelId4: number,
+  slaTensOfMs8: number,
+  rowIndex20: number,
+): ChannelPackedHandle32 {
+  if (!Number.isInteger(channelId4) || channelId4 < 0 || channelId4 > 0xf) {
+    throw new RangeError(
+      \`channelId4 must be an integer in [0, 15] (got \${String(channelId4)})\`,
+    );
+  }
+  if (
+    !Number.isInteger(slaTensOfMs8) ||
+    slaTensOfMs8 < 0 ||
+    slaTensOfMs8 > 0xff
+  ) {
+    throw new RangeError(
+      \`slaTensOfMs8 must be an integer in [0, 255] (got \${String(slaTensOfMs8)})\`,
+    );
+  }
+  if (
+    !Number.isInteger(rowIndex20) ||
+    rowIndex20 < 0 ||
+    rowIndex20 > 0xfffff
+  ) {
+    throw new RangeError(
+      \`rowIndex20 must be an integer in [0, 1048575] (got \${String(rowIndex20)})\`,
+    );
+  }
+  const packedWord32 =
+    ((channelId4 & 0xf) << 28) |
+    ((slaTensOfMs8 & 0xff) << 20) |
+    (rowIndex20 & 0xfffff);
+  return (packedWord32 >>> 0) as ChannelPackedHandle32;
+}
+
+/**
+ * One metadata word per ingestion channel, in \`INGESTION_CHANNELS\` order. The row index is 0:
+ * this column carries channel provenance + SLA, not a customer row.
+ */
+export const CHANNEL_META_PACKED32_COL: Uint32Array = Uint32Array.from(
+  INGESTION_CHANNELS.map((channel) =>
+    packChannelHandle32(channel.channelId, channel.slaTensOfMs, 0),
+  ),
+);
+
+/**
  * Decision & Route Continuum (Layers 25-28).
  * Generated directly from tokens.toml.
  */
@@ -165,15 +268,16 @@ export const ROUTE_CIRCUITS: readonly RouteCircuitDefinition[] = [
   for (const r of routes) {
     const threshCode = formatRouteThreshold(r);
     out += `  {
-    layerId: "${r.layer_id}",
-    tokenName: "${r.token_name}",
-    hex: "${r.hex}",
-    routeName: "${r.route_name}",
-    moveFlag: "${r.move_flag}",
-    triggerKind: "${r.trigger_kind}",
+    routeId: ${r.route_id},
+    layerId: ${JSON.stringify(r.layer_id)},
+    tokenName: ${JSON.stringify(r.token_name)},
+    hex: ${JSON.stringify(r.hex)},
+    routeName: ${JSON.stringify(r.route_name)},
+    moveFlag: ${JSON.stringify(r.move_flag)},
+    triggerKind: ${JSON.stringify(r.trigger_kind)},
     threshold: ${threshCode},
-    mitigationKind: "${r.mitigation_kind}",
-    operationalRole: "${r.operational_role}",
+    mitigationKind: ${JSON.stringify(r.mitigation_kind)},
+    operationalRole: ${JSON.stringify(r.operational_role)},
   },
 `;
   }
@@ -189,14 +293,14 @@ export const TELEMETRY_SURFACES: readonly SurfaceDefinition[] = [
 
   for (const s of surfaces) {
     out += `  {
-    layerId: "${s.layer_id}",
-    tokenName: "${s.token_name}",
-    hex: "${s.hex}",
-    surfaceName: "${s.surface_name}",
-    targetViewport: "${s.viewport}",
-    protocol: "${s.protocol}",
-    colorDepth: "${s.color_depth}",
-    operationalRole: "${s.role}",
+    layerId: ${JSON.stringify(s.layer_id)},
+    tokenName: ${JSON.stringify(s.token_name)},
+    hex: ${JSON.stringify(s.hex)},
+    surfaceName: ${JSON.stringify(s.surface_name)},
+    targetViewport: ${JSON.stringify(s.viewport)},
+    protocol: ${JSON.stringify(s.protocol)},
+    colorDepth: ${JSON.stringify(s.color_depth)},
+    operationalRole: ${JSON.stringify(s.role)},
   },
 `;
   }
@@ -204,13 +308,20 @@ export const TELEMETRY_SURFACES: readonly SurfaceDefinition[] = [
   out += `];
 
 /**
- * Dashboard UI chrome tokens (cards, borders, text). Not neurons: excluded from the
- * pairwise ΔE00 floor, gated by role-specific WCAG contrast instead.
+ * Dashboard UI chrome tokens (cards, borders, focus rings, text). Not neurons:
+ * excluded from the pairwise ΔE00 floor, gated by role-specific WCAG contrast instead.
  */
 export interface UiTokenDefinition {
   readonly tokenName: string;
   readonly hex: string;
-  readonly role: "surface" | "border" | "text";
+  readonly role:
+    | "surface"
+    | "border"
+    | "border_hairline"
+    | "border_interactive"
+    | "focus"
+    | "text";
+  readonly stateSlot?: string;
   readonly description: string;
 }
 
@@ -219,10 +330,135 @@ export const UI_TOKENS: readonly UiTokenDefinition[] = [
 
   for (const t of ui) {
     out += `  {
-    tokenName: "${t.token_name}",
-    hex: "${t.hex}",
-    role: "${t.role}",
-    description: "${t.description}",
+    tokenName: ${JSON.stringify(t.token_name)},
+    hex: ${JSON.stringify(t.hex)},
+    role: ${JSON.stringify(t.role)},
+${t.state_slot !== undefined ? `    stateSlot: ${JSON.stringify(t.state_slot)},\n` : ""}    description: ${JSON.stringify(t.description)},
+  },
+`;
+  }
+
+  out += `];
+
+export interface SlaStateDefinition {
+  readonly stateId: string;
+  readonly tokenName: string;
+  readonly fgHex: string;
+  readonly bgHex: string;
+  readonly borderHex: string;
+  readonly description: string;
+}
+
+export interface SlaCssTokenDefinition {
+  readonly stateId: string;
+  readonly tokenName: string;
+  readonly hex: string;
+  readonly role: "fg" | "bg" | "border";
+}
+
+export const SLA_STATES: readonly SlaStateDefinition[] = [
+`;
+
+  for (const s of sla) {
+    out += `  {
+    stateId: ${JSON.stringify(s.state_id)},
+    tokenName: ${JSON.stringify(s.token_name)},
+    fgHex: ${JSON.stringify(s.fg_hex)},
+    bgHex: ${JSON.stringify(s.bg_hex)},
+    borderHex: ${JSON.stringify(s.border_hex)},
+    description: ${JSON.stringify(s.description)},
+  },
+`;
+  }
+
+  out += `];
+
+export const SLA_CSS_TOKENS: readonly SlaCssTokenDefinition[] = [
+`;
+
+  for (const s of sla) {
+    out += `  {
+    stateId: ${JSON.stringify(s.state_id)},
+    tokenName: ${JSON.stringify(s.token_name)},
+    hex: ${JSON.stringify(s.fg_hex)},
+    role: "fg",
+  },
+  {
+    stateId: ${JSON.stringify(s.state_id)},
+    tokenName: ${JSON.stringify(`${s.token_name}-bg`)},
+    hex: ${JSON.stringify(s.bg_hex)},
+    role: "bg",
+  },
+  {
+    stateId: ${JSON.stringify(s.state_id)},
+    tokenName: ${JSON.stringify(`${s.token_name}-border`)},
+    hex: ${JSON.stringify(s.border_hex)},
+    role: "border",
+  },
+`;
+  }
+
+  out += `];
+
+export const BET_LEG_BIT_POSITIONS = {
+`;
+
+  for (const [k, bit] of Object.entries(bitmasks.bet_legs)) {
+    out += `  ${k}: ${bit},\n`;
+  }
+
+  out += `} as const;
+
+export const BET_LEG_BITMASKS = {
+`;
+
+  for (const [k, bit] of Object.entries(bitmasks.bet_legs)) {
+    const maskHex = ((1 << bit) >>> 0).toString(16).padStart(8, "0");
+    out += `  ${k}: 0x${maskHex} as BitSet32,\n`;
+  }
+
+  out += `} as const;
+
+export const UI_STATE_BIT_POSITIONS = {
+`;
+
+  for (const [k, bit] of Object.entries(bitmasks.ui_state)) {
+    out += `  ${k}: ${bit},\n`;
+  }
+
+  out += `} as const;
+
+export const UI_STATE_BITMASKS = {
+`;
+
+  for (const [k, bit] of Object.entries(bitmasks.ui_state)) {
+    const maskHex = ((1 << bit) >>> 0).toString(16).padStart(8, "0");
+    out += `  ${k}: 0x${maskHex} as BitSet32,\n`;
+  }
+
+  out += `} as const;
+
+export interface OperatorKeymapSlot {
+  readonly slotIndex: number;
+  readonly bitMask: BitSet32;
+  readonly keyCode: string;
+  readonly keycap: string;
+  readonly forensicMode: number;
+  readonly label: string;
+}
+
+export const OPERATOR_KEYMAP: readonly OperatorKeymapSlot[] = [
+`;
+
+  for (const k of keymap) {
+    const maskHex = (k.bit_mask >>> 0).toString(16).padStart(4, "0");
+    out += `  {
+    slotIndex: ${k.slot_index},
+    bitMask: 0x${maskHex} as BitSet32,
+    keyCode: ${JSON.stringify(k.key_code)},
+    keycap: ${JSON.stringify(k.keycap)},
+    forensicMode: ${k.forensic_mode},
+    label: ${JSON.stringify(k.label)},
   },
 `;
   }
@@ -230,7 +466,19 @@ export const UI_TOKENS: readonly UiTokenDefinition[] = [
   out += `];
 
 /**
- * Complete 13-entity registry across all 3 decoupled axes.
+ * Slot-indexed bit column for the 10-key operator keymap:
+ * \`KEYMAP_SLOTS[slotIndex] === OPERATOR_KEYMAP[slotIndex].bitMask\` (1 << slotIndex).
+ * The array order is the bijection itself; do not sort or compact it.
+ */
+export const KEYMAP_SLOTS: Uint32Array = Uint32Array.from([
+${[...keymap]
+  .sort((a, b) => a.slot_index - b.slot_index)
+  .map((k) => `  ${k.bit_mask},`)
+  .join("\n")}
+]);
+
+/**
+ * Complete registry across all decoupled axes (Ingestion + Routes + Surfaces).
  */
 export const ALL_QWEN_TOKENS: readonly AnyQwenNeuronDefinition[] = [
   ...INGESTION_CHANNELS,

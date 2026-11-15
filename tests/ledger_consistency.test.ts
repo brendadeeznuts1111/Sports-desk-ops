@@ -1,15 +1,50 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
   auditLedger,
   countByTag,
+  countFileLines,
   countTiers,
   deriveMissingFromSpec,
   memberPath,
   resolveCitation,
 } from "../lib/ledger_consistency.ts";
 import { loadManifestIndex } from "../scripts/apply_captures.ts";
+
+describe("countFileLines", () => {
+  test("matches String#split semantics, including the trailing-empty segment", () => {
+    const dir = mkdtempSync(`${tmpdir()}/sd-ledger-lines-`);
+    try {
+      const cases = ["", "a", "a\n", "a\nb", "\n\n", "a\r\nb\r\n", "🎲\n"];
+      for (const [idx, text] of cases.entries()) {
+        const path = `${dir}/case-${idx}.txt`;
+        writeFileSync(path, text);
+        expect(countFileLines(path)).toBe(text.split("\n").length);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("counts a file that is not valid UTF-8 by its LF bytes", () => {
+    const dir = mkdtempSync(`${tmpdir()}/sd-ledger-bytes-`);
+    try {
+      const path = `${dir}/binary.bin`;
+      // 0xff is not a valid lead byte; the decode-and-split version would still
+      // count LFs, this one never decodes at all.
+      writeFileSync(path, Buffer.from([0xff, 0x0a, 0xfe, 0x0a, 0x00]));
+      expect(countFileLines(path)).toBe(3);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a missing path still reports 0 rather than throwing", () => {
+    expect(countFileLines(`${tmpdir()}/sd-no-such-ledger-file`)).toBe(0);
+  });
+});
 
 /**
  * The ledger is the SSOT the docs gate trusts, and nothing checked it against itself. Three

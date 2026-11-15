@@ -3797,7 +3797,10 @@ export function startServer(options?: ServerOptions) {
   const server: Bun.Server<undefined> = Bun.serve({
     ...serveConfig,
     // The dashboard's live bridge upgrades a guarded route that is already in DAEMON_ROUTES.
-    fetch: withBridgeUpgrade(serveConfig.fetch, ingress),
+    fetch: withBridgeUpgrade(
+      withMcpEndpoint(serveConfig.fetch, serveConfig, options, allowedOrigins),
+      ingress,
+    ),
     websocket: bridgeWebsocket,
     ...(unixSocket
       ? { unix: unixSocket }
@@ -3807,6 +3810,7 @@ export function startServer(options?: ServerOptions) {
         }),
   });
   attachBridgeHub(server);
+  attachMcpServerStop(server, serveConfig);
   return server;
 }
 
@@ -3827,7 +3831,12 @@ export function startBridgeSchedules(): () => void {
 if (import.meta.main)
   queueMicrotask(() => {
     // defer past module eval
-    const server = startServer({ daemonEntry: true });
+    const mcpStateless =
+      Bun.argv.includes("--stateless") || Bun.argv.includes("--mcp-stateless");
+    const server = startServer({
+      daemonEntry: true,
+      ...(mcpStateless ? { mcpStateless: true } : {}),
+    });
     const stopBridgeCron = startBridgeSchedules();
     const location = server.url ? server.url.toString() : "unix domain socket";
     console.log(`[SportsDesk Webview Server] Active on ${location}`);
@@ -4537,4 +4546,89 @@ function respondLiveBetsV2(
     produce: () => new TextEncoder().encode(JSON.stringify(resolved)),
     headers,
   });
+}
+
+export interface ServerOptions {
+  /** Run the mounted `/mcp` StreamableHTTP endpoint in stateless mode (default: false). */
+  readonly mcpStateless?: boolean | undefined;
+  /** Return `application/json` bodies instead of SSE streams on `POST /mcp` (default: false). */
+  readonly mcpJsonResponse?: boolean | undefined;
+  /** Override Bearer token resolver for `/mcp` (defaults to `Bun.env.SPORTSDESK_ADMIN_TOKEN`). */
+  readonly mcpAuthToken?: string | (() => string | undefined) | undefined;
+}
+
+const webviewMcpHandlers = new WeakMap<
+  object,
+  Promise<import("../lib/sportsdesk_mcp_server.ts").SportsdeskMcpHttpHandler>
+>();
+
+function getOrCreateWebviewMcpHandler(
+  owner: object,
+  options: ServerOptions | undefined,
+  allowedOrigins: readonly string[],
+): Promise<import("../lib/sportsdesk_mcp_server.ts").SportsdeskMcpHttpHandler> {
+  const existing = webviewMcpHandlers.get(owner);
+  if (existing !== undefined) return existing;
+  const created = import("../lib/sportsdesk_mcp_server.ts").then(
+    ({ createSportsdeskMcpHttpHandler }) =>
+      createSportsdeskMcpHttpHandler({
+        stateless:
+          options?.mcpStateless ??
+          /^(1|true)$/i.test(Bun.env.SPORTSDESK_MCP_STATELESS ?? ""),
+        enableJsonResponse: options?.mcpJsonResponse === true,
+        allowedOrigins,
+        ...(options?.executionEnv ? { policyEnv: options.executionEnv } : {}),
+        resolveAuthToken:
+          typeof options?.mcpAuthToken === "function"
+            ? options.mcpAuthToken
+            : typeof options?.mcpAuthToken === "string"
+              ? () => options.mcpAuthToken as string
+              : () => Bun.env.SPORTSDESK_ADMIN_TOKEN,
+      }),
+  );
+  webviewMcpHandlers.set(owner, created);
+  return created;
+}
+
+function attachMcpServerStop(
+  server: Bun.Server<undefined>,
+  owner: object,
+): void {
+  const originalStop = server.stop.bind(server);
+  server.stop = ((closeActiveConnections?: boolean) => {
+    const existing = webviewMcpHandlers.get(owner);
+    if (existing !== undefined) {
+      webviewMcpHandlers.delete(owner);
+      existing
+        .then((handler) => handler.closeAll())
+        .catch(() => {
+          // signal-honesty: intentional-teardown-cleanup
+        });
+    }
+    return originalStop(closeActiveConnections);
+  }) as typeof server.stop;
+}
+
+function withMcpEndpoint(
+  innerFetch: (req: Request) => Promise<Response>,
+  owner: object,
+  options: ServerOptions | undefined,
+  allowedOrigins: readonly string[],
+): (req: Request) => Promise<Response> {
+  return async (req: Request) => {
+    const url = new URL(req.url);
+    const pathname = url.pathname;
+    if (
+      pathname === "/mcp" &&
+      url.searchParams.get("trigger_error") !== "non_error"
+    ) {
+      const mcpHandler = await getOrCreateWebviewMcpHandler(
+        owner,
+        options,
+        allowedOrigins,
+      );
+      return mcpHandler.handleRequest(req);
+    }
+    return innerFetch(req);
+  };
 }

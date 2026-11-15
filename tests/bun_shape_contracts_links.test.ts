@@ -43,7 +43,7 @@ describe("bun shape reference link validator", () => {
 
     expect(
       await probeShapeReferenceUrl(
-        "https://bun.com/reference/globals/bun/FetchSession",
+        "https://bun.com/reference/bun/FetchSession",
         "FetchSession",
         async () =>
           new Response(softHtml, {
@@ -55,7 +55,7 @@ describe("bun shape reference link validator", () => {
 
     expect(
       await probeShapeReferenceUrl(
-        "https://bun.com/reference/globals/bun/serve",
+        "https://bun.com/reference/bun/serve",
         "serve",
         async () =>
           new Response(okHtml, {
@@ -67,7 +67,7 @@ describe("bun shape reference link validator", () => {
 
     expect(
       await probeShapeReferenceUrl(
-        "https://bun.com/reference/globals/bun/FetchSessionInit",
+        "https://bun.com/reference/bun/FetchSessionInit",
         "FetchSessionInit",
         async () => new Response("Not Found", { status: 404 }),
       ),
@@ -75,7 +75,7 @@ describe("bun shape reference link validator", () => {
 
     expect(
       await probeShapeReferenceUrl(
-        "https://bun.com/reference/globals/bun/FetchSession",
+        "https://bun.com/reference/bun/FetchSession",
         "FetchSession",
         async () => {
           throw new Error("network down");

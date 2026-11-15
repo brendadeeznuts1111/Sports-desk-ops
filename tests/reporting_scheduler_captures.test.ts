@@ -62,6 +62,7 @@ async function fireSchedule(
 
 describe("SHELL_CAPTURE schedule definitions", () => {
   test("both new ids are owned by the webview daemon", () => {
+    expect(BRIDGE_SCHEDULE_IDS).toContain("sched_10m_positions_pulse");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_agent_tree_hourly");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_customer_profiles_6h");
     expect(BRIDGE_SCHEDULE_IDS).toContain("sched_f402_session_refresh");
@@ -147,10 +148,9 @@ describe("SHELL_CAPTURE schedule definitions", () => {
       .getSchedules()
       .filter((s) => !(BRIDGE_SCHEDULE_IDS as readonly string[]).includes(s.id))
       .map((s) => s.id);
-    // The bot owns the four legacy reports, not the daemon-owned ids.
+    // The bot owns the three daily legacy briefings; the webview daemon owns the 10m positions pulse and bridge/capture jobs.
     expect(new Set(botOwned)).toEqual(
       new Set([
-        "sched_10m_positions_pulse",
         "sched_morning_briefing",
         "sched_midday_pulse",
         "sched_evening_settlement",

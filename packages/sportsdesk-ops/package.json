@@ -55,6 +55,9 @@
     "cli:bins": "bun run --cwd ../.. cli:bins",
     "test": "bun run --cwd ../.. test",
     "typecheck": "bun run --cwd ../.. typecheck",
+    "lint:check": "bun run --cwd ../.. lint:check",
+    "weblog:rollup": "bun run --cwd ../.. weblog:rollup",
+    "gen:tokens:gate": "bun run --cwd ../.. gen:tokens:gate",
     "schema": "bun run --cwd ../.. schema",
     "schema:list": "bun run --cwd ../.. schema:list",
     "schema:json": "bun run --cwd ../.. schema:json"

@@ -288,12 +288,8 @@ describe("R2S3Client uploads", () => {
     expect(backend.writes).toEqual([{ key: "a.txt", type: "text/plain" }]);
   });
 
-  test("redirectResponse wraps the lazy S3File in a Response", async () => {
+  test("writeWithMetadata retries transient 503/network errors up to retry limit and fails fast on 403", async () => {
     const backend = new FakeBackend();
-    backend.file = (): Bun.S3File =>
-      new Blob(["blob-bytes"], {
-        type: "application/octet-stream",
-      }) as unknown as Bun.S3File;
     const client = R2S3Client.fromOptions(
       {
         bucket: "bucket",
@@ -304,9 +300,83 @@ describe("R2S3Client uploads", () => {
       },
       backend,
     );
-    const response = client.redirectResponse("blobs/one.webp");
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("blob-bytes");
+
+    let attempts = 0;
+    const flakyFetch = (async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("socket hang up");
+      if (attempts === 2) return new Response("", { status: 503 });
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const written = await client.writeWithMetadata(
+      "live-wagers/latest.json",
+      "{}",
+      {
+        type: "application/json",
+        metadata: { source: "cron" },
+        retry: 3,
+        retryDelayMs: 0,
+        fetchImpl: flakyFetch,
+      },
+    );
+    expect(written).toBe(2);
+    expect(attempts).toBe(3);
+
+    let forbiddenAttempts = 0;
+    const forbiddenFetch = (async () => {
+      forbiddenAttempts += 1;
+      return new Response("", { status: 403 });
+    }) as unknown as typeof fetch;
+
+    await expect(
+      client.writeWithMetadata("live-wagers/latest.json", "{}", {
+        type: "application/json",
+        metadata: { source: "cron" },
+        retry: 3,
+        retryDelayMs: 0,
+        fetchImpl: forbiddenFetch,
+      }),
+    ).rejects.toThrow("R2 PUT live-wagers/latest.json failed (403)");
+    expect(forbiddenAttempts).toBe(1);
+  });
+
+  test("redirectResponse produces a 302 presigned redirect on real Bun.S3File; streamResponse streams 200 bytes", async () => {
+    const realClient = R2S3Client.fromOptions({
+      bucket: "bucket",
+      endpoint: "https://acc.r2.cloudflarestorage.com",
+      accessKeyId: "a",
+      secretAccessKey: "s",
+      publicBase: "https://pub.test",
+    });
+    const redirectRes = realClient.redirectResponse("blobs/one.webp");
+    expect(redirectRes.status).toBe(302);
+    expect(redirectRes.redirected).toBe(true);
+    expect(redirectRes.headers.get("location")).toContain(
+      "https://acc.r2.cloudflarestorage.com/bucket/blobs/one.webp",
+    );
+
+    const backend = new FakeBackend();
+    backend.file = (): Bun.S3File =>
+      new Blob(["blob-bytes"], {
+        type: "image/webp",
+      }) as unknown as Bun.S3File;
+    const streamClient = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const streamRes = streamClient.streamResponse("blobs/one.webp", {
+      type: "image/webp",
+    });
+    expect(streamRes.status).toBe(200);
+    expect(streamRes.headers.get("content-type")).toBe("image/webp");
+    expect(await streamRes.text()).toBe("blob-bytes");
   });
 
   test("write delegates to S3Client.write with the content type", async () => {

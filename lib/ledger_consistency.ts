@@ -401,7 +401,7 @@ function auditCitations(
       const start = match[2];
       if (start !== undefined) {
         const last = Number(match[3] ?? start);
-        const lines = countLines(resolved);
+        const lines = countFileLines(resolved);
         if (last > lines) {
           issues.push({
             code: "CITATION_LINE_RANGE",
@@ -414,9 +414,26 @@ function auditCitations(
   return issues;
 }
 
-function countLines(path: string): number {
+/**
+ * Line count with `String#split("\n").length` semantics (a trailing LF yields one
+ * extra empty segment), computed over bytes.
+ *
+ * The previous implementation decoded the whole file to UTF-8 and allocated one
+ * string per line just to count them; this walks the buffer with
+ * `Bun.indexOfLine`, so it also counts a file that is not valid UTF-8.
+ */
+export function countFileLines(path: string): number {
   try {
-    return readFileSync(path, "utf8").split("\n").length;
+    const bytes = readFileSync(path);
+    let count = 1; // split("") -> [""], split("a") -> ["a"]
+    let offset = 0;
+    for (;;) {
+      const nl = Bun.indexOfLine(bytes, offset);
+      if (nl < 0) break;
+      count += 1;
+      offset = nl + 1;
+    }
+    return count;
   } catch {
     return 0;
   }

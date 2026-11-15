@@ -71,7 +71,9 @@ jobs:
           bun-version-file: .bun-version
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --no-env-file
+      - name: Verify CI gates (lockfile, credentials, gitattributes)
+        run: bun ./scripts/verify_ci_gates.ts
       - name: Audit harness validator pin (deepseek-harness checkout)
         uses: actions/checkout@v4
         with:
@@ -114,7 +116,16 @@ jobs:
           if [ "$rc" -eq 1 ]; then echo "::error::unformatted files (bun fmt --check)"; exit 1; fi
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --no-env-file
+      - name: Build workspace contracts dist
+        run: bun run --filter '@sportsdesk-ops/contracts' build
+      # Baseline green on 2026-11-14: 0 vulnerabilities (180 packages) after
+      # `bun audit fix` bumped @hono/node-server to 2.1.6 and overrides carried
+      # got to 11.8.5 and ws to 5.2.5 (both were pinned by @ganchrowsci/gs-sdk's
+      # transitive diffusion/got ranges). Blocking from here on.
+      - name: Dependency audit
+        timeout-minutes: 2
+        run: bun run audit:deps
       - name: Type check
         timeout-minutes: 3
         run: bun run typecheck
@@ -124,6 +135,12 @@ jobs:
       - name: Bun docs & shape manifest baselines
         timeout-minutes: 3
         run: bun run bun:docs-mcp surfaces --check tests/bun_docs_surface_baseline.json && bun scripts/bun_shape_contracts.ts --check && bun test tests/bun_shapes_manifest.test.ts tests/bun_shapes_coverage.test.ts tests/language_coverage.test.ts
+      # Two cheap gates that ran only on main and turned it red after green PRs
+      # (2026-11-14: the innerHTML sink scan in #188 and the bundled VPS tree in
+      # #189). Both take seconds, so PRs can check them too.
+      - name: Main-gate smoke (innerHTML sinks + VPS tree)
+        timeout-minutes: 2
+        run: bun bin/check-innerhtml.ts && bun test tests/dashboard_credentials.test.ts
       - name: Bun test changed files
         run: bun run test:changed
       - name: Changed dsh-plugin bundles (verify-load)
@@ -182,7 +199,9 @@ jobs:
           bun-version-file: .bun-version
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --no-env-file
+      - name: Build workspace contracts dist
+        run: bun run --filter '@sportsdesk-ops/contracts' build
       - name: "Pinned CDN asset drift (live origins; scheduled/unattended runs)"
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         timeout-minutes: 4

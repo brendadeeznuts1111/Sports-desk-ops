@@ -42,12 +42,70 @@ export interface WorkspacePackReport {
 interface RawWorkspaceManifest {
   readonly name?: string;
   readonly private?: boolean;
+  readonly publishConfig?: {
+    readonly access?: string;
+    readonly registry?: string;
+  };
   readonly files?: unknown;
   readonly exports?: unknown;
   readonly dependencies?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
   readonly peerDependencies?: Record<string, string>;
   readonly optionalDependencies?: Record<string, string>;
+}
+
+/**
+ * npm and Bun always include these regardless of "files": the manifest itself,
+ * readme, license and changelog (with optional extensions such as README.md).
+ */
+const AUTO_INCLUDED_FILE =
+  /^(?:package\.json|readme(?:\.[a-z0-9]+)?|license(?:\.[a-z0-9]+)?|changelog(?:\.[a-z0-9]+)?)$/i;
+
+/**
+ * Is a packed file covered by the manifest's "files" allowlist? Semantics measured
+ * against `bun pm pack --dry-run` on 2026-11-14 and matched with Bun.Glob:
+ *   "src/**\/*.ts"  matches src/a.ts and src/nested/b.ts
+ *   "src/*.ts"      matches src/a.ts only (a single "*" does not cross "/")
+ *   "src"           a directory entry covers everything under it
+ *   "!src/nested/**" excludes matching files (negation)
+ * Auto-included files (manifest, readme, licence, changelog) always pass.
+ */
+export function isPackedFileAllowed(
+  file: string,
+  filesAllowlist: readonly string[],
+): boolean {
+  if (AUTO_INCLUDED_FILE.test(file)) return true;
+
+  const includes: string[] = [];
+  const excludes: string[] = [];
+  for (const raw of filesAllowlist) {
+    const negated = raw.startsWith("!");
+    const entry = (negated ? raw.slice(1) : raw)
+      .replace(/^\.\//, "")
+      .replace(/\/+$/, "");
+    if (entry.length === 0) continue;
+    (negated ? excludes : includes).push(entry);
+  }
+
+  const matches = (entry: string): boolean => {
+    if (/[*?[\]{}]/.test(entry)) return new Bun.Glob(entry).match(file);
+    return file === entry || file.startsWith(`${entry}/`);
+  };
+
+  if (excludes.some(matches)) return false;
+  return includes.some(matches);
+}
+
+/**
+ * Workspace packages are private by default. Publication is an explicit opt-in:
+ * no "private": true plus publishConfig access "public" to an https registry.
+ * A loopback or plain-http registry never qualifies. Measured 2026-11-14.
+ */
+export function isPublishableManifest(manifest: RawWorkspaceManifest): boolean {
+  if (manifest.private === true) return false;
+  const access = manifest.publishConfig?.access;
+  const registry = manifest.publishConfig?.registry ?? "";
+  return access === "public" && registry.startsWith("https://");
 }
 
 /** Parse file paths emitted by `bun --no-env-file pm pack --dry-run`. */
@@ -125,8 +183,10 @@ export async function checkWorkspacePacks(
     ).json()) as RawWorkspaceManifest;
     name = manifest.name ?? relDir;
 
-    if (manifest.private !== true) {
-      issues.push(`${relDir}: expected "private": true`);
+    if (manifest.private !== true && !isPublishableManifest(manifest)) {
+      issues.push(
+        `${relDir}: expected "private": true, or publishConfig { access: "public", registry: "https://…" } to publish`,
+      );
     }
 
     const filesAllowlist = Array.isArray(manifest.files)
@@ -179,11 +239,7 @@ export async function checkWorkspacePacks(
         if (FORBIDDEN_PACK_RE.test(file)) {
           issues.push(`${relDir}: forbidden file matched pack output: ${file}`);
         }
-        const allowed =
-          file === "package.json" ||
-          file.startsWith("src/") ||
-          file.startsWith("dist/");
-        if (!allowed) {
+        if (!isPackedFileAllowed(file, filesAllowlist)) {
           issues.push(`${relDir}: unexpected file outside allowlist: ${file}`);
         }
       }

@@ -1,0 +1,57 @@
+name: bun-probes
+
+# Why this exists: scripts/bun-1.4.4-probe.sh pins the package-manager behaviours
+# this repo relies on (audit scoping/fix paths, lockfile flags, prune, publish
+# recursion, release-age units). It is hermetic — every probe runs in its own temp
+# dir — but nothing ran it. A behaviour that regresses in a Bun upgrade is exactly
+# the kind of thing that surfaces months later as "why did CI start doing X", so
+# run it on a schedule and on changes to the surface it covers.
+#
+# The suite is network-dependent (registry installs and audit advisories), so it is
+# not on the per-push path; three claims stay SKIP and do not fail the job.
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/bun-1.4.4-probe.sh"
+      - ".github/workflows/bun-probes.yml"
+      - ".bun-version"
+      - "package.json"
+      - "bun.lock"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/bun-1.4.4-probe.sh"
+      - ".bun-version"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bun-probes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      # tee would return its own status, so pipefail is required for a failing
+      # probe to fail the job.
+      - name: Probe the documented Bun package-manager behaviour
+        run: |
+          set -o pipefail
+          bash scripts/bun-1.4.4-probe.sh | tee bun-probe-report.txt
+      - name: Upload probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-probe-report
+          path: bun-probe-report.txt
+          if-no-files-found: warn

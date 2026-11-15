@@ -5,13 +5,13 @@ Normative product design document for `packages/nsh-desk`, authored before featu
 "Designing data-heavy interfaces", and "Motion inventory"), taking direct layout, density, and
 native-motion inspiration from the NSH Gallery **`Stocks`** application (`Prev close` … `Turnover`).
 
-## 1. Task, Primary Objects, and 5-Plane Scope ("Start from the task")
+## 1. Task, Primary Objects, and 6-Plane Scope ("Start from the task")
 
 - **Primary task:** Operate a high-density, signal-honest sports market & risk surveillance terminal
   against the local `:4020` Sportsdesk daemon (`services/sportsdesk_webview_server.ts`) with full
-  endpoint parity, zero fabricated zeroes, explicit provenance badges, and native 60/120fps `<Canvas>`
-  market visualizations.
-- **5 Workspace Planes (top `SegmentedTabs` switcher):**
+  endpoint parity, zero fabricated zeroes, explicit provenance badges, strictly read-only trading
+  snapshots, and native 60/120fps `<Canvas>` market visualizations.
+- **6 Workspace Planes (top `SegmentedTabs` switcher):**
   1. **`Markets` (Default — NSH `Stocks` Terminal + Dockable Desk):**
      - **Watchlist Sidebar:** Collapsible **Composite** strip (market index, signed delta, spring-rotated
        chevron revealing advancers/decliners breadth & per-league diverging `SpringBar`s), live pulse
@@ -39,7 +39,33 @@ native-motion inspiration from the NSH Gallery **`Stocks`** application (`Prev c
      - **Dockable Classic Panels:** Preserves `SignalsPanel` (sortable `Float64Array` `DataTable`),
        `ExposurePanel` (`nsh/base/plot` bar chart), `ScoreboardPanel`, left `KpisPanel` dock, and
        bottom `DiagnosticsPanel` (`#78` `[DATA-STALE]` & `/api/live-bets/summary` `503` honesty).
-  2. **`Board` (`Board & Sports` Plane):**
+  2. **`Trading Desk` (`terminal` Plane — Unified Institutional Line-Trading, OTC Snapshot & Blotter):**
+     - Unifies the multi-panel trading desk layout under a single clean dark institutional palette
+       aligned with `design/tokens.toml` (`background #070b14`, `card #0d1527`, `popover #131f38`,
+       `border #1e293b`, plus semantic `prov-*` tokens for all 7 ingestion channels) with full Light
+       appearance parity and **strictly read-only snapshot semantics** (zero `Approve & Send to Book`,
+       `Decline`, or `Execute Hedge` mutation actions).
+     - **Top KPI Strip:** Null-honest `Margin`, `GGR`, `Held %`, `Active Bets`, and `Polymarket Liq.`
+       readouts with explicit provenance (`LIVE` / `CAPTURE` / `FIXTURE` / `UNMEASURED`) plus search
+       and stream status.
+     - **`Sport View` Live Hierarchy (Left):** Expandable sport → league tree with live game & active
+       bet counts (`All` + per-sport/league selection).
+     - **`Line-Trading Dashboard` (Center-Left) & `Live Trading Dashboard` Cards (Center-Right):**
+       Selected match handle/activity split `SpringBar`s, `1X2` / `Spread` / `Over-Under` ladder with
+       opener movement deltas & key-number / layoff-risk advisories, dual-series `<Canvas>`
+       **`DualTrajectoryCanvas`** charts (`Point Chart` & `Historic Odds`), and multi-match live
+       trading cards (`1X2`, `Spread`, `Total`) that select into the primary ladder.
+     - **Read-Only Right Inspector:** `Telegram OTC` / `Bet Slip` / `Hedge Monitor` read-only snapshot
+       tabs (inspect OTC quote requests, stake, requested vs fair odds, edge bps, and advisory verdict
+       without approval controls), `Book Liability vs Polymarket Liquidity` `SpringBar` comparison +
+       SOR-1 slippage compliance badge, and `Liability Monitor` (`Total` / `Hold` / `Net Risk` matrix)
+       with `Show Unhedged Only` `DeskSwitch`.
+     - **Bottom Blotter (`Active Bet Logs & Risk Triggers`):** Searchable, filterable (`All`,
+       `Accepted`, `Auto`, `Flagged`, `Hedged`, `Hedge Pending`, `Show Unhedged Only`) active bet log
+       excluding `ALERT`/`BLOCKED` noise from canonical stake/liability totals, rendering semantic
+       `ProvenanceChannelBadge` (`INTERNET`, `GSLIVE`, `GSBUILDER`, `ALERT`, `BLOCKED`, `GATEWAY`,
+       `CSLEVEL2`) and read-only Polymarket hedge coverage status badges.
+  3. **`Board` (`Board & Sports` Plane):**
      - `GET /api/game-admin/board?window=24|48|-1` (opener vs current spread/money/total ladders),
        `GET /api/game-admin` (`Straight` / `Parlay` / `Teaser` wager rollups), `GET /api/scoreboard`,
        `GET /api/logo/:team?meta=1&lqip=1` (logo asset dimensions & LQIP probe), `GET /api/sports`,
@@ -47,20 +73,20 @@ native-motion inspiration from the NSH Gallery **`Stocks`** application (`Prev c
        `GET /api/contests?group=...&q=...` (`227` futures filter), and Live Bets `v1` vs `v2` vs
        `summary` vs `live-wagers` (`?source=auto|file|live`) + retired `410` `/api/f402/get-pending`
        guard verification.
-  3. **`Surveillance` (`Syndicate Graph & GSLive` Plane):**
+  4. **`Surveillance` (`Syndicate Graph & GSLive` Plane):**
      - `GET /api/graph/summary`, `GET /api/graph-feed` (`walletProfiles`, `pendingBets`,
        `perOfficeIpTrackerClusters`, `tenModeSnapshot`, `backtest4Wk` weekly hold & savings),
        `GET /api/graph/stream` bounded SSE frame sampler (`text/event-stream`),
        `GET /api/gslive/weblogs`, `GET /api/gslive/session-health` (`?probe=0|1`), and
        `GET /api/bridge3c/status`.
-  4. **`Forensics` (`Agents, Portal Analysis & Customer Book` Plane):**
+  5. **`Forensics` (`Agents, Portal Analysis & Customer Book` Plane):**
      - `GET /api/agents/search?q=...&limit=20` typeahead (`>= 2` chars), `GET /api/agent-tree` (flat
        `2,276` nodes + `?view=hierarchy` roots/collisions/problems), `GET /api/analysis/filters`,
        `GET /api/analysis/reports`, `GET /api/analysis?report=...&agent=...&sport=...&week=...`
        (integer cents formatted as USD + discrepancy flags), `GET /api/customer/profile?id=...`,
        `GET /api/customer/rating?id=...` (Bayesian skill & Kelly metrics), and admin-gated
        `GET /api/watchlist`.
-  5. **`Ops` (`Health, Governance, Telegram, Parsers & 38-Route Parity` Plane):**
+  6. **`Ops` (`Health, Governance, Telegram, Parsers & 38-Route Parity` Plane):**
      - `GET /health`, `GET /api/status` (`/status.json`), `GET /api/dns/telemetry`,
        `GET /governance.json` (`/governance` oracle gates, owner scorecards, P0 tasks & decisions),
        Telegram admin console (`GET /api/telegram/status`, `GET /api/telegram/activity`,
@@ -108,10 +134,10 @@ Verified statically via `Bun.Transpiler` (`auditNshModuleGraph` in `scripts/nsh_
   `Stocks` instrument synthesis, parser presets, and `DESK_ENDPOINT_CATALOG`.
 - **Root (`App.tsx`):** Single `mount(App)` owner, safe-area shell, root `<ErrorBoundary>`,
   `createDeskStore()`, keyboard shortcuts, desktop menu bar, and plane/dock dispatch.
-- **Feature views (`components/*`):** `DeskHeader`, `MarketsPanel`, `ExecutionTicketModal`,
-  `BoardWorkspace`, `SurveillanceWorkspace`, `ForensicsWorkspace`, `OpsWorkspace`, `SignalsPanel`,
-  `ExposurePanel`, `ScoreboardPanel`, `KpisPanel`, `DiagnosticsPanel`. Never import `nsh/base` or
-  `nsh/desktop`.
+- **Feature views (`components/*`):** `DeskHeader`, `MarketsPanel`, `TradingTerminalWorkspace`,
+  `ExecutionTicketModal`, `BoardWorkspace`, `SurveillanceWorkspace`, `ForensicsWorkspace`,
+  `OpsWorkspace`, `SignalsPanel`, `ExposurePanel`, `ScoreboardPanel`, `KpisPanel`, `DiagnosticsPanel`.
+  Never import `nsh/base` or `nsh/desktop`.
 - **Design-system `ui/` layer (`ui/*`):**
   - `ui/tokens.ts` — `MOTION`, focus/popup/scrim tokens, `animateUserLayoutChange()`.
   - `ui/Button.tsx` — `DeskButton` & `DeskIconButton` (`split()`).
@@ -120,11 +146,12 @@ Verified statically via `Bun.Transpiler` (`auditNshModuleGraph` in `scripts/nsh_
   - `ui/SegmentedTabs.tsx` — `SegmentedTabs` (`Tabs` + `Tab` spring indicator).
   - `ui/Menu.tsx` — `DeskMenu`, `DeskMenuItem`, `DeskMenuSeparator`.
   - `ui/Dialog.tsx` — `DeskDialog`.
-  - `ui/Surface.tsx` — `Surface`, `Badge`, `SectionHeader`, `Separator`, `StateNotice` (`split()`).
+  - `ui/Surface.tsx` — `Surface`, `Badge`, `ProvenanceChannelBadge`, `SectionHeader`, `Separator`,
+    `StateNotice` (`split()`).
   - `ui/DataView.tsx` — `DeskDataTable`, `DeskExposurePlot`, `DeskToolbar`, `DeskWorkspace`.
   - `ui/StockPrimitives.tsx` — `LiveDot`, `SpringBar`, `StatGrid`, `DayRangeBar`,
     `SparklineCanvas`, `MarketChartCanvas`, `DepthChartCanvas`, `RangesDumbbellCanvas`,
-    `OrderToastBanner`.
+    `DualTrajectoryCanvas`, `OrderToastBanner`.
   - `ui/UiKitGallery.tsx` — interactive gallery showcasing every `ui/` primitive in Light & Dark.
 
 ## 5. Motion Tokens & Screen Motion Inventory
@@ -141,15 +168,16 @@ Verified statically via `Bun.Transpiler` (`auditNshModuleGraph` in `scripts/nsh_
 
 ### Motion Inventory (`ops.sportsdesk.desk`)
 
-| #   | State Change Kind            | Concrete Screen Element                                                                                       | Tool & Motion Tokens                                                                                                                                                         | `reduceMotion` Behavior                                                                    |
-| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 1   | Press & hover on controls    | `DeskButton`, `DeskSelect` trigger, Watchlist ticker rows, `Order book` `5 → 10` chip                         | `transition duration-100 ease-out hover:bg-accent active:scale-[0.97] duration-150`                                                                                          | `motion-reduce:transition-none motion-reduce:active:scale-100`                             |
-| 2   | Glyph or direction rotation  | Quote direction arrow (`↑` `0deg` ↔ `180deg`), Composite breadth chevron (`›` `0deg` ↔ `90deg`), `DeskSwitch` | `createAnimatedValue` `.spring(deg, { stiffness: 280, damping: 24 })` bound to `transform: [{ rotate }]`; frequent poll ms counter uses **no motion**                        | `.set(deg)` jumps immediately when `reduceMotion()` is true                                |
-| 3   | Selection that moves         | Top 5-plane `SegmentedTabs`, Watchlist `All/Gainers/Losers/Active`, Chart period `Intraday..4W`, League tabs  | `nsh/base` `Tabs` single `indicatorClass` sliding natively via `spring_move`                                                                                                 | Native `Tabs` indicator snaps without travel                                               |
-| 4   | Watchlist & ladder layout    | Composite breadth expand/collapse, Watchlist filter reorder, Order Book `5 → 10` toggle, Ticket `Review`      | `animateUserLayoutChange()` (`LayoutAnimation.configureNext` `200ms` `easeInEaseOut` `opacity`) invoked strictly on user command                                             | `if (reduceMotion()) return;` — immediate layout commit                                    |
-| 5   | Continuous proportion bars   | Composite league breadth bars, Order Book `BID %`/`ASK %` bar, `Trade flow` diverging bars, `DayRangeBar`     | `SpringBar` & `DayRangeBar` drive `createAnimatedValue` `translateX` via `.spring(target, { stiffness: 240, damping: 26 })` on UI thread                                     | `.set(target)` snaps bar & range knob without spring travel                                |
-| 6   | Interactive chart scrub      | `MarketChartCanvas` horizontal crosshair & floating price/time pill                                           | `PanResponder` (`activeOffsetX: 6, failOffsetY: 8`) updates cursor index 1:1 with pointer/finger; `calm(0.22)` dampens Y-axis bounds across period switches                  | 1:1 direct scrub tracking preserved (user-driven gesture)                                  |
-| 7   | Surface opening or closing   | `Execution Ticket` (`DeskDialog` / `DeskSheet`), `UI kit…` `DeskDialog`, `Workspace` `DeskMenu`, `DeskSelect` | `Dialog` `animation="fade"`, `Sheet` edge slide + scrim fade (`closeOnSwipe`), `Menu` scale/fade popup classes                                                               | `Dialog` `animation="none"`, `Sheet` & `Menu` settle instantly                             |
-| 8   | Action confirmation toast    | `OrderToastBanner` after paper execution run / mode switch / parser or webhook run                            | `createAnimatedValue` `translateY` (`-12` → `0`) + `opacity` (`0` → `1`) spring entrance, auto-dismiss after `4s`                                                            | Appears at `translateY: 0, opacity: 1` immediately                                         |
-| 9   | Content arriving & tables    | Initial `loading` → `ready` panel fade; `DataTable` sorted cells & polling refreshes                          | Panel ready wrapper runs `createMotion({ enter: "fadeIn", duration: 150 })` once; `DataTable` rows and background poll updates use **no motion** so figures stay razor-sharp | `createMotion` lands at rest immediately                                                   |
-| 10  | Live telemetry pulse & sound | `LiveDot` in Watchlist header & Sparkline latest-point ring while `Auto 10s` is active; audio                 | `<Canvas>` reads `AnimatedValue` `pulse` (`cx.arc` radius & `cx.globalAlpha` animated natively without JS re-recording); **no audio**                                        | Static crisp dot at rest (`pulse.set(0)`), zero loop keyframes when `reduceMotion()` is on |
+| #   | State Change Kind                | Concrete Screen Element                                                                                                         | Tool & Motion Tokens                                                                                                                                                           | `reduceMotion` Behavior                                                                          |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| 1   | Press & hover on controls        | `DeskButton`, `DeskSelect` trigger, Watchlist ticker rows, `Order book` `5 → 10` chip                                           | `transition duration-100 ease-out hover:bg-accent active:scale-[0.97] duration-150`                                                                                            | `motion-reduce:transition-none motion-reduce:active:scale-100`                                   |
+| 2   | Glyph or direction rotation      | Quote direction arrow (`↑` `0deg` ↔ `180deg`), Composite breadth chevron (`›` `0deg` ↔ `90deg`), `DeskSwitch`                   | `createAnimatedValue` `.spring(deg, { stiffness: 280, damping: 24 })` bound to `transform: [{ rotate }]`; frequent poll ms counter uses **no motion**                          | `.set(deg)` jumps immediately when `reduceMotion()` is true                                      |
+| 3   | Selection that moves             | Top 5-plane `SegmentedTabs`, Watchlist `All/Gainers/Losers/Active`, Chart period `Intraday..4W`, League tabs                    | `nsh/base` `Tabs` single `indicatorClass` sliding natively via `spring_move`                                                                                                   | Native `Tabs` indicator snaps without travel                                                     |
+| 4   | Watchlist & ladder layout        | Composite breadth expand/collapse, Watchlist filter reorder, Order Book `5 → 10` toggle, Ticket `Review`                        | `animateUserLayoutChange()` (`LayoutAnimation.configureNext` `200ms` `easeInEaseOut` `opacity`) invoked strictly on user command                                               | `if (reduceMotion()) return;` — immediate layout commit                                          |
+| 5   | Continuous proportion bars       | Composite league breadth bars, Order Book `BID %`/`ASK %` bar, `Trade flow` diverging bars, `DayRangeBar`                       | `SpringBar` & `DayRangeBar` drive `createAnimatedValue` `translateX` via `.spring(target, { stiffness: 240, damping: 26 })` on UI thread                                       | `.set(target)` snaps bar & range knob without spring travel                                      |
+| 6   | Interactive chart scrub          | `MarketChartCanvas` horizontal crosshair & floating price/time pill                                                             | `PanResponder` (`activeOffsetX: 6, failOffsetY: 8`) updates cursor index 1:1 with pointer/finger; `calm(0.22)` dampens Y-axis bounds across period switches                    | 1:1 direct scrub tracking preserved (user-driven gesture)                                        |
+| 7   | Surface opening or closing       | `Execution Ticket` (`DeskDialog` / `DeskSheet`), `UI kit…` `DeskDialog`, `Workspace` `DeskMenu`, `DeskSelect`                   | `Dialog` `animation="fade"`, `Sheet` edge slide + scrim fade (`closeOnSwipe`), `Menu` scale/fade popup classes                                                                 | `Dialog` `animation="none"`, `Sheet` & `Menu` settle instantly                                   |
+| 8   | Action confirmation toast        | `OrderToastBanner` after paper execution run / mode switch / parser or webhook run                                              | `createAnimatedValue` `translateY` (`-12` → `0`) + `opacity` (`0` → `1`) spring entrance, auto-dismiss after `4s`                                                              | Appears at `translateY: 0, opacity: 1` immediately                                               |
+| 9   | Content arriving & tables        | Initial `loading` → `ready` panel fade; `DataTable` sorted cells & polling refreshes                                            | Panel ready wrapper runs `createMotion({ enter: "fadeIn", duration: 150 })` once; `DataTable` rows and background poll updates use **no motion** so figures stay razor-sharp   | `createMotion` lands at rest immediately                                                         |
+| 10  | Live telemetry pulse & sound     | `LiveDot` in Watchlist header & Sparkline latest-point ring while `Auto 10s` is active; audio                                   | `<Canvas>` reads `AnimatedValue` `pulse` (`cx.arc` radius & `cx.globalAlpha` animated natively without JS re-recording); **no audio**                                          | Static crisp dot at rest (`pulse.set(0)`), zero loop keyframes when `reduceMotion()` is on       |
+| 11  | Trading Desk inspector & blotter | `Telegram OTC` / `Bet Slip` / `Hedge Monitor` tabs, `Active Bet Logs` status filter, `Show Unhedged Only` & `Sport View` filter | `SegmentedTabs` spring indicator + `animateUserLayoutChange()` on user filter/toggle + `SpringBar` for Book Liability vs Polymarket Liquidity; blotter cells use **no motion** | `Tabs` & `SpringBar` snap immediately; `animateUserLayoutChange()` no-ops under `reduceMotion()` |

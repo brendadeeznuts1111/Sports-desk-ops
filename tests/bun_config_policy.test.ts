@@ -126,10 +126,20 @@ describe("package manager policy", () => {
     expect(globalBunfigPath({ HOME: "/h" })).toBe("/h/.bunfig.toml");
   });
 
-  test("the registry scope is declared without a token", async () => {
-    const npmrc = await Bun.file(".npmrc").text();
-    expect(npmrc).toContain("@tennis-hq:registry=");
-    expect(npmrc).not.toContain("_authToken");
+  test("no loopback registry or auth token is committed", async () => {
+    // The old committed .npmrc routed @tennis-hq at 127.0.0.1:50851, a registry
+    // that never ran. Registry and token configuration belongs in the user-level
+    // ~/.npmrc (see docs/runbooks/bun-pm-policy.md); this guard keeps a dead
+    // loopback route from returning. Measured 2026-11-14.
+    const npmrc = Bun.file(".npmrc");
+    if (await npmrc.exists()) {
+      const text = await npmrc.text();
+      expect(text).not.toMatch(/127\.0\.0\.1|localhost/);
+      expect(text).not.toContain("_authToken");
+    }
+    const pkg = await Bun.file("package.json").json();
+    const registry = pkg.publishConfig?.registry ?? "";
+    expect(registry).not.toMatch(/127\.0\.0\.1|localhost/);
   });
 
   test("root manifest is private and every packages/* directory is a registered workspace", async () => {

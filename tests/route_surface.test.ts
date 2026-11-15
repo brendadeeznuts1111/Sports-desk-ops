@@ -277,6 +277,6 @@ describe("the committed tree", () => {
     );
     // A ratchet: the count moves only with a reviewed route change, and the comparison above
     // is what proves each served path is declared and (unless it is a page) specified.
-    expect(inputs.served.size).toBe(73);
+    expect(inputs.served.size).toBe(74);
   });
 });

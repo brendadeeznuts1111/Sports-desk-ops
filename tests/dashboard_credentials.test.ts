@@ -100,6 +100,13 @@ describe("the VPS tree contains everything the daemon imports", () => {
     .trim()
     .split(/\s+/);
 
+  test("ships the directories the daemon reads at runtime", () => {
+    // Not bundled imports: lib/wager_config.ts opens config/wager_tiers.toml and
+    // lib/wagers_wire_contract.ts opens schema/wagers_field_contract.json by path.
+    // The bundler cannot see those reads, so the deploy list must carry them.
+    expect(shipped).toEqual(expect.arrayContaining(["config", "schema"]));
+  });
+
   // Bundling is the measurement: it follows static and dynamic imports from the entry points the
   // systemd unit starts. A file that loads from a directory the script does not copy would exist
   // here and be missing on the server (2026-11-04: `scripts/` was imported but not shipped).

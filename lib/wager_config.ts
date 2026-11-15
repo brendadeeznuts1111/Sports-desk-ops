@@ -47,8 +47,8 @@ export const tierEntrySchema = z.object({
 });
 
 export const DEFAULT_SURFACE = {
-  panel: "#0d1527",
-  border: "#1e293b",
+  panel: "#0b1120",
+  border: "#243247",
   text: "#f1f5f9",
   muted: "#94a3b8",
   accent: "#38bdf8",
@@ -61,39 +61,41 @@ export const DEFAULT_SURVEILLANCE = {
   inplayDelaySeconds: 3,
 };
 
+const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+export const surfaceProvenanceSchema = z.object({
+  liveFg: hexColorSchema,
+  liveBg: hexColorSchema,
+  liveBorder: hexColorSchema,
+  captureFg: hexColorSchema,
+  captureBg: hexColorSchema,
+  captureBorder: hexColorSchema,
+  staleFg: hexColorSchema,
+  staleBg: hexColorSchema,
+  staleBorder: hexColorSchema,
+  fixtureFg: hexColorSchema,
+  fixtureBg: hexColorSchema,
+  fixtureBorder: hexColorSchema,
+});
+
 export const surfaceSchema = z.object({
-  panel: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .default(DEFAULT_SURFACE.panel),
-  border: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .default(DEFAULT_SURFACE.border),
-  text: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .default(DEFAULT_SURFACE.text),
-  muted: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .default(DEFAULT_SURFACE.muted),
-  accent: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .default(DEFAULT_SURFACE.accent),
-  danger: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
-  warn: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
-  ok: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
+  bg: hexColorSchema.optional(),
+  cli: hexColorSchema.optional(),
+  panel: hexColorSchema.default(DEFAULT_SURFACE.panel),
+  elevated: hexColorSchema.optional(),
+  hover: hexColorSchema.optional(),
+  raised: hexColorSchema.optional(),
+  border: hexColorSchema.default(DEFAULT_SURFACE.border),
+  borderStrong: hexColorSchema.optional(),
+  text: hexColorSchema.default(DEFAULT_SURFACE.text),
+  textSecondary: hexColorSchema.optional(),
+  muted: hexColorSchema.default(DEFAULT_SURFACE.muted),
+  accent: hexColorSchema.default(DEFAULT_SURFACE.accent),
+  danger: hexColorSchema.optional(),
+  warn: hexColorSchema.optional(),
+  ok: hexColorSchema.optional(),
+  info: hexColorSchema.optional(),
+  provenance: surfaceProvenanceSchema.optional(),
   typography: z
     .object({
       fontFamily: z.string(),
@@ -101,6 +103,17 @@ export const surfaceSchema = z.object({
       scale: z.number(),
     })
     .optional(),
+});
+
+export const wagerDashboardSchema = z.object({
+  defaultTab: z.string().min(1).default("customers"),
+  refreshIntervalSeconds: z.number().int().positive().max(3600).default(15),
+  staleFeedWarnMinutes: z.number().positive().max(1440).default(30),
+  maxLiveTapeRows: z.number().int().positive().max(5000).default(250),
+  highlightSharpScoreMin: z.number().min(0).max(10).default(7.5),
+  showProvenanceBadges: z.boolean().default(true),
+  showInlineClvBps: z.boolean().default(true),
+  autoExecute: z.literal(false).default(false),
 });
 
 export const surveillanceSchema = z.object({
@@ -168,6 +181,7 @@ export const wagerTiersConfigSchema = z.object({
   features: z.record(z.string(), z.boolean()).optional(),
   rateLimits: z.record(z.string(), z.unknown()).optional(),
   audit: z.record(z.string(), z.unknown()).optional(),
+  dashboard: wagerDashboardSchema.optional(),
 });
 
 let lastLoadedConfig: { path: string; config: WagerTiersConfig } | null = null;

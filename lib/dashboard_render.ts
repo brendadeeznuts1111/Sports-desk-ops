@@ -116,10 +116,12 @@ export function renderDashboardHtml(snapshot: DashboardSnapshot): string {
 `;
 }
 
-export interface DashboardAnsiOptions {
+export interface DashboardAnsiOptions extends Bun.markdown.AnsiTheme {
   readonly colors?: boolean;
+  readonly hyperlinks?: boolean;
   readonly columns?: number;
   readonly light?: boolean;
+  readonly kittyGraphics?: boolean;
 }
 
 /** The terminal view; `columns: 0` disables wrapping. */
@@ -127,14 +129,34 @@ export function renderDashboardAnsi(
   snapshot: DashboardSnapshot,
   options: DashboardAnsiOptions = {},
 ): string {
+  return Bun.markdown.ansi(
+    buildDashboardMarkdown(snapshot),
+    dashboardAnsiTheme(options),
+  );
+}
+
+/**
+ * Map dashboard options onto Bun's `AnsiTheme` (`Bun.markdown.AnsiTheme`).
+ *
+ * `light` and `kittyGraphics` are forwarded only when the caller states them.
+ * Omitting `light` lets Bun detect from `COLORFGBG`; passing `false` forces the
+ * dark palette rather than silently falling back to that detection.
+ */
+export function dashboardAnsiTheme(
+  options: DashboardAnsiOptions = {},
+): Bun.markdown.AnsiTheme {
   const colors = options.colors ?? true;
-  const columns = options.columns ?? 100;
-  return Bun.markdown.ansi(buildDashboardMarkdown(snapshot), {
+  const hyperlinks =
+    options.hyperlinks === undefined ? colors : colors && options.hyperlinks;
+  return {
     colors,
-    hyperlinks: colors,
-    columns,
-    ...(options.light === true ? { light: true } : {}),
-  });
+    hyperlinks,
+    columns: options.columns ?? 100,
+    ...(options.light === undefined ? {} : { light: options.light }),
+    ...(options.kittyGraphics === undefined
+      ? {}
+      : { kittyGraphics: options.kittyGraphics }),
+  };
 }
 
 /** Exactly the sections in render order; exported for tests and callers that build a TOC. */

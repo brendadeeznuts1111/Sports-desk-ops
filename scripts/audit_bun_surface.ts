@@ -3,7 +3,7 @@
  * Audit the documented Bun global surface against this repo's catalogs and usage.
  *
  * Sources (network is deliberate; this is a manual audit, not a CI gate):
- *  - https://bun.sh/reference/globals/bun — documented Bun functions/classes/variables/namespaces;
+ *  - https://bun.sh/reference/bun — documented Bun functions/classes/variables/namespaces;
  *  - lib/bun_shapes.ts — the shape catalog the docs gates reference;
  *  - bin/bun_surface.ts — the pinned runtime presence checks;
  *  - the tracked source tree — `Bun.<name>` call sites.
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const URL_REFERENCE = "https://bun.sh/reference/globals/bun";
+const URL_REFERENCE = "https://bun.sh/reference/bun";
 const SECTIONS = [
   "functions",
   "classes",

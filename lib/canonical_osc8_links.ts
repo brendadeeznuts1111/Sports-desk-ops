@@ -146,7 +146,7 @@ export function formatGsLiveSidecarOsc8Markdown(
   return `[${label}](${url})`;
 }
 
-export interface AnsiMarkdownOptions {
+export interface AnsiMarkdownOptions extends Bun.markdown.AnsiTheme {
   readonly colors?: boolean;
   readonly hyperlinks?: boolean;
   readonly light?: boolean;
@@ -156,10 +156,11 @@ export interface AnsiMarkdownOptions {
 }
 
 /**
- * Type alias representing Bun's official Markdown AnsiTheme interface.
- * Controls terminal ANSI rendering options for Bun.markdown.ansi().
+ * Type alias representing Bun's official Markdown AnsiTheme interface (`Bun.markdown.AnsiTheme`).
+ * Controls terminal ANSI rendering options for `Bun.markdown.ansi(input, theme)`.
  *
- * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
+ * @see https://bun.com/reference/bun/markdown/AnsiTheme
+ * @see https://bun.com/reference/bun/markdown/AnsiTheme
  */
 export type AnsiTheme = AnsiMarkdownOptions;
 
@@ -189,6 +190,154 @@ export const ACCESSIBLE_OSC8_THEME: AnsiTheme = {
   hyperlinks: true,
 } as const;
 
+export type AnsiThemePresetName =
+  "dark" | "light" | "mono" | "monochrome" | "accessible";
+
+export const ANSI_THEME_PRESETS: Readonly<
+  Record<AnsiThemePresetName, AnsiTheme>
+> = {
+  dark: DARK_ANSI_THEME,
+  light: LIGHT_ANSI_THEME,
+  mono: MONOCHROME_ANSI_THEME,
+  monochrome: MONOCHROME_ANSI_THEME,
+  accessible: ACCESSIBLE_OSC8_THEME,
+} as const;
+
+/**
+ * Parse CLI arguments (`--theme`, `--colors` / `--no-color`, `--hyperlinks` / `--no-hyperlinks`,
+ * `--light` / `--dark`, `--columns`, `--kitty-graphics`, `--linkify-symbols`) into an `AnsiMarkdownOptions`
+ * object compatible with `Bun.markdown.AnsiTheme`.
+ */
+export function parseAnsiMarkdownCliOptions(
+  args: readonly string[] = [],
+): AnsiMarkdownOptions {
+  let preset: AnsiTheme | undefined;
+  let colors: boolean | undefined;
+  let hyperlinks: boolean | undefined;
+  let light: boolean | undefined;
+  let columns: number | undefined;
+  let kittyGraphics: boolean | undefined;
+  let linkifySymbols: boolean | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "--theme" && i + 1 < args.length) {
+      const name = args[++i]!.toLowerCase() as AnsiThemePresetName;
+      if (name in ANSI_THEME_PRESETS) {
+        preset = ANSI_THEME_PRESETS[name];
+      }
+      continue;
+    }
+    if (arg.startsWith("--theme=")) {
+      const name = arg
+        .slice("--theme=".length)
+        .toLowerCase() as AnsiThemePresetName;
+      if (name in ANSI_THEME_PRESETS) {
+        preset = ANSI_THEME_PRESETS[name];
+      }
+      continue;
+    }
+    if (arg === "--colors" || arg === "--color") {
+      colors = true;
+      continue;
+    }
+    if (arg === "--no-colors" || arg === "--no-color") {
+      colors = false;
+      continue;
+    }
+    if (arg === "--hyperlinks") {
+      hyperlinks = true;
+      continue;
+    }
+    if (arg === "--no-hyperlinks") {
+      hyperlinks = false;
+      continue;
+    }
+    if (arg === "--light") {
+      light = true;
+      continue;
+    }
+    if (arg === "--dark" || arg === "--no-light") {
+      light = false;
+      continue;
+    }
+    if (arg === "--columns" && i + 1 < args.length) {
+      const parsed = Number(args[++i]);
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        columns = parsed;
+      }
+      continue;
+    }
+    if (arg.startsWith("--columns=")) {
+      const parsed = Number(arg.slice("--columns=".length));
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        columns = parsed;
+      }
+      continue;
+    }
+    if (arg === "--kitty-graphics" || arg === "--kitty") {
+      kittyGraphics = true;
+      continue;
+    }
+    if (arg === "--no-kitty-graphics" || arg === "--no-kitty") {
+      kittyGraphics = false;
+      continue;
+    }
+    if (arg === "--linkify-symbols") {
+      linkifySymbols = true;
+      continue;
+    }
+    if (arg === "--no-linkify-symbols") {
+      linkifySymbols = false;
+      continue;
+    }
+  }
+
+  const resolvedColors =
+    colors ?? preset?.colors ?? (!Bun.env.NO_COLOR && Bun.env.TERM !== "dumb");
+  const resolvedHyperlinks = hyperlinks ?? preset?.hyperlinks ?? resolvedColors;
+  const resolvedLight = light ?? preset?.light;
+  const resolvedColumns = columns ?? preset?.columns;
+  const resolvedKitty = kittyGraphics ?? preset?.kittyGraphics;
+
+  return {
+    colors: resolvedColors,
+    hyperlinks: resolvedHyperlinks,
+    ...(resolvedLight !== undefined ? { light: resolvedLight } : {}),
+    ...(resolvedColumns !== undefined ? { columns: resolvedColumns } : {}),
+    ...(resolvedKitty !== undefined ? { kittyGraphics: resolvedKitty } : {}),
+    ...(linkifySymbols !== undefined ? { linkifySymbols } : {}),
+  };
+}
+
+/**
+ * Formats a concise human-readable summary of the active `Bun.markdown.AnsiTheme` properties.
+ */
+export function describeAnsiTheme(options?: AnsiMarkdownOptions): string {
+  const colors =
+    options?.colors ?? (!Bun.env.NO_COLOR && Bun.env.TERM !== "dumb");
+  const hyperlinks = options?.hyperlinks ?? true;
+  const terminalWidth =
+    options?.columns !== undefined
+      ? options.columns
+      : Math.min(process.stdout?.columns || 80, 130);
+  const parts = [
+    `colors=${colors}`,
+    `hyperlinks=${colors && hyperlinks}`,
+    `columns=${terminalWidth}`,
+  ];
+  if (options?.light !== undefined) {
+    parts.push(`light=${options.light}`);
+  }
+  if (options?.kittyGraphics === true) {
+    parts.push("kittyGraphics=true");
+  }
+  if (options?.linkifySymbols === true) {
+    parts.push("linkifySymbols=true");
+  }
+  return parts.join(", ");
+}
+
 /**
  * Formats a Markdown link pointing to Bun's canonical AnsiTheme reference.
  */
@@ -210,7 +359,7 @@ export function formatBunSymbolOsc8Markdown(symbol: string): string | null {
 /**
  * Render Markdown to ANSI terminal string using native Bun.markdown.ansi().
  * Fully aligned with official Bun.AnsiTheme reference:
- * @see https://bun.com/reference/globals/bun/markdown/AnsiTheme
+ * @see https://bun.com/reference/bun/markdown/AnsiTheme
  *  - colors: Emit ANSI styling (false for plain ASCII chrome without escapes)
  *  - hyperlinks: Emit clickable OSC 8 hyperlinks (\x1b]8;;URL\x1b\TEXT\x1b]8;;\x1b\)
  *  - light: Auto-detects or sets inline code palette for light backgrounds

@@ -16,13 +16,19 @@ import * as readline from "node:readline";
 import { Readable } from "node:stream";
 import {
   buildCompositeMatchKey,
+  computeWagerLineWindows,
   enrichWagerRecord,
   inferTotalPicks,
   parseBuyPointsFromDesc,
+  rankCustomersBySlice,
   FigureDateEnrichmentInspection,
+  type CustomerSliceSummary,
   type FigureDateWager,
   type LiveTickerWager,
   type EnrichedWager,
+  type WagerLineWindow,
+  type WagerPeriodSliceToken,
+  type WagerSliceFilter,
 } from "../lib/f402_figure_date_enricher.ts";
 import { parseAsCents } from "../design/domain-branded-types.ts";
 import { cliInspectOptions, inspectReport } from "../lib/cli_inspect.ts";
@@ -42,6 +48,9 @@ Options:
   --format <fmt>     Output presentation format: inspect | jsonl | summary | table (default: summary)
   --inspect          Format output using Bun.inspect inspection view (shortcut for --format=inspect)
   --sample <N>       Number of sample enriched wagers to inspect (default: 5)
+  --sub-sport <sub > Filter customer leaderboard by SubSport (e.g. NCAAB, NBA, NFL)
+  --period <p>       Filter customer leaderboard by period (e.g. 1H, 2H, FG, 1Q)
+  --live-only        Filter customer leaderboard to in-play (LIVE / GSLive) wagers
   --stats            Output match rate and summary statistics (default: true)
   --help             Show this help message
 `);
@@ -57,6 +66,7 @@ export interface CliOptions {
   format?: "jsonl" | "inspect" | "summary" | "table";
   inspect?: boolean;
   sampleCount?: number;
+  sliceFilter?: WagerSliceFilter;
 }
 
 export function parseCliArgs(args: string[]): CliOptions {
@@ -68,6 +78,10 @@ export function parseCliArgs(args: string[]): CliOptions {
   let format: "jsonl" | "inspect" | "summary" | "table" = "summary";
   let inspect = false;
   let sampleCount = 5;
+  let subSport: string | undefined;
+  let portalPeriod: WagerPeriodSliceToken | undefined;
+  let isLive: boolean | undefined;
+  let gsLiveOnly: boolean | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -105,6 +119,15 @@ export function parseCliArgs(args: string[]): CliOptions {
       if (!Number.isNaN(parsed) && parsed > 0) {
         sampleCount = parsed;
       }
+    } else if (arg === "--sub-sport" && i + 1 < args.length) {
+      const val = args[++i];
+      if (val) subSport = val.trim();
+    } else if (arg === "--period" && i + 1 < args.length) {
+      const val = args[++i];
+      if (val) portalPeriod = val.trim().toUpperCase() as WagerPeriodSliceToken;
+    } else if (arg === "--live-only" || arg === "--gslive-only") {
+      isLive = true;
+      gsLiveOnly = true;
     }
   }
 
@@ -114,6 +137,13 @@ export function parseCliArgs(args: string[]): CliOptions {
     process.exit(1);
   }
 
+  const sliceFilter: WagerSliceFilter = {
+    ...(subSport !== undefined ? { subSport } : {}),
+    ...(portalPeriod !== undefined ? { portalPeriod } : {}),
+    ...(isLive !== undefined ? { isLive } : {}),
+    ...(gsLiveOnly !== undefined ? { gsLiveOnly } : {}),
+  };
+
   return {
     figurePath,
     tickerPath,
@@ -122,6 +152,7 @@ export function parseCliArgs(args: string[]): CliOptions {
     format,
     inspect,
     sampleCount,
+    sliceFilter,
   };
 }
 
@@ -194,6 +225,8 @@ export async function runEnrichment(options: CliOptions): Promise<{
   unmatchedRows: number;
   enrichedOutPath: string;
   inspection: FigureDateEnrichmentInspection;
+  customerLeaderboard: readonly CustomerSliceSummary[];
+  lineWindows: ReadonlyMap<string, WagerLineWindow>;
 }> {
   if (
     typeof options.figurePath === "string" &&
@@ -225,6 +258,7 @@ export async function runEnrichment(options: CliOptions): Promise<{
   let totalRiskCents = 0;
   let totalNetPnlCents = 0;
   const samples: EnrichedWager[] = [];
+  const enrichedWagers: EnrichedWager[] = [];
   const maxSamples = options.sampleCount ?? 5;
 
   const rl = readline.createInterface({
@@ -234,6 +268,10 @@ export async function runEnrichment(options: CliOptions): Promise<{
     crlfDelay: Infinity,
   });
 
+  if (options.outputPath) {
+    // Bun.file().writer() overwrites from offset 0 without truncating; clear any prior file first.
+    await Bun.write(options.outputPath, "");
+  }
   const outWriter = options.outputPath
     ? Bun.file(options.outputPath).writer()
     : null;
@@ -268,6 +306,7 @@ export async function runEnrichment(options: CliOptions): Promise<{
       if (figureRow) {
         matchedRows++;
         const enriched = enrichWagerRecord(tickerRow, figureRow);
+        enrichedWagers.push(enriched);
         totalRiskCents += enriched.settlement.amountWageredCents;
         totalNetPnlCents += enriched.settlement.netPnlCents;
         if (samples.length < maxSamples) {
@@ -373,6 +412,12 @@ export async function runEnrichment(options: CliOptions): Promise<{
     samples,
   );
 
+  const lineWindows = computeWagerLineWindows(enrichedWagers);
+  const customerLeaderboard = rankCustomersBySlice(
+    enrichedWagers,
+    options.sliceFilter ?? {},
+  );
+
   if (options.inspect || options.format === "inspect") {
     console.log(inspectReport(inspection, cliInspectOptions()));
   } else if (options.stats && options.format === "summary") {
@@ -390,6 +435,8 @@ export async function runEnrichment(options: CliOptions): Promise<{
     unmatchedRows,
     enrichedOutPath: options.outputPath ?? ":memory:",
     inspection,
+    customerLeaderboard,
+    lineWindows,
   };
 }
 

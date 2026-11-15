@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Operator & CI CLI for `packages/nsh-desk` (`https://nsh.dev/docs/cli/`),
- * implemented natively on Bun's `Bun` global namespace (`/reference/globals/bun`):
+ * implemented natively on Bun's `Bun` global namespace (`/reference/bun`):
  *   - `Bun.file(...)` async file probes & byte/JSON/text loading (zero `node:fs`)
  *   - `Bun.which(...)` binary discovery with explicit `PATH`
  *   - `Bun.spawn(...)` + `Bun.nanoseconds()` high-resolution step timing

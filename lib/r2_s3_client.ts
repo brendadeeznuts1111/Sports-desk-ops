@@ -316,7 +316,24 @@ async function signingKey(
  * needs SigV4 over the exact header set. This stays in Web Crypto (no node:crypto)
  * and is used only when metadata is non-empty; plain writes still go through
  * Bun.S3Client.write and downloads still use its presigner.
+ *
+ * Matches `s3file.writer({ retry: 3 })` in `docs/runtime/s3.mdx` by retrying
+ * transient network errors and HTTP 408/429/5xx responses up to `retry` times.
  */
+export const DEFAULT_METADATA_PUT_RETRIES = 3;
+export const DEFAULT_METADATA_PUT_RETRY_DELAY_MS = 150;
+
+function isTransientPutStatus(status: number): boolean {
+  return (
+    status === 408 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
+
 async function putObjectWithMetadata(
   auth: R2S3Auth,
   bucket: string,
@@ -324,72 +341,102 @@ async function putObjectWithMetadata(
   payload: Uint8Array,
   type: string,
   metadata: Readonly<Record<string, string>>,
+  retryOptions: {
+    readonly retry?: number;
+    readonly retryDelayMs?: number;
+    readonly fetchImpl?: typeof fetch;
+  } = {},
 ): Promise<void> {
   const endpoint = new URL(auth.endpoint);
   const host = endpoint.host;
   const path = `/${encodeBucket(bucket)}/${key.split("/").map(encodeRfc3986).join("/")}`;
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.[0-9]{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
   const region = auth.region ?? "auto";
   const payloadHash = new Bun.CryptoHasher("sha256")
     .update(payload)
     .digest("hex");
-  const headers: Record<string, string> = {
-    "content-length": String(payload.byteLength),
-    "content-type": type,
-    host,
-    "x-amz-content-sha256": payloadHash,
-    "x-amz-date": amzDate,
-  };
-  if (auth.sessionToken !== undefined) {
-    headers["x-amz-security-token"] = auth.sessionToken;
-  }
-  for (const [name, value] of Object.entries(metadata)) {
-    headers[`x-amz-meta-${name.toLowerCase()}`] = value
-      .replace(/[\r\n]+/g, " ")
-      .trim();
-  }
-  const signedHeaderNames = Object.keys(headers).sort();
-  const canonicalHeaders = signedHeaderNames
-    .map((name) => `${name}:${headers[name]}\n`)
-    .join("");
-  const signedHeaders = signedHeaderNames.join(";");
-  const canonicalRequest = [
-    "PUT",
-    path,
-    "",
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
-  const scope = `${dateStamp}/${region}/s3/aws4_request`;
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    scope,
-    new Bun.CryptoHasher("sha256").update(canonicalRequest).digest("hex"),
-  ].join("\n");
-  const signing = await signingKey(auth.secretAccessKey, dateStamp, region);
-  const signature = Buffer.from(
-    await hmacSha256(signing, stringToSign),
-  ).toString("hex");
-  const requestHeaders = new Headers();
-  for (const [name, value] of Object.entries(headers)) {
-    if (name !== "host") requestHeaders.set(name, value);
-  }
-  requestHeaders.set(
-    "authorization",
-    `AWS4-HMAC-SHA256 Credential=${auth.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  const maxRetries = Math.max(0, Math.trunc(retryOptions.retry ?? 0));
+  const baseDelayMs = Math.max(
+    0,
+    Math.trunc(
+      retryOptions.retryDelayMs ?? DEFAULT_METADATA_PUT_RETRY_DELAY_MS,
+    ),
   );
-  const response = await fetch(`${endpoint.origin}${path}`, {
-    method: "PUT",
-    headers: requestHeaders,
-    body: payload,
-  });
-  if (!response.ok) {
-    throw new Error(`R2 PUT ${key} failed (${response.status})`);
+  const doFetch = retryOptions.fetchImpl ?? fetch;
+
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0 && baseDelayMs > 0) {
+      await Bun.sleep(baseDelayMs * attempt);
+    }
+    const now = new Date();
+    const amzDate = now.toISOString().replace(/[:-]|\.[0-9]{3}/g, "");
+    const dateStamp = amzDate.slice(0, 8);
+    const headers: Record<string, string> = {
+      "content-length": String(payload.byteLength),
+      "content-type": type,
+      host,
+      "x-amz-content-sha256": payloadHash,
+      "x-amz-date": amzDate,
+    };
+    if (auth.sessionToken !== undefined) {
+      headers["x-amz-security-token"] = auth.sessionToken;
+    }
+    for (const [name, value] of Object.entries(metadata)) {
+      headers[`x-amz-meta-${name.toLowerCase()}`] = value
+        .replace(/[\r\n]+/g, " ")
+        .trim();
+    }
+    const signedHeaderNames = Object.keys(headers).sort();
+    const canonicalHeaders = signedHeaderNames
+      .map((name) => `${name}:${headers[name]}\n`)
+      .join("");
+    const signedHeaders = signedHeaderNames.join(";");
+    const canonicalRequest = [
+      "PUT",
+      path,
+      "",
+      canonicalHeaders,
+      signedHeaders,
+      payloadHash,
+    ].join("\n");
+    const scope = `${dateStamp}/${region}/s3/aws4_request`;
+    const stringToSign = [
+      "AWS4-HMAC-SHA256",
+      amzDate,
+      scope,
+      new Bun.CryptoHasher("sha256").update(canonicalRequest).digest("hex"),
+    ].join("\n");
+    const signing = await signingKey(auth.secretAccessKey, dateStamp, region);
+    const signature = Buffer.from(
+      await hmacSha256(signing, stringToSign),
+    ).toString("hex");
+    const requestHeaders = new Headers();
+    for (const [name, value] of Object.entries(headers)) {
+      if (name !== "host") requestHeaders.set(name, value);
+    }
+    requestHeaders.set(
+      "authorization",
+      `AWS4-HMAC-SHA256 Credential=${auth.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    );
+    let response: Response;
+    try {
+      response = await doFetch(`${endpoint.origin}${path}`, {
+        method: "PUT",
+        headers: requestHeaders,
+        body: payload,
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxRetries) continue;
+      throw lastError;
+    }
+    if (response.ok) return;
+    lastError = new Error(`R2 PUT ${key} failed (${response.status})`);
+    if (!isTransientPutStatus(response.status) || attempt === maxRetries) {
+      throw lastError;
+    }
   }
+  throw lastError ?? new Error(`R2 PUT ${key} failed`);
 }
 
 function encodeBucket(bucket: string): string {
@@ -451,9 +498,27 @@ export class R2S3Client {
     return written ?? byteLength(data);
   }
 
-  /** A 200 response backed directly by the lazy S3File (`new Response(s3file)`). */
+  /**
+   * Synchronous 302 presigned redirect backed by the lazy S3File (`new Response(s3file)`),
+   * per `docs/runtime/s3.mdx#new-response-s3file`.
+   */
   redirectResponse(key: string): Response {
     return new Response(this.client.file(key));
+  }
+
+  /**
+   * A 200 streaming body response backed by `s3file.stream()` (`docs/runtime/s3.mdx#reading-files-from-s3`).
+   */
+  streamResponse(
+    key: string,
+    options: { readonly type?: string } = {},
+  ): Response {
+    return new Response(
+      this.client.file(key).stream(),
+      options.type === undefined
+        ? undefined
+        : { headers: { "content-type": options.type } },
+    );
   }
 
   /**
@@ -467,6 +532,9 @@ export class R2S3Client {
     options: {
       readonly type?: string;
       readonly metadata?: Readonly<Record<string, string>>;
+      readonly retry?: number;
+      readonly retryDelayMs?: number;
+      readonly fetchImpl?: typeof fetch;
     } = {},
   ): Promise<number> {
     const type = options.type ?? "application/octet-stream";
@@ -485,6 +553,15 @@ export class R2S3Client {
       payload,
       type,
       metadata,
+      {
+        ...(options.retry === undefined ? {} : { retry: options.retry }),
+        ...(options.retryDelayMs === undefined
+          ? {}
+          : { retryDelayMs: options.retryDelayMs }),
+        ...(options.fetchImpl === undefined
+          ? {}
+          : { fetchImpl: options.fetchImpl }),
+      },
     );
     return byteLength(data);
   }

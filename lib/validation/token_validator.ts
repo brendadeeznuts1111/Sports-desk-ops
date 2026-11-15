@@ -220,13 +220,17 @@ export function evaluatePerceptualDistances(
   // Documented deliberate family pairings that share adjacent spectral bands by design
   const deliberateFamilyJustifications: Record<string, string> = {
     "--sd-tier-alert:--sd-route-manager":
-      "Deliberate Danger Continuum: #ef4444 (Alert Red) and #f43f5e (Manager Terminal Rose) represent escalated tiers of risk containment.",
+      "Deliberate Danger Continuum: #ff7878 (Alert Red) and #ff758f (Manager Terminal Rose) represent escalated tiers of risk containment.",
     "--sd-tier-rec-bias:--sd-route-devig":
-      "Deliberate Market Flow Continuum: #38bdf8 (Sky Recreational Bias) and #06b6d4 (Cyan Devig Arbitrage) represent market flow sentiment and pricing bounds.",
+      "Deliberate Market Flow Continuum: #7dd3fc (Sky Recreational Bias) and #22d3ee (Cyan Devig Arbitrage) represent market flow sentiment and pricing bounds.",
     "--sd-tier-steam:--sd-route-pending":
-      "Deliberate Warning Continuum: #f59e0b (Amber-500 Steam Chase) and #d97706 (Amber-600 Circuit Breaker Halt) signal liquidity exhaustion during active steam.",
-    "--sd-theme-emerald:--sd-tier-whale":
-      "Deliberate Profit/Volume Continuum: #10b981 (SportsDesk Emerald Gate) and #28a745 (Green Whale In-Play) represent book volume ingestion gates.",
+      "Deliberate Warning Continuum: #f59e0b (Amber-500 Steam Chase) and #fb923c (Orange-400 Circuit Breaker Halt) signal liquidity exhaustion during active steam.",
+    "--sd-tier-gateway:--sd-tier-whale":
+      "Deliberate Profit/Volume Continuum: #22d39a (SportsDesk Gateway Emerald) and #4ade80 (Green Whale In-Play) represent book volume ingestion gates.",
+    "--sd-tier-blocked:--sd-tier-drop":
+      "Deliberate Sentinel-Drop Continuum: #8fa3bf (Blocked Sentinel L19) and #94a3b8 (Stage 1 Non-Sports Drop L17) both represent zero-volume DROPPED filters.",
+    "--sd-route-devig:--sd-tier-live-cws":
+      "Deliberate In-Play Cyan Continuum: #67e8f9 (Fantasy402 Live CWS In-Play) and #22d3ee (Devig Consensus Arbitration) coordinate live feed arrival with consensus repricing.",
     "--sd-surface-bg:--sd-surface-cli":
       "Deliberate Dark Shell Hierarchy: #070b14 (DOM Obsidian Shell) and #04070e (CLI Dark ANSI) provide coordinated terminal surfaces.",
   };

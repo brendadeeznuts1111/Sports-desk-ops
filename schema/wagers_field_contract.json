@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "contract": "gslive-getBetTicker-wire",
+  "createdAt": "2026-11-14T00:00:00Z",
+  "ownership": {
+    "wire": "The captures own type/nullable/enum values. This registry cites a capture set and its sha256; it never restates those values, so there is no second copy to drift.",
+    "semantics": "This registry owns origin, consumer obligation, lifecycle mutability and liveness. Each axis carries a status and citations. The validator checks that a status and a citation exist; it does not check that the citation is true."
+  },
+  "statuses": {
+    "evidenced": "A cited artifact establishes it.",
+    "unverified": "No artifact establishes it. Legitimate value; carries review_by so it ages.",
+    "conflicting": "Two cited sources disagree. Surface, do not pick a winner."
+  },
+  "captureSets": {
+    "getBetTicker-2026-10-31": {
+      "path": "docs/evidence/captures/2026-10-31/getBetTicker.post.json",
+      "sha256": "955c3d0a084825f4fe35309b499b9d38111c6b8001e958b393e139e6fb39e1c3",
+      "capturedAt": "2026-10-31T00:19:51.608Z",
+      "skeletonPath": "response.bodySkeleton.fields.LIST.items.fields",
+      "observation": "authored"
+    }
+  },
+  "fields": {
+    "WagerType": {
+      "capture": "getBetTicker-2026-10-31",
+      "enum_source": {
+        "value": "observed",
+        "citation": "scripts/capture/schema.ts:191 builds enumCandidates from captured scalar values and :266 merges them as a union; the key name is a description, not a declaration.",
+        "note": "Observed set on 2026-10-31 was L,M,P,S,T. tests/fixtures/live-wagers-LIST-100.json also carries C and E, so the observed set is incomplete and an unknown code is a sample boundary, not a contract violation."
+      },
+      "semantics": {
+        "lifecycle_mutability": {
+          "status": "unverified",
+          "review_by": "2027-02-01",
+          "citations": [
+            "docs/evidence/manager-betreport-field-contract.md:52 (ticket-level values repeat verbatim per leg \u2014 weak evidence toward immutability at issue, not proof)"
+          ]
+        },
+        "consumer_obligation": {
+          "status": "evidenced",
+          "citations": [
+            "tests/wagers_field_roundtrip.test.ts",
+            "packages/backend/src/wagers.ts:45 (wagerTypeCode preserves the wire value) and :273 (label table is a declared projection)"
+          ]
+        },
+        "origin": {
+          "status": "evidenced",
+          "value": "vendor_issued",
+          "citations": [
+            "docs/evidence/manager-betreport-field-contract.md:8-12 (rows at r.bets[*] of the getBetReport/ajax.php response)",
+            "verification/manager-boot-oracle/pinned/util.js (vendor getTypeInfo switch, v43.0.27)"
+          ]
+        },
+        "liveness": {
+          "status": "evidenced",
+          "citations": [
+            "tests/fixtures/live-wagers-LIST-100.json (100/100 rows carry WagerType)"
+          ]
+        }
+      }
+    },
+    "ShortDesc": {
+      "capture": "getBetTicker-2026-10-31",
+      "enum_source": {
+        "value": "observed",
+        "citation": "scripts/capture/schema.ts:191 (same derivation as every scalar enumCandidates entry)."
+      },
+      "semantics": {
+        "lifecycle_mutability": {
+          "status": "unverified",
+          "review_by": "2027-02-01",
+          "citations": [
+            "docs/evidence/manager-betreport-field-contract.md (no lifecycle or rewrite statement for ShortDesc; the gap is cited, not filled)"
+          ]
+        },
+        "consumer_obligation": {
+          "status": "evidenced",
+          "citations": [
+            "tests/wagers_field_roundtrip.test.ts (raw string reaches the parser verbatim)",
+            "docs/design/bridge3a_f402_betticker.md:18,29 (demux input only; raw text is never published)"
+          ]
+        },
+        "origin": {
+          "status": "evidenced",
+          "value": "vendor_issued",
+          "citations": [
+            "docs/design/bridge3a_f402_betticker.md:18 (extract bounded fields before dropping ShortDesc)"
+          ]
+        },
+        "liveness": {
+          "status": "evidenced",
+          "citations": [
+            "tests/fixtures/live-wagers-LIST-100.json (100/100 rows carry a non-empty ShortDesc)"
+          ]
+        }
+      }
+    },
+    "VolumeAmount": {
+      "capture": "getBetTicker-2026-10-31",
+      "semantics": {
+        "lifecycle_mutability": {
+          "status": "unverified",
+          "review_by": "2027-02-01",
+          "citations": [
+            "docs/evidence/ledger.json:2445 (VolumeAmount can differ from AmountWagered \u2014 ambiguous between per-leg vs ticket-level, partial cashout and settlement-time rewrite)"
+          ]
+        },
+        "consumer_obligation": {
+          "status": "evidenced",
+          "citations": [
+            "tests/wagers_field_roundtrip.test.ts (volumeUsd equals the wire value; no reconciliation toward AmountWagered)",
+            "docs/design/bridge3a_f402_betticker.md:169-170 (whole-dollar artifact; canonical volume is VolumeAmount x 100, a declared unit conversion, not a value edit)"
+          ]
+        },
+        "origin": {
+          "status": "evidenced",
+          "value": "vendor_issued",
+          "citations": [
+            "docs/evidence/manager-betreport-field-contract.md:52 (currency section: raw values are in settlement currency)"
+          ]
+        },
+        "liveness": {
+          "status": "evidenced",
+          "citations": [
+            "tests/fixtures/live-wagers-LIST-100.json (100/100 rows carry VolumeAmount)"
+          ]
+        }
+      },
+      "note": "In the live corpus (data/live-wagers.json, untracked, 300 rows) VolumeAmount differs from AmountWagered on 259 rows, so treating the two as interchangeable would be wrong in the majority case."
+    },
+    "VIP": {
+      "capture": "getBetTicker-2026-10-31",
+      "semantics": {
+        "lifecycle_mutability": {
+          "status": "unverified",
+          "review_by": "2027-02-01",
+          "citations": [
+            "docs/evidence/ledger.json:283 (RawPendingLegRow declares VIP? optional on a different report shape)"
+          ]
+        },
+        "consumer_obligation": {
+          "status": "evidenced",
+          "citations": [
+            "tests/wagers_field_roundtrip.test.ts (wire '1' -> true; '0' and the padded '0         ' -> false)"
+          ]
+        },
+        "origin": {
+          "status": "evidenced",
+          "value": "vendor_issued",
+          "citations": [
+            "docs/evidence/captures/2026-10-31/getBetTicker.post.json (VIP is part of the LIST row skeleton)"
+          ]
+        },
+        "liveness": {
+          "status": "conflicting",
+          "review_by": "2027-02-01",
+          "citations": [
+            "data/live-wagers.json (untracked live capture, 300/300 rows carry the constant '0         ' \u2014 nullable:false satisfied by a value nothing writes)",
+            "tests/fixtures/live-wagers-LIST-100.json (10/100 rows carry '1')"
+          ]
+        }
+      },
+      "note": "nullable:false is satisfied by a constant. The concern that a missing VIP might sort as not-VIP is defensive-only, not contractual; the open question is liveness, not nullability."
+    }
+  }
+}

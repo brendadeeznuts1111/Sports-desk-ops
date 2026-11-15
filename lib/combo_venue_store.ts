@@ -3,6 +3,9 @@
  */
 
 import type { Database } from "bun:sqlite";
+import { assertIdentifier, assertNotSentinel } from "./identifier_grammar.ts";
+import { parseVenueId, type VenueId } from "./domain_venue_registry.ts";
+import { DodGateFailureError } from "./bridge_and_channel_router.ts";
 import { openSportsdeskSqlite } from "./sportsdesk_sqlite.ts";
 import { type AuditRunId, type IsoDateTimeUtc } from "./audit_run_id.ts";
 import { isoTime, jsonText, type IsoTime, type Sha256Hex } from "./brand.ts";
@@ -17,7 +20,8 @@ import {
 } from "./sqlite_schema_registry.ts";
 import { sha256HexOfBytes } from "../services/sportsdesk_ingestion_feed_provenance.ts";
 
-export type ComboVenue = "internal" | "polymarket";
+/** One source of truth: the six declared venue ids, not a local union. */
+export type ComboVenue = VenueId;
 export type ComboLegsSsotRow = Row<"combo_legs">;
 export type ComboLegsSsotInsert = Insert<"combo_legs">;
 
@@ -44,6 +48,10 @@ export class ComboVenueStore {
   constructor(private readonly db: Database) {}
 
   insertObservation(row: ComboVenueObservationInsert): void {
+    // Boundary, not call-site: a venue value must be a declared VenueId and must
+    // not be a sentinel state word. The DB has no enum, so this is the gate.
+    assertIdentifier("venue", row.venue, "SEC_COMBO_VENUE_WRITE");
+    assertNotSentinel("venue", row.venue, "SEC_COMBO_VENUE_WRITE");
     const validTime = isoTime(row.validTime);
     const wireJson = row.wireJson
       ? jsonText(canonicalJsonString(row.wireJson))
@@ -97,12 +105,25 @@ export class ComboVenueStore {
       first_valid_time: string;
       venue_ref: string;
     }>;
-    return rows.map((r) => ({
-      canonical_combo_id: r.canonical_combo_id,
-      venue: r.venue,
-      first_valid_time: isoTime(r.first_valid_time),
-      venue_ref: r.venue_ref,
-    }));
+    return rows.map((r) => {
+      // Legacy rows stored "internal", which named two origins at once. The
+      // alias resolves to `desk`; an unmapped value is surfaced, never coerced.
+      const venue = parseVenueId(r.venue);
+      if (venue === null) {
+        throw new DodGateFailureError({
+          gate: 4,
+          section: "SEC_COMBO_VENUE_READ",
+          expected: "a declared VenueId",
+          actual: `stored venue ${JSON.stringify(r.venue)}`,
+        });
+      }
+      return {
+        canonical_combo_id: r.canonical_combo_id,
+        venue,
+        first_valid_time: isoTime(r.first_valid_time),
+        venue_ref: r.venue_ref,
+      };
+    });
   }
 
   countLegRows(): number {

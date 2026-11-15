@@ -193,10 +193,12 @@ export function buildApiPrefixMatrixExpression(
 /** Read bearer token + effective customerID from sessionStorage (report customer wins). */
 export function inPageReadSessionAuthJs(): string {
   return `let token = (sessionStorage.getItem("token") ?? "").trim();
+  if (token && token.split(".").length !== 3) token = "";
   let customerID = "";
   try {
     const credentials = JSON.parse(sessionStorage.getItem("credentials") ?? "{}");
     if (!token) token = (credentials.code ?? "").trim();
+    if (token && token.split(".").length !== 3) token = "";
     customerID = credentials.customerID ?? "";
     const reportCustomer = (sessionStorage.getItem("customerID") ?? "").trim();
     if (reportCustomer) customerID = reportCustomer;

@@ -10,12 +10,15 @@ import {
   buildScoreboardRows,
   buildSignalArenaIndex,
   buildSignalArenaView,
+  buildTradingTerminalSnapshot,
+  classifyWriterProvenanceChannel,
   computeMarketComposite,
   DESK_ENDPOINT_CATALOG,
   DESK_PREFS_STORAGE_KEY,
   defaultWorkspacePrefs,
   extractApiFailureCause,
   filterMarketInstruments,
+  mapLeagueToCanonicalSport,
   PARSER_WORKBENCH_PRESETS,
   parseAnalysisPayload,
   parseCustomerProfilePayload,
@@ -24,11 +27,14 @@ import {
   parseExecutionActionPayload,
   parseExecutionPlanPayload,
   parseGameAdminBoardPayload,
+  parseGameAdminPayload,
   parseGovernancePayload,
   parseGraphFeedPayload,
   parseGraphStreamSample,
   parseKalshiPayload,
   parseKpisPayload,
+  parseLiveBetsSummaryPayload,
+  parseLiveWagersPayload,
   parseScoreboardPayload,
   parseWorkspacePrefsJson,
   resolveDeskOrigin,
@@ -264,10 +270,25 @@ describe("packages/nsh-desk model and capability contracts", () => {
         dark: Record<string, string>;
       };
     };
-    for (const requiredRole of ["positive", "warning", "negative"]) {
+    for (const requiredRole of [
+      "positive",
+      "warning",
+      "negative",
+      "prov-internet",
+      "prov-blocked",
+      "prov-gateway",
+      "prov-alert",
+      "prov-gsbuilder",
+      "prov-gslive",
+      "prov-cslevel2",
+    ]) {
       expect(typeof themeJson.cssVars.light[requiredRole]).toBe("string");
       expect(typeof themeJson.cssVars.dark[requiredRole]).toBe("string");
     }
+    expect(themeJson.cssVars.dark["background"]).toBe("#070b14");
+    expect(themeJson.cssVars.dark["card"]).toBe("#0d1527");
+    expect(themeJson.cssVars.dark["popover"]).toBe("#131f38");
+    expect(themeJson.cssVars.dark["border"]).toBe("#1e293b");
 
     const designDoc = await Bun.file(path.join(pkgDir, "DESIGN.md")).text();
     expect(designDoc).toContain(
@@ -1029,5 +1050,381 @@ describe("packages/nsh-desk model and capability contracts", () => {
     } finally {
       await rm(badDir, { recursive: true, force: true });
     }
+  });
+
+  test("buildTradingTerminalSnapshot synthesizes read-only Trading Desk panels, excludes ALERT/BLOCKED noise, and preserves null-honest unavailable KPIs", () => {
+    expect(mapLeagueToCanonicalSport("NBA")).toBe("Basketball");
+    expect(mapLeagueToCanonicalSport("EPL")).toBe("Soccer");
+    expect(mapLeagueToCanonicalSport("NHL")).toBe("Ice Hockey");
+    expect(mapLeagueToCanonicalSport("ATP")).toBe("Tennis");
+    expect(mapLeagueToCanonicalSport("CS2")).toBe("Esports");
+
+    expect(classifyWriterProvenanceChannel("inet", "Straight", false)).toBe(
+      "INTERNET",
+    );
+    expect(classifyWriterProvenanceChannel("gslive", "Live", false)).toBe(
+      "GSLIVE",
+    );
+    expect(classifyWriterProvenanceChannel("inet", "Parlay", false)).toBe(
+      "GSBUILDER",
+    );
+    expect(classifyWriterProvenanceChannel("tg-bot", "Straight", false)).toBe(
+      "GATEWAY",
+    );
+    expect(classifyWriterProvenanceChannel("vip-desk", "Straight", true)).toBe(
+      "CSLEVEL2",
+    );
+    expect(classifyWriterProvenanceChannel("steam-alert", "Straight")).toBe(
+      "ALERT",
+    );
+    expect(classifyWriterProvenanceChannel("blocked-dup", "Straight")).toBe(
+      "BLOCKED",
+    );
+
+    // 1. All endpoints unavailable -> strictly null-honest ("—"), zero fabricated $0 or 0%
+    const makeUnavailable = (endpoint: string) => ({
+      status: "unavailable" as const,
+      endpoint,
+      httpStatus: 503,
+      code: "upstream_down",
+      cause: `${endpoint} HTTP 503`,
+      fetchedAtIso: "2026-11-13T10:00:00.000Z",
+    });
+
+    const emptySnap = buildTradingTerminalSnapshot({
+      kpisSnap: makeUnavailable("/api/kpis"),
+      kalshiSnap: makeUnavailable("/api/signals/kalshi"),
+      scoreboardSnap: makeUnavailable("/api/scoreboard"),
+      liveBetsSnap: makeUnavailable("/api/live-bets/summary"),
+      gameAdminBoardSnap: makeUnavailable("/api/game-admin/board"),
+      gameAdminSnap: makeUnavailable("/api/game-admin"),
+      liveWagersSnap: makeUnavailable("/api/live-wagers"),
+      graphFeedSnap: makeUnavailable("/api/graph-feed"),
+      filters: {
+        sportFilter: "ALL",
+        selectedMatchId: null,
+        blotterStatus: "all",
+        unhedgedOnly: false,
+        searchQuery: "",
+      },
+    });
+
+    expect(emptySnap.readOnlySnapshot).toBe(true);
+    expect(emptySnap.approvalActionsEnabled).toBe(false);
+    expect(emptySnap.hedgeExecutionEnabled).toBe(false);
+    expect(emptySnap.hedgeMonitor.executionEnabled).toBe(false);
+    for (const kpi of emptySnap.kpis) {
+      expect(kpi.value).toBe("—");
+    }
+    expect(emptySnap.liveMatches).toEqual([]);
+    expect(emptySnap.selectedMatch).toBeNull();
+    expect(emptySnap.liabilityVsLiquidity.sor1Status).toBe("UNMEASURED");
+
+    // 2. Populated snapshots with ALERT/BLOCKED noise + unhedgedOnly filtering
+    const readySnap = buildTradingTerminalSnapshot({
+      kpisSnap: {
+        status: "ready",
+        endpoint: "/api/kpis",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseKpisPayload({
+          generatedAt: "2026-11-13T10:00:00.000Z",
+          kpis: {},
+        }),
+      },
+      kalshiSnap: {
+        status: "ready",
+        endpoint: "/api/signals/kalshi",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseKalshiPayload({
+          provenance: { dataMode: "LIVE", stale: false, fixture: false },
+          kalshi: { ok: true, degraded: false },
+          signals: [
+            {
+              id: "NBA-BOS_LAL-spread",
+              league: "NBA",
+              marketKind: "spread",
+              teams: ["LAL", "BOS"],
+              line: -3.5,
+              riskUsd: 24000,
+              distinctAccounts: 3,
+              fairProb: 0.54,
+              confidence: 78,
+              kalshi: { edgeBps: 340, verdict: "actionable", reason: "tight" },
+              accounts: [
+                {
+                  login: "VIP_WHALE_99",
+                  agentId: "BILLY666",
+                  archetype: "Whale",
+                  riskUsd: 12000,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      scoreboardSnap: makeUnavailable("/api/scoreboard"),
+      liveBetsSnap: {
+        status: "ready",
+        endpoint: "/api/live-bets/summary",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseLiveBetsSummaryPayload({
+          totalWagers: 42,
+          totalRiskUsd: 18500,
+          mode: "live",
+        }),
+      },
+      gameAdminBoardSnap: {
+        status: "ready",
+        endpoint: "/api/game-admin/board",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseGameAdminBoardPayload({
+          source: "live-board",
+          window: 24,
+          games: [
+            {
+              gameNum: 540,
+              league: "NBA",
+              status: "live",
+              clock: "Q3 06:14",
+              teams: ["Lakers", "Celtics"],
+              score: [78, 82],
+              openers: { spread: "-2.5" },
+              spread: ["-3.5 (-110)"],
+              money: ["+135 / -155"],
+              total: ["224.5"],
+            },
+          ],
+        }),
+      },
+      gameAdminSnap: {
+        status: "ready",
+        endpoint: "/api/game-admin",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseGameAdminPayload({
+          source: "captured",
+          games: [
+            {
+              matchup: "Lakers @ Celtics",
+              league: "NBA",
+              total: { wagers: 18, wagered: 32000, toWin: 28500 },
+              positions: {},
+            },
+            {
+              matchup: "Pacers @ Knicks",
+              league: "NBA",
+              total: { wagers: 4, wagered: 3000, toWin: 2700 },
+              positions: {},
+            },
+          ],
+        }),
+      },
+      liveWagersSnap: {
+        status: "ready",
+        endpoint: "/api/live-wagers",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseLiveWagersPayload({
+          wagers: [
+            {
+              ticketNumber: "9001",
+              customerId: "ACCT_HEDGED",
+              writer: "gslive",
+              wagerType: "Straight",
+              riskUsd: 4000,
+              toWinUsd: 3600,
+              description: "Celtics -3.5",
+            },
+            {
+              ticketNumber: "9002",
+              customerId: "ACCT_ALERT",
+              writer: "steam-alert",
+              wagerType: "Straight",
+              riskUsd: 50000,
+              toWinUsd: 45000,
+              description: "Noise steam ping",
+            },
+            {
+              ticketNumber: "9003",
+              customerId: "ACCT_BLOCKED",
+              writer: "blocked-limit",
+              wagerType: "Straight",
+              riskUsd: 25000,
+              toWinUsd: 22000,
+              description: "Blocked duplicate",
+            },
+          ],
+        }),
+      },
+      graphFeedSnap: {
+        status: "ready",
+        endpoint: "/api/graph-feed",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseGraphFeedPayload({
+          schemaVersion: 3,
+          dataMode: "LIVE",
+          pendingBets: [
+            {
+              id: "pb-1",
+              login: "SHARP_VIP",
+              league: "NBA",
+              selection: "Celtics ML",
+              riskUsd: 9000,
+              sharpScore: 93,
+              placedAt: "2026-11-13T10:02:15Z",
+            },
+          ],
+          backtest4Wk: {
+            weeks: [
+              {
+                week: "2026-W45",
+                estimatedSavingsUsd: 14200,
+                holdImprovementBps: 90,
+              },
+            ],
+          },
+        }),
+      },
+      filters: {
+        sportFilter: "ALL",
+        selectedMatchId: null,
+        blotterStatus: "all",
+        unhedgedOnly: false,
+        searchQuery: "",
+      },
+    });
+
+    // Noise exclusion: 50K ALERT + 25K BLOCKED must NOT inflate canonicalStakeUsd!
+    expect(readySnap.blotterSummary.excludedNoiseCount).toBe(2);
+    expect(readySnap.blotterSummary.canonicalCount).toBe(3);
+    expect(readySnap.blotterSummary.canonicalStakeUsd).toBe(
+      4000 + 9000 + 12000,
+    );
+    expect(readySnap.selectedMatch?.ladderRows[1]?.riskBadge).toBe("KEY #3/#7");
+    expect(readySnap.otcQuotes.length).toBeGreaterThanOrEqual(2);
+
+    // Filter unhedgedOnly=true -> drops ACCT_HEDGED, ACCT_ALERT, ACCT_BLOCKED, and hedged Pacers @ Knicks row
+    const unhedgedSnap = buildTradingTerminalSnapshot({
+      kpisSnap: {
+        status: "ready",
+        endpoint: "/api/kpis",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseKpisPayload({ kpis: {} }),
+      },
+      kalshiSnap: readySnap.selectedMatch
+        ? {
+            status: "ready",
+            endpoint: "/api/signals/kalshi",
+            httpStatus: 200,
+            fetchedAtIso: "2026-11-13T10:00:00.000Z",
+            data: parseKalshiPayload({
+              kalshi: { ok: true, degraded: false },
+              signals: [
+                {
+                  id: "NBA-BOS_LAL-spread",
+                  league: "NBA",
+                  marketKind: "spread",
+                  teams: ["LAL", "BOS"],
+                  line: -3.5,
+                  riskUsd: 24000,
+                  distinctAccounts: 3,
+                  fairProb: 0.54,
+                  confidence: 78,
+                  kalshi: {
+                    edgeBps: 340,
+                    verdict: "actionable",
+                    reason: "tight",
+                  },
+                  accounts: [
+                    {
+                      login: "VIP_WHALE_99",
+                      agentId: "BILLY666",
+                      archetype: "Whale",
+                      riskUsd: 12000,
+                    },
+                  ],
+                },
+              ],
+            }),
+          }
+        : makeUnavailable("/api/signals/kalshi"),
+      scoreboardSnap: makeUnavailable("/api/scoreboard"),
+      liveBetsSnap: makeUnavailable("/api/live-bets/summary"),
+      gameAdminBoardSnap: makeUnavailable("/api/game-admin/board"),
+      gameAdminSnap: {
+        status: "ready",
+        endpoint: "/api/game-admin",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseGameAdminPayload({
+          source: "captured",
+          games: [
+            {
+              matchup: "Lakers @ Celtics",
+              league: "NBA",
+              total: { wagers: 18, wagered: 32000, toWin: 28500 },
+              positions: {},
+            },
+            {
+              matchup: "Pacers @ Knicks",
+              league: "NBA",
+              total: { wagers: 4, wagered: 3000, toWin: 2700 },
+              positions: {},
+            },
+          ],
+        }),
+      },
+      liveWagersSnap: {
+        status: "ready",
+        endpoint: "/api/live-wagers",
+        httpStatus: 200,
+        fetchedAtIso: "2026-11-13T10:00:00.000Z",
+        data: parseLiveWagersPayload({
+          wagers: [
+            {
+              ticketNumber: "9001",
+              customerId: "ACCT_HEDGED",
+              writer: "gslive",
+              wagerType: "Straight",
+              riskUsd: 4000,
+              toWinUsd: 3600,
+              description: "Celtics -3.5",
+            },
+            {
+              ticketNumber: "9002",
+              customerId: "ACCT_ALERT",
+              writer: "steam-alert",
+              wagerType: "Straight",
+              riskUsd: 50000,
+              toWinUsd: 45000,
+              description: "Noise steam ping",
+            },
+          ],
+        }),
+      },
+      graphFeedSnap: makeUnavailable("/api/graph-feed"),
+      filters: {
+        sportFilter: "ALL",
+        selectedMatchId: null,
+        blotterStatus: "all",
+        unhedgedOnly: true,
+        searchQuery: "",
+      },
+    });
+
+    expect(unhedgedSnap.blotterRows.map((r) => r.account)).toEqual([
+      "VIP_WHALE_99 (BILLY666)",
+    ]);
+    expect(
+      unhedgedSnap.liabilityMatrix.some(
+        (m) => m.outcomeLabel === "Pacers @ Knicks",
+      ),
+    ).toBe(false);
   });
 });

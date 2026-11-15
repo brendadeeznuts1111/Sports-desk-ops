@@ -22,7 +22,7 @@ export function formatRouteThreshold(row: RouteThresholdRow): string {
     case "consensus_lag":
       return `{ kind: "consensus_lag", maxLagMs: ${row.max_lag_ms} }`;
     case "bayes_shrinkage":
-      return `{ kind: "bayes_shrinkage", tauStar: ${row.tau_star}, minTickets: ${row.min_tickets} }`;
+      return `{ kind: "bayes_shrinkage", tauStarBasisPoints: parseAsBasisPoints(${row.tau_star_basis_points}, true), minTickets: ${row.min_tickets} }`;
     case "liquidity_depth":
       return `{ kind: "liquidity_depth", minDepthCents: parseAsCents(${row.min_depth_cents}) }`;
     case "composite_risk_gate":

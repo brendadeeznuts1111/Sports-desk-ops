@@ -13,6 +13,7 @@ import {
   ScoreboardPanel,
   SignalsPanel,
   SurveillanceWorkspace,
+  TradingTerminalWorkspace,
 } from "./components";
 import { createDeskStore, DeskStoreContext } from "./store";
 import {
@@ -95,6 +96,10 @@ function DeskRootBody(props: {
     },
     "mod+1": toggleLeftDock,
     "mod+2": toggleBottomDock,
+    "mod+3": () => {
+      animateUserLayoutChange();
+      store.setActivePlane("terminal");
+    },
     "mod+shift+l": () => store.toggleLocked(),
     "mod+shift+c": copyDiagnostics,
     "mod+t": () => store.openTicketForSelected(),
@@ -134,24 +139,31 @@ function DeskRootBody(props: {
           when={store.activePlane() === "markets"}
           else={
             <If
-              when={store.activePlane() === "board"}
+              when={store.activePlane() === "terminal"}
               else={
                 <If
-                  when={store.activePlane() === "surveillance"}
+                  when={store.activePlane() === "board"}
                   else={
                     <If
-                      when={store.activePlane() === "forensics"}
-                      else={<OpsWorkspace />}
+                      when={store.activePlane() === "surveillance"}
+                      else={
+                        <If
+                          when={store.activePlane() === "forensics"}
+                          else={<OpsWorkspace />}
+                        >
+                          <ForensicsWorkspace />
+                        </If>
+                      }
                     >
-                      <ForensicsWorkspace />
+                      <SurveillanceWorkspace />
                     </If>
                   }
                 >
-                  <SurveillanceWorkspace />
+                  <BoardWorkspace />
                 </If>
               }
             >
-              <BoardWorkspace />
+              <TradingTerminalWorkspace store={store} />
             </If>
           }
         >

@@ -76,6 +76,32 @@ does not apply the display conversion.
   response documented above; the vendor data service must not be cited for wager grouping or
   settlement semantics.
 
+## Enforced at ingest
+
+`schema/wagers_field_contract.json` is the machine-readable form of this note: it cites this
+capture set by sha256 and owns only the semantic axes (origin, consumer obligation, lifecycle,
+liveness). Wire shape stays owned by the captures — the registry never restates `type`/`nullable`.
+
+`lib/wagers_wire_contract.ts` turns that registry into a runtime check over the raw rows the live
+wagers loader reads (before projection). Sentinel-noise rows (`TicketWriter` `ALERT`/`BLOCKED`) are
+skipped and counted in `skipped_rows`, so the exclusion is visible rather than silent. The host attaches the result
+to the feed:
+
+```sh
+curl -s http://127.0.0.1:4023/api/wagers | jq '.wire_contract'
+```
+
+A registry must cite exactly one capture for all of its fields; a mixed set is rejected rather than
+partially checked (the checker would otherwise silently verify only the first field's capture). Cited
+capture paths resolve relative to the registry's grandparent, and the reported `registry` is a
+basename or `schema/<file>` — never an absolute host path.
+
+It reports `ok`, `rows` (checked), `skipped_rows`, `fields_checked`, the capture id/sha it resolved, and one violation bucket
+per `(field, kind)` where kind is `type` or `nullable`. Enum differences are deliberately **not**
+violations: `enum_source` is `observed` (see `scripts/capture/schema.ts:191`), so an unobserved code
+is a sample boundary, not a contract break. A missing registry or capture yields `ok: false` with an
+`error`, never a silent pass.
+
 ## Limits
 
 - No external settlement truth is implied: these are shape semantics, not outcome correctness.

@@ -4,6 +4,7 @@
  */
 
 import React from "react";
+import { rewriteBrokenDeskUrl } from "./links.ts";
 
 export interface AnsiSegment {
   readonly text: string;
@@ -11,7 +12,9 @@ export interface AnsiSegment {
   readonly bg?: string | undefined;
   readonly bold?: boolean | undefined;
   readonly dim?: boolean | undefined;
+  readonly italic?: boolean | undefined;
   readonly underline?: boolean | undefined;
+  readonly strikethrough?: boolean | undefined;
   readonly linkUrl?: string | undefined;
 }
 
@@ -46,46 +49,67 @@ const ANSI_BG_MAP: Record<number, string> = {
   100: "#1e293b",
 };
 
+/**
+ * Convert an xterm-256 palette index (0..255) emitted by `Bun.markdown.ansi`
+ * (e.g. `38;5;215` / `48;5;236` for dark inline code or `38;5;124` / `48;5;254`
+ * for `AnsiTheme.light: true`) into a CSS color string.
+ */
+export function ansi256ToCss(index: number): string | undefined {
+  if (!Number.isInteger(index) || index < 0 || index > 255) return undefined;
+  if (index < 8) return ANSI_COLOR_MAP[30 + index];
+  if (index < 16) return ANSI_COLOR_MAP[90 + (index - 8)];
+  if (index < 232) {
+    const cube = index - 16;
+    const rIdx = Math.floor(cube / 36);
+    const gIdx = Math.floor((cube % 36) / 6);
+    const bIdx = cube % 6;
+    const chan = (v: number): number => (v === 0 ? 0 : 55 + v * 40);
+    return `rgb(${chan(rIdx)}, ${chan(gIdx)}, ${chan(bIdx)})`;
+  }
+  const gray = 8 + (index - 232) * 10;
+  return `rgb(${gray}, ${gray}, ${gray})`;
+}
+
 /* eslint-disable no-control-regex */
 export function parseAnsiTokens(raw: string): AnsiSegment[] {
   const segments: AnsiSegment[] = [];
   // eslint-disable-next-line no-control-regex -- ANSI and OSC 8 sequences require control characters
   const tokenRegex =
-    /\x1b]8;[^\x1b\\]*(?:\x1b\\|\x07)([^\x1b]*)\x1b]8;;\x1b\\|\x1b\[([0-9;]*)m/g;
+    /\x1b]8;[a-zA-Z0-9;=]*;([^\x1b\x07]*)(?:\x1b\\|\x07)|\x1b\[([0-9;]*)m/g;
 
   let lastIndex = 0;
   let currentColor: string | undefined;
   let currentBg: string | undefined;
   let currentBold = false;
   let currentDim = false;
+  let currentItalic = false;
   let currentUnderline = false;
+  let currentStrikethrough = false;
+  let currentLinkUrl: string | undefined;
+
+  const pushText = (text: string): void => {
+    if (text.length === 0) return;
+    segments.push({
+      text,
+      color: currentLinkUrl ? (currentColor ?? "#38bdf8") : currentColor,
+      bg: currentBg,
+      bold: currentBold,
+      dim: currentDim,
+      ...(currentItalic ? { italic: true } : {}),
+      underline: currentLinkUrl ? true : currentUnderline,
+      ...(currentStrikethrough ? { strikethrough: true } : {}),
+      ...(currentLinkUrl ? { linkUrl: currentLinkUrl } : {}),
+    });
+  };
 
   let match: RegExpExecArray | null;
   while ((match = tokenRegex.exec(raw)) !== null) {
     if (match.index > lastIndex) {
-      const text = raw.slice(lastIndex, match.index);
-      if (text.length > 0) {
-        segments.push({
-          text,
-          color: currentColor,
-          bg: currentBg,
-          bold: currentBold,
-          dim: currentDim,
-          underline: currentUnderline,
-        });
-      }
+      pushText(raw.slice(lastIndex, match.index));
     }
 
     if (match[1] !== undefined) {
-      const full = match[0];
-      // eslint-disable-next-line no-control-regex -- OSC 8 URL extraction requires control characters
-      const urlMatch = /\x1b]8;[a-zA-Z0-9;=]*;([^\x1b\x07]+)/.exec(full);
-      segments.push({
-        text: match[1],
-        color: "#38bdf8",
-        underline: true,
-        linkUrl: urlMatch?.[1],
-      });
+      currentLinkUrl = match[1].length > 0 ? match[1] : undefined;
     } else if (match[2] !== undefined) {
       const paramStr = match[2];
       const codes =
@@ -102,7 +126,9 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
           currentBg = undefined;
           currentBold = false;
           currentDim = false;
+          currentItalic = false;
           currentUnderline = false;
+          currentStrikethrough = false;
         } else if (code === 39) {
           currentColor = undefined;
         } else if (code === 49) {
@@ -111,13 +137,35 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
           currentBold = true;
         } else if (code === 2) {
           currentDim = true;
+        } else if (code === 3) {
+          currentItalic = true;
         } else if (code === 4) {
           currentUnderline = true;
+        } else if (code === 9) {
+          currentStrikethrough = true;
         } else if (code === 22) {
           currentBold = false;
           currentDim = false;
+        } else if (code === 23) {
+          currentItalic = false;
         } else if (code === 24) {
           currentUnderline = false;
+        } else if (code === 29) {
+          currentStrikethrough = false;
+        } else if (
+          code === 38 &&
+          codes[i + 1] === 5 &&
+          codes[i + 2] !== undefined
+        ) {
+          currentColor = ansi256ToCss(codes[i + 2]!);
+          i += 2;
+        } else if (
+          code === 48 &&
+          codes[i + 1] === 5 &&
+          codes[i + 2] !== undefined
+        ) {
+          currentBg = ansi256ToCss(codes[i + 2]!);
+          i += 2;
         } else if (
           code === 38 &&
           codes[i + 1] === 2 &&
@@ -156,17 +204,7 @@ export function parseAnsiTokens(raw: string): AnsiSegment[] {
   }
 
   if (lastIndex < raw.length) {
-    const text = raw.slice(lastIndex);
-    if (text.length > 0) {
-      segments.push({
-        text,
-        color: currentColor,
-        bg: currentBg,
-        bold: currentBold,
-        dim: currentDim,
-        underline: currentUnderline,
-      });
-    }
+    pushText(raw.slice(lastIndex));
   }
 
   return segments;
@@ -180,13 +218,20 @@ export function renderAnsiReact(raw: string): React.ReactNode[] {
     if (seg.bg) style.backgroundColor = seg.bg;
     if (seg.bold) style.fontWeight = 700;
     if (seg.dim) style.opacity = 0.75;
-    if (seg.underline) style.textDecoration = "underline";
+    if (seg.italic) style.fontStyle = "italic";
+    if (seg.underline && seg.strikethrough) {
+      style.textDecoration = "underline line-through";
+    } else if (seg.underline) {
+      style.textDecoration = "underline";
+    } else if (seg.strikethrough) {
+      style.textDecoration = "line-through";
+    }
 
     if (seg.linkUrl) {
       return (
         <a
           key={i}
-          href={seg.linkUrl}
+          href={rewriteBrokenDeskUrl(seg.linkUrl)}
           target="_blank"
           rel="noreferrer"
           style={{ ...style, cursor: "pointer" }}

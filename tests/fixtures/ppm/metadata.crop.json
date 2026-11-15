@@ -1,0 +1,43 @@
+{
+  "sports": {
+    "1": { "n": "Baseball" },
+    "2": { "n": "Basketball" },
+    "93": { "n": "Table Tennis" },
+    "102": { "n": "College Basketball" }
+  },
+  "leagues": {
+    "1": { "n": "MLB Props", "po": false, "mo": false, "s": 1 },
+    "4": {
+      "n": "NFL",
+      "o": -450,
+      "po": false,
+      "mo": false,
+      "p": "m",
+      "m": { "3": true, "5": "secondary", "6": "primary" },
+      "pn": { "85": "Total Player Interceptions" },
+      "mn": {
+        "85": "Total Player Interceptions",
+        "276": "What Will Happen 1st",
+        "881": "To Win From Behind",
+        "1298": "Player To Record 25+ Receiving Yards In Each half",
+        "1951": "Which Quarter Player will have most Rushing Yards",
+        "1961": "Super Bowl Player Records"
+      },
+      "sn": "NFL",
+      "in": "nfl",
+      "s": 3,
+      "platformSport": "3",
+      "fmc": 6
+    }
+  },
+  "wagertypes": {
+    "3": {
+      "n": "Money Line",
+      "po": false,
+      "mo": false,
+      "sn": "ML",
+      "mcId": 1,
+      "bId": 0
+    }
+  }
+}

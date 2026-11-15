@@ -1,5 +1,6 @@
 import type React from "react";
 import { styles } from "../dashboard_styles.ts";
+import { getLocalAgentHref, getLocalCustomerHref } from "../links.ts";
 import { PROXY_CONDUITS_30D, RANKED_30D_PLAYERS } from "../showcase_data.ts";
 import type { RankingsFilter } from "../types.ts";
 
@@ -9,6 +10,8 @@ export interface RankingsTabPanelProps {
   readonly rankingsFilter: RankingsFilter;
   readonly onRankingsFilterChange: (filter: RankingsFilter) => void;
   readonly onInspectPty: (customerId: string) => void;
+  readonly onSelectAgent?: ((agentId: string) => void) | undefined;
+  readonly onSelectCustomerById?: ((customerId: string) => void) | undefined;
 }
 
 const RANKINGS_FILTERS: readonly {
@@ -27,6 +30,8 @@ export function RankingsTabPanel({
   rankingsFilter,
   onRankingsFilterChange,
   onInspectPty,
+  onSelectAgent,
+  onSelectCustomerById,
 }: RankingsTabPanelProps): React.ReactElement {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -141,16 +146,38 @@ export function RankingsTabPanel({
                       }}
                     >
                       <a
-                        href={`https://fantasy402.com/manager.html?customer=${p.id}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={getLocalCustomerHref(p.id)}
+                        onClick={(e) => {
+                          if (
+                            onSelectCustomerById &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectCustomerById(p.id);
+                          }
+                        }}
                         style={{
                           ...styles.custLogin,
                           textDecoration: "none",
                         }}
-                        title="Fantasy402 Customer Portal"
+                        title="Inspect Customer in SportsDesk Profiles"
                       >
-                        {p.id} ↗
+                        {p.id}
+                      </a>
+                      <a
+                        href={`https://fantasy402.com/manager.html?customer=${p.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "#64748b",
+                          textDecoration: "none",
+                          fontSize: "11px",
+                        }}
+                        title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
+                      >
+                        ↗
                       </a>
                       {p.isProxy && (
                         <span
@@ -173,14 +200,23 @@ export function RankingsTabPanel({
                   <td style={styles.td}>
                     <div style={{ fontWeight: 600 }}>
                       <a
-                        href={`https://desk.bookdeskops.com/agent/${p.agentId}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={getLocalAgentHref(p.agentId)}
+                        onClick={(e) => {
+                          if (
+                            onSelectAgent &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectAgent(p.agentId);
+                          }
+                        }}
                         style={{
                           color: "#38bdf8",
                           textDecoration: "none",
                         }}
-                        title="Agent Desk Profile"
+                        title="Open SportsDesk Agent Inspector"
                       >
                         {p.agentId} ↗
                       </a>
@@ -293,14 +329,23 @@ export function RankingsTabPanel({
                   <td style={styles.td}>
                     <span style={{ fontWeight: 700, color: "#f59e0b" }}>
                       <a
-                        href={`https://desk.bookdeskops.com/agent/${c.agentId}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={getLocalAgentHref(c.agentId)}
+                        onClick={(e) => {
+                          if (
+                            onSelectAgent &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectAgent(c.agentId);
+                          }
+                        }}
                         style={{
                           color: "#f59e0b",
                           textDecoration: "none",
                         }}
-                        title="Agent Desk Profile"
+                        title="Open SportsDesk Agent Inspector"
                       >
                         {c.agentId} ↗
                       </a>
@@ -320,16 +365,38 @@ export function RankingsTabPanel({
                   <td style={styles.td}>
                     <span style={{ fontWeight: 700, color: "#38bdf8" }}>
                       <a
-                        href={`https://fantasy402.com/manager.html?customer=${c.topCust}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={getLocalCustomerHref(c.topCust)}
+                        onClick={(e) => {
+                          if (
+                            onSelectCustomerById &&
+                            !e.metaKey &&
+                            !e.ctrlKey &&
+                            e.button === 0
+                          ) {
+                            e.preventDefault();
+                            onSelectCustomerById(c.topCust);
+                          }
+                        }}
                         style={{
                           color: "#38bdf8",
                           textDecoration: "none",
                         }}
-                        title="Fantasy402 Customer Portal"
+                        title="Inspect Customer in SportsDesk Profiles"
                       >
-                        {c.topCust} ↗
+                        {c.topCust}
+                      </a>{" "}
+                      <a
+                        href={`https://fantasy402.com/manager.html?customer=${c.topCust}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "#64748b",
+                          textDecoration: "none",
+                          fontSize: "11px",
+                        }}
+                        title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
+                      >
+                        ↗
                       </a>
                     </span>
                   </td>

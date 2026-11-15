@@ -2,6 +2,12 @@
  * In-page F402 Manager JWT lifecycle (sessionStorage + authenticateCustomer).
  * Injectable deps so Bun tests can mock fetch/storage/timers without a DOM.
  *
+ * Vendor 1.0.287 changed the session shape this module was written against: the portal no
+ * longer writes `sessionStorage.credentials`, and `security.js` `verifySession` now refreshes
+ * on its own from `sessionStorage.token` (`setInterval(refresh, timeRefresh)` with
+ * `timeRefresh: 3e5`). `_remint` cannot work against that shape — see its JSDoc before wiring
+ * this module anywhere.
+ *
  * @see fantasy402-skills/fantasy402-manager.md (Auth / session)
  */
 
@@ -121,6 +127,25 @@ export class F402TokenManager {
     return (this.deps.now ?? (() => Date.now()))();
   }
 
+  /**
+   * @deprecated The input source this reads from was deleted in vendor 1.0.287.
+   *
+   * Reads `sessionStorage.credentials.password`, which the vendor stopped writing in 1.0.287.
+   * The same release moved `verifySession` onto `sessionStorage.token` and added a 5-minute
+   * self-refresh interval (`timeRefresh: 3e5`), so the portal now renews tokens without our help.
+   *
+   * Two viable futures:
+   *   1. Delete `_remint` and rely on the vendor's 5-minute refresh.
+   *   2. Feed remint from `persistDurably` (durable store) and stop reading
+   *      `sessionStorage.credentials` entirely.
+   *
+   * NOT viable: adding a reader for the new key. A JWT cannot be re-exchanged for a password,
+   * which is what `_remint` was written to do.
+   *
+   * The existing tests pass against a session shape 1.0.287 no longer produces (they seed
+   * `credentials` in memory), so a green suite is not evidence this works against a live
+   * 1.0.287 session.
+   */
   private async _remint(): Promise<string> {
     const rawCreds = this.deps.storage.getItem("credentials");
     const creds =
@@ -201,6 +226,17 @@ export async function f402AuthorizedFetch(
   return res;
 }
 
+/**
+ * Persist a password into `sessionStorage.credentials` so `_remint` has an input.
+ *
+ * Note (2026-11-13): this re-introduces the persistence class vendor 1.0.287 removed from the
+ * portal's own login path — sessionStorage is readable by any same-origin script, which is the
+ * property that made the old `credentials` blob worth deleting. It is currently **uncalled**
+ * (verified by repo-wide grep); it becomes a finding the moment it is wired.
+ *
+ * Not covered by tests: `tests/f402_browser_token_manager.test.ts` exercises `F402TokenManager`
+ * only, so this path is uncalled, untested, and dormant rather than validated.
+ */
 export async function bootstrapF402Credentials(
   storage: StorageLike,
   promptPassword: () => Promise<BootstrapPasswordAnswer | null>,
