@@ -19,7 +19,7 @@
     "./panels": "./src/panels/index.tsx",
     "./shadow-pricing": "./src/shadow_pricing/index.tsx",
     "./runtime-flags": "./src/runtime_flags.ts",
-    "./showcase-data": "./src/showcase_data.ts",
+    "./terminal-catalog": "./src/terminal_catalog.ts",
     "./styles": "./src/dashboard_styles.ts",
     "./types": "./src/types.ts",
     "./desk.css": "./src/desk.css",

@@ -502,10 +502,7 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 
 🎯 <b>Originators & Steam Chasers Active:</b>
-• <b>GP300 (GPRO50RSK):</b> 22 tickets, $46.1k handle, <b>+$33,858 win</b> (Hold: -73.4%)
-• <b>AT10359 (ATEAM):</b> 21 tickets, $26.5k handle, <b>+$19,024 win</b> (Hold: -71.8%)
-• <b>BCC1530 (SPEN):</b> 31 tickets, $19.7k handle, <b>+$10,514 win</b> (Hold: -53.3%)
-• <b>AT811 (ATEAM):</b> 30 tickets, $5.9k handle, <b>+$3,967 win</b> (Hold: -66.2%)
+• <b>unmeasured (no per-customer intraday source wired to this report)</b>
 
 🛡 <b>Operational Directive:</b>
 Enforce 6-second dynamic confirmation delay gate across live/in-play markets and moving numbers.
@@ -546,11 +543,7 @@ Master Agent: <code>BILLY666</code> • Generated: <code>${nowStr}</code>
 • Agent 50% Shared Hold : ${sharedHoldLine}
 
 🚨 <b>Top 5 Sub-Agent House Losses:</b>
-1. <b>BIGDAD</b>    : -$40,000.00 (BGD101 cashed 2 max wagers)
-2. <b>GPRO50RSK</b> : -$29,303.00 (GP300 steam win +$33.9k)
-3. <b>ATEAM</b>     : -$27,434.00 (AT10359 syndicate win +$19.0k)
-4. <b>FAKEMONEY</b> : -$25,000.00 (RF2003 whale swing)
-5. <b>DAN318</b>    : -$12,382.00 (DAN245 won +$14.0k)
+• <b>unmeasured (no per-sub-agent settlement source wired to this report)</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
     return {

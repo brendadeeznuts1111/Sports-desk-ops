@@ -16,13 +16,15 @@ import type {
   DashboardFeedProvenanceKind,
   DashboardSourceProvenance,
   LiveWager,
+  ProxyConduit30d,
+  RankedPlayer30d,
   TierStyleConfig,
 } from "./types.ts";
 
-export const SHOWCASE_WAGERS_PROVENANCE: DashboardSourceProvenance = {
-  kind: "showcase",
-  label: "Showcase Seed",
-  sourcePath: null,
+export const PENDING_WAGERS_PROVENANCE: DashboardSourceProvenance = {
+  kind: "pending",
+  label: "Pending Hydration",
+  sourcePath: "/api/wagers",
   observedAt: "",
 };
 
@@ -632,4 +634,208 @@ export async function hydrateDashboardFeeds(
     ),
   ]);
   return { wagers, customers, tiers };
+}
+
+/** Provenance for a feed that failed: names the endpoint and the error, never a substitute dataset. */
+export function unavailableProvenance(
+  endpoint: string,
+  error: string,
+  observedAt: string = new Date().toISOString(),
+): DashboardSourceProvenance {
+  return {
+    kind: "unavailable",
+    label: error,
+    sourcePath: endpoint,
+    observedAt,
+  };
+}
+
+/** Endpoint the Downlines tab reads: `runBatchedRanking` over the F402 bets corpus. */
+export const RANKINGS_ENDPOINT = "/api/rankings/all";
+
+export interface RankingsSummary {
+  readonly generatedAtIso: string;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly inWindowWagers: number;
+  readonly totalHandleUsd: number;
+  readonly totalToWinUsd: number;
+  readonly activeCustomerCount: number;
+  readonly activeSubAgentCount: number;
+  readonly activeMasterAgentCount: number;
+  readonly conduitSubAgentCount: number;
+}
+
+export interface NormalizedRankingsResult {
+  readonly summary: RankingsSummary;
+  readonly players: readonly RankedPlayer30d[];
+  readonly conduits: readonly ProxyConduit30d[];
+  /** Rows dropped because a required field was missing or non-numeric. */
+  readonly rejectedRows: number;
+}
+
+function finiteOrNull(val: unknown): number | null {
+  if (typeof val !== "number" || !Number.isFinite(val)) return null;
+  return val;
+}
+
+function nonEmptyString(val: unknown): string | null {
+  return typeof val === "string" && val.trim().length > 0 ? val.trim() : null;
+}
+
+/**
+ * Normalize a `GET /api/rankings/all` (`BatchedRankingResult`) payload. Returns null when the
+ * envelope is not that shape; rows missing a required field are counted in `rejectedRows`
+ * instead of being coerced.
+ */
+export function normalizeRankingsResponse(
+  raw: unknown,
+): NormalizedRankingsResult | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const rec = raw as Record<string, unknown>;
+  if (
+    !Array.isArray(rec.topRankedPlayers) ||
+    !Array.isArray(rec.topSubAgents)
+  ) {
+    return null;
+  }
+  const summaryNumbers = {
+    inWindowWagers: finiteOrNull(rec.inWindowWagers),
+    totalHandleUsd: finiteOrNull(rec.totalHandleUsd),
+    totalToWinUsd: finiteOrNull(rec.totalToWinUsd),
+    activeCustomerCount: finiteOrNull(rec.activeCustomerCount),
+    activeSubAgentCount: finiteOrNull(rec.activeSubAgentCount),
+    activeMasterAgentCount: finiteOrNull(rec.activeMasterAgentCount),
+    conduitSubAgentCount: finiteOrNull(rec.conduitSubAgentCount),
+  };
+  if (Object.values(summaryNumbers).some((v) => v === null)) return null;
+
+  let rejectedRows = 0;
+  const players: RankedPlayer30d[] = [];
+  for (const entry of rec.topRankedPlayers as unknown[]) {
+    const row = (
+      typeof entry === "object" && entry !== null ? entry : {}
+    ) as Record<string, unknown>;
+    const id = nonEmptyString(row.customerId);
+    const rank = finiteOrNull(row.rank);
+    const handleUsd = finiteOrNull(row.handleUsd);
+    const wagers = finiteOrNull(row.totalWagers);
+    const gini = finiteOrNull(row.stakeGini);
+    const alertRate = finiteOrNull(row.alertRatePct);
+    const score = finiteOrNull(row.compositeScore);
+    const limitUsd = finiteOrNull(row.recommendedLimitUsd);
+    const tier = nonEmptyString(row.tier);
+    if (
+      id === null ||
+      rank === null ||
+      handleUsd === null ||
+      wagers === null ||
+      gini === null ||
+      alertRate === null ||
+      score === null ||
+      limitUsd === null ||
+      tier === null
+    ) {
+      rejectedRows++;
+      continue;
+    }
+    players.push({
+      rank,
+      id,
+      agentId: nonEmptyString(row.agentId) ?? "",
+      masterAgent: nonEmptyString(row.masterAgent) ?? "",
+      handleUsd,
+      wagers,
+      gini,
+      alertRate,
+      score,
+      tier,
+      tierLabel: nonEmptyString(row.tierLabel) ?? tier,
+      dominantSport: nonEmptyString(row.dominantSport) ?? "",
+      isProxy: row.isProxyConduit === true,
+      limitUsd,
+    });
+  }
+
+  const conduits: ProxyConduit30d[] = [];
+  for (const entry of rec.topSubAgents as unknown[]) {
+    const row = (
+      typeof entry === "object" && entry !== null ? entry : {}
+    ) as Record<string, unknown>;
+    if (row.isProxyConduit !== true) continue;
+    const agentId = nonEmptyString(row.agentId);
+    const handleUsd = finiteOrNull(row.totalHandleUsd);
+    const wagers = finiteOrNull(row.totalWagers);
+    const concPct = finiteOrNull(row.topCustomerConcentrationPct);
+    if (
+      agentId === null ||
+      handleUsd === null ||
+      wagers === null ||
+      concPct === null
+    ) {
+      rejectedRows++;
+      continue;
+    }
+    conduits.push({
+      agentId,
+      masterAgent: nonEmptyString(row.masterAgent) ?? "",
+      handleUsd,
+      wagers,
+      topCust: nonEmptyString(row.topCustomer) ?? "",
+      concPct,
+    });
+  }
+
+  return {
+    summary: {
+      generatedAtIso: nonEmptyString(rec.generatedAtIso) ?? "",
+      windowStart: nonEmptyString(rec.windowStart) ?? "",
+      windowEnd: nonEmptyString(rec.windowEnd) ?? "",
+      inWindowWagers: summaryNumbers.inWindowWagers as number,
+      totalHandleUsd: summaryNumbers.totalHandleUsd as number,
+      totalToWinUsd: summaryNumbers.totalToWinUsd as number,
+      activeCustomerCount: summaryNumbers.activeCustomerCount as number,
+      activeSubAgentCount: summaryNumbers.activeSubAgentCount as number,
+      activeMasterAgentCount: summaryNumbers.activeMasterAgentCount as number,
+      conduitSubAgentCount: summaryNumbers.conduitSubAgentCount as number,
+    },
+    players,
+    conduits,
+    rejectedRows,
+  };
+}
+
+/**
+ * Fetch and normalize `GET /api/rankings/all`. A non-2xx reply carries the server's
+ * `{ error }` text (for example a missing bets corpus) into the failure message.
+ */
+export async function fetchRankingsSlice(
+  fetchImpl: (input: string) => Promise<Response>,
+  limit = 100,
+): Promise<HydratedSliceResult<NormalizedRankingsResult>> {
+  const url = `${RANKINGS_ENDPOINT}?limit=${limit}`;
+  try {
+    const res = await fetchImpl(url);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: unknown;
+      } | null;
+      const detail = typeof body?.error === "string" ? `: ${body.error}` : "";
+      return {
+        ok: false,
+        error: `GET ${RANKINGS_ENDPOINT} returned HTTP ${res.status} (${res.statusText || "error"})${detail}`,
+      };
+    }
+    const normalized = normalizeRankingsResponse(await res.json());
+    if (normalized === null) {
+      return {
+        ok: false,
+        error: `GET ${RANKINGS_ENDPOINT} returned an unexpected BatchedRankingResult payload`,
+      };
+    }
+    return { ok: true, data: normalized };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `GET ${RANKINGS_ENDPOINT} failed: ${message}` };
+  }
 }

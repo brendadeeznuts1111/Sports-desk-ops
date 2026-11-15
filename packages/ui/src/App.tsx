@@ -8,9 +8,12 @@ import "./desk.css";
 import { ShadowPricingPanel } from "./ShadowPricingPanel.tsx";
 import { styles } from "./dashboard_styles.ts";
 import {
+  fetchRankingsSlice,
+  type NormalizedRankingsResult,
   normalizeCustomersCohortResponse,
   normalizeLiveWagersResponse,
-  SHOWCASE_WAGERS_PROVENANCE,
+  PENDING_WAGERS_PROVENANCE,
+  unavailableProvenance,
 } from "./hydration.ts";
 import {
   AgentInspectorModal,
@@ -31,14 +34,9 @@ import {
 } from "./runtime_flags.ts";
 import {
   CLIENT_AUTOCOMPLETE_COMMANDS,
-  KNOWN_ID_LIST,
-  PROXY_CONDUITS_30D,
-  RANKED_30D_PLAYERS,
-  SAMPLE_LIVE_WAGERS,
-  SAMPLE_PROFILE_DATA,
   TERMINAL_INITIAL_COMMANDS,
   TERMINAL_WELCOME_HELP_STDOUT,
-} from "./showcase_data.ts";
+} from "./terminal_catalog.ts";
 import {
   DASHBOARD_API,
   DASHBOARD_DEFAULT_TAB,
@@ -73,13 +71,16 @@ import {
 } from "./types.ts";
 
 export * from "./types.ts";
-export {
-  KNOWN_ID_LIST,
-  PROXY_CONDUITS_30D,
-  RANKED_30D_PLAYERS,
-  SAMPLE_LIVE_WAGERS,
-  SAMPLE_PROFILE_DATA,
-};
+
+/**
+ * Why the profile cards are empty: no endpoint serves the per-customer card list.
+ * `GET /api/customer/profile?id=` returns one book profile by ID in a different shape.
+ */
+export const PROFILES_UNAVAILABLE_REASON =
+  "No endpoint serves the per-customer profile cards (sharpness components, VaR, limits). " +
+  "GET /api/customer/profile?id= returns a single book profile by ID, not this list, so the cards stay empty rather than showing invented customers.";
+
+const PROFILE_CUSTOMERS: readonly ShowcaseCustomer[] = [];
 
 function getCsrfToken(): string {
   if (typeof document === "undefined") return "";
@@ -142,9 +143,7 @@ export function App(): React.ReactElement {
   const [wagerAlertFilter, setWagerAlertFilter] = useState<string>("ALL");
   const [wagerTypeFilter, setWagerTypeFilter] = useState<string>("ALL");
   const [copiedTicketId, setCopiedTicketId] = useState<string | null>(null);
-  const [selectedWager, setSelectedWager] = useState<LiveWager | null>(
-    SAMPLE_LIVE_WAGERS[0] ?? null,
-  );
+  const [selectedWager, setSelectedWager] = useState<LiveWager | null>(null);
   // Default sort comes from packages/ui/src/config/wagers.toml ([table] table).
   const [wagerSortField, setWagerSortField] = useState<WagerSortField>(
     WAGERS_DEFAULTS.sort_field,
@@ -178,24 +177,16 @@ export function App(): React.ReactElement {
   const [filterTier, setFilterTier] = useState<string>("ALL");
   const [copiedCliId, setCopiedCliId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] =
-    useState<ShowcaseCustomer | null>(() => {
-      const q = resolveInitialUrlParam("search").toUpperCase();
-      if (q) {
-        const match = SAMPLE_PROFILE_DATA.find((c) => c.id.toUpperCase() === q);
-        if (match) return match;
-      }
-      return SAMPLE_PROFILE_DATA[0] ?? null;
-    });
+    useState<ShowcaseCustomer | null>(null);
   const [customerForensicResult, setCustomerForensicResult] = useState<
     string | null
   >(null);
 
   // Runtime Declarative Wager Tiers + Live API Hydration state
   const [tiersConfig, setTiersConfig] = useState<TierStyleConfig | null>(null);
-  const [liveWagers, setLiveWagers] =
-    useState<readonly LiveWager[]>(SAMPLE_LIVE_WAGERS);
+  const [liveWagers, setLiveWagers] = useState<readonly LiveWager[]>([]);
   const [wagersProvenance, setWagersProvenance] =
-    useState<DashboardSourceProvenance>(SHOWCASE_WAGERS_PROVENANCE);
+    useState<DashboardSourceProvenance>(PENDING_WAGERS_PROVENANCE);
   const [wagersError, setWagersError] = useState<string | null>(null);
   const [wireContract, setWireContract] =
     useState<WagersWireContractSummary | null>(null);
@@ -214,6 +205,13 @@ export function App(): React.ReactElement {
     "pending" | "ready" | "unavailable"
   >("pending");
   const [cohortsError, setCohortsError] = useState<string | null>(null);
+  const [rankings, setRankings] = useState<NormalizedRankingsResult | null>(
+    null,
+  );
+  const [rankingsStatus, setRankingsStatus] = useState<
+    "pending" | "ready" | "unavailable"
+  >("pending");
+  const [rankingsError, setRankingsError] = useState<string | null>(null);
 
   const fetchTiersConfig = async () => {
     try {
@@ -231,18 +229,23 @@ export function App(): React.ReactElement {
     }
   };
 
+  const failLiveWagers = (message: string) => {
+    setWagersError(message);
+    setWagersProvenance(unavailableProvenance("/api/wagers", message));
+  };
+
   const fetchLiveWagers = async () => {
     try {
       const res = await fetch(dashboardApiUrl(DASHBOARD_API.wagers));
       if (!res.ok) {
-        setWagersError(
+        failLiveWagers(
           `GET /api/wagers returned HTTP ${res.status} (${res.statusText || "error"})`,
         );
         return;
       }
       const normalized = normalizeLiveWagersResponse(await res.json());
       if (!normalized) {
-        setWagersError(
+        failLiveWagers(
           "GET /api/wagers returned unexpected LiveWagersApiResponse payload",
         );
         return;
@@ -260,7 +263,7 @@ export function App(): React.ReactElement {
         );
       }
     } catch (err) {
-      setWagersError(
+      failLiveWagers(
         `GET /api/wagers failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
@@ -292,6 +295,18 @@ export function App(): React.ReactElement {
       setCohortsError(
         `GET /api/customers failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+  };
+
+  const fetchRankings = async () => {
+    const slice = await fetchRankingsSlice(fetch);
+    if (slice.ok) {
+      setRankings(slice.data);
+      setRankingsStatus("ready");
+      setRankingsError(null);
+    } else {
+      setRankingsStatus("unavailable");
+      setRankingsError(slice.error);
     }
   };
 
@@ -371,6 +386,7 @@ export function App(): React.ReactElement {
     void fetchTiersConfig();
     void fetchLiveWagers();
     void fetchCustomersCohorts();
+    void fetchRankings();
     void fetchBetTicker();
     void fetchR2Pipeline();
   }, []);
@@ -658,6 +674,13 @@ export function App(): React.ReactElement {
     }
   };
 
+  const knownCustomerIds = (): readonly string[] => [
+    ...new Set([
+      ...liveWagers.map((w) => w.customerId),
+      ...(rankings?.players ?? []).map((p) => p.id),
+    ]),
+  ];
+
   const handleAutocomplete = () => {
     const trimmed = terminalCommand.trimStart();
     if (!trimmed) {
@@ -675,7 +698,7 @@ export function App(): React.ReactElement {
         setTerminalCommand(cmdMatch + " ");
         return;
       }
-      const idMatch = KNOWN_ID_LIST.find((id) =>
+      const idMatch = knownCustomerIds().find((id) =>
         id.toLowerCase().startsWith(prefix),
       );
       if (idMatch) {
@@ -686,7 +709,7 @@ export function App(): React.ReactElement {
       const cmd = tokens[0]!.toLowerCase();
       const argPrefix = tokens[1]!.toUpperCase();
       if (cmd === "profile" || cmd === "p" || cmd === "c") {
-        const idMatch = KNOWN_ID_LIST.find((id) =>
+        const idMatch = knownCustomerIds().find((id) =>
           id.toUpperCase().startsWith(argPrefix),
         );
         if (idMatch) {
@@ -754,29 +777,15 @@ export function App(): React.ReactElement {
           },
         ]);
       }
-    } catch {
-      // Local client fallback
-      const upper = trimmed.toUpperCase();
-      const cust = SAMPLE_PROFILE_DATA.find((c) => c.id === upper);
-      let stdout = "";
-      if (cust) {
-        stdout =
-          `\x1b[1;36m🎯 SPORTSDESK BEHAVIORAL PROFILE: ${cust.id}\x1b[0m\n` +
-          `  Name: ${cust.name} | Agent: ${cust.agentId} | Tier: \x1b[1;33m${cust.tier}\x1b[0m (Score: \x1b[1m${cust.score}/10\x1b[0m)\n` +
-          `  Strategy: ${cust.sizingStrategy} | Stake Gini: \x1b[1m${cust.gini}\x1b[0m | Mean Stake: $${cust.meanStake}\n` +
-          `  Timing: ${cust.timingArchetype} | Correlated Risk: \x1b[31m${cust.correlatedRisk}\x1b[0m\n` +
-          `  7d VaR (95%): $${cust.var95Usd.toLocaleString()} | Hold: ${cust.holdPct}%\n` +
-          `  Recommended Limit: \x1b[1m$${cust.recommendedLimitUsd.toLocaleString()}\x1b[0m | Action: \x1b[1;31m${cust.action}\x1b[0m`;
-      } else {
-        stdout = `\x1b[33m[OFFLINE_FALLBACK] Executed: ${trimmed}\x1b[0m\n\x1b[90m(Start dev server via 'bun run dev' for live Bun.Terminal PTY)\x1b[0m`;
-      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
       setTerminalHistory((prev) => [
         ...prev,
         {
           command: trimmed,
-          stdout,
-          exitCode: 0,
-          durationMs: 5,
+          stdout: `\x1b[31m[TERMINAL_UNAVAILABLE] POST /api/terminal/exec failed: ${reason}\x1b[0m\n\x1b[90mNothing was executed. Start the dashboard server ('bun run dev') for the live Bun.Terminal PTY.\x1b[0m`,
+          exitCode: 1,
+          durationMs: 0,
           timestamp: Date.now(),
         },
       ]);
@@ -911,6 +920,7 @@ export function App(): React.ReactElement {
           void fetchLiveWagers();
           void fetchBetTicker();
           void fetchCustomersCohorts();
+          void fetchRankings();
           void fetchTiersConfig();
           break;
         case "dashboard-updated":
@@ -949,7 +959,7 @@ export function App(): React.ReactElement {
     };
   }, []);
 
-  const filteredCustomers = SAMPLE_PROFILE_DATA.filter((cust) => {
+  const filteredCustomers = PROFILE_CUSTOMERS.filter((cust) => {
     const matchesSearch =
       cust.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cust.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -992,7 +1002,7 @@ export function App(): React.ReactElement {
 
   const handleSelectCustomerById = (customerId: string) => {
     const upper = customerId.trim().toUpperCase();
-    const found = SAMPLE_PROFILE_DATA.find((c) => c.id.toUpperCase() === upper);
+    const found = PROFILE_CUSTOMERS.find((c) => c.id.toUpperCase() === upper);
     if (found) {
       setSelectedCustomer(found);
     }
@@ -1260,7 +1270,7 @@ export function App(): React.ReactElement {
             onClick={() => setActiveTab("customers")}
             title="Inspect individual sharp originators, sizing models, and risk (Ctrl+1)"
           >
-            👥 Profiles ({SAMPLE_PROFILE_DATA.length})
+            👥 Profiles (—)
             <span style={styles.keyShortcutBadge}>Ctrl+1</span>
           </button>
           <button
@@ -1296,7 +1306,7 @@ export function App(): React.ReactElement {
             onClick={() => setActiveTab("rankings")}
             title="Rolling 30-day handle rankings & proxy conduits (Ctrl+4)"
           >
-            🏆 Downlines ({PROXY_CONDUITS_30D.length})
+            🏆 Downlines ({rankings ? rankings.conduits.length : "—"})
             <span style={styles.keyShortcutBadge}>Ctrl+4</span>
           </button>
           <button
@@ -1535,7 +1545,7 @@ export function App(): React.ReactElement {
             }}
             title="Inspect BRT106 (BGMASTER / BILLY666) 3-endpoint portal & figureDate reconciliation"
           >
-            🧾 Figure-Date Audit: BRT106 (+$76,950 · 0¢ Delta)
+            🧾 Figure-Date Audit: BRT106
           </button>
         </div>
         <div
@@ -1556,26 +1566,34 @@ export function App(): React.ReactElement {
           <span>·</span>
           <span>
             Top Conduit:{" "}
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedAgentId(
-                  PROXY_CONDUITS_30D[0]?.agentId ?? "FAKEMONEY",
-                )
-              }
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                color: "#38bdf8",
-                fontWeight: 600,
-                fontSize: "11px",
-                cursor: "pointer",
-              }}
-            >
-              {PROXY_CONDUITS_30D[0]?.agentId ?? "FAKEMONEY"} (
-              {PROXY_CONDUITS_30D[0]?.concPct ?? 100}%) ↗
-            </button>
+            {rankings?.conduits[0] ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedAgentId(rankings.conduits[0]?.agentId ?? null)
+                }
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "#38bdf8",
+                  fontWeight: 600,
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                {rankings.conduits[0].agentId} (
+                {rankings.conduits[0].concPct.toFixed(1)}%) ↗
+              </button>
+            ) : (
+              <code style={{ color: "#94a3b8" }} title={rankingsError ?? ""}>
+                {rankingsStatus === "pending"
+                  ? "pending"
+                  : rankingsStatus === "ready"
+                    ? "none flagged"
+                    : "unavailable"}
+              </code>
+            )}
           </span>
         </div>
       </section>
@@ -1628,6 +1646,7 @@ export function App(): React.ReactElement {
               void runTerminalCommand(`profile ${customerId}`);
             }}
             onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
+            profilesUnavailableReason={PROFILES_UNAVAILABLE_REASON}
             onViewCustomerWagers={(customerId) => {
               setWagerSportFilter("ALL");
               setWagerAlertFilter("ALL");
@@ -1702,6 +1721,9 @@ export function App(): React.ReactElement {
             }}
             onSelectAgent={(agentId) => setSelectedAgentId(agentId)}
             onSelectCustomerById={handleSelectCustomerById}
+            rankings={rankings}
+            rankingsStatus={rankingsStatus}
+            rankingsError={rankingsError}
           />
         ) : activeTab === "alerts" ? (
           <AlertsTabPanel
@@ -1741,7 +1763,7 @@ export function App(): React.ReactElement {
         ) : activeTab === "shadow" ? (
           <ShadowPricingPanel
             onInspectAccount={(accountId) => {
-              const found = SAMPLE_PROFILE_DATA.find(
+              const found = PROFILE_CUSTOMERS.find(
                 (c) => c.id.toUpperCase() === accountId.toUpperCase(),
               );
               if (found) {

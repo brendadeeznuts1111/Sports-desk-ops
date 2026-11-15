@@ -19,26 +19,28 @@ import {
   SurveillanceTabPanel,
   TerminalTabPanel,
 } from "../packages/ui/src/panels/index.tsx";
+import { TERMINAL_WELCOME_HELP_STDOUT } from "../packages/ui/src/terminal_catalog.ts";
 import {
-  PROXY_CONDUITS_30D,
-  SAMPLE_LIVE_WAGERS,
-  SAMPLE_PROFILE_DATA,
-  TERMINAL_WELCOME_HELP_STDOUT,
-} from "../packages/ui/src/showcase_data.ts";
+  FIXTURE_LIVE_WAGERS,
+  FIXTURE_PROFILE_CUSTOMERS,
+  FIXTURE_RANKINGS,
+} from "./fixtures/dashboard_ui_fixtures.ts";
 
 describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () => {
   test("App renders orchestrator header, tabs, and customer panel without runtime error", () => {
     const html = renderToStaticMarkup(React.createElement(App));
     expect(html).toContain("SportsDesk &amp; Fantasy402 Operations");
     expect(html).toContain("autoExecute: false");
-    expect(html).toContain(`Profiles (${SAMPLE_PROFILE_DATA.length})`);
-    expect(html).toContain(`Downlines (${PROXY_CONDUITS_30D.length})`);
-    expect(html).toContain(`Live Wagers (${SAMPLE_LIVE_WAGERS.length})`);
+    expect(html).toContain("Profiles (—)");
+    expect(html).toContain("Downlines (—)");
+    expect(html).toContain("Live Wagers (0)");
+    expect(html).toContain("No live profile source yet");
     expect(html).toContain("Desk Quick-Jump:");
     expect(html).toContain("NCAAB Slice");
     expect(html).toContain("GSLive / In-Play");
     expect(html).toContain("Figure-Date Audit: BRT106");
-    expect(html).toContain("GP301");
+    expect(html).not.toContain("GP301");
+    expect(html).not.toContain("+$76,950");
   });
 
   test("BuildMatrixDrawer renders sentinel, all 18 Houdini tokens, DCE flags, delta vs dev, and active target", () => {
@@ -89,7 +91,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
   });
 
   test("CustomersTabPanel renders customer table, radars, and inspector actions", () => {
-    const cust = SAMPLE_PROFILE_DATA[0]!;
+    const cust = FIXTURE_PROFILE_CUSTOMERS[0]!;
     const noop = () => {};
     const html = renderToStaticMarkup(
       React.createElement(CustomersTabPanel, {
@@ -101,7 +103,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         onSearchQueryChange: noop,
         filterTier: "ALL",
         onFilterTierChange: noop,
-        sortedCustomers: SAMPLE_PROFILE_DATA,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
         customerSort: { key: "score", dir: -1 },
         onCustomerSort: noop,
         selectedCustomer: cust,
@@ -114,11 +116,13 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         onOpenTerminalProfile: noop,
       }),
     );
-    expect(html).toContain(`Profiled Bettors (${SAMPLE_PROFILE_DATA.length})`);
+    expect(html).toContain(
+      `Profiled Bettors (${FIXTURE_PROFILE_CUSTOMERS.length})`,
+    );
     expect(html).toContain("Avg Sharp:");
     expect(html).toContain("Alerts");
     expect(html).toContain("Σ VaR:");
-    expect(html).toContain(`#1 / ${SAMPLE_PROFILE_DATA.length}`);
+    expect(html).toContain(`#1 / ${FIXTURE_PROFILE_CUSTOMERS.length}`);
     expect(html).toContain("← Prev");
     expect(html).toContain("Next →");
     expect(html).toContain("VaR / Max Cap:");
@@ -155,7 +159,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
     expect(emptyHtml).toContain("No profiled bettors match current filters.");
     expect(emptyHtml).toContain("Reset filters");
 
-    const brt106 = SAMPLE_PROFILE_DATA.find((c) => c.id === "BRT106")!;
+    const brt106 = FIXTURE_PROFILE_CUSTOMERS.find((c) => c.id === "BRT106")!;
     expect(brt106).toBeDefined();
     const brtHtml = renderToStaticMarkup(
       React.createElement(CustomersTabPanel, {
@@ -167,7 +171,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         onSearchQueryChange: noop,
         filterTier: "ALL",
         onFilterTierChange: noop,
-        sortedCustomers: SAMPLE_PROFILE_DATA,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
         customerSort: { key: "score", dir: -1 },
         onCustomerSort: noop,
         selectedCustomer: brt106,
@@ -360,6 +364,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         rankingsFilter: "ALL",
         onRankingsFilterChange: noop,
         onInspectPty: noop,
+        rankings: FIXTURE_RANKINGS,
       }),
     );
     expect(html).toContain("30-Day Sharp Bettor Rankings");
@@ -423,8 +428,9 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
 
   test("LiveWagersTabPanel renders incoming wagers table and selected ticket inspector", () => {
     const noop = () => {};
-    const wager = SAMPLE_LIVE_WAGERS[0]!;
+    const wager = FIXTURE_LIVE_WAGERS[0]!;
     const baseProps = {
+      wagers: FIXTURE_LIVE_WAGERS,
       wagerSearch: "",
       onWagerSearchChange: noop,
       wagerSportFilter: "ALL",
@@ -797,10 +803,10 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         onSearchQueryChange: noop,
         filterTier: "ALL",
         onFilterTierChange: noop,
-        sortedCustomers: SAMPLE_PROFILE_DATA,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
         customerSort: { key: "score", dir: -1 },
         onCustomerSort: noop,
-        selectedCustomer: SAMPLE_PROFILE_DATA[0]!,
+        selectedCustomer: FIXTURE_PROFILE_CUSTOMERS[0]!,
         onSelectCustomer: noop,
         copiedCliId: null,
         onCopyCli: noop,
@@ -823,7 +829,8 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         wagerSortField: "timestamp",
         wagerSortDir: "desc",
         onWagerSort: noop,
-        selectedWager: SAMPLE_LIVE_WAGERS[0]!,
+        wagers: FIXTURE_LIVE_WAGERS,
+        selectedWager: FIXTURE_LIVE_WAGERS[0]!,
         onSelectWager: noop,
         copiedTicketId: null,
         onCopyText: noop,
@@ -839,6 +846,7 @@ describe("@sportsdesk-ops/ui modular App & panels (renderToStaticMarkup)", () =>
         rankingsFilter: "ALL",
         onRankingsFilterChange: noop,
         onInspectPty: noop,
+        rankings: FIXTURE_RANKINGS,
       }),
     );
     const ansiHtml = renderToStaticMarkup(

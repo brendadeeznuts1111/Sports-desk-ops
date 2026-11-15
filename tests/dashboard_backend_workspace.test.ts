@@ -10,7 +10,6 @@ import {
   createDevLiveWagersLoader,
   DashboardHealthTracker,
   DashboardMarkdownCache,
-  FALLBACK_DEV_WAGERS,
   isDashboardAuthRequired,
   parseFiniteNumber,
   parseRepriceMode,
@@ -161,11 +160,15 @@ describe("@sportsdesk-ops/backend workspace services", () => {
       candidatePaths: [path.join(SCRATCH, "does-not-exist.json")],
       loadSharpDeps: async () => deps,
     });
-    const fallback = await emptyLoader.buildLiveWagersPayload();
-    expect(fallback.autoExecute).toBe(false);
-    expect(fallback.wagers.length).toBe(FALLBACK_DEV_WAGERS.length);
-    expect(fallback.provenance.kind).toBe("fallback");
-    expect(fallback.provenance.sourcePath).toBeNull();
+    const unavailable = await emptyLoader.buildLiveWagersPayload();
+    expect(unavailable.autoExecute).toBe(false);
+    expect(unavailable.wagers).toEqual([]);
+    expect(unavailable.totalRiskUsd).toBe(0);
+    expect(unavailable.provenance.kind).toBe("unavailable");
+    expect(unavailable.provenance.label).toBe(
+      "No wager rows in does-not-exist.json",
+    );
+    expect(unavailable.provenance.sourcePath).toBeNull();
   });
 
   test("createCustomerRowFinder & computeCustomersCohortPayload aggregate dynamically", async () => {

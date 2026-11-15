@@ -25,7 +25,7 @@ export * from "./hydration.ts";
 export * from "./links.ts";
 export * from "./runtime_flags.ts";
 
-// 5. Visual Tokens, Showcase Fixtures & Canonical Tab/Domain Types
+// 5. Visual Tokens, Terminal Command Catalog & Canonical Tab/Domain Types
 export * from "./dashboard_styles.ts";
-export * from "./showcase_data.ts";
+export * from "./terminal_catalog.ts";
 export * from "./types.ts";

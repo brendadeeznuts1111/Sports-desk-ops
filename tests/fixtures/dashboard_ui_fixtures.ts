@@ -1,11 +1,17 @@
+/**
+ * Synthetic dashboard rows for UI tests only. These customers, wagers, rankings and
+ * conduits are invented; runtime code must never import this file
+ * (`tests/dashboard_no_seed_runtime.test.tsx` enforces it).
+ */
+import type { NormalizedRankingsResult } from "../../packages/ui/src/hydration.ts";
 import type {
   LiveWager,
   ProxyConduit30d,
   RankedPlayer30d,
   ShowcaseCustomer,
-} from "./types.ts";
+} from "../../packages/ui/src/types.ts";
 
-export const SAMPLE_PROFILE_DATA: ShowcaseCustomer[] = [
+export const FIXTURE_PROFILE_CUSTOMERS: readonly ShowcaseCustomer[] = [
   {
     id: "GP301",
     name: "Golden Punter Syndicate Seat 1",
@@ -534,75 +540,7 @@ export const SAMPLE_PROFILE_DATA: ShowcaseCustomer[] = [
   },
 ];
 
-export const CLIENT_AUTOCOMPLETE_COMMANDS: readonly string[] = [
-  "profile",
-  "find",
-  "sharps",
-  "syndicates",
-  "key-numbers",
-  "gini",
-  "directives",
-  "risk",
-  "stats",
-  "who",
-  "dns",
-  "reverse",
-  "cron",
-  "markdown",
-  "capabilities",
-  "clear",
-  "help",
-  "keybindings",
-  "p",
-  "f",
-  "sh",
-  "syn",
-  "k",
-  "g",
-  "dir",
-  "var",
-  "stat",
-  "w",
-  "d",
-  "r",
-  "cr",
-  "md",
-  "cls",
-  "h",
-  "kb",
-];
-
-export const KNOWN_ID_LIST: readonly string[] = [
-  "GP301",
-  "CCC88412",
-  "MJ107",
-  "BRT5235",
-  "BRT5229",
-  "BRT5229_0",
-  "BRT5229_1",
-  "BRT106",
-  "BGD101",
-  "BAR301",
-  "ST100",
-  "KENT99",
-  "LIVE99",
-  "BK119",
-  "RF2003",
-  "SQUARE1",
-  "B121",
-  "AX39",
-  "BNN320",
-  "MJ109",
-  "DAN900",
-  "LLB105",
-  "CUB109",
-  "VIPM126",
-  "PEY101",
-  "GL205",
-  "ABC700",
-];
-
-export const RANKED_30D_PLAYERS: RankedPlayer30d[] = [
+export const FIXTURE_RANKED_PLAYERS_30D: readonly RankedPlayer30d[] = [
   {
     rank: 1,
     id: "B121",
@@ -797,7 +735,7 @@ export const RANKED_30D_PLAYERS: RankedPlayer30d[] = [
   },
 ];
 
-export const PROXY_CONDUITS_30D: ProxyConduit30d[] = [
+export const FIXTURE_PROXY_CONDUITS_30D: readonly ProxyConduit30d[] = [
   {
     agentId: "FAKEMONEY",
     masterAgent: "NOLAWOLF",
@@ -912,7 +850,7 @@ export const PROXY_CONDUITS_30D: ProxyConduit30d[] = [
   },
 ];
 
-export const SAMPLE_LIVE_WAGERS: LiveWager[] = [
+export const FIXTURE_LIVE_WAGERS: readonly LiveWager[] = [
   {
     ticketId: "W-109281",
     timestamp: "14:32:01 ET",
@@ -1211,40 +1149,21 @@ export const SAMPLE_LIVE_WAGERS: LiveWager[] = [
   },
 ];
 
-export const TERMINAL_WELCOME_HELP_STDOUT =
-  "\x1b[1;36m╔════════════════════════════════════════════════════════════════════════════╗\x1b[0m\n" +
-  "\x1b[1;36m║   ⚡ SPORTSDESK & FANTASY402 INTERACTIVE PTY TERMINAL (Bun.Terminal)     ║\x1b[0m\n" +
-  "\x1b[1;36m╚════════════════════════════════════════════════════════════════════════════╝\x1b[0m\n" +
-  "\x1b[90mEngine: Bun.spawn + Bun.Terminal PTY · Host: sportsdesk-ops · Invariant: autoExecute: false\x1b[0m\n\n" +
-  "\x1b[1;33mCommands & Canonical Shortcodes:\x1b[0m\n" +
-  "  \x1b[1;32mprofile <id>\x1b[0m (aliases: \x1b[32mp, c\x1b[0m) Inspect multidimensional sharpness radar (flags: \x1b[36m--radar\x1b[0m, \x1b[36m--json\x1b[0m, \x1b[36m--wagers\x1b[0m)\n" +
-  "  \x1b[1;32mfind <query>\x1b[0m (aliases: \x1b[32mf, s\x1b[0m) Search accounts (flags: \x1b[36m-t <tier>\x1b[0m, \x1b[36m-s <sport>\x1b[0m, \x1b[36m-a <action>\x1b[0m)\n" +
-  "  \x1b[1;32msharps\x1b[0m (aliases: \x1b[32msh, top\x1b[0m)    Top sharp originators ranked by Sharpness Composite Index\n" +
-  "  \x1b[1;32msyndicates\x1b[0m (aliases: \x1b[32msyn\x1b[0m)       Detected hook syndicate clusters & sub-accounts\n" +
-  "  \x1b[1;32mkey-numbers\x1b[0m (aliases: \x1b[32mk, keys\x1b[0m) Football key number buyers (3, 7, 10, 14, 21) hit rates & edge\n" +
-  "  \x1b[1;32mgini\x1b[0m (alias: \x1b[32mg\x1b[0m)               Stake inequality Gini rankings (flat unit vs Kelly vs martingale)\n" +
-  "  \x1b[1;32mdirectives\x1b[0m (aliases: \x1b[32mdir\x1b[0m)     Actionable desk directives, limit caps & in-play delays\n" +
-  "  \x1b[1;32mrisk\x1b[0m (aliases: \x1b[32mvar, cvar\x1b[0m)       7d Value-at-Risk (95%), CVaR shortfall & hold %\n" +
-  "  \x1b[1;32mstats\x1b[0m (aliases: \x1b[32mstat\x1b[0m)          Full cohort breakdown & capital protection metrics\n" +
-  "  \x1b[1;32mwho\x1b[0m (alias: \x1b[32mw\x1b[0m)                Operator desk, session, worktree & Bun runtime info\n" +
-  "  \x1b[1;32mkeybindings\x1b[0m (alias: \x1b[32mkb\x1b[0m)        Terminal & GUI keyboard shortcuts cheat sheet\n" +
-  "  \x1b[1;32mdns <host>\x1b[0m (alias: \x1b[32md\x1b[0m)         Benchmark c-ares vs system DNS resolver latency\n" +
-  "  \x1b[1;32mreverse <ip>\x1b[0m (alias: \x1b[32mr, ip\x1b[0m)     Reverse DNS forensics & datacenter/residential IP lookup\n" +
-  "  \x1b[1;32mcron <expr>\x1b[0m (alias: \x1b[32mcr\x1b[0m)        Inspect Bun.cron() schedule triggers\n" +
-  "  \x1b[1;32mmarkdown\x1b[0m (alias: \x1b[32mmd\x1b[0m)           Render Markdown via native Bun.markdown.ansi\n" +
-  "  \x1b[1;32mclear\x1b[0m (alias: \x1b[32mcls\x1b[0m)             Clear terminal screen buffer\n" +
-  "  \x1b[1;32mhelp\x1b[0m (aliases: \x1b[32mh, ?\x1b[0m)           Display this reference manual\n\n" +
-  "\x1b[1;33mKeyboard Shortcuts:\x1b[0m \x1b[36m[Tab]\x1b[0m Autocomplete · \x1b[36m[Ctrl+` / Cmd+K]\x1b[0m Toggle PTY · \x1b[36m[Ctrl+1/2/3]\x1b[0m Tabs · \x1b[36m[Ctrl+L]\x1b[0m Clear";
-
-export const TERMINAL_INITIAL_COMMANDS: string[] = [
-  "help",
-  "p GP301",
-  "sh",
-  "k",
-  "g",
-  "dir",
-  "var",
-  "stat",
-  "w",
-  "kb",
-];
+/** `GET /api/rankings/all` already normalized, built from the synthetic rows above. */
+export const FIXTURE_RANKINGS: NormalizedRankingsResult = {
+  summary: {
+    generatedAtIso: "2026-11-09T12:00:00.000Z",
+    windowStart: "2026-10-10",
+    windowEnd: "2026-11-09",
+    inWindowWagers: 627710,
+    totalHandleUsd: 268_900_000,
+    totalToWinUsd: 424_700_000,
+    activeCustomerCount: 9134,
+    activeSubAgentCount: 672,
+    activeMasterAgentCount: 107,
+    conduitSubAgentCount: FIXTURE_PROXY_CONDUITS_30D.length,
+  },
+  players: FIXTURE_RANKED_PLAYERS_30D,
+  conduits: FIXTURE_PROXY_CONDUITS_30D,
+  rejectedRows: 0,
+};

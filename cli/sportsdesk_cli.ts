@@ -2726,9 +2726,11 @@ export async function main(): Promise<void> {
     rawArgs.includes("--telegram-alert") ||
     cmd === "alert"
   ) {
-    const custId = rawArgs[1] || "RF2003";
     const bot = new SportsDeskTelegramService();
-    await bot.dispatchTestAlert(custId);
+    await bot.dispatchTestAlert(
+      rawArgs[1] ?? "",
+      Number(rawArgs[2] ?? Number.NaN),
+    );
     return;
   }
 

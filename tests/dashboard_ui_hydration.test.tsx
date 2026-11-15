@@ -14,8 +14,8 @@ import {
   hydrateDashboardFeeds,
   LiveWagersTabPanel,
   normalizeLiveWagersResponse,
-  SAMPLE_PROFILE_DATA,
 } from "@sportsdesk-ops/ui";
+import { FIXTURE_PROFILE_CUSTOMERS } from "./fixtures/dashboard_ui_fixtures.ts";
 
 function buildHydrationApi(options: {
   readonly wagerProvenanceKind?: "capture" | "fixture" | "fallback";
@@ -257,10 +257,10 @@ describe("@sportsdesk-ops/ui live hydration & Signal-Honesty provenance (zero po
         onSearchQueryChange: noop,
         filterTier: "ALL",
         onFilterTierChange: noop,
-        sortedCustomers: SAMPLE_PROFILE_DATA,
+        sortedCustomers: FIXTURE_PROFILE_CUSTOMERS,
         customerSort: { key: "score", dir: -1 },
         onCustomerSort: noop,
-        selectedCustomer: SAMPLE_PROFILE_DATA[0] ?? null,
+        selectedCustomer: FIXTURE_PROFILE_CUSTOMERS[0] ?? null,
         onSelectCustomer: noop,
         copiedCliId: null,
         onCopyCli: noop,

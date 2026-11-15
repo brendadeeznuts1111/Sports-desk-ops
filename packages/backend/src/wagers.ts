@@ -1,6 +1,6 @@
 /**
  * @file packages/backend/src/wagers.ts
- * @description Live wager normalization, risk classification, and safe fallback fixtures (`autoExecute: false`).
+ * @description Live wager normalization and risk classification (`autoExecute: false`).
  */
 
 import { basename, relative, resolve } from "node:path";
@@ -76,72 +76,6 @@ export interface LiveWagersPayload {
   /** Host-supplied slab policy summary (see config/slab.toml). */
   readonly slab_policy?: unknown;
 }
-
-export const FALLBACK_DEV_WAGERS: ReadonlyArray<Record<string, unknown>> = [
-  {
-    ticketId: "W-109281",
-    timestamp: "14:32:01 ET",
-    customerId: "GP301",
-    agentId: "AG99",
-    masterAgent: "MASTER_VEND",
-    sport: "NFL",
-    betType: "Total",
-    event: "Kansas City Chiefs @ Buffalo Bills",
-    selection: "Under",
-    lineDisplay: "47½",
-    oddsAmerican: "-110",
-    riskUsd: 5500,
-    toWinUsd: 5000,
-    clvCents: 14.2,
-    alertTier: "CRITICAL",
-    alertBadge: "🚨 CRITICAL (T1 Originator)",
-    operatorDirective: "Clamp Max $250 (autoExecute: false)",
-    maxRecommendedStake: 250,
-    autoExecute: false,
-  },
-  {
-    ticketId: "W-109282",
-    timestamp: "14:32:15 ET",
-    customerId: "CCC88412",
-    agentId: "FATSNOBOT",
-    masterAgent: "NOLAWOLF",
-    sport: "CFB",
-    betType: "Spread",
-    event: "Georgia @ Texas",
-    selection: "Texas",
-    lineDisplay: "+3½",
-    oddsAmerican: "-105",
-    riskUsd: 5250,
-    toWinUsd: 5000,
-    clvCents: 11.5,
-    alertTier: "STEAM",
-    alertBadge: "🚨 STEAM (Key Number 3)",
-    operatorDirective: "Clamp Max $250 (autoExecute: false)",
-    maxRecommendedStake: 250,
-    autoExecute: false,
-  },
-  {
-    ticketId: "W-109288",
-    timestamp: "14:34:25 ET",
-    customerId: "RF2003",
-    agentId: "FAKEMONEY",
-    masterAgent: "NOLAWOLF",
-    sport: "SOCCER",
-    betType: "Total",
-    event: "Real Madrid vs Barcelona",
-    selection: "Over",
-    lineDisplay: "3½ Goals",
-    oddsAmerican: "+130",
-    riskUsd: 25000,
-    toWinUsd: 32500,
-    clvCents: -4.2,
-    alertTier: "RECREATIONAL",
-    alertBadge: "✅ RECREATIONAL (Whale)",
-    operatorDirective: "Accept Normal ($25k) (autoExecute: false)",
-    maxRecommendedStake: 25000,
-    autoExecute: false,
-  },
-];
 
 export interface ProjectLiveWagerDeps {
   readonly parseShortDesc: (raw: unknown) => ParsedShortDescLike;
@@ -376,9 +310,6 @@ export function createDevLiveWagersLoader(options: DevLiveWagersLoaderOptions) {
   const cwd = options.cwd ?? process.cwd();
   const candidatePaths = options.candidatePaths ?? [
     resolve(cwd, "data/live-wagers.json"),
-    resolve(cwd, "tests/fixtures/live-wagers.partial.json"),
-    resolve(cwd, "tests/fixtures/live-wagers-LIST-100.json"),
-    resolve(cwd, "tests/fixtures/live-wagers-list-sample.json"),
   ];
   const cache = new BoundedStampCache<DevLiveWagersLoadResult>(8);
 
@@ -452,8 +383,7 @@ export function createDevLiveWagersLoader(options: DevLiveWagersLoaderOptions) {
   const buildLiveWagersPayload = async (): Promise<LiveWagersPayload> => {
     const nowIso = new Date().toISOString();
     const loaded = await loadDevLiveWagersDetailed();
-    const wagers: ReadonlyArray<Record<string, unknown>> =
-      loaded.rows.length > 0 ? loaded.rows : FALLBACK_DEV_WAGERS;
+    const wagers: ReadonlyArray<Record<string, unknown>> = loaded.rows;
     const provenance: DashboardSourceProvenance =
       loaded.rows.length > 0 && loaded.source !== null
         ? {
@@ -463,8 +393,13 @@ export function createDevLiveWagersLoader(options: DevLiveWagersLoaderOptions) {
             observedAt: nowIso,
           }
         : {
-            kind: "fallback",
-            label: "In-Memory Fallback",
+            kind: "unavailable",
+            label: `No wager rows in ${candidatePaths
+              .map(
+                (candidatePath) =>
+                  classifyWagerCandidateSource(candidatePath, cwd).sourcePath,
+              )
+              .join(", ")}`,
             sourcePath: null,
             observedAt: nowIso,
           };

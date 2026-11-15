@@ -2,7 +2,7 @@ import type React from "react";
 import { styles } from "../dashboard_styles.ts";
 import {
   formatProvenanceBadge,
-  SHOWCASE_WAGERS_PROVENANCE,
+  PENDING_WAGERS_PROVENANCE,
 } from "../hydration.ts";
 import {
   DASHBOARD_FRESHNESS,
@@ -20,7 +20,6 @@ import {
   WAGERS_THRESHOLDS,
 } from "../config/wagers.ts";
 import { getLocalAgentHref } from "../links.ts";
-import { SAMPLE_LIVE_WAGERS } from "../showcase_data.ts";
 import { WireContractChip } from "./WireContractChip.tsx";
 import type {
   DashboardSourceProvenance,
@@ -75,9 +74,25 @@ const TIER_ORDER = WAGER_TIER_RANK;
 /** Stake emphasis is owned by `dashboard.toml`, not duplicated in wagers.toml. */
 const HIGH_RISK_WAGER_USD = DASHBOARD_THRESHOLDS.high_risk_wager_usd;
 
+function describeEmptyWagers(
+  loadedCount: number,
+  provenance: DashboardSourceProvenance,
+): string {
+  const endpoint = provenance.sourcePath ?? "/api/wagers";
+  if (loadedCount > 0) return "No wagers match the current filters.";
+  switch (provenance.kind) {
+    case "pending":
+      return `Waiting for GET ${endpoint}…`;
+    case "unavailable":
+      return `Unavailable — ${endpoint}: ${provenance.label}`;
+    default:
+      return `${provenance.label} returned no wagers (${endpoint}).`;
+  }
+}
+
 export function LiveWagersTabPanel({
-  wagers = SAMPLE_LIVE_WAGERS,
-  provenance = SHOWCASE_WAGERS_PROVENANCE,
+  wagers = [],
+  provenance = PENDING_WAGERS_PROVENANCE,
   wagersError = null,
   onRefreshWagers,
   wagerSearch,
@@ -313,7 +328,7 @@ export function LiveWagersTabPanel({
             style={styles.searchInput}
             value={wagerSearch}
             onChange={(e) => onWagerSearchChange(e.target.value)}
-            placeholder="Filter by Ticket (#W-...), Customer ('GP301'), Agent, Event, Selection..."
+            placeholder="Filter by Ticket (#W-...), Customer, Agent, Event, Selection..."
           />
         </div>
 
@@ -802,6 +817,21 @@ export function LiveWagersTabPanel({
                   </td>
                 </tr>
               ))}
+              {visibleWagers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={11}
+                    data-wagers-empty={activeProvenance.kind}
+                    style={{
+                      ...styles.td,
+                      textAlign: "center",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {describeEmptyWagers(activeWagers.length, activeProvenance)}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
