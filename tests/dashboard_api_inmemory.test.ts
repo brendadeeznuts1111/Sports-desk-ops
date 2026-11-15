@@ -6,7 +6,10 @@ import {
 } from "@sportsdesk-ops/api";
 import { parseDashboardWsSignal } from "@sportsdesk-ops/contracts";
 import { WAGERS_TABLE } from "../packages/ui/src/config/wagers.ts";
-import { startDashboardServer } from "../scripts/dev_dashboard.ts";
+import {
+  resolveDashboardDevelopmentOption,
+  startDashboardServer,
+} from "../scripts/dev_dashboard.ts";
 
 function buildMockDeps(
   overrides: Partial<DashboardApiDeps> = {},
@@ -563,5 +566,34 @@ describe("@sportsdesk-ops/api in-memory router (zero port bind)", () => {
     } finally {
       handle.stop(true);
     }
+  });
+
+  test("resolveDashboardDevelopmentOption wires Bun v1.4.4 HTML error overlay & HMR options", () => {
+    expect(resolveDashboardDevelopmentOption({}, "development")).toEqual({
+      hmr: true,
+      console: true,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ watchFiles: false }, "development"),
+    ).toEqual({
+      hmr: false,
+      console: false,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ apiOnly: true }, "development"),
+    ).toBe(false);
+    expect(resolveDashboardDevelopmentOption({}, "production")).toBe(false);
+    expect(
+      resolveDashboardDevelopmentOption(
+        { development: { hmr: true, console: false } },
+        "production",
+      ),
+    ).toEqual({
+      hmr: true,
+      console: false,
+    });
+    expect(
+      resolveDashboardDevelopmentOption({ development: false }, "development"),
+    ).toBe(false);
   });
 });

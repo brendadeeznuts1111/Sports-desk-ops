@@ -70,10 +70,17 @@ import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
 
+export interface DashboardServerDevelopmentOptions {
+  readonly hmr?: boolean | undefined;
+  readonly console?: boolean | undefined;
+}
+
 export interface DashboardServerOptions {
   readonly port?: number | undefined;
   readonly hostname?: string | undefined;
   readonly watchFiles?: boolean | undefined;
+  readonly development?:
+    boolean | DashboardServerDevelopmentOptions | undefined;
   readonly shadowDbPath?: string | undefined;
   readonly forceShadowFixture?: boolean | undefined;
   readonly apiOnly?: boolean | undefined;
@@ -84,6 +91,7 @@ export interface DashboardServerHandle {
   readonly server: Server<undefined>;
   readonly url: URL;
   readonly port: number;
+  readonly development: boolean;
   stop: (closeActiveConnections?: boolean) => void;
 }
 
@@ -217,6 +225,34 @@ function renderAgentHtmlPage(detail: AgentDetailApiResponse): string {
 </html>`;
 }
 
+export function resolveDashboardDevelopmentOption(
+  options: DashboardServerOptions,
+  envNodeEnv: string | undefined = Bun.env.NODE_ENV,
+): boolean | { hmr: boolean; console: boolean } {
+  const apiOnly = options.apiOnly === true;
+  if (options.development !== undefined) {
+    if (typeof options.development === "boolean") {
+      return options.development;
+    }
+    return {
+      hmr:
+        options.development.hmr ?? (!apiOnly && options.watchFiles !== false),
+      console:
+        options.development.console ??
+        (!apiOnly && options.watchFiles !== false),
+    };
+  }
+  const isDevEnv = envNodeEnv !== "production";
+  if (!isDevEnv || apiOnly) {
+    return false;
+  }
+  const activeWatch = options.watchFiles !== false;
+  return {
+    hmr: activeWatch,
+    console: activeWatch,
+  };
+}
+
 export function startDashboardServer(
   options: DashboardServerOptions = {},
 ): DashboardServerHandle {
@@ -233,7 +269,8 @@ export function startDashboardServer(
   const clients = new Set<ServerWebSocket<undefined>>();
   const watchers: FSWatcher[] = [];
   let serverRef: Server<undefined> | null = null;
-  const isDevelopment = Bun.env.NODE_ENV !== "production";
+  const serveDevelopment = resolveDashboardDevelopmentOption(options);
+  const isDevelopment = serveDevelopment !== false;
   const mcpHandler = createSportsdeskMcpHttpHandler({
     stateless:
       options.mcpStateless ??
@@ -813,6 +850,7 @@ export function startDashboardServer(
   const server: Server<undefined> = Bun.serve({
     port,
     hostname,
+    development: serveDevelopment,
     routes: apiOnly
       ? api.routes
       : { ...uiRoutes, ...api.routes, ...companionApiRoutes },
@@ -1023,6 +1061,7 @@ export function startDashboardServer(
     server,
     url: server.url,
     port: server.port ?? port,
+    development: server.development,
     stop(closeActiveConnections = true) {
       alertDispatcher.stop();
       mcpHandler.closeAll().catch(() => {
@@ -1050,12 +1089,21 @@ if (import.meta.main) {
   }
 
   const apiOnly = Bun.argv.includes("--api-only");
+  const noDev = Bun.argv.includes("--no-dev") || Bun.argv.includes("--prod");
+  const noHmr = Bun.argv.includes("--no-hmr");
+  const noConsole = Bun.argv.includes("--no-console");
   const mcpStateless =
     Bun.argv.includes("--stateless") || Bun.argv.includes("--mcp-stateless");
   prefetchSportsDeskEndpoints();
   const handle = startDashboardServer({
-    watchFiles: true,
+    watchFiles: !noDev,
     apiOnly,
+    development: noDev
+      ? false
+      : {
+          hmr: !noHmr,
+          console: !noConsole,
+        },
     ...(mcpStateless ? { mcpStateless: true } : {}),
   });
 
@@ -1063,6 +1111,9 @@ if (import.meta.main) {
     `\n⚡ SportsDesk ${apiOnly ? "API-Only" : "Enhanced Dashboard"} Server running!`,
   );
   console.log(`   ➜ Local URL:    ${handle.url.href}`);
+  console.log(
+    `   ➜ Dev Overlay:  ${handle.development ? `enabled (hmr: ${!noHmr}, console: ${!noConsole} · Bun v${Bun.version})` : "disabled"}`,
+  );
   console.log(`   ➜ Health Probe: ${handle.url.href}health`);
   console.log(`   ➜ Markdown API: ${handle.url.href}api/dashboard`);
   console.log(`   ➜ Shadow API:   ${handle.url.href}api/shadow-pricing`);
