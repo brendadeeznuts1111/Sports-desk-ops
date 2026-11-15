@@ -20,25 +20,15 @@ on:
       - "dsh-plugin/**"
       - "dsh-plugin-*/**"
       - ".github/workflows/**"
+  # No `paths:` filter here, deliberately. Branch protection requires `market-index` and
+  # `verify-changed`; a path filter that matches nothing means the workflow never triggers, the
+  # check runs are never created, and the PR is stuck at "Expected — waiting for status to be
+  # reported" forever (#248: a `.mailmap`-only PR could not merge). A path list can never be
+  # complete — every new root-level file re-opens the hole — so PRs always trigger.
+  # The cost is handled per job instead: `code-mode` asks scripts/ci/changed-code.sh whether the
+  # change can affect code. The required jobs always run; that is the point of the check.
   pull_request:
     branches: [main]
-    paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.json"
-      - "**.jsonl"
-      - "**.html"
-      - "docs/**"
-      - "infra/**"
-      - "design/**"
-      - "design/tokens.toml"
-      - "package.json"
-      - "bun.lock"
-      - "verification/**"
-      - "market/**"
-      - "dsh-plugin/**"
-      - "dsh-plugin-*/**"
-      - ".github/workflows/**"
   # Freshness cadence: the value artifacts cannot be rebuilt in CI (live inputs), but a daily run
   # still fails if the generator inputs drifted or a release tag is unregistered.
   schedule:
@@ -185,16 +175,24 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+      - name: Decide whether this change can affect Code Mode
+        id: scope
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: bash scripts/ci/changed-code.sh
       - name: Install dependencies
+        if: steps.scope.outputs.run == 'true'
         run: bun install --frozen-lockfile --no-env-file
       - name: Code Mode gates (freeze, property tests, mutation, guest probe)
+        if: steps.scope.outputs.run == 'true'
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           # On a push, origin/main == HEAD in the checkout; the gate falls back to this SHA (or HEAD^).
           GITHUB_EVENT_BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: bun run ci:code-mode
       - name: Upload mutation report
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report
