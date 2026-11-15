@@ -10,12 +10,12 @@ a second alert channel on top of the Telegram post).
 
 ## The v1 target set
 
-| Key                           | SLA   | Source                       |
-| ----------------------------- | ----- | ---------------------------- |
-| `f402-bet-ticker/latest.json` | 1h    | bridge3a wager ticker rollup |
-| `gslive-tally/latest.json`    | 1h    | bridge3c open-bets rollup    |
-| `f402-weblog/latest.json`     | 1h30m | weblog pointer (hourly cron) |
-| `wagers-by-state/latest.json` | 1h    | wager-state histogram        |
+| Key                           | SLA   | Source                          |
+| ----------------------------- | ----- | ------------------------------- |
+| `f402-bet-ticker/latest.json` | 1h    | bridge3a wager ticker rollup    |
+| `gslive-tally/latest.json`    | 1h    | bridge3c open-bets rollup       |
+| `f402-weblog/latest.json`     | 1h30m | weblog pointer (hourly cadence) |
+| `wagers-by-state/latest.json` | 1h    | wager-state histogram           |
 
 Why only these four: the operator's live branch still predates PR #42, so the newer keys
 (`live-wagers/latest.json`, `agent-tree/latest.json`, `customer-profiles/latest.json`, etc.)
@@ -38,7 +38,7 @@ The workflow needs nothing else. No R2 credentials — the probe HEADs the publi
 ```sh
 # 1. Does the library pass tests?
 bun test tests/r2_staleness.test.ts
-#    Expected: 34 pass / 0 fail
+#    Expected: the suite passes (do not hardcode a test count)
 
 # 2. Does a live dry-run against production R2 work?
 bun run scripts/r2_staleness_alerter.ts --dry-run
