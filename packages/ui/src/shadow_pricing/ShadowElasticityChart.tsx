@@ -1,11 +1,21 @@
 /**
  * @file packages/ui/src/shadow_pricing/ShadowElasticityChart.tsx
  * @description SVG frontier chart plotting Retail Turnover Elasticity vs. Net Desk Savings.
+ * One USD axis anchored at $0, direct end labels instead of a legend, grey context series, and a
+ * single accent reserved for the actionable breakeven point.
  */
 
 import React from "react";
 import type { ElasticityFrontierPoint } from "@sportsdesk-ops/contracts/shadow-pricing";
 import { formatSignedUsd } from "./shared.tsx";
+import {
+  VIZ_COLORS,
+  VIZ_LABEL_FONT_PX,
+  VIZ_LABEL_MIN_GAP_PX,
+  linearScale,
+  spreadLabels,
+  zeroAnchoredDomain,
+} from "../viz/perceptual.ts";
 
 export interface ShadowElasticityChartProps {
   readonly points: readonly ElasticityFrontierPoint[];
@@ -13,59 +23,93 @@ export interface ShadowElasticityChartProps {
   readonly breakevenPct: number | null;
 }
 
+const MAX_ELASTICITY = 0.4;
+
+interface FrontierSeries {
+  readonly key: string;
+  readonly label: string;
+  readonly pick: (point: ElasticityFrontierPoint) => number;
+  readonly stroke: string;
+  readonly strokeWidth: number;
+  readonly dash?: string;
+}
+
+const FRONTIER_SERIES: readonly FrontierSeries[] = [
+  {
+    key: "net",
+    label: "Net desk savings",
+    pick: (point) => point.netDeskSavingsUsd,
+    stroke: VIZ_COLORS.label,
+    strokeWidth: 2.5,
+  },
+  {
+    key: "sharp",
+    label: "Sharp savings",
+    pick: (point) => point.sharpSavingsUsd,
+    stroke: VIZ_COLORS.context,
+    strokeWidth: 1.5,
+    dash: "5 3",
+  },
+  {
+    key: "retail",
+    label: "Retail net impact",
+    pick: (point) => point.retailNetImpactUsd,
+    stroke: VIZ_COLORS.context,
+    strokeWidth: 1.5,
+  },
+];
+
 export function ShadowElasticityChart({
   points,
   selectedElasticity,
   breakevenPct,
 }: ShadowElasticityChartProps): React.ReactElement {
-  const width = 620;
+  const width = 640;
   const height = 220;
   const padL = 66;
-  const padR = 24;
-  const padT = 22;
+  const padR = 170;
+  const padT = 14;
   const padB = 34;
-  const plotW = width - padL - padR;
-  const plotH = height - padT - padB;
 
   if (points.length === 0) {
     return <div style={{ color: "var(--sd-text-muted)" }}>No curve data</div>;
   }
 
-  let minY = 0;
-  let maxY = 0;
-  for (const pt of points) {
-    minY = Math.min(
-      minY,
-      pt.netDeskSavingsUsd,
-      pt.sharpSavingsUsd,
-      pt.retailNetImpactUsd,
-    );
-    maxY = Math.max(
-      maxY,
-      pt.netDeskSavingsUsd,
-      pt.sharpSavingsUsd,
-      pt.retailNetImpactUsd,
-    );
-  }
-  const span = Math.max(1000, maxY - minY);
-  minY -= span * 0.1;
-  maxY += span * 0.1;
-
+  const domain = zeroAnchoredDomain(
+    points.flatMap((point) =>
+      FRONTIER_SERIES.map((series) => series.pick(point)),
+    ),
+  );
+  const xScale = linearScale([0, MAX_ELASTICITY], [padL, width - padR]);
+  const yScale = linearScale(domain, [height - padB, padT]);
   const xOf = (elasticity: number) =>
-    padL + (Math.min(0.4, Math.max(0, elasticity)) / 0.4) * plotW;
-  const yOf = (usd: number) =>
-    padT + (1 - (usd - minY) / (maxY - minY)) * plotH;
+    xScale.map(Math.min(MAX_ELASTICITY, Math.max(0, elasticity)));
+  const yOf = yScale.map;
 
-  const buildPath = (pick: (p: ElasticityFrontierPoint) => number) =>
+  const buildPath = (pick: (point: ElasticityFrontierPoint) => number) =>
     points
       .map(
-        (p, idx) =>
-          `${idx === 0 ? "M" : "L"}${xOf(p.elasticity).toFixed(1)},${yOf(pick(p)).toFixed(1)}`,
+        (point, order) =>
+          `${order === 0 ? "M" : "L"}${xOf(point.elasticity).toFixed(1)},${yOf(pick(point)).toFixed(1)}`,
       )
       .join(" ");
 
+  const last = points[points.length - 1]!;
+  const labelYs = spreadLabels(
+    FRONTIER_SERIES.map((series) => yOf(series.pick(last)) + 4),
+    VIZ_LABEL_MIN_GAP_PX,
+    [padT + 4, height - padB + 4],
+  );
   const zeroY = yOf(0);
   const markerX = xOf(selectedElasticity);
+  const axisTicks = [domain[1], 0, domain[0]].filter(
+    (value, order, all) => all.indexOf(value) === order,
+  );
+  const axisTickYs = spreadLabels(
+    axisTicks.map((value) => yOf(value) + 4),
+    VIZ_LABEL_MIN_GAP_PX,
+    [padT + 4, height - padB + 4 + VIZ_LABEL_MIN_GAP_PX],
+  );
 
   return (
     <svg
@@ -79,83 +123,75 @@ export function ShadowElasticityChart({
         y1={zeroY}
         x2={width - padR}
         y2={zeroY}
-        stroke="var(--sd-surface-border)"
-        strokeWidth="1.5"
-        strokeDasharray="4 4"
+        stroke={VIZ_COLORS.baseline}
+        strokeWidth="1"
       />
-      <text
-        x={padL - 8}
-        y={zeroY + 4}
-        textAnchor="end"
-        fill="var(--sd-text-muted)"
-        fontSize="10"
-      >
-        $0
-      </text>
-      <text
-        x={padL - 8}
-        y={padT + 8}
-        textAnchor="end"
-        fill="var(--sd-text-muted)"
-        fontSize="10"
-      >
-        {formatSignedUsd(maxY)}
-      </text>
-      <text
-        x={padL - 8}
-        y={height - padB}
-        textAnchor="end"
-        fill="var(--sd-text-muted)"
-        fontSize="10"
-      >
-        {formatSignedUsd(minY)}
-      </text>
-
-      <path
-        d={buildPath((p) => p.sharpSavingsUsd)}
-        fill="none"
-        stroke="var(--sd-route-sharp)"
-        strokeWidth="2"
-        strokeDasharray="5 3"
-      />
-
-      <path
-        d={buildPath((p) => p.retailNetImpactUsd)}
-        fill="none"
-        stroke="var(--sd-tier-steam)"
-        strokeWidth="2"
-      />
-
-      <path
-        d={buildPath((p) => p.netDeskSavingsUsd)}
-        fill="none"
-        stroke="var(--sd-tier-rec-bias)"
-        strokeWidth="3"
-      />
+      {axisTicks.map((value, order) => (
+        <text
+          key={value}
+          x={padL - 8}
+          y={axisTickYs[order]}
+          textAnchor="end"
+          fill={VIZ_COLORS.label}
+          fontSize={VIZ_LABEL_FONT_PX}
+        >
+          {value === 0 ? "$0" : formatSignedUsd(value)}
+        </text>
+      ))}
 
       <line
         x1={markerX}
         y1={padT}
         x2={markerX}
         y2={height - padB}
-        stroke="var(--sd-theme-emerald)"
-        strokeWidth="1.5"
+        stroke={VIZ_COLORS.context}
+        strokeWidth="1"
+        strokeDasharray="2 3"
       />
+      <text
+        x={markerX + 4}
+        y={padT + 8}
+        fill={VIZ_COLORS.label}
+        fontSize={VIZ_LABEL_FONT_PX}
+      >
+        selected {Math.round(selectedElasticity * 100)}%
+      </text>
 
-      {breakevenPct !== null && breakevenPct <= 40 ? (
-        <g>
+      {FRONTIER_SERIES.map((series, order) => (
+        <g key={series.key} data-series={series.key}>
+          <path
+            d={buildPath(series.pick)}
+            fill="none"
+            stroke={series.stroke}
+            strokeWidth={series.strokeWidth}
+            strokeDasharray={series.dash}
+          />
+          <text
+            x={width - padR + 6}
+            y={labelYs[order]}
+            fill={VIZ_COLORS.label}
+            fontSize={VIZ_LABEL_FONT_PX}
+            fontWeight={series.key === "net" ? 700 : 400}
+          >
+            {series.label} {formatSignedUsd(series.pick(last))}
+          </text>
+        </g>
+      ))}
+
+      {breakevenPct !== null && breakevenPct <= MAX_ELASTICITY * 100 ? (
+        <g data-accent="true">
           <circle
             cx={xOf(breakevenPct / 100)}
             cy={zeroY}
             r="4.5"
-            fill="var(--sd-tier-alert)"
+            fill={VIZ_COLORS.accent}
           />
           <text
             x={xOf(breakevenPct / 100) + 6}
             y={zeroY - 6}
-            fill="var(--sd-tier-alert)"
-            fontSize="10"
-            fontWeight="600"
+            fill={VIZ_COLORS.accent}
+            fontSize={VIZ_LABEL_FONT_PX}
+            fontWeight="700"
           >
             Breakeven {breakevenPct}%
           </text>
@@ -168,8 +204,8 @@ export function ShadowElasticityChart({
           x={xOf(tick)}
           y={height - 10}
           textAnchor="middle"
-          fill="var(--sd-text-muted)"
-          fontSize="10"
+          fill={VIZ_COLORS.label}
+          fontSize={VIZ_LABEL_FONT_PX}
         >
           {Math.round(tick * 100)}% drop
         </text>

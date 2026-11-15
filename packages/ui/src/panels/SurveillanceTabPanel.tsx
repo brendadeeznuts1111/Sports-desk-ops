@@ -5,6 +5,7 @@ import { DASHBOARD_PANELS } from "../config/dashboard.ts";
 import { styles } from "../dashboard_styles.ts";
 import type { DashboardData, DnsData } from "../types.ts";
 import { ThresholdsPanel } from "./ThresholdsPanel.tsx";
+import { VIZ_COLORS } from "../viz/perceptual.ts";
 
 const DNS_CACHE_CAPACITY = DASHBOARD_PANELS.dns_cache_capacity;
 
@@ -268,17 +269,19 @@ export function SurveillanceTabPanel({
                   width: "44px",
                   height: "6px",
                   borderRadius: "999px",
-                  backgroundColor: "#1e293b",
+                  backgroundColor: "var(--sd-surface-border)",
                   overflow: "hidden",
                 }}
               >
                 <span
                   style={{
                     display: "block",
-                    width: `${Math.max(4, dnsSummary.capacityPct)}%`,
+                    width: `${Math.min(100, Math.max(0, dnsSummary.capacityPct))}%`,
                     height: "100%",
                     backgroundColor:
-                      dnsSummary.capacityPct >= 85 ? "#fbbf24" : "#38bdf8",
+                      dnsSummary.capacityPct >= 85
+                        ? VIZ_COLORS.accent
+                        : VIZ_COLORS.context,
                   }}
                 />
               </span>

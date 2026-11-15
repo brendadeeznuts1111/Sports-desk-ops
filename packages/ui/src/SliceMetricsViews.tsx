@@ -15,6 +15,7 @@ import type {
   RouterAuditMode,
   SliceMetricsDashboardBundle,
 } from "@sportsdesk-ops/contracts/shadow-pricing";
+import { SliceSmallMultiples } from "./viz/SliceSmallMultiples.tsx";
 
 export interface SliceMetricsViewsProps {
   readonly bundle: SliceMetricsDashboardBundle;
@@ -241,6 +242,11 @@ export function SliceMetricsViews({
           </div>
         </div>
       </div>
+
+      <SliceSmallMultiples
+        rows={soaRows}
+        controlTotalHandleUsd={slo.total_handle_usd}
+      />
 
       {/* 2. Typed SliceMetrics DataTable (SoA Spine) */}
       <div className="sd-card">
