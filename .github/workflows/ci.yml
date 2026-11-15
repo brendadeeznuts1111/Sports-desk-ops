@@ -157,6 +157,13 @@ jobs:
       - name: Main-gate smoke (innerHTML sinks + VPS tree)
         timeout-minutes: 2
         run: bun bin/check-innerhtml.ts && bun test tests/dashboard_credentials.test.ts
+      # The docs contract (fabricated contract, freshness, headers, dist parity) lived only in
+      # `verify`, which is skipped on pull requests — so a docs-heavy PR merged unvalidated and
+      # the failure surfaced in the nightly run hours later (#271). It costs seconds.
+      - name: "Docs gates (verify_docs: fabricated-contract, freshness, headers, dist)"
+        timeout-minutes: 2
+        run: bun run verify:docs
+
       - name: Bun test changed files
         run: bun run test:changed
       - name: Changed dsh-plugin bundles (verify-load)
