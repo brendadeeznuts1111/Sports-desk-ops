@@ -26,7 +26,11 @@ export type ReadOnlyOp = (typeof READ_ONLY_OPS)[number];
 
 /**
  * Read-only Manager ops used by the Fantasy402 bulk puller.
- * `getWebLog` is in both lists; the rest are puller-only.
+ * `getWebLog`, `getPending`, and `getBetTicker` are in both lists.
+ * Wager reads are included only when desk-api-reference classifies them
+ * as READ / READ-via-POST (VERIFIED-FROM-CODE or SEEN-LIVE).
+ * `getBetTicker` has no standalone endpoints.json row but is named as the
+ * Fantasy402 counterpart of a verified read and is already a capture read.
  * Writes and unknown operations must never be added here.
  */
 export const PULL_READ_ONLY_OPS = [
@@ -37,6 +41,10 @@ export const PULL_READ_ONLY_OPS = [
   "getTransactionList",
   "getDeletedTransactionHistory",
   "getWebLog",
+  "getPending",
+  "getBetTicker",
+  "getGraded",
+  "getWagersByFigureDate",
 ] as const;
 
 export type PullReadOnlyOp = (typeof PULL_READ_ONLY_OPS)[number];

@@ -15,6 +15,12 @@ import {
 } from "./f402_analyze_ingest.ts";
 import { linkAccounts, type LinkReport } from "./f402_analyze_link.ts";
 import { predictAccounts, type PredictReport } from "./f402_analyze_predict.ts";
+import {
+  backtestPredict,
+  type CalibrationReport,
+} from "./f402_analyze_calibrate.ts";
+import { reportJoinCoverage, type JoinCoverage } from "./f402_analyze_join.ts";
+import { renderReviewMarkdown } from "./f402_analyze_report.ts";
 
 export {
   F402AnalyzeError,
@@ -53,7 +59,7 @@ export type {
 } from "./f402_analyze_predict.ts";
 
 export const F402_ANALYZE_DEFAULT_IN_DIR = F402_PULL_DEFAULT_OUT_DIR;
-export type F402AnalyzeCommand = "link" | "predict";
+export type F402AnalyzeCommand = "link" | "predict" | "calibrate" | "report";
 
 const IPV4 =
   /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/;
@@ -68,9 +74,14 @@ export function hashIp(ip: string): string {
 function hashIpsInString(value: string): string {
   return value
     .replace(IPV4, (match) => hashIp(match))
-    .replace(IPV6, (match) =>
-      match.includes("::") || match.includes(":") ? hashIp(match) : match,
-    );
+    .replace(IPV6, (match) => {
+      if (/^\d{4}-\d{2}-\d{2}T/.test(value) || /T\d{2}:\d{2}/.test(value)) {
+        return match;
+      }
+      return match.includes("::") || match.split(":").length >= 5
+        ? hashIp(match)
+        : match;
+    });
 }
 
 export function hashIpsDeep(value: unknown): unknown {
@@ -160,4 +171,94 @@ export function runPredictAnalysis(
 
 export function loadProjection(inDir: string): PullProjection {
   return ingestPullDirectory(inDir);
+}
+
+export { reportJoinCoverage, JOIN_ASSUMPTIONS } from "./f402_analyze_join.ts";
+export type { JoinCoverage } from "./f402_analyze_join.ts";
+export {
+  backtestPredict,
+  brierScore,
+  calibrationTable,
+} from "./f402_analyze_calibrate.ts";
+export type { CalibrationReport } from "./f402_analyze_calibrate.ts";
+export { renderReviewMarkdown } from "./f402_analyze_report.ts";
+
+export function runCalibrateAnalysis(
+  inDir: string,
+  options: {
+    readonly outDir?: string;
+    readonly nowMs?: number;
+    readonly horizonDays?: number;
+  } = {},
+): { readonly report: CalibrationReport; readonly outPath: string } {
+  const projection = ingestPullDirectory(inDir);
+  const report = backtestPredict(projection, {
+    ...(options.nowMs === undefined ? {} : { nowMs: options.nowMs }),
+    ...(options.horizonDays === undefined
+      ? {}
+      : { horizonDays: options.horizonDays }),
+  });
+  const sanitized = hashIpsDeep(report) as CalibrationReport;
+  const outPath = join(
+    analysisOutDir(inDir, options.outDir),
+    "calibrate-summary.json",
+  );
+  writeSummary(outPath, sanitized, "calibrate");
+  return { report: sanitized, outPath };
+}
+
+export function runReviewAnalysis(
+  inDir: string,
+  options: {
+    readonly outDir?: string;
+    readonly nowMs?: number;
+    readonly horizonDays?: number;
+  } = {},
+): {
+  readonly markdown: string;
+  readonly outPath: string;
+  readonly join: JoinCoverage;
+} {
+  const projection = ingestPullDirectory(inDir);
+  const link = hashIpsDeep(linkAccounts(projection, { hashIp })) as LinkReport;
+  const predict = hashIpsDeep(
+    predictAccounts(
+      projection,
+      options.nowMs === undefined ? {} : { nowMs: options.nowMs },
+    ),
+  ) as PredictReport;
+  const joinCoverage = reportJoinCoverage(projection).coverage;
+  const calibration = backtestPredict(projection, {
+    ...(options.nowMs === undefined ? {} : { nowMs: options.nowMs }),
+    ...(options.horizonDays === undefined
+      ? {}
+      : { horizonDays: options.horizonDays }),
+  });
+  const generatedAtIso = new Date(options.nowMs ?? Date.now()).toISOString();
+  const markdown = renderReviewMarkdown({
+    generatedAtIso,
+    inDir,
+    link,
+    predict,
+    join: joinCoverage,
+    calibration,
+  });
+  const sanitized = String(hashIpsDeep(markdown));
+  const dir = analysisOutDir(inDir, options.outDir);
+  mkdirSync(dir, { recursive: true });
+  const outPath = join(dir, "review.md");
+  writeSummary(
+    join(dir, "review-summary.json"),
+    { generatedAtIso, join: joinCoverage, outPath },
+    "report",
+  );
+  assertNoRawIp(sanitized, "report");
+  writeFileSync(
+    outPath,
+    sanitized.endsWith("\n") ? sanitized : `${sanitized}\n`,
+    {
+      mode: 0o600,
+    },
+  );
+  return { markdown: sanitized, outPath, join: joinCoverage };
 }

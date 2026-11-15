@@ -4,6 +4,8 @@
  *
  *   bun run f402:analyze link --in /workspace/f402-pull
  *   bun run f402:analyze predict --in /workspace/f402-pull
+ *   bun run f402:analyze calibrate --in /workspace/f402-pull
+ *   bun run f402:analyze report --in /workspace/f402-pull
  *
  * Output stays under the input directory (default: <in>/analysis) and is
  * gitignored with the pull. IPs are hashed in summaries and stdout.
@@ -16,20 +18,28 @@ import {
   F402_ANALYZE_DEFAULT_IN_DIR,
   F402AnalyzeError,
   hashIpsDeep,
+  runCalibrateAnalysis,
   runLinkAnalysis,
   runPredictAnalysis,
+  runReviewAnalysis,
   type F402AnalyzeCommand,
 } from "../lib/f402_analyze.ts";
 
-const COMMANDS: readonly F402AnalyzeCommand[] = ["link", "predict"];
+const COMMANDS: readonly F402AnalyzeCommand[] = [
+  "link",
+  "predict",
+  "calibrate",
+  "report",
+];
 
 function printUsage(): void {
-  console.log(`Usage: bun run f402:analyze <link|predict> [options]
+  console.log(`Usage: bun run f402:analyze <link|predict|calibrate|report> [options]
 
 Options:
-  --in <dir>     Puller output directory (default: ${F402_ANALYZE_DEFAULT_IN_DIR})
-  --out <dir>    Analysis output directory (default: <in>/analysis)
-  --now <iso>    Prediction clock (ISO-8601); default is now
+  --in <dir>             Puller output directory (default: ${F402_ANALYZE_DEFAULT_IN_DIR})
+  --out <dir>            Analysis output directory (default: <in>/analysis)
+  --now <iso>            Prediction / backtest clock (ISO-8601); default is now
+  --horizon-days <n>     Backtest horizon (default: 7)
   --help
 
 Links are evidence-scored guesses, not confirmed identities.
@@ -74,6 +84,7 @@ async function main(argv: string[]): Promise<number> {
       in: { type: "string" },
       out: { type: "string" },
       now: { type: "string" },
+      "horizon-days": { type: "string" },
       help: { type: "boolean", default: false },
     },
     strict: true,
@@ -122,10 +133,45 @@ async function main(argv: string[]): Promise<number> {
       "invalid --now (use ISO-8601)",
     );
   }
-  const predictOpts: { outDir?: string; nowMs?: number } = {};
-  if (outDir !== undefined) predictOpts.outDir = outDir;
-  if (nowMs !== undefined) predictOpts.nowMs = nowMs;
-  const { report, outPath } = runPredictAnalysis(inDir, predictOpts);
+  const horizonRaw = flagString(values, "horizon-days");
+  const horizonDays = horizonRaw === undefined ? undefined : Number(horizonRaw);
+  if (
+    horizonRaw !== undefined &&
+    (!Number.isFinite(horizonDays) || horizonDays! <= 0)
+  ) {
+    throw new F402AnalyzeError("config", command, "invalid --horizon-days");
+  }
+  const commonOpts: { outDir?: string; nowMs?: number; horizonDays?: number } =
+    {};
+  if (outDir !== undefined) commonOpts.outDir = outDir;
+  if (nowMs !== undefined) commonOpts.nowMs = nowMs;
+  if (horizonDays !== undefined) commonOpts.horizonDays = horizonDays;
+  if (command === "calibrate") {
+    const { report, outPath } = runCalibrateAnalysis(inDir, commonOpts);
+    const stdout = hashIpsDeep({
+      command,
+      brier: report.brier,
+      windowCount: report.windowCount,
+      lowSample: report.lowSample,
+      observedRate: report.observedRate,
+      predictedMean: report.predictedMean,
+      bins: report.bins,
+      outPath,
+    });
+    console.log(JSON.stringify(stdout));
+    return 0;
+  }
+  if (command === "report") {
+    const { outPath, join } = runReviewAnalysis(inDir, commonOpts);
+    const stdout = hashIpsDeep({
+      command,
+      outPath,
+      join,
+    });
+    console.log(JSON.stringify(stdout));
+    return 0;
+  }
+  const { report, outPath } = runPredictAnalysis(inDir, commonOpts);
   const stdout = hashIpsDeep({
     command,
     generatedAtIso: report.generatedAtIso,

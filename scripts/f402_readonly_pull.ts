@@ -6,6 +6,7 @@
  *   bun run f402:pull contract --agent-id BILLY666 --customer <id>
  *   bun run f402:pull transactions --agent-id BILLY666
  *   bun run f402:pull weblog --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
+ *   bun run f402:pull wagers --agent-id BILLY666 --from 2026-11-01 --to 2026-11-14
  *
  * This CLI never places a wager, writes a log, or opens a page module.
  * Sessions are minted only through the existing `session:login` / WebView path.
@@ -31,6 +32,7 @@ import {
   runCensus,
   runContract,
   runTransactions,
+  runWagers,
   runWeblog,
   type F402PullPhase,
 } from "../lib/f402_readonly_puller.ts";
@@ -40,10 +42,11 @@ const PHASES: readonly F402PullPhase[] = [
   "contract",
   "transactions",
   "weblog",
+  "wagers",
 ];
 
 function printUsage(): void {
-  console.log(`Usage: bun run f402:pull <census|contract|transactions|weblog> [options]
+  console.log(`Usage: bun run f402:pull <census|contract|transactions|weblog|wagers> [options]
 
 Options:
   --out <dir>              Output directory (default: ${F402_PULL_DEFAULT_OUT_DIR})
@@ -52,9 +55,10 @@ Options:
   --agent-type <M|A>       agentType for getListAgenstByAgent (default: from hierarchy)
   --customer <id>          Test customer for the contract phase (required there)
   --start <YYYY-MM-DD>     Transaction start; contract also sends start=""
-  --from <YYYY-MM-DD>      Weblog range start (required for weblog)
-  --to <YYYY-MM-DD>        Weblog range end (required for weblog)
+  --from <YYYY-MM-DD>      Weblog / wagers range start (required for those phases)
+  --to <YYYY-MM-DD>        Weblog / wagers range end (required for those phases)
   --mode <A|B|C|I>         getWebLog type (default: I)
+  --skip-figure-date       Wagers: skip per-customer getWagersByFigureDate
   --base-url <url>         Portal origin (default: ${F402_PULL_DEFAULT_BASE_URL})
   --interval-ms <n>        Minimum delay between requests (default: ${F402_PULL_DEFAULT_INTERVAL_MS})
   --no-resume              Ignore completed ids/dates in the checkpoint
@@ -116,6 +120,7 @@ async function main(argv: string[]): Promise<number> {
       "base-url": { type: "string" },
       "interval-ms": { type: "string" },
       "no-resume": { type: "boolean", default: false },
+      "skip-figure-date": { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
     strict: true,
@@ -204,7 +209,19 @@ async function main(argv: string[]): Promise<number> {
   const from = flagString(values, "from");
   const to = flagString(values, "to");
   if (from === undefined || to === undefined) {
-    throw new F402PullerError("config", "weblog", "missing --from or --to");
+    throw new F402PullerError("config", phase, "missing --from or --to");
+  }
+  if (phase === "wagers") {
+    const result = await runWagers(ctx, {
+      from,
+      to,
+      resume: values["no-resume"] !== true,
+      includeFigureDate: values["skip-figure-date"] !== true,
+    });
+    console.log(
+      JSON.stringify(redactSecretsAndIps({ phase, ...result, outDir })),
+    );
+    return 0;
   }
   const modeRaw = (flagString(values, "mode") ?? "I").toUpperCase();
   if (

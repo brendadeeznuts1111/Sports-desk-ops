@@ -44,6 +44,9 @@ import {
 } from "./f402_session.ts";
 
 export type { F402Session } from "./f402_session.ts";
+import { parseFigureDateWagersPayload } from "./f402_figure_date_enricher.ts";
+import { extractPendingLegs } from "./f402_pending_fetch.ts";
+import { buildManagerWagersByFigureDatePayload } from "./f402_probe.ts";
 import {
   parseTransactionListEnvelope,
   summarizeTransactionList,
@@ -66,7 +69,8 @@ export const F402_PULL_CHECKPOINT_VERSION = 1 as const;
 export const F402_PULL_MAX_RETRIES = 5;
 export const F402_PULL_BACKOFF_CAP_MS = 30_000;
 
-export type F402PullPhase = "census" | "contract" | "transactions" | "weblog";
+export type F402PullPhase =
+  "census" | "contract" | "transactions" | "weblog" | "wagers";
 
 export type F402PullerErrorCode =
   | "allowlist"
@@ -210,6 +214,10 @@ export interface F402PullCheckpoint {
   readonly customerIds: readonly string[];
   readonly completedCustomers: readonly string[];
   readonly completedWeblogDates: readonly string[];
+  readonly completedGradedDates: readonly string[];
+  readonly completedFigureDateKeys: readonly string[];
+  readonly wagersPendingDone: boolean;
+  readonly wagersTickerDone: boolean;
   readonly census?: {
     readonly agentCount: number;
     readonly playerCount: number;
@@ -228,6 +236,10 @@ export const emptyCheckpoint = (
   customerIds: [],
   completedCustomers: [],
   completedWeblogDates: [],
+  completedGradedDates: [],
+  completedFigureDateKeys: [],
+  wagersPendingDone: false,
+  wagersTickerDone: false,
   updatedAtIso: nowIso,
 });
 
@@ -251,7 +263,8 @@ export function parseCheckpoint(raw: unknown): F402PullCheckpoint {
     phase !== "census" &&
     phase !== "contract" &&
     phase !== "transactions" &&
-    phase !== "weblog"
+    phase !== "weblog" &&
+    phase !== "wagers"
   ) {
     throw new F402PullerError("checkpoint", "checkpoint", "invalid phase");
   }
@@ -269,6 +282,10 @@ export function parseCheckpoint(raw: unknown): F402PullCheckpoint {
     customerIds: asStringArray(raw.customerIds),
     completedCustomers: asStringArray(raw.completedCustomers),
     completedWeblogDates: asStringArray(raw.completedWeblogDates),
+    completedGradedDates: asStringArray(raw.completedGradedDates),
+    completedFigureDateKeys: asStringArray(raw.completedFigureDateKeys),
+    wagersPendingDone: raw.wagersPendingDone === true,
+    wagersTickerDone: raw.wagersTickerDone === true,
     ...(isPlainObject(raw.census) &&
     typeof raw.census.agentCount === "number" &&
     typeof raw.census.playerCount === "number" &&
@@ -353,13 +370,40 @@ export interface ManagerPostOptions {
   readonly timeoutMs?: number;
 }
 
-export function buildManagerUrl(
+/** Controller for a puller op. Report is only used for verified Report reads. */
+export function pullOpController(
+  operation: PullReadOnlyOp,
+): "Manager" | "Report" {
+  return operation === "getWagersByFigureDate" ? "Report" : "Manager";
+}
+
+export function buildPullUrl(
   baseUrl: string,
   operation: PullReadOnlyOp,
 ): string {
   const op = assertPullReadOnly(operation);
   const base = baseUrl.replace(/\/+$/, "");
-  return `${base}/cloud/api/Manager/${op}`;
+  return `${base}/cloud/api/${pullOpController(op)}/${op}`;
+}
+
+export function buildManagerUrl(
+  baseUrl: string,
+  operation: PullReadOnlyOp,
+): string {
+  return buildPullUrl(baseUrl, operation);
+}
+
+/** getGraded requires MM-DD-YYYY; ISO dates return a quiet partial (measured). */
+export function formatGradedDate(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+  if (match === null) {
+    throw new F402PullerError(
+      "config",
+      "getGraded",
+      `graded date must be YYYY-MM-DD, got ${isoDate}`,
+    );
+  }
+  return `${match[2]}-${match[3]}-${match[1]}`;
 }
 
 export function buildFormBody(fields: Record<string, string>): string {
@@ -425,7 +469,7 @@ export class F402PullClient {
     fields: Record<string, string>,
   ): Promise<unknown> {
     const op = assertPullReadOnly(operation);
-    const url = buildManagerUrl(this.baseUrl, op);
+    const url = buildPullUrl(this.baseUrl, op);
     const body = buildFormBody({
       ...fields,
       operation: op,
@@ -977,6 +1021,228 @@ export async function runWeblog(
     rowCounts,
   });
   return { dates, completed, skipped, rowCounts };
+}
+
+export function extractTickerRows(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(
+      (row): row is Record<string, unknown> =>
+        row !== null && typeof row === "object" && !Array.isArray(row),
+    );
+  }
+  if (payload !== null && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    for (const key of ["LIST", "data", "rows"]) {
+      const value = record[key];
+      if (Array.isArray(value)) return extractTickerRows(value);
+    }
+  }
+  return [];
+}
+
+export function extractGradedRows(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(
+      (row): row is Record<string, unknown> =>
+        row !== null && typeof row === "object" && !Array.isArray(row),
+    );
+  }
+  if (payload !== null && typeof payload === "object") {
+    const list = (payload as { LIST?: unknown }).LIST;
+    if (Array.isArray(list)) return extractGradedRows(list);
+  }
+  return [];
+}
+
+function stringFields(
+  fields: Record<string, string | number>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) out[key] = String(value);
+  return out;
+}
+
+export interface WagersResult {
+  readonly pendingRows: number;
+  readonly tickerRows: number;
+  readonly gradedDates: readonly string[];
+  readonly gradedCompleted: number;
+  readonly gradedSkipped: number;
+  readonly gradedRowCounts: Record<string, number>;
+  readonly figureDateAttempted: number;
+  readonly figureDateCompleted: number;
+  readonly figureDateSkipped: number;
+}
+
+export async function runWagers(
+  ctx: RunContext,
+  options: {
+    readonly from: string;
+    readonly to: string;
+    readonly resume?: boolean;
+    readonly includeFigureDate?: boolean;
+  },
+): Promise<WagersResult> {
+  const dates = eachUtcDateInclusive(options.from, options.to);
+  const previous =
+    loadCheckpoint(ctx.outDir) ??
+    emptyCheckpoint(ctx.agentId, nowIso(ctx.clock));
+  const resume = options.resume !== false;
+  const common = {
+    ...(ctx.agentId ? { agentID: ctx.agentId } : {}),
+    ...(ctx.agentOwner ? { agentOwner: ctx.agentOwner } : {}),
+  };
+
+  let pendingRows = 0;
+  let pendingDone = resume && previous.wagersPendingDone;
+  if (!pendingDone) {
+    const raw = await ctx.client.post(
+      "getPending",
+      stringFields({
+        ...common,
+        path: "/qubic/api/Manager/getPending",
+        date: options.to,
+        wagerType: "",
+        sort: "1",
+        typeSort: "2",
+        week: 0,
+        customerID: "0",
+      }),
+    );
+    pendingRows = extractPendingLegs(raw).length;
+    writeRawJson(ctx.outDir, "wagers/pending.json", raw);
+    pendingDone = true;
+    saveCheckpoint(ctx.outDir, {
+      ...previous,
+      phase: "wagers",
+      wagersPendingDone: true,
+      updatedAtIso: nowIso(ctx.clock),
+    });
+  }
+
+  let tickerRows = 0;
+  let tickerDone = resume && previous.wagersTickerDone;
+  if (!tickerDone) {
+    const raw = await ctx.client.post(
+      "getBetTicker",
+      stringFields({ ...common, wagerNumber: "0" }),
+    );
+    tickerRows = extractTickerRows(raw).length;
+    writeRawJson(ctx.outDir, "wagers/ticker.json", raw);
+    tickerDone = true;
+    saveCheckpoint(ctx.outDir, {
+      ...previous,
+      phase: "wagers",
+      wagersPendingDone: true,
+      wagersTickerDone: true,
+      updatedAtIso: nowIso(ctx.clock),
+    });
+  }
+
+  const gradedDone = new Set(resume ? previous.completedGradedDates : []);
+  const gradedRowCounts: Record<string, number> = {};
+  let gradedCompleted = 0;
+  let gradedSkipped = 0;
+  for (const date of dates) {
+    if (gradedDone.has(date)) {
+      gradedSkipped += 1;
+      continue;
+    }
+    const day = formatGradedDate(date);
+    const raw = await ctx.client.post(
+      "getGraded",
+      stringFields({ ...common, startDate: day, endDate: day }),
+    );
+    gradedRowCounts[date] = extractGradedRows(raw).length;
+    writeRawJson(ctx.outDir, `wagers/graded/${date}.json`, raw);
+    gradedDone.add(date);
+    gradedCompleted += 1;
+    saveCheckpoint(ctx.outDir, {
+      ...previous,
+      phase: "wagers",
+      wagersPendingDone: true,
+      wagersTickerDone: true,
+      completedGradedDates: [...gradedDone],
+      updatedAtIso: nowIso(ctx.clock),
+    });
+  }
+
+  const includeFigureDate = options.includeFigureDate !== false;
+  const figureDone = new Set(resume ? previous.completedFigureDateKeys : []);
+  let figureDateAttempted = 0;
+  let figureDateCompleted = 0;
+  let figureDateSkipped = 0;
+  if (includeFigureDate) {
+    const customerIds = previous.customerIds;
+    for (const customerId of customerIds) {
+      for (const date of dates) {
+        const key = `${customerId}|${date}`;
+        figureDateAttempted += 1;
+        if (figureDone.has(key)) {
+          figureDateSkipped += 1;
+          continue;
+        }
+        const payload = buildManagerWagersByFigureDatePayload({
+          agentID: ctx.agentId,
+          agentOwner: ctx.agentOwner || ctx.agentId,
+          customerID: customerId,
+          date,
+          figureDate: date,
+        });
+        const raw = await ctx.client.post(
+          "getWagersByFigureDate",
+          stringFields(payload as unknown as Record<string, string | number>),
+        );
+        try {
+          parseFigureDateWagersPayload(raw);
+        } catch {
+          // Persist the raw body even if the envelope is unexpected.
+        }
+        writeRawJson(
+          ctx.outDir,
+          `wagers/figure-date/${customerId}/${date}.json`,
+          raw,
+        );
+        figureDone.add(key);
+        figureDateCompleted += 1;
+        saveCheckpoint(ctx.outDir, {
+          ...previous,
+          phase: "wagers",
+          wagersPendingDone: true,
+          wagersTickerDone: true,
+          completedGradedDates: [...gradedDone],
+          completedFigureDateKeys: [...figureDone],
+          updatedAtIso: nowIso(ctx.clock),
+        });
+      }
+    }
+  }
+
+  writeSummaryJson(ctx.outDir, "wagers-summary.json", {
+    from: options.from,
+    to: options.to,
+    pendingRows,
+    tickerRows,
+    gradedDates: dates,
+    gradedCompleted,
+    gradedSkipped,
+    gradedRowCounts,
+    figureDateAttempted,
+    figureDateCompleted,
+    figureDateSkipped,
+    gradedDateFormat: "MM-DD-YYYY",
+  });
+  return {
+    pendingRows,
+    tickerRows,
+    gradedDates: dates,
+    gradedCompleted,
+    gradedSkipped,
+    gradedRowCounts,
+    figureDateAttempted,
+    figureDateCompleted,
+    figureDateSkipped,
+  };
 }
 
 /** Test helper: getCustomerAdmin / getPlayers remain callable and gated. */

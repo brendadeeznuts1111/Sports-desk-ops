@@ -33,7 +33,9 @@ import {
   resolvePullSession,
   runCensus,
   runContract,
+  formatGradedDate,
   runTransactions,
+  runWagers,
   runWeblog,
   saveCheckpoint,
   summarizeHierarchy,
@@ -78,7 +80,7 @@ describe("allowlist expansion", () => {
     expect(parseOpsArgument("all")).toEqual([...READ_ONLY_OPS]);
   });
 
-  test("puller reads are allowed and only those seven", () => {
+  test("puller reads are allowed and only the verified set", () => {
     expect([...PULL_READ_ONLY_OPS]).toEqual([
       "getHeriarchy",
       "getListAgenstByAgent",
@@ -87,6 +89,10 @@ describe("allowlist expansion", () => {
       "getTransactionList",
       "getDeletedTransactionHistory",
       "getWebLog",
+      "getPending",
+      "getBetTicker",
+      "getGraded",
+      "getWagersByFigureDate",
     ]);
     for (const op of PULL_READ_ONLY_OPS) {
       expect(assertPullReadOnly(op)).toBe(op);
@@ -98,10 +104,15 @@ describe("allowlist expansion", () => {
     ).toBe("getTransactionList");
   });
 
-  test("capture-only reads are not puller ops (except getWebLog)", () => {
-    expect(() => assertPullReadOnly("getPending")).toThrow(AllowlistError);
-    expect(assertAllowedRead("getPending")).toBe("getPending");
-    expect(assertReadOnly("getPending")).toBe("getPending");
+  test("capture-only reads are not puller ops (except shared reads)", () => {
+    expect(() => assertPullReadOnly("getInfoPlayer")).toThrow(AllowlistError);
+    expect(() => assertPullReadOnly("getBetTickerConfig")).toThrow(
+      AllowlistError,
+    );
+    expect(assertAllowedRead("getInfoPlayer")).toBe("getInfoPlayer");
+    expect(assertReadOnly("getInfoPlayer")).toBe("getInfoPlayer");
+    expect(assertPullReadOnly("getPending")).toBe("getPending");
+    expect(assertPullReadOnly("getBetTicker")).toBe("getBetTicker");
   });
 
   test("writes and unknown ops stay refused", () => {
@@ -538,5 +549,103 @@ describe("checkpoint file helpers", () => {
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("wagers phase", () => {
+  test("getGraded dates are MM-DD-YYYY and figure-date posts to Report", async () => {
+    expect(formatGradedDate("2026-11-01")).toBe("11-01-2026");
+    const urls: string[] = [];
+    const forms: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url, init) => {
+        urls.push(url);
+        forms.push(String(init?.body ?? ""));
+        return new Response(JSON.stringify({ LIST: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const outDir = tempOut();
+    saveCheckpoint(
+      outDir,
+      emptyCheckpoint("ROOT1", "2026-11-14T00:00:00.000Z"),
+    );
+    const prior = loadCheckpoint(outDir);
+    saveCheckpoint(outDir, {
+      ...prior!,
+      customerIds: ["CUST1"],
+    });
+    const result = await runWagers(
+      {
+        client,
+        outDir,
+        agentId: "ROOT1",
+        agentOwner: "ROOT1",
+        agentType: "M",
+      },
+      { from: "2026-11-01", to: "2026-11-01", resume: false },
+    );
+    expect(result.gradedCompleted).toBe(1);
+    expect(result.figureDateCompleted).toBe(1);
+    expect(urls.some((u) => u.endsWith("/cloud/api/Manager/getPending"))).toBe(
+      true,
+    );
+    expect(
+      urls.some((u) => u.endsWith("/cloud/api/Manager/getBetTicker")),
+    ).toBe(true);
+    expect(urls.some((u) => u.endsWith("/cloud/api/Manager/getGraded"))).toBe(
+      true,
+    );
+    expect(
+      urls.some((u) => u.endsWith("/cloud/api/Report/getWagersByFigureDate")),
+    ).toBe(true);
+    expect(forms.some((body) => body.includes("startDate=11-01-2026"))).toBe(
+      true,
+    );
+    expect(forms.some((body) => body.includes("endDate=11-01-2026"))).toBe(
+      true,
+    );
+  });
+
+  test("wagers resume skips completed pending, ticker, and graded days", async () => {
+    const urls: string[] = [];
+    const client = new F402PullClient({
+      session,
+      intervalMs: 0,
+      fetchImpl: async (url) => {
+        urls.push(url);
+        return new Response(JSON.stringify({ LIST: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const outDir = tempOut();
+    const base = emptyCheckpoint("ROOT1", "2026-11-14T00:00:00.000Z");
+    saveCheckpoint(outDir, {
+      ...base,
+      customerIds: ["CUST1"],
+      wagersPendingDone: true,
+      wagersTickerDone: true,
+      completedGradedDates: ["2026-11-01"],
+      completedFigureDateKeys: ["CUST1|2026-11-01"],
+    });
+    const result = await runWagers(
+      {
+        client,
+        outDir,
+        agentId: "ROOT1",
+        agentOwner: "ROOT1",
+        agentType: "M",
+      },
+      { from: "2026-11-01", to: "2026-11-01", resume: true },
+    );
+    expect(result.gradedSkipped).toBe(1);
+    expect(result.figureDateSkipped).toBe(1);
+    expect(urls).toEqual([]);
   });
 });

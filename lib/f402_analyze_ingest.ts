@@ -16,7 +16,11 @@ import {
   normalizeAgentTreePlayerRows,
   parseListAgentsByAgentEnvelope,
 } from "./f402_list_agents_by_agent.ts";
+import { parseFigureDateWagersPayload } from "./f402_figure_date_enricher.ts";
+import { extractPendingLegs } from "./f402_pending_fetch.ts";
 import {
+  extractGradedRows,
+  extractTickerRows,
   loadCheckpoint,
   parseHierarchyList,
   redactSecrets,
@@ -262,6 +266,7 @@ export interface LedgerRow {
   readonly tranDateTime: string;
   readonly tranMs: number;
   readonly ticket: string | null;
+  readonly gradeNum: number | null;
   readonly deleted: boolean;
 }
 
@@ -281,11 +286,48 @@ export interface WeblogRow {
   readonly win: number | null;
 }
 
+export type WagerSource = "pending" | "ticker" | "graded" | "figure-date";
+
+export interface WagerLeg {
+  readonly eventKey: string;
+  readonly lineKey: string;
+  readonly sport: string;
+  readonly period: string;
+  readonly team1: string;
+  readonly team2: string;
+  readonly chosen: string;
+  readonly lineType: "spread" | "total" | "money" | "other";
+  readonly line: string;
+}
+
+export interface WagerRow {
+  readonly source: WagerSource;
+  readonly accountId: string;
+  readonly ticketNumber: string;
+  readonly wagerNumber: string;
+  readonly playNumber: string;
+  readonly amountWagered: number;
+  readonly toWinAmount: number;
+  readonly acceptedDateTime: string;
+  readonly acceptedMs: number;
+  readonly wagerType: string;
+  readonly sport: string;
+  readonly market: string;
+  readonly period: string;
+  readonly description: string;
+  readonly legs: readonly WagerLeg[];
+  readonly origLine: string | null;
+  readonly adjLine: string | null;
+  readonly documentNumber: number | null;
+  readonly gradeNum: number | null;
+}
+
 export interface PullProjection {
   readonly inDir: string;
   readonly accounts: readonly AnalyzedAccount[];
   readonly ledger: readonly LedgerRow[];
   readonly weblog: readonly WeblogRow[];
+  readonly wagers: readonly WagerRow[];
   readonly snapshotIds: readonly string[];
   readonly censusSnapshotCount: number;
 }
@@ -464,6 +506,7 @@ function toLedgerRow(
     tranDateTime: normalized.tranDateTime,
     tranMs: parseTimestampMs(normalized.tranDateTime),
     ticket: parseTicketFromText(normalized.description),
+    gradeNum: normalized.gradeNum,
     deleted,
   };
 }
@@ -551,6 +594,246 @@ function loadWeblog(inDir: string): WeblogRow[] {
   return rows;
 }
 
+function numField(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+): number {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() !== "") {
+      const n = Number.parseFloat(value.trim());
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0;
+}
+
+function strField(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text !== "") return text;
+  }
+  return "";
+}
+
+function optionalInt(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+): number | null {
+  const n = numField(raw, keys);
+  return n === 0 &&
+    keys.every((k) => raw[k] === undefined || raw[k] === null || raw[k] === "")
+    ? null
+    : Number.isFinite(n)
+      ? Math.trunc(n)
+      : null;
+}
+
+export function inferLineType(
+  raw: Record<string, unknown>,
+  description: string,
+): WagerLeg["lineType"] {
+  const ou = strField(raw, ["TotalPointsOU", "OU"]).toUpperCase();
+  if (ou === "O" || ou === "U" || /\bover\b|\bunder\b/i.test(description)) {
+    return "total";
+  }
+  if (
+    raw.AdjSpread != null ||
+    raw.OrigSpread != null ||
+    /spread|-?\d+\.?\d*/i.test(description)
+  ) {
+    if (
+      raw.FinalMoney != null &&
+      raw.AdjSpread == null &&
+      raw.OrigSpread == null
+    ) {
+      return "money";
+    }
+    if (raw.AdjSpread != null || raw.OrigSpread != null) return "spread";
+  }
+  if (raw.FinalMoney != null || /\bml\b|money/i.test(description))
+    return "money";
+  return "other";
+}
+
+export function buildWagerLeg(raw: Record<string, unknown>): WagerLeg {
+  const sport = strField(raw, ["SportType", "Sport", "sport"]);
+  const period = strField(raw, ["PeriodDescription", "Period", "period"]);
+  const team1 = strField(raw, ["Team1ID", "Team1", "HomeTeam"]);
+  const team2 = strField(raw, ["Team2ID", "Team2", "AwayTeam"]);
+  const chosen = strField(raw, ["ChosenTeamID", "ChosenTeam", "Team"]);
+  const description = strField(raw, ["Description", "ShortDesc", "Data"]);
+  const lineType = inferLineType(raw, description);
+  const line =
+    lineType === "total"
+      ? `${strField(raw, ["TotalPointsOU", "OU"])}:${strField(raw, ["AdjTotalPoints", "OrigTotalPoints", "TotalPoints"])}`
+      : lineType === "spread"
+        ? String(raw.AdjSpread ?? raw.OrigSpread ?? "")
+        : lineType === "money"
+          ? String(raw.FinalMoney ?? raw.GradeMoney ?? "")
+          : description;
+  const eventKey = [sport, team1, team2, period]
+    .map((s) => s.toLowerCase())
+    .join("|");
+  const lineKey = `${eventKey}|${lineType}|${line}`;
+  return {
+    eventKey,
+    lineKey,
+    sport,
+    period,
+    team1,
+    team2,
+    chosen,
+    lineType,
+    line,
+  };
+}
+
+export function normalizeWagerRow(
+  raw: Record<string, unknown>,
+  source: WagerSource,
+  fallbackAccount = "",
+): WagerRow {
+  const accountId =
+    strField(raw, ["CustomerID", "customerID", "Login", "LoginID"]) ||
+    fallbackAccount;
+  const acceptedDateTime = strField(raw, [
+    "AcceptedDateTime",
+    "InsertDateTime",
+    "PlacedOn",
+    "TranDateTime",
+  ]);
+  const description = strField(raw, ["Description", "ShortDesc"]);
+  const sport = strField(raw, ["SportType", "Sport"]);
+  const wagerType = strField(raw, ["WagerType", "Type"]);
+  const period = strField(raw, ["PeriodDescription", "Period"]);
+  const ticketNumber = strField(raw, ["TicketNumber", "ticketNumber"]);
+  const wagerNumber = strField(raw, ["WagerNumber", "wagerNumber"]);
+  const amountWagered = numField(raw, ["AmountWagered", "Risk", "Amount"]);
+  const toWinAmount = numField(raw, ["ToWinAmount", "ToWin", "Win"]);
+  const orig = raw.OrigSpread ?? raw.OrigTotalPoints ?? null;
+  const adj = raw.AdjSpread ?? raw.AdjTotalPoints ?? null;
+  const doc = optionalInt(raw, ["DocumentNumber"]);
+  const grade = optionalInt(raw, ["GradeNum"]);
+  return {
+    source,
+    accountId,
+    ticketNumber,
+    wagerNumber,
+    playNumber: strField(raw, ["PlayNumber"]),
+    amountWagered,
+    toWinAmount,
+    acceptedDateTime,
+    acceptedMs: parseTimestampMs(acceptedDateTime),
+    wagerType,
+    sport,
+    market: inferLineType(raw, description),
+    period,
+    description,
+    legs: [buildWagerLeg(raw)],
+    origLine: orig === null || orig === undefined ? null : String(orig),
+    adjLine: adj === null || adj === undefined ? null : String(adj),
+    documentNumber: doc,
+    gradeNum: grade,
+  };
+}
+
+function walkJsonFiles(dir: string, suffix = ".json"): string[] {
+  const out: string[] = [];
+  const walk = (current: string): void => {
+    for (const name of listFiles(current).sort()) {
+      const path = join(current, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (name.endsWith(suffix)) out.push(path);
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return out;
+}
+
+function loadWagers(inDir: string): WagerRow[] {
+  const rows: WagerRow[] = [];
+  const pushAll = (
+    payload: unknown,
+    source: WagerSource,
+    extract: (raw: unknown) => Record<string, unknown>[],
+    fallbackAccount = "",
+  ): void => {
+    let list: Record<string, unknown>[] = [];
+    try {
+      list = extract(payload);
+    } catch {
+      return;
+    }
+    for (const raw of list) {
+      const row = normalizeWagerRow(raw, source, fallbackAccount);
+      if (
+        row.accountId === "" &&
+        row.ticketNumber === "" &&
+        row.wagerNumber === ""
+      ) {
+        continue;
+      }
+      rows.push(row);
+    }
+  };
+  const pendingPath = join(inDir, "wagers", "pending.json");
+  if (existsSync(pendingPath)) {
+    pushAll(
+      redactSecrets(readJson(pendingPath)),
+      "pending",
+      extractPendingLegs,
+    );
+  }
+  const tickerPath = join(inDir, "wagers", "ticker.json");
+  if (existsSync(tickerPath)) {
+    pushAll(redactSecrets(readJson(tickerPath)), "ticker", extractTickerRows);
+  }
+  for (const path of walkJsonFiles(join(inDir, "wagers", "graded"))) {
+    pushAll(redactSecrets(readJson(path)), "graded", extractGradedRows);
+  }
+  for (const path of walkJsonFiles(join(inDir, "wagers", "figure-date"))) {
+    const parts = path.split("/");
+    const customerId = parts.at(-2) ?? "";
+    pushAll(
+      redactSecrets(readJson(path)),
+      "figure-date",
+      (payload) => {
+        try {
+          return parseFigureDateWagersPayload(payload) as Record<
+            string,
+            unknown
+          >[];
+        } catch {
+          return extractGradedRows(payload);
+        }
+      },
+      customerId,
+    );
+  }
+  return rows;
+}
+
+export function groupWagersByTicket(
+  wagers: readonly WagerRow[],
+): Map<string, WagerRow[]> {
+  const map = new Map<string, WagerRow[]>();
+  for (const row of wagers) {
+    const key = row.ticketNumber || `${row.accountId}:${row.wagerNumber}`;
+    if (key === "" || key.endsWith(":")) continue;
+    const list = map.get(key) ?? [];
+    list.push(row);
+    map.set(key, list);
+  }
+  return map;
+}
+
 export function ingestPullDirectory(inDir: string): PullProjection {
   if (inDir.trim() === "") {
     throw new F402AnalyzeError("config", "ingest", "missing input directory");
@@ -608,6 +891,7 @@ export function ingestPullDirectory(inDir: string): PullProjection {
 
   const ledger = loadLedger(inDir);
   const weblog = loadWeblog(inDir);
+  const wagers = loadWagers(inDir);
 
   const ensureAccount = (accountId: string, login = accountId): void => {
     if (accountId === "" || byId.has(accountId)) return;
@@ -626,6 +910,7 @@ export function ingestPullDirectory(inDir: string): PullProjection {
   };
   for (const row of ledger) ensureAccount(row.accountId);
   for (const row of weblog) ensureAccount(row.loginId, row.loginId);
+  for (const row of wagers) ensureAccount(row.accountId, row.accountId);
 
   const accounts: AnalyzedAccount[] = [...byId.values()]
     .map((row) => {
@@ -648,6 +933,7 @@ export function ingestPullDirectory(inDir: string): PullProjection {
     accounts,
     ledger,
     weblog,
+    wagers,
     snapshotIds: snapshots.map((s) => s.snapshotId),
     censusSnapshotCount: snapshots.length,
   };

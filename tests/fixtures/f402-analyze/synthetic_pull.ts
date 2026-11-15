@@ -53,6 +53,14 @@ export interface SynthPullSpec {
     readonly CurrentBalance?: number;
     readonly Password?: string;
   }[];
+  readonly pending?: readonly Record<string, unknown>[];
+  readonly ticker?: readonly Record<string, unknown>[];
+  readonly graded?: Readonly<
+    Record<string, readonly Record<string, unknown>[]>
+  >;
+  readonly figureDate?: Readonly<
+    Record<string, Readonly<Record<string, readonly Record<string, unknown>[]>>>
+  >;
 }
 
 function writeJson(path: string, value: unknown): void {
@@ -106,6 +114,23 @@ export function writeSyntheticPull(root: string, spec: SynthPullSpec): string {
   }
   for (const [day, rows] of Object.entries(spec.weblog)) {
     writeJson(join(root, "weblog", `${day}.json`), { LIST: rows });
+  }
+  if (spec.pending !== undefined) {
+    writeJson(join(root, "wagers", "pending.json"), { LIST: spec.pending });
+  }
+  if (spec.ticker !== undefined) {
+    writeJson(join(root, "wagers", "ticker.json"), { LIST: spec.ticker });
+  }
+  for (const [day, rows] of Object.entries(spec.graded ?? {})) {
+    writeJson(join(root, "wagers", "graded", `${day}.json`), { LIST: rows });
+  }
+  for (const [customerId, days] of Object.entries(spec.figureDate ?? {})) {
+    for (const [day, rows] of Object.entries(days)) {
+      writeJson(
+        join(root, "wagers", "figure-date", customerId, `${day}.json`),
+        { LIST: { INFO: rows } },
+      );
+    }
   }
   return root;
 }
@@ -455,6 +480,238 @@ export function plantedClusterPull(): SynthPullSpec {
           Data: "",
         },
       ],
+    },
+  };
+}
+
+function steamLeg(
+  customerID: string,
+  ticket: number,
+  when: string,
+  orig: number,
+  adj: number,
+): Record<string, unknown> {
+  return {
+    TicketNumber: ticket,
+    WagerNumber: ticket,
+    CustomerID: customerID,
+    AcceptedDateTime: when,
+    AmountWagered: 10000,
+    ToWinAmount: 9100,
+    WagerType: "S",
+    SportType: "Basketball",
+    PeriodDescription: "Game",
+    Team1ID: "LAL",
+    Team2ID: "BOS",
+    ChosenTeamID: "LAL",
+    OrigSpread: orig,
+    AdjSpread: adj,
+    Description: "LAL -3.5",
+  };
+}
+
+function parlayLeg(
+  customerID: string,
+  ticket: number,
+  play: number,
+  when: string,
+  sport: string,
+  team1: string,
+  team2: string,
+  line: number,
+): Record<string, unknown> {
+  return {
+    TicketNumber: ticket,
+    WagerNumber: ticket * 10 + play,
+    PlayNumber: play,
+    CustomerID: customerID,
+    AcceptedDateTime: when,
+    AmountWagered: play === 1 ? 20000 : 0,
+    ToWinAmount: play === 1 ? 60000 : 0,
+    WagerType: "P",
+    SportType: sport,
+    PeriodDescription: "Game",
+    Team1ID: team1,
+    Team2ID: team2,
+    ChosenTeamID: team1,
+    AdjSpread: line,
+    OrigSpread: line,
+    Description: `${team1} ${line}`,
+  };
+}
+
+/** Planted steam ring + shared-parlay ring, plus decoys that must not link. */
+export function plantedBehaviourPull(): SynthPullSpec {
+  const players = [
+    { customerID: "STEAM1", Login: "steam1", Agent: "SUB1" },
+    { customerID: "STEAM2", Login: "steam2", Agent: "SUB1" },
+    { customerID: "STEAM3", Login: "steam3", Agent: "SUB1" },
+    { customerID: "SOLO", Login: "solo", Agent: "SUB2" },
+    { customerID: "PAR1", Login: "par1", Agent: "SUB3" },
+    { customerID: "PAR2", Login: "par2", Agent: "SUB3" },
+    { customerID: "PAR3", Login: "par3", Agent: "SUB3" },
+    { customerID: "JOIN1", Login: "join1", Agent: "SUB4" },
+  ];
+  const steam = [
+    steamLeg("STEAM1", 7001, "2026-11-01 15:00:00", -3, -3.5),
+    steamLeg("STEAM2", 7002, "2026-11-01 15:01:30", -3, -3.5),
+    steamLeg("STEAM3", 7003, "2026-11-01 15:02:00", -3, -3.5),
+    steamLeg("SOLO", 7099, "2026-11-01 18:00:00", -3, -3.5),
+  ];
+  const parlays = [
+    parlayLeg(
+      "PAR1",
+      8001,
+      1,
+      "2026-11-01 16:00:00",
+      "Soccer",
+      "MEX",
+      "USA",
+      -0.5,
+    ),
+    parlayLeg(
+      "PAR1",
+      8001,
+      2,
+      "2026-11-01 16:00:00",
+      "Basketball",
+      "CHI",
+      "NYK",
+      -4,
+    ),
+    parlayLeg(
+      "PAR1",
+      8001,
+      3,
+      "2026-11-01 16:00:00",
+      "Football",
+      "KC",
+      "BUF",
+      -2.5,
+    ),
+    parlayLeg(
+      "PAR2",
+      8002,
+      1,
+      "2026-11-01 16:08:00",
+      "Soccer",
+      "MEX",
+      "USA",
+      -0.5,
+    ),
+    parlayLeg(
+      "PAR2",
+      8002,
+      2,
+      "2026-11-01 16:08:00",
+      "Basketball",
+      "CHI",
+      "NYK",
+      -4,
+    ),
+    parlayLeg(
+      "PAR2",
+      8002,
+      3,
+      "2026-11-01 16:08:00",
+      "Football",
+      "KC",
+      "BUF",
+      -2.5,
+    ),
+    parlayLeg(
+      "PAR3",
+      8003,
+      1,
+      "2026-11-01 16:10:00",
+      "Tennis",
+      "AUS",
+      "ESP",
+      -1.5,
+    ),
+    parlayLeg(
+      "PAR3",
+      8003,
+      2,
+      "2026-11-01 16:10:00",
+      "Hockey",
+      "TOR",
+      "MTL",
+      -1.5,
+    ),
+    parlayLeg(
+      "PAR3",
+      8003,
+      3,
+      "2026-11-01 16:10:00",
+      "Baseball",
+      "NYY",
+      "BOS",
+      -1.5,
+    ),
+  ];
+  const joinWager = {
+    TicketNumber: 5001,
+    WagerNumber: 5001,
+    CustomerID: "JOIN1",
+    AcceptedDateTime: "2026-11-01 12:00:00",
+    AmountWagered: 5000,
+    ToWinAmount: 4500,
+    WagerType: "S",
+    SportType: "Basketball",
+    PeriodDescription: "Game",
+    Team1ID: "MIA",
+    Team2ID: "ORL",
+    ChosenTeamID: "MIA",
+    AdjSpread: -2,
+    GradeNum: 42,
+    DocumentNumber: 4242,
+    Description: "MIA -2",
+  };
+  return {
+    snapshots: [{ id: "2026-11-01", players }],
+    ledger: {
+      JOIN1: [
+        {
+          DocumentNumber: 4242,
+          TranCode: "D",
+          TranType: "A",
+          Amount: 5000,
+          Balance: 15000,
+          Description: "Wager ticket 5001-1",
+          TranDateTime: "2026-11-01 12:00:00",
+          EnteredBy: "system",
+        },
+      ],
+      STEAM1: [],
+      STEAM2: [],
+      STEAM3: [],
+      SOLO: [],
+      PAR1: [],
+      PAR2: [],
+      PAR3: [],
+    },
+    weblog: {
+      "2026-11-01": [
+        {
+          AccessDateTime: "2026-11-01 12:00:05",
+          IPAddress: "203.0.113.80",
+          LoginID: "join1",
+          Operation: "API LOG | Ticket: 5001 Risk:50 Win:45",
+          Data: "",
+        },
+        {
+          AccessDateTime: "2026-11-01 15:00:02",
+          IPAddress: "203.0.113.81",
+          LoginID: "steam1",
+          Operation: "API LOG | Ticket: 7001 Risk:100 Win:91",
+          Data: "",
+        },
+      ],
+    },
+    graded: { "2026-11-01": [...steam, ...parlays, joinWager] },
+    figureDate: {
+      JOIN1: { "2026-11-01": [joinWager] },
     },
   };
 }
