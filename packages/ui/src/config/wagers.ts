@@ -89,7 +89,8 @@ export const WAGERS_DEFAULTS = Object.freeze({
  * CLV edge color ramp, driven by `thresholds.clv_hot_cents` / `clv_warm_cents`.
  * Positive means the customer beat the closing line (desk liability).
  */
-export function clvEdgeTone(cents: number): string {
+export function clvEdgeTone(cents: number | null): string {
+  if (cents === null) return "#94a3b8";
   if (cents <= 0) return "#4ade80";
   return cents >= WAGERS_THRESHOLDS.clv_hot_cents ? "#ef4444" : "#f59e0b";
 }

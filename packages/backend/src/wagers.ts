@@ -52,7 +52,8 @@ export interface ProjectedDevWagerRow {
   readonly riskUsd: number;
   readonly volumeUsd: number;
   readonly toWinUsd: number;
-  readonly clvCents: number;
+  /** Real CLV in cents, or null when no closing-line comparison exists. */
+  readonly clvCents: number | null;
   readonly vip: boolean;
   readonly isSentinelNoise: boolean;
   readonly alertTier: WagerTier;
@@ -107,28 +108,25 @@ export function projectLiveWagerRow(
       Math.round(riskUsd * 0.9),
   );
   const isSharp = deps.sharpCustomerIds.has(customerId.toUpperCase());
+  // No invented CLV: a row without an explicit closing-line comparison reports null.
   const clvCents =
-    typeof item.clvCents === "number"
+    typeof item.clvCents === "number" && Number.isFinite(item.clvCents)
       ? item.clvCents
-      : isSharp
-        ? 12.5
-        : riskUsd >= 5000
-          ? 8.2
-          : -2.4;
+      : null;
 
   let alertTier: WagerTier = "RECREATIONAL";
   let alertBadge = "✅ RECREATIONAL";
   let operatorDirective = "Accept Normal (autoExecute: false)";
   let maxRecommendedStake = 25000;
 
-  if (clvCents >= 10 || isSharp) {
+  if ((clvCents !== null && clvCents >= 10) || isSharp) {
     alertTier = "CRITICAL";
     alertBadge = isSharp
       ? "🚨 CRITICAL (T1 Originator)"
       : "🚨 CRITICAL (High CLV)";
     operatorDirective = "Clamp Max $250 (autoExecute: false)";
     maxRecommendedStake = 250;
-  } else if (clvCents >= 5) {
+  } else if (clvCents !== null && clvCents >= 5) {
     alertTier = "STEAM";
     alertBadge = "⚡ STEAM (Line Mover)";
     operatorDirective = "Clamp Max $500 (autoExecute: false)";
