@@ -3195,7 +3195,7 @@ export function buildCcc88412DecisionInstrument(
       nonCccDistinctTicketSameSecondPairsK++;
     }
   }
-  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,520 in full 70,869 corpus
+  const nonCccEventsN = Math.max(1, nonCccHockeyEvents.size); // 2,519 non-CCC events in the full 70,869 corpus (CCC88412 is excluded above)
   const p0BookDualTicket =
     nonCccHockeyEvents.size >= 100
       ? nonCccSameTicketPairsK / nonCccEventsN
