@@ -209,7 +209,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
     ]);
   });
 
-  test("nsh.json enforces minRuntime 0.4.0 and read-only loopback HTTP capabilities", async () => {
+  test("nsh.json enforces minRuntime 0.5.0 and read-only loopback HTTP capabilities", async () => {
     const nshJsonPath = path.join(
       import.meta.dir,
       "..",
@@ -234,7 +234,7 @@ describe("packages/nsh-desk model and capability contracts", () => {
     };
 
     expect(manifest.id).toBe("ops.sportsdesk.desk");
-    expect(manifest.minRuntime).toBe("0.4.0");
+    expect(manifest.minRuntime).toBe("0.5.0");
     expect(manifest.capabilities.network.hosts).toBeUndefined();
     expect(manifest.capabilities.network.http).toEqual([
       {
@@ -607,7 +607,25 @@ describe("packages/nsh-desk model and capability contracts", () => {
 
     const repoRoot = path.join(import.meta.dir, "..");
     const maybeNsh = await tryResolveNshBinary(repoRoot);
-    if (maybeNsh !== null) {
+    // The sign flow needs a runtime at least as new as the manifest's
+    // minRuntime: a stale local nsh cannot build a pinned app. Gate on the
+    // probe and say why we skipped instead of failing every 0.4.0 host.
+    const localNshVersion =
+      maybeNsh === null
+        ? null
+        : (() => {
+            const probe = Bun.spawnSync([maybeNsh.bin, "--version"], {
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            return parseNshVersionOutput(
+              `${probe.stdout.toString()}${probe.stderr.toString()}`,
+            ).semver;
+          })();
+    const runtimeMeetsPin =
+      localNshVersion !== null &&
+      Bun.semver.satisfies(localNshVersion, `>=${PINNED_NSH_RELEASE.version}`);
+    if (maybeNsh !== null && runtimeMeetsPin) {
       const signReport = await runNshSignVerify(
         repoRoot,
         path.join(repoRoot, "packages", "nsh-desk"),
@@ -625,13 +643,17 @@ describe("packages/nsh-desk model and capability contracts", () => {
       );
       expect(signInspect).toContain("NSH Sign & Verify");
       expect(signInspect).toContain("ops.sportsdesk.desk");
+    } else if (maybeNsh !== null) {
+      console.warn(
+        `[nsh] sign/verify skipped: local nsh ${localNshVersion ?? "unknown"} < pinned ${PINNED_NSH_RELEASE.version}`,
+      );
     }
 
-    expect(PINNED_NSH_RELEASE.version).toBe("0.4.0");
+    expect(PINNED_NSH_RELEASE.version).toBe("0.5.0");
     expect(PINNED_NSH_RELEASE.commit).toBe(
-      "e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3",
+      "f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1",
     );
-    expect(PINNED_NSH_RELEASE.shortSha).toBe("e626a8d");
+    expect(PINNED_NSH_RELEASE.shortSha).toBe("f4d68f7");
 
     const installSh = await Bun.file(
       path.join(import.meta.dir, "..", "scripts", "ci", "install-nsh.sh"),
@@ -651,14 +673,14 @@ describe("packages/nsh-desk model and capability contracts", () => {
     expect(nshManifestSummary.minRuntime).toBe(PINNED_NSH_RELEASE.version);
 
     const ver = parseNshVersionOutput(
-      "\u001b[32mnsh 0.4.0 (e626a8d)\u001b[0m\n",
+      "\u001b[32mnsh 0.5.0 (f4d68f7)\u001b[0m\n",
     );
     expect(ver).toEqual({
-      raw: "nsh 0.4.0 (e626a8d)",
-      semver: "0.4.0",
-      gitSha: "e626a8d",
+      raw: "nsh 0.5.0 (f4d68f7)",
+      semver: "0.5.0",
+      gitSha: "f4d68f7",
     });
-    expect(Bun.semver.satisfies(ver.semver!, ">=0.4.0")).toBe(true);
+    expect(Bun.semver.satisfies(ver.semver!, ">=0.5.0")).toBe(true);
 
     expect(detectNshProjectMode({ name: "Desk" })).toBe("tsx");
     expect(detectNshProjectMode({ rust: "native" })).toBe("mixed");

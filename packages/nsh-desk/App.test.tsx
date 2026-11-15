@@ -451,8 +451,10 @@ test("renders Stocks Markets terminal (Composite breadth, Prev close/Turnover st
     app.texts().some((t) => t.includes("Breadth by League")),
   );
 
-  // Toggle Order Book depth 5 -> 10
+  // Toggle Order Book depth 5 -> 10. The 0.5.0 headless engine hit-tests a
+  // press, so bring the deep order book on screen first, as a user scrolls.
   expect(app.texts().some((t) => t === "B10")).toBe(false);
+  await app.scroll("id:book-depth-toggle", 420);
   await app.press("id:book-depth-toggle");
   await app.waitUntil(
     () =>
@@ -461,6 +463,7 @@ test("renders Stocks Markets terminal (Composite breadth, Prev close/Turnover st
   );
 
   // Open Execution Ticket modal, step limit price +1, review & execute paper fill
+  await app.scroll("id:open-order-ticket-btn", -1200);
   await app.press("id:open-order-ticket-btn");
   await app.waitFor("text:Execution Ticket — Paper Venue");
 

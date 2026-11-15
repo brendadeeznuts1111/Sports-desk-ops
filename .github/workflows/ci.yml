@@ -150,14 +150,14 @@ jobs:
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: bash scripts/ci/test-changed-plugins.sh
-      - name: Cache NSH v0.4.0 toolchain & TypeScript 7 cache
+      - name: Cache NSH v0.5.0 toolchain & TypeScript 7 cache
         uses: actions/cache@v4
         with:
           path: |
             .agents/tools/nsh
             .agents/tools/nsh-cache
-          key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
-      - name: Changed NSH Desk package (pinned v0.4.0 check + build + headless test + web + signed .nshpkg)
+          key: nsh-v0.5.0-f4d68f7-${{ runner.os }}-${{ runner.arch }}
+      - name: Changed NSH Desk package (pinned v0.5.0 check + build + headless test + web + signed .nshpkg)
         timeout-minutes: 5
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -269,14 +269,14 @@ jobs:
       - name: "Signal Honesty Linter Gate"
         timeout-minutes: 3
         run: bun bin/check-signal-honesty.ts --verbose
-      - name: Cache NSH v0.4.0 toolchain & TypeScript 7 cache
+      - name: Cache NSH v0.5.0 toolchain & TypeScript 7 cache
         uses: actions/cache@v4
         with:
           path: |
             .agents/tools/nsh
             .agents/tools/nsh-cache
-          key: nsh-v0.4.0-e626a8d-${{ runner.os }}-${{ runner.arch }}
-      - name: "Native Shell Desk Gate (pinned nsh v0.4.0 e626a8d doctor + verify-loop + web + signed .nshpkg)"
+          key: nsh-v0.5.0-f4d68f7-${{ runner.os }}-${{ runner.arch }}
+      - name: "Native Shell Desk Gate (pinned nsh v0.5.0 f4d68f7 doctor + verify-loop + web + signed .nshpkg)"
         timeout-minutes: 5
         run: bash scripts/ci/install-nsh.sh && bun run nsh:doctor && bun run nsh:verify
       - name: Schema gate (snapshot parity, fixture drift, gauntlet, EOD smoke)
