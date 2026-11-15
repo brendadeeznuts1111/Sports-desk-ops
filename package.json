@@ -259,7 +259,7 @@
     "code-mode": "bun cli/code_mode_cli.ts --realm host",
     "code-mode:profile": "bun cli/code_mode_cli.ts --realm guest",
     "test:code-mode": "bun test tests/code_mode/*.test.ts",
-    "mutation:code-mode": "bun --bun x stryker run; rc=$?; bun run scripts/ci/restore_after_stryker.ts; exit $rc",
+    "mutation:code-mode": "bun --bun x stryker run tests/code_mode/stryker.conf.mjs; rc=$?; bun run scripts/ci/restore_after_stryker.ts; exit $rc",
     "probe:code-mode": "bun run tests/code_mode/guest_probe.ts",
     "code-mode:binary-reference": "bun scripts/code_mode_binary_reference.ts",
     "check:profile-code-mode-host-allowlist": "bun run scripts/ci/check_profile_code_mode_host_allowlist.ts",

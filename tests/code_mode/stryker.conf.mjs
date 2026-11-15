@@ -5,7 +5,7 @@
  * Mutates the query/getProfile implementation and the QuickJS bridge that hosts it. The suite
  * must keep the aggregate score at or above `break` or the gate fails.
  *
- *   bunx stryker run
+ *   bun run mutation:code-mode
  */
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {

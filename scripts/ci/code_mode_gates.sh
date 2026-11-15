@@ -21,12 +21,9 @@ echo "== [3/7] bun test tests/code_mode/*.test.ts =="
 bun test tests/code_mode/*.test.ts
 
 echo "== [4/7] stryker run (thresholds: high 80 / low 60 / break 60) =="
-stryker_rc=0
-bunx stryker run || stryker_rc=$?
-# In-place mutation restores files by content, dropping exec bits and symlink types. Put the
-# tracked metadata back so the gate leaves the worktree as it found it — even when it fails.
-bun run scripts/ci/restore_after_stryker.ts
-[ "$stryker_rc" -eq 0 ] || exit "$stryker_rc"
+# Node/bunx cannot load @hughescr/stryker-bun-runner under the ws@5.2.5 override (ESM named
+# imports); Bun's CJS interop can. Same entrypoint as `bun run mutation:code-mode`.
+bun run mutation:code-mode
 
 echo "== [5/7] QuickJS guest probe =="
 bun run tests/code_mode/guest_probe.ts

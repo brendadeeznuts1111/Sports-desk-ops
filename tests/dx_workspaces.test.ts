@@ -57,11 +57,11 @@ describe("dx workspaces — monorepo workspace dev control", () => {
     const rootRow = report.rows.find((r) => r.dir === ".");
     expect(rootRow?.wave).toBe(3);
     expect(rootRow?.workspaceDeps).toEqual([
-      "sportsdesk-ops@workspace:packages/sportsdesk-ops",
       "@sportsdesk-ops/api@workspace:*",
       "@sportsdesk-ops/backend@workspace:*",
       "@sportsdesk-ops/contracts@workspace:*",
       "@sportsdesk-ops/ui@workspace:*",
+      "sportsdesk-ops@workspace:packages/sportsdesk-ops",
     ]);
   });
 
