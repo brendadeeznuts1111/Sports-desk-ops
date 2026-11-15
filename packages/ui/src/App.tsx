@@ -73,12 +73,16 @@ import {
 export * from "./types.ts";
 
 /**
- * Why the profile cards are empty: no endpoint serves the per-customer card list.
+ * Why the profile cards are empty: no endpoint serves the per-customer card list, and two of the
+ * three fields the UI used to promise have no source at all — the cohort file carries a scalar
+ * `sharp_score` (no components) and no VaR. The copy names only what the data supports, so filling
+ * the cards later cannot quietly omit them.
  * `GET /api/customer/profile?id=` returns one book profile by ID in a different shape.
  */
 export const PROFILES_UNAVAILABLE_REASON =
-  "No endpoint serves the per-customer profile cards (sharpness components, VaR, limits). " +
-  "GET /api/customer/profile?id= returns a single book profile by ID, not this list, so the cards stay empty rather than showing invented customers.";
+  "Profile cards are limited to what the curated cohort file records: wager limit, delay, CLV and " +
+  "sharpness score. VaR and sharpness components have no source yet, so they stay blank rather than " +
+  "computed from nothing. The cohort is 6 customers, not the full book.";
 
 const PROFILE_CUSTOMERS: readonly ShowcaseCustomer[] = [];
 
