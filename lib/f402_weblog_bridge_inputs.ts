@@ -16,9 +16,9 @@ import { resolveFourcRoot } from "./fourc_root.ts";
 
 export const WEBLOG_BRIDGE_USAGE_HINT = [
   "weblog: --from required (or --fetch-mode to capture first)",
-  "  fetch+rollup: bun run weblog:rollup --fetch-mode A",
-  "  rollup only:  bun run weblog:rollup --from out/f402/weblog/11-08-2026.jsonl",
-  "  (Mode B/I shared-IP audit is not activity weblog — not supported here)",
+  "  fetch+rollup: bun run --filter sportsdesk-ops weblog:rollup --fetch-mode A",
+  "  rollup only:  bun run --filter sportsdesk-ops weblog:rollup --from out/f402/weblog/11-08-2026.jsonl",
+  "  (only activity weblog fetch modes A and C are supported)",
 ].join("\n");
 
 export const WEBLOG_ROLLUP_UNSUPPORTED_FETCH_MODES = new Set<WebLogMode>([
