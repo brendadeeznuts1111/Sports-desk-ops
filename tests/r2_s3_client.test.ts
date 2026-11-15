@@ -419,6 +419,25 @@ describe("R2S3Client uploads", () => {
     );
   });
 
+  test("readArrayBufferFromStream drains S3File.stream()", async () => {
+    const payload = new TextEncoder().encode("wager-snapshot");
+    const backend = new FakeBackend();
+    backend.file = (): Bun.S3File =>
+      new Blob([payload]) as unknown as Bun.S3File;
+    const client = R2S3Client.fromOptions(
+      {
+        bucket: "bucket",
+        endpoint: "https://r2.test",
+        accessKeyId: "a",
+        secretAccessKey: "s",
+        publicBase: "https://pub.test",
+      },
+      backend,
+    );
+    const buf = await client.readArrayBufferFromStream("wagers/latest.bin");
+    expect(new TextDecoder().decode(buf)).toBe("wager-snapshot");
+  });
+
   test("stat never reads the deprecated S3File.size property", async () => {
     const backend = new FakeBackend();
     backend.file = (): Bun.S3File => {

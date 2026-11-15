@@ -28,18 +28,21 @@ export interface CustomerRecord {
  * `artifact` and `demo-book` are demo cohorts; `fixture` is synthetic test data. A live portal id
  * only appears as `capture` once a capture actually retains it.
  */
-export type CustomerSource = "artifact" | "demo-book" | "fixture" | "capture";
+export type CustomerSource =
+  "live" | "artifact" | "demo-book" | "fixture" | "capture" | "dod6-spine";
 
 export const LIVE_SOURCES: ReadonlySet<CustomerSource> =
-  new Set<CustomerSource>(["capture"]);
+  new Set<CustomerSource>(["live", "capture"]);
 
 export type CustomerDatabase = InstanceType<typeof Bun.SQL>;
 
 const CUSTOMER_SOURCES: ReadonlySet<string> = new Set([
+  "live",
   "artifact",
   "demo-book",
   "fixture",
   "capture",
+  "dod6-spine",
 ]);
 
 function customerSource(value: string): CustomerSource {

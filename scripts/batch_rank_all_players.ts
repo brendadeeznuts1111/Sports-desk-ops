@@ -265,7 +265,7 @@ export async function runBatchedRanking(
           .subtract({ days: 30 })
           .toPlainDate()
           .toString()
-      : "2026-10-10");
+      : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
   const limitPlayers = options.limitPlayers ?? 100;
 
   const [corpusStamp, treeStamp] = await Promise.all([

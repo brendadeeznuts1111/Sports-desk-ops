@@ -251,7 +251,7 @@ function cleanSpawnEnv(): Record<string, string | undefined> {
 /** Flags declared by one Bun help invocation, e.g. `readBunHelpFlags(["test", "--help"])`. */
 export function readBunHelpFlags(
   args: readonly string[],
-  bunPath = "bun",
+  bunPath = process.execPath,
 ): ReadonlySet<string> {
   const result = Bun.spawnSync([bunPath, ...args], {
     env: cleanSpawnEnv(),
@@ -267,7 +267,7 @@ export function readBunHelpFlags(
 }
 
 /** Read the runtime's own help once; never hand-maintain the flag list. */
-export function readBunCliSurface(bunPath = "bun"): BunCliSurface {
+export function readBunCliSurface(bunPath = process.execPath): BunCliSurface {
   const result = Bun.spawnSync([bunPath, "--help"], {
     env: cleanSpawnEnv(),
     stdout: "pipe",
@@ -312,7 +312,9 @@ export function bunFlagsInScripts(
 }
 
 /** Read the runtime's own `bun run --help` surface once; never hand-maintain the flag list. */
-export function readBunRunCliSurface(bunPath = "bun"): BunRunCliSurface {
+export function readBunRunCliSurface(
+  bunPath = process.execPath || "bun",
+): BunRunCliSurface {
   const result = Bun.spawnSync([bunPath, "run", "--help"], {
     env: cleanSpawnEnv(),
     stdout: "pipe",

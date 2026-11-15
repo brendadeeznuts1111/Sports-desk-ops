@@ -117,6 +117,12 @@ jobs:
           if [ "$rc" -ne 0 ]; then echo "::error::bun fmt failed (exit $rc)"; exit "$rc"; fi
       - name: Install dependencies
         run: bun install --frozen-lockfile --no-env-file
+      # SECURITY-ADJACENT SEAL (merge gate): profile insecure-host import allowlist — do not move to a
+      # non-required job or trim without replacing the merge gate. Runs early so a later step failure
+      # still leaves proof this job executed the seal on PRs touching lib/. Full suite: `code-mode` job.
+      - name: Profile code-mode host import allowlist
+        timeout-minutes: 2
+        run: bun run check:profile-code-mode-host-seal
       - name: Build workspace contracts dist
         run: bun run --filter '@sportsdesk-ops/contracts' build
       # Baseline green on 2026-11-14: 0 vulnerabilities (180 packages) after
@@ -162,6 +168,38 @@ jobs:
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: bash scripts/ci/test-changed-nsh.sh
+
+  code-mode:
+    # Property-based + mutation gate for the Code Mode profile tools. Unlike the PR ratchet this
+    # runs the full sequential gate on both PRs and main: mutation survivors are the regression.
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --no-env-file
+      - name: Code Mode gates (freeze, property tests, mutation, guest probe)
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          # On a push, origin/main == HEAD in the checkout; the gate falls back to this SHA (or HEAD^).
+          GITHUB_EVENT_BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: bun run ci:code-mode
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: reports/mutation
+          if-no-files-found: warn
 
   verify:
     # Full ratchet on main (and unattended cadence), not on pull requests — PRs use verify-changed.

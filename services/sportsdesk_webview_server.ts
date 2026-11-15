@@ -4309,6 +4309,66 @@ async function serveGovernanceRoute(
 type CustomerBookRow = import("../lib/customer_profile.ts").CustomerRow;
 
 /**
+ * `data/customer-profiles.json` stores built profiles, not book rows. Lift the book aggregates back
+ * into the row field names every other source uses; the ticket sample is not stored there, so it
+ * stays absent instead of being synthesized.
+ */
+function customerRowFromProfileDocument(
+  value: unknown,
+): CustomerBookRow | null {
+  const profile = value as {
+    customer_id?: unknown;
+    customerId?: unknown;
+    agentId?: unknown;
+    masterAgent?: unknown;
+    status?: unknown;
+    contextType?: unknown;
+    book?: Readonly<Record<string, unknown>>;
+  } | null;
+  const id =
+    typeof profile?.customer_id === "string"
+      ? profile.customer_id.trim()
+      : typeof profile?.customerId === "string"
+        ? profile.customerId.trim().toUpperCase()
+        : "";
+  if (id === "") return null;
+  const book = profile?.book;
+  if (typeof book !== "object" || book === null) {
+    // A row-shaped entry (fixture or older artifact): keep its fields as they are.
+    return { ...(value as CustomerBookRow), customer_id: id };
+  }
+  const number = (field: unknown): number | undefined =>
+    typeof field === "number" && Number.isFinite(field) ? field : undefined;
+  const volume = number(book.lifetimeVolumeUsd);
+  const net = number(book.lifetimeNetUsd);
+  const hold = number(book.holdPct);
+  const clv = number(book.clvBps);
+  const sharp = number(book.sharpScore);
+  const limit = number(book.wagerLimitUsd);
+  const delay = number(book.delaySeconds);
+  return {
+    customer_id: id,
+    ...(typeof profile?.agentId === "string"
+      ? { agent_id: profile.agentId }
+      : {}),
+    ...(typeof profile?.masterAgent === "string"
+      ? { master_agent: profile.masterAgent }
+      : {}),
+    ...(typeof profile?.status === "string" ? { status: profile.status } : {}),
+    ...(typeof profile?.contextType === "string"
+      ? { context_type: profile.contextType }
+      : {}),
+    ...(volume === undefined ? {} : { lifetime_volume_usd: volume }),
+    ...(net === undefined ? {} : { lifetime_net_usd: net }),
+    ...(hold === undefined ? {} : { hold_pct: hold }),
+    ...(clv === undefined ? {} : { clv_bps: clv }),
+    ...(sharp === undefined ? {} : { sharp_score: sharp }),
+    ...(limit === undefined ? {} : { wager_limit_usd: limit }),
+    ...(delay === undefined ? {} : { delay_seconds: delay }),
+  };
+}
+
+/**
  * Look up a customer record in enriched_customers_full.json, fixtures, or data/customer-profiles.json.
  */
 async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
@@ -4356,13 +4416,51 @@ async function findCustomerRow(id: string): Promise<CustomerBookRow | null> {
                 : "";
           return custId.trim().toUpperCase() === normId;
         });
-        if (found) return found;
+        const row = found ? customerRowFromProfileDocument(found) : null;
+        if (row !== null) return row;
       }
     } catch {
-      // ignore read/parse failure
+      // signal-honesty: an unreadable profiles artifact falls through to the live artifacts
     }
   }
-  return null;
+
+  // Loaded here (not at the top) so adding the fallback does not shift the cited line anchors for
+  // this file; the module is cached after the first lookup.
+  const {
+    customerRowFromHarvestedProfile,
+    customerRowFromLiveWagers,
+    liveWagerRows,
+  } = await import("../lib/customer_source_rows.ts");
+
+  // 3. A harvested 24h live profile: model-derived, and it publishes no lifetime volume, so the
+  // row omits that field instead of guessing one.
+  const harvestedFile = Bun.file(
+    resolve(repoRoot, "reports/harvested-live-profiles.json"),
+  );
+  if (await harvestedFile.exists()) {
+    try {
+      const data = (await harvestedFile.json()) as { profiles?: unknown[] };
+      if (Array.isArray(data?.profiles)) {
+        for (const profile of data.profiles) {
+          const row = customerRowFromHarvestedProfile(profile);
+          if (row !== null && row.customer_id === normId) return row;
+        }
+      }
+    } catch {
+      // signal-honesty: unreadable harvested profiles fall through to the open-wager capture
+    }
+  }
+
+  // 4. Open wagers captured tonight: identity and pending tickets, no lifetime aggregates.
+  try {
+    const liveRows = liveWagerRows(
+      await Bun.file(resolve(repoRoot, "data/live-wagers.json")).json(),
+    );
+    return customerRowFromLiveWagers(normId, liveRows);
+  } catch {
+    // signal-honesty: an unreadable capture is not a customer record
+    return null;
+  }
 }
 
 const ASSET_TEXT_MIMES: Readonly<Record<string, string>> = {

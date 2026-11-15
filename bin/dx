@@ -336,6 +336,7 @@ Usage: ./bin/dx <command> [args...]
     ./bin/dx workspaces [list|graph|audit|run|add|remove|link|init]
                                     Monorepo workspace dev control (workspace:*, waves, self-contained audit)
     ./bin/dx bun [--url <u>]        Runtime surface, declaration drift, proxy routing
+    ./bin/dx pr <target> [flags]    Upstream Bun PR runner via bun-pr (--verify, --list, --clean, -x)
     ./bin/dx provenance [flags]     Bun oracle pin + spine repo & worktree SHA provenance (--table|--json|--yaml)
     ./bin/dx run [flags] <target>   Controlled Bun runner (connects live `bun run --help` + presets)
     ./bin/dx monitor [flags]        Monitor Bun processes, daemon /health + /api/v2/live-bets, profiles
@@ -630,6 +631,10 @@ EOF
   bun)
     cd "$REPO_ROOT"
     exec bun bin/bun_surface.ts "$@"
+    ;;
+  bun-pr|pr)
+    cd "$REPO_ROOT"
+    exec bun bin/bun_pr_cli.ts "$@"
     ;;
   provenance)
     cd "$REPO_ROOT"

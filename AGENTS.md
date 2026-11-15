@@ -121,6 +121,16 @@ with `bun run audit:tool-calls`.
 - **`Bun.semver` vs npm `semver`:** `Bun.semver.satisfies` takes only `(version, range)` and does
   NOT support `{ includePrerelease: true }`. The npm `semver` package in `devDependencies` is required by
   `tests/market_index.test.ts` to match upstream Harness install behaviour. Do not swap it out.
+- **`bun run` flag position & profiling flags:**
+  - **Runtime & runner flags** (`--watch`, `--hot`, `--smol`, `--check`, `--bun`, `--console-depth=<val>`,
+    `--inspect`, `--cpu-prof`, `--heap-prof`, `--no-env-file`) must appear **before** the target script or
+    entrypoint (e.g. `bun --check run script.ts`, `bun run --bun vite`, or `bun --console-depth=5 dev`).
+    Value flags must use `--flag=<val>` to avoid argument ambiguity.
+  - **Always forwarded to `process.argv`:** Any flag placed **after** the target script or entrypoint
+    (e.g. `bun run dev --watch` or `bun run clean --bun`) is passed verbatim to the script as arguments,
+    bypassing Bun's runtime controls completely.
+  - **Profiling flags:** Bun's native profiler flags are `--cpu-prof` (with `--cpu-prof-md` for LLM analysis),
+    `--cpu-prof-name`, `--cpu-prof-dir`, and `--heap-prof` — never `--profile-cpu`.
 
 **Environment and tooling**
 

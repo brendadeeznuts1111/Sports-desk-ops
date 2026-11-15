@@ -279,8 +279,13 @@ export interface TicketRow {
   readonly placed_at?: string;
 }
 
+/** Artifact a synthesized row came from; the book's own rows leave this unset. */
+export type CustomerRowProvenance = "harvested-live-profiles" | "live-wagers";
+
 export interface CustomerRow {
   readonly customer_id: string;
+  /** Set when this row was synthesized from a live artifact rather than the customer book. */
+  readonly provenance?: CustomerRowProvenance;
   readonly agent_id?: string;
   readonly master_agent?: string;
   readonly context_type?: string;
@@ -393,10 +398,12 @@ export function summarizeTickets(tickets: readonly TicketRow[]): TicketSummary {
     const net = num(ticket.net_usd);
     const result = key(ticket.result);
     const isVoid = result === "VOID";
+    // An open ticket has no outcome yet; counting it as a settled non-win would report 0% wins.
+    const isOpen = result === "PENDING" || result === "OPEN";
     riskUsd += risk;
     netUsd += net;
     if (isVoid) voids += 1;
-    else {
+    else if (!isOpen) {
       settled += 1;
       if (result === "WIN") wins += 1;
     }

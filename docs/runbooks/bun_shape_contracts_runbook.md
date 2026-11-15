@@ -166,7 +166,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · no reference page (see [docs](https://bun.com/docs/compiler/executables#detecting-standalone-mode-at-runtime))
 - **Shape:** value: `boolean` · writable false · enumerable true
-- **Here:** `bin/bun_surface.ts`, `scripts/wagers_by_state_capture.ts`
+- **Here:** `bin/bun_surface.ts`, `scripts/code_mode_binary_reference.ts`
 - **Evidence:** `surface:isStandaloneExecutable`
 
 ## Text and terminal rendering
@@ -358,7 +358,7 @@ When upstream moves: bump `packageManager`, `engines.bun`, `.bun-version` and `@
 
 - **Source:** declared in `bun-types@1.4.4` · [reference](https://bun.com/reference/bun/Transpiler)
 - **Shape:** value: `function` · writable true · enumerable true
-- **Here:** `bin/bun_surface.ts`, `lib/pm_policy.ts`
+- **Here:** `bin/bun_surface.ts`, `lib/code_mode.ts`
 - **Evidence:** `surface:Transpiler`, `test:tests/nsh_desk_contract.test.ts`
 
 ## Storage and scheduling
