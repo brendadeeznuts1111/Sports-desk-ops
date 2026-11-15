@@ -317,6 +317,16 @@ describe("dx status reports only what it measured", () => {
     expect(result.stdout).toContain("not probed: DX_STATUS_OFFLINE=1");
   });
 
+  test("online status finishes and reports wrangler not installed when the package is absent", async () => {
+    const started = Date.now();
+    const result = await dx(["status"], { DX_STATUS_OFFLINE: "" });
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("wrangler not installed");
+    expect(result.stdout).not.toContain("not probed: DX_STATUS_OFFLINE=1");
+    expect(result.stdout).not.toContain("wrangler missing");
+  });
+
   test("XDG_CONFIG_HOME is reported as re-anchored only when it changed", async () => {
     const same = await dx(["status"], {
       XDG_CONFIG_HOME: path.join(home, ".config"),
