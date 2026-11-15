@@ -98,7 +98,9 @@ def norm_oxlint(text):
     return "\n".join(out).strip() + "\n"
 
 def norm_verify_bun(text, ctx):
+    # mask the binary path and its hash: the verdict (OK/MISMATCH + exit code) is the behavior
     t = text.replace(ctx["bun"], "<BUN>").replace(REPO, "<REPO>")
+    t = re.sub(r"sha256=[0-9a-f]{64}", "sha256=<SHA>", t)
     return re.sub(r"/tmp/[^ )]+", "<TMP>", t)
 
 def norm_raw(text): return text
