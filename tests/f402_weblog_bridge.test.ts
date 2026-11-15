@@ -285,6 +285,7 @@ describe("f402_weblog_bridge Pass 1 guards & CAS", () => {
     expect(res.manifestKey).toBe("manifests/f402-weblog/latest");
     expect(res.manifestIfMatch).toBe('"etag-v1"');
     expect(res.manifestIfNoneMatch).toBeNull();
+    expect(res.pointerOutcome).toBe("written");
     expect(res.dataWindowMaxEpochMs).toBe(rollup.window.toMs);
     expect(res.r2PublishedAtEpochMs).toBe(nowMs);
 
@@ -421,5 +422,90 @@ describe("f402_weblog_bridge Pass 1 guards & CAS", () => {
       (c) => c.method === "PUT" && c.url.endsWith("/f402-weblog/latest.json"),
     );
     expect(latestPuts).toHaveLength(0);
+  });
+  test("a pointer 412 is retried once while our manifest is still current", async () => {
+    const rollup = sampleRollup();
+    const manifestEtags: (string | null)[] = [null, '"m1"', '"m1"'];
+    const pointerEtags: (string | null)[] = ['"p0"', '"p1"'];
+    const pointerAttempts: Array<string | null> = [];
+    const writes: Array<{ key: string; bytes: number }> = [];
+    let failPointer = true;
+    const client: WeblogR2PublishClient = {
+      publicBase: "https://example.r2.dev",
+      async writeWithMetadata(key, data, opts) {
+        const buf =
+          typeof data === "string" ? new TextEncoder().encode(data) : data;
+        if (key === "f402-weblog/latest.json") {
+          pointerAttempts.push(opts?.ifMatch ?? null);
+          if (failPointer) {
+            failPointer = false;
+            throw new R2PreconditionFailedError(key);
+          }
+        }
+        writes.push({ key, bytes: buf.byteLength });
+        return buf.byteLength;
+      },
+      async stat(key) {
+        const last = writes.findLast((w) => w.key === key);
+        return { size: last?.bytes ?? 0 };
+      },
+      async headEtag(key) {
+        if (key === "manifests/f402-weblog/latest") {
+          return manifestEtags.shift() ?? null;
+        }
+        if (key === "f402-weblog/latest.json") {
+          return pointerEtags.shift() ?? null;
+        }
+        return null;
+      },
+    };
+
+    const res = await publishF402WeblogRollup({ client, rollup });
+    expect(res.pointerOutcome).toBe("written");
+    // the failed attempt used p0; the retry used the pointer's new ETag p1
+    expect(pointerAttempts).toEqual(['"p0"', '"p1"']);
+    // only the successful pointer write landed
+    expect(
+      writes.filter((w) => w.key === "f402-weblog/latest.json"),
+    ).toHaveLength(1);
+  });
+
+  test("a pointer 412 leaves the pointer to a newer manifest", async () => {
+    const rollup = sampleRollup();
+    // before the manifest write, after it, and what the conflict check sees
+    const manifestEtags: (string | null)[] = [null, '"m1"', '"m2"'];
+    const pointerEtags: (string | null)[] = ['"p0"'];
+    let pointerAttempts = 0;
+    const writes: Array<{ key: string; bytes: number }> = [];
+    const client: WeblogR2PublishClient = {
+      publicBase: "https://example.r2.dev",
+      async writeWithMetadata(key, data) {
+        const buf =
+          typeof data === "string" ? new TextEncoder().encode(data) : data;
+        if (key === "f402-weblog/latest.json") {
+          pointerAttempts += 1;
+          throw new R2PreconditionFailedError(key);
+        }
+        writes.push({ key, bytes: buf.byteLength });
+        return buf.byteLength;
+      },
+      async stat(key) {
+        const last = writes.findLast((w) => w.key === key);
+        return { size: last?.bytes ?? 0 };
+      },
+      async headEtag(key) {
+        if (key === "manifests/f402-weblog/latest") {
+          return manifestEtags.shift() ?? null;
+        }
+        if (key === "f402-weblog/latest.json") {
+          return pointerEtags.shift() ?? null;
+        }
+        return null;
+      },
+    };
+
+    const res = await publishF402WeblogRollup({ client, rollup });
+    expect(res.pointerOutcome).toBe("superseded");
+    expect(pointerAttempts).toBe(1);
   });
 });

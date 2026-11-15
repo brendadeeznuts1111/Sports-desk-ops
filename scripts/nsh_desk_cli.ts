@@ -215,22 +215,22 @@ export function formatCliReportOutput(
   return inspectReport(inspectable, cliInspectOptions());
 }
 
-const MINIMUM_NSH_RUNTIME_RANGE = ">=0.4.0";
+const MINIMUM_NSH_RUNTIME_RANGE = ">=0.5.0";
 
 /**
  * Upstream `longbridge/nsh` release provenance pinned for `packages/nsh-desk` and CI
- * (`https://github.com/longbridge/nsh/commit/e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3`).
+ * (`https://github.com/longbridge/nsh/commit/f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1`).
  */
 export const PINNED_NSH_RELEASE = {
-  version: "0.4.0",
-  tag: "v0.4.0",
-  commit: "e626a8dd8f8d8b277b9507cfd5ac74d0e67020f3",
-  shortSha: "e626a8d",
+  version: "0.5.0",
+  tag: "v0.5.0",
+  commit: "f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1",
+  shortSha: "f4d68f7",
   sha256: {
     "linux-x86_64":
-      "8806121aebf40bb51f8fb6aa703722fbb01253f9a435759c18d53beece1ec976",
+      "a422bbe5dc2a7ae3ff308ee56e05d73d5becc81f57adf11447fc570dcee65e0f",
     "macos-arm64":
-      "f63c3d57c31b28c9b34227aac81f099d1e0e61f1db552a6ec5127d114eaf59cb",
+      "e6722427b391b00cf7ec13137db9366e78d1e7a045f2933cf00b340365309d9d",
   },
 } as const;
 
@@ -1266,7 +1266,7 @@ export async function runNshDoctor(
 }
 
 /**
- * Ephemerally runs the full NSH 0.4.0 signed runtime delivery & revocation pipeline
+ * Ephemerally runs the full NSH 0.5.0 signed runtime delivery & revocation pipeline
  * (`keygen` root & release -> `certify` -> `publish` `.nshpkg` -> `verify --root` -> `revoke` -> `verify --revocations` must reject)
  * inside an OS temporary scratch directory that is cleaned up unconditionally on exit.
  */

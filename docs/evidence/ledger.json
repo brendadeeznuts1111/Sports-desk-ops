@@ -667,7 +667,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:257-276",
           "kind": "implementation",
-          "note": "adminRejection: requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN> compared with crypto.timingSafeEqual; 503 when the env token is unset, 401 otherwise. Applied at services/sportsdesk_webview_server.ts:3430-3439."
+          "note": "adminRejection: requires Authorization: Bearer <SPORTSDESK_ADMIN_TOKEN> compared with crypto.timingSafeEqual; 503 when the env token is unset, 401 otherwise. Applied at services/sportsdesk_webview_server.ts:3432-3441."
         },
         {
           "source": "docs/openapi.json",
@@ -688,9 +688,9 @@
       "capturedResponse": false,
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:3520-3554",
+          "source": "services/sportsdesk_webview_server.ts:3522-3556",
           "kind": "implementation",
-          "note": "Body {customerId, riskUSD} required (400 TelegramTestAlertInputError when customerId is missing or off the watch list, or riskUSD is not positive); dispatches a labelled synthetic test alert via telegramService.dispatchTestAlert and returns {success, ok, customerId}. Admin-token gated (services/sportsdesk_webview_server.ts:3430-3439)."
+          "note": "Body {customerId, riskUSD} required (400 TelegramTestAlertInputError when customerId is missing or off the watch list, or riskUSD is not positive); dispatches a labelled synthetic test alert via telegramService.dispatchTestAlert and returns {success, ok, customerId}. Admin-token gated (services/sportsdesk_webview_server.ts:3432-3441)."
         },
         {
           "source": "docs/openapi.json",
@@ -741,7 +741,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -769,7 +769,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -797,7 +797,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -896,7 +896,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1062,7 +1062,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1090,7 +1090,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1118,7 +1118,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1146,7 +1146,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1174,7 +1174,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -1202,7 +1202,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3776-3784). No /api/desk/* route exists."
+          "note": "The daemon request handler serves /health, /, /dashboard, /miniapp, /telegram/webhook, /api/telegram/status|activity|webhook, /api/watchlist, /api/telegram/alert|report, then falls through to a 404 JSON fallback (services/sportsdesk_webview_server.ts:3778-3786). No /api/desk/* route exists."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -2201,7 +2201,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1123-3128",
           "kind": "absence",
-          "note": "Handler dispatches the known local routes and falls through to 404 (services/sportsdesk_webview_server.ts:3776-3784); no /api/desk prefix is matched."
+          "note": "Handler dispatches the known local routes and falls through to 404 (services/sportsdesk_webview_server.ts:3778-3786); no /api/desk prefix is matched."
         },
         {
           "source": "tests/capture_apply.test.ts:84,96",
@@ -2266,7 +2266,7 @@
       "members": ["GET /api/scoreboard"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:3191-3203",
+          "source": "services/sportsdesk_webview_server.ts:3193-3205",
           "kind": "implementation",
           "note": "Returns the file plus summarizeScoreboard(); source and observedAt travel with the payload so a transcription is never mistaken for a capture."
         }
@@ -2335,7 +2335,7 @@
         {
           "source": "services/sportsdesk_webview_server.ts:1914-2592",
           "kind": "implementation",
-          "note": "All five families returned 404 before this route existed. Asset names are validated (separators, control characters, traversal) and traversal is rejected (the /assets/* arm, services/sportsdesk_webview_server.ts:3369-3391)."
+          "note": "All five families returned 404 before this route existed. Asset names are validated (separators, control characters, traversal) and traversal is rejected (the /assets/* arm, services/sportsdesk_webview_server.ts:3371-3393)."
         },
         {
           "source": "services/sportsdesk_webview_server.ts#GET /agent-graph.webp",
@@ -2412,7 +2412,7 @@
       "members": ["GET /api/sports/catalog"],
       "evidence": [
         {
-          "source": "services/sportsdesk_webview_server.ts:2952-3026",
+          "source": "services/sportsdesk_webview_server.ts:2954-3028",
           "kind": "implementation",
           "note": "Reads tests/fixtures/fantasy402-sport-catalog-2026-10-21.json; ?sport and ?subSport resolve an exact market, and unknown values 404 with the known list. [Partly contradicted, re-read 2026-11-02: an unknown sport 404s with the known sport list, but an unknown subSport 404s with that sport's periods, not a list of known sub-sports.]"
         }
@@ -2489,7 +2489,7 @@
     "services/blob_and_live_bets_server.ts:457-503": "\"/api/v1/live-bets\": {",
     "services/blob_and_live_bets_server.ts:517-600": "\"/api/v1/blobs/:key\": {",
     "services/blob_and_live_bets_server.ts:620-649": "\"/ws/live-bets\": (request: Request",
-    "services/sportsdesk_webview_server.ts:3237-3246": "if (pathname === \"/api/agents/search\") {",
+    "services/sportsdesk_webview_server.ts:3239-3248": "if (pathname === \"/api/agents/search\") {",
     "services/sportsdesk_telegram_bot.ts:80-84": "export const REPORT_TYPES = [",
     "catalog/fantasy402_sport_catalog.ts:133-140": "export type CatalogDigestSet = {",
     "catalog/fantasy402_sport_catalog.ts:229-245": "export function makeDeskLinkId(",
@@ -2562,25 +2562,25 @@
     "services/sportsdesk_webview_server.ts:1914-2592": "pathname === \"/graph-live-feed.json\" ||",
     "services/sportsdesk_webview_server.ts:2674-2716": "if (pathname === \"/api/analysis/reports\") {",
     "services/sportsdesk_webview_server.ts:2719-2819": "if (pathname === \"/api/live-wagers\") {",
-    "services/sportsdesk_webview_server.ts:2841-2880": "if (pathname === \"/api/contests\") {",
-    "services/sportsdesk_webview_server.ts:2883-2949": "if (pathname === \"/api/game-admin/board\") {",
-    "services/sportsdesk_webview_server.ts:2952-3026": "if (pathname === \"/api/sports/catalog\") {",
-    "services/sportsdesk_webview_server.ts:3030-3045": "if (pathname === \"/api/analysis/filters\") {",
-    "services/sportsdesk_webview_server.ts:3145-3160": "if (pathname === \"/api/game-admin\") {",
-    "services/sportsdesk_webview_server.ts:3163-3188": "if (pathname === \"/api/sports\") {",
-    "services/sportsdesk_webview_server.ts:3191-3203": "if (pathname === \"/api/scoreboard\") {",
-    "services/sportsdesk_webview_server.ts:3237-3297": "if (pathname === \"/api/agents/search\") {",
-    "services/sportsdesk_webview_server.ts:3300-3365": "if (pathname === \"/api/agent-tree\") {",
+    "services/sportsdesk_webview_server.ts:2843-2882": "if (pathname === \"/api/contests\") {",
+    "services/sportsdesk_webview_server.ts:2885-2951": "if (pathname === \"/api/game-admin/board\") {",
+    "services/sportsdesk_webview_server.ts:2954-3028": "if (pathname === \"/api/sports/catalog\") {",
+    "services/sportsdesk_webview_server.ts:3032-3047": "if (pathname === \"/api/analysis/filters\") {",
+    "services/sportsdesk_webview_server.ts:3147-3162": "if (pathname === \"/api/game-admin\") {",
+    "services/sportsdesk_webview_server.ts:3165-3190": "if (pathname === \"/api/sports\") {",
+    "services/sportsdesk_webview_server.ts:3193-3205": "if (pathname === \"/api/scoreboard\") {",
+    "services/sportsdesk_webview_server.ts:3239-3299": "if (pathname === \"/api/agents/search\") {",
+    "services/sportsdesk_webview_server.ts:3302-3367": "if (pathname === \"/api/agent-tree\") {",
     "services/sportsdesk_webview_server.ts:257-276": "function adminRejection(",
-    "services/sportsdesk_webview_server.ts:3369-3391": "if (pathname.startsWith(\"/assets/\")) {",
-    "services/sportsdesk_webview_server.ts:3407-3426": "if (pathname === \"/telegram/webhook\" && req.method === \"POST\") {",
-    "services/sportsdesk_webview_server.ts:3430-3439": "pathname.startsWith(\"/api/telegram/\")",
-    "services/sportsdesk_webview_server.ts:3442-3454": "pathname === \"/api/telegram/status\" &&",
-    "services/sportsdesk_webview_server.ts:3469-3480": "pathname === \"/api/telegram/activity\" &&",
-    "services/sportsdesk_webview_server.ts:3482-3504": "if (pathname === \"/api/telegram/webhook\" && req.method === \"POST\") {",
-    "services/sportsdesk_webview_server.ts:3520-3554": "if (pathname === \"/api/telegram/alert\" && req.method === \"POST\") {",
-    "services/sportsdesk_webview_server.ts:3557-3577": "if (pathname === \"/api/telegram/report\" && req.method === \"POST\") {",
-    "services/sportsdesk_webview_server.ts:3776-3784": "// 14. 404 Fallback",
+    "services/sportsdesk_webview_server.ts:3371-3393": "if (pathname.startsWith(\"/assets/\")) {",
+    "services/sportsdesk_webview_server.ts:3409-3428": "if (pathname === \"/telegram/webhook\" && req.method === \"POST\") {",
+    "services/sportsdesk_webview_server.ts:3432-3441": "pathname.startsWith(\"/api/telegram/\")",
+    "services/sportsdesk_webview_server.ts:3444-3456": "pathname === \"/api/telegram/status\" &&",
+    "services/sportsdesk_webview_server.ts:3471-3482": "pathname === \"/api/telegram/activity\" &&",
+    "services/sportsdesk_webview_server.ts:3484-3506": "if (pathname === \"/api/telegram/webhook\" && req.method === \"POST\") {",
+    "services/sportsdesk_webview_server.ts:3522-3556": "if (pathname === \"/api/telegram/alert\" && req.method === \"POST\") {",
+    "services/sportsdesk_webview_server.ts:3559-3579": "if (pathname === \"/api/telegram/report\" && req.method === \"POST\") {",
+    "services/sportsdesk_webview_server.ts:3778-3786": "// 14. 404 Fallback",
     "services/sportsdesk_webview_server.ts:689-738": "async function fetchLogo(",
     "services/sportsdesk_webview_server.ts:843-857": "const baseHeaders: Record<string, string> = {",
     "services/sportsdesk_webview_server.ts:847-848": "\"Content-Security-Policy\":",

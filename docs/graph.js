@@ -17,8 +17,15 @@ import {
   mergeTape,
   nextTabIndex,
   normalizeTickerRow,
+  describeLiveWagersTickerSource,
+  graphHostEdgeIsDaemon,
+  graphStreamPollingFallbackTitle,
+  liveWagerToTickPreview,
+  resolveGraphFeedPollUrl,
+  resolveGraphHostEdge,
   resolveLiveMode,
   resolvePollerState,
+  pollerRefreshHint,
   summarizeBridgeFrame,
   summarizePendingBets,
   summarizePositions,
@@ -461,6 +468,13 @@ import {
   let feedAwaiting = true;
   let lastAnnouncedPollerLabel = "";
   let lastPollEpochMs = null;
+  let graphHostEdge = { kind: "static_pages" };
+  let daemonFeedProbePromise = null;
+  /** @type {"feed" | "api"} */
+  let f402TickerTransport = "feed";
+  let liveWagersFetchError = null;
+  let lastLiveWagersMeta = null;
+  const liveTicksSourceEl = document.getElementById("live-ticks-source");
   const lastUpdatedAgeEl = document.getElementById("live-last-updated-age");
 
   function fmtInt(value) {
@@ -707,16 +721,22 @@ import {
   }
 
   function updateLiveBadges() {
-    renderPollerState(
-      resolvePollerState({
-        wsState: liveWsState,
-        feedAgeMs:
-          lastPollEpochMs === null ? null : Date.now() - lastPollEpochMs,
-        feedDataMode: liveFeedDataMode,
-        fetchError: feedFetchError,
-        awaiting: feedAwaiting,
-      }),
-    );
+    const feedAgeMsForBanner =
+      lastPollEpochMs === null ? null : Date.now() - lastPollEpochMs;
+    const polledState = resolvePollerState({
+      wsState: liveWsState,
+      feedAgeMs: feedAgeMsForBanner,
+      feedDataMode: liveFeedDataMode,
+      fetchError: feedFetchError,
+      awaiting: feedAwaiting,
+    });
+    const hint = pollerRefreshHint({
+      feedDataMode: liveFeedDataMode,
+      feedAgeMs: feedAgeMsForBanner,
+    });
+    const bannerDetail =
+      hint !== "" ? polledState.detail + " · " + hint : polledState.detail;
+    renderPollerState({ ...polledState, detail: bannerDetail });
     const mode = resolveLiveMode({
       wsState: liveWsState,
       feedAgeMs: liveFeedEpochMs === null ? null : Date.now() - liveFeedEpochMs,
@@ -772,7 +792,7 @@ import {
       liveDeskSourceEl.className =
         "pill pill-" + (deskSource === "LIVE" ? "emerald" : "amber");
     }
-    if (!liveTapePaused) {
+    if (!liveTapePaused && f402TickerTransport !== "api") {
       const ticks = (Array.isArray(data.liveTicks) ? data.liveTicks : [])
         .map(function (tick, index) {
           return normalizeTickerRow(tick, index);
@@ -828,7 +848,57 @@ import {
   if (liveRefreshBtn) {
     liveRefreshBtn.addEventListener("click", function () {
       pollLiveFeed();
+      loadLiveWagersTicks();
     });
+  }
+
+  function navLoopback() {
+    const nav = globalThis.location;
+    if (!nav) return false;
+    return (
+      nav.hostname === "localhost" ||
+      nav.hostname === "127.0.0.1" ||
+      nav.hostname === "[::1]"
+    );
+  }
+
+  function probeDaemonGraphFeed() {
+    const hasAdminToken = adminToken() !== "";
+    const loopback = navLoopback();
+    if (hasAdminToken) {
+      return Promise.resolve(
+        resolveGraphHostEdge({ hasAdminToken: true, loopback }),
+      );
+    }
+    if (!loopback) {
+      return Promise.resolve(
+        resolveGraphHostEdge({ hasAdminToken: false, loopback: false }),
+      );
+    }
+    if (typeof fetch !== "function") {
+      return Promise.resolve(
+        resolveGraphHostEdge({
+          hasAdminToken: false,
+          loopback: true,
+          fetchAvailable: false,
+        }),
+      );
+    }
+    return fetch("/api/graph-feed", { method: "HEAD", cache: "no-store" })
+      .then(function (res) {
+        return resolveGraphHostEdge({
+          hasAdminToken: false,
+          loopback: true,
+          feedHeadOk: res.ok,
+        });
+      })
+      .catch(function () {
+        return resolveGraphHostEdge({
+          hasAdminToken: false,
+          loopback: true,
+          feedHeadOk: false,
+        });
+      });
   }
 
   function appendLiveTape(entry) {
@@ -864,10 +934,6 @@ import {
         ? String(meta.getAttribute("content") || "").trim()
         : "";
     if (token !== "") protocols.push("bearer-" + token);
-    const loopback =
-      nav.hostname === "localhost" ||
-      nav.hostname === "127.0.0.1" ||
-      nav.hostname === "[::1]";
 
     let socket = null;
     let pingTimer = null;
@@ -953,32 +1019,20 @@ import {
       });
     }
 
-    // A browser cannot tell "no hub" from "hub rejected us" until it tries, and every
-    // failed upgrade logs a network error. Probe the daemon's feed route first: it is
-    // same-origin, oks on loopback, and 404s on the static Pages edge, so the public
-    // page never emits a doomed WebSocket attempt. With an operator token we skip the
-    // probe (a non-loopback peer needs the token for both paths anyway).
-    function probeHub() {
-      if (token !== "") return Promise.resolve(true);
-      if (!loopback) return Promise.resolve(false);
-      if (typeof fetch !== "function") return Promise.resolve(false);
-      return fetch("/api/graph-feed", { method: "HEAD", cache: "no-store" })
-        .then(function (res) {
-          return res.ok;
-        })
-        .catch(function () {
-          return false;
-        });
-    }
-
-    probeHub().then(function (reachable) {
-      if (!reachable) {
+    // Hub upgrade uses the same daemon probe as the graph feed poller (HEAD /api/graph-feed).
+    daemonFeedProbePromise.then(function (edge) {
+      if (!graphHostEdgeIsDaemon(edge)) {
         setWsState("polling");
         return;
       }
       connect();
     });
   }
+
+  daemonFeedProbePromise = probeDaemonGraphFeed();
+  daemonFeedProbePromise.then(function (edge) {
+    graphHostEdge = edge;
+  });
 
   connectLiveOpsSocket();
 
@@ -1115,16 +1169,44 @@ import {
     }
   }
 
-  // 8d. F402 tick preview: identity/timing only, no money columns until units are captured.
-  function hydrateLiveTicks(data) {
+  function renderLiveTicksSourcePill() {
+    if (!liveTicksSourceEl) return;
+    if (f402TickerTransport === "api" && lastLiveWagersMeta) {
+      const label = describeLiveWagersTickerSource({
+        servedFrom: lastLiveWagersMeta.servedFrom,
+        live: lastLiveWagersMeta.live,
+        freshness: lastLiveWagersMeta.freshness,
+      });
+      liveTicksSourceEl.textContent = label;
+      liveTicksSourceEl.title = label;
+      liveTicksSourceEl.className =
+        "pill pill-" +
+        (liveWagersFetchError
+          ? "rose"
+          : lastLiveWagersMeta.live && lastLiveWagersMeta.live.status === "live"
+            ? "emerald"
+            : "amber");
+      return;
+    }
+    if (liveWagersFetchError && graphHostEdgeIsDaemon(graphHostEdge)) {
+      liveTicksSourceEl.textContent =
+        "ticker: feed fallback · " + liveWagersFetchError;
+      liveTicksSourceEl.className = "pill pill-rose";
+      return;
+    }
+    liveTicksSourceEl.textContent = "ticker: graph-live-feed.json";
+    liveTicksSourceEl.className = "pill pill-amber";
+    liveTicksSourceEl.title =
+      "Static Pages edge or daemon before /api/live-wagers answered";
+  }
+
+  function paintTickPreviewRows(ticks, emptyMessage) {
     if (!liveTicksBody) return;
-    const ticks = (data && data.liveTicks) || [];
-    if (ticks.length === 0) {
+    if (!ticks || ticks.length === 0) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
       cell.colSpan = 6;
-      cell.textContent =
-        "No live F402 ticks — run ./bin/dx poll --live-f402 with a cached session.";
+      cell.textContent = emptyMessage;
       row.appendChild(cell);
       liveTicksBody.replaceChildren(row);
       return;
@@ -1146,6 +1228,96 @@ import {
       return row;
     });
     liveTicksBody.replaceChildren.apply(liveTicksBody, rows);
+  }
+
+  // 8d. F402 tick preview: daemon uses `/api/live-wagers`; static edge uses feed.liveTicks.
+  function hydrateLiveTicksFromWagers(wagers, meta) {
+    lastLiveWagersMeta = meta || lastLiveWagersMeta;
+    f402TickerTransport = "api";
+    const previews = (Array.isArray(wagers) ? wagers : [])
+      .map(function (wager) {
+        return liveWagerToTickPreview(wager);
+      })
+      .filter(Boolean);
+    paintTickPreviewRows(
+      previews,
+      "No rows in /api/live-wagers — run bun run capture:bet-ticker or session:login for live getBetTicker.",
+    );
+    renderLiveTicksSourcePill();
+  }
+
+  function hydrateLiveTicksFromFeed(data) {
+    if (f402TickerTransport === "api") return;
+    f402TickerTransport = "feed";
+    const ticks = (data && data.liveTicks) || [];
+    paintTickPreviewRows(
+      ticks,
+      "No live F402 ticks in the feed — run bun run graph:poll --live or use the daemon ticker API.",
+    );
+    renderLiveTicksSourcePill();
+  }
+
+  async function loadLiveWagersTicks() {
+    if (!graphHostEdgeIsDaemon(graphHostEdge)) {
+      f402TickerTransport = "feed";
+      renderLiveTicksSourcePill();
+      return;
+    }
+    try {
+      const token = adminToken();
+      const headers = { Accept: "application/json" };
+      if (token !== "") headers.Authorization = "Bearer " + token;
+      const res = await fetch("/api/live-wagers?source=auto", {
+        headers: headers,
+        cache: "no-store",
+      });
+      if (res.status === 404) {
+        f402TickerTransport = "feed";
+        liveWagersFetchError = "HTTP 404";
+        renderLiveTicksSourcePill();
+        return;
+      }
+      if (!res.ok) {
+        f402TickerTransport = "feed";
+        liveWagersFetchError = "HTTP " + res.status;
+        renderLiveTicksSourcePill();
+        return;
+      }
+      const body = await res.json();
+      liveWagersFetchError = null;
+      const meta = {
+        servedFrom:
+          typeof body.servedFrom === "string" ? body.servedFrom : null,
+        live: body.live && typeof body.live === "object" ? body.live : null,
+        freshness:
+          body.freshness && typeof body.freshness === "object"
+            ? body.freshness
+            : null,
+        provenance:
+          body.provenance && typeof body.provenance === "object"
+            ? body.provenance
+            : null,
+      };
+      const wagers = Array.isArray(body.wagers) ? body.wagers : [];
+      hydrateLiveTicksFromWagers(wagers, meta);
+      if (!liveTapePaused && wagers.length > 0) {
+        const tapeEntries = wagers
+          .slice(0, 40)
+          .map(function (wager, index) {
+            const preview = liveWagerToTickPreview(wager);
+            return preview ? normalizeTickerRow(preview, index) : null;
+          })
+          .filter(Boolean);
+        if (tapeEntries.length > 0) {
+          liveTapeRows = mergeTape(liveTapeRows, tapeEntries, TAPE_LIMIT);
+          renderLiveTape();
+        }
+      }
+    } catch {
+      f402TickerTransport = "feed";
+      liveWagersFetchError = "network error";
+      renderLiveTicksSourcePill();
+    }
   }
 
   document
@@ -1282,9 +1454,12 @@ import {
 
   async function pollLiveFeed() {
     try {
-      const res = await fetch("./graph-live-feed.json?t=" + Date.now(), {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        resolveGraphFeedPollUrl({ hostEdge: graphHostEdge }) +
+          "?t=" +
+          Date.now(),
+        { cache: "no-store" },
+      );
       if (!res.ok) {
         // Keep the last good timestamp: only the failure is news.
         feedFetchError = "HTTP " + res.status;
@@ -1323,7 +1498,7 @@ import {
         }
         hydrateGsLiveLinks(data);
         hydrateWalletRows(data);
-        hydrateLiveTicks(data);
+        hydrateLiveTicksFromFeed(data);
         hydrateLiveOps(data);
         hydrateFeedLabels(data);
         // A moved feed is the contract's cue to re-ask /api/live-bets; a static
@@ -1356,6 +1531,7 @@ import {
   if (pollNowBtn) {
     pollNowBtn.addEventListener("click", function () {
       pollLiveFeed();
+      loadLiveWagersTicks();
     });
   }
 
@@ -2783,7 +2959,7 @@ import {
         : state === "reconnecting"
           ? "SSE stream dropped; reconnecting with capped exponential backoff"
           : state === "polling"
-            ? "No stream on this edge — falling back to the 15s graph-live-feed.json poll"
+            ? graphStreamPollingFallbackTitle(graphHostEdge)
             : "Stream unreachable and the feed poll is not answering; last rendered values stay on screen";
   }
 
@@ -2847,6 +3023,7 @@ import {
     if (stamp !== lastSummaryFeedStamp) {
       lastSummaryFeedStamp = stamp;
       pollLiveFeed();
+      loadLiveWagersTicks();
     }
   }
 
@@ -4334,6 +4511,7 @@ import {
   function pollTick() {
     if (streamLive) return;
     pollLiveFeed();
+    loadLiveWagersTicks();
   }
 
   if (gameStateRefreshBtn) {
@@ -4411,7 +4589,10 @@ import {
   setInterval(kalshiAutoRefresh, KALSHI_REFRESH_MS);
   // Tab 8 refreshes at most once a minute, and only while it is visible.
   setInterval(execAutoRefresh, EXEC_REFRESH_MS);
-  pollLiveFeed();
+  daemonFeedProbePromise.then(function () {
+    pollLiveFeed();
+    loadLiveWagersTicks();
+  });
   connectDashboardStream();
   loadGameState();
   hydrateValueArtifacts();

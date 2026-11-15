@@ -8,7 +8,11 @@ import {
   resolveWeblogCorpusPaths,
   WEBLOG_BRIDGE_USAGE_HINT,
 } from "../lib/f402_weblog_bridge_inputs.ts";
-import { R2S3Client, resolveSecretBackedEnv } from "../lib/r2_s3_client.ts";
+import {
+  R2PreconditionFailedError,
+  R2S3Client,
+  resolveSecretBackedEnv,
+} from "../lib/r2_s3_client.ts";
 import {
   buildWeblogRollup,
   type WebLogRollup,
@@ -164,6 +168,8 @@ export interface PublishWeblogRollupResult {
   readonly r2PublishedAtEpochMs: number;
   readonly manifestIfMatch: string | null;
   readonly manifestIfNoneMatch: string | null;
+  /** `superseded` means a newer manifest won and this publisher did not overwrite the pointer. */
+  readonly pointerOutcome: "written" | "superseded";
 }
 
 /**
@@ -171,6 +177,56 @@ export interface PublishWeblogRollupResult {
  * and promotes `manifests/f402-weblog/latest` using strict `If-Match` /
  * `If-None-Match` ETag CAS with zero rebases on HTTP 412.
  */
+/**
+ * Promotes the public pointer under its own ETag.
+ *
+ * The manifest CAS is the commit point; the pointer has no cross-key transaction with it, so a
+ * stale writer must not overwrite a newer pointer. On a 412 the writer re-reads the manifest:
+ * while its own manifest is still current it retries the pointer once, and once a newer manifest
+ * owns the key it returns `superseded` and leaves the pointer alone.
+ */
+async function promoteWeblogPointer(options: {
+  readonly client: WeblogR2PublishClient;
+  readonly body: Uint8Array;
+  readonly metadata: Readonly<Record<string, string>>;
+  readonly ourManifestEtag: string | null;
+  readonly fetchImpl?: typeof fetch | undefined;
+}): Promise<"written" | "superseded"> {
+  const fetchOptions =
+    options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const pointerEtag = await options.client.headEtag(
+      WEBLOG_LATEST_KEY,
+      fetchOptions,
+    );
+    try {
+      await options.client.writeWithMetadata(WEBLOG_LATEST_KEY, options.body, {
+        type: "application/json",
+        metadata: options.metadata,
+        ...(pointerEtag === null
+          ? { ifNoneMatch: "*" }
+          : { ifMatch: pointerEtag }),
+        ...fetchOptions,
+      });
+      return "written";
+    } catch (error) {
+      if (!(error instanceof R2PreconditionFailedError)) throw error;
+      const currentManifest = await options.client.headEtag(
+        WEBLOG_MANIFEST_KEY,
+        fetchOptions,
+      );
+      if (
+        options.ourManifestEtag === null ||
+        currentManifest !== options.ourManifestEtag
+      ) {
+        return "superseded";
+      }
+      // Our manifest is still current; retry once against the pointer's new ETag.
+    }
+  }
+  return "superseded";
+}
+
 export async function publishF402WeblogRollup(options: {
   readonly client: WeblogR2PublishClient;
   readonly rollup: WebLogRollup;
@@ -238,6 +294,10 @@ export async function publishF402WeblogRollup(options: {
       : { ifMatch: expectedEtag }),
     ...(fetchImpl === undefined ? {} : { fetchImpl }),
   });
+  const ourManifestEtag = await client.headEtag(
+    WEBLOG_MANIFEST_KEY,
+    fetchImpl === undefined ? {} : { fetchImpl },
+  );
 
   const pointerPayload = {
     schemaVersion: 1,
@@ -249,9 +309,11 @@ export async function publishF402WeblogRollup(options: {
     generatedAt: publishedAtIso,
   };
   const pointerBody = assertSanitizedF402Weblog(pointerPayload);
-  await client.writeWithMetadata(WEBLOG_LATEST_KEY, pointerBody, {
-    type: "application/json",
+  const pointerOutcome = await promoteWeblogPointer({
+    client,
+    body: pointerBody,
     metadata: { ...metadata, source: "f402-weblog-pointer" },
+    ourManifestEtag,
     ...(fetchImpl === undefined ? {} : { fetchImpl }),
   });
 
@@ -265,6 +327,7 @@ export async function publishF402WeblogRollup(options: {
     r2PublishedAtEpochMs,
     manifestIfMatch: expectedEtag,
     manifestIfNoneMatch: expectedEtag === null ? "*" : null,
+    pointerOutcome,
   };
 }
 
@@ -375,8 +438,13 @@ async function main(): Promise<void> {
     } else {
       const published = await publishF402WeblogRollup({ client, rollup });
       console.error(
-        `[weblog] published ${published.dailyKey} bytes=${published.bytes} + ${published.manifestKey} + ${published.latestKey}`,
+        `[weblog] published ${published.dailyKey} bytes=${published.bytes} + ${published.manifestKey} + ${published.latestKey} pointer=${published.pointerOutcome}`,
       );
+      if (published.pointerOutcome === "superseded") {
+        console.error(
+          "[weblog] pointer left to the newer manifest; this run did not overwrite it",
+        );
+      }
       console.error(weblogPublishDataWindowLogLine(rollup.window.toMs));
       const publicStatus = await fetch(
         `${client.publicBase}/${published.dailyKey}`,

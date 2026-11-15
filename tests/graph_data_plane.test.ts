@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { startServer } from "../services/sportsdesk_webview_server.ts";
 
 /**
@@ -38,6 +39,20 @@ describe("graph data plane", () => {
       expect(script.status).toBe(200);
       expect(script.headers.get("content-type")).toContain("javascript");
     }
+  });
+
+  test("graph.js derives poll URL from graphHostEdge", async () => {
+    const root = join(import.meta.dirname, "..");
+    const source = await Bun.file(join(root, "docs", "graph.js")).text();
+    expect(source).toContain("graphHostEdge");
+    expect(source).toContain(
+      "resolveGraphFeedPollUrl({ hostEdge: graphHostEdge })",
+    );
+    expect(source).toContain("probeDaemonGraphFeed");
+    expect(source).toContain("loadLiveWagersTicks");
+    expect(source).not.toContain(
+      'fetch("./graph-live-feed.json?t=" + Date.now()',
+    );
   });
 
   test("serves the live feed at both paths the page documents", async () => {

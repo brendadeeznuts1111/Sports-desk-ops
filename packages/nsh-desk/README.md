@@ -16,7 +16,7 @@ Ensure the `:4020` Sportsdesk server is running, then from the repository root:
 ./bin/dx nsh doctor           # Inspect nsh binary, semver, nsh.json mode/caps, skills YAML & origin (--json|--yaml)
 ./bin/dx nsh verify-loop      # Run nsh check -> nsh build (zero-warning gate) -> nsh test with timings (--json|--yaml)
 ./bin/dx nsh artifacts        # Inventory packages/nsh-desk/.nsh/out with byte sizes & SHA-256 digests (--json|--yaml)
-bun run nsh -- -V             # Print NSH version and Git revision (e.g. nsh 0.4.0 (e626a8d))
+bun run nsh -- -V             # Print NSH version and Git revision (e.g. nsh 0.5.0 (f4d68f7))
 bun run nsh -- run --help     # Print flags for any nsh <command>
 bun run nsh:check             # TypeScript 7 + NSH bundle check
 bun run nsh:build             # Static Tailwind/token class check + QuickJS bytecode bundle (.nsh/out)

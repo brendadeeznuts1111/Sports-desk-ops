@@ -79,6 +79,12 @@ import {
   WirePayloadError,
 } from "../lib/fantasy402_manager_wire.ts";
 import {
+  auditPlayerRiskPosture,
+  formatPlayerRiskPostureReport,
+  parseGetInfoPlayerProbe,
+  redactGetInfoPlayer,
+} from "../lib/f402_get_info_player.ts";
+import {
   TEN_MODE_CATALOG,
   buildTenModeLiveSnapshot,
 } from "../lib/forensic_diagnostic_modes.ts";
@@ -1711,10 +1717,38 @@ export async function handleWireCommand(args: string[]): Promise<void> {
 
   if (sub === "info" || sub === "player") {
     const custId = getArgValue(args, ["-c", "--customer"], "CB112_1");
+    const asJson = args.includes("--json");
+    const asRaw = args.includes("--raw");
+    const asRedact = args.includes("--redact");
     console.log(`[Wire Read-Back] Fetching getInfoPlayer for ${custId}...`);
     try {
       const res = await fetchPlayerInfo({ customerIdentifier: custId });
-      console.log(`[Wire Read-Back] Result:`, res);
+      if (!res) {
+        console.error(
+          `[Wire Read-Back] Empty response or request failed for ${custId}. Check portal connectivity/credentials.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const probe = parseGetInfoPlayerProbe(res);
+      if (!probe.found) {
+        console.log(
+          `[Wire Read-Back] Customer "${custId}" not found on portal (INFO: null).`,
+        );
+        return;
+      }
+      if (asRaw) {
+        const payload = asRedact
+          ? redactGetInfoPlayer(probe.envelope)
+          : probe.envelope;
+        console.log(JSON.stringify(payload, null, 2));
+      } else if (asJson) {
+        const audit = auditPlayerRiskPosture(probe.envelope);
+        console.log(JSON.stringify({ summary: probe.summary, audit }, null, 2));
+      } else {
+        const audit = auditPlayerRiskPosture(probe.envelope);
+        console.log(formatPlayerRiskPostureReport(audit, probe.summary));
+      }
     } catch (err) {
       console.error(
         `[Wire Read-Back Error] ${err instanceof Error ? err.message : String(err)}`,

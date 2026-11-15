@@ -9,7 +9,9 @@ import {
   NULL_CLV_SENTINEL_BIGINT,
   parseCentsStrict,
   parseLineHundredths,
+  rechunkBytes,
   roundDivHalfEven,
+  sniffBetCaptureCompression,
   streamBetReportBets,
 } from "../lib/gslive_tally_rollup.ts";
 
@@ -230,5 +232,101 @@ describe("streaming rollup", () => {
     expect(rollup.clv.value).toBeNull();
     expect(rollup.clv.clvEligibleLegCount).toBe(5);
     expect(rollup.clv.clvSumLineHundredths).toBe(50);
+  });
+});
+
+async function compressedReport(
+  bets: readonly Record<string, unknown>[],
+  format: "gzip" | "zstd",
+): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "gslive-tally-"));
+  dirs.push(dir);
+  const path = join(dir, `betReport-all.json.${format}`);
+  const body = JSON.stringify({
+    r: { bets },
+    e: 0,
+    d: "",
+    from: 1793163600,
+    to: 1793771999,
+  });
+  await writeFile(
+    path,
+    format === "gzip" ? Bun.gzipSync(body) : Bun.zstdCompressSync(body),
+  );
+  return path;
+}
+
+describe("compressed bet-report captures", () => {
+  test("sniffs the gzip and zstd magic bytes; plain JSON is null", () => {
+    expect(sniffBetCaptureCompression(Bun.gzipSync("{}"))).toBe("gzip");
+    expect(sniffBetCaptureCompression(Bun.zstdCompressSync("{}"))).toBe("zstd");
+    expect(
+      sniffBetCaptureCompression(new TextEncoder().encode("{}")),
+    ).toBeNull();
+  });
+
+  test("gzip and zstd captures stream through the same parser", async () => {
+    const bets = [bet({ betGroupId: "7001" }), bet({ betGroupId: "7002" })];
+    for (const format of ["gzip", "zstd"] as const) {
+      const seen: string[] = [];
+      for await (const row of streamBetReportBets(
+        await compressedReport(bets, format),
+        { chunkBytes: 7 },
+      )) {
+        seen.push(String(row.betGroupId));
+      }
+      expect(seen).toEqual(["7001", "7002"]);
+    }
+  });
+
+  test("a truncated compressed capture fails with a named decode error", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gslive-tally-"));
+    dirs.push(dir);
+    const path = join(dir, "betReport-all.json.gz");
+    const full = Bun.gzipSync(
+      JSON.stringify({ r: { bets: [bet({})] }, e: 0, d: "" }),
+    );
+    // Cut mid-body: dropping only the trailer can still decode completely.
+    await writeFile(path, full.slice(0, Math.max(12, full.length >> 1)));
+    const drain = async () => {
+      for await (const _row of streamBetReportBets(path)) {
+        // drain until the decoder or the parser fails
+      }
+    };
+    await expect(drain()).rejects.toThrow(/streamBetReportBets: /);
+  });
+});
+
+describe("capture chunk bound", () => {
+  test("rechunkBytes bounds every read without losing bytes", async () => {
+    const parts = [
+      new Uint8Array([1, 2, 3]),
+      new Uint8Array([4, 5, 6, 7]),
+      new Uint8Array([8, 9, 10]),
+    ];
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    });
+    const seen: number[][] = [];
+    for await (const chunk of rechunkBytes(source, 2)) {
+      seen.push([...chunk]);
+    }
+    expect(seen.every((chunk) => chunk.length <= 2)).toBe(true);
+    expect(seen.flat()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  test("rechunkBytes rejects an invalid bound instead of guessing", () => {
+    const empty = () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    expect(() => rechunkBytes(empty(), 0)).toThrow(RangeError);
+    expect(() => rechunkBytes(empty(), 2.5)).toThrow(RangeError);
+    expect(() => rechunkBytes(empty(), Number.NaN)).toThrow(RangeError);
   });
 });

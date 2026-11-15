@@ -1298,7 +1298,7 @@
         "x-evidence": {
           "tier": "B",
           "sources": [
-            "services/sportsdesk_webview_server.ts:3520-3554",
+            "services/sportsdesk_webview_server.ts:3522-3556",
             "docs/openapi.json"
           ],
           "capturedResponse": false,
@@ -4450,7 +4450,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:3191-3203"],
+          "sources": ["services/sportsdesk_webview_server.ts:3193-3205"],
           "capturedResponse": false,
           "requiredCapture": "HTTP capture of GET /api/scoreboard (handler-verified only; no HTTP response was captured)."
         },
@@ -5468,7 +5468,7 @@
         },
         "x-evidence": {
           "tier": "D",
-          "sources": ["services/sportsdesk_webview_server.ts:2952-3026"],
+          "sources": ["services/sportsdesk_webview_server.ts:2954-3028"],
           "capturedResponse": false,
           "requiredCapture": "Not a capture gap: the catalog fixture is the captured artifact."
         },

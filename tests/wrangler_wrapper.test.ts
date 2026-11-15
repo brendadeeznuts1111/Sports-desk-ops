@@ -5,13 +5,27 @@
  * rather than the Cloudflare wrangler npm package.
  */
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const WRAPPER = join(ROOT, "bin/wrangler");
 const SCRATCH = mkdtempSync(join(tmpdir(), "wrangler-wrapper-"));
+// A controlled PATH: the caller's `~/.bun/bin` (or Homebrew) may hold a real
+// wrangler, which would make the "not installed" assertions host-dependent.
+// `process.execPath` usually lives in ~/.bun/bin, which may also hold a real
+// global wrangler; expose only a `bun` symlink on the test PATH.
+const BUN_SHIM_DIR = join(SCRATCH, "bin");
+mkdirSync(BUN_SHIM_DIR, { recursive: true });
+symlinkSync(process.execPath, join(BUN_SHIM_DIR, "bun"));
+const BASE_PATH = `${BUN_SHIM_DIR}:/usr/bin:/bin`;
 
 afterAll(() => {
   rmSync(SCRATCH, { recursive: true, force: true });
@@ -37,6 +51,7 @@ async function runWrapper(
     env: {
       ...Bun.env,
       HOME: join(SCRATCH, "empty-home"),
+      PATH: BASE_PATH,
       ...env,
     },
   });
@@ -83,7 +98,11 @@ describe("bin/wrangler never re-invokes itself", () => {
         cwd: ROOT,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...Bun.env, HOME: join(SCRATCH, "empty-home") },
+        env: {
+          ...Bun.env,
+          HOME: join(SCRATCH, "empty-home"),
+          PATH: BASE_PATH,
+        },
       },
     );
     const killer = setTimeout(() => child.kill("SIGKILL"), 3000);
@@ -108,7 +127,7 @@ describe("bin/wrangler never re-invokes itself", () => {
     await Bun.write(fake, "#!/usr/bin/env bash\necho wrangler-fixture 0.0.0\n");
     chmodSync(fake, 0o755);
     const result = await runWrapper(["--version"], {
-      PATH: `${binDir}:${dirname(process.execPath)}:/usr/bin:/bin`,
+      PATH: `${binDir}:${BUN_SHIM_DIR}:/usr/bin:/bin`,
     });
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("wrangler-fixture 0.0.0");

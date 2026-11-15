@@ -3423,11 +3423,21 @@
                   margin-top: 0.2rem;
                 "
               >
-                Last 20 rows from <code>getBetTicker</code> over the cached
-                session. Money fields are withheld until their units are
-                captured; <code>pendingBets</code> stays fixture.
+                On the daemon, rows come from
+                <code>/api/live-wagers</code> (<code>getBetTicker</code> live or
+                capture). On static Pages, the committed
+                <code>graph-live-feed.json</code> ticks apply. Money fields are
+                withheld until their units are captured;
+                <code>pendingBets</code> in the feed stays on its own
+                provenance.
               </div>
             </div>
+            <span
+              class="pill pill-cyan"
+              id="live-ticks-source"
+              title="F402 ticker transport for this panel"
+              >ticker: awaiting</span
+            >
           </div>
           <div class="table-wrap">
             <table aria-label="F402 tick preview">

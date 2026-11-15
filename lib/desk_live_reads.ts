@@ -912,6 +912,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
           httpStatus: 200,
           body: {
             success: true,
+            servedFrom: "file",
             provenance: chosen.artifact.provenance,
             freshness: freshness(
               chosen.artifact.provenance.observedAt,
@@ -959,6 +960,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
           httpStatus: 200,
           body: {
             success: true,
+            servedFrom: "live",
             provenance: artifact.provenance,
             freshness: fresh,
             skipped,
@@ -991,6 +993,7 @@ export function createDeskLiveReads(options: DeskLiveReadsOptions) {
         httpStatus: 200,
         body: {
           success: true,
+          servedFrom: "file",
           provenance: chosen.artifact.provenance,
           freshness: fresh,
           skipped,

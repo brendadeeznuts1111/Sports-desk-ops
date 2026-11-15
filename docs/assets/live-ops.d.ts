@@ -161,6 +161,36 @@ export function resolvePollerState(input?: {
   awaiting?: boolean;
 }): LiveMode;
 
+/** Stale cutoff aligned with `resolveLiveMode` SNAPSHOT (5 minutes). */
+export declare const GRAPH_FEED_POLL_STALE_MS: number;
+
+export type GraphHostEdge = { kind: "daemon" } | { kind: "static_pages" };
+
+export function resolveGraphHostEdge(input?: {
+  hasAdminToken?: boolean;
+  loopback?: boolean;
+  feedHeadOk?: boolean;
+  fetchAvailable?: boolean;
+}): GraphHostEdge;
+
+export function graphHostEdgeIsDaemon(
+  edge: GraphHostEdge | null | undefined,
+): boolean;
+
+export function resolveGraphFeedPollUrl(input?: {
+  daemonFeedReachable?: boolean;
+  hostEdge?: GraphHostEdge;
+}): string;
+
+export function graphStreamPollingFallbackTitle(
+  hostEdge: GraphHostEdge | null | undefined,
+): string;
+
+export function pollerRefreshHint(input?: {
+  feedDataMode?: string | null;
+  feedAgeMs?: number | null;
+}): string;
+
 /** WAI-ARIA tablist keys. Returns the new index, or null for a non-navigation key. */
 export function nextTabIndex(
   current: number,
@@ -169,3 +199,14 @@ export function nextTabIndex(
 ): number | null;
 
 export function isObservedSource(source: string): boolean;
+
+/** Map a live-wagers API row to the feed tick preview shape (identity only). */
+export function liveWagerToTickPreview(
+  wager: Record<string, unknown>,
+): Record<string, string> | null;
+
+export function describeLiveWagersTickerSource(input?: {
+  servedFrom?: string | null;
+  live?: { status?: string } | null;
+  freshness?: { stale?: boolean } | null;
+}): string;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run pinned NSH v0.4.0 (e626a8d) doctor + verify-loop on PRs only when NSH-relevant paths changed.
+# Run pinned NSH v0.5.0 (f4d68f7) doctor + verify-loop on PRs only when NSH-relevant paths changed.
 set -euo pipefail
 
 ROOT=$(git -C "${BASH_SOURCE%/*}/../.." rev-parse --show-toplevel)
@@ -22,7 +22,7 @@ if ! echo "$CHANGED" | grep -qE '^(packages/nsh-desk/|scripts/nsh_desk_cli\.ts$|
   exit 0
 fi
 
-echo "test-changed-nsh: NSH desk paths changed; bootstrapping pinned nsh v0.4.0 (e626a8d)..."
+echo "test-changed-nsh: NSH desk paths changed; bootstrapping pinned nsh v0.5.0 (f4d68f7)..."
 bash scripts/ci/install-nsh.sh
 bun run nsh:doctor
 bun run nsh:verify

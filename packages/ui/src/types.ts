@@ -141,6 +141,8 @@ export interface ShowcaseCustomer {
   readonly action: string;
   readonly ipAddress: string;
   readonly portalReconciliation?: CustomerPortalReconciliation | undefined;
+  /** Fields the customer book did not carry; set by profile_rows, never guessed. */
+  readonly unknown?: readonly string[] | undefined;
 }
 
 export interface RankedPlayer30d {

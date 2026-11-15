@@ -109,10 +109,10 @@ Real routes, no spec rows:
 
 | Route                               | Behaviour                                             | Source                                            |
 | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------- |
-| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `services/sportsdesk_webview_server.ts:3407-3426` |
-| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `services/sportsdesk_webview_server.ts:3442-3454` |
-| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `services/sportsdesk_webview_server.ts:3469-3480` |
-| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `services/sportsdesk_webview_server.ts:3482-3504` |
+| `POST /telegram/webhook`            | Validates `x-telegram-bot-api-secret-token`, else 401 | `services/sportsdesk_webview_server.ts:3409-3428` |
+| `GET /api/telegram/status`          | Status + schedules + `REPORT_TYPES`                   | `services/sportsdesk_webview_server.ts:3444-3456` |
+| `GET /api/telegram/activity?limit=` | Activity log, limit clamped 1–200                     | `services/sportsdesk_webview_server.ts:3471-3482` |
+| `POST /api/telegram/webhook`        | `{action:"set"\|"delete"}` webhook management         | `services/sportsdesk_webview_server.ts:3484-3506` |
 | `OPTIONS *`                         | 204 preflight with CORS headers                       | `services/sportsdesk_webview_server.ts:1139-1141` |
 | `GET /api/test/error`               | Synthetic throw for the error boundary                | `services/sportsdesk_webview_server.ts:1132-1136` |
 
@@ -183,7 +183,7 @@ Evidence of absence:
 
 - `services/sportsdesk_webview_server.ts:1123-3128` is the complete daemon router: `/health`, `/`, `/dashboard`,
   `/miniapp`, `/telegram/webhook`, `/api/telegram/*`, `/api/watchlist`, `/api/telegram/alert|report`, then a
-  404 JSON fallback at `services/sportsdesk_webview_server.ts:3776-3784`. No `/api/desk` prefix is matched.
+  404 JSON fallback at `services/sportsdesk_webview_server.ts:3778-3786`. No `/api/desk` prefix is matched.
 - A repo-wide grep for `/api/desk` in code finds only documentation tests
   (`tests/capture_apply.test.ts:84,96`; re-measured 2026-11-02 — `tests/api_reference.test.ts`, cited here before, no longer mentions `/api/desk`) and the generator that wrote the spec
   (`scripts/author_openapi_spec.mjs:115,237,249,269,289,301,321`).
@@ -207,7 +207,7 @@ present these as callable routes in the docs release.
 ## D-9. `surface.daemon-agent-tree`
 
 - `GET /api/agent-tree` serves `data/agent-tree.json` joined with per-agent exposure
-  (`services/sportsdesk_webview_server.ts:3300-3365`).
+  (`services/sportsdesk_webview_server.ts:3302-3367`).
 - The forest is built from the portal's own `baseHeriarchy` parent pointers
   (`scripts/build_agent_tree.ts`), keyed by canonical `agentLoginKey`.
 - A key owned by more than one `AgentID` keeps its node but is flagged `a: true` and never given a
@@ -319,7 +319,7 @@ master account — in `source` or a sibling field.
 
 ## D-10. `surface.daemon-scoreboard`
 
-- `GET /api/scoreboard` serves `data/scoreboard.json` (`services/sportsdesk_webview_server.ts:3191-3203`):
+- `GET /api/scoreboard` serves `data/scoreboard.json` (`services/sportsdesk_webview_server.ts:3193-3205`):
   22 games (NFL 12, NHL 5, NBA 4, NCAA 1) transcribed from the manager page.
 - The payload carries `source` and `observedAt`. These games are **transcribed, not captured**; the
   pasted logo column was offset by one game, so logos are resolved by team name and verified against
@@ -329,21 +329,21 @@ master account — in `source` or a sibling field.
 ## D-11. `surface.daemon-sports-taxonomy`
 
 - `GET /api/sports` returns the portal's 18 categories with counts for the loaded wagers and the
-  scoreboard (`services/sportsdesk_webview_server.ts:3163-3188`).
+  scoreboard (`services/sportsdesk_webview_server.ts:3165-3190`).
 - `All Sports` is the absence of a filter and `LIVE` is a state, so neither is modelled as a category;
   unmapped sports surface as `Other` (`lib/sport_taxonomy.ts`).
 
 ## D-12. `surface.daemon-game-admin`
 
 - `GET /api/game-admin` returns exposure per fixture split by position (`Straight`/`Parlay`/`Teaser`),
-  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`services/sportsdesk_webview_server.ts:3145-3160`).
+  the report the portal manual v1.0.280 describes in F.A.Q. #4 (`services/sportsdesk_webview_server.ts:3147-3162`).
 - `preGame` is computed from `gameDateTime` against the request clock and is a fact about the fixture,
   **not** a claim about the operator's delete permission (manual F.A.Q. #3).
 
 ## D-13. `surface.daemon-graph-data-plane`
 
 The generated graph page fetches its data relative to the document, so serving only `/graph` and
-`/graph.js` left it dead. These paths now serve it (`services/sportsdesk_webview_server.ts:1914-2592,3191-3203`):
+`/graph.js` left it dead. These paths now serve it (`services/sportsdesk_webview_server.ts:1914-2592,3193-3205`):
 
 | Route                           | Serves                                         |
 | ------------------------------- | ---------------------------------------------- |
@@ -358,7 +358,7 @@ Asset names are validated (separators, control characters, `..`) and traversal i
 ## D-14. `surface.daemon-analysis`
 
 - `GET /api/analysis/filters` returns the report kinds (CP/CPS/CPV/G), 14 activity codes, 2 group
-  modes and 4 week windows, with provenance (`services/sportsdesk_webview_server.ts:3030-3045`).
+  modes and 4 week windows, with provenance (`services/sportsdesk_webview_server.ts:3032-3047`).
 - `GET /api/analysis/reports` lists transcribed results with the selection each was run under
   (`services/sportsdesk_webview_server.ts:2674-2716`).
 - `GET /api/analysis` answers **200** only when a stored report matches the selection, and **501**
@@ -455,14 +455,14 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 ## D-15. `surface.daemon-agent-search`
 
 - `GET /api/agents/search?q=` searches `data/agent-tree.json`, prefix hits first
-  (`services/sportsdesk_webview_server.ts:3237-3297`).
+  (`services/sportsdesk_webview_server.ts:3239-3299`).
 - Requires two characters, clamps `limit` to 1–100, and is loopback-gated because agent names are
   identity data.
 
 ## D-16. `surface.daemon-game-admin-board`
 
 - `GET /api/game-admin/board` serves the Admin module — spread, moneyline, total and team totals
-  with the money on each side (`services/sportsdesk_webview_server.ts:2883-2949`).
+  with the money on each side (`services/sportsdesk_webview_server.ts:2885-2951`).
 - Window values are the portal's: `48` yesterday, `24` today, `-1` current board. A single-day
   board answers Yesterday with no games rather than repeating today.
 - Abbreviated amounts (`120k`) carry `amountExact: null` and are excluded from every sum.
@@ -471,14 +471,14 @@ fantasy402.com ]"`). A client that assumes one content type for the portal's wri
 
 - `GET /api/sports/catalog` exposes 19 sports, 230 sub-sports and 42 period entries from
   `tests/fixtures/fantasy402-sport-catalog-2026-10-21.json`
-  (`services/sportsdesk_webview_server.ts:2952-3026`).
+  (`services/sportsdesk_webview_server.ts:2954-3028`).
 - Period numbers are sport-specific; `periodTypes` reports every name a number carries and flags the
   ambiguous ones. Sub-sport codes claimed by two sports are marked.
 
 ## D-18. `surface.daemon-contests`
 
 - `GET /api/contests` serves 227 futures extracted from the sports nav by
-  `scripts/extract_contests.ts` (`services/sportsdesk_webview_server.ts:2841-2880`).
+  `scripts/extract_contests.ts` (`services/sportsdesk_webview_server.ts:2843-2882`).
 - Rows are keyed by the portal's numeric `contestNum`; sport, market and subject are parsed from the
   padded type string. `?group` and `?q` filter server-side.
 
