@@ -142,6 +142,51 @@ export function computeSettledRoiBasisPoints(
   };
 }
 
+export type BetCaptureCompression = "gzip" | "zstd" | "deflate";
+
+/** Compression of a `--from` capture, sniffed from its first bytes (null = plain JSON). */
+export function sniffBetCaptureCompression(
+  head: Uint8Array,
+): BetCaptureCompression | null {
+  if (head.length >= 2 && head[0] === 0x1f && head[1] === 0x8b) return "gzip";
+  if (
+    head.length >= 4 &&
+    head[0] === 0x28 &&
+    head[1] === 0xb5 &&
+    head[2] === 0x2f &&
+    head[3] === 0xfd
+  ) {
+    return "zstd";
+  }
+  if (
+    head.length >= 2 &&
+    head[0] === 0x78 &&
+    (head[1] === 0x01 || head[1] === 0x9c || head[1] === 0xda)
+  ) {
+    return "deflate";
+  }
+  return null;
+}
+
+/**
+ * Bun 1.4.4's DecompressionStream accepts "zstd" at runtime, but the DOM type
+ * union does not; keep the wider constructor in one place.
+ */
+const DecompressionStreamCtor = DecompressionStream as unknown as new (
+  format: BetCaptureCompression,
+) => DecompressionStream;
+
+/** The capture stream, decompressed by magic bytes; plain JSON passes through. */
+function openBetCaptureStream(
+  path: string,
+  compression: BetCaptureCompression | null,
+): ReadableStream<Uint8Array> {
+  const raw = Bun.file(path).stream();
+  return compression === null
+    ? raw
+    : raw.pipeThrough(new DecompressionStreamCtor(compression));
+}
+
 /** Stream the `bets` array of a bet-report document without loading the whole file. */
 export async function* streamBetReportBets(
   path: string,
@@ -153,14 +198,29 @@ export async function* streamBetReportBets(
     options.chunkBytes > 0
       ? options.chunkBytes
       : DEFAULT_CHUNK_BYTES;
-  const reader = new Response(Bun.file(path)).textStream().getReader();
+  // Decompress by magic bytes before decoding text; a gzip/zstd `--from`
+  // capture used to reach textStream as raw bytes and fail as mojibake.
+  const head = new Uint8Array(await Bun.file(path).slice(0, 4).arrayBuffer());
+  const compression = sniffBetCaptureCompression(head);
+  const reader = new Response(openBetCaptureStream(path, compression))
+    .textStream()
+    .getReader();
   let buffer = "";
   let found = false;
   const readMore = async (): Promise<boolean> => {
-    const next = await reader.read();
-    if (next.done === true) return false;
-    buffer += next.value;
-    return true;
+    try {
+      const next = await reader.read();
+      if (next.done === true) return false;
+      buffer += next.value;
+      return true;
+    } catch (error) {
+      throw new Error(
+        `streamBetReportBets: cannot decode ${compression ?? "plain"} capture ${path}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error },
+      );
+    }
   };
   try {
     while (!found) {
