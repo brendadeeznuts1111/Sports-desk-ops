@@ -26,6 +26,7 @@ import { dirname } from "node:path";
 const ARTIFACT = "scratch/f402-customer-decision-rankings.json";
 const OUT = "packages/ui/src/data/rankings-summary.json";
 const CHECK = Bun.argv.includes("--check");
+const POLICY = Bun.argv.includes("--policy");
 
 /** Keys that must never appear in the projection, kept as a post-condition on the output. */
 const FORBIDDEN_KEY =
@@ -59,7 +60,53 @@ function assertNoForbiddenKeys(value: unknown, path = "$"): void {
   }
 }
 
+/**
+ * Policy check on the COMMITTED projection — the only part that can run in CI.
+ *
+ * `--check` needs the artifact, and the artifact is gitignored, so a fresh clone cannot run it.
+ * This validates what is actually in the repository: required fields present, and no forbidden key
+ * anywhere in the tree. It catches the failure a CI gate is for — someone editing the JSON by hand
+ * or regenerating it with a widened allowlist.
+ */
+function runPolicy(): void {
+  if (!existsSync(OUT))
+    fail(`${OUT} is missing — run the projection and commit it`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(OUT, "utf8"));
+  } catch (error) {
+    fail(`${OUT} is not valid JSON: ${String(error)}`);
+  }
+  assertNoForbiddenKeys(parsed);
+  const pop = (parsed as { population?: unknown }).population;
+  if (typeof pop !== "object" || pop === null)
+    fail(`${OUT} has no population block`);
+  for (const key of [
+    "rule",
+    "summaryCustomerCount",
+    "gradedRowsBefore",
+    "gradedRowsAfter",
+    "droppedRows",
+    "droppedCustomers",
+  ]) {
+    if (!(key in (pop as Record<string, unknown>)))
+      fail(`population.${key} missing`);
+  }
+  const digest = (parsed as { sourceSha256?: unknown }).sourceSha256;
+  if (typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) {
+    fail("sourceSha256 is not a sha256 hex digest");
+  }
+  console.log(
+    `project_rankings_summary: policy ok — ${OUT} has the population block and no forbidden keys`,
+  );
+}
+
 function main(): void {
+  if (POLICY) {
+    runPolicy();
+    return;
+  }
+
   if (!existsSync(ARTIFACT)) {
     fail(
       `artifact not found at ${ARTIFACT}. Regenerate with ` +

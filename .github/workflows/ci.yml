@@ -160,6 +160,13 @@ jobs:
       # The docs contract (fabricated contract, freshness, headers, dist parity) lived only in
       # `verify`, which is skipped on pull requests — so a docs-heavy PR merged unvalidated and
       # the failure surfaced in the nightly run hours later (#271). It costs seconds.
+      # The projection's staleness check needs the f402 artifact, which is gitignored, so CI can
+      # never run it. This checks what a PR CAN break: the committed projection still carries the
+      # population block and no customer-identifying key (#279).
+      - name: Rankings summary projection policy
+        timeout-minutes: 1
+        run: bun run scripts/project_rankings_summary.ts --policy
+
       - name: "Docs gates (verify_docs: fabricated-contract, freshness, headers, dist)"
         timeout-minutes: 2
         run: bun run verify:docs
