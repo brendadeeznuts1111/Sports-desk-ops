@@ -4,7 +4,21 @@
  * before logging or writing scratch artifacts.
  */
 
+import type { CustomerRankingRow } from "./f402_customer_decision_ranking.ts";
 import { CUSTOMER_TO_POLY_WALLET } from "./parlay_combo_backtest_engine.ts";
+
+/** Redaction sentinel written by `redactGetInfoPlayer`; a value equal to it is masked, not observed. */
+const REDACTED_SENTINEL = "<redacted>";
+
+/** A real proxy wallet is 20 bytes of hex; `lib/customer_poly_bridge.ts` quarantines anything else. */
+const POLY_WALLET_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * `ConfirmationDelay` is reported in seconds. Local getInfoPlayer captures show 0, 3, 5, 15 and
+ * null; 5 is the boundary above which the delay is reported as elevated. It is a review
+ * threshold, not a documented DGS default.
+ */
+const ELEVATED_CONFIRMATION_DELAY_SECONDS = 5;
 
 export interface ParlaySpecRow {
   readonly ParlayName?: string;
@@ -190,6 +204,15 @@ export function redactGetInfoPlayer(
   };
 }
 
+/**
+ * How a `getInfoPlayer` login resolved against the customer→proxy-wallet fixture map.
+ * `PLACEHOLDER_QUARANTINED` mirrors `lib/customer_poly_bridge.ts`: a mapped value that is not a
+ * 42-character `0x` hex address is a placeholder, not an observed on-chain wallet, so it must not
+ * drive a cross-venue surveillance flag.
+ */
+export type ProxyWalletAttribution =
+  "VALID_MAPPED" | "PLACEHOLDER_QUARANTINED" | "UNMAPPED";
+
 export interface GetInfoPlayerSummary {
   readonly customerId: string;
   readonly login: string;
@@ -228,8 +251,13 @@ export interface GetInfoPlayerSummary {
   readonly basketballFlatPrice: number | null;
   readonly vigDiscountPercent: number | null;
   readonly encryptPassword: string | null;
+  /** `EncryptPassword === "N"`: the account setting disables credential encryption. */
+  readonly credentialEncryptionDisabled: boolean;
+  /** True only when a non-redacted `Password`/`Passwordt` value was actually observed. */
   readonly plaintextPasswordExposed: boolean;
+  /** Raw fixture lookup value; may be a non-hex placeholder (see `polyWalletAttribution`). */
   readonly mappedProxyWallet: string | null;
+  readonly polyWalletAttribution: ProxyWalletAttribution;
 }
 
 export function summarizeGetInfoPlayer(
@@ -264,6 +292,23 @@ export function summarizeGetInfoPlayer(
         : wiseWeight === 1
           ? "DEFAULT_BASELINE_1"
           : "ELEVATED_SHARP";
+  const mappedProxyWallet =
+    CUSTOMER_TO_POLY_WALLET[trimPaddedId(data.Login)] ??
+    CUSTOMER_TO_POLY_WALLET[customerId] ??
+    null;
+  const polyWalletAttribution: ProxyWalletAttribution =
+    mappedProxyWallet === null
+      ? "UNMAPPED"
+      : POLY_WALLET_ADDRESS_RE.test(mappedProxyWallet)
+        ? "VALID_MAPPED"
+        : "PLACEHOLDER_QUARANTINED";
+  const observedPlaintextCredential = [data.Password, data.Passwordt].some(
+    (value) =>
+      typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.trim() !== REDACTED_SENTINEL,
+  );
+
   return {
     customerId,
     login: trimPaddedId(data.Login),
@@ -351,18 +396,10 @@ export function summarizeGetInfoPlayer(
         : null,
     encryptPassword:
       typeof data.EncryptPassword === "string" ? data.EncryptPassword : null,
-    plaintextPasswordExposed:
-      data.EncryptPassword === "N" ||
-      (typeof data.Password === "string" &&
-        data.Password.trim().length > 0 &&
-        data.Password !== "<redacted>") ||
-      (typeof data.Passwordt === "string" &&
-        data.Passwordt.trim().length > 0 &&
-        data.Passwordt !== "<redacted>"),
-    mappedProxyWallet:
-      CUSTOMER_TO_POLY_WALLET[trimPaddedId(data.Login)] ??
-      CUSTOMER_TO_POLY_WALLET[customerId] ??
-      null,
+    credentialEncryptionDisabled: data.EncryptPassword === "N",
+    plaintextPasswordExposed: observedPlaintextCredential,
+    mappedProxyWallet,
+    polyWalletAttribution,
   };
 }
 
@@ -374,10 +411,11 @@ export type PlayerRiskPostureFlag =
   | "HALF_POINT_BUY_RESTRICTED"
   | "HAS_PENDING_WAGERS"
   | "CARRYOVER_PREVIOUS_BALANCE_MISMATCH"
+  | "CREDENTIAL_ENCRYPTION_DISABLED"
   | "PLAINTEXT_CREDENTIAL_EXPOSURE"
   | "CONTRACTUAL_FLAT_PRICE_ACTIVE"
   | "SUSPECTED_BOT_FLAGGED"
-  | "HIGH_CONFIRMATION_DELAY_CLAMP"
+  | "ELEVATED_CONFIRMATION_DELAY"
   | "MAPPED_POLY_SYNDICATE_WALLET";
 
 export interface PlayerRiskPostureAudit {
@@ -400,10 +438,14 @@ export interface PlayerRiskPostureAudit {
   readonly effectiveLiveBettingStatus:
     | "ULTRA_LIVE_ENABLED_EZLIVE_OFF"
     | "ALL_LIVE_ENGINES_DISABLED"
-    | "LIVE_ENABLED";
+    | "LIVE_ENABLED"
+    | "UNKNOWN";
   /** Disambiguates custom DOW schedule flags (`HalfPointInet...Flag = N`) from standard `AllowBuyPointsExtraGames = Y`. */
   readonly effectivePointBuyingStatus:
-    "EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF" | "DOW_SCHEDULE_OFF" | "ENABLED";
+    | "EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF"
+    | "DOW_SCHEDULE_OFF"
+    | "ENABLED"
+    | "UNKNOWN";
   readonly riskFlags: readonly PlayerRiskPostureFlag[];
 }
 
@@ -450,7 +492,8 @@ export function auditPlayerRiskPosture(
   }
 
   // Source: getInfoPlayer wire field `INFO.data.WiseLineMovementWeight` (observed `1` on capture 2026-11-13)
-  // Note: `1` is the DGS factory default across standard accounts; `> 1` is an elevated sharp weight.
+  // Note: `1` was observed on every captured payload; `> 1` is an elevated line-mover weight whose
+  // link to sharpness is not established by this wire field alone.
   const isLineMover =
     summary.wiseLineMovementWeight !== null &&
     summary.wiseLineMovementWeight > 0;
@@ -472,31 +515,59 @@ export function auditPlayerRiskPosture(
     riskFlags.push("BETTING_ALERTS_DISABLED");
   }
 
-  // Source: getInfoPlayer wire fields `INFO.data.AllowEZLive === "N"` and `INFO.data.AllowNewLiveBetting === "N"` (capture 2026-11-13)
-  if (data.AllowEZLive === "N" && data.AllowNewLiveBetting === "N") {
+  // Source: getInfoPlayer wire fields `INFO.data.AllowEZLive` / `AllowNewLiveBetting` / `AllowUltraLive`.
+  // A missing or null wire field is not evidence that an engine is enabled, so it stays UNKNOWN.
+  const allowEzLive =
+    typeof data.AllowEZLive === "string" ? data.AllowEZLive : null;
+  const allowNewLive =
+    typeof data.AllowNewLiveBetting === "string"
+      ? data.AllowNewLiveBetting
+      : null;
+  const allowUltraLive =
+    typeof data.AllowUltraLive === "string" ? data.AllowUltraLive : null;
+  const liveEnginesExplicitlyOff = allowEzLive === "N" && allowNewLive === "N";
+  if (liveEnginesExplicitlyOff) {
     riskFlags.push("LIVE_INPLAY_RESTRICTED");
   }
   const effectiveLiveBettingStatus: PlayerRiskPostureAudit["effectiveLiveBettingStatus"] =
-    data.AllowEZLive === "N" && data.AllowNewLiveBetting === "N"
-      ? data.AllowUltraLive === "Y"
-        ? "ULTRA_LIVE_ENABLED_EZLIVE_OFF"
-        : "ALL_LIVE_ENGINES_DISABLED"
-      : "LIVE_ENABLED";
+    allowEzLive === null || allowNewLive === null
+      ? "UNKNOWN"
+      : !liveEnginesExplicitlyOff
+        ? "LIVE_ENABLED"
+        : allowUltraLive === "Y"
+          ? "ULTRA_LIVE_ENABLED_EZLIVE_OFF"
+          : allowUltraLive === "N"
+            ? "ALL_LIVE_ENGINES_DISABLED"
+            : "UNKNOWN";
 
-  // Source: getInfoPlayer wire fields `INFO.data.HalfPointInetBasketballFlag === "N"` / `HalfPointInetFootballFlag === "N"` (capture 2026-11-13)
-  if (
-    data.HalfPointInetBasketballFlag === "N" ||
-    data.HalfPointInetFootballFlag === "N"
-  ) {
+  // Source: getInfoPlayer wire fields `INFO.data.HalfPointInetBasketballFlag` /
+  // `HalfPointInetFootballFlag` / `AllowBuyPointsExtraGames`. Missing or null flags stay UNKNOWN.
+  const dowBasketball =
+    typeof data.HalfPointInetBasketballFlag === "string"
+      ? data.HalfPointInetBasketballFlag
+      : null;
+  const dowFootball =
+    typeof data.HalfPointInetFootballFlag === "string"
+      ? data.HalfPointInetFootballFlag
+      : null;
+  const allowExtraGamesBuy =
+    typeof data.AllowBuyPointsExtraGames === "string"
+      ? data.AllowBuyPointsExtraGames
+      : null;
+  const dowScheduleExplicitlyOff = dowBasketball === "N" || dowFootball === "N";
+  if (dowScheduleExplicitlyOff) {
     riskFlags.push("HALF_POINT_BUY_RESTRICTED");
   }
   const effectivePointBuyingStatus: PlayerRiskPostureAudit["effectivePointBuyingStatus"] =
-    data.HalfPointInetBasketballFlag === "N" ||
-    data.HalfPointInetFootballFlag === "N"
-      ? data.AllowBuyPointsExtraGames === "Y"
-        ? "EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF"
-        : "DOW_SCHEDULE_OFF"
-      : "ENABLED";
+    dowBasketball === null && dowFootball === null
+      ? "UNKNOWN"
+      : !dowScheduleExplicitlyOff
+        ? "ENABLED"
+        : allowExtraGamesBuy === "Y"
+          ? "EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF"
+          : allowExtraGamesBuy === "N"
+            ? "DOW_SCHEDULE_OFF"
+            : "UNKNOWN";
 
   // descriptive posture flag, not an anomaly signal — Source: `INFO.data.PendingWagerCount > 0` or `INFO.data.PendingWagerBalance > 0` (capture 2026-11-13)
   if (
@@ -506,12 +577,17 @@ export function auditPlayerRiskPosture(
     riskFlags.push("HAS_PENDING_WAGERS");
   }
 
-  // Security posture: unencrypted or plaintext credentials returned on wire (capture 2026-11-14)
-  if (data.EncryptPassword === "N" || summary.plaintextPasswordExposed) {
+  // Security posture: a disabled encryption setting is a different observation from a plaintext
+  // credential actually present in the response, so the two are reported separately.
+  if (summary.credentialEncryptionDisabled) {
+    riskFlags.push("CREDENTIAL_ENCRYPTION_DISABLED");
+  }
+  if (summary.plaintextPasswordExposed) {
     riskFlags.push("PLAINTEXT_CREDENTIAL_EXPOSURE");
   }
 
-  // Fixed/flat pricing contract overrides dynamic line movement (capture 2026-11-14)
+  // Fixed/flat pricing contract overrides dynamic line movement (`0` is unset; `-105` was
+  // observed on live payloads). Reported as a configuration posture, not an anomaly.
   if (
     (typeof data.BasketballFlatPrice === "number" &&
       data.BasketballFlatPrice !== 0) ||
@@ -520,21 +596,22 @@ export function auditPlayerRiskPosture(
     riskFlags.push("CONTRACTUAL_FLAT_PRICE_ACTIVE");
   }
 
-  // Explicit DGS bot tagging (capture 2026-11-14)
+  // Explicit DGS bot tagging: `SuspectedBot` arrives as "Y"/"N" with `SuspectedBotType` 0/-1/3.
   if (data.SuspectedBot === "Y") {
     riskFlags.push("SUSPECTED_BOT_FLAGGED");
   }
 
-  // Clamp on order submission confirmation delay exceeding standard default (capture 2026-11-14)
+  // Elevated `ConfirmationDelay` (seconds) — observed 0/3/5/15 in local getInfoPlayer captures.
   if (
     typeof data.ConfirmationDelay === "number" &&
-    data.ConfirmationDelay > 5
+    data.ConfirmationDelay > ELEVATED_CONFIRMATION_DELAY_SECONDS
   ) {
-    riskFlags.push("HIGH_CONFIRMATION_DELAY_CLAMP");
+    riskFlags.push("ELEVATED_CONFIRMATION_DELAY");
   }
 
-  // Cross-venue surveillance: account mapped to an on-chain Polymarket proxy wallet
-  if (summary.mappedProxyWallet !== null) {
+  // Cross-venue surveillance: only a well-formed 0x wallet is evidence. The fixture map also
+  // carries placeholders, and those are quarantined rather than flagged as a syndicate link.
+  if (summary.polyWalletAttribution === "VALID_MAPPED") {
     riskFlags.push("MAPPED_POLY_SYNDICATE_WALLET");
   }
 
@@ -567,21 +644,49 @@ function formatUsd(usd: number | null): string {
   return `${sign}$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export interface DecisionInstrumentReportOverlay {
+/**
+ * The subset of `CustomerRankingRow` the report prints. The numeric fields are derived with `Pick`
+ * so a rename in the ranking system breaks the type check instead of printing `undefined`; the four
+ * label fields stay `string` because they are only interpolated and are validated at the CLI
+ * boundary.
+ */
+export type DecisionInstrumentReportOverlay = Pick<
+  CustomerRankingRow,
+  | "rankOverallSharp"
+  | "rankSystematicSignature"
+  | "totalBetsN"
+  | "correctedUnionRateShrunkKappa20"
+  | "unionClvBhQValueAllCustomers"
+  | "estimatedNetEvAfterVigPct"
+  | "realizedPlayerNetUsd"
+  | "limitHeuristicScore"
+  | "costRatioThresholdTau"
+  | "minDistinctTicketGapSeconds"
+> & {
   readonly decisionTier: string;
   readonly recommendedAction: string;
-  readonly rankOverallSharp: number;
-  readonly rankSystematicSignature: number;
-  readonly totalBetsN: number;
   readonly powerStatus: string;
-  readonly correctedUnionRateShrunkKappa20: number;
-  readonly unionClvBhQValueAllCustomers: number;
-  readonly estimatedNetEvAfterVigPct: number;
-  readonly realizedPlayerNetUsd: number;
-  readonly limitHeuristicScore: number;
-  readonly costRatioThresholdTau: number;
   readonly systematicSignatureClass: string;
-  readonly minDistinctTicketGapSeconds: number | null;
+};
+
+function describeCredentialPosture(summary: GetInfoPlayerSummary): string {
+  if (summary.plaintextPasswordExposed) {
+    return "OBSERVED PLAINTEXT CREDENTIAL [SECURITY WARNING: PASSWORD ON WIRE]";
+  }
+  if (summary.credentialEncryptionDisabled) {
+    return "ENCRYPTION DISABLED (setting; no credential observed in this response)";
+  }
+  return "SECURE [MASKED/NOT RETURNED]";
+}
+
+function describeProxyWalletPosture(summary: GetInfoPlayerSummary): string {
+  if (summary.polyWalletAttribution === "VALID_MAPPED") {
+    return `${summary.mappedProxyWallet} [FLAGGED: CROSS-VENUE SYNDICATE]`;
+  }
+  if (summary.polyWalletAttribution === "PLACEHOLDER_QUARANTINED") {
+    return `${summary.mappedProxyWallet} [QUARANTINED: NOT A 42-CHAR WALLET]`;
+  }
+  return "UNMAPPED [No Fixture Attribution]";
 }
 
 /** Formats an executive, PII-redacted inspection report for terminal/log output. */
@@ -628,8 +733,8 @@ export function formatPlayerRiskPostureReport(
     "-".repeat(80),
     "2. RISK & SURVEILLANCE POSTURE",
     "-".repeat(80),
-    `  Credential Wire Security : ${summary.plaintextPasswordExposed ? "EXPOSED [SECURITY WARNING: PLAINTEXT CREDENTIAL ON WIRE]" : "SECURE [MASKED/ENCRYPTED]"}`,
-    `  Surveillance Proxy Wallet: ${summary.mappedProxyWallet ? `${summary.mappedProxyWallet} [FLAGGED: CROSS-VENUE SYNDICATE]` : "UNMAPPED [Standard Customer Account]"}`,
+    `  Credential Wire Security : ${describeCredentialPosture(summary)}`,
+    `  Surveillance Proxy Wallet: ${describeProxyWalletPosture(summary)}`,
     `  Suspected Bot Flag       : ${summary.suspectedBot ?? "N"} (Type: ${summary.suspectedBotType ?? 0})`,
     `  Flat Pricing Contract    : ${summary.basketballFlatPrice || summary.footballFlatPrice ? `ACTIVE (BB: ${summary.basketballFlatPrice}, FB: ${summary.footballFlatPrice})` : "INACTIVE (0 / 0)"}`,
     `  Line Mover Weight        : ${summary.wiseLineMovementWeight ?? 0} [${audit.lineMoverWeightTier}]`,
