@@ -37,9 +37,6 @@ const QUICK_TERMINAL_CHIPS: readonly {
   readonly cmd: string;
   readonly cat: Exclude<TerminalCategory, "ALL">;
 }[] = [
-  { label: "⚡ p GP301", cmd: "p GP301", cat: "SHARPS" },
-  { label: "⚡ p BRT5229", cmd: "p BRT5229", cat: "SHARPS" },
-  { label: "⚡ p BRT106", cmd: "p BRT106", cat: "SHARPS" },
   { label: "🏆 rank-all", cmd: "rank-all", cat: "SHARPS" },
   { label: "🏆 sh", cmd: "sh", cat: "SHARPS" },
   { label: "🔍 f syndicate", cmd: "f syndicate", cat: "SHARPS" },
@@ -320,7 +317,7 @@ export function TerminalTabPanel({
               }
             }
           }}
-          placeholder="Type command or shortcode (e.g. 'p GP301', 'f syndicate', 'k', 'g', 'dir', 'var', 'stat', 'w', 'kb')..."
+          placeholder="Type command or shortcode (e.g. 'p <customer id>', 'f syndicate', 'k', 'g', 'dir', 'var', 'stat', 'w', 'kb')..."
           style={styles.terminalInput}
           autoFocus
         />

@@ -96,19 +96,18 @@
 
 ### Profiled Customer Cohorts & Corpora
 
-| Cohort / Registry                     |    Count    | Description & Evidence Source                                                                                       |
-| :------------------------------------ | :---------: | :------------------------------------------------------------------------------------------------------------------ |
-| **DOD6 v5.4 Binary Columnar Spine**   | **14,534**  | 88-section SoA binary spine (`data/sportsdesk_unified_baseline_v54.dodbin`, 84.1 MB, 64-bit base-40 + radix lookup) |
-| **Provisioned Portal Accounts**       |  **9,435**  | Total provisioned customer accounts (`totalProvisionedCustomers` in `docs/backtest-4wk-cfb-nba.json`)               |
-| **Broad Surveillance Surface**        |  **4,914**  | Unique customer identifiers across all historical captures and weblogs                                              |
-| **Active 4-Week Sports Bettors**      |  **2,236**  | Active sports bettors in 4-week window (`totalActiveSportsBettors` in `docs/backtest-4wk-cfb-nba.json`)             |
-| **Local Customer Book Specification** |   **220**   | Full operator book (`enriched_customers_full.json`, 1,100 sampled tickets across 29 agents)                         |
-| **Committed Backtest Cohort**         |   **49**    | 4-week CFB/NBA historical backtest with CLV, volume, hold, and parlay data (`docs/backtest-4wk-cfb-nba.json`)       |
-| **Bridged Polymarket Wallets**        |   **22**    | Cross-domain customer-to-wallet attributions (`totalBridgedPolymarketWallets`, `./bin/dx bridge`)                   |
-| **UI Showcase & Known ID Registry**   | **15 / 27** | Fully typed UI showcase profiles (`SAMPLE_PROFILE_DATA`) & autocomplete IDs (`KNOWN_ID_LIST`)                       |
-| **CI Synthetic Fixture Book**         |    **6**    | Edge case test cohort (`tests/fixtures/backtest/enriched_customers_full.json`)                                      |
-| **Key Number Buyer Watchlist**        |    **5**    | Elite sharps targeting football key numbers 3, 7, 10, 14, 21 (`KEY_NUMBER_BUYER_PROFILES`)                          |
-| **Hook Syndicate Watchlist**          |    **5**    | Downline accounts exploiting half-point hooks (`HALF_POINT_HOOK_SYNDICATE_PROFILES`)                                |
+| Cohort / Registry                     |   Count    | Description & Evidence Source                                                                                       |
+| :------------------------------------ | :--------: | :------------------------------------------------------------------------------------------------------------------ |
+| **DOD6 v5.4 Binary Columnar Spine**   | **14,534** | 88-section SoA binary spine (`data/sportsdesk_unified_baseline_v54.dodbin`, 84.1 MB, 64-bit base-40 + radix lookup) |
+| **Provisioned Portal Accounts**       | **9,435**  | Total provisioned customer accounts (`totalProvisionedCustomers` in `docs/backtest-4wk-cfb-nba.json`)               |
+| **Broad Surveillance Surface**        | **4,914**  | Unique customer identifiers across all historical captures and weblogs                                              |
+| **Active 4-Week Sports Bettors**      | **2,236**  | Active sports bettors in 4-week window (`totalActiveSportsBettors` in `docs/backtest-4wk-cfb-nba.json`)             |
+| **Local Customer Book Specification** |  **220**   | Full operator book (`enriched_customers_full.json`, 1,100 sampled tickets across 29 agents)                         |
+| **Committed Backtest Cohort**         |   **49**   | 4-week CFB/NBA historical backtest with CLV, volume, hold, and parlay data (`docs/backtest-4wk-cfb-nba.json`)       |
+| **Bridged Polymarket Wallets**        |   **22**   | Cross-domain customer-to-wallet attributions (`totalBridgedPolymarketWallets`, `./bin/dx bridge`)                   |
+| **CI Synthetic Fixture Book**         |   **6**    | Edge case test cohort (`tests/fixtures/backtest/enriched_customers_full.json`)                                      |
+| **Key Number Buyer Watchlist**        |   **5**    | Elite sharps targeting football key numbers 3, 7, 10, 14, 21 (`KEY_NUMBER_BUYER_PROFILES`)                          |
+| **Hook Syndicate Watchlist**          |   **5**    | Downline accounts exploiting half-point hooks (`HALF_POINT_HOOK_SYNDICATE_PROFILES`)                                |
 
 ### Multidimensional Profiling Architecture
 

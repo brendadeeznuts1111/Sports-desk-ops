@@ -7,7 +7,7 @@ name: r2-staleness-alert
 # secrets. If the operator Mac is dead, this still fires.
 #
 # Scheduling caveat: GitHub Actions free-tier cron is not guaranteed on-time; 5-10 min skew is
-# normal at peak. At `*/15 * * * *` cadence with 60 min SLAs that is well within budget. If we
+# normal at peak. At `*/15 * * * *` cadence with the per-key SLAs in `lib/r2_staleness.ts` that is well within budget. If we
 # ever need tighter guarantees, migrate the runner to a Cloudflare Worker cron trigger (same
 # pure library, swap the runner wrapper).
 

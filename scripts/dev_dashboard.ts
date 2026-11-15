@@ -66,10 +66,6 @@ import {
   resolveMcpAllowedOrigins,
 } from "../lib/sportsdesk_mcp_server.ts";
 import { executeTerminalQuery } from "../lib/terminal_emulator.ts";
-import {
-  PROXY_CONDUITS_30D,
-  SAMPLE_PROFILE_DATA,
-} from "../packages/ui/src/showcase_data.ts";
 import indexHtml from "../src/dashboard/index.html";
 import { runBunBuild } from "./build.ts";
 import { computeDashboardDceMatrix } from "./build_dashboard.ts";
@@ -262,6 +258,13 @@ export function startDashboardServer(
   const { buildLiveWagersPayload, clearCache: clearWagersCache } =
     createDevLiveWagersLoader({
       cwd,
+      // SPORTSDESK_LIVE_WAGERS_JSON points the feed at one capture; unset reads
+      // data/live-wagers.json and reports "unavailable" when it is missing.
+      ...(Bun.env.SPORTSDESK_LIVE_WAGERS_JSON
+        ? {
+            candidatePaths: [resolve(cwd, Bun.env.SPORTSDESK_LIVE_WAGERS_JSON)],
+          }
+        : {}),
       // Vendor wire contract (schema/wagers_field_contract.json) checked against
       // the raw rows before projection; surfaces as payload.wire_contract.
       // Sentinel-noise rows (writer ALERT/BLOCKED) are not wagers; skip and count
@@ -310,17 +313,20 @@ export function startDashboardServer(
   });
   const agentDetailService = createAgentDetailService({
     cwd,
-    getConduits: async () =>
-      PROXY_CONDUITS_30D.map((c) => ({
-        agentId: c.agentId,
-        masterAgent: c.masterAgent,
-        handleUsd: c.handleUsd,
-        wagers: c.wagers,
-        topCustomer: c.topCust,
-        concentrationPct: c.concPct,
-        isProxyConduit: c.concPct >= 80,
-      })),
-    getCustomers: () => SAMPLE_PROFILE_DATA,
+    getConduits: async () => {
+      const { runBatchedRanking } = await import("../lib/customer_rankings.ts");
+      const data = await runBatchedRanking({ limitPlayers: 50 });
+      return data.topSubAgents.map((agent) => ({
+        agentId: agent.agentId,
+        masterAgent: agent.masterAgent,
+        handleUsd: agent.totalHandleUsd,
+        wagers: agent.totalWagers,
+        customers: agent.customerCount,
+        topCustomer: agent.topCustomer,
+        concentrationPct: agent.topCustomerConcentrationPct,
+        isProxyConduit: agent.isProxyConduit,
+      }));
+    },
     getRecentWagers: async () => {
       const payload = await buildLiveWagersPayload();
       return payload.wagers as unknown as ReadonlyArray<

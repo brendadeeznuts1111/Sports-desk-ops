@@ -1,8 +1,13 @@
 import type React from "react";
 import { styles } from "../dashboard_styles.ts";
+import {
+  type NormalizedRankingsResult,
+  RANKINGS_ENDPOINT,
+} from "../hydration.ts";
 import { getLocalAgentHref, getLocalCustomerHref } from "../links.ts";
-import { PROXY_CONDUITS_30D, RANKED_30D_PLAYERS } from "../showcase_data.ts";
 import type { RankingsFilter } from "../types.ts";
+
+export type RankingsSourceStatus = "pending" | "ready" | "unavailable";
 
 export interface RankingsTabPanelProps {
   readonly rankingsSearch: string;
@@ -12,17 +17,69 @@ export interface RankingsTabPanelProps {
   readonly onInspectPty: (customerId: string) => void;
   readonly onSelectAgent?: ((agentId: string) => void) | undefined;
   readonly onSelectCustomerById?: ((customerId: string) => void) | undefined;
+  readonly rankings?: NormalizedRankingsResult | null | undefined;
+  readonly rankingsStatus?: RankingsSourceStatus | undefined;
+  readonly rankingsError?: string | null | undefined;
 }
 
-const RANKINGS_FILTERS: readonly {
-  readonly id: RankingsFilter;
-  readonly label: string;
-}[] = [
-  { id: "ALL", label: "All Top Sharps" },
-  { id: "CONDUITS", label: "🚨 Proxy Conduits (21)" },
-  { id: "TIER3", label: "🎯 Tier 3 Sharps" },
-  { id: "WHALES", label: "🐋 Whales (>$1M)" },
-];
+function rankingsFilterPills(
+  conduitCount: number | null,
+): readonly { readonly id: RankingsFilter; readonly label: string }[] {
+  return [
+    { id: "ALL", label: "All Top Sharps" },
+    {
+      id: "CONDUITS",
+      label: `🚨 Proxy Conduits (${conduitCount ?? "—"})`,
+    },
+    { id: "TIER3", label: "🎯 Tier 3 Sharps" },
+    { id: "WHALES", label: "🐋 Whales (>$1M)" },
+  ];
+}
+
+function formatUsdCompact(usd: number): string {
+  if (Math.abs(usd) >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(usd) >= 1_000) return `$${(usd / 1_000).toFixed(1)}K`;
+  return `$${usd.toLocaleString()}`;
+}
+
+function RankingsSourceNotice({
+  status,
+  error,
+  rejectedRows,
+}: {
+  readonly status: RankingsSourceStatus;
+  readonly error: string | null;
+  readonly rejectedRows: number;
+}): React.ReactElement | null {
+  if (status === "ready" && rejectedRows === 0) return null;
+  const unavailable = status === "unavailable";
+  const message =
+    status === "pending"
+      ? `Waiting for GET ${RANKINGS_ENDPOINT}…`
+      : unavailable
+        ? `Rankings unavailable — GET ${RANKINGS_ENDPOINT}: ${error ?? "no response"}`
+        : `${rejectedRows} ranking row(s) from GET ${RANKINGS_ENDPOINT} were rejected (missing or non-numeric fields) and are not shown.`;
+  return (
+    <div
+      role={unavailable ? "alert" : "status"}
+      data-rankings-source={status}
+      style={{
+        padding: "10px 14px",
+        borderRadius: "8px",
+        backgroundColor: unavailable
+          ? "rgba(239, 68, 68, 0.14)"
+          : "rgba(56, 189, 248, 0.12)",
+        border: unavailable
+          ? "1px solid rgba(239, 68, 68, 0.4)"
+          : "1px solid rgba(56, 189, 248, 0.35)",
+        color: unavailable ? "#fca5a5" : "#7dd3fc",
+        fontSize: "12px",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
 
 export function RankingsTabPanel({
   rankingsSearch,
@@ -32,33 +89,65 @@ export function RankingsTabPanel({
   onInspectPty,
   onSelectAgent,
   onSelectCustomerById,
+  rankings = null,
+  rankingsStatus = rankings ? "ready" : "pending",
+  rankingsError = null,
 }: RankingsTabPanelProps): React.ReactElement {
+  const summary = rankings?.summary ?? null;
+  const players = rankings?.players ?? [];
+  const conduits = rankings?.conduits ?? [];
+  const unmeasured = "—";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <RankingsSourceNotice
+        status={rankingsStatus}
+        error={rankingsError}
+        rejectedRows={rankings?.rejectedRows ?? 0}
+      />
       {/* 30-Day Sharps & Agency Downlines View */}
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>30-Day Total Handle</div>
-          <div style={styles.kpiVal}>$268.9M</div>
+          <div style={styles.kpiVal}>
+            {summary ? formatUsdCompact(summary.totalHandleUsd) : unmeasured}
+          </div>
           <div style={styles.kpiSub}>
-            627,710 Wagers Placed (Oct 10 – Nov 09)
+            {summary
+              ? `${summary.inWindowWagers.toLocaleString()} Wagers Placed (${summary.windowStart} – ${summary.windowEnd})`
+              : `No source: GET ${RANKINGS_ENDPOINT}`}
           </div>
         </div>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Active Player Downline</div>
-          <div style={styles.kpiVal}>9,134 Accounts</div>
-          <div style={styles.kpiSub}>672 Sub-Agents · 107 Master Forests</div>
+          <div style={styles.kpiVal}>
+            {summary
+              ? `${summary.activeCustomerCount.toLocaleString()} Accounts`
+              : unmeasured}
+          </div>
+          <div style={styles.kpiSub}>
+            {summary
+              ? `${summary.activeSubAgentCount.toLocaleString()} Sub-Agents · ${summary.activeMasterAgentCount.toLocaleString()} Master Forests`
+              : `No source: GET ${RANKINGS_ENDPOINT}`}
+          </div>
         </div>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Proxy Conduits Detected</div>
-          <div style={{ ...styles.kpiVal, color: "#f87171" }}>21 Agencies</div>
+          <div style={{ ...styles.kpiVal, color: "#f87171" }}>
+            {summary
+              ? `${summary.conduitSubAgentCount.toLocaleString()} Agencies`
+              : unmeasured}
+          </div>
           <div style={styles.kpiSub}>Single-Customer Concentration ≥ 80%</div>
         </div>
         <div style={styles.kpiCard}>
           <div style={styles.kpiLabel}>Desk Exposure (ToWin)</div>
-          <div style={styles.kpiVal}>$424.7M</div>
+          <div style={styles.kpiVal}>
+            {summary ? formatUsdCompact(summary.totalToWinUsd) : unmeasured}
+          </div>
           <div style={styles.kpiSub}>
-            Median: $51.00 · P99: $6,750 · Max: $240k
+            {summary
+              ? `Generated ${summary.generatedAtIso || "(no timestamp)"}`
+              : `No source: GET ${RANKINGS_ENDPOINT}`}
           </div>
         </div>
       </div>
@@ -71,21 +160,23 @@ export function RankingsTabPanel({
             style={styles.searchInput}
             value={rankingsSearch}
             onChange={(e) => onRankingsSearchChange(e.target.value)}
-            placeholder="Filter by Customer (e.g. 'B121', 'RF2003'), Sub-Agent ('FAKEMONEY'), or Master..."
+            placeholder="Filter by Customer, Sub-Agent, or Master..."
           />
         </div>
 
         <div style={styles.tierFilterGroup}>
-          {RANKINGS_FILTERS.map((pill) => (
-            <button
-              key={pill.id}
-              type="button"
-              style={styles.filterPill(rankingsFilter === pill.id)}
-              onClick={() => onRankingsFilterChange(pill.id)}
-            >
-              {pill.label}
-            </button>
-          ))}
+          {rankingsFilterPills(summary?.conduitSubAgentCount ?? null).map(
+            (pill) => (
+              <button
+                key={pill.id}
+                type="button"
+                style={styles.filterPill(rankingsFilter === pill.id)}
+                onClick={() => onRankingsFilterChange(pill.id)}
+              >
+                {pill.label}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -118,181 +209,208 @@ export function RankingsTabPanel({
               </tr>
             </thead>
             <tbody>
-              {RANKED_30D_PLAYERS.filter((p) => {
-                const q = rankingsSearch.toLowerCase();
-                const matchesSearch =
-                  !q ||
-                  p.id.toLowerCase().includes(q) ||
-                  p.agentId.toLowerCase().includes(q) ||
-                  p.masterAgent.toLowerCase().includes(q);
-                if (!matchesSearch) return false;
-                if (rankingsFilter === "CONDUITS") return p.isProxy;
-                if (rankingsFilter === "TIER3") return p.tier === "TIER_3";
-                if (rankingsFilter === "WHALES") return p.handleUsd >= 1000000;
-                return true;
-              }).map((p) => (
-                <tr key={p.id}>
-                  <td style={styles.td}>
-                    <span style={{ fontWeight: 700, color: "#38bdf8" }}>
-                      #{p.rank}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <a
-                        href={getLocalCustomerHref(p.id)}
-                        onClick={(e) => {
-                          if (
-                            onSelectCustomerById &&
-                            !e.metaKey &&
-                            !e.ctrlKey &&
-                            e.button === 0
-                          ) {
-                            e.preventDefault();
-                            onSelectCustomerById(p.id);
-                          }
-                        }}
-                        style={{
-                          ...styles.custLogin,
-                          textDecoration: "none",
-                        }}
-                        title="Inspect Customer in SportsDesk Profiles"
-                      >
-                        {p.id}
-                      </a>
-                      <a
-                        href={`https://fantasy402.com/manager.html?customer=${p.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "#64748b",
-                          textDecoration: "none",
-                          fontSize: "11px",
-                        }}
-                        title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
-                      >
-                        ↗
-                      </a>
-                      {p.isProxy && (
-                        <span
-                          style={{
-                            fontSize: "9px",
-                            padding: "1px 5px",
-                            borderRadius: "3px",
-                            backgroundColor: "rgba(239, 68, 68, 0.2)",
-                            border: "1px solid #ef4444",
-                            color: "#ef4444",
-                            fontWeight: 700,
-                          }}
-                        >
-                          PROXY
-                        </span>
-                      )}
-                    </div>
-                    <div style={styles.custSub}>{p.dominantSport}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600 }}>
-                      <a
-                        href={getLocalAgentHref(p.agentId)}
-                        onClick={(e) => {
-                          if (
-                            onSelectAgent &&
-                            !e.metaKey &&
-                            !e.ctrlKey &&
-                            e.button === 0
-                          ) {
-                            e.preventDefault();
-                            onSelectAgent(p.agentId);
-                          }
-                        }}
-                        style={{
-                          color: "#38bdf8",
-                          textDecoration: "none",
-                        }}
-                        title="Open SportsDesk Agent Inspector"
-                      >
-                        {p.agentId} ↗
-                      </a>
-                    </div>
-                    <div style={styles.custSub}>Master: {p.masterAgent}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 600 }}>
-                      ${p.handleUsd.toLocaleString()}
-                    </div>
-                    <div style={styles.custSub}>
-                      Avg: ${(p.handleUsd / p.wagers).toFixed(0)}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <div>{p.wagers}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {p.gini.toFixed(3)}
-                    </span>
-                    <div style={styles.custSub}>
-                      {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {p.alertRate}%
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
-                      }}
-                    >
-                      {p.score.toFixed(2)}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.tierBadge(p.tier)}>{p.tierLabel}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontSize: "11px", color: "#f87171" }}>
-                      Limit: ${p.limitUsd.toLocaleString()}
-                    </div>
-                    <div style={styles.custSub}>Live Delay: 2-3s</div>
-                  </td>
-                  <td style={styles.td}>
-                    <button
-                      type="button"
-                      style={{
-                        ...styles.actionBtn,
-                        padding: "4px 8px",
-                        fontSize: "11px",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => onInspectPty(p.id)}
-                    >
-                      Inspect PTY
-                    </button>
+              {players.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={11}
+                    data-rankings-empty="players"
+                    style={{
+                      ...styles.td,
+                      textAlign: "center",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {rankingsStatus === "ready"
+                      ? `GET ${RANKINGS_ENDPOINT} returned no ranked players for this window.`
+                      : rankingsStatus === "pending"
+                        ? `Waiting for GET ${RANKINGS_ENDPOINT}…`
+                        : `Unavailable — GET ${RANKINGS_ENDPOINT}: ${rankingsError ?? "no response"}`}
                   </td>
                 </tr>
-              ))}
+              ) : null}
+              {players
+                .filter((p) => {
+                  const q = rankingsSearch.toLowerCase();
+                  const matchesSearch =
+                    !q ||
+                    p.id.toLowerCase().includes(q) ||
+                    p.agentId.toLowerCase().includes(q) ||
+                    p.masterAgent.toLowerCase().includes(q);
+                  if (!matchesSearch) return false;
+                  if (rankingsFilter === "CONDUITS") return p.isProxy;
+                  if (rankingsFilter === "TIER3") return p.tier === "TIER_3";
+                  if (rankingsFilter === "WHALES")
+                    return p.handleUsd >= 1000000;
+                  return true;
+                })
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td style={styles.td}>
+                      <span style={{ fontWeight: 700, color: "#38bdf8" }}>
+                        #{p.rank}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <a
+                          href={getLocalCustomerHref(p.id)}
+                          onClick={(e) => {
+                            if (
+                              onSelectCustomerById &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              e.button === 0
+                            ) {
+                              e.preventDefault();
+                              onSelectCustomerById(p.id);
+                            }
+                          }}
+                          style={{
+                            ...styles.custLogin,
+                            textDecoration: "none",
+                          }}
+                          title="Inspect Customer in SportsDesk Profiles"
+                        >
+                          {p.id}
+                        </a>
+                        <a
+                          href={`https://fantasy402.com/manager.html?customer=${p.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "#64748b",
+                            textDecoration: "none",
+                            fontSize: "11px",
+                          }}
+                          title="Open in external Fantasy402 Manager Portal (requires active F402 session)"
+                        >
+                          ↗
+                        </a>
+                        {p.isProxy && (
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              padding: "1px 5px",
+                              borderRadius: "3px",
+                              backgroundColor: "rgba(239, 68, 68, 0.2)",
+                              border: "1px solid #ef4444",
+                              color: "#ef4444",
+                              fontWeight: 700,
+                            }}
+                          >
+                            PROXY
+                          </span>
+                        )}
+                      </div>
+                      <div style={styles.custSub}>{p.dominantSport}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600 }}>
+                        <a
+                          href={getLocalAgentHref(p.agentId)}
+                          onClick={(e) => {
+                            if (
+                              onSelectAgent &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              e.button === 0
+                            ) {
+                              e.preventDefault();
+                              onSelectAgent(p.agentId);
+                            }
+                          }}
+                          style={{
+                            color: "#38bdf8",
+                            textDecoration: "none",
+                          }}
+                          title="Open SportsDesk Agent Inspector"
+                        >
+                          {p.agentId} ↗
+                        </a>
+                      </div>
+                      <div style={styles.custSub}>Master: {p.masterAgent}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 600 }}>
+                        ${p.handleUsd.toLocaleString()}
+                      </div>
+                      <div style={styles.custSub}>
+                        Avg:{" "}
+                        {p.wagers > 0
+                          ? `$${(p.handleUsd / p.wagers).toFixed(0)}`
+                          : "—"}
+                      </div>
+                    </td>
+                    <td style={styles.td}>
+                      <div>{p.wagers}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          color: p.gini <= 0.15 ? "#4ade80" : "#f59e0b",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {p.gini.toFixed(3)}
+                      </span>
+                      <div style={styles.custSub}>
+                        {p.gini <= 0.15 ? "Flat-Unit" : "Variable"}
+                      </div>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          color: p.alertRate >= 50 ? "#ef4444" : "#94a3b8",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {p.alertRate}%
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          color: p.score >= 7.0 ? "#f59e0b" : "#38bdf8",
+                        }}
+                      >
+                        {p.score.toFixed(2)}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.tierBadge(p.tier)}>
+                        {p.tierLabel}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontSize: "11px", color: "#f87171" }}>
+                        Limit: ${p.limitUsd.toLocaleString()}
+                      </div>
+                      <div style={styles.custSub}>Live Delay: 2-3s</div>
+                    </td>
+                    <td style={styles.td}>
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.actionBtn,
+                          padding: "4px 8px",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => onInspectPty(p.id)}
+                      >
+                        Inspect PTY
+                      </button>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -324,7 +442,26 @@ export function RankingsTabPanel({
               </tr>
             </thead>
             <tbody>
-              {PROXY_CONDUITS_30D.map((c) => (
+              {conduits.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    data-rankings-empty="conduits"
+                    style={{
+                      ...styles.td,
+                      textAlign: "center",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {rankingsStatus === "ready"
+                      ? `GET ${RANKINGS_ENDPOINT} flagged no proxy conduits for this window.`
+                      : rankingsStatus === "pending"
+                        ? `Waiting for GET ${RANKINGS_ENDPOINT}…`
+                        : `Unavailable — GET ${RANKINGS_ENDPOINT}: ${rankingsError ?? "no response"}`}
+                  </td>
+                </tr>
+              ) : null}
+              {conduits.map((c) => (
                 <tr key={c.agentId}>
                   <td style={styles.td}>
                     <span style={{ fontWeight: 700, color: "#f59e0b" }}>

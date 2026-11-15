@@ -43,6 +43,8 @@ export interface CustomersTabPanelProps {
   readonly onOpenTerminalProfile: (customerId: string) => void;
   readonly onSelectAgent?: ((agentId: string) => void) | undefined;
   readonly onViewCustomerWagers?: ((customerId: string) => void) | undefined;
+  /** Set when no live per-customer profile source exists; replaces the table and inspector. */
+  readonly profilesUnavailableReason?: string | null | undefined;
 }
 
 interface CustomerCohortSummary {
@@ -142,6 +144,7 @@ export function CustomersTabPanel({
   onOpenTerminalProfile,
   onSelectAgent,
   onViewCustomerWagers,
+  profilesUnavailableReason = null,
 }: CustomersTabPanelProps): React.ReactElement {
   const effectiveStatus: "pending" | "ready" | "unavailable" =
     cohortsStatus ?? (cohortsReport !== null ? "ready" : "pending");
@@ -423,6 +426,31 @@ export function CustomersTabPanel({
 
       {/* Two-Column Grid: Customer Table & Deep Inspector */}
       {(() => {
+        if (profilesUnavailableReason !== null) {
+          return (
+            <div
+              role="status"
+              data-profiles-source="unavailable"
+              style={{
+                ...styles.tablePanel,
+                textAlign: "center",
+                color: "#94a3b8",
+                fontSize: "13px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 8px",
+                  fontSize: "16px",
+                  color: "#f8fafc",
+                }}
+              >
+                No live profile source yet
+              </h3>
+              <div>{profilesUnavailableReason}</div>
+            </div>
+          );
+        }
         const cohortSummary = summarizeDisplayedCustomers(sortedCustomers);
         const hasActiveFilter =
           searchQuery.trim() !== "" || filterTier !== "ALL";

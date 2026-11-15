@@ -110,6 +110,7 @@ import {
 import {
   REPORT_TYPES,
   SportsDeskTelegramService,
+  TelegramTestAlertInputError,
   isReportType,
   type TelegramUpdate,
 } from "./sportsdesk_telegram_bot.ts";
@@ -3519,10 +3520,14 @@ export function startServer(options?: ServerOptions) {
       if (pathname === "/api/telegram/alert" && req.method === "POST") {
         try {
           const body = (await req.json().catch(() => ({}))) as {
-            customerId?: string;
+            customerId?: unknown;
+            riskUSD?: unknown;
           };
-          const custId = body.customerId || "RF2003";
-          const sent = await telegramService.dispatchTestAlert(custId);
+          const custId =
+            typeof body.customerId === "string" ? body.customerId.trim() : "";
+          const riskUSD =
+            typeof body.riskUSD === "number" ? body.riskUSD : Number.NaN;
+          const sent = await telegramService.dispatchTestAlert(custId, riskUSD);
           return Response.json(
             {
               success: true,
@@ -3532,13 +3537,18 @@ export function startServer(options?: ServerOptions) {
             { headers: cors },
           );
         } catch (err) {
+          const invalidInput = err instanceof TelegramTestAlertInputError;
           return Response.json(
             {
               success: false,
               ok: false,
-              error: err instanceof Error ? err.message : String(err),
+              error: invalidInput
+                ? `${err.name}: ${err.message}`
+                : err instanceof Error
+                  ? err.message
+                  : String(err),
             },
-            { status: 500, headers: cors },
+            { status: invalidInput ? 400 : 500, headers: cors },
           );
         }
       }

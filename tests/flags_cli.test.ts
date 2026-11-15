@@ -293,11 +293,19 @@ describe("flags CLI", () => {
       "OLDCUST",
       "Lakers vs Kings",
     );
-    const recentDate = new Date(Date.now() - 2 * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    // `--week` keeps tickets with insertedAt >= Date.now() - 7d.
+    // A hardcoded calendar day eventually falls out of that window,
+    // so the in-window capture is dated two days before now. The
+    // date is local, matching Date.parse on unzoned InsertDateTime.
+    const recent = new Date(Date.now() - 2 * 86_400_000);
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    const recentDate = [
+      recent.getFullYear(),
+      pad(recent.getMonth() + 1),
+      pad(recent.getDate()),
+    ].join("-");
     write(
-      "capture-2026.json",
+      "capture-recent.json",
       820000001,
       recentDate,
       "NEWCUST",
