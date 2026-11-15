@@ -68,6 +68,11 @@ async function main() {
     LIST?: ReportPlayerAnalysisRowRaw[];
   };
   const allSummaryRows = playerRaw.LIST ?? [];
+  if (allSummaryRows.length === 0) {
+    throw new Error(
+      `No customer summary rows in ${PLAYER_ANALYSIS_PATH}; refusing to emit an empty ranking artifact.`,
+    );
+  }
 
   const botDetailFile = Bun.file(BOT_DETAIL_PATH);
   let suspectedBotDetailRows: ReportPlayerAnalysisRowRaw[] = [];
@@ -80,6 +85,11 @@ async function main() {
   }
 
   const gradedWagerRows = await loadGradedWagers();
+  if (gradedWagerRows.length === 0) {
+    console.error(
+      `warning: no graded wagers loaded (checked ${GRADED_OCT_PATH}, ${GRADED_TODAY_PATH}, then ${FALLBACK_LEDGER_BUNDLE_PATH}); skin-hold and graded timing features will be empty.`,
+    );
+  }
 
   const system1 = buildAllCustomerDecisionRankingSystem({
     allSummaryRows,
