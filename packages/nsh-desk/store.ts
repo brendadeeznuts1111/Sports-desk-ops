@@ -236,13 +236,11 @@ async function sampleSseEndpoint(
 ): Promise<EndpointSnapshot<ParsedGraphStreamSample>> {
   const fetchedAtIso = new Date().toISOString();
   const url = `${origin}${endpoint}`;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 1_600);
   try {
     const response = await fetch(url, {
       method: "GET",
       headers: { Accept: "text/event-stream" },
-      signal: ctrl.signal,
+      signal: AbortSignal.timeout(1_600),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => "");
@@ -293,8 +291,6 @@ async function sampleSseEndpoint(
       cause: `${endpoint} SSE probe failed: ${msg}`,
       fetchedAtIso,
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

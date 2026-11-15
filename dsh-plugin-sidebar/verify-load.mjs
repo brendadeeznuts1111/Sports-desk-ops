@@ -815,7 +815,7 @@ function bootClient(fetchImpl, options = {}) {
 }
 
 /** Wait for the stubbed fetch chain to finish and the store to publish. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 25));
+const settle = () => Bun.sleep(25);
 
 /** Find every element whose className contains `cls` (arrays are traversed). */
 function findAll(node, cls, found = []) {
@@ -2300,7 +2300,7 @@ await checkAsync(
       card.props["data-bridge-state"] === "reconnecting",
       `state after 1006 ${card.props["data-bridge-state"]}`,
     );
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await Bun.sleep(1_200);
     assert(
       instances.length === 2,
       `no reconnect after backoff (${instances.length})`,

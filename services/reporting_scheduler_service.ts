@@ -698,8 +698,7 @@ export async function runShellCaptureDefault(
   const started = Bun.nanoseconds();
   const elapsedMs = () => Math.round((Bun.nanoseconds() - started) / 1e6);
   const timeoutSeconds = spec.timeoutSeconds ?? 600;
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), timeoutSeconds * 1_000);
+  const abort = AbortSignal.timeout(timeoutSeconds * 1_000);
   try {
     const resolvedBin = spec.bin === "bun" ? process.execPath : spec.bin;
     const resolvedArgs =
@@ -711,11 +710,11 @@ export async function runShellCaptureDefault(
       stdin: "ignore",
       stdout: "inherit",
       stderr: "inherit",
-      signal: abort.signal,
+      signal: abort,
     });
     const exitCode = await child.exited;
     const durationMs = elapsedMs();
-    if (abort.signal.aborted) {
+    if (abort.aborted) {
       logger.warn(
         `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: aborted after ${timeoutSeconds}s`,
       );
@@ -742,6 +741,21 @@ export async function runShellCaptureDefault(
       reason: `exit ${exitCode}`,
     };
   } catch (error) {
+    if (
+      abort.aborted ||
+      (error instanceof Error && error.name === "TimeoutError")
+    ) {
+      const durationMs = elapsedMs();
+      logger.warn(
+        `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: aborted after ${timeoutSeconds}s`,
+      );
+      return {
+        status: "failed",
+        exitCode: -1,
+        durationMs,
+        reason: `timed out after ${timeoutSeconds}s`,
+      };
+    }
     const reason = error instanceof Error ? error.message : String(error);
     logger.warn(
       `[Shell Capture] ${spec.bin} ${spec.args.join(" ")}: ${reason}`,
@@ -752,8 +766,6 @@ export async function runShellCaptureDefault(
       durationMs: elapsedMs(),
       reason,
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

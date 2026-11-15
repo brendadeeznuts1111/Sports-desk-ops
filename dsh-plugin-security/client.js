@@ -1223,23 +1223,42 @@ window.__ModuleLoader__.load({
      * @param {unknown} body
      * @returns {{ code: string, status: number, message: string }}
      */
+    /**
+     * A thrown route failure always carries `{ code, status, message }` so the
+     * store can render it. Named Error so non-Error throws are not used as the
+     * transport contract.
+     */
+    class RouteFailure extends Error {
+      /**
+       * @param {string} code
+       * @param {number} status
+       * @param {string} message
+       */
+      constructor(code, status, message) {
+        super(message);
+        this.name = "RouteFailure";
+        this.code = code;
+        this.status = status;
+      }
+    }
+
     function responseFailure(status, body) {
       if (status === 404) {
-        return { code: "route_absent", status, message: "" };
+        return new RouteFailure("route_absent", status, "");
       }
       const record = isRecord(body) ? body : null;
       const reason = record === null ? null : readText(record.reason);
       const message = record === null ? null : readText(record.message);
-      return {
-        code: reason ?? `http_${status}`,
+      return new RouteFailure(
+        reason ?? `http_${status}`,
         status,
-        message: message ?? "",
-      };
+        message ?? "",
+      );
     }
 
     /**
      * GET one route and return its parsed 200 body. A thrown failure is always
-     * a plain `{ code, status, message }` object so the store can render it.
+     * a RouteFailure with `{ code, status, message }` so the store can render it.
      * @param {string} url
      * @param {AbortSignal} signal
      * @returns {Promise<Record<string, unknown>>}
@@ -1260,11 +1279,11 @@ window.__ModuleLoader__.load({
       }
       if (!response.ok) throw responseFailure(response.status, body);
       if (!isRecord(body)) {
-        throw {
-          code: "invalid_response",
-          status: response.status,
-          message: "the route did not return a JSON object",
-        };
+        throw new RouteFailure(
+          "invalid_response",
+          response.status,
+          "the route did not return a JSON object",
+        );
       }
       if (body.ok === false) throw responseFailure(response.status, body);
       return body;

@@ -1084,9 +1084,7 @@ async function cmdJournal(
 }
 
 function sleepFor(ms: number): Promise<void> {
-  return new Promise((resolveSleep) => {
-    setTimeout(resolveSleep, ms);
-  });
+  return Bun.sleep(ms);
 }
 
 async function sleepWhile(

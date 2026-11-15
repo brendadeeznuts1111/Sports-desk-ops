@@ -66,12 +66,10 @@ async function probeOne(
   timeoutMs: number,
 ): Promise<StalenessProbe> {
   const url = publicUrlFor(target);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       method: "HEAD",
-      signal: controller.signal,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const lastModifiedMs = parseLastModified(
       response.headers.get("last-modified"),
@@ -89,8 +87,6 @@ async function probeOne(
       lastModifiedMs: null,
       error: message,
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

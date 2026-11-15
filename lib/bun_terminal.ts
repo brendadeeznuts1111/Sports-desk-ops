@@ -530,10 +530,7 @@ export class TerminalSession implements AsyncDisposable {
     const effectiveTimeout = timeoutMs ?? this._options.timeoutMs;
     const drainPty = async (): Promise<void> => {
       if (!this._ptyClosedPromise) return;
-      await Promise.race([
-        this._ptyClosedPromise,
-        new Promise<void>((resolve) => setTimeout(resolve, 25)),
-      ]);
+      await Promise.race([this._ptyClosedPromise, Bun.sleep(25)]);
       const final = this._decoder.decode();
       if (final) {
         this._raw += final;
@@ -681,16 +678,10 @@ export class TerminalSession implements AsyncDisposable {
     if (this.active && this._proc) {
       this.stop("SIGTERM");
       try {
-        await Promise.race([
-          this._proc.exited,
-          new Promise((resolve) => setTimeout(resolve, 300)),
-        ]);
+        await Promise.race([this._proc.exited, Bun.sleep(300)]);
         if (this.active && this._proc) {
           this.stop("SIGKILL");
-          await Promise.race([
-            this._proc.exited,
-            new Promise((resolve) => setTimeout(resolve, 200)),
-          ]);
+          await Promise.race([this._proc.exited, Bun.sleep(200)]);
         }
       } catch {
         // ignore errors during cleanup

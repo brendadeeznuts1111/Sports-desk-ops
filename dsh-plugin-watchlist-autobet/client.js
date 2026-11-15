@@ -5514,10 +5514,7 @@ window.__ModuleLoader__.load({
           }
           busyRef.current = request.key;
           if (aliveRef.current) setBusyKey(request.key);
-          const controller = new AbortController();
-          const timeout = setTimeout(() => {
-            controller.abort();
-          }, ACTION_TIMEOUT_MS);
+          const signal = AbortSignal.timeout(ACTION_TIMEOUT_MS);
           try {
             const payload = { action: request.action, confirm: true };
             if (actor !== "") payload.actor = actor;
@@ -5535,11 +5532,7 @@ window.__ModuleLoader__.load({
             if (request.category !== undefined) {
               payload.category = request.category;
             }
-            const response = await postAction(
-              payload,
-              csrfToken,
-              controller.signal,
-            );
+            const response = await postAction(payload, csrfToken, signal);
             const body = asRecord(response.body);
             const cli = body === null ? null : asRecord(body.cli);
             const serverBoard = body === null ? null : asRecord(body.board);
@@ -5577,7 +5570,7 @@ window.__ModuleLoader__.load({
             const aborted =
               error !== null &&
               typeof error === "object" &&
-              error.name === "AbortError";
+              (error.name === "AbortError" || error.name === "TimeoutError");
             return {
               ok: false,
               code: aborted ? "action_timeout" : "network_error",
@@ -5587,7 +5580,6 @@ window.__ModuleLoader__.load({
                   : stringOrNull(error.message) || "",
             };
           } finally {
-            clearTimeout(timeout);
             busyRef.current = null;
             if (aliveRef.current) setBusyKey(null);
           }
