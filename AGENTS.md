@@ -256,6 +256,22 @@ already been noticed. The second one is a documentation failure, not a parser su
 - **Check issue state after merging.** A premature close is silent, and reopening loses the
   ordering a reader would expect from the thread.
 
+### Check the run, not the green tick
+
+Check runs attach to a **commit SHA**, not to a pull request. Retarget a PR, rebase it, or move a
+stacked base, and the PR can keep showing the results of a run against the **previous** head or
+base — passing, and no longer about the code being merged. Observed on 2026-11-15: a PR recreated
+against `main` displayed the run from its stacked base (`43764453809`) until a branch update fired
+`synchronize` and produced `43764621840`.
+
+- After a retarget, rebase, or base change, compare `git rev-parse HEAD` with the check run's head
+  SHA before trusting a green tick, and push or update to force a fresh run.
+- `strict: true` branch protection forces an update before merge, and the update fires
+  `synchronize`, so a fresh run normally exists by merge time. That is a backstop, not a
+  substitute for looking.
+- Same class as the closing-keyword rule above: what GitHub _displays_ as "your checks" is not
+  necessarily the run you think it is.
+
 ### Data-handling budgets
 
 - Live captures `data/live-bets.json` and `data/live-wagers.json` stay **untracked**; `positions:cron`
