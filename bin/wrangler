@@ -2,6 +2,11 @@
 # Official Wrangler CLI wrapper located in `bin/wrangler` (linked into `node_modules/.bin/wrangler`
 # so `bun x wrangler ...`, `bun run wrangler ...`, and `./bin/wrangler ...` resolve identically
 # without polluting the repository root).
+#
+# Never re-invoke this script. package.json registers `bin.wrangler = bin/wrangler`, so
+# `bun x wrangler` resolves back here rather than to the Cloudflare wrangler npm package.
+# A previous fallback of `bun x --bun --no-install wrangler` fork-looped when that package
+# was absent.
 set -eo pipefail
 
 resolve_script_dir() {
@@ -14,9 +19,49 @@ resolve_script_dir() {
   cd -P "$(dirname "$src")" && pwd
 }
 
+# Physical path of a file or directory (symlink walk; portable, no `readlink -f`).
+resolve_physical() {
+  local src="$1" dir
+  [[ -e "$src" || -L "$src" ]] || return 1
+  while [[ -L "$src" ]]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  if [[ -d "$src" ]]; then
+    cd -P "$src" && pwd
+  else
+    echo "$(cd -P "$(dirname "$src")" && pwd)/$(basename "$src")"
+  fi
+}
+
+is_this_wrapper() {
+  local resolved
+  resolved="$(resolve_physical "$1")" || return 1
+  [[ "$resolved" == "$SELF_REAL" ]]
+}
+
+exec_real_wrangler() {
+  local cand="$1"
+  shift
+  case "$cand" in
+    *.js) exec bun "$cand" "$@" ;;
+    *) exec "$cand" "$@" ;;
+  esac
+}
+
 BIN_DIR="$(resolve_script_dir "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(cd -P "${BIN_DIR}/.." && pwd)"
 XDG_CFG="${XDG_CONFIG_HOME:-${HOME}/.config}"
+SELF_REAL="$(resolve_physical "${BIN_DIR}/wrangler")"
+
+# A parent already entered this wrapper (`bun x wrangler`, or a symlink to us).
+if [[ "${SPORTSDESK_WRANGLER_WRAPPER:-}" == "1" ]]; then
+  echo "[wrangler] refused a recursive invocation of ${SELF_REAL}." >&2
+  echo "[wrangler] Cause: package.json bin \"wrangler\" points at bin/wrangler, so \`bun x wrangler\` re-enters this wrapper instead of the Cloudflare wrangler npm package." >&2
+  exit 1
+fi
+export SPORTSDESK_WRANGLER_WRAPPER=1
 
 # 1. Load Pages-scoped credentials safely as data (never `source`d, matching bin/dx)
 load_pages_env() {
@@ -45,24 +90,27 @@ done
 
 export PATH="${HOME}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
 
-# 2. Delegate to Bun (`bun <script>` or `bun x --bun --no-install wrangler` so #!/usr/bin/env node never requires Node.js)
-SELF_REAL="${BIN_DIR}/wrangler"
-
 if ! command -v bun >/dev/null 2>&1; then
   echo "wrangler: bun not found on PATH; install Bun 1.4.4 to run wrangler" >&2
   exit 1
 fi
 
-for candidate in \
-  "${REPO_ROOT}/node_modules/wrangler/bin/wrangler.js" \
-  "${HOME}/.bun/bin/wrangler"; do
-  if [[ -r "$candidate" && "$candidate" != "$SELF_REAL" ]]; then
-    exec bun "$candidate" "$@"
-  fi
-done
+# 2. Delegate to a real wrangler CLI — never to this wrapper, and never via `bun x wrangler`.
+if [[ -r "${REPO_ROOT}/node_modules/wrangler/bin/wrangler.js" ]]; then
+  exec bun "${REPO_ROOT}/node_modules/wrangler/bin/wrangler.js" "$@"
+fi
+
+if [[ -e "${HOME}/.bun/bin/wrangler" ]] && ! is_this_wrapper "${HOME}/.bun/bin/wrangler"; then
+  exec_real_wrangler "${HOME}/.bun/bin/wrangler" "$@"
+fi
 
 CLEAN_PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "${REPO_ROOT}/node_modules/.bin" | grep -vxF "${BIN_DIR}" | paste -sd ':' -)"
-if PATH="$CLEAN_PATH" bun x --bun --no-install wrangler --version >/dev/null 2>&1; then
-  exec env PATH="$CLEAN_PATH" bun x --bun --no-install wrangler "$@"
+wrangler_bin=""
+wrangler_bin="$(PATH="$CLEAN_PATH" command -v wrangler 2>/dev/null)" || true
+if [[ -n "$wrangler_bin" ]] && ! is_this_wrapper "$wrangler_bin"; then
+  exec_real_wrangler "$wrangler_bin" "$@"
 fi
-exec env PATH="$CLEAN_PATH" bun x --bun wrangler "$@"
+
+echo "[wrangler] Cloudflare wrangler CLI is not installed." >&2
+echo "[wrangler] Cause: this repo's package.json bin \"wrangler\" points at bin/wrangler, so \`bun x wrangler\` would re-enter this wrapper instead of the wrangler npm package. Looked for ${REPO_ROOT}/node_modules/wrangler/bin/wrangler.js, ${HOME}/.bun/bin/wrangler, and wrangler on PATH excluding ${BIN_DIR} and ${REPO_ROOT}/node_modules/.bin. Install the wrangler package in this repo (for example \`bun add -d wrangler\`) to run wrangler commands." >&2
+exit 1

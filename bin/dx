@@ -289,6 +289,33 @@ dx_poller_warn_fixture() {
     "[dx]          Live refresh: SPORTSDESK_LIVE_INGEST=1 ./bin/dx poll --once --no-backtest-artifact" >&2
 }
 
+
+# Bounded command runner for status probes (exit 124 on timeout, like GNU timeout).
+# `dx status` used to hang forever when bin/wrangler fork-looped via `bun x wrangler`.
+DX_WRANGLER_PROBE_SECS=5
+dx_run_timeout() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+    return $?
+  fi
+  "$@" &
+  local pid=$!
+  local elapsed=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( elapsed >= secs )); then
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  wait "$pid"
+  return $?
+}
+
 case "$cmd" in
   help|--help|-h)
     if (($# > 0)); then
@@ -420,7 +447,23 @@ EOF
       if [[ "${DX_STATUS_OFFLINE:-}" == "1" ]]; then
         printf '%s\n' "not probed (DX_STATUS_OFFLINE=1)" >"$dx_probe_dir/wrangler"
       else
-        (cd "$REPO_ROOT" && "$REPO_ROOT/bin/wrangler" --version 2>/dev/null | grep -m1 -v '^[[:space:]]*$' || true) >"$dx_probe_dir/wrangler"
+        # Bound the probe: bin/wrangler used to fork-loop via `bun x wrangler` when
+        # the wrangler npm package was absent. Never wait unbounded.
+        dx_wrangler_out=""
+        dx_wrangler_rc=0
+        dx_wrangler_out="$(
+          cd "$REPO_ROOT" && dx_run_timeout "${DX_WRANGLER_PROBE_SECS}" "$REPO_ROOT/bin/wrangler" --version 2>"$dx_probe_dir/wrangler.err"
+        )" && dx_wrangler_rc=0 || dx_wrangler_rc=$?
+        if [[ "$dx_wrangler_rc" -eq 0 ]]; then
+          printf '%s\n' "$(printf '%s\n' "$dx_wrangler_out" | grep -m1 -v '^[[:space:]]*$' || true)" >"$dx_probe_dir/wrangler"
+          if [[ ! -s "$dx_probe_dir/wrangler" ]]; then
+            printf '%s\n' "wrangler --version printed no version" >"$dx_probe_dir/wrangler"
+          fi
+        elif [[ "$dx_wrangler_rc" -eq 124 ]]; then
+          printf '%s\n' "wrangler probe timed out after ${DX_WRANGLER_PROBE_SECS}s" >"$dx_probe_dir/wrangler"
+        else
+          printf '%s\n' "wrangler not installed" >"$dx_probe_dir/wrangler"
+        fi
       fi
     ) &
     (
@@ -475,7 +518,7 @@ EOF
     else
       echo "  • Home links           : $(dx_ok 'no conflicts')"
     fi
-    echo "  • Bun / Wrangler       : ${dx_bun_ver} / ${dx_wrangler:-wrangler missing}"
+    echo "  • Bun / Wrangler       : ${dx_bun_ver} / ${dx_wrangler:-wrangler not installed}"
     echo "  • Git Branch & Tip     : ${dx_git_tip}"
     echo "  • Staged dist/ Assets  : ${dx_staged_dist}"
     if [[ "$dx_r2_state" == "ok" ]]; then
