@@ -239,6 +239,7 @@
     "artifacts:value": "bun run scripts/generate_value_artifacts.ts",
     "artifacts:lock": "bun run scripts/artifacts_lock.ts",
     "audit:customer-book": "bun run scripts/audit_customer_book.ts",
+    "audit:player-info": "bun run cli/f402_player_info_audit_cli.ts",
     "normalize:customer-book": "bun run scripts/normalize_customer_book.ts",
     "tasks:render": "bun run scripts/render_tasks.ts",
     "docs:render": "bun run scripts/render_docs.ts",

@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   auditPlayerRiskPosture,
+  formatPlayerRiskPostureReport,
   parseGetInfoPlayerEnvelope,
   parseGetInfoPlayerProbe,
   redactGetInfoPlayer,
@@ -85,6 +86,7 @@ describe("getInfoPlayer envelope", () => {
         agentId: "BIGDAD",
         agentLogin: "BIGDAD",
         status: "Active",
+        mappedProxyWallet: "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
       },
     });
   });
@@ -197,5 +199,226 @@ describe("getInfoPlayer envelope", () => {
     expect(mismatchAudit.riskFlags).toContain(
       "CARRYOVER_PREVIOUS_BALANCE_MISMATCH",
     );
+  });
+
+  test("audits XB142 wire payload with accounting identity and security posture flags", () => {
+    const raw = {
+      INFO: {
+        data: {
+          Login: "XB142",
+          AgentID: "XBEER",
+          AgentLogin: "XBEER",
+          Active: "Y",
+          CreditLimit: 1000000,
+          CurrentBalance: -46651,
+          PendingWagerBalance: 33500,
+          PendingWagerCount: 2,
+          CarryOverAmount: -124651,
+          SettleFigure: 1000,
+          WagerLimit: 250000,
+          ParlayTeamMaxWager: 500000,
+          ConfirmationDelay: 5,
+          WiseLineMovementWeight: 1,
+          InetTarget: "4playbets.com",
+          AllowEZLive: "N",
+          AllowNewLiveBetting: "N",
+          AllowUltraLive: "Y",
+          HalfPointInetBasketballFlag: "N",
+          HalfPointInetFootballFlag: "N",
+          ActivateBettingAlerts: "N",
+          BasketballFlatPrice: 0,
+          FootballFlatPrice: 0,
+          SuspectedBot: "N",
+          SuspectedBotType: 0,
+          EncryptPassword: "N",
+          Password: "mask",
+          ParlayName: "8 Team Max - 300         ",
+        },
+        balance: {
+          AvailableBalance: 919849,
+        },
+        added: {
+          CustomerID: "XB142     ",
+          NotifyTelegram: "N",
+        },
+        thisWeek: {
+          PreviousBalance: -1246.51,
+        },
+      },
+    };
+
+    const envelope = parseGetInfoPlayerEnvelope(raw);
+    const summary = summarizeGetInfoPlayer(envelope);
+    expect(summary.customerId).toBe("XB142");
+    expect(summary.agentId).toBe("XBEER");
+    expect(summary.creditLimit).toBe(1000000);
+    expect(summary.currentBalance).toBe(-46651);
+    expect(summary.pendingWagerBalance).toBe(33500);
+    expect(summary.availableBalance).toBe(919849);
+    expect(summary.carryOverAmount).toBe(-124651);
+    expect(summary.previousBalanceUsd).toBe(-1246.51);
+    expect(summary.suspectedBot).toBe("N");
+    expect(summary.suspectedBotType).toBe(0);
+    expect(summary.basketballFlatPrice).toBe(0);
+    expect(summary.footballFlatPrice).toBe(0);
+    expect(summary.encryptPassword).toBe("N");
+    expect(summary.plaintextPasswordExposed).toBe(true);
+    expect(summary.mappedProxyWallet).toBeNull();
+
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(audit.creditEquationBalanced).toBe(true);
+    expect(audit.expectedAvailableBalanceCents).toBe(919849);
+    expect(audit.creditEquationDeltaCents).toBe(0);
+    expect(audit.carryOverParityMatched).toBe(true);
+    expect(audit.carryOverParityDeltaCents).toBe(0);
+    expect(audit.lineMoverWeightTier).toBe("DEFAULT_BASELINE_1");
+    expect(audit.effectiveLiveBettingStatus).toBe(
+      "ULTRA_LIVE_ENABLED_EZLIVE_OFF",
+    );
+    expect(audit.effectivePointBuyingStatus).toBe("DOW_SCHEDULE_OFF");
+    expect(audit.riskFlags).toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+    expect(audit.riskFlags).toContain("LINE_MOVER_WEIGHT_ACTIVE");
+    expect(audit.riskFlags).not.toContain("ELEVATED_LINE_MOVER_WEIGHT");
+    expect(audit.riskFlags).toContain("BETTING_ALERTS_DISABLED");
+    expect(audit.riskFlags).toContain("LIVE_INPLAY_RESTRICTED");
+    expect(audit.riskFlags).toContain("HALF_POINT_BUY_RESTRICTED");
+    expect(audit.riskFlags).toContain("HAS_PENDING_WAGERS");
+    expect(audit.riskFlags).not.toContain("MAPPED_POLY_SYNDICATE_WALLET");
+    expect(audit.riskFlags).not.toContain("CONTRACTUAL_FLAT_PRICE_ACTIVE");
+    expect(audit.riskFlags).not.toContain("SUSPECTED_BOT_FLAGGED");
+    expect(audit.riskFlags).not.toContain("HIGH_CONFIRMATION_DELAY_CLAMP");
+  });
+
+  test("flags cross-venue Polymarket proxy wallet attribution (BGD101)", () => {
+    const raw = {
+      INFO: {
+        data: {
+          Login: "BGD101",
+          AgentID: "BIGDAD",
+          Active: "Y",
+          CreditLimit: 5000000,
+          CurrentBalance: 0,
+          PendingWagerBalance: 0,
+          CarryOverAmount: 0,
+          EncryptPassword: "Y",
+        },
+        balance: { AvailableBalance: 5000000 },
+        added: { CustomerID: "BGD101" },
+        thisWeek: { PreviousBalance: 0 },
+      },
+    };
+    const envelope = parseGetInfoPlayerEnvelope(raw);
+    const summary = summarizeGetInfoPlayer(envelope);
+    expect(summary.mappedProxyWallet).toBe(
+      "0x26cf4a41eb49f0c560d32a2d2e4f45715e47c612",
+    );
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(audit.riskFlags).toContain("MAPPED_POLY_SYNDICATE_WALLET");
+  });
+
+  test("flags bot, flat pricing contract, and confirmation delay clamp", () => {
+    const raw = {
+      INFO: {
+        data: {
+          Login: "BOT99",
+          AgentID: "XBEER",
+          Active: "Y",
+          CreditLimit: 500000,
+          CurrentBalance: 0,
+          PendingWagerBalance: 0,
+          CarryOverAmount: 0,
+          ConfirmationDelay: 8,
+          WiseLineMovementWeight: 0,
+          ActivateBettingAlerts: "Y",
+          BasketballFlatPrice: -105,
+          FootballFlatPrice: 0,
+          SuspectedBot: "Y",
+          SuspectedBotType: 1,
+          EncryptPassword: "Y",
+        },
+        balance: { AvailableBalance: 500000 },
+        added: { CustomerID: "BOT99", NotifyTelegram: "Y" },
+        thisWeek: { PreviousBalance: 0 },
+      },
+    };
+
+    const envelope = parseGetInfoPlayerEnvelope(raw);
+    const summary = summarizeGetInfoPlayer(envelope);
+    expect(summary.suspectedBot).toBe("Y");
+    expect(summary.suspectedBotType).toBe(1);
+    expect(summary.basketballFlatPrice).toBe(-105);
+    expect(summary.confirmationDelaySec).toBe(8);
+    expect(summary.plaintextPasswordExposed).toBe(false);
+
+    const audit = auditPlayerRiskPosture(envelope);
+    expect(audit.riskFlags).toContain("SUSPECTED_BOT_FLAGGED");
+    expect(audit.riskFlags).toContain("CONTRACTUAL_FLAT_PRICE_ACTIVE");
+    expect(audit.riskFlags).toContain("HIGH_CONFIRMATION_DELAY_CLAMP");
+    expect(audit.riskFlags).not.toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+  });
+
+  test("formatPlayerRiskPostureReport renders comprehensive terminal report with decision overlay", () => {
+    const raw = {
+      INFO: {
+        data: {
+          Login: "XB142",
+          AgentID: "XBEER",
+          Active: "Y",
+          CreditLimit: 1000000,
+          CurrentBalance: -46651,
+          PendingWagerBalance: 33500,
+          PendingWagerCount: 2,
+          CarryOverAmount: -124651,
+          SettleFigure: 1000,
+          WagerLimit: 250000,
+          ConfirmationDelay: 5,
+          WiseLineMovementWeight: 1,
+          InetTarget: "4playbets.com",
+          AllowEZLive: "N",
+          AllowNewLiveBetting: "N",
+          AllowUltraLive: "Y",
+          AllowBuyPointsExtraGames: "Y",
+          HalfPointInetFootballFlag: "N",
+          EncryptPassword: "N",
+        },
+        balance: { AvailableBalance: 919849 },
+        thisWeek: { PreviousBalance: -1246.51 },
+      },
+    };
+    const envelope = parseGetInfoPlayerEnvelope(raw);
+    const summary = summarizeGetInfoPlayer(envelope);
+    const audit = auditPlayerRiskPosture(envelope);
+    const report = formatPlayerRiskPostureReport(audit, summary, {
+      decisionTier: "TIER_6_RECREATIONAL_HOLD",
+      recommendedAction: "RETAIN_RECREATIONAL_HOLD",
+      rankOverallSharp: 476,
+      rankSystematicSignature: 925,
+      totalBetsN: 50,
+      powerStatus: "POWERED",
+      correctedUnionRateShrunkKappa20: 0.2925,
+      unionClvBhQValueAllCustomers: 1,
+      estimatedNetEvAfterVigPct: -4.2,
+      realizedPlayerNetUsd: -15.53,
+      limitHeuristicScore: 0.1184,
+      costRatioThresholdTau: 0.6026,
+      systematicSignatureClass: "NONE_OBSERVED",
+      minDistinctTicketGapSeconds: 18.54,
+    });
+
+    expect(report).toContain("F402 / DGS PLAYER PROFILE AUDIT REPORT");
+    expect(report).toContain("Customer ID       : XB142");
+    expect(report).toContain("Credit Limit      : $10,000.00");
+    expect(report).toContain("Current Balance   : -$466.51");
+    expect(report).toContain("Pending Wagers    : $335.00");
+    expect(report).toContain("Available Balance : $9,198.49");
+    expect(report).toContain("Credit Identity: BALANCED [OK]");
+    expect(report).toContain("Carryover Parity: MATCHED [OK]");
+    expect(report).toContain("Surveillance Proxy Wallet: UNMAPPED");
+    expect(report).toContain("PLAINTEXT_CREDENTIAL_EXPOSURE");
+    expect(report).toContain("[DEFAULT_BASELINE_1]");
+    expect(report).toContain("[ULTRA_LIVE_ENABLED_EZLIVE_OFF]");
+    expect(report).toContain("[EXTRA_GAMES_BUY_ENABLED_DOW_SCHEDULE_OFF]");
+    expect(report).toContain("4. EMPIRICAL DECISION-INSTRUMENT TELEMETRY");
+    expect(report).toContain("TIER_6_RECREATIONAL_HOLD");
   });
 });
