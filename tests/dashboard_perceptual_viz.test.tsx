@@ -53,7 +53,7 @@ import {
 } from "../packages/ui/src/viz/SharpnessDecomposition.tsx";
 import { SliceMetricsViews } from "../packages/ui/src/SliceMetricsViews.tsx";
 import { ShadowElasticityChart } from "../packages/ui/src/shadow_pricing/ShadowElasticityChart.tsx";
-import { SAMPLE_PROFILE_DATA } from "../packages/ui/src/showcase_data.ts";
+import { FIXTURE_PROFILE_CUSTOMERS } from "./fixtures/dashboard_ui_fixtures.ts";
 import { runShadowPricingDashboard } from "../lib/shadow_pricing_engine.ts";
 
 function seededUniform(seed: number): () => number {
@@ -536,7 +536,7 @@ describe("panels fail closed", () => {
   });
 
   test("sharpness decomposition withholds bars when components do not sum to the score", () => {
-    const mismatched = SAMPLE_PROFILE_DATA.find(
+    const mismatched = FIXTURE_PROFILE_CUSTOMERS.find(
       (customer) => customer.id === "RF2003",
     )!;
     const components = [
