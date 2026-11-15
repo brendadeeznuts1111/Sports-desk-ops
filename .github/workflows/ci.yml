@@ -359,3 +359,32 @@ jobs:
         with:
           name: test-results
           path: junit-report.xml
+
+  notify:
+    # Pages the desk when this run fails (#248). Zero watchers and one collaborator means a red
+    # check reaches nobody until someone opens the PR.
+    #
+    # `failure()` is true only when a needed job actually failed. A run superseded by the
+    # concurrency group is `cancelled` and a job that did not apply is `skipped`; neither reaches
+    # here, so this does not page for pushes that were already replaced.
+    if: failure()
+    needs: [market-index, verify-changed, code-mode, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Deliberately no `bun install`: the cases this reports on include a broken lockfile or a
+      # bad dependency pin, and the notifier must run when the install is what failed.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Notify the desk
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: bun run scripts/ci/notify_failure.ts
