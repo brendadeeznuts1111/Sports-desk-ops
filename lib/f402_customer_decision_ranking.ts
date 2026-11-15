@@ -320,6 +320,9 @@ export function buildAllCustomerDecisionRankingSystem(
   // Group detail rows by verbatim CustomerID and detect synchronized 2H office bursts.
   // `playerLogin` remains the office-burst grouping key; `customerId` keys the per-account set.
   const detailByCustomerId = new Map<string, ReportPlayerAnalysisRowRaw[]>();
+  // Intentionally login-level: an office burst is per-login behaviour, not per-account. A
+  // login->customerId sweep must leave this key alone — two records sharing a login are one
+  // login for burst detection.
   const office2hGameLogins = new Map<string, Set<string>>();
 
   for (const d of input.suspectedBotDetailRows) {
