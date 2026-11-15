@@ -311,6 +311,51 @@ describe("lib/f402_ccc88412_decision_instrument", () => {
     expect(sha1).toBe(sha2);
   });
 
+  test("H7 non-CCC Hockey counts match the pinned corpus (2,519 events, 12 pairs)", () => {
+    const root = process.cwd();
+    const allSummaryPath = resolve(
+      root,
+      "scratch/f402-player-analysis-all.json",
+    );
+    const detailPath = resolve(root, "scratch/f402-suspected-bots-detail.json");
+    const octPath = resolve(root, "scratch/graded/graded-oct-window.json");
+    const todayPath = resolve(root, "scratch/graded/graded-today.json");
+    if (
+      !existsSync(allSummaryPath) ||
+      !existsSync(detailPath) ||
+      !existsSync(octPath) ||
+      !existsSync(todayPath)
+    ) {
+      return;
+    }
+    const graded = [
+      ...(JSON.parse(readFileSync(octPath, "utf8")) as GradedWagerRawRow[]),
+      ...(JSON.parse(readFileSync(todayPath, "utf8")) as GradedWagerRawRow[]),
+    ];
+    const inst = buildCcc88412DecisionInstrument({
+      allSummaryRows: (
+        JSON.parse(readFileSync(allSummaryPath, "utf8")) as {
+          LIST: ReportPlayerAnalysisRowRaw[];
+        }
+      ).LIST,
+      suspectedBotDetailRows: (
+        JSON.parse(readFileSync(detailPath, "utf8")) as {
+          detailRows: ReportPlayerAnalysisRowRaw[];
+        }
+      ).detailRows,
+      gradedWagerRows: graded,
+      cccRawWebLogText20261101: CCC88412_WEBLOG_NOV1_TSV,
+    });
+    // `nonCccEventsN` excludes CCC88412 and the comment names its value, so a change to the
+    // exclusion or the corpus must move the comment and these assertions together.
+    expect(
+      inst.automationSignatureTestH7.fullGradedCorpusNonCccHockeyEventsN,
+    ).toBe(2519);
+    expect(
+      inst.automationSignatureTestH7.fullGradedCorpusNonCccSameTicketPairsK,
+    ).toBe(12);
+  });
+
   test("H7 summary index keys by verbatim customerId, not by shared PlayerLogin", () => {
     const rows = [
       {
